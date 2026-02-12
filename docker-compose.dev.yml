@@ -1,0 +1,221 @@
+# ============================================
+# 开发环境 Docker Compose 配置文件
+# 热加载模式，支持快速开发迭代
+# ============================================
+
+services:
+  # PostgreSQL 数据库服务
+  postgres:
+    image: postgres:15-alpine
+    container_name: wangsh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS}
+      POSTGRES_STATEMENT_TIMEOUT: ${POSTGRES_STATEMENT_TIMEOUT}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    command: [ "postgres", "-c", "timezone=Asia/Shanghai" ]
+    ports:
+      - "5432:5432"
+    volumes:
+      # 数据持久化到本地 data 目录
+      - ./data/postgres:/var/lib/postgresql/data
+      # 初始化脚本（将整个目录挂载到初始化目录）
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/
+    networks:
+      - wangsh-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 服务（用于缓存和 Celery 代理）
+  redis:
+    image: redis:7-alpine
+    container_name: wangsh-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    command: redis-server --appendonly yes
+    networks:
+      - wangsh-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端服务 (Python FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: wangsh-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # 设置部署环境为docker，配置类将自动调整主机地址
+      - DEPLOYMENT_ENV=docker
+      - DOCKER_POSTGRES_HOST=postgres
+      - DOCKER_REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD}
+      # 其他必要环境变量
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - UPLOAD_FOLDER=./uploads
+      - MAX_UPLOAD_SIZE=10485760
+      # 开发模式热加载
+      - BACKEND_RELOAD=True
+    volumes:
+      # 代码热重载：将本地代码挂载到容器
+      - ./backend:/app
+      # 上传文件持久化 - 使用容器内的绝对路径
+      - ./data/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wangsh-network
+    command: >
+      sh -c "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # Celery Worker 服务（异步任务处理）
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: wangsh-celery-worker
+    restart: unless-stopped
+    environment:
+      # 设置部署环境为docker，配置类将自动调整主机地址
+      - DEPLOYMENT_ENV=docker
+      - DOCKER_POSTGRES_HOST=postgres
+      - DOCKER_REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      # Celery 特定配置
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - wangsh-network
+    command: >
+      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q typst -c 1 --pool=solo"
+
+  # 前端服务 (React + TypeScript)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: wangsh-frontend
+    restart: unless-stopped
+    ports:
+      - "6608:6608"
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_ENV=${REACT_APP_ENV}
+      # 开发模式热加载
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      # 代码热重载：将本地代码挂载到容器
+      - ./frontend:/app
+      - /app/node_modules # 避免覆盖容器内的 node_modules
+    depends_on:
+      - backend
+    networks:
+      - wangsh-network
+    command: sh -c "npm start"
+    # Caddy 反向代理服务（开发环境启用）- 唯一入口
+  caddy:
+    image: caddy:2-alpine
+    container_name: wangsh-caddy
+    restart: unless-stopped
+    environment:
+      # 关键：告诉 Caddy 不要对 Docker 内部网络使用代理
+      - NO_PROXY=localhost,127.0.0.1,backend,frontend,redis,postgres,wangsh-network
+      - no_proxy=localhost,127.0.0.1,backend,frontend,redis,postgres,wangsh-network
+      # --- Caddy 原生环境变量支持 ---
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=8000
+      - FRONTEND_HOST=frontend
+      - FRONTEND_PORT=6608
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      # 直接挂载 Caddyfile（使用Caddy原生环境变量语法）
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      # 挂载配置和数据目录
+      - ./data/caddy/config:/config
+      - ./data/caddy/data:/data
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - wangsh-network
+    # 直接运行Caddy，不需要envsubst预处理
+    command: caddy run --config /etc/caddy/Caddyfile
+
+  # Adminer 数据库管理界面
+  adminer:
+    image: adminer:4
+    container_name: wangsh-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DEFAULT_DB: ${POSTGRES_DB}
+      ADMINER_DEFAULT_USERNAME: ${POSTGRES_USER}
+      ADMINER_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      ADMINER_DESIGN: pepa-linha
+    depends_on:
+      - postgres
+    networks:
+      - wangsh-network
+
+# 网络配置
+networks:
+  wangsh-network:
+    driver: bridge
+
+# 数据卷配置
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:

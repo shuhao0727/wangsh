@@ -1,0 +1,55 @@
+{
+  // PostgreSQL Explorer 配置
+  // 用于连接项目的PostgreSQL数据库
+  
+  // 数据库连接配置
+  "postgresql.connections": [
+    {
+      "name": "WangSh Development Database",
+      "host": "localhost",
+      "port": 5432,
+      "username": "admin",
+      "password": "wangshuhao0727",
+      "database": "wangsh_db",
+      "ssl": false,
+      "savePassword": true,
+      "color": "green"
+    }
+  ],
+  
+  // PostgreSQL Explorer 扩展设置
+  "postgresql.showDatabases": true,
+  "postgresql.showUsers": true,
+  "postgresql.showTablespaces": true,
+  "postgresql.autoRefresh": true,
+  "postgresql.showConnectionStatus": true,
+  
+  // 项目特定设置
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  
+  // 文件关联设置
+  "files.associations": {
+    "**/*.sql": "postgresql"
+  },
+  
+  // 排除文件
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "data/": true,
+    "**/.git": false
+  },
+  
+  // Python 设置（用于后端开发）
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "basic",
+  
+  // TypeScript 设置（用于前端开发）
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.updateImportsOnFileMove.enabled": "always"
+}

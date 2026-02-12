@@ -1,0 +1,274 @@
+/**
+ * API 服务
+ * 基于配置的统一 API 调用封装
+ */
+
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import { config } from "./config";
+import { logger } from "./logger";
+
+// API 响应接口
+export interface ApiResponse<T = any> {
+  code: number;
+  data: T;
+  message: string;
+  timestamp: string;
+}
+
+// 验证错误接口（用于422错误响应）
+export interface ValidationErrorResponse {
+  detail: Array<{
+    type: string;
+    loc: (string | number)[];
+    msg: string;
+    input: any;
+    ctx?: Record<string, any>;
+  }>;
+}
+
+// 创建 Axios 实例
+const createApiClient = (): AxiosInstance => {
+  const instance = axios.create({
+    baseURL: config.apiUrl,
+    timeout: 30000,
+    withCredentials: true,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+  });
+
+  // 请求拦截器
+  instance.interceptors.request.use(
+    (requestConfig) => {
+      if (config.features.debug) {
+        logger.debug("🚀 API 请求:", {
+          url: `${requestConfig.baseURL}${requestConfig.url}`,
+          method: requestConfig.method,
+          data: requestConfig.data,
+        });
+      }
+
+      return requestConfig;
+    },
+    (error) => {
+      logger.error("❌ 请求拦截器错误:", error);
+      return Promise.reject(error);
+    },
+  );
+
+  // 响应拦截器
+  instance.interceptors.response.use(
+    (response: AxiosResponse<ApiResponse | ValidationErrorResponse>) => {
+      if (config.features.debug) {
+        logger.debug("✅ API 响应:", {
+          url: response.config.url,
+          status: response.status,
+          data: response.data,
+        });
+      }
+
+      // 特别检查：如果是验证错误对象（422错误），则转换为错误
+      const data = response.data;
+      if (response.status === 422 && data && typeof data === "object") {
+        // 检查是否是Pydantic验证错误格式
+        const isValidationError =
+          (data as ValidationErrorResponse).detail &&
+          Array.isArray((data as ValidationErrorResponse).detail) &&
+          (data as ValidationErrorResponse).detail.length > 0 &&
+          (data as ValidationErrorResponse).detail[0].type &&
+          (data as ValidationErrorResponse).detail[0].msg;
+
+        if (isValidationError) {
+          logger.error("❌ API 响应中包含验证错误:", data);
+          // 创建错误对象
+          const error = new Error("请求数据验证失败");
+          (error as any).response = {
+            data: data,
+            status: 422,
+            statusText: "Unprocessable Content",
+            headers: response.headers,
+            config: response.config,
+          };
+          (error as any).config = response.config;
+          (error as any).request = response.request;
+          return Promise.reject(error);
+        }
+      }
+
+      // 处理标准 API 响应格式
+      if (response.data && typeof response.data === "object") {
+        // 可以在这里添加业务逻辑处理
+        return response;
+      }
+
+      return response;
+    },
+    async (error) => {
+      const originalRequest = error.config;
+      
+      // 防止无限重试
+      if (error.response?.status === 401 && !originalRequest._retry) {
+        originalRequest._retry = true;
+
+        try {
+          logger.info("🔄 API: 检测到401错误，尝试刷新会话");
+          if (originalRequest.url?.includes("/auth/refresh")) {
+            throw new Error("刷新接口返回401");
+          }
+
+          await instance.post("/auth/refresh", {});
+          logger.info("✅ API: 会话刷新成功，重试原始请求");
+          return instance(originalRequest);
+        } catch (_refreshError) {
+          logger.warn("⚠️ API: 会话刷新失败，跳转到登录页面");
+          if (typeof window !== "undefined") {
+            const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            if (!window.location.pathname.startsWith("/login")) {
+              window.location.href = `/login?redirect=${encodeURIComponent(here)}`;
+            }
+          }
+        }
+      }
+
+      if (error.response?.status === 401 && originalRequest?._retry) {
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.removeItem("auth_initial_fetched");
+          } catch {
+          }
+          const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+          if (!window.location.pathname.startsWith("/login")) {
+            window.location.href = `/login?redirect=${encodeURIComponent(here)}`;
+          }
+        }
+      }
+      
+      // 记录错误
+      if (error.response) {
+        // 服务器返回错误状态码
+        let loggedData = error.response.data;
+        try {
+          if (loggedData instanceof Blob) {
+            const text = await loggedData.text();
+            try {
+              const obj = JSON.parse(text);
+              loggedData = obj?.detail ?? obj;
+            } catch {
+              loggedData = text;
+            }
+          }
+        } catch {
+          loggedData = error.response.data;
+        }
+        logger.error("❌ API 错误响应:", {
+          url: error.config.url,
+          status: error.response.status,
+          data: loggedData,
+        });
+      } else if (error.request) {
+        // 请求发送但无响应
+        logger.error("❌ 网络错误，无响应:", error.request);
+      } else {
+        // 请求配置错误
+        logger.error("❌ 请求配置错误:", error.message);
+      }
+
+      return Promise.reject(error);
+    },
+  );
+
+  return instance;
+};
+
+// 全局 API 客户端实例
+const apiClient = createApiClient();
+
+// 导出常用的 HTTP 方法
+export const api = {
+  // GET 请求
+  get: <T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> =>
+    apiClient.get<ApiResponse<T>>(url, config),
+
+  // POST 请求
+  post: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> =>
+    apiClient.post<ApiResponse<T>>(url, data, config),
+
+  // PUT 请求
+  put: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> =>
+    apiClient.put<ApiResponse<T>>(url, data, config),
+
+  // DELETE 请求
+  delete: <T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> =>
+    apiClient.delete<ApiResponse<T>>(url, config),
+
+  // PATCH 请求
+  patch: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> =>
+    apiClient.patch<ApiResponse<T>>(url, data, config),
+
+  // 原始实例（用于特殊配置）
+  client: apiClient,
+};
+
+// 健康检查 API - 这些接口在根路径，不在/api/v1下
+export const healthApi = {
+  check: () => api.client.get("/health"),
+  ping: () => api.client.get("/ping"),
+  version: () => api.client.get("/version"),
+};
+
+// 认证 API
+export const authApi = {
+  // 登录 - 使用表单格式 (application/x-www-form-urlencoded)
+  // 注意：后端auth端点返回直接响应，没有ApiResponse包装
+  login: (username: string, password: string) => {
+    const params = new URLSearchParams();
+    params.append("username", username);
+    params.append("password", password);
+
+    // 使用client直接调用，避免ApiResponse包装
+    // 注意：baseURL已经包含/api/v1，这里只需要/auth/login
+    return api.client.post("/auth/login", params.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+  },
+
+  // 注册
+  register: (userData: any) => api.client.post("/auth/register", userData),
+
+  // 获取用户信息 - 后端返回直接用户对象，没有包装
+  getCurrentUser: () => api.client.get("/auth/me"),
+
+  // 登出
+  logout: () => api.client.post("/auth/logout"),
+
+  // 刷新令牌
+  refreshToken: (refreshToken?: string) =>
+    api.client.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}),
+
+  // 验证令牌
+  verifyToken: (token?: string) =>
+    api.client.get("/auth/verify", token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
+};
+
+export default api;

@@ -1,0 +1,186 @@
+/* ============================================
+ * 全局样式文件
+ * 重置样式和基础样式定义
+ * ============================================ */
+
+/* 重置样式 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --ws-color-bg: #f5f5f5;
+  --ws-color-surface: #ffffff;
+  --ws-color-surface-2: #fafafa;
+  --ws-color-border: #d9d9d9;
+  --ws-color-text: #1f1f1f;
+  --ws-color-text-secondary: #595959;
+  --ws-color-primary: #1677ff;
+  --ws-color-primary-hover: #4096ff;
+  --ws-color-primary-active: #0958d9;
+  --ws-color-accent: #722ed1;
+  --ws-color-success: #52c41a;
+  --ws-color-warning: #faad14;
+  --ws-color-error: #ff4d4f;
+  --ws-color-info: #1677ff;
+  --ws-color-hover-bg: #f5f5f5;
+  --ws-color-focus-ring: rgba(22, 119, 255, 0.2);
+  --ws-color-primary-soft: #e6f4ff;
+  --ws-color-success-soft: #f6ffed;
+  --ws-color-warning-soft: #fffbe6;
+  --ws-color-error-soft: #fff1f0;
+  --ws-color-info-soft: #e6f4ff;
+  --ws-radius-sm: 6px;
+  --ws-radius-md: 10px;
+  --ws-radius-lg: 12px;
+  --ws-shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.08);
+  --ws-space-1: 8px;
+  --ws-space-2: 12px;
+  --ws-space-3: 16px;
+  --ws-space-4: 24px;
+  --ws-space-5: 32px;
+}
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  line-height: 1.15;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ws-color-text);
+  background-color: var(--ws-color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: auto;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ws-color-surface-2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 链接样式 */
+a {
+  color: var(--ws-color-primary);
+  text-decoration: none;
+  background-color: transparent;
+  outline: none;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: var(--ws-color-primary-hover);
+}
+
+a:active {
+  color: var(--ws-color-primary-active);
+}
+
+/* 工具类 */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+.mt-4 { margin-top: 32px; }
+.mt-5 { margin-top: 40px; }
+
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+.mb-4 { margin-bottom: 32px; }
+.mb-5 { margin-bottom: 40px; }
+
+.ml-1 { margin-left: 8px; }
+.ml-2 { margin-left: 16px; }
+.ml-3 { margin-left: 24px; }
+.ml-4 { margin-left: 32px; }
+.ml-5 { margin-left: 40px; }
+
+.mr-1 { margin-right: 8px; }
+.mr-2 { margin-right: 16px; }
+.mr-3 { margin-right: 24px; }
+.mr-4 { margin-right: 32px; }
+.mr-5 { margin-right: 40px; }
+
+.p-1 { padding: 8px; }
+.p-2 { padding: 16px; }
+.p-3 { padding: 24px; }
+.p-4 { padding: 32px; }
+.p-5 { padding: 40px; }
+
+/* 布局类 */
+.full-height {
+  height: 100%;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* 响应式断点 */
+@media (max-width: 768px) {
+  .hidden-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .hidden-desktop {
+    display: none !important;
+  }
+}

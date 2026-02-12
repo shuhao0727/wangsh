@@ -1,0 +1,134 @@
+.article-detail-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.article-detail-empty {
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.article-detail-back {
+  margin-bottom: 18px;
+}
+
+.article-detail-back-btn {
+  padding-left: 0 !important;
+  color: var(--ws-color-text-secondary) !important;
+}
+
+.article-detail-back-btn:hover {
+  color: #fa541c !important;
+}
+
+.article-detail-hero {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border-radius: var(--ws-radius-lg);
+  background: linear-gradient(135deg, #fff7e6 0%, #fff1f0 100%);
+  border: 1px solid #ffe7ba;
+}
+
+.article-detail-title {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--ws-color-text);
+  margin-bottom: 10px;
+}
+
+.article-detail-summary {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ws-color-text-secondary);
+  line-height: 1.7;
+  border-left: 4px solid #fa541c;
+  padding-left: 14px;
+}
+
+.article-meta-card {
+  margin-bottom: 24px;
+  border-radius: var(--ws-radius-md);
+  border: 1px solid var(--ws-color-border);
+  background: var(--ws-color-surface-2);
+}
+
+.article-content-card {
+  border-radius: var(--ws-radius-md);
+  border: 1px solid var(--ws-color-border);
+  margin-bottom: 28px;
+}
+
+.article-toc-sticky {
+  position: sticky;
+  top: 24px;
+}
+
+.article-toc-card {
+  border-radius: var(--ws-radius-md);
+  border: 1px solid var(--ws-color-border);
+}
+
+.article-toc-list {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.article-toc-item {
+  padding: 8px 0;
+  cursor: pointer;
+  color: var(--ws-color-text-secondary);
+  border-left: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.article-toc-item:hover {
+  color: #fa541c;
+  border-left-color: #fa541c;
+}
+
+.article-detail-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--ws-color-border);
+  margin-top: 28px;
+}
+
+.article-content {
+  font-size: 15px;
+}
+
+.article-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.article-content th,
+.article-content td {
+  border: 1px solid var(--ws-color-border);
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.article-content th {
+  background: var(--ws-color-surface-2);
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .article-detail-container {
+    padding: 16px 12px;
+  }
+
+  .article-detail-hero {
+    padding: 14px 14px;
+  }
+
+  .article-detail-title {
+    font-size: 20px;
+  }
+}

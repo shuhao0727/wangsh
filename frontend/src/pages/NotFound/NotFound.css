@@ -1,0 +1,8 @@
+.not-found-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-height: calc(100vh - 200px);
+  background-color: var(--ws-color-bg);
+}

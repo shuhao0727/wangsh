@@ -1,0 +1,85 @@
+.typst-editor-page {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.typst-editor-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.typst-editor-grid.typst-editor-grid-collapsed {
+  grid-template-columns: 48px 1fr;
+}
+
+.typst-editor-side.typst-editor-side-collapsed {
+  gap: 0;
+}
+
+@media (min-width: 992px) {
+  .typst-editor-grid {
+    gap: 16px;
+  }
+}
+
+.typst-editor-side {
+  position: sticky;
+  top: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.typst-editor-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.typst-editor-card {
+  border-radius: 10px;
+  border: 1px solid var(--ws-color-border);
+}
+
+.typst-editor-card .ant-card-head {
+  background: linear-gradient(135deg, var(--ws-color-bg) 0%, var(--ws-color-info-soft) 100%);
+  border-bottom: 1px solid var(--ws-color-border);
+  border-radius: 10px 10px 0 0;
+}
+
+.typst-editor-card .ant-card-head-title {
+  font-weight: 600;
+  color: var(--ws-color-primary);
+}
+
+.typst-preview-box {
+  height: 100%;
+  border-radius: var(--ws-radius-md);
+  border: 1px solid var(--ws-color-border);
+  background: var(--ws-color-surface);
+  padding: var(--ws-space-2);
+  overflow: auto;
+}
+
+.typst-editor-panel {
+  height: min(820px, calc(100vh - 220px));
+  min-height: 560px;
+}
+
+.typst-editor-panel > .ant-input {
+  height: 100%;
+}
+
+@media (max-width: 1200px) {
+  .typst-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .typst-editor-side {
+    position: static;
+  }
+}

@@ -1,0 +1,28 @@
+:80 {
+    log {
+        level INFO
+    }
+
+    handle_path /admin* {
+        root * /usr/share/caddy
+        try_files {path} /index.html
+        file_server
+    }
+
+    @api_health path /api/health
+    handle @api_health {
+        rewrite * /health
+        reverse_proxy http://backend:8000
+    }
+
+    @api path /api/*
+    handle @api {
+        reverse_proxy http://backend:8000
+    }
+
+    handle {
+        root * /usr/share/caddy
+        try_files {path} /index.html
+        file_server
+    }
+}

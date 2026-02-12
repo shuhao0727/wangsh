@@ -1,0 +1,119 @@
+/* AdminLayout 样式 */
+
+.admin-layout {
+  min-height: 100vh;
+}
+
+/* 左侧边栏头部 */
+.admin-sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--ws-color-border);
+}
+
+.admin-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--ws-color-primary) 0%, var(--ws-color-success) 100%);
+  border-radius: var(--ws-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.admin-logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 用户信息区域 */
+.admin-user-info {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--ws-color-border);
+}
+
+.admin-user-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 左侧边栏底部 */
+.admin-sidebar-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--ws-color-surface);
+  border-radius: var(--ws-radius-sm);
+  border-top: 1px solid var(--ws-color-border);
+}
+
+/* 头部样式 */
+.admin-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .admin-layout .ant-layout-sider {
+    position: fixed !important;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .admin-layout .ant-layout {
+    margin-left: 0 !important;
+  }
+
+  .admin-layout .ant-layout-sider-collapsed + .ant-layout {
+    margin-left: 80px !important;
+  }
+}
+
+/* 动画效果 */
+.ant-layout-sider-collapsed .admin-logo-text,
+.ant-layout-sider-collapsed .admin-user-details {
+  display: none;
+}
+
+/* 管理菜单样式 */
+.admin-layout .ant-menu {
+  border-right: 0;
+}
+
+.admin-layout .ant-menu-item {
+  margin: 4px 8px !important;
+  border-radius: var(--ws-radius-sm);
+}
+
+.admin-layout .ant-menu-item-selected {
+  background-color: var(--ws-color-primary-soft) !important;
+  color: var(--ws-color-primary) !important;
+}
+
+.admin-layout .ant-menu-item:hover {
+  background-color: var(--ws-color-surface-2) !important;
+}

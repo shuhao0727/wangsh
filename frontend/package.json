@@ -1,0 +1,70 @@
+{
+  "name": "wangsh-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WangSh 项目前端应用 - React + TypeScript + Ant Design",
+  "author": "WangSh Team",
+  "license": "MIT",
+  "homepage": "/",
+  "scripts": {
+    "start": "cross-env PORT=6608 REACT_APP_ENV=development craco start",
+    "build": "cross-env REACT_APP_ENV=production craco build",
+    "test": "cross-env REACT_APP_ENV=test craco test",
+    "eject": "react-scripts eject",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css,md,json}\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "@myriaddreamin/typst.ts": "^0.7.0-rc2",
+    "@myriaddreamin/typst-ts-renderer": "^0.7.0-rc2",
+    "@myriaddreamin/typst-ts-web-compiler": "^0.7.0-rc2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "ajv-keywords": "^5.1.0",
+    "antd": "^6.2.3",
+    "axios": "^1.1.3",
+    "dayjs": "^1.11.7",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.13.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0"
+  },
+  "devDependencies": {
+    "@craco/craco": "^7.1.0",
+    "@types/node": "^25.2.0",
+    "@types/react": "^19.2.11",
+    "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "cross-env": "^10.1.0",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^8.57.1",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "prettier": "^3.8.1",
+    "react-scripts": "^5.0.1",
+    "typescript": "^5.9.3"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  }
+}

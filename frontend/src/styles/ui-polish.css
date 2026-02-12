@@ -1,0 +1,38 @@
+html {
+  background: #f5f5f5;
+}
+
+body {
+  background: #f5f5f5;
+}
+
+.ws-admin-page {
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .ws-admin-page {
+    padding: 16px;
+  }
+}
+
+.ws-page-card {
+  margin-bottom: 16px;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.ant-btn:focus-visible {
+  outline: none;
+}
+
+.ant-btn-primary > span,
+.ant-btn-primary .anticon {
+  color: inherit;
+}

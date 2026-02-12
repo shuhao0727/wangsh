@@ -1,0 +1,103 @@
+# ============================================
+# 前端开发环境 Dockerfile
+# 支持热重载和开发调试
+# ============================================
+
+# 基础镜像：Node.js LTS（使用本地已有镜像）
+FROM node:lts-alpine3.23 AS development
+
+# 设置工作目录
+WORKDIR /app
+
+# 构建环境：避免继承宿主机代理导致 npm 拉包失败，默认使用国内镜像
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG all_proxy
+ARG ALL_PROXY
+ARG no_proxy
+ARG NO_PROXY
+ENV http_proxy=
+ENV https_proxy=
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV all_proxy=
+ENV ALL_PROXY=
+ENV no_proxy=
+ENV NO_PROXY=
+RUN npm config set registry https://registry.npmmirror.com/
+
+# 设置环境变量
+ENV NODE_ENV=development
+ENV PORT=6608
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+
+# 复制 package.json 和 package-lock.json（如果存在）
+COPY package*.json ./
+
+# 安装依赖（开发环境包含所有依赖）
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+
+# 复制源代码
+COPY . .
+
+# 暴露端口
+EXPOSE 6608
+
+# 启动开发服务器（热重载）
+CMD ["npm", "start"]
+
+# ============================================
+# 生产构建阶段
+# ============================================
+FROM node:lts-alpine3.23 AS builder
+
+WORKDIR /app
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG all_proxy
+ARG ALL_PROXY
+ARG no_proxy
+ARG NO_PROXY
+ENV http_proxy=
+ENV https_proxy=
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV all_proxy=
+ENV ALL_PROXY=
+ENV no_proxy=
+ENV NO_PROXY=
+RUN npm config set registry https://registry.npmmirror.com/
+
+# 复制 package.json 和 package-lock.json
+COPY package*.json ./
+
+# 安装依赖（生产环境）
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+
+# 复制源代码
+COPY . .
+
+# 构建应用
+RUN npm run build
+
+# ============================================
+# 生产运行阶段（使用 Caddy 作为 Web 服务器）
+# ============================================
+FROM caddy:latest AS production
+
+# 复制构建产物到 Caddy 目录
+COPY --from=builder /app/build /usr/share/caddy
+
+# 复制 Caddyfile 配置文件
+COPY caddy/Caddyfile.prod /etc/caddy/Caddyfile
+
+# 暴露端口
+EXPOSE 80
+
+# Caddy 会自动提供静态文件服务

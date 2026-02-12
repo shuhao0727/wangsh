@@ -1,0 +1,45 @@
+# ============================================
+# 前端生产环境 Dockerfile
+# ============================================
+
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+ARG REACT_APP_API_URL=/api/v1
+ARG REACT_APP_ENV=production
+ARG REACT_APP_VERSION=1.0.0
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_ENV=$REACT_APP_ENV
+ENV REACT_APP_VERSION=$REACT_APP_VERSION
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG all_proxy
+ARG ALL_PROXY
+ARG no_proxy
+ARG NO_PROXY
+ENV http_proxy=
+ENV https_proxy=
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV all_proxy=
+ENV ALL_PROXY=
+ENV no_proxy=
+ENV NO_PROXY=
+RUN npm config set registry https://registry.npmmirror.com/
+
+COPY package*.json ./
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+
+COPY . .
+RUN npm run build
+
+FROM caddy:latest AS production
+
+COPY --from=builder /app/build /usr/share/caddy
+COPY caddy/Caddyfile.prod /etc/caddy/Caddyfile
+
+EXPOSE 80

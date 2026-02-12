@@ -1,0 +1,163 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - wangsh-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - wangsh-network
+
+  backend:
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_BACKEND:-wangsh-backend}:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      target: production
+    restart: unless-stopped
+    environment:
+      DEBUG: "False"
+      AUTO_CREATE_TABLES: "false"
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
+      TYPST_COMPILE_MAX_CONCURRENCY: ${TYPST_COMPILE_MAX_CONCURRENCY:-2}
+      TYPST_COMPILE_USE_CELERY: "true"
+      TYPST_PDF_STORAGE_DIR: "/app/data/typst_pdfs"
+      TYPST_STORE_PDF_IN_DB: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import http.client; c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); c.request('GET','/health'); r=c.getresponse(); r.read(); print('ok')\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - wangsh-network
+    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-4}" ]
+    volumes:
+      - typst_pdfs:/app/data/typst_pdfs
+
+  typst-worker:
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_WORKER:-wangsh-typst-worker}:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      target: production
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DEBUG: "False"
+      AUTO_CREATE_TABLES: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
+      TYPST_COMPILE_MAX_CONCURRENCY: ${TYPST_COMPILE_MAX_CONCURRENCY:-2}
+      TYPST_COMPILE_USE_CELERY: "true"
+      TYPST_PDF_STORAGE_DIR: "/app/data/typst_pdfs"
+      TYPST_STORE_PDF_IN_DB: "false"
+    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
+    networks:
+      - wangsh-network
+    volumes:
+      - typst_pdfs:/app/data/typst_pdfs
+
+  frontend:
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_FRONTEND:-wangsh-frontend}:${IMAGE_TAG:-latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      target: production
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-/api/v1}
+        REACT_APP_ENV: ${REACT_APP_ENV:-production}
+        REACT_APP_VERSION: ${REACT_APP_VERSION:-1.0.0}
+    restart: unless-stopped
+    environment:
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    networks:
+      - wangsh-network
+
+networks:
+  wangsh-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  typst_pdfs:

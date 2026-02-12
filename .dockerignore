@@ -1,0 +1,13 @@
+.git
+.trae
+.vscode
+
+backend/venv
+backend/**/__pycache__
+
+frontend/node_modules
+frontend/build
+
+my_web
+
+**/.DS_Store

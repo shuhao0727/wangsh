@@ -1,0 +1,50 @@
+# ============================================
+# WangSh 项目 Python 依赖包
+# 升级到最新兼容版本 (2026-02-04)
+# ============================================
+
+# 核心依赖
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+
+# Pydantic 配置
+pydantic-settings==2.12.0
+pydantic==2.12.5
+
+# 表单处理
+python-multipart==0.0.22
+
+# 数据库
+sqlalchemy==2.0.46
+asyncpg==0.31.0
+python-dotenv==1.2.1
+alembic==1.18.3
+greenlet==3.3.1
+
+# JWT认证
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+argon2-cffi==25.1.0  # 更强的密码哈希算法
+
+# Email验证
+email-validator==2.3.0
+
+# 异步任务（基础）
+celery==5.6.2
+redis==7.1.0
+
+# AI智能体相关（SSE流式响应）
+aiohttp==3.12.0
+sse-starlette==2.2.0
+httpx==0.28.1
+
+# Excel处理（用户导入/导出）
+pandas==2.2.3
+openpyxl==3.1.5
+
+# 开发工具（可选）
+pytest==9.0.2
+loguru==0.7.3
+
+# ============================================
+# 依赖关系说明：

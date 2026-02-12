@@ -1,0 +1,235 @@
+/* BasicLayout 组件样式 - 横向导航版 */
+
+.basic-layout {
+  min-height: 100vh;
+}
+
+/* 顶部导航栏样式 */
+.top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--ws-color-surface);
+  border-bottom: 1px solid var(--ws-color-border);
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* 左侧区域：Logo + 横向菜单 */
+.header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+/* Logo 样式 */
+.logo {
+  display: flex;
+  align-items: center;
+  margin-right: 40px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.logo:hover {
+  opacity: 0.8;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ws-color-primary);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: var(--ws-radius-sm);
+  margin-right: 12px;
+}
+
+.logo-text {
+  margin: 0 !important;
+  color: var(--ws-color-primary);
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 横向导航菜单 */
+.horizontal-menu {
+  flex: 1;
+  border-bottom: none;
+  background: transparent;
+  line-height: 62px;
+  min-width: 600px;
+}
+
+/* 清除Ant Design默认的选中状态样式 */
+.horizontal-menu.ant-menu-horizontal {
+  border-bottom: none !important;
+}
+
+.horizontal-menu .ant-menu-item {
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ws-color-text-secondary);
+  transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+  position: relative;
+}
+
+.horizontal-menu .ant-menu-item::after {
+  display: none !important;
+}
+
+.horizontal-menu .ant-menu-item:hover {
+  color: var(--ws-color-primary);
+  border-bottom: 2px solid var(--ws-color-primary);
+  background: transparent !important;
+}
+
+.horizontal-menu .ant-menu-item-selected {
+  color: var(--ws-color-primary);
+  border-bottom: 2px solid var(--ws-color-primary);
+  background: transparent !important;
+}
+
+.horizontal-menu .ant-menu-item-selected::after {
+  display: none !important;
+  border-bottom: none !important;
+  content: none !important;
+}
+
+.horizontal-menu .ant-menu-item .anticon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* 右侧：用户信息 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--ws-radius-sm);
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.user-info:hover {
+  background-color: var(--ws-color-hover-bg);
+  border-color: var(--ws-color-border);
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ws-color-text);
+}
+
+/* 主内容区域 */
+.main-content {
+  margin: 24px;
+  padding: 24px;
+  min-height: calc(100vh - 112px);
+  background: var(--ws-color-surface);
+  overflow: auto;
+}
+
+/* 响应式调整 */
+@media (max-width: 1024px) {
+  .horizontal-menu {
+    min-width: 500px;
+  }
+
+  .horizontal-menu .ant-menu-item {
+    padding: 0 16px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-header {
+    padding: 0 16px;
+    flex-wrap: wrap;
+    height: auto;
+    padding: 12px 16px;
+  }
+
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .logo {
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .horizontal-menu {
+    min-width: 100%;
+    line-height: 40px;
+  }
+
+  .horizontal-menu .ant-menu-item {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid var(--ws-color-border);
+  }
+
+  .main-content {
+    margin: 16px;
+    padding: 16px;
+    min-height: calc(100vh - 160px);
+  }
+}
+
+@media (max-width: 480px) {
+  .horizontal-menu .ant-menu-item {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .horizontal-menu .ant-menu-item .anticon {
+    margin-right: 4px;
+    font-size: 14px;
+  }
+
+  .user-info {
+    padding: 6px 8px;
+  }
+
+  .username {
+    font-size: 12px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .logo-text {
+    font-size: 16px;
+  }
+}

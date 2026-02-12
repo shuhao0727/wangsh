@@ -1,0 +1,112 @@
+# ============================================
+# 后端生产环境 Dockerfile
+# ============================================
+
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG all_proxy
+ARG ALL_PROXY
+ARG no_proxy
+ARG NO_PROXY
+ENV http_proxy=
+ENV https_proxy=
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV all_proxy=
+ENV ALL_PROXY=
+ENV no_proxy=
+ENV NO_PROXY=
+ENV PIP_CONFIG_FILE=/dev/null
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+
+COPY requirements.txt .
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
+    pip install --upgrade pip \
+    && env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
+    pip install -r requirements.txt
+
+COPY . .
+
+FROM python:3.11-slim AS production
+
+WORKDIR /app
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG all_proxy
+ARG ALL_PROXY
+ARG no_proxy
+ARG NO_PROXY
+ENV http_proxy=
+ENV https_proxy=
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV all_proxy=
+ENV ALL_PROXY=
+ENV no_proxy=
+ENV NO_PROXY=
+
+ARG TYPST_VERSION=0.14.2
+
+RUN apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+    && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
+    ca-certificates curl xz-utils fontconfig \
+    fonts-noto-cjk fonts-noto-core fonts-noto-extra \
+    fonts-liberation fonts-dejavu-core \
+    fonts-arphic-ukai fonts-arphic-uming \
+    fonts-wqy-zenhei \
+    && rm -rf /var/lib/apt/lists/* \
+    && printf '%s\n' \
+    '<?xml version="1.0"?>' \
+    '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+    '<fontconfig>' \
+    '  <alias>' \
+    '    <family>Times New Roman</family>' \
+    '    <prefer><family>Liberation Serif</family><family>Noto Serif</family></prefer>' \
+    '  </alias>' \
+    '  <alias>' \
+    '    <family>STSong</family>' \
+    '    <prefer><family>Noto Serif CJK SC</family><family>AR PL UMing CN</family></prefer>' \
+    '  </alias>' \
+    '  <alias>' \
+    '    <family>Kaiti SC</family>' \
+    '    <prefer><family>AR PL UKai CN</family><family>Noto Serif CJK SC</family></prefer>' \
+    '  </alias>' \
+    '  <alias>' \
+    '    <family>STXihei</family>' \
+    '    <prefer><family>Noto Sans CJK SC</family><family>WenQuanYi Zen Hei</family></prefer>' \
+    '  </alias>' \
+    '</fontconfig>' \
+    > /etc/fonts/local.conf \
+    && fc-cache -f \
+    && ARCH="$(uname -m)" \
+    && if [ "$ARCH" = "x86_64" ]; then PKG="typst-x86_64-unknown-linux-musl.tar.xz"; elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then PKG="typst-aarch64-unknown-linux-musl.tar.xz"; else echo "unsupported arch: $ARCH" && exit 1; fi \
+    && curl --noproxy '*' -x '' -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/${PKG}" -o /tmp/typst.tar.xz \
+    && tar -xf /tmp/typst.tar.xz -C /tmp \
+    && tar -tf /tmp/typst.tar.xz | head -n 1 | cut -d/ -f1 > /tmp/typst_dir \
+    && TDIR="$(cat /tmp/typst_dir)" \
+    && install -m 0755 "/tmp/${TDIR}/typst" /usr/local/bin/typst \
+    && rm -rf /tmp/typst.tar.xz "/tmp/${TDIR}" /tmp/typst_dir
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app /app
+
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/data/typst_pdfs \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-4}"]
+
