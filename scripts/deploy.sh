@@ -64,7 +64,7 @@ case "${cmd}" in
   deploy-local)
     require_env_file
     require_docker
-    COMPOSE_PROJECT_NAME=wangsh_local DOCKERHUB_NAMESPACE=local IMAGE_TAG=latest compose up -d --no-build
+    COMPOSE_PROJECT_NAME=wangsh_local compose up -d --no-build
     compose ps
     bash scripts/deploy.sh health
     web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
