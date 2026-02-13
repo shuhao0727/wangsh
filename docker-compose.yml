@@ -78,7 +78,7 @@ services:
       retries: 10
     networks:
       - wangsh-network
-    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-4}" ]
+    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
 
@@ -93,6 +93,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     environment:
       DEBUG: "False"
@@ -120,7 +122,7 @@ services:
       TYPST_COMPILE_USE_CELERY: "true"
       TYPST_PDF_STORAGE_DIR: "/app/data/typst_pdfs"
       TYPST_STORE_PDF_IN_DB: "false"
-    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
     networks:
       - wangsh-network
     volumes:
