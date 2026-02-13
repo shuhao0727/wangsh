@@ -18,11 +18,13 @@ cp .env.example .env
 - `POSTGRES_PASSWORD`
 - `SUPER_ADMIN_PASSWORD`
 - `DOCKERHUB_NAMESPACE`
+- `DEPLOYMENT_ENV`（生产用 production）
+- `REACT_APP_API_URL`（生产用 /api/v1）
 
 可选：
 
 - `WEB_PORT`（默认 6608）
-- `IMAGE_TAG`（默认 latest；需要固定版本时改为 1.0.0 这类版本号）
+- `IMAGE_TAG`（建议固定版本，例如 1.0.2；需要始终拉最新时用 latest）
 
 ## 2）部署方式 A：服务器直接拉取镜像并运行（推荐）
 

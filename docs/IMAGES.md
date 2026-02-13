@@ -8,5 +8,5 @@
 
 推荐：
 
-- 日常部署用 `IMAGE_TAG=latest`
-- 需要可回滚/可审计时，用固定版本号（例如 `IMAGE_TAG=1.0.0`）
+- 生产部署建议用固定版本号（例如 `IMAGE_TAG=1.0.2`）
+- 需要始终拉最新时用 `IMAGE_TAG=latest`
