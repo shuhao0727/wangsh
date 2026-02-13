@@ -61,6 +61,15 @@ case "${cmd}" in
     require_env_file
     DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh deploy
     ;;
+  deploy-local)
+    require_env_file
+    require_docker
+    COMPOSE_PROJECT_NAME=wangsh_local DOCKERHUB_NAMESPACE=local IMAGE_TAG=latest compose up -d --no-build
+    compose ps
+    bash scripts/deploy.sh health
+    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
+    echo "web: http://localhost:${web_port}"
+    ;;
   up-amd64)
     require_env_file
     DOCKER_DEFAULT_PLATFORM=linux/amd64 ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" bash scripts/deploy.sh up
@@ -181,11 +190,11 @@ POSTGRES_USER=admin
 POSTGRES_PASSWORD=${pg_password}
 SUPER_ADMIN_USERNAME=admin
 SUPER_ADMIN_PASSWORD=${admin_password}
-    CORS_ORIGINS=["http://localhost:16608","http://127.0.0.1:16608"]
+CORS_ORIGINS=["http://localhost:16608","http://127.0.0.1:16608"]
 REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
 REACT_APP_VERSION=1.0.0
-    WEB_PORT=16608
+WEB_PORT=16608
 EOF
 
     COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-wangsh_sim}" \
@@ -253,7 +262,7 @@ EOF
     esac
     ;;
   *)
-    echo "usage: $0 <deploy|deploy-amd64|up|pull-up|build|push|down|down-v|logs|health|simulate|backup-db|restore-db|up-amd64|pull-up-amd64|build-amd64|push-amd64|simulate-amd64>" >&2
+    echo "usage: $0 <deploy|deploy-amd64|deploy-local|up|pull-up|build|push|down|down-v|logs|health|simulate|backup-db|restore-db|up-amd64|pull-up-amd64|build-amd64|push-amd64|simulate-amd64>" >&2
     exit 2
     ;;
 esac

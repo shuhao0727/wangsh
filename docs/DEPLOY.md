@@ -36,6 +36,12 @@ bash scripts/deploy.sh pull-up
 bash scripts/deploy.sh deploy
 ```
 
+本地 Docker 镜像部署验证（不依赖 Docker Hub，使用本地构建的 `local/wangsh-*` 镜像）：
+
+```bash
+bash scripts/deploy.sh deploy-local
+```
+
 ## 3）部署方式 B：服务器本地构建并运行（不推荐，作为兜底）
 
 ```bash
