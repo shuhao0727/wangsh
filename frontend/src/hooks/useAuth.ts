@@ -30,11 +30,11 @@ export interface AuthState {
 
 let sharedFetchPromise: Promise<User | null> | null = null;
 
-const AuthContext = createContext<ReturnType<typeof createAuthController> | null>(null);
+const AuthContext = createContext<ReturnType<typeof useAuthController> | null>(null);
 
 const ACCESS_TOKEN_KEY = "ws_access_token";
 
-const createAuthController = () => {
+const useAuthController = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -226,7 +226,7 @@ const createAuthController = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const controller = createAuthController();
+  const controller = useAuthController();
   return React.createElement(AuthContext.Provider, { value: controller }, children);
 };
 
