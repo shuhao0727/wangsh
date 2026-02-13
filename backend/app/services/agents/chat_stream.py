@@ -4,14 +4,24 @@ from typing import AsyncGenerator, Optional, Dict, Any
 
 from app.services.agents.ai_agent import get_agent
 from app.services.agents.providers import detect_flags, chat_completions_endpoint
+from app.core.config import settings
 
 async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None) -> AsyncGenerator[bytes, None]:
     agent = await get_agent(db, agent_id)
-    if not agent or not agent.api_endpoint or not agent.api_key:
+    if not agent:
         yield b"event: error\ndata: {\"error\":\"invalid_agent\"}\n\n"
         return
 
-    api_endpoint = agent.api_endpoint.strip().rstrip("/")
+    api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
+    api_key = agent.api_key
+    if agent.agent_type != "dify":
+        if not api_endpoint:
+            api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
+        if not api_key:
+            api_key = settings.OPENROUTER_API_KEY
+    if not api_endpoint or not api_key:
+        yield b"event: error\ndata: {\"error\":\"invalid_agent\"}\n\n"
+        return
     is_dify = agent.agent_type == "dify"
 
     # 基础请求头构建：后续根据服务商类型微调
@@ -19,13 +29,13 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
     is_anthropic = flags.get("is_anthropic", False)
 
     headers: Dict[str, str] = {}
-    if agent.api_key:
+    if api_key:
         if is_dify:
-            headers["Authorization"] = f"Bearer {agent.api_key}"
+            headers["Authorization"] = f"Bearer {api_key}"
         elif is_anthropic:
-            headers["x-api-key"] = agent.api_key
+            headers["x-api-key"] = api_key
         else:
-            headers["Authorization"] = f"Bearer {agent.api_key}"
+            headers["Authorization"] = f"Bearer {api_key}"
 
     if is_dify:
         candidates = []

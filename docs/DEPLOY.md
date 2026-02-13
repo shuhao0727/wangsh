@@ -21,13 +21,13 @@ cp .env.example .env
 
 可选：
 
-- `WEB_PORT`（默认 8080）
-- `IMAGE_TAG`（默认 latest；建议用版本号，比如 1.0.0）
+- `WEB_PORT`（默认 6608）
+- `IMAGE_TAG`（默认 latest；需要固定版本时改为 1.0.0 这类版本号）
 
-## 2）部署方式 A：服务器本地构建并运行
+## 2）部署方式 A：服务器直接拉取镜像并运行（推荐）
 
 ```bash
-bash scripts/deploy.sh up
+bash scripts/deploy.sh pull-up
 ```
 
 一键部署（拉取/启动 + 健康检查）：
@@ -36,7 +36,13 @@ bash scripts/deploy.sh up
 bash scripts/deploy.sh deploy
 ```
 
-## 3）部署方式 B：本地构建推送 → 服务器拉取运行（推荐）
+## 3）部署方式 B：服务器本地构建并运行（不推荐，作为兜底）
+
+```bash
+bash scripts/deploy.sh up
+```
+
+## 4）镜像发布（你需要重新打包/更新版本时）
 
 本地：
 
@@ -67,7 +73,7 @@ bash scripts/deploy.sh push-amd64
 bash scripts/deploy.sh pull-up
 ```
 
-## 4）验证 / 常用命令
+## 5）验证 / 常用命令
 
 健康检查：
 

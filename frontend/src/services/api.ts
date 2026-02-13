@@ -7,6 +7,57 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 import { config } from "./config";
 import { logger } from "./logger";
 
+let refreshPromise: Promise<void> | null = null;
+const ACCESS_TOKEN_KEY = "ws_access_token";
+const REFRESH_TOKEN_KEY = "ws_refresh_token";
+
+const getStoredAccessToken = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const getStoredRefreshToken = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const authTokenStorage = {
+  set(accessToken?: string | null, refreshToken?: string | null) {
+    if (typeof window === "undefined") return;
+    try {
+      if (accessToken) sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+      if (refreshToken) sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    } catch {
+    }
+  },
+  clear() {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+      sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    } catch {
+    }
+  },
+};
+
+const isAuthEndpoint = (url?: string) => {
+  if (!url) return false;
+  return (
+    url.includes("/auth/login") ||
+    url.includes("/auth/refresh") ||
+    url.includes("/auth/logout") ||
+    url.includes("/auth/me")
+  );
+};
+
 // API 响应接口
 export interface ApiResponse<T = any> {
   code: number;
@@ -41,6 +92,11 @@ const createApiClient = (): AxiosInstance => {
   // 请求拦截器
   instance.interceptors.request.use(
     (requestConfig) => {
+      const token = getStoredAccessToken();
+      if (token && !requestConfig.headers?.Authorization) {
+        requestConfig.headers = requestConfig.headers ?? {};
+        (requestConfig.headers as any).Authorization = `Bearer ${token}`;
+      }
       if (config.features.debug) {
         logger.debug("🚀 API 请求:", {
           url: `${requestConfig.baseURL}${requestConfig.url}`,
@@ -112,41 +168,51 @@ const createApiClient = (): AxiosInstance => {
         originalRequest._retry = true;
 
         try {
-          logger.info("🔄 API: 检测到401错误，尝试刷新会话");
+          if (isAuthEndpoint(originalRequest.url)) {
+            return Promise.reject(error);
+          }
+          logger.debug("🔄 API: 检测到401错误，尝试刷新会话");
           if (originalRequest.url?.includes("/auth/refresh")) {
             throw new Error("刷新接口返回401");
           }
 
-          await instance.post("/auth/refresh", {});
-          logger.info("✅ API: 会话刷新成功，重试原始请求");
+          if (!refreshPromise) {
+            const storedRefreshToken = getStoredRefreshToken();
+            refreshPromise = instance
+              .post(
+                "/auth/refresh",
+                storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
+              )
+              .then((resp) => {
+                const data: any = resp?.data;
+                if (data?.access_token || data?.refresh_token) {
+                  authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
+                }
+                return undefined;
+              })
+              .finally(() => {
+                refreshPromise = null;
+              });
+          }
+          await refreshPromise;
+          logger.debug("✅ API: 会话刷新成功，重试原始请求");
           return instance(originalRequest);
         } catch (_refreshError) {
-          logger.warn("⚠️ API: 会话刷新失败，跳转到登录页面");
-          if (typeof window !== "undefined") {
-            const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-            if (!window.location.pathname.startsWith("/login")) {
-              window.location.href = `/login?redirect=${encodeURIComponent(here)}`;
-            }
-          }
+          logger.debug("⚠️ API: 会话刷新失败");
+          return Promise.reject(error);
         }
       }
 
       if (error.response?.status === 401 && originalRequest?._retry) {
-        if (typeof window !== "undefined") {
-          try {
-            sessionStorage.removeItem("auth_initial_fetched");
-          } catch {
-          }
-          const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-          if (!window.location.pathname.startsWith("/login")) {
-            window.location.href = `/login?redirect=${encodeURIComponent(here)}`;
-          }
-        }
+        return Promise.reject(error);
       }
       
       // 记录错误
       if (error.response) {
         // 服务器返回错误状态码
+        if (error.response.status === 401 && isAuthEndpoint(originalRequest?.url)) {
+          return Promise.reject(error);
+        }
         let loggedData = error.response.data;
         try {
           if (loggedData instanceof Blob) {
@@ -246,11 +312,19 @@ export const authApi = {
 
     // 使用client直接调用，避免ApiResponse包装
     // 注意：baseURL已经包含/api/v1，这里只需要/auth/login
-    return api.client.post("/auth/login", params.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
+    return api.client
+      .post("/auth/login", params.toString(), {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      })
+      .then((resp) => {
+        const data: any = resp?.data;
+        if (data?.access_token || data?.refresh_token) {
+          authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
+        }
+        return resp;
+      });
   },
 
   // 注册
@@ -260,11 +334,16 @@ export const authApi = {
   getCurrentUser: () => api.client.get("/auth/me"),
 
   // 登出
-  logout: () => api.client.post("/auth/logout"),
+  logout: () =>
+    api.client.post("/auth/logout").finally(() => {
+      authTokenStorage.clear();
+    }),
 
   // 刷新令牌
-  refreshToken: (refreshToken?: string) =>
-    api.client.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}),
+  refreshToken: (refreshToken?: string) => {
+    const token = refreshToken || (typeof window !== "undefined" ? sessionStorage.getItem("ws_refresh_token") : null);
+    return api.client.post("/auth/refresh", token ? { refresh_token: token } : {});
+  },
 
   // 验证令牌
   verifyToken: (token?: string) =>

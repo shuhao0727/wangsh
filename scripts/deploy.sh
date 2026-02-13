@@ -54,7 +54,7 @@ case "${cmd}" in
     require_docker
     bash scripts/deploy.sh pull-up
     bash scripts/deploy.sh health
-    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 8080)"
+    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
     echo "web: http://localhost:${web_port}"
     ;;
   deploy-amd64)
@@ -149,7 +149,7 @@ case "${cmd}" in
     ;;
   health)
     require_env_file
-    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 8080)"
+    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
     curl -fsS "http://localhost:${web_port}/api/health"
     ;;
   simulate)
@@ -181,11 +181,11 @@ POSTGRES_USER=admin
 POSTGRES_PASSWORD=${pg_password}
 SUPER_ADMIN_USERNAME=admin
 SUPER_ADMIN_PASSWORD=${admin_password}
-CORS_ORIGINS=["http://localhost:18080","http://127.0.0.1:18080"]
+    CORS_ORIGINS=["http://localhost:16608","http://127.0.0.1:16608"]
 REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
 REACT_APP_VERSION=1.0.0
-WEB_PORT=18080
+    WEB_PORT=16608
 EOF
 
     COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-wangsh_sim}" \
@@ -199,14 +199,14 @@ EOF
       bash scripts/deploy.sh up
 
     for _ in $(seq 1 60); do
-      if curl -fsS "http://localhost:18080/api/health" >/dev/null; then
+      if curl -fsS "http://localhost:16608/api/health" >/dev/null; then
         break
       fi
       sleep 1
     done
-    curl -fsS "http://localhost:18080/api/health" >/dev/null
+    curl -fsS "http://localhost:16608/api/health" >/dev/null
 
-    BASE_URL="http://localhost:18080/api/v1" \
+    BASE_URL="http://localhost:16608/api/v1" \
       ADMIN_USERNAME="admin" \
       ADMIN_PASSWORD="${admin_password}" \
       python3 backend/scripts/smoke_typst_pipeline.py

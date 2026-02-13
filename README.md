@@ -18,9 +18,20 @@ bash stop-dev.sh
 
 看文档： [DEPLOY.md](file:///Users/wsh/wangsh/docs/DEPLOY.md)
 
+最常用的一键部署命令（服务器上）：
+
+```bash
+cp .env.example .env
+bash scripts/deploy.sh deploy
+```
+
 ## 环境变量说明
 
 看文档： [ENV.md](file:///Users/wsh/wangsh/docs/ENV.md)
+
+## 镜像说明
+
+看文档： [IMAGES.md](file:///Users/wsh/wangsh/docs/IMAGES.md)
 
 ## Typst 流水线
 

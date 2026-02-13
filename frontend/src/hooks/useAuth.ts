@@ -28,6 +28,8 @@ export interface AuthState {
   error: string | null;
 }
 
+let sharedFetchPromise: Promise<User | null> | null = null;
+
 const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -44,60 +46,67 @@ const useAuth = () => {
   }, []);
 
   // 获取当前用户信息（增强版，添加调试和错误处理）
-  const fetchCurrentUser = useCallback(async () => {
-    try {
-      logger.debug("fetchCurrentUser: 调用authApi.getCurrentUser()");
-      const response = await authApi.getCurrentUser();
-      logger.debug("fetchCurrentUser: API响应成功", response);
+  const fetchCurrentUser = useCallback((): Promise<User | null> => {
+    if (sharedFetchPromise) return sharedFetchPromise;
 
-      // 处理不同的响应格式
-      let userData = response.data;
-      logger.debug("fetchCurrentUser: 原始响应数据", userData);
+    sharedFetchPromise = (async (): Promise<User | null> => {
+      try {
+        logger.debug("fetchCurrentUser: 调用authApi.getCurrentUser()");
+        const response = await authApi.getCurrentUser();
+        logger.debug("fetchCurrentUser: API响应成功", response);
 
-      // 检查是否被ApiResponse包装
-      if (userData && typeof userData === "object" && "data" in userData) {
-        logger.debug("fetchCurrentUser: 检测到ApiResponse包装，解包...");
-        userData = userData.data;
+        let userData = response.data;
+        logger.debug("fetchCurrentUser: 原始响应数据", userData);
+
+        if (userData && typeof userData === "object" && "data" in userData) {
+          logger.debug("fetchCurrentUser: 检测到ApiResponse包装，解包...");
+          userData = (userData as any).data;
+        }
+
+        if (!userData || typeof userData !== "object") {
+          throw new Error("无效的用户数据格式");
+        }
+
+        setAuthState({
+          user: userData as User,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+
+        return userData as User;
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 401) {
+          setAuthState({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
+          });
+          return null;
+        }
+
+        const errorMessage =
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          "身份验证失败，请重新登录";
+
+        logger.error("fetchCurrentUser: 获取用户信息失败", error);
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: errorMessage,
+        });
+        return null;
+      } finally {
+        sharedFetchPromise = null;
       }
+    })();
 
-      // 验证用户数据格式
-      if (!userData || typeof userData !== "object") {
-        logger.error("fetchCurrentUser: 用户数据格式无效", userData);
-        throw new Error("无效的用户数据格式");
-      }
-
-      logger.debug("fetchCurrentUser: 设置用户状态", userData);
-      setAuthState({
-        user: userData,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      });
-
-      return userData;
-    } catch (error: any) {
-      logger.error("fetchCurrentUser: 获取用户信息失败", error);
-      logger.error("fetchCurrentUser: 错误详情", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-
-      // 提取错误信息
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        "身份验证失败，请重新登录";
-
-      setAuthState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: errorMessage,
-      });
-      return null;
-    }
+    return sharedFetchPromise;
   }, []);
   // 登录
   const login = useCallback(
@@ -110,7 +119,12 @@ const useAuth = () => {
           setTimeout(() => resolve(null), 8000),
         );
         const user = (await Promise.race([fetchCurrentUser(), timeoutPromise])) as User | null;
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
+        if (!user) {
+          const msg = "登录成功但会话未建立，请检查部署域名/Cookie/反向代理配置";
+          setAuthState((prev) => ({ ...prev, isLoading: false, error: msg }));
+          return { success: false, error: msg };
+        }
+        setAuthState((prev) => ({ ...prev, isLoading: false, error: null }));
         return { success: true, user };
       } catch (error: any) {
         const errorMessage =
@@ -187,7 +201,7 @@ const useAuth = () => {
     const alreadyFetched = sessionStorage.getItem(SESSION_FLAG_KEY) === "1";
     if (!initialFetchRef.current) {
       initialFetchRef.current = true;
-      if (!authState.user || !authState.isAuthenticated || !alreadyFetched) {
+      if (!alreadyFetched) {
         sessionStorage.setItem(SESSION_FLAG_KEY, "1");
         fetchCurrentUser();
       } else {

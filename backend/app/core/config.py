@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     
     # ==================== CORS 配置 ====================
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:6608", "http://127.0.0.1:6608"])
+
+    # ==================== 外部 AI 服务（可选） ====================
+    OPENROUTER_API_URL: str = Field(default="https://openrouter.ai/api/v1")
+    OPENROUTER_API_KEY: Optional[str] = Field(default=None)
     
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
