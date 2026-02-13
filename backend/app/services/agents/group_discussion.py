@@ -498,7 +498,10 @@ async def admin_analyze_session(
     try:
         result_text = await run_agent_chat_blocking(db, agent_id=agent_id, message=prompt_text, user="admin")
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"智能体分析失败: {str(e)}")
+        msg = str(e)
+        if msg.startswith("provider_status_429"):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
+        raise HTTPException(status_code=422, detail=f"智能体分析失败: {msg}")
 
     analysis = GroupDiscussionAnalysis(
         session_id=session_id,
@@ -632,7 +635,10 @@ async def admin_compare_analyze_sessions(
     try:
         result_text = await run_agent_chat_blocking(db, agent_id=agent_id, message=prompt_text, user="admin")
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"智能体分析失败: {str(e)}")
+        msg = str(e)
+        if msg.startswith("provider_status_429"):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
+        raise HTTPException(status_code=422, detail=f"智能体分析失败: {msg}")
 
     analysis = GroupDiscussionAnalysis(
         session_id=int(ids[0]),

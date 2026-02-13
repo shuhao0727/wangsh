@@ -587,8 +587,23 @@ const AIAgentsPage: React.FC = () => {
               }
               await persistUsage(finalText);
             } else if (eventType === "error") {
-              const errText = payload?.message || payload?.error || "对话发生错误";
-              markError(String(errText));
+              const rawError = payload?.error ? String(payload.error) : "";
+              const status = payload?.provider_status ? Number(payload.provider_status) : undefined;
+              const detail = payload?.detail ? String(payload.detail) : "";
+              let errText = payload?.message ? String(payload.message) : "";
+              if (!errText) {
+                if (rawError === "provider_status_429" || status === 429) {
+                  errText = "上游服务返回 429（限流/额度不足）。请稍后重试，或更换 API Key/提升额度";
+                } else if (rawError) {
+                  errText = rawError;
+                } else {
+                  errText = "对话发生错误";
+                }
+              }
+              if (detail && detail !== errText) {
+                errText = `${errText}\n${detail}`;
+              }
+              markError(errText);
             } else {
               const fallback = getAnswerText();
               if (fallback) {

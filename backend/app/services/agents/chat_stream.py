@@ -6,6 +6,19 @@ from app.services.agents.ai_agent import get_agent
 from app.services.agents.providers import detect_flags, chat_completions_endpoint
 from app.core.config import settings
 
+def _provider_error_message(status_code: int) -> str:
+    if status_code == 401 or status_code == 403:
+        return "上游服务鉴权失败（请检查 API Key 是否正确、是否有权限访问该模型）"
+    if status_code == 404:
+        return "上游服务接口或模型不存在（请检查 API Endpoint 与模型名）"
+    if status_code == 429:
+        return "上游服务返回 429（限流/额度不足）。请稍后重试，或更换 API Key/提升额度"
+    if status_code == 402:
+        return "上游服务余额不足或需要付费（请检查账号额度/账单）"
+    if 500 <= status_code <= 599:
+        return "上游服务异常（5xx）。请稍后重试"
+    return "上游服务请求失败"
+
 async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None) -> AsyncGenerator[bytes, None]:
     agent = await get_agent(db, agent_id)
     if not agent:
@@ -121,8 +134,11 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
                     if resp.status_code != 200:
                         body_bytes = await resp.aread()
                         body_text = body_bytes.decode("utf-8", errors="ignore")
+                        status_code = int(resp.status_code)
                         err = {
-                            "error": f"provider_status_{resp.status_code}",
+                            "error": f"provider_status_{status_code}",
+                            "message": _provider_error_message(status_code),
+                            "provider_status": status_code,
                             "detail": body_text[:200],
                         }
                         yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(
