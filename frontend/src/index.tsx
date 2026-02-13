@@ -7,6 +7,7 @@ import './styles/index.css';
 import './styles/ui-polish.css';
 import "./utils/dayjs";
 import App from './App';
+import { AuthProvider } from '@hooks/useAuth';
 
 // 获取根元素
 const container = document.getElementById('root');
@@ -79,7 +80,9 @@ root.render(
           },
         }}
       >
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </ConfigProvider>
     </BrowserRouter>
   </React.StrictMode>

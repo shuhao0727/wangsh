@@ -4,7 +4,7 @@
  * 符合数据库设计文档v3.0，支持统一用户系统
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { authApi } from "@services";
 import { logger } from "@services/logger";
 
@@ -30,7 +30,11 @@ export interface AuthState {
 
 let sharedFetchPromise: Promise<User | null> | null = null;
 
-const useAuth = () => {
+const AuthContext = createContext<ReturnType<typeof createAuthController> | null>(null);
+
+const ACCESS_TOKEN_KEY = "ws_access_token";
+
+const createAuthController = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -39,10 +43,13 @@ const useAuth = () => {
   });
 
   const initialFetchRef = useRef(false);
-  const SESSION_FLAG_KEY = "auth_initial_fetched";
 
   const getToken = useCallback(() => {
-    return null;
+    try {
+      return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    } catch {
+      return null;
+    }
   }, []);
 
   // 获取当前用户信息（增强版，添加调试和错误处理）
@@ -149,7 +156,6 @@ const useAuth = () => {
     } catch (error) {
       logger.error("登出失败:", error);
     } finally {
-      sessionStorage.removeItem(SESSION_FLAG_KEY);
       setAuthState({
         user: null,
         isAuthenticated: false,
@@ -198,17 +204,11 @@ const useAuth = () => {
 
   // 初始化时获取用户信息
   useEffect(() => {
-    const alreadyFetched = sessionStorage.getItem(SESSION_FLAG_KEY) === "1";
     if (!initialFetchRef.current) {
       initialFetchRef.current = true;
-      if (!alreadyFetched) {
-        sessionStorage.setItem(SESSION_FLAG_KEY, "1");
-        fetchCurrentUser();
-      } else {
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
-      }
+      fetchCurrentUser();
     }
-  }, [fetchCurrentUser, authState.user, authState.isAuthenticated]);
+  }, [fetchCurrentUser]);
 
   return {
     ...authState,
@@ -223,6 +223,19 @@ const useAuth = () => {
     getDisplayName,
     getToken,
   };
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const controller = createAuthController();
+  return React.createElement(AuthContext.Provider, { value: controller }, children);
+};
+
+const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within <AuthProvider>");
+  }
+  return ctx;
 };
 
 export default useAuth;

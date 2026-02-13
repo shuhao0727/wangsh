@@ -56,10 +56,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
           onSuccess();
         }
 
-        // 刷新页面以更新菜单和状态
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
       } else {
         message.error(result.error || "登录失败");
       }
