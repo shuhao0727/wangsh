@@ -21,6 +21,9 @@ from .xbk import XbkStudent, XbkCourse, XbkSelection
 # 信息学/笔记模型 (inf_ 前缀)
 from .informatics import TypstNote, TypstAsset, TypstStyle, TypstCategory
 
+# 信息技术模型 (xxjs_ 前缀)
+from .xxjs.dianming import XxjsDianming
+
 __all__ = [
     "Base", 
     "User", 
@@ -40,4 +43,5 @@ __all__ = [
     "TypstAsset",
     "TypstStyle",
     "TypstCategory",
+    "XxjsDianming",
 ]

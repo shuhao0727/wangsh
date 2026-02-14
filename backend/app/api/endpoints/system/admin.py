@@ -1,17 +1,91 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, update
+from pydantic import BaseModel
 
 from app.core.deps import require_admin, get_db
 from app.core.config import settings
 from app.utils.cache import cache
 from app.services.informatics.typst_pdf_cleanup import cleanup_unreferenced_pdfs
 from app.db.database import engine
+from app.models.core.feature_flag import FeatureFlag
 
 router = APIRouter(prefix="/system")
+
+# --- Feature Flags ---
+
+class FeatureFlagSchema(BaseModel):
+    key: str
+    value: Any
+    
+    class Config:
+        from_attributes = True
+
+@router.get("/feature-flags", response_model=List[FeatureFlagSchema])
+async def list_feature_flags(
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    stmt = select(FeatureFlag)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+@router.get("/feature-flags/{key}", response_model=FeatureFlagSchema)
+async def get_feature_flag(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    # Publicly accessible for frontend checks, or restricted? 
+    # Usually public endpoints need a separate route or relaxed dependency.
+    # For now, let's keep it admin-only here and assume there's a public way or we relax this.
+    # Actually, for frontend feature toggles, we often need a public endpoint.
+    # But let's stick to admin management first.
+    user: Dict[str, Any] = Depends(require_admin), 
+) -> Any:
+    stmt = select(FeatureFlag).where(FeatureFlag.key == key)
+    result = await db.execute(stmt)
+    flag = result.scalar_one_or_none()
+    if not flag:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    return flag
+
+@router.post("/feature-flags", response_model=FeatureFlagSchema)
+async def create_or_update_feature_flag(
+    data: FeatureFlagSchema,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    stmt = select(FeatureFlag).where(FeatureFlag.key == data.key)
+    result = await db.execute(stmt)
+    flag = result.scalar_one_or_none()
+    
+    if flag:
+        flag.value = data.value
+        # Trigger update explicitly if needed, but SQLAlchemy tracks changes
+    else:
+        flag = FeatureFlag(key=data.key, value=data.value)
+        db.add(flag)
+    
+    await db.commit()
+    await db.refresh(flag)
+    return flag
+
+# Public endpoint for feature flags (optional, but good for frontend)
+@router.get("/public/feature-flags/{key}", response_model=FeatureFlagSchema)
+async def get_public_feature_flag(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    # Allow read-only access to feature flags
+    stmt = select(FeatureFlag).where(FeatureFlag.key == key)
+    result = await db.execute(stmt)
+    flag = result.scalar_one_or_none()
+    if not flag:
+        # Return default structure if not found to avoid 404s on frontend
+        return FeatureFlagSchema(key=key, value={}) 
+    return flag
 
 
 @router.get("/overview")
