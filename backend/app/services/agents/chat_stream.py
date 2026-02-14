@@ -1,3 +1,4 @@
+import asyncio
 import json
 import httpx
 from typing import AsyncGenerator, Optional, Dict, Any
@@ -5,6 +6,7 @@ from typing import AsyncGenerator, Optional, Dict, Any
 from app.services.agents.ai_agent import get_agent
 from app.services.agents.providers import detect_flags, chat_completions_endpoint
 from app.core.config import settings
+from app.utils.agent_secrets import try_decrypt_api_key
 
 def _provider_error_message(status_code: int) -> str:
     if status_code == 401 or status_code == 403:
@@ -19,6 +21,28 @@ def _provider_error_message(status_code: int) -> str:
         return "上游服务异常（5xx）。请稍后重试"
     return "上游服务请求失败"
 
+
+def _extract_provider_detail(body_text: str) -> str:
+    t = (body_text or "").strip()
+    if not t:
+        return ""
+    try:
+        data = json.loads(t)
+        if isinstance(data, dict):
+            err = data.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message") or err.get("error") or err.get("type")
+                if msg:
+                    return str(msg)[:500]
+            if isinstance(err, str) and err.strip():
+                return err.strip()[:500]
+            msg = data.get("message")
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()[:500]
+    except Exception:
+        pass
+    return t[:500]
+
 async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None) -> AsyncGenerator[bytes, None]:
     agent = await get_agent(db, agent_id)
     if not agent:
@@ -26,7 +50,7 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
         return
 
     api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
-    api_key = agent.api_key
+    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
     if agent.agent_type != "dify":
         if not api_endpoint:
             api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
@@ -128,65 +152,69 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
 
         try:
             async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
-                async with client.stream(
-                    "POST", chat_url, headers=headers, json=payload
-                ) as resp:
-                    if resp.status_code != 200:
-                        body_bytes = await resp.aread()
-                        body_text = body_bytes.decode("utf-8", errors="ignore")
-                        status_code = int(resp.status_code)
-                        err = {
-                            "error": f"provider_status_{status_code}",
-                            "message": _provider_error_message(status_code),
-                            "provider_status": status_code,
-                            "detail": body_text[:200],
-                        }
-                        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(
-                            "utf-8"
-                        )
+                for attempt in range(3):
+                    async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
+                        if resp.status_code != 200:
+                            body_bytes = await resp.aread()
+                            body_text = body_bytes.decode("utf-8", errors="ignore")
+                            status_code = int(resp.status_code)
+                            if status_code in (429, 502, 503, 504) and attempt < 2:
+                                await asyncio.sleep(1.5 * (2**attempt))
+                                continue
+                            detail = _extract_provider_detail(body_text)
+                            err = {
+                                "error": f"provider_status_{status_code}",
+                                "message": _provider_error_message(status_code),
+                                "provider_status": status_code,
+                                "detail": detail[:500],
+                            }
+                            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+                            return
+
+                        final_text = ""
+
+                        async for raw_line in resp.aiter_lines():
+                            if not raw_line:
+                                continue
+                            line = raw_line.strip()
+                            if not line.startswith("data:"):
+                                continue
+
+                            data_str = line[len("data:") :].strip()
+                            if not data_str:
+                                continue
+                            if data_str == "[DONE]":
+                                break
+
+                            try:
+                                obj = json.loads(data_str)
+                            except Exception:
+                                continue
+
+                            choices = obj.get("choices") or []
+                            if not choices:
+                                continue
+                            choice0 = choices[0] or {}
+                            delta = choice0.get("delta") or choice0.get("message") or {}
+                            content = delta.get("content") or ""
+                            if not content:
+                                continue
+
+                            final_text += str(content)
+                            chunk = {"answer": str(content)}
+                            yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode(
+                                "utf-8"
+                            )
+
+                        if final_text:
+                            end_payload = {"answer": final_text}
+                            yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode(
+                                "utf-8"
+                            )
                         return
 
-                    final_text = ""
-
-                    async for raw_line in resp.aiter_lines():
-                        if not raw_line:
-                            continue
-                        line = raw_line.strip()
-                        if not line.startswith("data:"):
-                            continue
-
-                        data_str = line[len("data:") :].strip()
-                        if not data_str:
-                            continue
-                        if data_str == "[DONE]":
-                            break
-
-                        try:
-                            obj = json.loads(data_str)
-                        except Exception:
-                            continue
-
-                        choices = obj.get("choices") or []
-                        if not choices:
-                            continue
-                        choice0 = choices[0] or {}
-                        delta = choice0.get("delta") or choice0.get("message") or {}
-                        content = delta.get("content") or ""
-                        if not content:
-                            continue
-
-                        final_text += str(content)
-                        chunk = {"answer": str(content)}
-                        yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode(
-                            "utf-8"
-                        )
-
-                    if final_text:
-                        end_payload = {"answer": final_text}
-                        yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode(
-                            "utf-8"
-                        )
-                    return
+                yield b"event: error\ndata: {\"error\":\"stream_failed\"}\n\n"
+                return
         except Exception as e:
             err = {"error": "stream_failed", "detail": str(e)}
             yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(

@@ -2,7 +2,9 @@
 # 前端生产环境 Dockerfile
 # ============================================
 
-FROM node:20-alpine AS builder
+ARG NODE_IMAGE=node:20-alpine
+ARG CADDY_IMAGE=caddy:latest
+FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /app
 
@@ -37,7 +39,7 @@ RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -
 COPY . .
 RUN npm run build
 
-FROM caddy:latest AS production
+FROM ${CADDY_IMAGE} AS production
 
 COPY --from=builder /app/build /usr/share/caddy
 COPY caddy/Caddyfile.prod /etc/caddy/Caddyfile

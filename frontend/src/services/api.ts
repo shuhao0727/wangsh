@@ -137,8 +137,26 @@ const createApiClient = (): AxiosInstance => {
 
         if (isValidationError) {
           logger.error("❌ API 响应中包含验证错误:", data);
+          
+          // 将 Pydantic 错误数组转换为用户友好的字符串
+          const details = (data as ValidationErrorResponse).detail;
+          const message = details.map(err => {
+            const field = err.loc[err.loc.length - 1];
+            // 简单的字段名翻译映射，可以根据需要扩展
+            const fieldMap: Record<string, string> = {
+              name: '名称',
+              agent_type: '智能体类型',
+              api_endpoint: 'API 地址',
+              api_key: 'API 密钥',
+              model_name: '模型名称',
+              description: '描述'
+            };
+            const fieldName = fieldMap[String(field)] || field;
+            return `${fieldName}: ${err.msg}`;
+          }).join('; ');
+
           // 创建错误对象
-          const error = new Error("请求数据验证失败");
+          const error = new Error(message || "请求数据验证失败");
           (error as any).response = {
             data: data,
             status: 422,
@@ -148,6 +166,8 @@ const createApiClient = (): AxiosInstance => {
           };
           (error as any).config = response.config;
           (error as any).request = response.request;
+          // 附加自定义消息字段供前端组件使用
+          (error as any).userMessage = message;
           return Promise.reject(error);
         }
       }

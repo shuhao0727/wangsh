@@ -20,11 +20,10 @@ interface AgentDetailProps {
   onClose: () => void;
 }
 
-// 格式化API密钥显示
-const formatApiKey = (key?: string): string => {
-  if (!key) return "未设置";
-  if (key.length <= 8) return "****";
-  return `${key.substring(0, 4)}****${key.substring(key.length - 4)}`;
+const formatApiKey = (agent: AIAgent): string => {
+  if (!agent.has_api_key) return "未设置";
+  if (agent.api_key_last4) return `****${agent.api_key_last4}`;
+  return "已设置";
 };
 
 // 智能体类型标签映射
@@ -123,7 +122,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
             <Text strong>API密钥：</Text>
             <div style={{ marginTop: 4 }}>
               <KeyOutlined style={{ marginRight: 4, color: "#faad14" }} />
-              <Tag color="orange">{formatApiKey(agent.api_key)}</Tag>
+              <Tag color={agent.has_api_key ? "orange" : "default"}>{formatApiKey(agent)}</Tag>
               <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
                 （部分隐藏）
               </Text>

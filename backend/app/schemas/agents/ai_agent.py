@@ -6,7 +6,7 @@ AI智能体相关的 Pydantic 模型
 
 from datetime import datetime
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field, validator, HttpUrl
+from pydantic import BaseModel, Field, validator, HttpUrl, AnyHttpUrl
 from uuid import UUID
 
 
@@ -21,7 +21,7 @@ class AIAgentBase(BaseModel):
     agent_type: AgentType = Field(..., description="智能体类型: general(通用)/openai(OpenAI兼容)/dify(Dify自定义)")
     description: Optional[str] = Field(None, max_length=2000, description="智能体描述（可选）")
     model_name: Optional[str] = Field(None, max_length=100, description="模型名称（如：deepseek-chat, gpt-4, 深度思考等）")
-    api_endpoint: Optional[str] = Field(None, max_length=500, description="API端点URL")
+    api_endpoint: Optional[AnyHttpUrl] = Field(None, description="API端点URL")
     api_key: Optional[str] = Field(None, max_length=200, description="API密钥")
     is_active: bool = Field(True, description="是否启用")
     
@@ -31,18 +31,6 @@ class AIAgentBase(BaseModel):
         if not v.strip():
             raise ValueError("智能体名称不能为空")
         return v.strip()
-    
-    @validator("api_endpoint")
-    def validate_api_endpoint(cls, v):
-        """验证API端点格式"""
-        if v is None or v == "":
-            return v
-        
-        # 简单的URL验证
-        if not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError("API端点必须以http://或https://开头")
-        
-        return v
 
 
 class AIAgentCreate(AIAgentBase):
@@ -56,14 +44,26 @@ class AIAgentUpdate(BaseModel):
     agent_type: Optional[AgentType] = Field(None, description="智能体类型")
     description: Optional[str] = Field(None, max_length=2000, description="智能体描述（可选）")
     model_name: Optional[str] = Field(None, max_length=100, description="模型名称")
-    api_endpoint: Optional[str] = Field(None, max_length=500, description="API端点URL")
+    api_endpoint: Optional[AnyHttpUrl] = Field(None, description="API端点URL")
     api_key: Optional[str] = Field(None, max_length=200, description="API密钥")
+    clear_api_key: Optional[bool] = Field(False, description="是否清除已保存的API密钥")
     is_active: Optional[bool] = Field(None, description="是否启用")
+
+    @validator("name")
+    def validate_name_not_empty(cls, v):
+        """验证名称非空（如果提供）"""
+        if v is not None:
+            if not v.strip():
+                raise ValueError("智能体名称不能为空")
+            return v.strip()
+        return v
 
 
 class AIAgentInDB(AIAgentBase):
     """数据库中的AI智能体模型"""
     id: int = Field(..., description="智能体ID")
+    has_api_key: Optional[bool] = Field(None, description="是否已配置API密钥")
+    api_key_last4: Optional[str] = Field(None, max_length=8, description="API密钥末尾4位")
     is_deleted: bool = Field(False, description="是否已删除")
     created_at: datetime = Field(..., description="创建时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
@@ -111,6 +111,14 @@ class AgentTestResponse(BaseModel):
     message: str = Field(..., description="响应消息或错误信息")
     response_time: Optional[float] = Field(None, description="响应时间（毫秒）")
     timestamp: datetime = Field(..., description="时间戳")
+
+
+class AgentRevealKeyRequest(BaseModel):
+    admin_password: str = Field(..., min_length=1, max_length=200, description="管理员密码（二次确认）")
+
+
+class AgentRevealKeyResponse(BaseModel):
+    api_key: str = Field(..., description="API密钥明文")
 
 
 # 智能体统计数据模型

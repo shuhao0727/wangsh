@@ -33,6 +33,9 @@ class AIAgent(Base):
     # API配置
     api_endpoint = Column(String(500), comment="API端点URL")
     api_key = Column(String(200), nullable=True, comment="API密钥")
+    api_key_encrypted = Column(Text, nullable=True, comment="API密钥（加密存储）")
+    api_key_last4 = Column(String(8), nullable=True, comment="API密钥末尾4位")
+    has_api_key = Column(Boolean, default=False, server_default=expression.false(), comment="是否已配置API密钥")
     
     # 状态
     is_active = Column(Boolean, default=True, server_default=expression.true(), comment="是否启用")

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.agents.group_discussion import (
     GroupDiscussionAnalysis,
+    GroupDiscussionMember,
     GroupDiscussionMessage,
     GroupDiscussionSession,
 )
@@ -80,7 +81,20 @@ async def get_or_create_today_session(
     class_name_n = _normalize_class_name(class_name)
     group_no_n = _normalize_group_no(group_no)
     group_name_n = _normalize_group_name(group_name)
+    user_id = int(user.get("id") or 0)
     today = datetime.now().date()
+
+    # 1. 检查上次加入时间（用于冷却检查）
+    last_member = (
+        await db.execute(
+            select(GroupDiscussionMember)
+            .where(GroupDiscussionMember.user_id == user_id)
+            .order_by(GroupDiscussionMember.joined_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    # 2. 获取现有 Session (不创建)
     row = (
         await db.execute(
             select(GroupDiscussionSession).where(
@@ -90,27 +104,66 @@ async def get_or_create_today_session(
             )
         )
     ).scalar_one_or_none()
-    if row:
+
+    # 3. 冷却检查逻辑
+    # 如果找到了目标 Session，且用户已经在其中，直接返回（无视冷却）
+    if row and last_member and last_member.session_id == row.id:
+        # 如果是创建者且提供了新组名，更新组名
         if (
             group_name_n
             and not (row.group_name or "").strip()
-            and int(row.created_by_user_id or 0) == int(user.get("id") or 0)
+            and int(row.created_by_user_id or 0) == user_id
         ):
             row.group_name = group_name_n
             await db.commit()
             await db.refresh(row)
         return row
 
-    row = GroupDiscussionSession(
-        session_date=today,
-        class_name=class_name_n,
-        group_no=group_no_n,
-        group_name=group_name_n,
-        created_by_user_id=user.get("id"),
-    )
-    db.add(row)
+    # 否则（切换或新建），检查冷却
+    if last_member:
+        joined_at = last_member.joined_at
+        if joined_at.tzinfo is None:
+            joined_at = joined_at.replace(tzinfo=timezone.utc)
+        
+        delta = datetime.now(timezone.utc) - joined_at
+        if delta.total_seconds() < 180:
+            remain = 180 - int(delta.total_seconds())
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"切换小组需等待 {remain} 秒",
+            )
+
+    # 4. 获取或创建 Session (如果之前没找到)
+    if not row:
+        row = GroupDiscussionSession(
+            session_date=today,
+            class_name=class_name_n,
+            group_no=group_no_n,
+            group_name=group_name_n,
+            created_by_user_id=user_id,
+        )
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+    else:
+        # 如果 Session 已存在但用户不在其中，更新组名（如果是创建者补录）
+        if (
+            group_name_n
+            and not (row.group_name or "").strip()
+            and int(row.created_by_user_id or 0) == user_id
+        ):
+            row.group_name = group_name_n
+            await db.commit()
+            await db.refresh(row)
+
+    # 5. 处理成员变更
+    if last_member:
+        await db.delete(last_member)
+
+    new_mem = GroupDiscussionMember(session_id=row.id, user_id=user_id)
+    db.add(new_mem)
     await db.commit()
-    await db.refresh(row)
+    
     return row
 
 
@@ -120,11 +173,20 @@ async def list_today_groups(
     class_name: str,
     keyword: Optional[str] = None,
     limit: int = 50,
-) -> List[GroupDiscussionSession]:
+) -> List[Any]:
     class_name_n = _normalize_class_name(class_name)
     limit_n = max(1, min(int(limit or 50), 200))
     today = datetime.now().date()
-    stmt = select(GroupDiscussionSession).where(
+    
+    # 子查询统计成员数
+    member_count_sub = (
+        select(func.count(GroupDiscussionMember.id))
+        .where(GroupDiscussionMember.session_id == GroupDiscussionSession.id)
+        .correlate(GroupDiscussionSession)
+        .scalar_subquery()
+    )
+
+    stmt = select(GroupDiscussionSession, member_count_sub.label("real_member_count")).where(
         GroupDiscussionSession.session_date == today,
         GroupDiscussionSession.class_name == class_name_n,
     )
@@ -142,7 +204,8 @@ async def list_today_groups(
                 GroupDiscussionSession.group_no.asc(),
             ).limit(limit_n)
         )
-    ).scalars().all()
+    ).all()
+    # rows is list of (Session, member_count) tuples
     return rows
 
 
@@ -243,6 +306,18 @@ async def send_message(
 
     now = datetime.now(timezone.utc)
     user_id = int(student_user["id"])
+
+    # 验证是否为该组成员
+    is_member = (
+        await db.execute(
+            select(GroupDiscussionMember).where(
+                GroupDiscussionMember.session_id == session_id,
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not is_member:
+        raise HTTPException(status_code=403, detail="请先加入该小组")
 
     rate_seconds = int(settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS or 0)
     if rate_seconds > 0:

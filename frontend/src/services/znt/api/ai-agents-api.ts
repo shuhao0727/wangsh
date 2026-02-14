@@ -19,8 +19,29 @@ import { api } from "../../api";
 import { logger } from "../../logger";
 
 // API路径常量
-const AI_AGENTS_BASE_PATH = "/ai-agents";
+const AI_AGENTS_BASE_PATH = "/ai-agents/";
 const MODEL_DISCOVERY_BASE_PATH = "/model-discovery";
+
+const toDetailMessage = (detail: any): string | undefined => {
+  if (!detail) return undefined;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (!d) return "";
+        if (typeof d === "string") return d;
+        const loc = Array.isArray(d.loc) ? d.loc.join(".") : "";
+        const msg = d.msg || d.message || "";
+        return [loc, msg].filter(Boolean).join(": ");
+      })
+      .filter(Boolean);
+    return parts.join("；") || undefined;
+  }
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+};
 
 // 格式化API响应，添加前端兼容字段
 const formatAgentResponse = (agent: any): AIAgent => {
@@ -31,7 +52,9 @@ const formatAgentResponse = (agent: any): AIAgent => {
     agent_type: agent.agent_type,
     description: agent.description || "",
     api_endpoint: agent.api_endpoint,
-    api_key: agent.api_key,
+    api_key: agent.api_key || undefined,
+    has_api_key: agent.has_api_key,
+    api_key_last4: agent.api_key_last4,
     is_active: agent.is_active,
     status: agent.status || agent.is_active, // 兼容字段
     is_deleted: agent.is_deleted || false,
@@ -89,7 +112,7 @@ const aiAgentsApi = {
           total_pages: 0,
         },
         success: false,
-        message: error.response?.data?.detail || error.message || "获取智能体列表失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取智能体列表失败",
       };
     }
   },
@@ -97,7 +120,7 @@ const aiAgentsApi = {
   // 获取启用的智能体列表（用于AIAgents页面）
   getActiveAgents: async (): Promise<BaseResponse<AIAgent[]>> => {
     try {
-      const response = await api.get(`${AI_AGENTS_BASE_PATH}/active`);
+      const response = await api.get(`${AI_AGENTS_BASE_PATH}active`);
       
       // 后端直接返回AIAgentResponse[]数组
       const responseData = response.data;
@@ -115,7 +138,7 @@ const aiAgentsApi = {
       return {
         data: [],
         success: false,
-        message: error.response?.data?.detail || error.message || "获取启用智能体列表失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取启用智能体列表失败",
       };
     }
   },
@@ -123,7 +146,7 @@ const aiAgentsApi = {
   // 获取智能体详情
   getAgent: async (id: number): Promise<BaseResponse<AIAgent>> => {
     try {
-      const response = await api.get(`${AI_AGENTS_BASE_PATH}/${id}`);
+      const response = await api.get(`${AI_AGENTS_BASE_PATH}${id}`);
       
       return {
         data: formatAgentResponse(response.data),
@@ -144,7 +167,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: error.response?.data?.detail || error.message || "获取智能体详情失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取智能体详情失败",
       };
     }
   },
@@ -186,7 +209,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: error.response?.data?.detail || error.message || "创建智能体失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "创建智能体失败",
       };
     }
   },
@@ -197,7 +220,17 @@ const aiAgentsApi = {
     data: Partial<AgentFormValues>,
   ): Promise<BaseResponse<AIAgent>> => {
     try {
-      const response = await api.put(`${AI_AGENTS_BASE_PATH}/${id}`, data);
+      // 这里的路径拼接需要注意，AI_AGENTS_BASE_PATH 已经包含末尾斜杠
+      // 后端 update 接口不带尾随斜杠 (PUT /{agent_id})
+      // 所以我们要去掉末尾的斜杠，或者使用不带斜杠的 base path
+      const url = `${AI_AGENTS_BASE_PATH}${id}`;
+      // 如果 AI_AGENTS_BASE_PATH 是 "/ai-agents/"，那么 url 就是 "/ai-agents/2"
+      // 但是如果后端要求不带斜杠，我们需要处理一下
+      // 目前后端定义是 @router.put("/{agent_id}")，在 /ai-agents 路由下
+      // FastAPI 对于 PUT /ai-agents/2 和 /ai-agents/2/ 处理方式可能不同
+      // 之前的测试表明 PUT /ai-agents/2 是 OK 的，PUT /ai-agents/2/ 会 307
+      
+      const response = await api.put(url, data);
       
       return {
         data: formatAgentResponse(response.data),
@@ -220,7 +253,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: error.response?.data?.detail || error.message || "更新智能体失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "更新智能体信息失败",
       };
     }
   },
@@ -228,7 +261,7 @@ const aiAgentsApi = {
   // 删除智能体（软删除）
   deleteAgent: async (id: number): Promise<BaseResponse<boolean>> => {
     try {
-      await api.delete(`${AI_AGENTS_BASE_PATH}/${id}`);
+      await api.delete(`${AI_AGENTS_BASE_PATH}${id}`);
       
       return {
         data: true,
@@ -240,7 +273,7 @@ const aiAgentsApi = {
       return {
         data: false,
         success: false,
-        message: error.response?.data?.detail || error.message || "删除智能体失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "删除智能体失败",
       };
     }
   },
@@ -252,7 +285,7 @@ const aiAgentsApi = {
   ): Promise<BaseResponse<any>> => {
     try {
       const response = await api.post(
-        `${AI_AGENTS_BASE_PATH}/test`,
+        `${AI_AGENTS_BASE_PATH}test`,
         {
           agent_id: agentId,
           test_message: testMessage,
@@ -270,12 +303,32 @@ const aiAgentsApi = {
       return {
         data: {
           success: false,
-          message: error.response?.data?.detail || error.message || "智能体测试失败",
+          message: toDetailMessage(error.response?.data?.detail) || error.message || "智能体测试失败",
           response_time: null,
           timestamp: new Date().toISOString(),
         },
         success: false,
-        message: error.response?.data?.detail || error.message || "智能体测试失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "智能体测试失败",
+      };
+    }
+  },
+
+  revealApiKey: async (agentId: number, adminPassword: string): Promise<BaseResponse<string>> => {
+    try {
+      const response = await api.post(`${AI_AGENTS_BASE_PATH}${agentId}/reveal-api-key`, {
+        admin_password: adminPassword,
+      });
+      return {
+        data: String((response.data as any)?.api_key || ""),
+        success: true,
+        message: "获取API密钥成功",
+      };
+    } catch (error: any) {
+      logger.error(`获取API密钥失败 ID=${agentId}:`, error);
+      return {
+        data: "",
+        success: false,
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取API密钥失败",
       };
     }
   },
@@ -283,7 +336,7 @@ const aiAgentsApi = {
   // 获取智能体统计数据
   getAgentStatistics: async (): Promise<BaseResponse<AgentStatisticsData>> => {
     try {
-      const response = await api.get(`${AI_AGENTS_BASE_PATH}/statistics`);
+      const response = await api.get(`${AI_AGENTS_BASE_PATH}statistics`);
       
       return {
         data: response.data as unknown as AgentStatisticsData,
@@ -304,7 +357,7 @@ const aiAgentsApi = {
           api_errors: 0,
         },
         success: false,
-        message: error.response?.data?.detail || error.message || "获取智能体统计数据失败",
+        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取统计数据失败",
       };
     }
   },
@@ -346,7 +399,7 @@ const aiAgentsApi = {
         provider: "custom" as AIServiceProvider,
         models: [],
         total_count: 0,
-        error_message: error.response?.data?.detail || error.message || "发现模型失败",
+        error_message: toDetailMessage(error.response?.data?.detail) || error.message || "发现模型失败",
         response_time_ms: 0,
       };
     }

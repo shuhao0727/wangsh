@@ -69,6 +69,7 @@ export interface ChatAreaProps {
   isStudent: boolean;
   userDisplayName?: string;
   isStreaming?: boolean;
+  streamingContent?: string; // 新增：流式生成内容（独立于messages）
   streamSeconds?: number;
   onStopStream?: () => void;
   onSendMessage: () => void;

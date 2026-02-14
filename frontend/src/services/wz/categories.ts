@@ -111,12 +111,13 @@ export const categoryApi = {
    */
   listCategories: (params: CategoryFilterParams = {}) => {
     const { page = 1, size = 20, include_usage_count = false } = params;
+    const safeSize = Math.max(1, Math.min(100, Number(size) || 20));
 
     // 注意：后端直接返回数据，没有ApiResponse包装
     return api.client.get<CategoryListResponse>("/categories", {
       params: {
         page,
-        size,
+        size: safeSize,
         include_usage_count,
       },
     });
@@ -127,10 +128,11 @@ export const categoryApi = {
    */
   listPublicCategories: (params: PublicCategoryFilterParams = {}) => {
     const { page = 1, size = 50, include_usage_count = true } = params;
+    const safeSize = Math.max(1, Math.min(100, Number(size) || 50));
     return api.client.get<CategoryListResponse>("/categories/public/list", {
       params: {
         page,
-        size,
+        size: safeSize,
         include_usage_count,
       },
     });

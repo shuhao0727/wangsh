@@ -57,6 +57,7 @@ class GroupDiscussionGroupOut(BaseModel):
     group_no: str
     group_name: Optional[str] = None
     message_count: int
+    member_count: int = Field(0, description="当前成员数")
     last_message_at: Optional[datetime] = None
 
 

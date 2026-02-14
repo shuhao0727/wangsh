@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any, Dict, Optional
 
@@ -6,6 +7,7 @@ import httpx
 from app.services.agents.ai_agent import get_agent
 from app.services.agents.providers import detect_flags, chat_completions_endpoint
 from app.core.config import settings
+from app.utils.agent_secrets import try_decrypt_api_key
 
 
 def _provider_error_message(status_code: int) -> str:
@@ -22,6 +24,28 @@ def _provider_error_message(status_code: int) -> str:
     return "上游服务请求失败"
 
 
+def _extract_provider_detail(body_text: str) -> str:
+    t = (body_text or "").strip()
+    if not t:
+        return ""
+    try:
+        data = json.loads(t)
+        if isinstance(data, dict):
+            err = data.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message") or err.get("error") or err.get("type")
+                if msg:
+                    return str(msg)[:500]
+            if isinstance(err, str) and err.strip():
+                return err.strip()[:500]
+            msg = data.get("message")
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()[:500]
+    except Exception:
+        pass
+    return t[:500]
+
+
 async def run_agent_chat_blocking(
     db,
     *,
@@ -35,7 +59,7 @@ async def run_agent_chat_blocking(
         raise ValueError("invalid_agent")
 
     api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
-    api_key = agent.api_key
+    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
     if agent.agent_type != "dify":
         if not api_endpoint:
             api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
@@ -108,10 +132,22 @@ async def run_agent_chat_blocking(
     }
 
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-        resp = await client.post(chat_url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            msg = _provider_error_message(int(resp.status_code))
-            raise ValueError(f"provider_status_{resp.status_code}: {msg}")
+        resp = None
+        for attempt in range(3):
+            resp = await client.post(chat_url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                break
+            if resp.status_code in (429, 502, 503, 504) and attempt < 2:
+                await asyncio.sleep(1.5 * (2**attempt))
+                continue
+            break
+
+        if not resp or resp.status_code != 200:
+            status_code = int(resp.status_code) if resp else 0
+            msg = _provider_error_message(status_code)
+            detail = _extract_provider_detail(resp.text if resp else "")
+            suffix = f" - {detail}" if detail else ""
+            raise ValueError(f"provider_status_{status_code}: {msg}{suffix}")
         data = resp.json()
         try:
             choices = data.get("choices") or []

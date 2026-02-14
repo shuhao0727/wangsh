@@ -11,6 +11,8 @@ export interface AIAgent {
   description?: string;
   api_endpoint?: string;
   api_key?: string;
+  has_api_key?: boolean;
+  api_key_last4?: string;
   is_active: boolean;
   status?: boolean; // 用于前端状态显示
   is_deleted: boolean;
@@ -34,6 +36,7 @@ export interface AgentFormValues {
   description?: string;
   api_endpoint?: string;
   api_key?: string;
+  clear_api_key?: boolean;
   is_active: boolean;
 }
 

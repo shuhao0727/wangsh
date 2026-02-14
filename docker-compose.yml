@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
@@ -18,7 +18,7 @@ services:
       - wangsh-network
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
     restart: unless-stopped
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
@@ -32,11 +32,14 @@ services:
       - wangsh-network
 
   backend:
+    platform: linux/amd64
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_BACKEND:-wangsh-backend}:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-      target: production
+      target: backend_runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
     restart: unless-stopped
     environment:
       DEBUG: "False"
@@ -52,6 +55,7 @@ services:
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
@@ -83,11 +87,14 @@ services:
       - typst_pdfs:/app/data/typst_pdfs
 
   typst-worker:
+    platform: linux/amd64
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_WORKER:-wangsh-typst-worker}:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-      target: production
+      target: worker_runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -109,6 +116,7 @@ services:
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
@@ -129,6 +137,7 @@ services:
       - typst_pdfs:/app/data/typst_pdfs
 
   frontend:
+    platform: linux/amd64
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/${IMAGE_NAME_FRONTEND:-wangsh-frontend}:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
@@ -138,6 +147,8 @@ services:
         REACT_APP_API_URL: ${REACT_APP_API_URL:-/api/v1}
         REACT_APP_ENV: ${REACT_APP_ENV:-production}
         REACT_APP_VERSION: ${REACT_APP_VERSION:-1.0.0}
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+        CADDY_IMAGE: ${CADDY_IMAGE:-caddy:latest}
     restart: unless-stopped
     environment:
       http_proxy: ""
@@ -147,11 +158,28 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
-    depends_on:
-      backend:
-        condition: service_healthy
+    networks:
+      - wangsh-network
+
+  gateway:
+    image: ${CADDY_IMAGE:-caddy:latest}
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-6608}:80"
+    environment:
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend,frontend"
+    volumes:
+      - ./gateway/Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - frontend
+      - backend
     networks:
       - wangsh-network
 

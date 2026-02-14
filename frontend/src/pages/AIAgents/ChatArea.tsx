@@ -473,6 +473,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   isStudent,
   userDisplayName,
   isStreaming,
+  streamingContent, // 新增：流式内容
   streamSeconds,
   onStopStream,
   onSendMessage,
@@ -484,7 +485,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 自动滚动到最新消息
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   // 如果当前智能体为null，显示加载状态或空状态
   if (!currentAgent) {
@@ -522,8 +523,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   }
 
   // 获取当前智能体的消息
+  // 使用 String() 转换以兼容数字/字符串类型的 ID
   const currentAgentMessages = messages.filter(
-    (msg) => msg.agentId === currentAgent.id,
+    (msg) => String(msg.agentId) === String(currentAgent.id),
   );
   const isWorkflowMessage = (msg: Message) =>
     msg.sender !== "user" &&
@@ -644,6 +646,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             />
           );
         })}
+        {/* 渲染正在流式生成的内容 */}
+        {isStreaming && streamingContent && (
+            <MessageBubble
+              message={{
+                id: 'streaming-temp',
+                content: streamingContent,
+                sender: 'agent',
+                timestamp: new Date().toISOString(),
+                agentId: currentAgent.id
+              }}
+              currentAgent={currentAgent}
+              userDisplayName={userDisplayName}
+            />
+        )}
         <div ref={messagesEndRef} />
       </div>
 

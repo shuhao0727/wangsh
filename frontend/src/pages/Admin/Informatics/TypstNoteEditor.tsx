@@ -240,9 +240,14 @@ const TypstNoteEditor: React.FC<{
       }
     } catch (e: any) {
       if (previewTokenRef.current !== token || renderTokenRef.current !== renderToken) return { ok: false, rateLimited: false };
+      const status = Number(e?.response?.status);
+      if (status === 429) {
+        setRenderError("请求过于频繁，稍后将自动重试");
+        return { ok: false, rateLimited: true };
+      }
       setRenderError(await parseAxiosBlobError(e));
       setPreviewPdfData(null);
-      return { ok: false, rateLimited: Number(e?.response?.status) === 429 };
+      return { ok: false, rateLimited: false };
     } finally {
       if (previewTokenRef.current === token && renderTokenRef.current === renderToken) setRenderLoading(false);
     }

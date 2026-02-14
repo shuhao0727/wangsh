@@ -3,23 +3,8 @@
         level INFO
     }
 
-    handle_path /admin* {
-        root * /usr/share/caddy
-        try_files {path} /index.html
-        file_server
-    }
-
-    @api_health path /api/health
-    handle @api_health {
-        rewrite * /health
-        reverse_proxy http://backend:8000
-    }
-
-    @api path /api/*
-    handle @api {
-        reverse_proxy http://backend:8000
-    }
-
+    # 纯静态文件服务
+    # 不再包含后端代理逻辑，实现解耦
     handle {
         root * /usr/share/caddy
         try_files {path} /index.html

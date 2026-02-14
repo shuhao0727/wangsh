@@ -201,9 +201,10 @@ async def list_groups(
             group_no=str(r.group_no),
             group_name=(str(r.group_name).strip() if r.group_name else None),
             message_count=int(r.message_count or 0),
+            member_count=int(count or 0),
             last_message_at=r.last_message_at,
         )
-        for r in rows
+        for r, count in rows
     ]
     return GroupDiscussionGroupListResponse(items=items)
 

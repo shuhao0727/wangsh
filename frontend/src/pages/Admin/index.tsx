@@ -370,10 +370,10 @@ const AdminPage: React.FC = () => {
               <Card title="系统配置">
                 <Descriptions title="环境配置" bordered column={2}>
                   <Descriptions.Item label="后端服务">
-                    <Tag color="blue">http://localhost:8000</Tag>
+                    <Tag color="blue">{window.location.origin}{"/api/v1"}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="前端服务">
-                    <Tag color="green">http://localhost:6608</Tag>
+                    <Tag color="green">{window.location.origin}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="数据库">
                     <Tag color="purple">PostgreSQL 15.15</Tag>

@@ -6,6 +6,12 @@
   - `.env`：你的真实部署配置（不提交）
   - `docker-compose.yml`：统一的生产/部署 compose（可构建也可拉镜像运行）
 
+说明：
+
+- 浏览器只访问 `http://localhost:${WEB_PORT}`（默认 6608）
+- 生产前端容器内部使用 Caddy：静态资源 + `/api/*` 反向代理到 `backend:8000`
+- 不要让浏览器直接访问 `backend:8000`（`backend` 仅容器网络内可解析）
+
 ## 1）准备环境变量
 
 ```bash
@@ -18,6 +24,7 @@ cp .env.example .env
 - `POSTGRES_PASSWORD`
 - `SUPER_ADMIN_PASSWORD`
 - `DOCKERHUB_NAMESPACE`
+- `AGENT_API_KEY_ENCRYPTION_KEY`
 - `DEPLOYMENT_ENV`（生产用 production）
 - `REACT_APP_API_URL`（生产用 /api/v1）
 

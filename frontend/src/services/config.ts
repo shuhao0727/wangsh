@@ -35,9 +35,27 @@ const getConfig = (): AppConfig => {
   const env =
     (process.env.REACT_APP_ENV as "development" | "production" | "test") ||
     "development";
-  const apiUrl =
+  const rawApiUrl =
     process.env.REACT_APP_API_URL ||
     (env === "development" ? "http://localhost:8000/api/v1" : "/api/v1");
+  const apiUrl = (() => {
+    const v = String(rawApiUrl || "").trim();
+    if (!v) return env === "development" ? "http://localhost:8000/api/v1" : "/api/v1";
+    if (v.startsWith("http://") || v.startsWith("https://")) {
+      try {
+        const u = new URL(v);
+        const host = (u.hostname || "").toLowerCase();
+        const port = Number(u.port || "");
+        if (env !== "development" && (host === "backend" || (host === "localhost" && port === 8000))) {
+          return "/api/v1";
+        }
+      } catch {
+      }
+      return v;
+    }
+    if (v.startsWith("/")) return v;
+    return env === "development" ? "http://localhost:8000/api/v1" : "/api/v1";
+  })();
   const difyUrl = process.env.REACT_APP_DIFY_URL || "";
   const nasUrl = process.env.REACT_APP_NAS_URL || "";
 

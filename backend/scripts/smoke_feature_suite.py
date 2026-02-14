@@ -100,7 +100,7 @@ def xbk_smoke(client: httpx.Client, url: str):
     ok("xbk public-config get")
 
     year = 2026
-    term = 1
+    term = "1"
     student_no = f"S{int(time.time())}"
     course_code = f"C{int(time.time())}"
 
@@ -204,4 +204,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

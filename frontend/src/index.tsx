@@ -77,6 +77,9 @@ root.render(
               rowSelectedHoverBg: "#bae0ff",
               rowHoverBg: "#f5f5f5",
             },
+            Tooltip: {
+              colorTextLightSolid: "#1677ff",
+            },
           },
         }}
       >

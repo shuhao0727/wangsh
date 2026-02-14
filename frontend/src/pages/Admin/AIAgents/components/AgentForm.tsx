@@ -57,14 +57,20 @@ const AgentForm: React.FC<AgentFormProps> = ({
   const [availableModels, setAvailableModels] = useState<AIModelInfo[]>([]);
   const [discoveringModels, setDiscoveringModels] = useState(false);
   const [modelDiscoveryResult, setModelDiscoveryResult] = useState<ModelDiscoveryResponse | null>(null);
+  const [revealVisible, setRevealVisible] = useState(false);
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
 
   // 检查是否可以测试
   const checkCanTest = useCallback(() => {
     const url = form.getFieldValue("api_endpoint");
     const apiKey = form.getFieldValue("api_key");
     const name = form.getFieldValue("name");
+    const clearApiKey = form.getFieldValue("clear_api_key");
 
-    const canTest = editingAgent?.id ? !!(name && url) : !!(name && url && apiKey);
+    const canTest = editingAgent?.id
+      ? Boolean(name && url && (!clearApiKey ? true : Boolean(apiKey)))
+      : Boolean(name && url && apiKey);
     setCanTest(canTest);
   }, [editingAgent?.id, form]);
 
@@ -78,6 +84,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
         description: editingAgent.description,
         api_endpoint: editingAgent.api_endpoint,
         api_key: "",
+        clear_api_key: false,
         is_active: editingAgent.is_active,
       };
       form.setFieldsValue(formValues);
@@ -88,6 +95,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
         model_name: "",
         description: "",
         is_active: true,
+        clear_api_key: false,
       });
     }
     setTestResult(null);
@@ -104,6 +112,30 @@ const AgentForm: React.FC<AgentFormProps> = ({
       onSubmit(cleaned);
     } catch (error) {
       logger.warn("表单验证失败:", error);
+    }
+  };
+
+  const openRevealModal = () => {
+    setAdminPassword("");
+    setRevealVisible(true);
+  };
+
+  const handleRevealApiKey = async () => {
+    if (!editingAgent?.id) return;
+    try {
+      setRevealLoading(true);
+      const resp = await aiAgentsApi.revealApiKey(editingAgent.id, adminPassword);
+      if (!resp.success || !resp.data) {
+        Modal.error({
+          title: "获取API密钥失败",
+          content: resp.message || "获取API密钥失败",
+        });
+        return;
+      }
+      form.setFieldValue("api_key", resp.data);
+      setRevealVisible(false);
+    } finally {
+      setRevealLoading(false);
     }
   };
 
@@ -142,15 +174,13 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (editingAgent?.id && !apiKey) {
         setModelDiscoveryResult(null);
         setDiscoveringModels(false);
-        if (testResult) {
-          setTestResult(testResult);
-        } else {
-          setTestResult({
+        setTestResult(
+          testResult || {
             success: false,
-            message: "测试失败：请填写 API Key 或稍后重试",
+            message: "测试失败：请稍后重试",
             timestamp: new Date().toISOString(),
-          });
-        }
+          },
+        );
         return;
       }
 
@@ -391,15 +421,32 @@ const AgentForm: React.FC<AgentFormProps> = ({
               label="API密钥"
               name="api_key"
               rules={[
-                { required: true, message: "请输入API密钥" },
                 { min: 8, message: "API密钥长度至少8位" },
               ]}
             >
               <Input.Password
-                placeholder="请输入API密钥"
+                placeholder={
+                  editingAgent?.id && editingAgent?.has_api_key
+                    ? `已保存（末尾 ****${editingAgent.api_key_last4 || ""}）`
+                    : "请输入API密钥"
+                }
                 onFocus={resetTestResult}
               />
             </Form.Item>
+            {editingAgent?.id && (
+              <Space size={8}>
+                <Button
+                  size="small"
+                  onClick={openRevealModal}
+                  disabled={!editingAgent?.has_api_key}
+                >
+                  显示
+                </Button>
+                <Form.Item name="clear_api_key" valuePropName="checked" noStyle>
+                  <Switch checkedChildren="清除密钥" unCheckedChildren="保留密钥" />
+                </Form.Item>
+              </Space>
+            )}
           </Col>
         </Row>
 
@@ -461,6 +508,21 @@ const AgentForm: React.FC<AgentFormProps> = ({
           />
         </Form.Item>
       </Form>
+      <Modal
+        title="验证管理员密码"
+        open={revealVisible}
+        onCancel={() => setRevealVisible(false)}
+        onOk={handleRevealApiKey}
+        confirmLoading={revealLoading}
+        okText="确认"
+        cancelText="取消"
+      >
+        <Input.Password
+          value={adminPassword}
+          onChange={(e) => setAdminPassword(e.target.value)}
+          placeholder="请输入管理员密码"
+        />
+      </Modal>
     </Modal>
   );
 };

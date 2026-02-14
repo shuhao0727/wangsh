@@ -285,36 +285,16 @@ async def get_current_user_or_student(
     db = None
 ):
     """
-    获取当前用户或学生 - 简化的实现，实际应根据需求扩展
-    这个函数是为了兼容znt_users API而临时添加的
+    获取当前用户或学生
+    
+    安全加固：仅在提供有效token且验证成功时返回用户
     """
-    # 如果没有提供token，返回一个模拟的管理员用户
-    if token is None:
-        return {
-            "id": 1,
-            "username": "admin",
-            "role_code": "super_admin",
-            "is_active": True,
-            "full_name": "系统管理员",
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
+    if not token:
+        return None
     
-    # 此时 token 一定不是 None，尝试获取用户
+    # 尝试获取用户
     user = await get_current_user(token, db)
-    if user:
-        return user
-    
-    # 如果token无效，返回模拟的学生用户
-    return {
-        "id": 1001,
-        "username": "student_demo",
-        "role_code": "student",
-        "is_active": True,
-        "full_name": "演示学生",
-        "created_at": datetime.now(),
-        "updated_at": datetime.now()
-    }
+    return user
 
 
 # ==================== 刷新令牌功能 ====================

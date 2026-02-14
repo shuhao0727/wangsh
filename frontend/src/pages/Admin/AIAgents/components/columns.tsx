@@ -64,12 +64,10 @@ const getTypeConfig = (agentType: string) => {
   );
 };
 
-// 处理API密钥显示
-const formatApiKey = (apiKey: string | undefined): string => {
-  if (!apiKey) return "未配置";
-  return apiKey.length > 8
-    ? `${apiKey.substring(0, 4)}****${apiKey.substring(apiKey.length - 4)}`
-    : "****";
+const formatApiKey = (agent: AIAgent): string => {
+  if (!agent.has_api_key) return "未配置";
+  if (agent.api_key_last4) return `****${agent.api_key_last4}`;
+  return "已配置";
 };
 
 // 表格列配置函数
@@ -91,7 +89,14 @@ export const getAgentColumns = (
           {agentName || record.name}
         </div>
         {record.model_name && (
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>{record.model_name}</div>
+          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>
+            {record.model_name}
+            {record.model_name.endsWith(":free") && (
+              <Tag color="gold" style={{ marginLeft: 8 }}>
+                free
+              </Tag>
+            )}
+          </div>
         )}
       </div>
     ),
@@ -147,14 +152,13 @@ export const getAgentColumns = (
     dataIndex: "api_key",
     key: "api_key",
     width: 180,
-    render: (apiKey: string | undefined) => (
-      <Tooltip title={apiKey ? "点击查看（部分隐藏）" : "未配置API密钥"}>
+    render: (_: string | undefined, record: AIAgent) => (
+      <Tooltip title={record.has_api_key ? "已保存API密钥" : "未配置API密钥"}>
         <Tag
           icon={<KeyOutlined />}
-          color={apiKey ? "orange" : "default"}
-          style={{ cursor: "pointer" }}
+          color={record.has_api_key ? "orange" : "default"}
         >
-          {formatApiKey(apiKey)}
+          {formatApiKey(record)}
         </Tag>
       </Tooltip>
     ),
@@ -189,21 +193,21 @@ export const getAgentColumns = (
     fixed: "right" as const,
     render: (_: any, record: AIAgent) => (
       <Space size="small">
-        <Tooltip title="查看详情">
+        <Tooltip title="查看详情" overlayInnerStyle={{ color: "#1677ff" }}>
           <Button
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetails(record)}
           />
         </Tooltip>
-        <Tooltip title="编辑">
+        <Tooltip title="编辑" overlayInnerStyle={{ color: "#1677ff" }}>
           <Button
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           />
         </Tooltip>
-        <Tooltip title="测试">
+        <Tooltip title="测试" overlayInnerStyle={{ color: "#1677ff" }}>
           <Button
             size="small"
             icon={<ThunderboltOutlined />}
@@ -211,7 +215,7 @@ export const getAgentColumns = (
             onClick={() => handleTestAgent(record.id, record.name)}
           />
         </Tooltip>
-        <Tooltip title="删除">
+        <Tooltip title="删除" overlayInnerStyle={{ color: "#1677ff" }}>
           <Button
             size="small"
             icon={<DeleteOutlined />}

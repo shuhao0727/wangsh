@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # ==================== 外部 AI 服务（可选） ====================
     OPENROUTER_API_URL: str = Field(default="https://openrouter.ai/api/v1")
     OPENROUTER_API_KEY: Optional[str] = Field(default=None)
+    AGENT_API_KEY_ENCRYPTION_KEY: Optional[str] = Field(default=None)
     
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -275,7 +276,7 @@ class Settings(BaseSettings):
     ARTICLE_PAGE_SIZE_DEFAULT: int = Field(default=20)          # 默认分页大小
     ARTICLE_PAGE_SIZE_MAX: int = Field(default=100)             # 最大分页大小
     CATEGORY_PAGE_SIZE_DEFAULT: int = Field(default=20)         # 分类默认分页
-    CATEGORY_PAGE_SIZE_MAX: int = Field(default=100)            # 分类最大分页
+    CATEGORY_PAGE_SIZE_MAX: int = Field(default=200)            # 分类最大分页
     CATEGORY_PUBLIC_PAGE_SIZE: int = Field(default=50)          # 公开分类分页
     CATEGORY_POPULAR_LIMIT: int = Field(default=10)             # 热门分类限制
     CATEGORY_SEARCH_LIMIT: int = Field(default=20)              # 搜索分类限制
@@ -326,6 +327,7 @@ class Settings(BaseSettings):
         must_set("SECRET_KEY", self.SECRET_KEY)
         must_set("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         must_set("SUPER_ADMIN_PASSWORD", self.SUPER_ADMIN_PASSWORD)
+        must_set("AGENT_API_KEY_ENCRYPTION_KEY", self.AGENT_API_KEY_ENCRYPTION_KEY or "")
 
         if len(self.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY 长度过短，建议至少 32 字符")

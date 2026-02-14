@@ -20,6 +20,8 @@ from app.schemas.agents import (
     AgentStatisticsData,
 )
 from app.schemas.agents import COMMON_MODEL_PRESETS
+from app.utils.agent_secrets import encrypt_api_key, try_decrypt_api_key, last4
+from app.core.config import settings
 
 
 async def create_agent(
@@ -44,13 +46,19 @@ async def create_agent(
         raise ValueError(f"智能体名称 '{agent_in.name}' 已存在")
     
     # 创建新的智能体
+    api_key_plain = (agent_in.api_key or "").strip() or None
+    api_key_encrypted = encrypt_api_key(api_key_plain) if api_key_plain else None
+
     db_agent = AIAgent(
         name=agent_in.name,
         agent_type=agent_in.agent_type,
         description=agent_in.description,
         model_name=agent_in.model_name,
         api_endpoint=agent_in.api_endpoint,
-        api_key=agent_in.api_key,
+        api_key=None,
+        api_key_encrypted=api_key_encrypted,
+        api_key_last4=last4(api_key_plain),
+        has_api_key=bool(api_key_plain),
         is_active=agent_in.is_active,
     )
     
@@ -76,6 +84,18 @@ async def get_agent(
     
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+
+def _resolved_agent_api_key(agent: AIAgent, *, is_openrouter: bool) -> Optional[str]:
+    v = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None))
+    if v:
+        return v
+    legacy = (getattr(agent, "api_key", None) or "").strip()
+    if legacy:
+        return legacy
+    if is_openrouter and settings.OPENROUTER_API_KEY:
+        return settings.OPENROUTER_API_KEY
+    return None
 
 
 async def get_agents(
@@ -167,10 +187,26 @@ async def update_agent(
         if existing_agent:
             raise ValueError(f"智能体名称 '{agent_in.name}' 已存在")
     
-    # 更新字段
     update_data = agent_in.dict(exclude_unset=True)
+
+    clear_api_key = bool(update_data.pop("clear_api_key", False))
+    api_key_plain = None
+    if "api_key" in update_data:
+        api_key_plain = (update_data.pop("api_key") or "").strip() or None
+
     for field, value in update_data.items():
         setattr(agent, field, value)
+
+    if clear_api_key:
+        agent.api_key = None
+        agent.api_key_encrypted = None
+        agent.api_key_last4 = None
+        agent.has_api_key = False
+    elif api_key_plain:
+        agent.api_key = None
+        agent.api_key_encrypted = encrypt_api_key(api_key_plain)
+        agent.api_key_last4 = last4(api_key_plain)
+        agent.has_api_key = True
     
     await db.commit()
     await db.refresh(agent)
@@ -300,16 +336,17 @@ async def test_agent(
         
         # 构建请求头
         headers = {}
-        if agent.api_key:
+        api_key = _resolved_agent_api_key(agent, is_openrouter=is_openrouter)
+        if api_key:
             if is_dify:
                 # Dify使用Bearer认证，API密钥格式为"app-xxx"
-                headers["Authorization"] = f"Bearer {agent.api_key}"
+                headers["Authorization"] = f"Bearer {api_key}"
             elif is_anthropic:
                 # Anthropic使用x-api-key头
-                headers["x-api-key"] = agent.api_key
+                headers["x-api-key"] = api_key
             else:
                 # OpenAI/DeepSeek使用Bearer认证
-                headers["Authorization"] = f"Bearer {agent.api_key}"
+                headers["Authorization"] = f"Bearer {api_key}"
         
         # 根据服务商类型选择测试端点
         test_endpoint = None

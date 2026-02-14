@@ -21,6 +21,7 @@ export type GroupDiscussionGroup = {
   group_no: string;
   group_name?: string | null;
   message_count: number;
+  member_count: number;
   last_message_at?: string | null;
 };
 

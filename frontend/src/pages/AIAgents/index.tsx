@@ -48,6 +48,9 @@ const AIAgentsPage: React.FC = () => {
 
   // 对话消息列表 - 初始为空，登录后才显示
   const [messages, setMessages] = useState<Message[]>([]);
+  // 新增：流式生成内容（独立于messages，避免高频更新历史记录）
+  const [streamingContent, setStreamingContent] = useState<string>("");
+  
   const [sessions, setSessions] = useState<ConversationSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
@@ -321,8 +324,6 @@ const AIAgentsPage: React.FC = () => {
       return;
     }
 
-    // 放宽登录限制：未登录也允许发送（后端流式不强制鉴权）
-
     // 检查智能体是否已加载
     if (!currentAgent) {
       logger.debug("⚠️ 智能体未加载，阻止发送");
@@ -350,14 +351,9 @@ const AIAgentsPage: React.FC = () => {
       agentId: currentAgent.id,
     };
     const agentMessageId = `agent-${Date.now() + 1}`;
-    const agentMessage: Message = {
-      id: agentMessageId,
-      content: "",
-      sender: "agent",
-      timestamp: new Date().toISOString(),
-      agentId: currentAgent.id,
-    };
-    setMessages((prev) => [...prev, userMessage, agentMessage]);
+    // 初始不添加空消息，改用 streamingContent 渲染
+    setMessages((prev) => [...prev, userMessage]);
+    setStreamingContent(""); // 重置流式内容
     setInputMessage("");
 
     const startStream = async () => {
@@ -374,6 +370,7 @@ const AIAgentsPage: React.FC = () => {
       };
       let finalText = "";
       let usageSaved = false;
+      
       const persistUsage = async (answerText: string) => {
         if (usageSaved || !userMessage.content) return;
         if (!auth.isAuthenticated) return;
@@ -388,15 +385,19 @@ const AIAgentsPage: React.FC = () => {
             response_time_ms: Date.now() - streamStartedAt,
             used_at: new Date().toISOString(),
           });
-          const listResp = await agentDataApi.listConversations({
-            agent_id: parseInt(String(currentAgent.id), 10),
-            limit: 5,
-          });
-          if (listResp.success) setSessions(listResp.data);
+          // 延迟刷新列表，避免后端写入延迟
+          setTimeout(async () => {
+              const listResp = await agentDataApi.listConversations({
+                agent_id: parseInt(String(currentAgent.id), 10),
+                limit: 5,
+              });
+              if (listResp.success) setSessions(listResp.data);
+          }, 1000);
         } catch (error) {
           logger.error("写入对话记录失败:", error);
         }
       };
+      
       try {
         const res = await fetch(`${config.apiUrl}/ai-agents/stream`, {
           method: "POST",
@@ -414,6 +415,7 @@ const AIAgentsPage: React.FC = () => {
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
         let currentGroupId = "";
+        
         const ensureGroup = () => {
           if (currentGroupId) return currentGroupId;
           const groupId = `wf-${Date.now()}-${Math.random()}`;
@@ -429,6 +431,7 @@ const AIAgentsPage: React.FC = () => {
           ]);
           return groupId;
         };
+        
         const addNode = (name: string) => {
           const groupId = ensureGroup();
           const node: WorkflowNode = {
@@ -443,6 +446,7 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
+        
         const finishNode = (name: string, detail?: string) => {
           const groupId = ensureGroup();
           setWorkflowGroups((prev) =>
@@ -465,6 +469,7 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
+        
         const markError = (msg: string) => {
           const groupId = ensureGroup();
           const node: WorkflowNode = {
@@ -479,25 +484,38 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
+        
         const updateAgentText = (text: string) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === agentMessageId ? { ...m, content: text } : m,
-            ),
-          );
+          setStreamingContent(text);
         };
+        
+        // 结束时将完整消息合并到 messages
+        const finalizeMessage = (finalText: string) => {
+            const finalMsg: Message = {
+              id: agentMessageId,
+              content: finalText,
+              sender: "agent",
+              timestamp: new Date().toISOString(),
+              agentId: currentAgent.id,
+            };
+            setMessages(prev => [...prev, finalMsg]);
+            setStreamingContent(""); // 清空流式状态
+        };
+        
         if (!res.ok) {
           const errText = `流式接口错误: HTTP ${res.status}`;
           markError(errText);
           await persistUsage(finalText);
           return;
         }
+        
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const parts = buffer.split("\n\n");
           buffer = parts.pop() || "";
+          
           for (const part of parts) {
             const lines = part.split("\n");
             let eventType = "";
@@ -509,15 +527,18 @@ const AIAgentsPage: React.FC = () => {
                 dataStr += line.slice(5).trim();
               }
             }
+            
             let payload: any = null;
             try {
               payload = dataStr ? JSON.parse(dataStr) : null;
             } catch {
               payload = { text: dataStr };
             }
+            
             if (!eventType && payload && payload.event) {
               eventType = String(payload.event);
             }
+            
             const getNodeName = () => {
               const d = payload?.data || payload;
               return (
@@ -529,6 +550,7 @@ const AIAgentsPage: React.FC = () => {
                 "节点"
               );
             };
+            
             const getAnswerText = () => {
               const d = payload?.data || payload;
               return (
@@ -541,6 +563,7 @@ const AIAgentsPage: React.FC = () => {
                 ""
               );
             };
+            
             if (eventType === "workflow_started") {
               const groupId = `wf-${Date.now()}-${Math.random()}`;
               currentGroupId = groupId;
@@ -566,11 +589,13 @@ const AIAgentsPage: React.FC = () => {
                 finalText = String(final);
                 updateAgentText(finalText);
               }
+              finalizeMessage(finalText);
               await persistUsage(finalText);
             } else if (eventType === "message_delta") {
               const delta = getAnswerText() || payload?.delta || "";
               if (delta) {
                 finalText += String(delta);
+                // 优化：使用requestAnimationFrame或防抖减少渲染频率
                 updateAgentText(finalText);
               }
             } else if (eventType === "message") {
@@ -585,6 +610,7 @@ const AIAgentsPage: React.FC = () => {
                 finalText = String(text);
                 updateAgentText(finalText);
               }
+              finalizeMessage(finalText);
               await persistUsage(finalText);
             } else if (eventType === "error") {
               const rawError = payload?.error ? String(payload.error) : "";
@@ -613,7 +639,11 @@ const AIAgentsPage: React.FC = () => {
             }
           }
         }
-        await persistUsage(finalText);
+        // 如果是正常结束循环（done=true）且未触发过 finalize，这里做一次兜底
+        if (!usageSaved && finalText) {
+            finalizeMessage(finalText);
+            await persistUsage(finalText);
+        }
       } catch (e: any) {
         if (e?.name === "AbortError") {
           return;
@@ -798,6 +828,7 @@ const AIAgentsPage: React.FC = () => {
             isStudent={auth.isStudent()}
             userDisplayName={auth.getDisplayName() || undefined}
             isStreaming={isStreaming}
+            streamingContent={streamingContent} // 传递流式内容
             streamSeconds={streamSeconds}
             onStopStream={handleStopStream}
             onSendMessage={handleSendMessage}

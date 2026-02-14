@@ -3,7 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db
+from app.core.deps import get_db, get_current_user, require_super_admin
 from app.schemas.agents import (
     AIAgentCreate,
     AIAgentUpdate,
@@ -11,6 +11,8 @@ from app.schemas.agents import (
     AIAgentListResponse,
     AgentTestRequest,
     AgentTestResponse,
+    AgentRevealKeyRequest,
+    AgentRevealKeyResponse,
     AgentStatisticsData,
 )
 from app.services.agents import (
@@ -23,18 +25,17 @@ from app.services.agents import (
     get_agent_statistics,
     get_active_agents,
 )
+from app.utils.agent_secrets import last4, try_decrypt_api_key
+from app.services.auth import authenticate_user
 
 router = APIRouter()
 
-def _mask_api_key(v: Optional[str]) -> Optional[str]:
-    if v is None:
-        return None
-    s = str(v)
-    if not s:
-        return ""
-    if len(s) <= 8:
-        return "*" * len(s)
-    return f"{s[:4]}...{s[-4:]}"
+def _api_key_last4(agent) -> Optional[str]:
+    v = getattr(agent, "api_key_last4", None)
+    if v:
+        return v
+    legacy = getattr(agent, "api_key", None)
+    return last4(legacy)
 
 
 @router.get("/", response_model=AIAgentListResponse)
@@ -60,6 +61,8 @@ async def read_agents(
 
         agent_responses = []
         for agent in agents:
+            api_key_last = _api_key_last4(agent)
+            has_api_key = bool(getattr(agent, "has_api_key", False) or api_key_last)
             agent_dict = {
                 "id": agent.id,
                 "name": agent.name,
@@ -68,7 +71,9 @@ async def read_agents(
                 "description": agent.description,
                 "model_name": agent.model_name,
                 "api_endpoint": agent.api_endpoint,
-                "api_key": _mask_api_key(agent.api_key),
+                "api_key": None,
+                "has_api_key": has_api_key,
+                "api_key_last4": api_key_last,
                 "is_active": agent.is_active,
                 "status": agent.is_active,
                 "is_deleted": agent.is_deleted,
@@ -104,6 +109,8 @@ async def read_active_agents(
 
         agent_responses = []
         for agent in agents:
+            api_key_last = _api_key_last4(agent)
+            has_api_key = bool(getattr(agent, "has_api_key", False) or api_key_last)
             agent_dict = {
                 "id": agent.id,
                 "name": agent.name,
@@ -112,7 +119,9 @@ async def read_active_agents(
                 "description": agent.description,
                 "model_name": agent.model_name,
                 "api_endpoint": agent.api_endpoint,
-                "api_key": _mask_api_key(agent.api_key),
+                "api_key": None,
+                "has_api_key": has_api_key,
+                "api_key_last4": api_key_last,
                 "is_active": agent.is_active,
                 "status": agent.is_active,
                 "is_deleted": agent.is_deleted,
@@ -163,7 +172,9 @@ async def read_agent(
             "description": agent.description,
             "model_name": agent.model_name,
             "api_endpoint": agent.api_endpoint,
-            "api_key": _mask_api_key(agent.api_key),
+            "api_key": None,
+            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
+            "api_key_last4": _api_key_last4(agent),
             "is_active": agent.is_active,
             "status": agent.is_active,
             "is_deleted": agent.is_deleted,
@@ -197,7 +208,9 @@ async def create_new_agent(
             "description": agent.description,
             "model_name": agent.model_name,
             "api_endpoint": agent.api_endpoint,
-            "api_key": _mask_api_key(agent.api_key),
+            "api_key": None,
+            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
+            "api_key_last4": _api_key_last4(agent),
             "is_active": agent.is_active,
             "status": agent.is_active,
             "is_deleted": agent.is_deleted,
@@ -240,7 +253,9 @@ async def update_existing_agent(
             "description": agent.description,
             "model_name": agent.model_name,
             "api_endpoint": agent.api_endpoint,
-            "api_key": _mask_api_key(agent.api_key),
+            "api_key": None,
+            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
+            "api_key_last4": _api_key_last4(agent),
             "is_active": agent.is_active,
             "status": agent.is_active,
             "is_deleted": agent.is_deleted,
@@ -299,3 +314,29 @@ async def test_agent_connection(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"测试智能体失败: {str(e)}",
         )
+
+
+@router.post(
+    "/{agent_id}/reveal-api-key",
+    response_model=AgentRevealKeyResponse,
+    dependencies=[Depends(require_super_admin)],
+)
+async def reveal_agent_api_key(
+    agent_id: int,
+    req: AgentRevealKeyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    user = await authenticate_user(db, current_user["username"], req.admin_password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员密码验证失败")
+
+    agent = await get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"智能体ID {agent_id} 不存在")
+
+    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
+    if not api_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="该智能体未配置API密钥")
+
+    return AgentRevealKeyResponse(api_key=str(api_key))

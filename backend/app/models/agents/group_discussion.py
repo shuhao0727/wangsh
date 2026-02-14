@@ -42,6 +42,22 @@ class GroupDiscussionSession(Base):
     created_by_user = relationship("User", lazy="select")
 
 
+class GroupDiscussionMember(Base):
+    __tablename__ = "znt_group_discussion_members"
+    __table_args__ = (
+        UniqueConstraint("session_id", "user_id", name="uq_group_session_user"),
+        {"comment": "小组讨论成员表"},
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("znt_group_discussion_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    session = relationship("GroupDiscussionSession", backref="members")
+    user = relationship("User", backref="joined_groups")
+
+
 class GroupDiscussionMessage(Base):
     __tablename__ = "znt_group_discussion_messages"
     __table_args__ = {"comment": "小组讨论消息表"}
