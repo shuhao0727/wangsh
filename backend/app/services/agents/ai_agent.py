@@ -48,13 +48,16 @@ async def create_agent(
     # 创建新的智能体
     api_key_plain = (agent_in.api_key or "").strip() or None
     api_key_encrypted = encrypt_api_key(api_key_plain) if api_key_plain else None
+    
+    # 确保api_endpoint是字符串
+    api_endpoint = str(agent_in.api_endpoint) if agent_in.api_endpoint else None
 
     db_agent = AIAgent(
         name=agent_in.name,
         agent_type=agent_in.agent_type,
         description=agent_in.description,
         model_name=agent_in.model_name,
-        api_endpoint=agent_in.api_endpoint,
+        api_endpoint=api_endpoint,
         api_key=None,
         api_key_encrypted=api_key_encrypted,
         api_key_last4=last4(api_key_plain),
@@ -188,6 +191,10 @@ async def update_agent(
             raise ValueError(f"智能体名称 '{agent_in.name}' 已存在")
     
     update_data = agent_in.dict(exclude_unset=True)
+    
+    # 确保api_endpoint是字符串
+    if "api_endpoint" in update_data and update_data["api_endpoint"]:
+        update_data["api_endpoint"] = str(update_data["api_endpoint"])
 
     clear_api_key = bool(update_data.pop("clear_api_key", False))
     api_key_plain = None
