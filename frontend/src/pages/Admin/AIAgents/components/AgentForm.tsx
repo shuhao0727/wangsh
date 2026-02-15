@@ -410,15 +410,15 @@ const AgentForm: React.FC<AgentFormProps> = ({
               name="api_endpoint"
               rules={[
                 { required: true, message: "请输入API地址" },
-                { 
-                  validator: async (_: any, value: string) => { 
-                    if (!value) return Promise.resolve(); 
-                    try { 
-                      new URL(value); // 支持 `http://docker-api-1:5001` 等格式
-                      return Promise.resolve(); 
-                    } catch (e) { 
-                      return Promise.reject(new Error("请输入有效的URL地址")); 
-                    } 
+                {
+                  validator: async (_: any, value: string) => {
+                    if (!value) return Promise.resolve();
+                    try {
+                      new URL(value);
+                      return Promise.resolve();
+                    } catch (e) {
+                      return Promise.reject(new Error("请输入有效的URL地址"));
+                    }
                   }
                 },
               ]}

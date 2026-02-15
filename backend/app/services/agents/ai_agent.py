@@ -49,7 +49,7 @@ async def create_agent(
     api_key_plain = (agent_in.api_key or "").strip() or None
     api_key_encrypted = encrypt_api_key(api_key_plain) if api_key_plain else None
     
-    # 确保api_endpoint是字符串
+    # 兼容性修复: Pydantic v2 AnyHttpUrl 对象需转换为字符串才能存入 asyncpg
     api_endpoint = str(agent_in.api_endpoint) if agent_in.api_endpoint else None
 
     db_agent = AIAgent(
@@ -191,8 +191,8 @@ async def update_agent(
             raise ValueError(f"智能体名称 '{agent_in.name}' 已存在")
     
     update_data = agent_in.dict(exclude_unset=True)
-    
-    # 确保api_endpoint是字符串
+
+    # 兼容性修复: Pydantic v2 AnyHttpUrl 对象需转换为字符串
     if "api_endpoint" in update_data and update_data["api_endpoint"]:
         update_data["api_endpoint"] = str(update_data["api_endpoint"])
 
