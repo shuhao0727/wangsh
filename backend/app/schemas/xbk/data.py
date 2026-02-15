@@ -7,6 +7,7 @@ class XbkStudentOut(BaseModel):
     id: int
     year: int
     term: str
+    grade: Optional[str] = None
     class_name: str
     student_no: str
     name: str
@@ -20,6 +21,7 @@ class XbkCourseOut(BaseModel):
     id: int
     year: int
     term: str
+    grade: Optional[str] = None
     course_code: str
     course_name: str
     teacher: Optional[str] = None
@@ -34,6 +36,7 @@ class XbkSelectionOut(BaseModel):
     id: int
     year: int
     term: str
+    grade: Optional[str] = None
     student_no: str
     name: Optional[str] = None
     course_code: str
@@ -50,6 +53,7 @@ class XbkListResponse(BaseModel):
 class XbkStudentUpsert(BaseModel):
     year: int
     term: str
+    grade: Optional[str] = None
     class_name: str
     student_no: str
     name: str
@@ -59,6 +63,7 @@ class XbkStudentUpsert(BaseModel):
 class XbkCourseUpsert(BaseModel):
     year: int
     term: str
+    grade: Optional[str] = None
     course_code: str
     course_name: str
     teacher: Optional[str] = None
@@ -69,6 +74,7 @@ class XbkCourseUpsert(BaseModel):
 class XbkSelectionUpsert(BaseModel):
     year: int
     term: str
+    grade: Optional[str] = None
     student_no: str
     name: Optional[str] = None
     course_code: str

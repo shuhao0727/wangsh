@@ -22,6 +22,7 @@ class XbkSelection(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     year = Column(Integer, nullable=False, index=True, comment="年份（如 2026）")
     term = Column(String(20), nullable=False, index=True, comment="学期（上学期/下学期）")
+    grade = Column(String(20), nullable=True, index=True, comment="年级（高一/高二）")
     student_no = Column(String(50), nullable=False, index=True, comment="学号")
     name = Column(String(50), nullable=True, comment="姓名（快照）")
     course_code = Column(String(50), nullable=False, index=True, comment="课程代码")

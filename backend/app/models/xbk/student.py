@@ -16,6 +16,7 @@ class XbkStudent(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     year = Column(Integer, nullable=False, index=True, comment="年份（如 2026）")
     term = Column(String(20), nullable=False, index=True, comment="学期（上学期/下学期）")
+    grade = Column(String(20), nullable=True, index=True, comment="年级（高一/高二）")
     class_name = Column(String(50), nullable=False, index=True, comment="班级")
     student_no = Column(String(50), nullable=False, index=True, comment="学号")
     name = Column(String(50), nullable=False, comment="姓名")

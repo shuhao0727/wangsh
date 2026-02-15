@@ -63,6 +63,7 @@ type DataTabKey = "course_results" | "students" | "courses" | "selections";
 type Filters = {
   year?: number;
   term?: "上学期" | "下学期";
+  grade?: "高一" | "高二";
   class_name?: string;
   search_text?: string;
 };
@@ -101,6 +102,7 @@ const XbkPage: React.FC = () => {
   const [filters, setFilters] = useState<Filters>({
     year: 2026,
     term: "上学期",
+    grade: undefined,
   });
   const [activeTab, setActiveTab] = useState<DataTabKey>("course_results");
   const [meta, setMeta] = useState<XbkMeta>({ years: [], terms: [], classes: [] });
@@ -150,7 +152,7 @@ const XbkPage: React.FC = () => {
   const [editForm] = Form.useForm();
 
   const resetFilters = () => {
-    setFilters({ year: 2026, term: "上学期", class_name: undefined, search_text: "" });
+    setFilters({ year: 2026, term: "上学期", grade: undefined, class_name: undefined, search_text: "" });
   };
 
   const loadMeta = useCallback(async () => {
@@ -160,7 +162,7 @@ const XbkPage: React.FC = () => {
     } catch {
       setMeta({ years: [], terms: [], classes: [] });
     }
-  }, [filters.term, filters.year]);
+  }, [filters.term, filters.year, filters.grade]);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -173,7 +175,7 @@ const XbkPage: React.FC = () => {
     } catch {
       setSummary(null);
     }
-  }, [filters.class_name, filters.term, filters.year]);
+  }, [filters.class_name, filters.term, filters.year, filters.grade]);
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
@@ -181,6 +183,7 @@ const XbkPage: React.FC = () => {
       const baseParams = {
         year: filters.year,
         term: filters.term,
+        grade: filters.grade,
         class_name: filters.class_name,
         search_text: filters.search_text,
       };
@@ -208,6 +211,7 @@ const XbkPage: React.FC = () => {
         const res = await xbkDataApi.listCourses({
           year: baseParams.year,
           term: baseParams.term,
+          grade: baseParams.grade,
           search_text: baseParams.search_text,
           page: coursesPage,
           size: coursesPageSize,
@@ -242,6 +246,7 @@ const XbkPage: React.FC = () => {
     filters.search_text,
     filters.term,
     filters.year,
+    filters.grade,
     selectionsPage,
     selectionsPageSize,
     studentsPage,
@@ -284,7 +289,7 @@ const XbkPage: React.FC = () => {
     setCoursesPage(1);
     setSelectionsPage(1);
     setCourseResultsPage(1);
-  }, [enabled, filters.year, filters.term, filters.class_name, filters.search_text]);
+  }, [enabled, filters.year, filters.term, filters.grade, filters.class_name, filters.search_text]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -302,13 +307,14 @@ const XbkPage: React.FC = () => {
         const params = {
           year: filters.year,
           term: filters.term,
+          grade: filters.grade,
           class_name: filters.class_name,
         };
         const [summary, courseStatsRes, classStatsRes, noSelRes] =
           await Promise.all([
             xbkDataApi.getSummary(params),
             xbkDataApi.getCourseStats(params),
-            xbkDataApi.getClassStats({ year: filters.year, term: filters.term }),
+            xbkDataApi.getClassStats({ year: filters.year, term: filters.term, grade: filters.grade }),
             xbkDataApi.getStudentsWithoutSelection(params),
           ]);
         setAnalysisSummary(summary);
@@ -325,7 +331,7 @@ const XbkPage: React.FC = () => {
         setAnalysisLoading(false);
       }
     })();
-  }, [analysisVisible, filters.year, filters.term, filters.class_name]);
+  }, [analysisVisible, filters.year, filters.term, filters.grade, filters.class_name]);
 
   const runImportPreview = useCallback(async (file: File, scope: XbkScope) => {
     setImportPreviewLoading(true);
@@ -334,6 +340,7 @@ const XbkPage: React.FC = () => {
         scope,
         year: filters.year,
         term: filters.term,
+        grade: filters.grade,
         file,
       });
       setImportPreview(res);
@@ -345,7 +352,7 @@ const XbkPage: React.FC = () => {
     } finally {
       setImportPreviewLoading(false);
     }
-  }, [filters.term, filters.year]);
+  }, [filters.term, filters.year, filters.grade]);
 
   useEffect(() => {
     if (!importVisible) return;
@@ -369,14 +376,14 @@ const XbkPage: React.FC = () => {
       setEditTargetId(null);
       setEditVisible(true);
       editForm.resetFields();
-      const base = { year: filters.year, term: filters.term };
+      const base = { year: filters.year, term: filters.term, grade: filters.grade };
       if (kind === "students") {
         editForm.setFieldsValue({ ...base, class_name: filters.class_name });
       } else {
         editForm.setFieldsValue(base);
       }
     },
-    [editForm, filters.class_name, filters.term, filters.year],
+    [editForm, filters.class_name, filters.grade, filters.term, filters.year],
   );
 
   const openEditModal = useCallback(
@@ -454,6 +461,12 @@ const XbkPage: React.FC = () => {
         width: calcColumnWidth(rows, "term", "学期", 80, 110),
       },
       {
+        title: "年级",
+        dataIndex: "grade",
+        width: 80,
+        render: (v) => v || "-",
+      },
+      {
         title: "课程代码",
         dataIndex: "course_code",
         width: calcColumnWidth(rows, "course_code", "课程代码", 90, 140),
@@ -508,6 +521,7 @@ const XbkPage: React.FC = () => {
     const cols: ColumnsType<XbkStudentRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
+      { title: "年级", dataIndex: "grade", width: 80, render: (v) => v || "-" },
       {
         title: "班级",
         dataIndex: "class_name",
@@ -551,6 +565,7 @@ const XbkPage: React.FC = () => {
     const cols: ColumnsType<XbkCourseRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
+      { title: "年级", dataIndex: "grade", width: 80, render: (v) => v || "-" },
       {
         title: "代码",
         dataIndex: "course_code",
@@ -612,6 +627,7 @@ const XbkPage: React.FC = () => {
     const cols: ColumnsType<XbkSelectionRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
+      { title: "年级", dataIndex: "grade", width: 80, render: (v) => v || "-" },
       { title: "学号", dataIndex: "student_no", width: calcColumnWidth(rows, "student_no", "学号", 120, 170), ellipsis: true },
       { title: "姓名", dataIndex: "name", width: calcColumnWidth(rows, "name", "姓名", 90, 130), render: (v) => v || "-", ellipsis: true },
       { title: "课程代码", dataIndex: "course_code", width: calcColumnWidth(rows, "course_code", "课程代码", 90, 140), ellipsis: true },
@@ -688,6 +704,7 @@ const XbkPage: React.FC = () => {
         scope,
         year: filters.year,
         term: filters.term,
+        grade: filters.grade,
         class_name: filters.class_name,
       });
       message.success(`删除完成，共 ${res.deleted} 条`);
@@ -700,7 +717,7 @@ const XbkPage: React.FC = () => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const blob = await xbkDataApi.downloadTemplate({ scope: importScope });
+      const blob = await xbkDataApi.downloadTemplate({ scope: importScope, grade: filters.grade });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -725,6 +742,7 @@ const XbkPage: React.FC = () => {
         scope: importScope,
         year: filters.year,
         term: filters.term,
+        grade: filters.grade,
         skip_invalid: skipInvalid,
         file: importFile,
       });
@@ -747,9 +765,10 @@ const XbkPage: React.FC = () => {
         export_type: exportType,
         year: filters.year || 2026,
         term: filters.term || "上学期",
+        grade: filters.grade,
         class_name: filters.class_name,
       });
-      const filename = `xbk_${exportType}_${filters.year || "all"}_${filters.term || "all"}.xlsx`;
+      const filename = `xbk_${exportType}_${filters.year || "all"}_${filters.term || "all"}_${filters.grade || "all"}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -820,6 +839,18 @@ const XbkPage: React.FC = () => {
                 >
                   <Option value="上学期">上学期</Option>
                   <Option value="下学期">下学期</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="年级">
+                <Select
+                  value={filters.grade}
+                  style={{ width: 100 }}
+                  onChange={(v) => setFilters((p) => ({ ...p, grade: v }))}
+                  allowClear
+                  placeholder="选择年级"
+                >
+                  <Option value="高一">高一</Option>
+                  <Option value="高二">高二</Option>
                 </Select>
               </Form.Item>
               <Form.Item label="班级">
@@ -1076,18 +1107,29 @@ const XbkPage: React.FC = () => {
       >
         <Form form={editForm} layout="vertical">
           <Row gutter={12}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item name="year" label="年份" rules={[{ required: true, message: "请输入年份" }]}>
                 <InputNumber style={{ width: "100%" }} min={2000} max={2100} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item name="term" label="学期" rules={[{ required: true, message: "请选择学期" }]}>
                 <Select
                   options={(meta.terms?.length ? meta.terms : ["上学期", "下学期"]).map((t) => ({
                     value: t,
                     label: t,
                   }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="grade" label="年级">
+                <Select
+                  allowClear
+                  options={[
+                    { value: "高一", label: "高一" },
+                    { value: "高二", label: "高二" },
+                  ]}
                 />
               </Form.Item>
             </Col>
@@ -1188,12 +1230,23 @@ const XbkPage: React.FC = () => {
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <div>
             <Text style={{ marginRight: 10 }}>导入类型</Text>
-            <Select value={importScope} style={{ width: 220 }} onChange={(v) => setImportScope(v)}>
+            <Select value={importScope} style={{ width: 140 }} onChange={(v) => setImportScope(v)}>
               <Option value="students">学生名单</Option>
               <Option value="courses">选课目录</Option>
               <Option value="selections">选课结果</Option>
             </Select>
-            <Button style={{ marginLeft: 10 }} onClick={handleDownloadTemplate}>
+            <Text style={{ marginLeft: 16, marginRight: 10 }}>所属年级</Text>
+            <Select
+              value={filters.grade}
+              style={{ width: 100 }}
+              placeholder="选择年级"
+              allowClear
+              onChange={(v) => setFilters((p) => ({ ...p, grade: v }))}
+            >
+              <Option value="高一">高一</Option>
+              <Option value="高二">高二</Option>
+            </Select>
+            <Button style={{ marginLeft: 16 }} onClick={handleDownloadTemplate}>
               下载模板
             </Button>
           </div>
@@ -1266,10 +1319,10 @@ const XbkPage: React.FC = () => {
             />
           ) : null}
           <Text type="secondary">
-            会优先使用你当前筛选的 年份/学期 作为默认值（Excel里也可包含“年份/学期”列）。
+            会优先使用你当前筛选的 年份/学期/年级 作为默认值（Excel里也可包含“年份/学期/年级”列）。
           </Text>
           <Text type="secondary">
-            字段要求：学生名单（年份、学期、班级、学号、姓名、性别）｜选课目录（年份、学期、课程代码、课程名称、课程负责人、限报人数、上课地点）｜选课结果（年份、学期、学号、姓名、课程代码）
+            字段要求：学生名单（年份、学期、年级、班级、学号、姓名、性别）｜选课目录（年份、学期、年级、课程代码、课程名称、课程负责人、限报人数、上课地点）｜选课结果（年份、学期、年级、学号、姓名、课程代码）
           </Text>
         </Space>
       </Modal>
@@ -1292,8 +1345,9 @@ const XbkPage: React.FC = () => {
             </Select>
           </div>
           <Text type="secondary">
-            将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"}{" "}
-            {filters.class_name ? `· ${filters.class_name}` : ""}
+            将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} ·{" "}
+            {filters.grade || "全部年级"}
+            {filters.class_name ? ` · ${filters.class_name}` : ""}
           </Text>
         </Space>
       </Modal>
@@ -1309,7 +1363,7 @@ const XbkPage: React.FC = () => {
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Text type="secondary">
             将按当前筛选条件删除数据：{filters.year || "全部年份"} ·{" "}
-            {filters.term || "全部学期"}
+            {filters.term || "全部学期"} · {filters.grade || "全部年级"}
           </Text>
           <div>
             <Text style={{ marginRight: 10 }}>删除范围</Text>

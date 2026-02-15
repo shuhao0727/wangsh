@@ -282,6 +282,7 @@ async def import_data(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     skip_invalid: bool = Query(True),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -295,6 +296,11 @@ async def import_data(
     now = datetime.utcnow()
     mapping = _students_mapping() if scope == "students" else _courses_mapping() if scope == "courses" else _selections_mapping()
     df = _remap_columns(df, mapping)
+
+    # 优先读取 Excel 中的年级列，如果没有则使用 Query 参数
+    def _get_row_grade(row, default_grade):
+        g = _normalize_str(row.get("年级"))
+        return g if g else default_grade
 
     if scope == "students":
         required = ["班级", "学号", "姓名"]
@@ -328,6 +334,8 @@ async def import_data(
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
+            
+            row_grade = _get_row_grade(row, grade)
             class_name = _normalize_str(row.get("班级"))
             student_no = _normalize_str(row.get("学号"))
             name = _normalize_str(row.get("姓名"))
@@ -351,6 +359,7 @@ async def import_data(
                 .values(
                     year=y,
                     term=t,
+                    grade=row_grade,
                     class_name=class_name,
                     student_no=student_no,
                     name=name,
@@ -362,6 +371,7 @@ async def import_data(
                 .on_conflict_do_update(
                     index_elements=["year", "term", "student_no"],
                     set_={
+                        "grade": row_grade,
                         "class_name": class_name,
                         "name": name,
                         "gender": gender,
@@ -419,6 +429,8 @@ async def import_data(
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
+            
+            row_grade = _get_row_grade(row, grade)
             course_code = _normalize_str(row.get("课程代码"))
             course_name = _normalize_str(row.get("课程名称"))
             teacher = _normalize_str(row.get("课程负责人"))
@@ -445,6 +457,7 @@ async def import_data(
                 .values(
                     year=y,
                     term=t,
+                    grade=row_grade,
                     course_code=course_code,
                     course_name=course_name,
                     teacher=teacher,
@@ -457,6 +470,7 @@ async def import_data(
                 .on_conflict_do_update(
                     index_elements=["year", "term", "course_code"],
                     set_={
+                        "grade": row_grade,
                         "course_name": course_name,
                         "teacher": teacher,
                         "quota": quota or 0,
@@ -515,6 +529,8 @@ async def import_data(
         except HTTPException as e:
             row_errors.append(str(e.detail))
             y = t = None
+        
+        row_grade = _get_row_grade(row, grade)
         student_no = _normalize_str(row.get("学号"))
         name = _normalize_str(row.get("姓名"))
         course_code = _normalize_str(row.get("课程代码"))
@@ -534,6 +550,7 @@ async def import_data(
             .values(
                 year=y,
                 term=t,
+                grade=row_grade,
                 student_no=student_no,
                 name=name,
                 course_code=course_code,
@@ -543,7 +560,7 @@ async def import_data(
             )
             .on_conflict_do_update(
                 index_elements=["year", "term", "student_no", "course_code"],
-                set_={"name": name, "is_deleted": False, "updated_at": now},
+                set_={"grade": row_grade, "name": name, "is_deleted": False, "updated_at": now},
             )
         )
         await db.execute(stmt)

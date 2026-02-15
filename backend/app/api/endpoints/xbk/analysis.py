@@ -15,6 +15,7 @@ router = APIRouter()
 async def get_summary(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
@@ -34,6 +35,11 @@ async def get_summary(
         course_stmt = course_stmt.where(XbkCourse.term == term)
         selection_stmt = selection_stmt.where(XbkSelection.term == term)
         no_sel_stmt = no_sel_stmt.where(XbkStudent.term == term)
+    if grade:
+        student_stmt = student_stmt.where(XbkStudent.grade == grade)
+        course_stmt = course_stmt.where(XbkCourse.grade == grade)
+        selection_stmt = selection_stmt.where(XbkSelection.grade == grade)
+        no_sel_stmt = no_sel_stmt.where(XbkStudent.grade == grade)
     if class_name:
         student_stmt = student_stmt.where(XbkStudent.class_name == class_name)
         no_sel_stmt = no_sel_stmt.where(XbkStudent.class_name == class_name)
@@ -42,6 +48,7 @@ async def get_summary(
             XbkStudent.class_name == class_name,
             *( [XbkStudent.year == year] if year is not None else [] ),
             *( [XbkStudent.term == term] if term else [] ),
+            *( [XbkStudent.grade == grade] if grade else [] ),
         )
         selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
 
@@ -57,6 +64,8 @@ async def get_summary(
         selected_student_sub = selected_student_sub.where(XbkSelection.year == year)
     if term:
         selected_student_sub = selected_student_sub.where(XbkSelection.term == term)
+    if grade:
+        selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
     if class_name:
         selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(sub))
     no_sel_stmt = no_sel_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
@@ -74,6 +83,7 @@ async def get_summary(
 async def course_stats(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
@@ -83,6 +93,8 @@ async def course_stats(
         class_count_stmt = class_count_stmt.where(XbkStudent.year == year)
     if term:
         class_count_stmt = class_count_stmt.where(XbkStudent.term == term)
+    if grade:
+        class_count_stmt = class_count_stmt.where(XbkStudent.grade == grade)
     if class_name:
         class_count_stmt = class_count_stmt.where(XbkStudent.class_name == class_name)
     class_count = int((await db.execute(class_count_stmt)).scalar_one() or 0)
@@ -96,12 +108,15 @@ async def course_stats(
         selection_stmt = selection_stmt.where(XbkSelection.year == year)
     if term:
         selection_stmt = selection_stmt.where(XbkSelection.term == term)
+    if grade:
+        selection_stmt = selection_stmt.where(XbkSelection.grade == grade)
     if class_name:
         sub = select(XbkStudent.student_no).where(
             XbkStudent.is_deleted.is_(False),
             XbkStudent.class_name == class_name,
             *( [XbkStudent.year == year] if year is not None else [] ),
             *( [XbkStudent.term == term] if term else [] ),
+            *( [XbkStudent.grade == grade] if grade else [] ),
         )
         selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
 
@@ -115,6 +130,7 @@ async def course_stats(
             XbkCourse.course_code.in_(codes),
             *( [XbkCourse.year == year] if year is not None else [] ),
             *( [XbkCourse.term == term] if term else [] ),
+            *( [XbkCourse.grade == grade] if grade else [] ),
         )
         for code, name, quota in (await db.execute(course_stmt)).all():
             course_map[str(code)] = {"course_name": str(name), "quota": int(quota or 0)}
@@ -130,7 +146,15 @@ async def course_stats(
         }
         for code, count in rows
     ]
-    items.sort(key=lambda x: x["count"], reverse=True)
+    
+    # 按照课程代码排序 (尝试转换为数字排序)
+    def _sort_key(item):
+        code = item["course_code"]
+        if code.isdigit():
+            return (0, int(code))
+        return (1, code)
+    
+    items.sort(key=_sort_key)
     return {"items": items}
 
 
@@ -138,6 +162,7 @@ async def course_stats(
 async def class_stats(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
@@ -150,9 +175,22 @@ async def class_stats(
         stmt = stmt.where(XbkStudent.year == year)
     if term:
         stmt = stmt.where(XbkStudent.term == term)
+    if grade:
+        stmt = stmt.where(XbkStudent.grade == grade)
     rows = (await db.execute(stmt)).all()
     items = [{"class_name": str(cls), "count": int(count)} for cls, count in rows]
-    items.sort(key=lambda x: x["count"], reverse=True)
+    
+    # 按照班级名称排序
+    def _sort_key(item):
+        name = item["class_name"]
+        # 尝试提取班级中的数字进行排序，例如 "高二(1)班" -> 1
+        import re
+        match = re.search(r'\((\d+)\)', name) or re.search(r'（(\d+)）', name) or re.search(r'(\d+)', name)
+        if match:
+             return (0, int(match.group(1)), name)
+        return (1, 0, name)
+        
+    items.sort(key=_sort_key)
     return {"items": items}
 
 
@@ -160,6 +198,7 @@ async def class_stats(
 async def students_without_selection(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
@@ -173,6 +212,9 @@ async def students_without_selection(
     if term:
         students_stmt = students_stmt.where(XbkStudent.term == term)
         selections_stmt = selections_stmt.where(XbkSelection.term == term)
+    if grade:
+        students_stmt = students_stmt.where(XbkStudent.grade == grade)
+        selections_stmt = selections_stmt.where(XbkSelection.grade == grade)
     if class_name:
         students_stmt = students_stmt.where(XbkStudent.class_name == class_name)
 
@@ -186,6 +228,7 @@ async def students_without_selection(
                     "id": s.id,
                     "year": s.year,
                     "term": s.term,
+                    "grade": s.grade,
                     "class_name": s.class_name,
                     "student_no": s.student_no,
                     "name": s.name,

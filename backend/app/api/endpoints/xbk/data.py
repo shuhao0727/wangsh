@@ -38,12 +38,14 @@ async def require_xbk_access(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="XBK 未开放")
 
 
-def _apply_common_filters(stmt, model, year: Optional[int], term: Optional[str], search_text: Optional[str]):
+def _apply_common_filters(stmt, model, year: Optional[int], term: Optional[str], grade: Optional[str], search_text: Optional[str]):
     conditions = []
     if year is not None:
         conditions.append(model.year == year)
     if term:
         conditions.append(model.term == term)
+    if grade:
+        conditions.append(model.grade == grade)
     if search_text and search_text.strip():
         keyword = f"%{search_text.strip()}%"
         text_conditions = []
@@ -61,6 +63,7 @@ def _apply_common_filters(stmt, model, year: Optional[int], term: Optional[str],
 async def list_students(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     search_text: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
@@ -69,7 +72,7 @@ async def list_students(
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
     stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
-    stmt = _apply_common_filters(stmt, XbkStudent, year, term, search_text)
+    stmt = _apply_common_filters(stmt, XbkStudent, year, term, grade, search_text)
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
 
@@ -92,6 +95,7 @@ async def list_students(
 async def list_courses(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     search_text: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=500),
@@ -99,7 +103,7 @@ async def list_courses(
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
     stmt = select(XbkCourse).where(XbkCourse.is_deleted.is_(False))
-    stmt = _apply_common_filters(stmt, XbkCourse, year, term, search_text)
+    stmt = _apply_common_filters(stmt, XbkCourse, year, term, grade, search_text)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
@@ -393,6 +397,7 @@ async def delete_selection(
 async def list_selections(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     search_text: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
@@ -401,7 +406,7 @@ async def list_selections(
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
     stmt = select(XbkSelection).where(XbkSelection.is_deleted.is_(False))
-    stmt = _apply_common_filters(stmt, XbkSelection, year, term, search_text)
+    stmt = _apply_common_filters(stmt, XbkSelection, year, term, grade, search_text)
 
     if class_name:
         sub = (
@@ -435,6 +440,7 @@ async def list_selections(
 async def list_course_results(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     search_text: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
@@ -447,6 +453,7 @@ async def list_course_results(
             XbkSelection.id.label("id"),
             XbkSelection.year.label("year"),
             XbkSelection.term.label("term"),
+            XbkSelection.grade.label("grade"),
             XbkSelection.student_no.label("student_no"),
             func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
             XbkStudent.class_name.label("class_name"),
@@ -481,6 +488,8 @@ async def list_course_results(
         stmt = stmt.where(XbkSelection.year == year)
     if term:
         stmt = stmt.where(XbkSelection.term == term)
+    if grade:
+        stmt = stmt.where(XbkSelection.grade == grade)
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
     if search_text and search_text.strip():
@@ -502,7 +511,11 @@ async def list_course_results(
 
     rows = (
         await db.execute(
-            stmt.order_by(XbkSelection.course_code.asc(), XbkStudent.class_name.asc(), XbkSelection.student_no.asc())
+            stmt.order_by(
+                XbkStudent.class_name.asc(),  # 先按班级
+                cast(func.regexp_replace(XbkSelection.student_no, '\D', '', 'g'), Integer).asc(), # 再按学号数字部分
+                XbkSelection.student_no.asc() # 最后按学号字符串
+            )
             .offset((page - 1) * size)
             .limit(size)
         )
@@ -513,6 +526,7 @@ async def list_course_results(
             "id": int(r.id),
             "year": int(r.year),
             "term": str(r.term),
+            "grade": str(r.grade) if r.grade else None,
             "student_no": str(r.student_no),
             "student_name": str(r.student_name) if r.student_name else None,
             "class_name": str(r.class_name) if r.class_name else None,
