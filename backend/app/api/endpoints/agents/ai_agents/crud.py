@@ -14,6 +14,8 @@ from app.schemas.agents import (
     AgentRevealKeyRequest,
     AgentRevealKeyResponse,
     AgentStatisticsData,
+    ModelDiscoveryRequest,
+    ModelDiscoveryResponse,
 )
 from app.services.agents import (
     create_agent,
@@ -22,6 +24,7 @@ from app.services.agents import (
     update_agent,
     delete_agent,
     test_agent,
+    discover_models_service,
     get_agent_statistics,
     get_active_agents,
 )
@@ -313,6 +316,43 @@ async def test_agent_connection(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"测试智能体失败: {str(e)}",
+        )
+
+
+@router.post("/{agent_id}/discover-models", response_model=ModelDiscoveryResponse)
+async def discover_agent_models(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        agent = await get_agent(db, agent_id)
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"智能体ID {agent_id} 不存在",
+            )
+
+        api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该智能体未配置API密钥",
+            )
+
+        if not agent.api_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该智能体未配置API地址",
+            )
+
+        request = ModelDiscoveryRequest(api_endpoint=str(agent.api_endpoint), api_key=str(api_key))
+        return await discover_models_service(request)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"发现模型失败: {str(e)}",
         )
 
 

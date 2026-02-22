@@ -33,7 +33,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
             <span>智能体列表</span>
           </Space>
         }
-        style={{ height: "100%", marginBottom: "16px" }}
+        style={{ height: "100%" }}
       >
         <div style={{ textAlign: "center", padding: "40px 20px" }}>
           <Text type="secondary">正在加载智能体...</Text>
@@ -55,7 +55,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           <span>智能体列表</span>
         </Space>
       }
-      style={{ height: "100%", marginBottom: "16px" }}
+      style={{ height: "100%" }}
       extra={
         <Tooltip title="隐藏侧边栏">
           <Button
@@ -75,7 +75,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           value={currentAgent.id}
           onChange={onAgentChange}
           style={{ width: "100%" }}
-          size="large"
+          size="middle"
         >
           {agents.map((agent) => (
             <Option key={agent.id} value={agent.id}>
@@ -101,26 +101,31 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         size="small"
         style={{
           borderLeft: `4px solid ${currentAgent.color}`,
-          marginBottom: "24px",
+          marginBottom: "16px",
         }}
+        styles={{ body: { padding: "12px" } }}
       >
-        <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+        <Space orientation="vertical" size={4} style={{ width: "100%" }}>
           <Flex align="center" gap="small">
             <Avatar
-              size="large"
+              size="default"
               icon={currentAgent.icon}
               style={{ backgroundColor: currentAgent.color }}
             />
             <div>
-              <Title level={5} style={{ margin: 0, color: currentAgent.color }}>
+              <Text strong style={{ color: currentAgent.color, fontSize: "14px" }}>
                 {currentAgent.name}
-              </Title>
-              <Text type="secondary">{currentAgent.description}</Text>
+              </Text>
+              <div style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)", lineHeight: 1.2 }}>
+                {currentAgent.description}
+              </div>
             </div>
           </Flex>
-          <Tag color={currentAgent.status === "online" ? "success" : "default"}>
-            {currentAgent.status === "online" ? "在线" : "离线"}
-          </Tag>
+          <div style={{ marginTop: 4 }}>
+             <Tag color={currentAgent.status === "online" ? "success" : "default"} style={{ margin: 0, fontSize: "10px", lineHeight: "18px" }}>
+              {currentAgent.status === "online" ? "在线" : "离线"}
+            </Tag>
+          </div>
         </Space>
       </Card>
 
@@ -131,14 +136,12 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
             <div
               key={s.session_id}
               style={{
-                padding: "8px 0",
+                padding: "8px 12px",
                 borderBottom: "1px solid var(--ws-color-border)",
                 cursor: "pointer",
-                background: "#ffffff",
-                borderLeft:
-                  s.session_id === currentSessionId
-                    ? "3px solid var(--ws-color-primary)"
-                    : "3px solid transparent",
+                background: s.session_id === currentSessionId ? "#e6f7ff" : "#ffffff",
+                borderRadius: 6,
+                margin: "4px 8px",
               }}
               onClick={() => onSelectSession(s.session_id)}
             >

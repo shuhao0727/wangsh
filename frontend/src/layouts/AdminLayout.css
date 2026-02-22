@@ -2,12 +2,13 @@
 
 .admin-layout {
   min-height: 100vh;
+  background: var(--ws-color-bg);
 }
 
 /* 左侧边栏头部 */
 .admin-sidebar-header {
   padding: 16px;
-  border-bottom: 1px solid var(--ws-color-border);
+  border-bottom: 1px solid transparent;
 }
 
 .admin-logo {
@@ -17,16 +18,16 @@
 }
 
 .admin-logo-icon {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, var(--ws-color-primary) 0%, var(--ws-color-success) 100%);
-  border-radius: var(--ws-radius-md);
+  width: 32px;
+  height: 32px;
+  background: var(--ws-color-primary);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: bold;
-  font-size: 18px;
+  font-weight: 600;
+  font-size: 16px;
   flex-shrink: 0;
 }
 
@@ -37,11 +38,11 @@
 
 /* 用户信息区域 */
 .admin-user-info {
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid var(--ws-color-border);
+  border-bottom: 1px solid transparent;
 }
 
 .admin-user-details {
@@ -59,9 +60,8 @@
   right: 16px;
   text-align: center;
   padding: 12px 8px;
-  background: var(--ws-color-surface);
-  border-radius: var(--ws-radius-sm);
-  border-top: 1px solid var(--ws-color-border);
+  background: transparent;
+  border-top: 1px solid transparent;
 }
 
 /* 头部样式 */
@@ -102,18 +102,32 @@
 /* 管理菜单样式 */
 .admin-layout .ant-menu {
   border-right: 0;
+  background: transparent;
 }
 
 .admin-layout .ant-menu-item {
-  margin: 4px 8px !important;
-  border-radius: var(--ws-radius-sm);
+  margin: 4px 12px !important;
+  border-radius: 6px;
+  width: auto !important;
 }
 
 .admin-layout .ant-menu-item-selected {
   background-color: var(--ws-color-primary-soft) !important;
   color: var(--ws-color-primary) !important;
+  font-weight: 500;
 }
 
-.admin-layout .ant-menu-item:hover {
-  background-color: var(--ws-color-surface-2) !important;
+.admin-layout .ant-menu-item:not(.ant-menu-item-selected):hover {
+  background-color: var(--ws-color-hover-bg) !important;
+  color: var(--ws-color-text);
+}
+
+.admin-layout .ant-layout-sider {
+  background: #ffffff !important;
+  border-right: 1px solid transparent;
+}
+
+.admin-layout .ant-layout-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid transparent;
 }

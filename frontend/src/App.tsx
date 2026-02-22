@@ -13,6 +13,7 @@ const AIAgentsPage = lazy(() => import("./pages/AIAgents"));
 const InformaticsPage = lazy(() => import("./pages/Informatics"));
 const InformaticsDetailPage = lazy(() => import("./pages/Informatics/Detail"));
 const ITTechnologyPage = lazy(() => import("./pages/ITTechnology"));
+const ITTechnologyPythonLabPage = lazy(() => import("./pages/ITTechnology/PythonLab"));
 const PersonalProgramsPage = lazy(() => import("./pages/PersonalPrograms"));
 const ArticlesPage = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/Articles/Detail"));
@@ -61,6 +62,8 @@ function App() {
               <Route path="/informatics" element={<InformaticsPage />} />
               <Route path="/informatics/:id" element={<InformaticsDetailPage />} />
               <Route path="/it-technology" element={<ITTechnologyPage />} />
+              <Route path="/it-technology/python-lab" element={<ITTechnologyPythonLabPage />} />
+              <Route path="/it-technology/python-lab/:id" element={<ITTechnologyPythonLabPage />} />
               <Route path="/personal-programs" element={<PersonalProgramsPage />} />
               <Route path="/xbk" element={<XbkPage />} />
               <Route path="/articles" element={<ArticlesPage />} />

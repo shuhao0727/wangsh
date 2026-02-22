@@ -38,50 +38,42 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onAddAgent,
 }) => {
   return (
-    <Card
-      size="small"
-      style={{ marginBottom: "16px" }}
-      styles={{ body: { padding: "16px" } }}
-    >
-      <Row gutter={16} align="middle">
-        <Col flex="1">
+    <div style={{ marginBottom: "24px" }}>
+      <Row gutter={16} align="middle" justify="space-between">
+        <Col xs={24} md={16} style={{ display: 'flex', gap: '16px' }}> {/* Increased gap */}
           <Search
-            placeholder="搜索智能体名称、描述或URL..."
+            placeholder="搜索智能体..."
             allowClear
-            enterButton={<SearchOutlined />}
-            size="middle"
+            size="large" 
             value={searchKeyword}
             onChange={(e) => onSearchChange(e.target.value)}
             onSearch={onSearch}
-            style={{ maxWidth: "400px", marginRight: "16px" }}
+            style={{ maxWidth: "480px" }} // Wider search bar
           />
           <Select
             value={selectedType}
             onChange={onTypeChange}
-            style={{ width: "150px" }}
+            size="large"
+            style={{ width: "180px" }} // Wider select
           >
             <Option value="all">全部类型</Option>
             <Option value={AgentTypeValues.GENERAL}>通用智能体</Option>
             <Option value={AgentTypeValues.DIFY}>Dify智能体</Option>
           </Select>
+          <Button icon={<ReloadOutlined />} onClick={onReset} />
         </Col>
-        <Col>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={onReset}>
-              重置
-            </Button>
+        <Col xs={24} md={8} style={{ textAlign: 'right', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             {selectedRowKeys.length > 0 && (
-              <Button danger icon={<DeleteOutlined />} onClick={onBatchDelete}>
+              <Button danger size="middle" icon={<DeleteOutlined />} onClick={onBatchDelete}>
                 批量删除 ({selectedRowKeys.length})
               </Button>
             )}
-            <Button type="primary" icon={<PlusOutlined />} onClick={onAddAgent}>
-              添加智能体
+            <Button type="primary" size="middle" icon={<PlusOutlined />} onClick={onAddAgent}>
+              新建智能体
             </Button>
-          </Space>
         </Col>
       </Row>
-    </Card>
+    </div>
   );
 };
 

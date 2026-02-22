@@ -32,6 +32,7 @@ import {
   FolderOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { Divider } from "antd";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
 import type {
@@ -42,7 +43,7 @@ import { AdminCard, AdminPage } from "@components/Admin";
 import CategoryManageModal from "./CategoryManageModal";
 import "./AdminArticles.css";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Search } = Input;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -158,14 +159,13 @@ const getArticleColumns = (
       return (
         <Space size="small">
           <Button
-            size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
           <Dropdown menu={menu} trigger={["click"]}>
-            <Button size="small" icon={<MoreOutlined />} />
+            <Button icon={<MoreOutlined />} />
           </Dropdown>
         </Space>
       );
@@ -518,22 +518,22 @@ const AdminArticles: React.FC = () => {
         size="small"
         className="admin-articles-toolbar"
         styles={{ body: { padding: "16px" } }}
-        accentColor="var(--ws-color-primary)"
-        gradient="var(--ws-color-surface)"
       >
-        <Row gutter={16} align="middle">
-          <Col flex="1">
-            <Search
-              placeholder="搜索文章..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="middle"
-              onSearch={handleSearch}
-              style={{ maxWidth: "300px" }}
-            />
+        <Row gutter={16} align="middle" justify="space-between">
+          <Col xs={24} md={12}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>文章管理</Title>
+              <Divider type="vertical" style={{ height: "20px" }} />
+              <Search
+                placeholder="搜索文章..."
+                allowClear
+                onSearch={handleSearch}
+                style={{ maxWidth: "320px" }}
+              />
+            </div>
           </Col>
-          <Col>
-            <Space>
+          <Col xs={24} md={12} style={{ textAlign: "right" }}>
+            <Space size="middle">
               {selectedRowKeys.length > 0 && (
                 <Dropdown menu={batchMenu}>
                   <Button icon={<MoreOutlined />}>
@@ -572,8 +572,6 @@ const AdminArticles: React.FC = () => {
           title="高级筛选"
           size="small"
           className="admin-articles-filter"
-          accentColor="var(--ws-color-info)"
-          gradient="var(--ws-color-surface)"
           extra={
             <Button
               type="link"
@@ -606,8 +604,6 @@ const AdminArticles: React.FC = () => {
             {Math.min(currentPage * pageSize, total)} 条
           </Text>
         }
-        accentColor="var(--ws-color-success)"
-        gradient="var(--ws-color-surface)"
       >
         {loading ? (
           <div style={{ textAlign: "center", padding: "40px" }}>
@@ -616,10 +612,15 @@ const AdminArticles: React.FC = () => {
         ) : articles.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无文章数据"
+            description={
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "24px" }}>
+                <Text type="secondary" style={{ fontSize: "16px" }}>暂无已发布内容</Text>
+                <Text type="secondary" style={{ fontSize: "14px" }}>您可以开始创作第一篇文章，或从草稿箱中发布。</Text>
+              </div>
+            }
           >
-            <Button type="primary" onClick={handleAddArticle}>
-              添加第一篇文章
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddArticle}>
+              立即创作
             </Button>
           </Empty>
         ) : (

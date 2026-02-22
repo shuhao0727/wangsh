@@ -21,6 +21,7 @@ class RedisCache:
     _instance: Optional["RedisCache"] = None
     _client: Optional[redis.Redis] = None
     _initialized: bool = False
+    _loop: Optional[asyncio.AbstractEventLoop] = None
     
     def __new__(cls):
         if cls._instance is None:
@@ -40,6 +41,7 @@ class RedisCache:
             return
             
         try:
+            self._loop = asyncio.get_running_loop()
             self._client = redis.Redis(
                 host=settings.REDIS_HOST,
                 port=settings.REDIS_PORT,
@@ -61,6 +63,23 @@ class RedisCache:
     
     async def get_client(self) -> redis.Redis:
         """获取Redis客户端实例"""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if self._loop is not None and getattr(self._loop, "is_closed", lambda: False)():
+            self._client = None
+            self._initialized = False
+            self._loop = None
+        if loop is not None and self._loop is not None and loop is not self._loop:
+            try:
+                if self._client:
+                    await self._client.aclose()
+            except Exception:
+                pass
+            self._client = None
+            self._initialized = False
+            self._loop = None
         if not self._initialized or self._client is None:
             await self.initialize()
         if self._client is None:

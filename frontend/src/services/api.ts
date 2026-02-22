@@ -11,7 +11,7 @@ let refreshPromise: Promise<void> | null = null;
 const ACCESS_TOKEN_KEY = "ws_access_token";
 const REFRESH_TOKEN_KEY = "ws_refresh_token";
 
-const getStoredAccessToken = () => {
+export const getStoredAccessToken = () => {
   if (typeof window === "undefined") return null;
   try {
     return sessionStorage.getItem(ACCESS_TOKEN_KEY);
@@ -20,7 +20,7 @@ const getStoredAccessToken = () => {
   }
 };
 
-const getStoredRefreshToken = () => {
+export const getStoredRefreshToken = () => {
   if (typeof window === "undefined") return null;
   try {
     return sessionStorage.getItem(REFRESH_TOKEN_KEY);
@@ -96,6 +96,11 @@ const createApiClient = (): AxiosInstance => {
       if (token && !requestConfig.headers?.Authorization) {
         requestConfig.headers = requestConfig.headers ?? {};
         (requestConfig.headers as any).Authorization = `Bearer ${token}`;
+      }
+      if (typeof FormData !== "undefined" && requestConfig.data instanceof FormData) {
+        requestConfig.headers = requestConfig.headers ?? {};
+        delete (requestConfig.headers as any)["Content-Type"];
+        delete (requestConfig.headers as any)["content-type"];
       }
       if (config.features.debug) {
         logger.debug("🚀 API 请求:", {
@@ -247,17 +252,22 @@ const createApiClient = (): AxiosInstance => {
         } catch {
           loggedData = error.response.data;
         }
-        logger.error("❌ API 错误响应:", {
-          url: error.config.url,
-          status: error.response.status,
-          data: loggedData,
-        });
+        const silent = !!(error.config as any)?.silent;
+        if (!silent) {
+          logger.error("❌ API 错误响应:", {
+            url: error.config.url,
+            status: error.response.status,
+            data: loggedData,
+          });
+        }
       } else if (error.request) {
         // 请求发送但无响应
-        logger.error("❌ 网络错误，无响应:", error.request);
+        const silent = !!(error.config as any)?.silent;
+        if (!silent) logger.error("❌ 网络错误，无响应:", error.request);
       } else {
         // 请求配置错误
-        logger.error("❌ 请求配置错误:", error.message);
+        const silent = !!(error.config as any)?.silent;
+        if (!silent) logger.error("❌ 请求配置错误:", error.message);
       }
 
       return Promise.reject(error);
@@ -351,7 +361,7 @@ export const authApi = {
   register: (userData: any) => api.client.post("/auth/register", userData),
 
   // 获取用户信息 - 后端返回直接用户对象，没有包装
-  getCurrentUser: () => api.client.get("/auth/me"),
+  getCurrentUser: (config?: AxiosRequestConfig) => api.client.get("/auth/me", config),
 
   // 登出
   logout: () =>

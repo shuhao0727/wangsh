@@ -5,15 +5,14 @@ import {
   Button,
   Row,
   Col,
-  Divider,
-  Alert,
   Tag,
+  Divider,
 } from "antd";
-import { SyncOutlined } from "@ant-design/icons";
-import { AdminCard, AdminPage } from "@components/Admin";
+import { SyncOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { AdminPage } from "@components/Admin";
 import { api, config } from "@services";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -44,147 +43,106 @@ const AdminDashboard: React.FC = () => {
     loadAll();
   }, [loadAll]);
 
+  const StatusItem = ({ label, value, status }: { label: string; value: React.ReactNode; status?: "success" | "error" | "default" }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <Text type="secondary" style={{ fontSize: 12 }}>{label}</Text>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {status === "success" && <CheckCircleOutlined style={{ color: "var(--ws-color-success)" }} />}
+        {status === "error" && <CloseCircleOutlined style={{ color: "var(--ws-color-error)" }} />}
+        <span style={{ fontSize: 18, fontWeight: 500 }}>{value}</span>
+      </div>
+    </div>
+  );
+
   return (
     <AdminPage>
-      {/* 标题和操作 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          marginBottom: "24px",
-        }}
-      >
-        <Space>
-          <Button
-            icon={<SyncOutlined />}
-            onClick={loadAll}
-            loading={loading}
-          >
-            刷新数据
-          </Button>
+      {/* Toolbar / Header Section */}
+      <div style={{ 
+        padding: "16px 24px", 
+        borderBottom: "1px solid #f0f0f0",
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center" 
+      }}>
+        <Space direction="vertical" size={0}>
+          <Title level={4} style={{ margin: 0 }}>状态概览</Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>实时监控系统运行状态与核心指标</Text>
         </Space>
+        <Button 
+          type="text" 
+          icon={<SyncOutlined spin={loading} />} 
+          onClick={loadAll}
+        >
+          刷新
+        </Button>
       </div>
 
-      {/* 系统状态提示 */}
-      <Alert
-        title="系统状态"
-        description={
-          errorText
-            ? errorText
-            : `后端：${health?.system?.service || "-"} · 版本：${health?.system?.version || "-"} · 环境：${health?.system?.environment || "-"}`
-        }
-        type={errorText ? "error" : health?.status === "healthy" ? "success" : "warning"}
-        showIcon
-        style={{
-          marginBottom: "24px",
-          background: "var(--ws-color-surface)",
-          border: "1px solid var(--ws-color-border)",
-        }}
-      />
+      <div style={{ padding: 24, overflowY: "auto", height: "100%" }}>
+        {/* Health Status Section */}
+        <div style={{ marginBottom: 32 }}>
+          <Title level={5} style={{ marginBottom: 16, fontSize: 14, color: "var(--ws-color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            系统健康 (System Health)
+          </Title>
+          
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
+            gap: 24,
+            padding: 24,
+            border: "1px solid #f0f0f0",
+            borderRadius: 8,
+            background: "#fafafa" // Very subtle background for the status area
+          }}>
+            <StatusItem 
+              label="整体状态" 
+              value={health?.status === 'healthy' ? '正常运行' : '异常'} 
+              status={health?.status === 'healthy' ? 'success' : 'error'} 
+            />
+            <StatusItem 
+              label="数据库连接" 
+              value={health?.checks?.database === 'healthy' ? '已连接' : '断开'} 
+              status={health?.checks?.database === 'healthy' ? 'success' : 'error'} 
+            />
+            <StatusItem 
+              label="Redis 缓存" 
+              value={health?.checks?.redis === 'healthy' ? '在线' : '离线'} 
+              status={health?.checks?.redis === 'healthy' ? 'success' : 'error'} 
+            />
+            <StatusItem 
+              label="最后检查时间" 
+              value={health?.system?.timestamp ? new Date(health.system.timestamp).toLocaleTimeString("zh-CN") : "-"} 
+            />
+          </div>
+        </div>
 
-      {/* 基础信息卡片 */}
-      <Row gutter={[24, 24]} style={{ marginBottom: "32px" }}>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <AdminCard title="服务状态" style={{ textAlign: "center" }}>
-            <Text strong style={{ fontSize: "24px" }}>
-              {health?.status === "healthy" ? (
-                <span style={{ color: "var(--ws-color-success)" }}>正常</span>
-              ) : health?.status ? (
-                <span style={{ color: "#faad14" }}>{health.status}</span>
-              ) : (
-                <span style={{ color: "#8c8c8c" }}>未知</span>
-              )}
-            </Text>
-          </AdminCard>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <AdminCard title="连接状态" style={{ textAlign: "center" }}>
-            <Text strong style={{ fontSize: "24px" }}>
-              {health?.checks?.database === "healthy" ? (
-                <span style={{ color: "var(--ws-color-success)" }}>在线</span>
-              ) : health?.checks?.database ? (
-                <span style={{ color: "#ff4d4f" }}>异常</span>
-              ) : (
-                <span style={{ color: "#8c8c8c" }}>未知</span>
-              )}
-            </Text>
-          </AdminCard>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <AdminCard title="Redis" style={{ textAlign: "center" }}>
-            <Text type="secondary" style={{ fontSize: "14px" }}>
-              {health?.checks?.redis === "healthy" ? (
-                <Tag color="green">healthy</Tag>
-              ) : health?.checks?.redis ? (
-                <Tag color="red">unhealthy</Tag>
-              ) : (
-                "-"
-              )}
-            </Text>
-          </AdminCard>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <AdminCard title="最近检查" style={{ textAlign: "center" }}>
-            <Text type="secondary" style={{ fontSize: "14px" }}>
-              {health?.system?.timestamp ? new Date(health.system.timestamp).toLocaleTimeString("zh-CN") : "-"}
-            </Text>
-          </AdminCard>
-        </Col>
-      </Row>
+        {/* System Overview Section */}
+        <div>
+          <Title level={5} style={{ marginBottom: 16, fontSize: 14, color: "var(--ws-color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            系统概况 (System Overview)
+          </Title>
 
-      <Divider />
-
-      {/* 系统信息 */}
-      <AdminCard
-        title="系统信息"
-        accentColor="var(--ws-color-success)"
-        gradient="var(--ws-color-surface)"
-      >
-        <Row gutter={[24, 16]}>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>后端版本</Text>
-              <Text type="secondary">{health?.system?.version || "-"}</Text>
-            </Space>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>前端版本</Text>
-              <Text type="secondary">build</Text>
-            </Space>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>数据概览</Text>
-              <Text type="secondary">
-                {overview?.counts
-                  ? `用户 ${overview.counts.users} · 文章 ${overview.counts.articles} · 智能体 ${overview.counts.agents}`
-                  : "需要管理员登录后可见"}
-              </Text>
-            </Space>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>API地址</Text>
-              <Text type="secondary">{config.apiUrl}</Text>
-            </Space>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>运行环境</Text>
-              <Text type="secondary">{health?.system?.environment || "-"}</Text>
-            </Space>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Space orientation="vertical">
-              <Text strong>当前时间</Text>
-              <Text type="secondary">{new Date().toLocaleString("zh-CN")}</Text>
-            </Space>
-          </Col>
-        </Row>
-      </AdminCard>
-
+          <Row gutter={[0, 0]} style={{ border: "1px solid #f0f0f0", borderRadius: 8, overflow: "hidden" }}>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24, borderRight: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0" }}>
+                <StatusItem label="后端版本" value={health?.system?.version || "-"} />
+             </Col>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24, borderRight: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0" }}>
+                <StatusItem label="运行环境" value={<Tag bordered={false}>{health?.system?.environment || "Development"}</Tag>} />
+             </Col>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24, borderBottom: "1px solid #f0f0f0" }}>
+                <StatusItem label="API 端点" value={<Text code>{config.apiUrl}</Text>} />
+             </Col>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24, borderRight: "1px solid #f0f0f0" }}>
+                <StatusItem label="用户总数" value={overview?.counts?.users || "-"} />
+             </Col>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24, borderRight: "1px solid #f0f0f0" }}>
+                <StatusItem label="文章总数" value={overview?.counts?.articles || "-"} />
+             </Col>
+             <Col xs={24} sm={12} md={8} style={{ padding: 24 }}>
+                <StatusItem label="智能体总数" value={overview?.counts?.agents || "-"} />
+             </Col>
+          </Row>
+        </div>
+      </div>
     </AdminPage>
   );
 };

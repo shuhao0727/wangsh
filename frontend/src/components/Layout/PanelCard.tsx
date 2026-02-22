@@ -14,7 +14,11 @@ const PanelCard: React.FC<Props> = ({ children, title, extra, bodyPadding = 12 }
       className="informatics-card"
       title={title}
       extra={extra}
-      styles={{ body: { padding: bodyPadding } }}
+      styles={{ 
+        body: { padding: bodyPadding },
+        header: !title && !extra ? { display: 'none', borderBottom: 'none' } : undefined 
+      }}
+      bordered={false}
     >
       {children}
     </Card>

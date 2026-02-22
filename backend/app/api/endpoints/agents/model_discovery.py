@@ -31,28 +31,6 @@ async def discover_models(
     发现可用模型列表
     
     根据提供的API端点和密钥，自动检测服务商类型并获取可用模型列表。
-    
-    请求参数:
-    - `api_endpoint`: API端点URL（如 https://api.openai.com/v1）
-    - `api_key`: API密钥
-    - `provider`: 可选，指定服务商类型（如 openai、deepseek 等），如不指定则自动检测
-    
-    返回:
-    - `success`: 是否成功
-    - `provider`: 检测到的服务商类型
-    - `models`: 可用模型列表
-    - `total_count`: 模型总数
-    - `error_message`: 错误信息（如果失败）
-    - `detection_method`: 服务商检测方法
-    - `response_time_ms`: 响应时间（毫秒）
-    
-    支持的服务商:
-    - OpenAI (api.openai.com)
-    - DeepSeek (api.deepseek.com)
-    - Anthropic (api.anthropic.com)
-    - Ollama (localhost:11434)
-    - Azure OpenAI (*.openai.azure.com)
-    - 自定义服务商
     """
     try:
         return await discover_models_service(request)
@@ -62,6 +40,50 @@ async def discover_models(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"模型发现失败: {str(e)}",
         )
+
+
+@router.post("/discover/{agent_id}", response_model=ModelDiscoveryResponse)
+async def discover_models_by_agent(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    使用已保存的智能体配置发现可用模型列表
+    """
+    from app.services.agents import get_agent
+    from app.utils.agent_secrets import try_decrypt_api_key
+
+    # 1. 获取智能体信息
+    agent = await get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"智能体ID {agent_id} 不存在",
+        )
+
+    # 2. 获取解密的API Key
+    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该智能体未配置API密钥",
+        )
+
+    # 3. 构造请求并调用服务
+    request = ModelDiscoveryRequest(
+        api_endpoint=agent.api_endpoint,
+        api_key=str(api_key),
+        provider=None # 自动检测
+    )
+
+    try:
+        return await discover_models_service(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"模型发现失败: {str(e)}",
+        )
+
 
 
 @router.get("/preset-models", response_model=List[AIModelInfo])

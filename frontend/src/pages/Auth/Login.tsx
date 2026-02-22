@@ -96,7 +96,7 @@ const LoginPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0 }}>
-            <Button type="primary" htmlType="submit" block size="large" loading={auth.isLoading}>
+            <Button type="primary" htmlType="submit" block loading={auth.isLoading}>
               {requireAdmin ? "管理员登录" : "登录"}
             </Button>
           </Form.Item>

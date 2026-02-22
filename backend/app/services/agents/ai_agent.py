@@ -324,8 +324,6 @@ async def test_agent(
         import httpx
         from app.services.agents.providers import detect_flags, models_endpoint, chat_completions_endpoint
         
-        response_time = (time.time() - start_time) * 1000  # 转换为毫秒
-        
         # 检测服务商类型
         api_endpoint = agent.api_endpoint.strip()
         
@@ -354,6 +352,10 @@ async def test_agent(
             else:
                 # OpenAI/DeepSeek使用Bearer认证
                 headers["Authorization"] = f"Bearer {api_key}"
+
+        if is_openrouter:
+            headers["HTTP-Referer"] = "https://github.com/wangsh"
+            headers["X-Title"] = "WangSh AI"
         
         # 根据服务商类型选择测试端点
         test_endpoint = None
@@ -364,8 +366,12 @@ async def test_agent(
             test_endpoint = models_endpoint(flags)
         
         def _join_api_url(base: str, path: str) -> str:
-            base_clean = (base or "").rstrip("/")
+            base_clean = (base or "").strip().rstrip("/")
+            if base_clean.endswith("/chat/completions"):
+                base_clean = base_clean[:-17]
+            
             path_clean = path if path.startswith("/") else f"/{path}"
+            
             if base_clean.endswith("/v1") and path_clean.startswith("/v1/"):
                 path_clean = path_clean[len("/v1"):]
             if base_clean.endswith("/api/v1") and path_clean.startswith("/api/v1/"):
@@ -375,7 +381,7 @@ async def test_agent(
             return f"{base_clean}{path_clean}"
 
         # 执行API测试
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             if test_endpoint:
                 if is_dify:
                     from app.services.agents.dify_test import run_dify_test
@@ -387,6 +393,8 @@ async def test_agent(
                         headers=headers
                     )
                     
+                    response_time = (time.time() - start_time) * 1000
+
                     if response.status_code == 200:
                         data = response.json()
                         models_count = len(data.get("data", []))
@@ -440,9 +448,22 @@ async def test_agent(
                             timestamp=datetime.now(),
                         )
                     else:
+                        error_msg = f"❌ API连接测试失败\n\n📋 类型: {agent.agent_type}\n🔗 端点: {api_endpoint}\n🛑 状态码: {response.status_code}"
+                        
+                        if response.status_code == 401:
+                            error_msg += "\n🔒 错误原因: 认证失败 (API Key 无效或过期)"
+                        elif response.status_code == 403:
+                            error_msg += "\n🚫 错误原因: 拒绝访问 (权限不足)"
+                        elif response.status_code == 404:
+                            error_msg += "\n🔍 错误原因: 端点不存在 (请检查URL)"
+                        elif response.status_code == 429:
+                            error_msg += "\n⏳ 错误原因: 请求过多 (触发限流)"
+                        
+                        error_msg += f"\n📄 响应: {response.text[:500]}"
+                        
                         return AgentTestResponse(
                             success=False,
-                            message=f"❌ API连接测试失败\n\n📋 类型: {agent.agent_type}\n🔗 端点: {api_endpoint}\n🛑 状态码: {response.status_code}\n📄 响应: {response.text[:100]}",
+                            message=error_msg,
                             response_time=response_time,
                             timestamp=datetime.now(),
                         )
@@ -450,6 +471,8 @@ async def test_agent(
                 # 未知服务商类型，进行基本连接测试
                 try:
                     response = await client.get(api_endpoint, headers=headers, timeout=30.0)
+                    response_time = (time.time() - start_time) * 1000
+
                     if response.status_code < 400:
                         # 格式化测试消息显示
                         test_message_display = test_request.test_message
@@ -470,6 +493,7 @@ async def test_agent(
                             timestamp=datetime.now(),
                         )
                 except Exception as conn_error:
+                    response_time = (time.time() - start_time) * 1000
                     return AgentTestResponse(
                         success=False,
                         message=f"❌ 连接测试异常\n\n📋 类型: {agent.agent_type}\n🔗 端点: {api_endpoint}\n🛑 错误: {str(conn_error)[:100]}",

@@ -1,418 +1,73 @@
-/* 文章页面样式 */
-
-/* ===== 搜索框样式 ===== */
-.informatics-page .ant-input {
-  box-shadow: none !important;
-  border: 1px solid var(--ws-color-border);
-  border-radius: var(--ws-radius-sm);
-  transition: all 0.3s ease;
-  height: 34px;
-  font-size: 13px;
-  background: var(--ws-color-surface);
-}
-
-.informatics-page .ant-input:hover {
-  border-color: var(--ws-color-primary-hover);
-}
-
-.informatics-page .ant-input:focus {
-  border-color: var(--ws-color-primary);
-  box-shadow: 0 0 0 2px var(--ws-color-focus-ring) !important;
-}
-
-.informatics-page .ant-input-affix-wrapper {
-  border-radius: var(--ws-radius-sm) !important;
-}
-
-.informatics-page .ant-input-affix-wrapper-focused {
-  box-shadow: 0 0 0 2px var(--ws-color-focus-ring) !important;
-}
-
-/* 分类菜单 */
-.category-menu .ant-menu-item {
-  padding: 12px 20px !important;
-  margin: 0;
-  transition: all 0.3s ease;
-  border-left: 3px solid transparent;
-  border-radius: 0;
-  font-size: 14px;
-  color: var(--ws-color-text);
-}
-
-.category-menu .ant-menu-item:hover {
-  background-color: var(--ws-color-surface-2);
-  border-left: 3px solid var(--ws-color-primary);
-  color: var(--ws-color-primary);
-}
-
-.category-menu .ant-menu-item-selected {
-  background-color: var(--ws-color-primary-soft);
-  border-left: 3px solid var(--ws-color-primary);
-  font-weight: 600;
-  color: var(--ws-color-primary);
-}
-
-.category-menu .ant-menu-item .category-count {
-  color: var(--ws-color-text-secondary);
-  font-size: 0.85rem;
-  float: right;
-  font-weight: 500;
-}
-
-/* ===== 文章卡片样式 - 首页精致设计风格 ===== */
-.article-item-card {
-  overflow: hidden;
-  border: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface);
-  width: 100%;
-  min-height: 110px;
-  max-height: 150px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border-radius: var(--ws-radius-md);
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease,
-    border-color 0.3s ease;
-  border-left: 4px solid var(--ws-color-accent);
+.article-item-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--ws-color-border);
   cursor: pointer;
+  transition: background-color 0.2s;
+  box-shadow: none !important;
+  border-top: none;
+  border-left: none;
+  border-right: none;
 }
 
-.article-item-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--ws-shadow-sm);
-  border-color: var(--ws-color-border);
-  border-left: 4px solid var(--ws-color-primary);
+/* Ensure card classes are clean */
+.ant-card,
+.panel-card {
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.article-item-card .ant-card-body {
-  padding: 16px 20px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.article-item-row:hover {
+  background-color: var(--ws-color-surface-2);
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 8px;
+  border-bottom-color: transparent;
 }
 
-/* 文章标题 - 首页风格 */
+.article-item-row:last-child {
+  border-bottom: none;
+}
+
 .article-card-title {
-  font-size: 1.125rem;
+  font-size: 18px;
   font-weight: 600;
   color: var(--ws-color-text);
-  line-height: 1.4;
-  margin-bottom: 10px;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-height: 28px;
-  transition: color 0.3s ease;
+  margin-bottom: 8px;
 }
 
-.article-item-card:hover .article-card-title {
-  color: var(--ws-color-primary);
-}
-
-/* 文章元信息 - 精致设计 */
 .article-card-meta {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 10px;
-  min-height: 22px;
-}
-
-.article-card-meta .ant-typography-secondary {
-  font-size: 0.8125rem;
+  margin-bottom: 12px;
   color: var(--ws-color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
 }
 
-.article-card-meta .ant-tag {
-  font-size: 0.8125rem;
-  margin: 0;
-  border-radius: 4px;
-  padding: 2px 8px;
-  background-color: var(--ws-color-primary-soft);
-  border-color: var(--ws-color-border);
-  color: var(--ws-color-primary);
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.article-item-card:hover .article-card-meta .ant-tag {
-  background-color: var(--ws-color-primary);
-  color: white;
-}
-
-/* 文章摘要 - 精美设计 */
 .article-card-summary {
+  font-size: 14px;
   color: var(--ws-color-text-secondary);
-  line-height: 1.5;
-  flex: 1;
+  line-height: 1.6;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 0;
-  min-height: 24px;
-  font-size: 0.9375rem;
-  font-weight: 400;
 }
 
-/* ===== 分页样式 - 首页风格 ===== */
 .articles-pagination {
-  margin-top: 40px;
+  margin-top: 24px;
   text-align: center;
 }
 
-.articles-pagination .ant-pagination {
-  display: inline-block;
+.category-menu {
+  border-right: none !important;
 }
 
-.articles-pagination .ant-pagination-item,
-.articles-pagination .ant-pagination-prev,
-.articles-pagination .ant-pagination-next {
-  box-shadow: none !important;
-  border-radius: var(--ws-radius-sm);
-  border: 1px solid var(--ws-color-border);
-  transition: all 0.3s ease;
+.category-menu .ant-menu-item {
+  margin-bottom: 4px;
+  border-radius: 6px;
 }
 
-.articles-pagination .ant-pagination-item:hover,
-.articles-pagination .ant-pagination-prev:hover,
-.articles-pagination .ant-pagination-next:hover {
-  border-color: var(--ws-color-primary);
+.category-menu .ant-menu-item-selected {
+  background-color: var(--ws-color-primary-bg);
   color: var(--ws-color-primary);
-}
-
-.articles-pagination .ant-pagination-item-active {
-  border-color: var(--ws-color-primary) !important;
-  background-color: var(--ws-color-primary) !important;
-}
-
-.articles-pagination .ant-pagination-item-active a {
-  color: white !important;
-}
-
-.articles-pagination .ant-pagination-item-active:hover {
-  border-color: var(--ws-color-primary-hover) !important;
-  background-color: var(--ws-color-primary-hover) !important;
-}
-
-/* ===== 筛选信息卡片 - 首页风格 ===== */
-.filter-card {
-  background: #ffffff;
-  margin-top: 0;
-  margin-bottom: 16px;
-  border: 1px solid var(--ws-color-border);
-  border-radius: 8px;
-  padding: 16px 20px;
-  border-left: 4px solid var(--ws-color-success);
-}
-
-.filter-card .ant-tag {
-  margin-left: 8px;
-  background-color: var(--ws-color-success-soft);
-  border-color: var(--ws-color-border);
-  color: var(--ws-color-success);
-  font-weight: 500;
-}
-
-.filter-card .ant-btn {
-  color: var(--ws-color-success);
-}
-
-.filter-card .ant-btn:hover {
-  color: var(--ws-color-success);
-}
-
-/* ===== 加载状态 - 首页风格 ===== */
-.loading-container {
-  padding: 80px 20px;
-  text-align: center;
-  background: transparent;
-}
-
-.loading-container .ant-spin {
-  margin-bottom: 16px;
-}
-
-.loading-container .ant-spin-dot-item {
-  background-color: var(--ws-color-primary);
-}
-
-.loading-container p {
-  color: var(--ws-color-text-secondary);
-  font-size: 14px;
-  margin-top: 8px;
-}
-
-/* ===== 空状态 - 首页风格 ===== */
-.empty-container {
-  padding: 80px 20px;
-  text-align: center;
-  background: transparent;
-}
-
-.empty-container .ant-empty-image {
-  height: 120px;
-  margin-bottom: 16px;
-}
-
-.empty-container .ant-empty-description {
-  color: var(--ws-color-text-secondary);
-  font-size: 14px;
-}
-
-.empty-container .ant-empty-description + div {
-  margin-top: 16px;
-}
-
-.empty-container .ant-btn {
-  background: var(--ws-color-primary);
-  border-color: var(--ws-color-primary);
-  color: white;
-  transition: all 0.3s ease;
-}
-
-.empty-container .ant-btn:hover {
-  background: var(--ws-color-primary-hover);
-  border-color: var(--ws-color-primary-hover);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: var(--ws-shadow-sm);
-}
-
-/* ===== 响应式调整 ===== */
-@media (max-width: 768px) {
-  .articles-container {
-    padding: 16px 12px;
-    max-width: 100%;
-  }
-
-  .article-item-card {
-    min-height: 100px;
-    max-height: 140px;
-  }
-
-  .article-item-card .ant-card-body {
-    padding: 12px 16px;
-  }
-
-  .article-card-title {
-    font-size: 1rem;
-    min-height: 26px;
-    margin-bottom: 8px;
-  }
-
-  .article-card-meta {
-    gap: 12px;
-    margin-bottom: 8px;
-  }
-
-  .article-card-meta .ant-typography-secondary {
-    font-size: 0.75rem;
-  }
-
-  .article-card-meta .ant-tag {
-    font-size: 0.75rem;
-    padding: 1px 6px;
-  }
-
-  .article-card-summary {
-    font-size: 0.875rem;
-    min-height: 22px;
-  }
-
-  .sidebar-card {
-    margin-bottom: 12px;
-  }
-
-  .sidebar-card:hover {
-    transform: translateY(-1px);
-  }
-
-  .category-menu .ant-menu-item {
-    padding: 10px 16px !important;
-    font-size: 13px;
-  }
-}
-
-@media (max-width: 576px) {
-  .articles-container {
-    padding: 12px 8px;
-  }
-
-  .article-item-card {
-    min-height: 95px;
-    max-height: 130px;
-    border-left: 3px solid var(--ws-color-accent);
-  }
-
-  .article-item-card:hover {
-    border-left: 3px solid var(--ws-color-primary);
-    transform: translateY(-2px);
-  }
-
-  .article-item-card .ant-card-body {
-    padding: 10px 14px;
-  }
-
-  .article-card-title {
-    font-size: 0.9375rem;
-    min-height: 24px;
-    margin-bottom: 6px;
-  }
-
-  .article-card-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    margin-bottom: 6px;
-  }
-
-  .article-card-meta .ant-typography-secondary {
-    font-size: 0.7rem;
-  }
-
-  .article-card-meta .ant-tag {
-    font-size: 0.7rem;
-    padding: 1px 4px;
-  }
-
-  .article-card-summary {
-    font-size: 0.8125rem;
-    min-height: 20px;
-  }
-
-  .articles-pagination {
-    margin-top: 32px;
-  }
-
-  .filter-card {
-    padding: 12px 16px;
-    border-left: 3px solid var(--ws-color-success);
-  }
-
-  .sidebar-card {
-    margin-bottom: 10px;
-  }
-
-  .category-menu .ant-menu-item {
-    padding: 8px 14px !important;
-    font-size: 12px;
-    border-left: 2px solid transparent;
-  }
-
-  .category-menu .ant-menu-item:hover,
-  .category-menu .ant-menu-item-selected {
-    border-left: 2px solid var(--ws-color-primary);
-  }
 }

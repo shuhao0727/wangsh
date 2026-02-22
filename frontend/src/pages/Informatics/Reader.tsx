@@ -268,7 +268,7 @@ const InformaticsReaderPage: React.FC = () => {
         right={
           <PanelCard
             title={
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>
                 {selectedId ? items.find((x) => x.id === selectedId)?.title || "内容" : "内容"}
               </Title>
             }

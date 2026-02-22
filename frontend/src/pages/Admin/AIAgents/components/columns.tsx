@@ -82,22 +82,32 @@ export const getAgentColumns = (
     title: "名称",
     dataIndex: "agent_name",
     key: "agent_name",
-    width: 180,
+    width: 200,
     render: (agentName: string, record: AIAgent) => (
-      <div>
-        <div style={{ fontWeight: 500, marginBottom: 2 }}>
-          {agentName || record.name}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 6,
+          background: '#f0f5ff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#1890ff',
+          fontSize: 18
+        }}>
+          {record.agent_type === 'dify' ? <CloudOutlined /> : <ThunderboltOutlined />}
         </div>
-        {record.model_name && (
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>
-            {record.model_name}
-            {record.model_name.endsWith(":free") && (
-              <Tag color="gold" style={{ marginLeft: 8 }}>
-                free
-              </Tag>
-            )}
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#2c3e50', marginBottom: 2 }}>
+            {agentName || record.name}
           </div>
-        )}
+          {record.model_name && (
+            <div style={{ fontSize: 12, color: "#7f8c8d" }}>
+              {record.model_name}
+            </div>
+          )}
+        </div>
       </div>
     ),
     sorter: (a: AIAgent, b: AIAgent) => {
@@ -133,16 +143,11 @@ export const getAgentColumns = (
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            color: url ? "inherit" : "var(--ws-color-text-secondary)",
+            color: "#7f8c8d", // Softened link color
+            fontSize: 13
           }}
         >
-          <LinkOutlined
-            style={{
-              marginRight: 4,
-              color: url ? "var(--ws-color-primary)" : "var(--ws-color-text-secondary)",
-            }}
-          />
-          {url ? url.replace(/^https?:\/\//, "") : "未配置"}
+          {url ? url.replace(/^https?:\/\//, "") : "-"}
         </div>
       </Tooltip>
     ),
@@ -192,31 +197,34 @@ export const getAgentColumns = (
     width: 180,
     fixed: "right" as const,
     render: (_: any, record: AIAgent) => (
-      <Space size="small">
-        <Tooltip title="查看详情" overlayInnerStyle={{ color: "#1677ff" }}>
+      <Space size={4}> {/* Tighter spacing */}
+        <Tooltip title="查看详情">
           <Button
+            type="text"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetails(record)}
           />
         </Tooltip>
-        <Tooltip title="编辑" overlayInnerStyle={{ color: "#1677ff" }}>
+        <Tooltip title="编辑">
           <Button
+            type="text"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           />
         </Tooltip>
-        <Tooltip title="测试" overlayInnerStyle={{ color: "#1677ff" }}>
+        <Tooltip title="测试连接">
           <Button
+            type="text"
             size="small"
-            icon={<ThunderboltOutlined />}
-            type="primary"
+            icon={<ThunderboltOutlined style={{ color: '#fa8c16' }} />}
             onClick={() => handleTestAgent(record.id, record.name)}
           />
         </Tooltip>
-        <Tooltip title="删除" overlayInnerStyle={{ color: "#1677ff" }}>
+        <Tooltip title="删除">
           <Button
+            type="text"
             size="small"
             icon={<DeleteOutlined />}
             danger

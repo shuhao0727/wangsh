@@ -76,7 +76,7 @@ const TypstMetricsPanel: React.FC = () => {
 
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={12}>
-          <AdminCard title="计数与命中率" accentColor="var(--ws-color-primary)" gradient="var(--ws-color-surface)">
+          <AdminCard title="计数与命中率">
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <Statistic title="总编译次数" value={Number(counts?.total || 0)} />
@@ -110,7 +110,7 @@ const TypstMetricsPanel: React.FC = () => {
         </Col>
 
         <Col xs={24} lg={12}>
-          <AdminCard title="耗时分布" accentColor="var(--ws-color-success)" gradient="var(--ws-color-surface)">
+          <AdminCard title="耗时分布">
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <Statistic title="样本数" value={Number(dur?.n || 0)} />

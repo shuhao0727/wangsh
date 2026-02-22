@@ -286,6 +286,22 @@ class Settings(BaseSettings):
     STUDENT_SESSION_TTL: int = Field(default=7200)              # 学生会话有效期（秒）2小时
     REDIS_DB_CACHE: int = Field(default=0)                      # 缓存数据库索引
 
+    # ==================== PythonLab 调试（V2：Docker + debugpy + Redis） ====================
+    PYTHONLAB_SANDBOX_IMAGE: str = Field(default="pythonlab-sandbox:py311")
+    PYTHONLAB_WORKSPACE_ROOT: str = Field(default="/tmp/pythonlab/workspaces")
+    PYTHONLAB_SESSION_TTL_SECONDS: int = Field(default=1800)
+    PYTHONLAB_UNATTACHED_TTL_SECONDS: int = Field(default=300)
+    PYTHONLAB_MAX_SESSIONS_PER_USER: int = Field(default=2)
+    PYTHONLAB_DEBUGPY_PORT: int = Field(default=5678)
+    PYTHONLAB_ORPHAN_CLEANUP_ENABLED: bool = Field(default=True)
+    PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: int = Field(default=300)
+    PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: int = Field(default=60)
+    PYTHONLAB_IDLE_TIMEOUT_SECONDS: int = Field(default=1800)
+    
+    # Phase 3: Sandbox Upgrade
+    PYTHONLAB_SANDBOX_PROVIDER: str = Field(default="docker") # docker, k8s, nomad
+    PYTHONLAB_DOCKER_RUNTIME: str = Field(default="runc") # runc, runsc (gVisor), kata-runtime
+
     GROUP_DISCUSSION_REDIS_ENABLED: bool = Field(default=True)
     GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=False)
     GROUP_DISCUSSION_LAST_ID_TTL: int = Field(default=86400)

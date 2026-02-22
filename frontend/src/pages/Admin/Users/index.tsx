@@ -8,12 +8,11 @@ import {
   Button,
   Input,
   Space,
-  Row,
-  Col,
   Table,
   Pagination,
   Select,
   Upload,
+  Divider,
 } from "antd";
 import {
   PlusOutlined,
@@ -21,6 +20,8 @@ import {
   ReloadOutlined,
   DownloadOutlined,
   UploadOutlined,
+  DeleteOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 
 // 导入自定义Hook和组件
@@ -29,7 +30,7 @@ import { getUserColumns } from "./columns";
 import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
 import { roleOptions, statusOptions } from "./data";
-import { AdminCard, AdminPage, AdminTablePanel } from "@components/Admin";
+import { AdminPage, AdminTablePanel } from "@components/Admin";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -53,152 +54,144 @@ const AdminUsers: React.FC = () => {
 
   return (
     <AdminPage>
-      {/* 标题和操作栏 */}
+      {/* 顶部工具栏 (Toolbar) - 类似于 PythonLab 的 CanvasToolbar */}
       <div
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "24px",
+          padding: "12px 24px",
+          borderBottom: "1px solid #f0f0f0",
+          background: "#ffffff",
+          flexShrink: 0,
         }}
       >
-        {state.selectedRowKeys.length > 0 && (
-          <Button
-            danger
-            icon={<DownloadOutlined />}
-            onClick={actions.handleBatchDelete}
-          >
-            批量删除 ({state.selectedRowKeys.length})
-          </Button>
-        )}
-      </div>
-
-      {/* 搜索和操作栏 */}
-      <AdminCard
-        size="small"
-        style={{ marginBottom: "16px" }}
-        styles={{ body: { padding: "16px" } }}
-        accentColor="var(--ws-color-primary)"
-        gradient="var(--ws-color-surface)"
-      >
-        <Row gutter={16} align="middle">
-          <Col flex="1">
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+             <UserOutlined style={{ fontSize: 18, color: "var(--ws-color-primary)" }} />
+             <span style={{ fontSize: 16, fontWeight: 600 }}>用户管理</span>
+          </div>
+          <Divider type="vertical" style={{ height: 24, margin: 0 }} />
+          
+          <Space size={8}>
             <Search
-              placeholder="搜索学号、姓名、班级或学年..."
+              placeholder="搜索用户..."
               allowClear
-              enterButton={<SearchOutlined />}
               size="middle"
               value={state.searchKeyword}
               onChange={(e) => actions.handleSearch(e.target.value)}
               onSearch={actions.handleSearch}
-              style={{ maxWidth: "400px" }}
+              style={{ width: 240 }}
+              prefix={<SearchOutlined style={{ color: "rgba(0,0,0,0.25)" }} />}
             />
-          </Col>
-          <Col>
-            <Space>
-              {/* 筛选条件 */}
-              <Select
-                placeholder="角色筛选"
-                style={{ width: 120 }}
-                allowClear
-                onChange={(value) => actions.handleRoleFilter(value as string)}
-              >
-                {roleOptions.map((role) => (
-                  <Option key={role.value} value={role.value}>
-                    {role.label}
-                  </Option>
-                ))}
-              </Select>
+            <Select
+              placeholder="角色"
+              style={{ width: 100 }}
+              allowClear
+              size="middle"
+              onChange={(value) => actions.handleRoleFilter(value as string)}
+              bordered={false}
+              showArrow
+            >
+              {roleOptions.map((role) => (
+                <Option key={role.value} value={role.value}>
+                  {role.label}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              placeholder="状态"
+              style={{ width: 100 }}
+              allowClear
+              size="middle"
+              onChange={(value) => actions.handleStatusFilter(value as boolean)}
+              bordered={false}
+              showArrow
+            >
+              {statusOptions.map((status) => (
+                <Option key={String(status.value)} value={status.value}>
+                  {status.label}
+                </Option>
+              ))}
+            </Select>
+          </Space>
+        </div>
 
-              <Select
-                placeholder="状态筛选"
-                style={{ width: 120 }}
-                allowClear
-                onChange={(value) =>
-                  actions.handleStatusFilter(value as boolean)
-                }
-              >
-                {statusOptions.map((status) => (
-                  <Option key={String(status.value)} value={status.value}>
-                    {status.label}
-                  </Option>
-                ))}
-              </Select>
-
-              <Button icon={<ReloadOutlined />} onClick={actions.handleReset}>
-                重置
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={actions.handleDownloadTemplate}
-              >
-                下载模板
-              </Button>
-              <Upload
-                beforeUpload={actions.handleFileUpload}
-                accept=".xlsx,.xls,.csv"
-                showUploadList={false}
-              >
-                <Button icon={<UploadOutlined />}>导入用户</Button>
-              </Upload>
-              {state.selectedRowKeys.length > 0 && (
-                <Button
-                  danger
-                  icon={<DownloadOutlined />}
-                  onClick={actions.handleBatchDelete}
-                >
-                  批量删除 ({state.selectedRowKeys.length})
-                </Button>
-              )}
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={actions.handleAddUser}
-              >
-                添加用户
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </AdminCard>
-
-      {/* 用户表格 */}
-      <AdminTablePanel
-        loading={state.loading}
-        isEmpty={state.users.length === 0}
-        emptyDescription={state.searchKeyword ? "未找到匹配的用户" : "暂无用户数据"}
-        emptyAction={
-          <Button type="primary" onClick={actions.handleAddUser}>
-            添加第一个用户
+        <Space size={4}>
+          <Button type="text" icon={<ReloadOutlined />} onClick={actions.handleReset} title="重置" />
+          <Button type="text" icon={<DownloadOutlined />} onClick={actions.handleDownloadTemplate} title="下载模板" />
+          <Upload
+            beforeUpload={actions.handleFileUpload}
+            accept=".xlsx,.xls,.csv"
+            showUploadList={false}
+          >
+            <Button type="text" icon={<UploadOutlined />} title="导入用户" />
+          </Upload>
+          <Divider type="vertical" />
+          {state.selectedRowKeys.length > 0 && (
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={actions.handleBatchDelete}
+              title="批量删除"
+            >
+              删除 ({state.selectedRowKeys.length})
+            </Button>
+          )}
+          <Button
+            type="primary"
+            size="middle"
+            icon={<PlusOutlined />}
+            onClick={actions.handleAddUser}
+          >
+            添加用户
           </Button>
-        }
-        pagination={
-          state.users.length > 0 ? (
-            <Pagination
-              current={state.currentPage}
-              pageSize={state.pageSize}
-              total={state.total}
-              onChange={actions.handlePageChange}
-              showSizeChanger
-              showQuickJumper
-              showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
-            />
-          ) : null
-        }
-      >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={state.users}
-          rowSelection={rowSelection}
-          pagination={false}
-          scroll={{ x: 1000 }}
-          size="middle"
-          loading={state.loading}
-        />
-      </AdminTablePanel>
+        </Space>
+      </div>
 
-      {/* 用户表单弹窗 */}
+      {/* 表格区域 */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <AdminTablePanel
+          loading={state.loading}
+          isEmpty={state.users.length === 0}
+          emptyDescription={state.searchKeyword ? "未找到匹配的用户" : "暂无用户数据"}
+          emptyAction={
+            <Button type="primary" onClick={actions.handleAddUser}>
+              添加第一个用户
+            </Button>
+          }
+          pagination={
+            state.users.length > 0 ? (
+              <Pagination
+                current={state.currentPage}
+                pageSize={state.pageSize}
+                total={state.total}
+                onChange={actions.handlePageChange}
+                showSizeChanger
+                showQuickJumper
+                size="small"
+                showTotal={(total) => `共 ${total} 条`}
+              />
+            ) : null
+          }
+        >
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={state.users}
+            rowSelection={rowSelection}
+            pagination={false}
+            scroll={{ x: 1000, y: "calc(100vh - 200px)" }} // Dynamic height calculation
+            size="middle"
+            loading={state.loading}
+            bordered={false}
+            style={{ borderTop: "none" }}
+          />
+        </AdminTablePanel>
+      </div>
+
+      {/* 弹窗组件 */}
       <UserForm
         visible={state.formVisible}
         editingUser={state.editingUser}
@@ -206,7 +199,6 @@ const AdminUsers: React.FC = () => {
         onCancel={closeForm}
       />
 
-      {/* 用户详情弹窗 */}
       <UserDetailModal
         visible={state.detailVisible}
         currentUser={state.currentUser}

@@ -172,15 +172,67 @@ const AgentForm: React.FC<AgentFormProps> = ({
       }
 
       if (editingAgent?.id && !apiKey) {
-        setModelDiscoveryResult(null);
+        // 使用已保存的API密钥（不回填明文）发现可用模型列表
+        try {
+          // 调用新的后端接口，通过agent_id发现模型
+          const discoveryResult = await aiAgentsApi.discoverModelsByAgentId(editingAgent.id);
+          
+          setModelDiscoveryResult(discoveryResult);
+          
+          if (discoveryResult.success) {
+             // 更新可用模型列表
+            setAvailableModels(discoveryResult.models);
+            
+            // 如果只有一个模型，自动选择它
+            if (discoveryResult.models.length === 1) {
+              form.setFieldValue("model_name", discoveryResult.models[0].id);
+            }
+            
+            setTestResult(
+              testResult || {
+                success: true,
+                message: `连接测试成功！发现 ${discoveryResult.total_count} 个可用模型。`,
+                timestamp: new Date().toISOString(),
+                response_time: discoveryResult.response_time_ms,
+                provider: discoveryResult.provider,
+                model_count: discoveryResult.total_count,
+              }
+            );
+          } else {
+            // 如果模型发现失败，但连接测试成功，显示混合消息
+            if (testResult && testResult.success) {
+              setTestResult({
+                ...testResult,
+                success: true, // 保持成功状态，但在消息中说明
+                message: `连接测试成功，但模型发现失败: ${discoveryResult.error_message || "无法获取模型列表"}`,
+              });
+            } else {
+              setTestResult({
+                success: false,
+                message: `测试失败: ${discoveryResult.error_message || "无法获取模型列表"}`,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (error) {
+           logger.warn("通过AgentID发现模型失败:", error);
+           
+           if (testResult && testResult.success) {
+             setTestResult({
+               ...testResult,
+               success: true,
+               message: "连接测试成功，但无法获取模型列表",
+             });
+           } else {
+             setTestResult({
+              success: false,
+              message: "测试失败：无法获取模型列表",
+              timestamp: new Date().toISOString(),
+            });
+           }
+        }
+        
         setDiscoveringModels(false);
-        setTestResult(
-          testResult || {
-            success: false,
-            message: "测试失败：请稍后重试",
-            timestamp: new Date().toISOString(),
-          },
-        );
         return;
       }
 
@@ -374,25 +426,27 @@ const AgentForm: React.FC<AgentFormProps> = ({
                   discoveringModels 
                     ? [] 
                     : availableModels.length > 0
-                    ? [
-                        ...availableModels.map(model => ({
-                          value: model.id,
-                          label: `${model.name} (${model.id})`,
-                          description: model.description || '',
-                        }))
-                      ]
+                    ? availableModels.map(model => ({
+                        value: model.id,
+                        label: model.id,
+                        description: model.description || '',
+                      }))
                     : []
                 }
-                optionRender={(option) => (
-                  <div>
-                    <div>{option.label}</div>
-                    {option.data?.description && (
-                      <div style={{ fontSize: '12px', color: 'var(--ws-color-text-secondary)' }}>
-                        {option.data.description}
-                      </div>
-                    )}
-                  </div>
-                )}
+                optionRender={(option: any) => {
+                  const description = option.description || option.data?.description;
+                  const label = option.label || option.data?.label;
+                  return (
+                    <div>
+                      <div>{label}</div>
+                      {description && (
+                        <div style={{ fontSize: '12px', color: 'var(--ws-color-text-secondary)' }}>
+                          {description}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
               />
             </Form.Item>
           </Col>

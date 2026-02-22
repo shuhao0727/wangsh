@@ -405,6 +405,24 @@ const aiAgentsApi = {
     }
   },
 
+  // 根据Agent ID发现可用模型列表（使用后端存储的密钥）
+  discoverModelsByAgentId: async (agentId: number): Promise<ModelDiscoveryResponse> => {
+    try {
+      const response = await api.post(`${MODEL_DISCOVERY_BASE_PATH}/discover/${agentId}`);
+      return response.data as unknown as ModelDiscoveryResponse;
+    } catch (error: any) {
+      logger.error("发现模型失败:", error);
+      return {
+        success: false,
+        provider: "custom" as AIServiceProvider,
+        models: [],
+        total_count: 0,
+        error_message: toDetailMessage(error.response?.data?.detail) || error.message || "发现模型失败",
+        response_time_ms: 0,
+      };
+    }
+  },
+
   // 获取预设模型列表
   getPresetModels: async (provider?: AIServiceProvider): Promise<AIModelInfo[]> => {
     try {

@@ -34,9 +34,10 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
             body: { padding: "12px", width: "100%" },
           }}
           style={{
-            borderLeft: "4px solid #1890ff",
+            borderLeft: "none",
+            borderTop: "4px solid #1890ff",
             background: "#ffffff",
-            height: "80px", // 高度减半
+            height: "100px",
             display: "flex",
             alignItems: "center",
           }}
@@ -45,40 +46,55 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start", // Left align content
+              gap: "12px", // Reduced gap
               width: "100%",
             }}
           >
+             <div style={{ 
+              width: 40, // Smaller icon container
+              height: 40, 
+              borderRadius: "50%", 
+              background: "#e6f7ff", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <RobotOutlined
+                style={{ fontSize: "20px", color: "#1890ff" }} // Smaller icon
+              />
+            </div>
             <div>
+              <Text type="secondary" style={{ fontSize: "12px" }}>
+                智能体总数
+              </Text>
               <Title
-                level={4}
+                level={2}
                 style={{
-                  marginBottom: "4px",
-                  color: "#1890ff",
-                  fontSize: "20px",
+                  margin: "0",
+                  color: "#2c3e50",
+                  fontWeight: 600,
+                  fontSize: "24px", // Slightly smaller number
+                  lineHeight: 1
                 }}
               >
                 {safeTotal}
               </Title>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                智能体总数
-              </Text>
             </div>
-            <RobotOutlined
-              style={{ fontSize: "24px", color: "#1890ff", opacity: 0.3 }}
-            />
           </div>
         </Card>
       </Col>
       <Col xs={24} sm={12} md={8} lg={6}>
         <Card
           styles={{
-            body: { padding: "12px", width: "100%" },
+            body: { padding: "16px", width: "100%" },
           }}
           style={{
-            borderLeft: "4px solid #52c41a",
+            borderLeft: "none",
+            borderTop: "4px solid #52c41a",
             background: "#ffffff",
-            height: "80px", // 高度减半
+            height: "100px",
             display: "flex",
             alignItems: "center",
           }}
@@ -87,40 +103,55 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
+              gap: "12px",
               width: "100%",
             }}
           >
+            <div style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: "50%", 
+              background: "#f6ffed", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <ThunderboltOutlined
+                style={{ fontSize: "20px", color: "#52c41a" }}
+              />
+            </div>
             <div>
+              <Text type="secondary" style={{ fontSize: "12px" }}>
+                通用智能体
+              </Text>
               <Title
-                level={4}
+                level={2}
                 style={{
-                  marginBottom: "4px",
-                  color: "#52c41a",
-                  fontSize: "20px",
+                  margin: "0",
+                  color: "#2c3e50",
+                  fontWeight: 600,
+                  fontSize: "24px",
+                  lineHeight: 1
                 }}
               >
                 {safeGeneralCount}
               </Title>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                通用智能体
-              </Text>
             </div>
-            <ThunderboltOutlined
-              style={{ fontSize: "24px", color: "#52c41a", opacity: 0.3 }}
-            />
           </div>
         </Card>
       </Col>
       <Col xs={24} sm={12} md={8} lg={6}>
         <Card
           styles={{
-            body: { padding: "12px", width: "100%" },
+            body: { padding: "16px", width: "100%" },
           }}
           style={{
-            borderLeft: "4px solid #722ed1",
+            borderLeft: "none",
+            borderTop: "4px solid #722ed1",
             background: "#ffffff",
-            height: "80px", // 高度减半
+            height: "100px",
             display: "flex",
             alignItems: "center",
           }}
@@ -129,40 +160,55 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
+              gap: "12px",
               width: "100%",
             }}
           >
+            <div style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: "50%", 
+              background: "#f9f0ff", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <CloudOutlined
+                style={{ fontSize: "20px", color: "#722ed1" }}
+              />
+            </div>
             <div>
+              <Text type="secondary" style={{ fontSize: "12px" }}>
+                Dify智能体
+              </Text>
               <Title
-                level={4}
+                level={2}
                 style={{
-                  marginBottom: "4px",
-                  color: "#722ed1",
-                  fontSize: "20px",
+                  margin: "0",
+                  color: "#2c3e50",
+                  fontWeight: 600,
+                  fontSize: "24px",
+                  lineHeight: 1
                 }}
               >
                 {safeDifyCount}
               </Title>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                Dify智能体
-              </Text>
             </div>
-            <CloudOutlined
-              style={{ fontSize: "24px", color: "#722ed1", opacity: 0.3 }}
-            />
           </div>
         </Card>
       </Col>
       <Col xs={24} sm={12} md={8} lg={6}>
         <Card
           styles={{
-            body: { padding: "12px", width: "100%" },
+            body: { padding: "16px", width: "100%" },
           }}
           style={{
-            borderLeft: "4px solid #fa8c16",
+            borderLeft: "none",
+            borderTop: "4px solid #fa8c16",
             background: "#ffffff",
-            height: "80px", // 高度减半
+            height: "100px",
             display: "flex",
             alignItems: "center",
           }}
@@ -171,28 +217,42 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
+              gap: "12px",
               width: "100%",
             }}
           >
+            <div style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: "50%", 
+              background: "#fff7e6", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <ApiOutlined
+                style={{ fontSize: "20px", color: "#fa8c16" }}
+              />
+            </div>
             <div>
+              <Text type="secondary" style={{ fontSize: "12px" }}>
+                启用中
+              </Text>
               <Title
-                level={4}
+                level={2}
                 style={{
-                  marginBottom: "4px",
-                  color: "#fa8c16",
-                  fontSize: "20px",
+                  margin: "0",
+                  color: "#2c3e50",
+                  fontWeight: 600,
+                  fontSize: "24px",
+                  lineHeight: 1
                 }}
               >
                 {safeActiveCount}
               </Title>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                启用中
-              </Text>
             </div>
-            <ApiOutlined
-              style={{ fontSize: "24px", color: "#fa8c16", opacity: 0.3 }}
-            />
           </div>
         </Card>
       </Col>

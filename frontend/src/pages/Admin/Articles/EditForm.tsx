@@ -659,7 +659,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           <div className="article-edit-editor-grid">
             <div className="article-edit-editor-side">
               <Card title="基本信息" size="small" className="article-edit-basic-card">
-                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                   <Form.Item
                     label={<span style={{ fontWeight: 500 }}>文章标题</span>}
                     name="title"
@@ -706,7 +706,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
               </Card>
 
               <Card size="small" title="写作面板" className="article-edit-side-card" styles={{ body: { padding: 12 } }}>
-                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                     <Text type="secondary">模式</Text>
                     <Tag color={isCreateMode ? "blue" : "green"}>{isCreateMode ? "新建" : "编辑"}</Tag>

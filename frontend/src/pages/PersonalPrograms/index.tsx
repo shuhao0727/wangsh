@@ -30,7 +30,7 @@ const PersonalProgramsPage: React.FC = () => {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "20px 20px 28px" }}>
+    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "32px" }}>
       {loading ? (
         <Card style={{ borderRadius: 12, border: "1px solid var(--ws-color-border)" }}>
           <div style={{ padding: "48px 0", textAlign: "center" }}>
@@ -44,7 +44,7 @@ const PersonalProgramsPage: React.FC = () => {
               style={{ borderRadius: 12, border: "1px solid var(--ws-color-border)" }}
               styles={{ body: { padding: 18 } }}
             >
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                 <Space align="center" style={{ justifyContent: "space-between" }}>
                   <Text strong style={{ fontSize: 16 }}>
                     校本课（XBK）处理系统

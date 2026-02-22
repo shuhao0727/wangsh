@@ -353,29 +353,8 @@ const AdminAIAgents: React.FC = () => {
 
   return (
     <AdminPage>
-      {/* 标题和操作栏 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          marginBottom: "24px",
-        }}
-      >
-        {selectedRowKeys.length > 0 && (
-          <Popconfirm
-            title="确认批量删除"
-            description={`确定要删除选中的 ${selectedRowKeys.length} 个智能体吗？`}
-            onConfirm={handleBatchDelete}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Button danger icon={<DeleteOutlined />}>
-              批量删除 ({selectedRowKeys.length})
-            </Button>
-          </Popconfirm>
-        )}
-      </div>
+      {/* 标题和操作栏 - 移除 redundant buttons */}
+      <div style={{ height: 16 }} /> {/* Spacer instead of buttons */}
 
       {/* 统计卡片 */}
       <StatisticsCards 

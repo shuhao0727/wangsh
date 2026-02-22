@@ -11,76 +11,79 @@
 }
 
 :root {
-  --ws-color-bg: #f5f5f5;
+  --ws-color-bg: #ffffff;
   --ws-color-surface: #ffffff;
   --ws-color-surface-2: #fafafa;
-  --ws-color-border: #d9d9d9;
-  --ws-color-text: #1f1f1f;
-  --ws-color-text-secondary: #595959;
-  --ws-color-primary: #1677ff;
-  --ws-color-primary-hover: #4096ff;
-  --ws-color-primary-active: #0958d9;
-  --ws-color-accent: #722ed1;
-  --ws-color-success: #52c41a;
-  --ws-color-warning: #faad14;
-  --ws-color-error: #ff4d4f;
-  --ws-color-info: #1677ff;
-  --ws-color-hover-bg: #f5f5f5;
-  --ws-color-focus-ring: rgba(22, 119, 255, 0.2);
-  --ws-color-primary-soft: #e6f4ff;
-  --ws-color-success-soft: #f6ffed;
-  --ws-color-warning-soft: #fffbe6;
-  --ws-color-error-soft: #fff1f0;
-  --ws-color-info-soft: #e6f4ff;
-  --ws-radius-sm: 6px;
-  --ws-radius-md: 10px;
-  --ws-radius-lg: 12px;
-  --ws-shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.08);
+  --ws-color-border: transparent; 
+  --ws-color-text: #2c3e50; /* Deep Blue Grey */
+  --ws-color-text-secondary: #7f8c8d;
+  --ws-color-primary: #3498db; /* Brand Blue */
+  --ws-color-primary-hover: #5dade2;
+  --ws-color-primary-active: #2980b9;
+  --ws-color-accent: #3498db; 
+  --ws-color-success: #2ecc71;
+  --ws-color-warning: #f1c40f;
+  --ws-color-error: #e74c3c;
+  --ws-color-info: #3498db;
+  --ws-color-hover-bg: #f8f9fa;
+  --ws-color-focus-ring: rgba(52, 152, 219, 0.2);
+  --ws-color-primary-soft: #ebf5fb;
+  --ws-color-success-soft: #eafaf1;
+  --ws-color-warning-soft: #fef9e7;
+  --ws-color-error-soft: #fdedec;
+  --ws-color-info-soft: #ebf5fb;
+  --ws-radius-sm: 4px; 
+  --ws-radius-md: 6px;
+  --ws-radius-lg: 8px;
+  --ws-shadow-sm: none;
   --ws-space-1: 8px;
   --ws-space-2: 12px;
   --ws-space-3: 16px;
   --ws-space-4: 24px;
   --ws-space-5: 32px;
+  
+  /* Typography - Clean & Modern */
+  --ws-font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ws-font-size-base: 14px;
+  --ws-font-size-sm: 12px; 
+  --ws-line-height-base: 1.6; /* Increased line height for breathability */
 }
 
 html {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
-    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-  line-height: 1.15;
+  font-family: var(--ws-font-family);
+  line-height: var(--ws-line-height-base);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ws-font-size-base);
   font-weight: 400;
-  line-height: 1.5;
   color: var(--ws-color-text);
   background-color: var(--ws-color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: auto;
+  overflow: hidden; /* App-like feel, let layout handle scroll */
 }
 
-/* 滚动条样式 */
+/* 滚动条样式 - Subtle & Minimal */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--ws-color-surface-2);
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 /* 链接样式 */
@@ -102,17 +105,9 @@ a:active {
 }
 
 /* 工具类 */
-.text-center {
-  text-align: center;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.text-left {
-  text-align: left;
-}
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
 
 .mt-1 { margin-top: 8px; }
 .mt-2 { margin-top: 16px; }
@@ -145,42 +140,25 @@ a:active {
 .p-5 { padding: 40px; }
 
 /* 布局类 */
-.full-height {
-  height: 100%;
-}
+.full-height { height: 100%; }
+.full-width { width: 100%; }
 
-.full-width {
-  width: 100%;
-}
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justifyContent: center; }
+.flex-column { display: flex; flex-direction: column; }
+.flex-1 { flex: 1; }
 
-.flex {
-  display: flex;
-}
-
-.flex-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.flex-column {
-  display: flex;
-  flex-direction: column;
-}
-
-.flex-1 {
-  flex: 1;
-}
+/* Border Utilities for the "Grid" look */
+.border-right { border-right: 1px solid var(--ws-color-border); }
+.border-bottom { border-bottom: 1px solid var(--ws-color-border); }
+.border-top { border-top: 1px solid var(--ws-color-border); }
+.border-left { border-left: 1px solid var(--ws-color-border); }
 
 /* 响应式断点 */
 @media (max-width: 768px) {
-  .hidden-mobile {
-    display: none !important;
-  }
+  .hidden-mobile { display: none !important; }
 }
 
 @media (min-width: 769px) {
-  .hidden-desktop {
-    display: none !important;
-  }
+  .hidden-desktop { display: none !important; }
 }

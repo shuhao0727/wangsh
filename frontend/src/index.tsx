@@ -26,59 +26,94 @@ root.render(
         theme={{
           cssVar: { key: "ws" },
           token: {
-            colorPrimary: "#1677ff",
-            colorInfo: "#1677ff",
-            colorSuccess: "#52c41a",
-            colorWarning: "#faad14",
-            colorError: "#ff4d4f",
-            colorLink: "#1677ff",
-            colorLinkHover: "#4096ff",
-            colorLinkActive: "#0958d9",
-            colorText: "#1f1f1f",
-            colorTextSecondary: "#595959",
-            colorTextTertiary: "#8c8c8c",
-            colorTextQuaternary: "#bfbfbf",
-            colorBorder: "#d9d9d9",
-            colorBorderSecondary: "#f0f0f0",
-            colorBgLayout: "#f5f5f5",
+            colorPrimary: "#3498db",
+            colorInfo: "#3498db",
+            colorSuccess: "#2ecc71",
+            colorWarning: "#f1c40f",
+            colorError: "#e74c3c",
+            colorLink: "#3498db",
+            colorLinkHover: "#5dade2",
+            colorLinkActive: "#2980b9",
+            colorText: "#2c3e50", // Softened from #1f1f1f
+            colorTextSecondary: "#7f8c8d",
+            colorTextTertiary: "#95a5a6",
+            colorTextQuaternary: "#bdc3c7",
+            colorBorder: "transparent", 
+            colorBorderSecondary: "#f0f0f0", 
+            colorBgLayout: "#ffffff",
             colorBgSpotlight: "#ffffff",
             colorBgContainer: "#ffffff",
             colorBgElevated: "#ffffff",
             lineWidth: 1,
-            controlHeight: 36,
+            controlHeight: 36, // Standardize control height to 36px (more comfortable)
             controlHeightLG: 40,
             controlHeightSM: 28,
             fontSize: 14,
-            borderRadius: 10,
-            borderRadiusLG: 12,
-            borderRadiusSM: 8,
+            borderRadius: 6, // Adjusted to 6px
+            borderRadiusLG: 8,
+            borderRadiusSM: 4,
           },
           components: {
             Button: {
               fontWeight: 500,
+              controlHeight: 36, // Match global control height
+              paddingContentHorizontal: 16, 
+              borderRadius: 6, 
             },
             Card: {
-              headerBg: "#fafafa",
-              paddingLG: 16,
-              paddingSM: 12,
+              headerBg: "#ffffff",
+              colorBgContainer: "#ffffff",
+              paddingLG: 32, // Increase padding for "loosened" layout
+              paddingSM: 20,
+              boxShadow: "none",
+              colorBorderSecondary: "transparent",
+              borderRadius: 8, 
+            },
+            Layout: {
+              bodyBg: "#ffffff",
+              headerBg: "#ffffff",
+              headerPadding: "0 32px", // Looser header padding
+            },
+            Menu: {
+              itemSelectedBg: "#f0f7ff", // Soft blue bg
+              itemSelectedColor: "#3498db", // Blue text
+              itemBorderRadius: 6,
+              itemMarginInline: 8,
             },
             Modal: {
-              paddingContentHorizontalLG: 20,
-              paddingContentVerticalLG: 20,
+              paddingContentHorizontalLG: 24,
+              paddingContentVerticalLG: 24,
+              boxShadow: "0 6px 16px rgba(0,0,0,0.08)", // Softer shadow
+              borderRadiusLG: 8,
             },
             Table: {
-              headerBg: "#fafafa",
-              headerColor: "#1f1f1f",
-              headerSplitColor: "#f0f0f0",
-              borderColor: "#f0f0f0",
-              cellPaddingInline: 12,
-              cellPaddingBlock: 10,
-              rowSelectedBg: "#e6f4ff",
-              rowSelectedHoverBg: "#bae0ff",
-              rowHoverBg: "#f5f5f5",
+              headerBg: "#ffffff",
+              headerColor: "#7f8c8d",
+              headerSplitColor: "transparent",
+              borderColor: "transparent", 
+              cellPaddingInline: 24, // Looser table spacing
+              cellPaddingBlock: 16,
+              rowSelectedBg: "#f0f7ff",
+              rowSelectedHoverBg: "#e6f7ff",
+              rowHoverBg: "#fafafa", 
             },
             Tooltip: {
-              colorTextLightSolid: "#1677ff",
+              colorBgSpotlight: "rgba(0, 0, 0, 0.85)",
+              colorTextLightSolid: "#ffffff",
+              borderRadius: 4,
+            },
+            Tabs: {
+              itemSelectedColor: "#3498db",
+              itemHoverColor: "#5dade2",
+              inkBarColor: "#3498db",
+            },
+            Input: {
+              controlHeight: 36, // Match global control height
+              borderRadius: 6, 
+            },
+            Select: {
+              controlHeight: 36,
+              borderRadius: 6,
             },
           },
         }}

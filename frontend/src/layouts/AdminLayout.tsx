@@ -42,11 +42,10 @@ const AdminLayout: React.FC = () => {
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [form] = Form.useForm();
   
-  // 直接使用默认值，因为我们会在App中使用ConfigProvider包装
+  // Directly use default values as we wrap with ConfigProvider in App
   const colorBgContainer = "#ffffff";
-  const borderRadiusLG = 8;
 
-  // 管理菜单项
+  // Manage menu items
   const adminMenuItems = [
     {
       key: "/admin/dashboard",
@@ -107,25 +106,25 @@ const AdminLayout: React.FC = () => {
     },
   ];
 
-  // 处理菜单点击
+  // Handle menu click
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key);
   };
 
-  // 获取当前选中的菜单项（支持嵌套菜单）
+  // Get current selected keys (supports nested menus)
   const getSelectedKeys = () => {
     const path = location.pathname;
-    // 如果是/admin根路径，默认选中dashboard
+    // If root /admin, default to dashboard
     if (path === "/admin" || path === "/admin/") {
       return ["/admin/dashboard"];
     }
     return [path];
   };
 
-  // 获取当前展开的菜单项（用于嵌套菜单）
+  // Get current open keys (for nested menus)
   const getOpenKeys = () => {
     const path = location.pathname;
-    // 如果当前路径是智能体相关页面，展开智能体菜单
+    // If current path is agent related, open agents menu
     if (
       path.startsWith("/admin/ai-agents") ||
       path.startsWith("/admin/users") ||
@@ -137,7 +136,7 @@ const AdminLayout: React.FC = () => {
     return [];
   };
 
-  // 扁平化菜单项，用于标题查找
+  // Flatten menu items for title lookup
   const flattenMenuItems = (items: any[]): any[] => {
     const result: any[] = [];
     items.forEach((item) => {
@@ -150,10 +149,10 @@ const AdminLayout: React.FC = () => {
     return result;
   };
 
-  // 获取当前页面标题
+  // Get current page title
   const getCurrentTitle = () => {
     const path = location.pathname;
-    // 扁平化菜单项进行查找
+    // Flatten menu items for lookup
     const flatItems = flattenMenuItems(adminMenuItems);
     const item = flatItems.find((item) => item.key === path);
 
@@ -161,11 +160,11 @@ const AdminLayout: React.FC = () => {
       return item.label;
     }
 
-    // 如果找不到，返回默认标题
+    // Default title if not found
     return "管理后台";
   };
 
-  // 用户下拉菜单
+  // User dropdown menu
   const userMenuItems = [
     {
       key: "profile",
@@ -198,7 +197,7 @@ const AdminLayout: React.FC = () => {
     },
   ];
 
-  // 处理登录提交
+  // Handle login submit
   const handleLogin = async (values: {
     username: string;
     password: string;
@@ -209,7 +208,7 @@ const AdminLayout: React.FC = () => {
         message.success("登录成功！");
         setIsLoginModalVisible(false);
         form.resetFields();
-        // 检查是否为管理员
+        // Check if admin
         if (auth.isSuperAdmin()) {
           navigate("/admin/dashboard");
         }
@@ -221,18 +220,18 @@ const AdminLayout: React.FC = () => {
     }
   };
 
-  // 打开登录模态框
+  // Open login modal
   const showLoginModal = () => {
     setIsLoginModalVisible(true);
   };
 
-  // 关闭登录模态框
+  // Close login modal
   const closeLoginModal = () => {
     setIsLoginModalVisible(false);
     form.resetFields();
   };
 
-  // 如果正在加载，显示加载中
+  // Show loading if loading
   if (auth.isLoading) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
@@ -244,7 +243,7 @@ const AdminLayout: React.FC = () => {
 
   return (
     <Layout className="admin-layout">
-      {/* 登录模态框 */}
+      {/* Login Modal */}
       <Modal
         title="管理员登录"
         open={isLoginModalVisible}
@@ -294,7 +293,7 @@ const AdminLayout: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* 左侧导航栏 */}
+      {/* Sidebar */}
       <Sider
         collapsible
         collapsed={collapsed}
@@ -308,21 +307,21 @@ const AdminLayout: React.FC = () => {
           top: 0,
           bottom: 0,
           zIndex: 100,
-          boxShadow: "2px 0 8px 0 rgba(29, 35, 41, 0.05)",
+          borderRight: "none", // Remove divider
         }}
       >
-        {/* 左侧边栏头部 */}
-        <div className="admin-sidebar-header">
-          <div className="admin-logo">
-            <div className="admin-logo-icon">WS</div>
+        {/* Sidebar Header */}
+        <div className="admin-sidebar-header" style={{ padding: "24px 16px" }}>
+          <div className="admin-logo" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="admin-logo-icon" style={{ 
+              width: 32, height: 32, background: "#3498db", borderRadius: 6, 
+              color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" 
+            }}>WS</div>
             {!collapsed && (
               <div className="admin-logo-text">
-                <Title level={5} style={{ margin: 0, color: "#1890ff" }}>
+                <Title level={5} style={{ margin: 0, color: "#2c3e50", fontSize: 16, fontWeight: 600 }}>
                   管理后台
                 </Title>
-                <Text type="secondary" style={{ fontSize: "12px" }}>
-                  WangSh Admin
-                </Text>
               </div>
             )}
           </div>
@@ -330,12 +329,12 @@ const AdminLayout: React.FC = () => {
 
         <Divider style={{ margin: "8px 0" }} />
 
-        {/* 用户信息区域 */}
+        {/* User Info Area */}
         <div className="admin-user-info">
           <Avatar
             size={collapsed ? "default" : "large"}
             icon={<UserOutlined />}
-            style={{ backgroundColor: "#1890ff" }}
+            style={{ backgroundColor: "#3498db" }}
           />
           {!collapsed && (
             <div className="admin-user-details">
@@ -357,7 +356,7 @@ const AdminLayout: React.FC = () => {
 
         <Divider style={{ margin: "8px 0" }} />
 
-        {/* 管理菜单 */}
+        {/* Menu */}
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
@@ -367,7 +366,7 @@ const AdminLayout: React.FC = () => {
           style={{ borderRight: 0 }}
         />
 
-        {/* 左侧边栏底部 */}
+        {/* Sidebar Footer */}
         {!collapsed && (
           <div className="admin-sidebar-footer">
             <Text type="secondary" style={{ fontSize: "12px" }}>
@@ -381,15 +380,16 @@ const AdminLayout: React.FC = () => {
         )}
       </Sider>
 
-      {/* 右侧内容区域 */}
+      {/* Right Content Area */}
       <Layout
         style={{
           marginLeft: collapsed ? 80 : 240,
           transition: "margin-left 0.2s",
           minHeight: "100vh",
+          background: "#ffffff", // Ensure white background
         }}
       >
-        {/* 顶部栏 */}
+        {/* Header */}
         <Header
           style={{
             padding: "0 24px",
@@ -400,17 +400,17 @@ const AdminLayout: React.FC = () => {
             position: "sticky",
             top: 0,
             zIndex: 99,
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
+            borderBottom: "none", // Remove divider
+            height: 64, // Explicit height
           }}
         >
           <div className="admin-header-left">
-            <Title level={4} style={{ margin: 0 }}>
+            <Title level={4} style={{ margin: 0, fontWeight: 600 }}>
               {getCurrentTitle()}
             </Title>
           </div>
 
           <div className="admin-header-right">
-            {/* 如果用户未登录，显示登录按钮 */}
             {!auth.isLoggedIn() ? (
               <Button
                 type="primary"
@@ -423,7 +423,6 @@ const AdminLayout: React.FC = () => {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "16px" }}
               >
-                {/* 系统监控 */}
                 <Button
                   type="text"
                   icon={<MonitorOutlined />}
@@ -432,7 +431,6 @@ const AdminLayout: React.FC = () => {
                   系统监控
                 </Button>
 
-                {/* 用户信息 */}
                 <Dropdown
                   menu={{ items: userMenuItems }}
                   placement="bottomRight"
@@ -448,7 +446,7 @@ const AdminLayout: React.FC = () => {
                     <Avatar
                       size="default"
                       icon={<UserOutlined />}
-                      style={{ marginRight: 8, backgroundColor: "#1890ff" }}
+                      style={{ marginRight: 8, backgroundColor: "#3498db" }}
                     />
                     <Text strong>{auth.user?.username || "管理员"}</Text>
                   </div>
@@ -458,18 +456,22 @@ const AdminLayout: React.FC = () => {
           </div>
         </Header>
 
-        {/* 主要内容区域 */}
+        {/* Main Content Area */}
         <Content
           style={{
-            margin: "24px 16px",
-            padding: 0,
-            minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            margin: 0,
+            padding: 0, // Removed padding globally for "canvas" feel
+            minHeight: "calc(100vh - 64px)", // Full height minus header
+            background: "transparent",
+            overflow: "hidden", // Let children handle scroll
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {auth.isLoggedIn() && auth.isAdmin() ? (
-            <Outlet />
+            <div style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column" }}>
+                <Outlet />
+            </div>
           ) : (
             <div style={{ textAlign: "center", padding: "80px 24px" }}>
               <Title level={3}>需要管理员权限</Title>

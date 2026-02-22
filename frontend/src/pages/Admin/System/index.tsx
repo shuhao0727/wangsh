@@ -92,8 +92,6 @@ const AdminSystem: React.FC = () => {
           <Col xs={24} lg={12}>
             <AdminCard
               title="基本设置"
-              accentColor="var(--ws-color-primary)"
-              gradient="var(--ws-color-surface)"
             >
               <Space orientation="vertical" style={{ width: "100%" }}>
                 <div
@@ -138,7 +136,7 @@ const AdminSystem: React.FC = () => {
             </AdminCard>
           </Col>
           <Col xs={24} lg={12}>
-            <AdminCard title="安全设置" accentColor="var(--ws-color-warning)" gradient="var(--ws-color-surface)">
+            <AdminCard title="安全设置">
               <Space orientation="vertical" style={{ width: "100%" }}>
                 <div>
                   <Text strong>JWT 过期时间</Text>
@@ -158,7 +156,7 @@ const AdminSystem: React.FC = () => {
             </AdminCard>
           </Col>
           <Col xs={24}>
-            <AdminCard title="观测指标" accentColor="var(--ws-color-success)" gradient="var(--ws-color-surface)">
+            <AdminCard title="观测指标">
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={12}>
                   <Space orientation="vertical" style={{ width: "100%" }}>

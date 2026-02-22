@@ -6,6 +6,7 @@ FastAPI 应用配置和启动
 import os
 import time
 import uuid
+import asyncio
 from datetime import datetime
 from typing import Any, Dict
 
@@ -67,8 +68,30 @@ async def lifespan(app: FastAPI):
         # 不抛出异常，避免应用启动失败
     
     logger.info("应用启动完成")
+    cleanup_task = None
+    if bool(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_ENABLED", True)):
+        interval = int(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS", 300) or 300)
+
+        async def loop():
+            while True:
+                try:
+                    celery_app.send_task("app.tasks.pythonlab.cleanup_orphans")
+                    celery_app.send_task("app.tasks.pythonlab.cleanup_stale_sessions")
+                except Exception:
+                    pass
+                await asyncio.sleep(max(30, interval))
+
+        cleanup_task = asyncio.create_task(loop())
     yield
     logger.info("应用关闭中...")
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
     
     # 关闭缓存连接
     try:
@@ -104,6 +127,24 @@ async def _ensure_dev_schema(conn):
         )
     except Exception:
         pass
+
+
+@asynccontextmanager
+async def lifespan_wrapper(app: FastAPI):
+    async with lifespan(app):
+        yield
+
+
+# 创建 FastAPI 应用实例
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description="WangSh 项目后端 API 服务",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan_wrapper,
+)
 
 
 async def create_super_admin():

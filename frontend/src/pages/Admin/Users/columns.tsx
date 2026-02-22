@@ -43,7 +43,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
       width: 120,
       render: (study_year: string | null) =>
         study_year ? (
-          <Tag color="blue" style={{ marginRight: 4 }}>
+          <Tag color="blue" bordered={false} style={{ marginRight: 4, background: 'var(--ws-color-primary-soft)', color: 'var(--ws-color-primary)' }}>
             {study_year}
           </Tag>
         ) : null,
@@ -60,7 +60,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
       width: 120,
       render: (className: string | null) =>
         className ? (
-          <Tag color="green" style={{ marginRight: 4 }}>
+          <Tag color="green" bordered={false} style={{ marginRight: 4, background: 'var(--ws-color-success-soft)', color: 'var(--ws-color-success)' }}>
             {className}
           </Tag>
         ) : null,
@@ -76,7 +76,14 @@ export const getUserColumns = (props: ColumnConfigProps) => {
       key: "is_active",
       width: 80,
       render: (isActive: boolean) => (
-        <Tag color={isActive ? "success" : "error"}>
+        <Tag 
+          color={isActive ? "success" : "error"} 
+          bordered={false}
+          style={{ 
+            background: isActive ? 'var(--ws-color-success-soft)' : 'var(--ws-color-error-soft)',
+            color: isActive ? 'var(--ws-color-success)' : 'var(--ws-color-error)'
+          }}
+        >
           {isActive ? "活跃" : "停用"}
         </Tag>
       ),
@@ -99,6 +106,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
         <Space size="small">
           <Tooltip title="查看详情">
             <Button
+              type="text"
               size="small"
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
@@ -106,6 +114,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
           </Tooltip>
           <Tooltip title="编辑">
             <Button
+              type="text"
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
@@ -119,7 +128,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
               okText="确认"
               cancelText="取消"
             >
-              <Button size="small" icon={<DeleteOutlined />} danger />
+              <Button type="text" size="small" icon={<DeleteOutlined />} danger />
             </Popconfirm>
           </Tooltip>
         </Space>

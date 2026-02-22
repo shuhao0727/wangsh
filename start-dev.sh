@@ -30,6 +30,7 @@ REDIS_PORT=6379
 LOG_DIR="/tmp/wangsh"
 BACKEND_LOG="${LOG_DIR}/backend.log"
 FRONTEND_LOG="${LOG_DIR}/frontend.log"
+CELERY_LOG="${LOG_DIR}/celery.log"
 mkdir -p "${LOG_DIR}"
 
 # 函数：打印带颜色的消息
@@ -239,6 +240,13 @@ stop_existing_processes() {
         pkill -f "react-scripts.*start"
         sleep 2
     fi
+
+    # 停止 Celery worker（本地模式）
+    if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
+        print_warning "发现已存在的Celery Worker进程，正在停止..."
+        pkill -f "celery.*app\\.core\\.celery_app:celery_app"
+        sleep 2
+    fi
     
     for p in "${ports_to_check[@]}"; do
         if lsof -Pi :${p} -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -256,6 +264,9 @@ setup_environment() {
     
     if [ -f "${PROJECT_ROOT}/.env" ]; then
         load_env_file "${PROJECT_ROOT}/.env"
+    fi
+    if [ -f "${PROJECT_ROOT}/.env.local" ]; then
+        load_env_file "${PROJECT_ROOT}/.env.local"
     fi
 
     if [ "${START_MODE:-local}" = "local" ]; then
@@ -375,6 +386,15 @@ start_docker_infrastructure() {
     else
         print_info "PostgreSQL容器已在运行"
     fi
+
+    local db_migration_sql="${PROJECT_ROOT}/backend/db/migrations/20260216_local_dev_schema.sql"
+    if [ -f "${db_migration_sql}" ]; then
+        print_info "执行本地开发数据库迁移..."
+        docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" -i wangsh-postgres \
+            psql -U "${POSTGRES_USER:-admin}" -d "${POSTGRES_DB:-wangsh_db}" \
+            < "${db_migration_sql}" > /dev/null
+        print_success "本地开发数据库迁移完成"
+    fi
     
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-redis"; then
         print_info "启动Redis容器..."
@@ -491,6 +511,39 @@ start_local_backend() {
     fi
     
     print_info "API文档: http://localhost:${BACKEND_PORT}/docs"
+}
+
+# 函数：启动本地 Celery Worker（用于 PythonLab debug 会话等异步任务）
+start_local_celery_worker() {
+    print_info "启动本地Celery Worker..."
+    
+    # 检查后端目录
+    if [ ! -d "${BACKEND_DIR}" ]; then
+        print_error "后端目录不存在: ${BACKEND_DIR}"
+        return 1
+    fi
+    
+    cd "${BACKEND_DIR}"
+    print_info "Celery日志: ${CELERY_LOG}"
+    
+    nohup python3 -m celery -A app.core.celery_app:celery_app worker \
+        -l INFO \
+        -c 1 \
+        --pool=solo \
+        > "${CELERY_LOG}" 2>&1 &
+    
+    CELERY_PID=$!
+    print_info "Celery Worker PID: ${CELERY_PID}"
+    
+    sleep 2
+    if kill -0 "${CELERY_PID}" > /dev/null 2>&1; then
+        print_success "本地Celery Worker启动完成 (PID: ${CELERY_PID})"
+        return 0
+    fi
+    
+    print_error "Celery Worker 启动失败，请查看日志: ${CELERY_LOG}"
+    tail -30 "${CELERY_LOG}" || true
+    return 1
 }
 
 # 函数：启动本地前端服务
@@ -675,6 +728,7 @@ main() {
         start_docker_stack
     else
         start_local_backend
+        start_local_celery_worker
         start_local_frontend
     fi
     

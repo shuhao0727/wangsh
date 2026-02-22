@@ -41,8 +41,8 @@ def _parse_quota_int(value: Any) -> Optional[int]:
         return None
 
 
-def _read_excel(file: UploadFile) -> pd.DataFrame:
-    content = file.file.read()
+async def _read_excel(file: UploadFile) -> pd.DataFrame:
+    content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件为空")
     try:
@@ -214,7 +214,7 @@ async def preview_import(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    df = _read_excel(file)
+    df = await _read_excel(file)
     df = df.fillna("")
 
     mapping = _students_mapping() if scope == "students" else _courses_mapping() if scope == "courses" else _selections_mapping()
@@ -288,7 +288,7 @@ async def import_data(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    df = _read_excel(file)
+    df = await _read_excel(file)
     if df.empty:
         return {"total_rows": 0, "processed": 0, "inserted": 0, "updated": 0, "skipped": 0, "invalid": 0, "errors": []}
 

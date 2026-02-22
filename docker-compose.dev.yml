@@ -6,9 +6,11 @@
 services:
   # PostgreSQL 数据库服务
   postgres:
-    image: postgres:15-alpine
+    image: public.ecr.aws/docker/library/postgres:15-alpine
     container_name: wangsh-postgres
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -21,8 +23,6 @@ services:
     volumes:
       # 数据持久化到本地 data 目录
       - ./data/postgres:/var/lib/postgresql/data
-      # 初始化脚本（将整个目录挂载到初始化目录）
-      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/
     networks:
       - wangsh-network
     healthcheck:
@@ -33,9 +33,11 @@ services:
 
   # Redis 服务（用于缓存和 Celery 代理）
   redis:
-    image: redis:7-alpine
+    image: public.ecr.aws/docker/library/redis:7-alpine
     container_name: wangsh-redis
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
       - ./data/redis:/data
     command: redis-server --appendonly yes
@@ -46,6 +48,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: wangsh-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DESIGN: "pappu687"
+    networks:
+      - wangsh-network
+    depends_on:
+      - postgres
 
   # 后端服务 (Python FastAPI)
   backend:
@@ -127,7 +142,7 @@ services:
     networks:
       - wangsh-network
     command: >
-      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q typst -c 1 --pool=solo"
+      sh -c "sleep 10 && celery -A app.core.celery_app:celery_app worker -l INFO -c 1 --pool=solo"
 
   # 前端服务 (React + TypeScript)
   frontend:
@@ -151,34 +166,20 @@ services:
     networks:
       - wangsh-network
     command: sh -c "npm start"
-    # Caddy 反向代理服务（开发环境启用）- 唯一入口
+    # 网关反向代理服务（开发环境启用）- 唯一入口
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: wangsh-caddy
     restart: unless-stopped
-    environment:
-      # 关键：告诉 Caddy 不要对 Docker 内部网络使用代理
-      - NO_PROXY=localhost,127.0.0.1,backend,frontend,redis,postgres,wangsh-network
-      - no_proxy=localhost,127.0.0.1,backend,frontend,redis,postgres,wangsh-network
-      # --- Caddy 原生环境变量支持 ---
-      - BACKEND_HOST=backend
-      - BACKEND_PORT=8000
-      - FRONTEND_HOST=frontend
-      - FRONTEND_PORT=6608
     ports:
-      - "6608:8080"
-    volumes:
-      # 直接挂载 Caddyfile（使用Caddy原生环境变量语法）
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      # 挂载配置和数据目录
-      - ./data/caddy/config:/config
-      - ./data/caddy/data:/data
+      - "8080:80"
     depends_on:
       - frontend
       - backend
     networks:
       - wangsh-network
-    # 直接运行Caddy，不需要envsubst预处理
-    command: caddy run --config /etc/caddy/Caddyfile
 
 # 网络配置
 networks:

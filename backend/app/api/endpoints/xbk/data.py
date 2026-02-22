@@ -77,7 +77,7 @@ async def list_students(
         stmt = stmt.where(XbkStudent.class_name == class_name)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = (await db.execute(count_stmt)).scalar_one() or 0
 
     rows = (
         await db.execute(
@@ -106,7 +106,7 @@ async def list_courses(
     stmt = _apply_common_filters(stmt, XbkCourse, year, term, grade, search_text)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = (await db.execute(count_stmt)).scalar_one() or 0
 
     numeric_course_code = case(
         (XbkCourse.course_code.op("~")("^[0-9]+$"), cast(XbkCourse.course_code, Integer)),
@@ -422,7 +422,7 @@ async def list_selections(
         stmt = stmt.where(XbkSelection.student_no.in_(select(sub.c.student_no)))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = (await db.execute(count_stmt)).scalar_one() or 0
 
     rows = (
         await db.execute(
@@ -507,7 +507,7 @@ async def list_course_results(
         )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = (await db.execute(count_stmt)).scalar_one() or 0
 
     rows = (
         await db.execute(

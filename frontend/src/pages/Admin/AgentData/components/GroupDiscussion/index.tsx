@@ -305,8 +305,6 @@ const GroupDiscussionAdminTab: React.FC = () => {
         size="small"
         style={{ marginBottom: 16 }}
         styles={{ body: { padding: 16 } }}
-        accentColor="var(--ws-color-primary)"
-        gradient="var(--ws-color-surface)"
       >
         <Space wrap>
           <Space>
@@ -408,8 +406,6 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
       <AdminTablePanel
         title="会话列表"
-        accentColor="var(--ws-color-success)"
-        gradient="var(--ws-color-surface)"
         loading={loading}
         isEmpty={!loading && sessions.length === 0}
         emptyDescription="暂无数据"

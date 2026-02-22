@@ -52,9 +52,9 @@ async def get_summary(
         )
         selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
 
-    students = (await db.execute(student_stmt)).scalar_one()
-    courses = (await db.execute(course_stmt)).scalar_one()
-    selections = (await db.execute(selection_stmt)).scalar_one()
+    students = (await db.execute(student_stmt)).scalar_one() or 0
+    courses = (await db.execute(course_stmt)).scalar_one() or 0
+    selections = (await db.execute(selection_stmt)).scalar_one() or 0
     selected_student_sub = (
         select(XbkSelection.student_no)
         .where(XbkSelection.is_deleted.is_(False))
@@ -69,7 +69,7 @@ async def get_summary(
     if class_name:
         selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(sub))
     no_sel_stmt = no_sel_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
-    no_selection_students = (await db.execute(no_sel_stmt)).scalar_one()
+    no_selection_students = (await db.execute(no_sel_stmt)).scalar_one() or 0
 
     return {
         "students": students,
@@ -218,7 +218,12 @@ async def students_without_selection(
     if class_name:
         students_stmt = students_stmt.where(XbkStudent.class_name == class_name)
 
-    selected_student_nos = {row[0] for row in (await db.execute(selections_stmt)).all()}
+    selection_rows = (await db.execute(selections_stmt)).all()
+    if not selection_rows:
+        selected_student_nos = set()
+    else:
+        selected_student_nos = {row[0] for row in selection_rows}
+    
     students = (await db.execute(students_stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
     items: List[Dict[str, Any]] = []
     for s in students:

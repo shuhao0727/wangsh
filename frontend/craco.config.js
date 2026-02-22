@@ -1,4 +1,5 @@
 const path = require("path");
+const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 
 module.exports = {
   webpack: {
@@ -19,6 +20,19 @@ module.exports = {
       // 特殊别名 - 精确匹配 tsconfig.json 中的配置
       "@services": path.resolve(__dirname, "src/services/index"),
       "@services/znt/*": path.resolve(__dirname, "src/services/znt/*"),
+    },
+    configure: (webpackConfig) => {
+      const already = (webpackConfig.plugins || []).some((p) => p && p.constructor && p.constructor.name === "MonacoWebpackPlugin");
+      if (!already) {
+        webpackConfig.plugins = webpackConfig.plugins || [];
+        webpackConfig.plugins.push(
+          new MonacoWebpackPlugin({
+            languages: ["python"],
+            filename: "static/[name].worker.js",
+          })
+        );
+      }
+      return webpackConfig;
     },
   },
 

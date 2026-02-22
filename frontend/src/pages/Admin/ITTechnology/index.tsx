@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Typography, Card, Row, Col, Switch, Button, message, Space, Breadcrumb, Divider } from "antd";
+import { Typography, Card, Row, Col, Switch, Button, message, Breadcrumb, Divider } from "antd";
 import { 
   ExperimentOutlined, 
   FormOutlined, 
   NodeIndexOutlined, 
+  CodeOutlined,
   SettingOutlined, 
   HomeOutlined,
   ToolOutlined 
 } from "@ant-design/icons";
+import { AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 
@@ -31,43 +33,58 @@ const AppCard: React.FC<AppCardProps> = ({
 }) => (
   <Card
     hoverable
-    actions={[
-      <div key="toggle" style={{ padding: '0 16px', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-        <span>前端可见性</span>
+    style={{
+      borderRadius: 8,
+      border: '1px solid #f0f0f0',
+      height: '100%',
+      transition: 'all 0.3s ease',
+    }}
+    styles={{
+      body: { padding: 24 }
+    }}
+    className="it-app-card"
+  >
+    <div style={{ 
+      display: 'flex',
+      alignItems: 'flex-start',
+      marginBottom: 20
+    }}>
+      <div style={{ 
+        width: 48, height: 48, 
+        borderRadius: 8, 
+        background: 'linear-gradient(135deg, #e6f7ff 0%, #1890ff 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', fontSize: 24,
+        marginRight: 16,
+        flexShrink: 0
+      }}>
+        {icon}
+      </div>
+      <div>
+        <Title level={5} style={{ marginBottom: 4, color: '#2c3e50', fontSize: 16 }}>{title}</Title>
+        <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.5, display: 'block' }}>
+          {description}
+        </Text>
+      </div>
+    </div>
+    
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Switch 
-          checkedChildren="显示" 
-          unCheckedChildren="隐藏" 
+          size="small"
           checked={enabled} 
           loading={loading}
           onChange={onToggle} 
         />
-      </div>,
-      onManage ? (
-        <Button type="link" key="manage" icon={<SettingOutlined />} onClick={onManage}>
-          数据管理
+        <Text type="secondary" style={{ fontSize: 12 }}>{enabled ? '已启用' : '已禁用'}</Text>
+      </div>
+      
+      {onManage && (
+        <Button type="link" size="small" icon={<SettingOutlined />} onClick={onManage} style={{ padding: 0 }}>
+          管理
         </Button>
-      ) : (
-        <Button type="link" key="manage" disabled>
-          暂无管理
-        </Button>
-      )
-    ]}
-  >
-    <Card.Meta
-      avatar={
-        <div style={{ 
-          width: 48, height: 48, 
-          borderRadius: 8, 
-          background: '#f0f5ff', 
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#1890ff', fontSize: 24
-        }}>
-          {icon}
-        </div>
-      }
-      title={title}
-      description={<div style={{ height: 40, overflow: 'hidden', textOverflow: 'ellipsis' }}>{description}</div>}
-    />
+      )}
+    </div>
   </Card>
 );
 
@@ -83,6 +100,13 @@ const AdminITTechnology: React.FC = () => {
       description: '班级名单管理与随机抽取工具',
       icon: <ExperimentOutlined />,
       hasManager: true,
+    },
+    {
+      key: 'it_python_lab',
+      title: 'Python 实验室',
+      description: '实验模板管理与前台实验台入口',
+      icon: <CodeOutlined />,
+      hasManager: false,
     },
     {
       key: 'it_survey',
@@ -135,28 +159,26 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'dianming-manager') {
     return (
-      <div style={{ padding: 24 }}>
+      <AdminPage>
         <Breadcrumb style={{ marginBottom: 16 }}>
           <Breadcrumb.Item>
-            <a onClick={() => setView('dashboard')}>
+            <Button type="link" onClick={() => setView('dashboard')} style={{ padding: 0 }}>
               <HomeOutlined /> IT应用管理
-            </a>
+            </Button>
           </Breadcrumb.Item>
           <Breadcrumb.Item>随机点名管理</Breadcrumb.Item>
         </Breadcrumb>
         <DianmingManager />
-      </div>
+      </AdminPage>
     );
   }
 
   return (
-    <div className="admin-it-technology" style={{ padding: 24 }}>
+    <AdminPage>
       <div style={{ marginBottom: 24 }}>
-        <Title level={2}>IT 应用管理中心</Title>
-        <Text type="secondary">配置前台应用可见性，并管理各个应用的基础数据。</Text>
+        <Title level={4} style={{ margin: 0, color: "#2c3e50" }}>IT 应用管理</Title>
+        <Text type="secondary">配置前台应用的可见性与基础数据</Text>
       </div>
-
-      <Divider><ToolOutlined /> 应用列表</Divider>
 
       <Row gutter={[24, 24]}>
         {appConfigs.map(app => (
@@ -176,7 +198,7 @@ const AdminITTechnology: React.FC = () => {
           </Col>
         ))}
       </Row>
-    </div>
+    </AdminPage>
   );
 };
 

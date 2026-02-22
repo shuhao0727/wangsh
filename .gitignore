@@ -161,6 +161,7 @@ frontend/public/uploads/
 
 # ==================== TypeScript前端 ====================
 # dependencies
+node_modules/
 frontend/node_modules/
 frontend/.pnp/
 frontend/.pnp.js
@@ -225,6 +226,9 @@ frontend/.cursor/
 **/target/
 
 # ==================== IDE配置 ====================
+# Trae
+.trae/
+
 # VS Code
 .vscode/*
 !.vscode/settings.json

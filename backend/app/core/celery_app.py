@@ -20,4 +20,5 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+  include=["app.tasks.typst_compile", "app.tasks.pythonlab"],
 )

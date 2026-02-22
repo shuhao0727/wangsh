@@ -17,6 +17,7 @@ from app.api.endpoints.informatics.typst_styles import router as typst_styles_ro
 from app.api.endpoints.informatics.typst_categories import router as typst_categories_router
 from app.api.endpoints.xbk import router as xbk_router
 from app.api.endpoints.xxjs import router as xxjs_router
+from app.api.endpoints.debug import router as debug_router
 
 api_router = APIRouter()
 
@@ -36,3 +37,4 @@ api_router.include_router(public_typst_notes_router, tags=["public-informatics"]
 api_router.include_router(public_typst_style_router, tags=["public-informatics"])
 api_router.include_router(xbk_router, tags=["xbk"], prefix="/xbk")
 api_router.include_router(xxjs_router, tags=["xxjs"], prefix="/xxjs")
+api_router.include_router(debug_router, tags=["debug"], prefix="/debug")

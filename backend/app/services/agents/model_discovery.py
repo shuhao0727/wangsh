@@ -251,6 +251,8 @@ class ModelDiscoveryService:
             headers = {
                 "Authorization": f"Bearer {config.api_key}",
                 "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/wangsh",
+                "X-Title": "WangSh AI",
             }
             
             if config.organization:

@@ -150,6 +150,13 @@ stop_all_local_processes() {
         pkill -f "react-scripts.*start"
         sleep 2
     fi
+
+    # 停止 Celery worker（本地模式）
+    if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
+        print_warning "发现Celery Worker进程，正在停止..."
+        pkill -f "celery.*app\\.core\\.celery_app:celery_app"
+        sleep 2
+    fi
     
     # 4. 最终验证端口状态
     print_info "验证端口状态..."

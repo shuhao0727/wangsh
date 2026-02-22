@@ -155,6 +155,17 @@ const XbkPage: React.FC = () => {
     setFilters({ year: 2026, term: "上学期", grade: undefined, class_name: undefined, search_text: "" });
   };
 
+  const getErrorMsg = (e: any, defaultMsg: string) => {
+    const detail = e?.response?.data?.detail;
+    if (Array.isArray(detail)) {
+      return detail.map((err: any) => err.msg).join("; ");
+    }
+    if (typeof detail === "object") {
+      return JSON.stringify(detail);
+    }
+    return detail || defaultMsg;
+  };
+
   const loadMeta = useCallback(async () => {
     try {
       const res = await xbkDataApi.getMeta({ year: filters.year, term: filters.term });
@@ -162,7 +173,7 @@ const XbkPage: React.FC = () => {
     } catch {
       setMeta({ years: [], terms: [], classes: [] });
     }
-  }, [filters.term, filters.year, filters.grade]);
+  }, [filters.term, filters.year]);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -175,7 +186,7 @@ const XbkPage: React.FC = () => {
     } catch {
       setSummary(null);
     }
-  }, [filters.class_name, filters.term, filters.year, filters.grade]);
+  }, [filters.class_name, filters.term, filters.year]);
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
@@ -228,7 +239,7 @@ const XbkPage: React.FC = () => {
       setSelections(res.items);
       setSelectionsTotal(res.total);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "加载数据失败");
+      message.error(getErrorMsg(e, "加载数据失败"));
       setStudents([]);
       setCourses([]);
       setSelections([]);
@@ -322,7 +333,7 @@ const XbkPage: React.FC = () => {
         setAnalysisClassStats(classStatsRes.items || []);
         setAnalysisNoSelection(noSelRes.items || []);
       } catch (e: any) {
-        message.error(e?.response?.data?.detail || "加载分析数据失败");
+        message.error(getErrorMsg(e, "加载分析数据失败"));
         setAnalysisSummary(null);
         setAnalysisCourseStats([]);
         setAnalysisClassStats([]);
@@ -348,7 +359,7 @@ const XbkPage: React.FC = () => {
     } catch (e: any) {
       setImportPreview(null);
       setImportResult(null);
-      message.error(e?.response?.data?.detail || "预检失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "预检失败（需要管理员登录）"));
     } finally {
       setImportPreviewLoading(false);
     }
@@ -426,7 +437,7 @@ const XbkPage: React.FC = () => {
       message.success("保存成功");
     } catch (e: any) {
       if (e?.errorFields) return;
-      message.error(e?.response?.data?.detail || "保存失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "保存失败（需要管理员登录）"));
     } finally {
       setEditSaving(false);
     }
@@ -441,7 +452,7 @@ const XbkPage: React.FC = () => {
         await Promise.all([loadMeta(), loadSummary(), loadData()]);
         message.success("删除成功");
       } catch (e: any) {
-        message.error(e?.response?.data?.detail || "删除失败（需要管理员登录）");
+        message.error(getErrorMsg(e, "删除失败（需要管理员登录）"));
       }
     },
     [loadData, loadMeta, loadSummary],
@@ -711,7 +722,7 @@ const XbkPage: React.FC = () => {
       setDeleteVisible(false);
       await Promise.all([loadMeta(), loadSummary(), loadData()]);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "删除失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "删除失败（需要管理员登录）"));
     }
   };
 
@@ -727,7 +738,7 @@ const XbkPage: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "下载模板失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "下载模板失败（需要管理员登录）"));
     }
   };
 
@@ -752,7 +763,7 @@ const XbkPage: React.FC = () => {
       );
       await Promise.all([loadMeta(), loadSummary(), loadData()]);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "导入失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "导入失败（需要管理员登录）"));
     } finally {
       setImporting(false);
     }
@@ -780,7 +791,7 @@ const XbkPage: React.FC = () => {
       setExportVisible(false);
       message.success("导出成功");
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || "导出失败（需要管理员登录）");
+      message.error(getErrorMsg(e, "导出失败（需要管理员登录）"));
     } finally {
       setExporting(false);
     }
@@ -788,7 +799,7 @@ const XbkPage: React.FC = () => {
 
   return (
     <div className="xbk-page">
-      <Card className="xbk-hero" styles={{ body: { padding: 18 } }}>
+      <div className="xbk-hero">
         <div className="xbk-hero-title">
           <div className="xbk-hero-title-left">
             <FileTextOutlined />
@@ -803,14 +814,9 @@ const XbkPage: React.FC = () => {
             </Button>
           </Space>
         </div>
-        <div style={{ marginTop: 8 }}>
-          <Text type="secondary">
-            当前为模拟数据与页面框架（字段已按新结构调整）；下一阶段接入真实导入/处理/导出逻辑。
-          </Text>
-        </div>
-      </Card>
+      </div>
 
-      <Card className="xbk-filter-card" style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
+      <div className="xbk-filter-card" style={{ marginTop: 16, padding: 16 }}>
         <Row gutter={[12, 12]} align="middle">
           <Col flex="auto">
             <Form layout="inline" style={{ width: "100%" }}>
@@ -887,62 +893,46 @@ const XbkPage: React.FC = () => {
             </Space>
           </Col>
         </Row>
-      </Card>
+      </div>
 
       <div className="xbk-kpis">
         <Row gutter={[12, 12]}>
           <Col xs={12} md={6}>
-            <Card
-              className="xbk-kpi-card xbk-kpi-accent"
-              size="small"
-              styles={{ body: { padding: 8 } }}
-            >
+            <div className="xbk-kpi-card xbk-kpi-accent">
               <div className="xbk-kpi-row">
                 <span className="xbk-kpi-label">学生数</span>
                 <span className="xbk-kpi-value">{kpiStudents}</span>
               </div>
-            </Card>
+            </div>
           </Col>
           <Col xs={12} md={6}>
-            <Card
-              className="xbk-kpi-card"
-              size="small"
-              styles={{ body: { padding: 8 } }}
-            >
+            <div className="xbk-kpi-card">
               <div className="xbk-kpi-row">
                 <span className="xbk-kpi-label">课程数</span>
                 <span className="xbk-kpi-value">{kpiCourses}</span>
               </div>
-            </Card>
+            </div>
           </Col>
           <Col xs={12} md={6}>
-            <Card
-              className="xbk-kpi-card"
-              size="small"
-              styles={{ body: { padding: 8 } }}
-            >
+            <div className="xbk-kpi-card">
               <div className="xbk-kpi-row">
                 <span className="xbk-kpi-label">选课条目</span>
                 <span className="xbk-kpi-value">{kpiSelections}</span>
               </div>
-            </Card>
+            </div>
           </Col>
           <Col xs={12} md={6}>
-            <Card
-              className="xbk-kpi-card"
-              size="small"
-              styles={{ body: { padding: 8 } }}
-            >
+            <div className="xbk-kpi-card">
               <div className="xbk-kpi-row">
                 <span className="xbk-kpi-label">未选课学生</span>
                 <span className="xbk-kpi-value">{kpiNoSelection}</span>
               </div>
-            </Card>
+            </div>
           </Col>
         </Row>
       </div>
 
-      <Card className="xbk-toolbar" style={{ marginTop: 16 }} styles={{ body: { padding: 14 } }}>
+      <div className="xbk-toolbar" style={{ marginTop: 16, padding: 14 }}>
         <Space wrap>
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setImportVisible(true)}>
             导入数据
@@ -965,9 +955,9 @@ const XbkPage: React.FC = () => {
             刷新
           </Button>
         </Space>
-      </Card>
+      </div>
 
-      <Card className="xbk-table-card" style={{ marginTop: 16 }} styles={{ body: { padding: 0 } }}>
+      <div className="xbk-table-card" style={{ marginTop: 16 }}>
         <Tabs
           activeKey={activeTab}
           onChange={(k) => {
@@ -1081,7 +1071,7 @@ const XbkPage: React.FC = () => {
             },
           ]}
         />
-      </Card>
+      </div>
 
       <Modal
         title={

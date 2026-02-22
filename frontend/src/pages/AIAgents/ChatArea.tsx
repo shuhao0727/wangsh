@@ -229,7 +229,7 @@ const MessageBubble: React.FC<{
           icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent.icon)}
           style={{
             backgroundColor: isUser
-              ? "var(--ws-color-primary)"
+              ? "#1890ff" // Consistent blue for user avatar
               : (wf ? wf.color : currentAgent.color),
             flexShrink: 0,
           }}
@@ -237,13 +237,13 @@ const MessageBubble: React.FC<{
         <div
           style={{
             background: isUser
-              ? "linear-gradient(135deg, var(--ws-color-primary) 0%, var(--ws-color-primary-hover) 100%)"
-              : "var(--ws-color-surface)",
-            color: isUser ? "#fff" : "var(--ws-color-text)",
+              ? "#e6f7ff" // Softer blue background for user
+              : "#ffffff", // White background for agent
+            color: "#2c3e50", // Dark text for readability
             padding: "14px 18px",
             borderRadius: isUser ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
-            boxShadow: "0 6px 16px rgba(0, 0, 0, 0.08)",
-            border: isUser ? "none" : "1px solid var(--ws-color-border)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)", // Softer shadow
+            border: isUser ? "1px solid #bae7ff" : "1px solid #f0f0f0", // Subtle border
           }}
         >
           <div style={{ marginBottom: "4px" }}>
@@ -251,7 +251,7 @@ const MessageBubble: React.FC<{
               strong
               style={{
                 fontSize: "12px",
-                color: isUser ? "#fff" : (wf ? wf.color : currentAgent.color),
+                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent.color), // Colored name
               }}
             >
               {isUser ? displayName : (wf ? wf.label : currentAgent.name)}
@@ -259,7 +259,7 @@ const MessageBubble: React.FC<{
             <Text
               style={{
                 fontSize: "10px",
-                color: isUser ? "rgba(255,255,255,0.7)" : "var(--ws-color-text-secondary)",
+                color: "#999",
                 marginLeft: "8px",
               }}
             >
@@ -492,7 +492,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return (
       <Card
         style={{
-          height: "calc(100vh - 160px)",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
         }}
@@ -564,7 +564,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   return (
     <Card
       style={{
-        height: "calc(100vh - 160px)",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
       }}
@@ -629,8 +629,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           flex: 1,
           padding: "20px 24px",
           overflowY: "auto",
-          background: "linear-gradient(180deg, #f7f9fc 0%, #f3f5f9 100%)",
-          minHeight: 0, // 重要：允许flex item收缩
+          background: "#fafafa", // Very light grey background for chat area
+          minHeight: 0, 
         }}
       >
         {visibleMessages.map((message) => {
@@ -677,7 +677,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             value={inputMessage}
             onChange={(e) => onInputChange(e.target.value)}
             placeholder={`向${currentAgent.name}发送消息...`}
-            autoSize={{ minRows: 2, maxRows: 6 }}
+            autoSize={{ minRows: 4, maxRows: 12 }}
             onKeyDown={handleKeyPress}
             style={{ width: "100%" }}
           />

@@ -59,7 +59,7 @@ const useAuthController = () => {
     sharedFetchPromise = (async (): Promise<User | null> => {
       try {
         logger.debug("fetchCurrentUser: 调用authApi.getCurrentUser()");
-        const response = await authApi.getCurrentUser();
+        const response = await authApi.getCurrentUser({ silent: true, timeout: 8000 } as any);
         logger.debug("fetchCurrentUser: API响应成功", response);
 
         let userData = response.data;
@@ -100,12 +100,15 @@ const useAuthController = () => {
           error.message ||
           "身份验证失败，请重新登录";
 
-        logger.error("fetchCurrentUser: 获取用户信息失败", error);
+        const hasResponse = !!error?.response;
+        const hasRequest = !!error?.request;
+        const isTimeout = String(error?.code || "").toUpperCase() === "ECONNABORTED" || String(error?.message || "").includes("timeout");
+        if (hasResponse) logger.error("fetchCurrentUser: 获取用户信息失败", error);
         setAuthState({
           user: null,
           isAuthenticated: false,
           isLoading: false,
-          error: errorMessage,
+          error: hasRequest || isTimeout ? null : errorMessage,
         });
         return null;
       } finally {

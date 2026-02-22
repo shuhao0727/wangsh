@@ -350,7 +350,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               <Input placeholder="例如: 飞跃小队" size="large" />
             </Form.Item>
             <Form.Item>
-              <Button type="primary" htmlType="submit" block size="large" icon={<PlusOutlined />}>
+              <Button type="primary" htmlType="submit" block icon={<PlusOutlined />}>
                 立即创建并加入
               </Button>
             </Form.Item>
@@ -468,7 +468,6 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             icon={<TeamOutlined />}
             onClick={() => setOpen(true)}
             style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, boxShadow: '2px 0 8px rgba(0,0,0,0.15)' }}
-            size="large"
           >
             小组讨论
           </Button>

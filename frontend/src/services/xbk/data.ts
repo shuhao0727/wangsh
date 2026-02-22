@@ -126,7 +126,6 @@ export const xbkDataApi = {
     form.append("file", params.file);
     const res = await api.client.post("/xbk/import/preview", form, {
       params: { scope: params.scope, year: params.year, term: params.term, grade: params.grade },
-      headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data as XbkImportPreview;
   },
@@ -250,7 +249,6 @@ export const xbkDataApi = {
         grade: params.grade,
         skip_invalid: params.skip_invalid ?? true,
       },
-      headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data as XbkImportResult;
   },

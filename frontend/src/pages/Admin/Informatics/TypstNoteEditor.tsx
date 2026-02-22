@@ -23,12 +23,24 @@ const hashString = (s: string) => {
   return (h >>> 0).toString(16);
 };
 
-const DEFAULT_STYLE_IMPORT_LINE = '#import "style/my_style.typ":my_style';
-
 const ensureDefaultStyleImport = (source: string) => {
-  const s = source || "";
-  if (s.includes('import "style/my_style.typ"') || s.includes("import 'style/my_style.typ'")) return s;
-  return `${DEFAULT_STYLE_IMPORT_LINE}\n${s}`;
+  let s = source || "";
+  if (!s.includes('import "style/my_style.typ"')) {
+    s = `#import "style/my_style.typ":my_style\n${s}`;
+  }
+  if (!s.includes('show: my_style')) {
+    // 找到 import 行，在它后面插入 show 规则
+    const lines = s.split('\n');
+    const importIdx = lines.findIndex(l => l.includes('import "style/my_style.typ"'));
+    if (importIdx !== -1) {
+      lines.splice(importIdx + 1, 0, '#show: my_style');
+      s = lines.join('\n');
+    } else {
+      // 如果没找到 import（理论上前面已经加了），就加在最前面
+      s = `#show: my_style\n${s}`;
+    }
+  }
+  return s;
 };
 
 const TypstNoteEditor: React.FC<{
@@ -52,7 +64,7 @@ const TypstNoteEditor: React.FC<{
   const [assetPrefix, setAssetPrefix] = useState<string>("images");
   const [assets, setAssets] = useState<TypstAssetListItem[]>([]);
   const [styleOptions, setStyleOptions] = useState<string[]>(["my_style"]);
-  const [autoPreview, setAutoPreview] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(true);
   const [assetsVersion, setAssetsVersion] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<TypstCategoryListItem[]>([]);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
@@ -727,7 +739,7 @@ const TypstNoteEditor: React.FC<{
           )}
         </Card>
 
-        <Card size="small" className="typst-editor-card">
+        <Card size="small" className="typst-editor-card" style={{ position: "sticky", bottom: 0, zIndex: 100, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
           <Row align="middle" justify="space-between">
             <Col>
               <Button onClick={onBack}>返回列表</Button>

@@ -11,11 +11,12 @@
   justify-content: space-between;
   padding: 0 24px;
   background: var(--ws-color-surface);
-  border-bottom: 1px solid var(--ws-color-border);
+  border-bottom: 1px solid transparent;
   height: 64px;
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: none;
 }
 
 /* 左侧区域：Logo + 横向菜单 */
@@ -78,7 +79,7 @@
   padding: 0 20px;
   font-size: 15px;
   font-weight: 500;
-  color: var(--ws-color-text-secondary);
+  color: #333333; /* Dark Grey for default state */
   transition: all 0.3s ease;
   border-bottom: 2px solid transparent;
   position: relative;
@@ -89,13 +90,14 @@
 }
 
 .horizontal-menu .ant-menu-item:hover {
-  color: var(--ws-color-primary);
+  color: #000000; /* Pure Black on hover */
   border-bottom: 2px solid var(--ws-color-primary);
   background: transparent !important;
 }
 
 .horizontal-menu .ant-menu-item-selected {
-  color: var(--ws-color-primary);
+  color: #000000; /* Pure Black for selected state */
+  font-weight: 600; /* Slightly bolder */
   border-bottom: 2px solid var(--ws-color-primary);
   background: transparent !important;
 }
@@ -141,10 +143,10 @@
 
 /* 主内容区域 */
 .main-content {
-  margin: 24px;
+  margin: 0;
   padding: 24px;
-  min-height: calc(100vh - 112px);
-  background: var(--ws-color-surface);
+  min-height: calc(100vh - 64px);
+  background: transparent;
   overflow: auto;
 }
 

@@ -1,0 +1,23 @@
+.pythonlab-rightpanel-tabs.ant-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pythonlab-rightpanel-tabs > .ant-tabs-nav {
+  flex: 0 0 auto;
+}
+
+.pythonlab-rightpanel-tabs > .ant-tabs-content-holder {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pythonlab-rightpanel-tabs .ant-tabs-content {
+  height: 100%;
+}
+
+.pythonlab-rightpanel-tabs .ant-tabs-tabpane {
+  height: 100%;
+}
+

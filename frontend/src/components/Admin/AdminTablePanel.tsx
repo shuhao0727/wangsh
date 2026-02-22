@@ -1,6 +1,5 @@
 import React from "react";
 import { Empty, Spin } from "antd";
-import AdminCard from "./AdminCard";
 
 type Props = {
   title?: React.ReactNode;
@@ -9,8 +8,6 @@ type Props = {
   isEmpty?: boolean;
   emptyDescription?: React.ReactNode;
   emptyAction?: React.ReactNode;
-  accentColor?: string;
-  gradient?: string;
   children: React.ReactNode;
   pagination?: React.ReactNode;
 };
@@ -22,28 +19,53 @@ const AdminTablePanel: React.FC<Props> = ({
   isEmpty = false,
   emptyDescription,
   emptyAction,
-  accentColor = "var(--ws-color-success)",
-  gradient = "var(--ws-color-surface)",
   children,
   pagination,
 }) => {
   return (
-    <AdminCard title={title} extra={extra} accentColor={accentColor} gradient={gradient}>
-      {loading ? (
-        <div style={{ textAlign: "center", padding: "40px" }}>
-          <Spin size="large" />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {(title || extra) && (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center", 
+          padding: "12px 24px",
+          borderBottom: "none" // Remove divider
+        }}>
+          {title && <div style={{ fontSize: 16, fontWeight: 600 }}>{title}</div>}
+          {extra && <div>{extra}</div>}
         </div>
-      ) : isEmpty ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription}>
-          {emptyAction}
-        </Empty>
-      ) : (
-        <>
-          {children}
-          {pagination ? <div style={{ marginTop: "24px", textAlign: "center" }}>{pagination}</div> : null}
-        </>
       )}
-    </AdminCard>
+      
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+            <Spin size="large" />
+          </div>
+        ) : isEmpty ? (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription}>
+              {emptyAction}
+            </Empty>
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflow: "auto", padding: 0 }}>
+             {children}
+          </div>
+        )}
+      </div>
+      
+      {pagination ? (
+        <div style={{ 
+          padding: "12px 24px", 
+          borderTop: "none", // Remove divider
+          textAlign: "right",
+          background: "#fff"
+        }}>
+          {pagination}
+        </div>
+      ) : null}
+    </div>
   );
 };
 

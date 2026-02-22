@@ -451,11 +451,10 @@ const ArticlesPage: React.FC = () => {
       <div
         key={articleId}
         onClick={() => articleSlug && navigateToArticle(articleSlug)}
-        style={{ marginBottom: 16 }}
+        className="article-item-row"
       >
-        <Card hoverable className="article-item-card" style={{ width: "100%" }}>
-          <div className="article-card-title">{articleTitle}</div>
-          <div className="article-card-meta">
+        <div className="article-card-title">{articleTitle}</div>
+        <div className="article-card-meta">
             <Text type="secondary" style={{ fontSize: "0.8125rem" }}>
               <CalendarOutlined /> {articleDate}
             </Text>
@@ -469,7 +468,6 @@ const ArticlesPage: React.FC = () => {
             </Text>
           </div>
           <div className="article-card-summary">{articleSummary}</div>
-        </Card>
       </div>
     );
   };
@@ -477,12 +475,12 @@ const ArticlesPage: React.FC = () => {
   return (
     <div className="informatics-page">
       <SplitPanePage
-        leftWidth={420}
+        leftWidth={320}
         left={
-          <PanelCard bodyPadding={12}>
+          <PanelCard bodyPadding={12} title=" " extra={<span></span>}>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <Input
-                placeholder="搜索（当前页）：标题 / 摘要 / 作者 / 分类"
+                placeholder="搜索文章..."
                 value={searchKeyword}
                 onChange={handleSearchInputChange}
                 onKeyDown={handleSearchKeyDown}
@@ -504,7 +502,7 @@ const ArticlesPage: React.FC = () => {
               style={{
                 maxHeight: "calc(100vh - 260px)",
                 overflow: "auto",
-                border: "1px solid var(--ws-color-border)",
+                border: "none",
                 borderRadius: "var(--ws-radius-md)",
               }}
             >
@@ -529,7 +527,7 @@ const ArticlesPage: React.FC = () => {
         right={
           <PanelCard
             title={
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>
                 {selectedCategory ? selectedCategoryName : "文章"}
               </Title>
             }

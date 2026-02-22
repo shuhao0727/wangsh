@@ -145,8 +145,6 @@ const AdminInformatics: React.FC = () => {
 
       <AdminCard
         title="Typst 笔记"
-        accentColor="var(--ws-color-primary)"
-        gradient="var(--ws-color-surface)"
       >
         <Table
           rowKey="id"
