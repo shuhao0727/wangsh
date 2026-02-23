@@ -89,13 +89,12 @@ ARG TYPST_VERSION=0.14.2
 RUN (test -f /etc/apt/sources.list.d/debian.sources && sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g; s|http://deb.debian.org/debian-security|http://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources || true) \
     && (test -f /etc/apt/sources.list && sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g; s|http://security.debian.org/debian-security|http://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list || true) \
     && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
-    && (apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y \
     ca-certificates curl xz-utils fontconfig docker.io \
     fonts-noto-cjk fonts-noto-core \
     fonts-liberation fonts-dejavu-core \
     fonts-arphic-ukai fonts-arphic-uming \
     fonts-wqy-zenhei \
-    || true) \
     && rm -rf /var/lib/apt/lists/* \
     && printf '%s\n' \
     '<?xml version="1.0"?>' \
