@@ -7,6 +7,7 @@ from app.services.agents.ai_agent import get_agent
 from app.services.agents.providers import detect_flags, chat_completions_endpoint
 from app.core.config import settings
 from app.utils.agent_secrets import try_decrypt_api_key
+from app.core.http_client import get_http_client
 
 def _provider_error_message(status_code: int) -> str:
     if status_code == 401 or status_code == 403:
@@ -95,40 +96,43 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
             "user": user or "stream_user",
             "inputs": inputs or {},
         }
-        async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
-            last_error = None
-            for url in candidates:
-                try:
-                    try_payload = payload_primary if "/chat-messages" in url else payload_fallback
-                    async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
-                        if resp.status_code != 200:
-                            last_error = f"status_{resp.status_code}"
+        
+        client = get_http_client()
+        last_error = None
+        for url in candidates:
+            try:
+                try_payload = payload_primary if "/chat-messages" in url else payload_fallback
+                # 使用全局客户端发起流式请求
+                async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
+                    if resp.status_code != 200:
+                        last_error = f"status_{resp.status_code}"
+                        continue
+                    
+                    buffer = ""
+                    async for chunk in resp.aiter_bytes():
+                        if not chunk:
                             continue
-                        buffer = ""
-                        async for chunk in resp.aiter_bytes():
-                            if not chunk:
-                                continue
-                            buffer += chunk.decode("utf-8", errors="ignore")
-                            buffer = buffer.replace("\r\n", "\n")
-                            parts = buffer.split("\n\n")
-                            buffer = parts.pop() or ""
-                            for part in parts:
-                                if not part:
-                                    continue
+                        buffer += chunk.decode("utf-8", errors="ignore")
+                        # 处理可能粘包的情况，按 \n\n 分割 SSE 消息
+                        while "\n\n" in buffer:
+                            part, buffer = buffer.split("\n\n", 1)
+                            if part:
                                 yield (part + "\n\n").encode("utf-8")
-                        if buffer.strip():
-                            yield (buffer.strip() + "\n\n").encode("utf-8")
-                        return
-                except Exception as e:
-                    last_error = str(e)
-                    continue
+                    
+                    if buffer.strip():
+                        yield (buffer.strip() + "\n\n").encode("utf-8")
+                    return
+            except Exception as e:
+                last_error = str(e)
+                continue
+        
+        # 如果所有候选URL都失败，尝试非流式请求作为最后手段
         try:
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                url = candidates[0]
-                r = await client.post(url, headers=headers, json=payload_fallback)
-                data = r.text
-                yield (f"data: {data}\n\n").encode("utf-8")
-                return
+            url = candidates[0]
+            r = await client.post(url, headers=headers, json=payload_fallback)
+            data = r.text
+            yield (f"data: {data}\n\n").encode("utf-8")
+            return
         except Exception:
             yield b"event: error\ndata: {\"error\":\"stream_failed\"}\n\n"
             return
@@ -151,70 +155,69 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
         }
 
         try:
-            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
-                for attempt in range(3):
-                    async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
-                        if resp.status_code != 200:
-                            body_bytes = await resp.aread()
-                            body_text = body_bytes.decode("utf-8", errors="ignore")
-                            status_code = int(resp.status_code)
-                            if status_code in (429, 502, 503, 504) and attempt < 2:
-                                await asyncio.sleep(1.5 * (2**attempt))
-                                continue
-                            detail = _extract_provider_detail(body_text)
-                            err = {
-                                "error": f"provider_status_{status_code}",
-                                "message": _provider_error_message(status_code),
-                                "provider_status": status_code,
-                                "detail": detail[:500],
-                            }
-                            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
-                            return
+            client = get_http_client()
+            # 简化重试逻辑，利用全局连接池
+            async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
+                if resp.status_code != 200:
+                    body_bytes = await resp.aread()
+                    body_text = body_bytes.decode("utf-8", errors="ignore")
+                    status_code = int(resp.status_code)
+                    
+                    detail = _extract_provider_detail(body_text)
+                    err = {
+                        "error": f"provider_status_{status_code}",
+                        "message": _provider_error_message(status_code),
+                        "provider_status": status_code,
+                        "detail": detail[:500],
+                    }
+                    yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+                    return
 
-                        final_text = ""
+                final_text = ""
 
-                        async for raw_line in resp.aiter_lines():
-                            if not raw_line:
-                                continue
-                            line = raw_line.strip()
-                            if not line.startswith("data:"):
-                                continue
+                async for raw_line in resp.aiter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    
+                    # 移除 data: 前缀
+                    data_str = line[5:].strip()
+                    if not data_str:
+                        continue
+                    if data_str == "[DONE]":
+                        break
 
-                            data_str = line[len("data:") :].strip()
-                            if not data_str:
-                                continue
-                            if data_str == "[DONE]":
-                                break
+                    try:
+                        obj = json.loads(data_str)
+                    except Exception:
+                        continue
 
-                            try:
-                                obj = json.loads(data_str)
-                            except Exception:
-                                continue
+                    choices = obj.get("choices") or []
+                    if not choices:
+                        continue
+                    choice0 = choices[0] or {}
+                    delta = choice0.get("delta") or choice0.get("message") or {}
+                    content = delta.get("content") or ""
+                    
+                    # 部分模型可能返回 None content
+                    if not content:
+                        continue
 
-                            choices = obj.get("choices") or []
-                            if not choices:
-                                continue
-                            choice0 = choices[0] or {}
-                            delta = choice0.get("delta") or choice0.get("message") or {}
-                            content = delta.get("content") or ""
-                            if not content:
-                                continue
+                    final_text += str(content)
+                    chunk = {"answer": str(content)}
+                    yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
 
-                            final_text += str(content)
-                            chunk = {"answer": str(content)}
-                            yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode(
-                                "utf-8"
-                            )
-
-                        if final_text:
-                            end_payload = {"answer": final_text}
-                            yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode(
-                                "utf-8"
-                            )
-                        return
-
-                yield b"event: error\ndata: {\"error\":\"stream_failed\"}\n\n"
+                if final_text:
+                    end_payload = {"answer": final_text}
+                    yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
                 return
+
         except Exception as e:
             err = {"error": "stream_failed", "detail": str(e)}
             yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(

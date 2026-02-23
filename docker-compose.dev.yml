@@ -112,12 +112,12 @@ services:
       timeout: 3s
       retries: 10
 
-  # Celery Worker 服务（异步任务处理）
-  celery_worker:
+  # Celery Worker 服务（Typst 异步任务处理）
+  typst-worker:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: wangsh-celery-worker
+    container_name: wangsh-typst-worker
     restart: unless-stopped
     environment:
       # 设置部署环境为docker，配置类将自动调整主机地址
@@ -131,18 +131,79 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       # Celery 特定配置
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TYPST_COMPILE_MAX_CONCURRENCY=${TYPST_COMPILE_MAX_CONCURRENCY:-2}
+      - TYPST_COMPILE_USE_CELERY=true
+      - TYPST_PDF_STORAGE_DIR=/app/data/typst_pdfs
+      - TYPST_STORE_PDF_IN_DB=false
     volumes:
       - ./backend:/app
+      - ./data/typst_pdfs:/app/data/typst_pdfs
     depends_on:
       - redis
       - backend
     networks:
       - wangsh-network
     command: >
-      sh -c "sleep 10 && celery -A app.core.celery_app:celery_app worker -l INFO -c 1 --pool=solo"
+      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}"
+
+  # PythonLab Worker 服务（代码执行沙箱任务）
+  pythonlab-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: wangsh-pythonlab-worker
+    restart: unless-stopped
+    user: "0:0" # 需要 root 权限操作 docker socket
+    environment:
+      - DEPLOYMENT_ENV=docker
+      - DOCKER_POSTGRES_HOST=postgres
+      - DOCKER_REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # PythonLab 调试会话相关
+      - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
+      - PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
+      - PYTHONLAB_SESSION_TTL_SECONDS=${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
+      - PYTHONLAB_UNATTACHED_TTL_SECONDS=${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
+      - PYTHONLAB_MAX_SESSIONS_PER_USER=${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
+      - PYTHONLAB_DEBUGPY_PORT=${PYTHONLAB_DEBUGPY_PORT:-5678}
+      - PYTHONLAB_ORPHAN_CLEANUP_ENABLED=${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
+      - PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS=${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
+      - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
+      - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
+      - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - wangsh-network
+    command: >
+      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab"
 
   # 前端服务 (React + TypeScript)
   frontend:

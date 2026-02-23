@@ -25,6 +25,7 @@ from app.api import api_router
 from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.utils.cache import cache, startup_cache, shutdown_cache
+from app.core.http_client import HttpClientManager
 from app.models import User
 from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
@@ -67,6 +68,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"缓存服务初始化失败: {e}")
         # 不抛出异常，避免应用启动失败
     
+    # 初始化全局 HTTP 客户端
+    HttpClientManager.get_client()
+    logger.info("全局 HTTP 客户端初始化完成")
+
     logger.info("应用启动完成")
     cleanup_task = None
     if bool(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_ENABLED", True)):
@@ -100,6 +105,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"缓存服务关闭失败: {e}")
     
+    # 关闭全局 HTTP 客户端
+    await HttpClientManager.close()
+    logger.info("全局 HTTP 客户端已关闭")
+
     # 清理数据库连接
     await engine.dispose()
     logger.info("应用已关闭")

@@ -22,7 +22,10 @@ from app.schemas.agents import (
 from app.schemas.agents import COMMON_MODEL_PRESETS
 from app.utils.agent_secrets import encrypt_api_key, try_decrypt_api_key, last4
 from app.core.config import settings
+from cachetools import TTLCache
 
+# Agent Cache: key=agent_id, value=AIAgent, TTL=60s, maxsize=1000
+_AGENT_CACHE = TTLCache(maxsize=1000, ttl=60)
 
 async def create_agent(
     db: AsyncSession,
@@ -78,15 +81,27 @@ async def get_agent(
     include_deleted: bool = False,
 ) -> Optional[AIAgent]:
     """
-    根据ID获取智能体
+    根据ID获取智能体 (带内存缓存)
     """
+    # 仅针对未删除的智能体使用缓存
+    if not include_deleted:
+        cached = _AGENT_CACHE.get(agent_id)
+        if cached:
+            return cached
+
     query = select(AIAgent).where(AIAgent.id == agent_id)
     
     if not include_deleted:
         query = query.where(AIAgent.is_deleted == False)
     
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    agent = result.scalar_one_or_none()
+
+    # 写入缓存
+    if agent and not include_deleted:
+        _AGENT_CACHE[agent_id] = agent
+        
+    return agent
 
 
 def _resolved_agent_api_key(agent: AIAgent, *, is_openrouter: bool) -> Optional[str]:
@@ -192,6 +207,10 @@ async def update_agent(
     
     update_data = agent_in.dict(exclude_unset=True)
 
+    # 清除缓存
+    if agent_id in _AGENT_CACHE:
+        del _AGENT_CACHE[agent_id]
+
     # 兼容性修复: Pydantic v2 AnyHttpUrl 对象需转换为字符串
     if "api_endpoint" in update_data and update_data["api_endpoint"]:
         update_data["api_endpoint"] = str(update_data["api_endpoint"])
@@ -241,6 +260,10 @@ async def delete_agent(
         agent.is_deleted = True
         agent.deleted_at = datetime.now()
     
+    # 清除缓存
+    if agent_id in _AGENT_CACHE:
+        del _AGENT_CACHE[agent_id]
+
     await db.commit()
     return True
 
