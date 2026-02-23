@@ -219,6 +219,26 @@ export function RightPanel(props: {
   const canStep = runner.status === "paused";
   const canRun = runner.status !== "running";
 
+  useEffect(() => {
+    if (runner.status === "starting" || runner.status === "error") {
+      setActiveTab("terminal");
+    }
+  }, [runner.status]);
+
+  useEffect(() => {
+    if (runner.status === "paused") {
+      setActiveTab("debug");
+    }
+  }, [runner.status]);
+
+  useEffect(() => {
+    if (firstError) setActiveTab("terminal");
+  }, [firstError]);
+
+  useEffect(() => {
+    if (runner.stdout.length > 0) setActiveTab("terminal");
+  }, [runner.stdout.length]);
+
   // Breakpoint Columns
   const breakpointColumns = [
       { title: "行", dataIndex: "line", key: "line", width: 60 },
@@ -341,6 +361,11 @@ export function RightPanel(props: {
                                 locale={{ emptyText: "暂无监视表达式" }}
                                 scroll={{ x: 'max-content' }}
                             />
+                            {(!runner.watchResults.length && runner.watchExprs.length > 0) && (
+                                <div style={{ padding: "8px 0", color: "rgba(0,0,0,0.45)", fontSize: 12, textAlign: "center" }}>
+                                    等待下次暂停时计算...
+                                </div>
+                            )}
                       </div>
                   ),
                   style: { borderBottom: '1px solid #f0f0f0' }
@@ -380,17 +405,18 @@ export function RightPanel(props: {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const clampEditorHeight = (hostH: number, desired: number) => {
     const minH = 140;
-    const reserve = 260;
-    const maxH = hostH > 0 ? Math.max(minH, Math.min(900, hostH - reserve)) : 900;
+    // 增加底部预留空间，确保调试面板至少有 200px 可见
+    const minBottomPanelH = 200; 
+    const maxH = hostH > 0 ? Math.max(minH, hostH - minBottomPanelH) : 900;
     return Math.max(minH, Math.min(maxH, desired));
   };
   const [editorHeight, setEditorHeight] = useState(() => {
     try {
       const raw = localStorage.getItem("python_lab_editor_height");
       const v = raw ? Number(raw) : NaN;
-      if (Number.isFinite(v) && v > 60) return v;
+      if (Number.isFinite(v) && v > 100) return v;
     } catch {}
-    return 400;
+    return 320; // 默认稍微减小一点，留更多空间给调试器
   });
   const [panelWidth, setPanelWidth] = useState(400); // This would need to be lifted up if controlling parent width, 
                                                      // but assuming this component is inside a container, 
@@ -1302,8 +1328,8 @@ export function RightPanel(props: {
         </div>
       </FloatingPopup>
 
-      <FloatingPopup open={fullGraphViewerOpen} title="完整流程图（Graphviz）" initialSize={{ w: 1020, h: 760 }} onClose={() => setFullGraphViewerOpen(false)}>
-        <div style={{ display: "grid", gap: 12 }}>
+      <FloatingPopup open={fullGraphViewerOpen} title="完整流程图（Graphviz）" initialSize={{ w: 1020, h: 760 }} onClose={() => setFullGraphViewerOpen(false)} scrollable={false}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
           <div
             style={{
               position: "sticky",
@@ -1312,6 +1338,7 @@ export function RightPanel(props: {
               background: "#ffffff",
               borderBottom: "1px solid var(--ws-color-border)",
               paddingBottom: 10,
+              flexShrink: 0,
             }}
           >
             <Space>
@@ -1343,7 +1370,7 @@ export function RightPanel(props: {
 
           <div
             ref={fullGraphBoxRef}
-            style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 8, background: "#fff", overflow: "auto", height: 620, cursor: "grab" }}
+            style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 8, background: "#fff", overflow: "auto", flex: 1, minHeight: 0, cursor: "grab" }}
             onPointerDown={(evt) => {
               const host = fullGraphBoxRef.current;
               if (!host) return;

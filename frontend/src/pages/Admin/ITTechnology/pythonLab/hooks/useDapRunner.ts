@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { getStoredAccessToken } from "@services/api";
+import { authApi, getStoredAccessToken, getCookieToken, authTokenStorage } from "@services/api";
 import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
-import { diffVarTrace, extractLatestTraceback, wsUrl } from "./dapRunnerHelpers";
+import { diffVarTrace, extractLatestTraceback, wsUrl, wsCloseHint } from "./dapRunnerHelpers";
 
 // --- Types ---
 
@@ -326,16 +326,23 @@ export function useDapRunner(code: string) {
       }
       if (retries <= 0) throw new Error("调试会话启动超时：容器/调试器仍在启动或队列拥堵；可点右侧“会话”查看后重试");
 
-      // 3. Connect WS
+      // 3. Acquire token for WS (prefer sessionStorage; fall back to refresh)
       let token = getStoredAccessToken();
-      // If no token, we try to refresh it or proceed with empty token if configured to allow anonymous
-      // But DAP usually requires auth. We will try to proceed but warn.
+      if (!token) token = getCookieToken();
       if (!token) {
-         try {
-             // Attempt to refresh token if possible (though api.ts usually handles this automatically)
-             // For now, we just don't block immediately, let the backend decide or user re-login.
-             // But to avoid "Not logged in" error loop, we can check if refresh token exists
-         } catch {}
+        try {
+          const r = await authApi.refreshToken();
+          const data: any = r?.data;
+          if (data?.access_token || data?.refresh_token) {
+            authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
+            token = String(data?.access_token || "");
+          }
+        } catch {
+          // ignore; will fail below
+        }
+      }
+      if (!token) {
+        throw new Error("登录状态缺失：请先登录后再运行（或刷新页面后重试）");
       }
       
       const url = wsUrl(`/api/v1/debug/sessions/${session.session_id}/ws`, token);
@@ -374,10 +381,11 @@ export function useDapRunner(code: string) {
       });
 
       client.on("close", (ev: CloseEvent) => {
+         const hint = wsCloseHint(ev.code);
          if (ev.code === 4401) {
             dispatch({ type: "SET_ERROR", payload: "登录已过期，请刷新页面" });
          } else if (ev.code !== 1000) {
-            // dispatch({ type: "SET_ERROR", payload: `Connection closed: ${ev.code} ${ev.reason}` });
+            dispatch({ type: "SET_ERROR", payload: `连接已关闭（${ev.code}）：${hint || ev.reason || "未知原因"}` });
          }
          dispatch({ type: "SET_STATUS", payload: "stopped" });
       });
@@ -507,6 +515,8 @@ export function useDapRunner(code: string) {
   }, [state.breakpoints, refreshBreakpoints, state.status]);
 
   const addWatch = useCallback(async (expr: string) => {
+    if (stateRef.current.watchExprs.includes(expr)) return;
+    
     // 1. Update state
     dispatch({ type: "UPDATE_WATCH_EXPRS", payload: [...stateRef.current.watchExprs, expr] });
     

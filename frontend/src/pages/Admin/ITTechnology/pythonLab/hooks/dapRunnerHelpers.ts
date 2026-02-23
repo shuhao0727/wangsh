@@ -31,6 +31,16 @@ export function wsCloseHint(code: number): string | null {
       return "策略违规";
     case 1011:
       return "服务器内部错误";
+    case 4401:
+      return "登录已过期，请刷新页面";
+    case 4403:
+      return "无权访问此会话";
+    case 4404:
+      return "会话不存在或已被清理";
+    case 4409:
+      return "会话状态异常（未就绪），请稍后重试";
+    case 4410:
+      return "调试端口无效";
     default:
       return null;
   }

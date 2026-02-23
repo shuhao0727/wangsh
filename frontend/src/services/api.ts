@@ -29,6 +29,26 @@ export const getStoredRefreshToken = () => {
   }
 };
 
+export const getCookieToken = () => {
+  if (typeof document === "undefined") return null;
+  try {
+    const raw = document.cookie || "";
+    const pairs = raw.split(";").map((s) => s.trim());
+    for (const p of pairs) {
+      const idx = p.indexOf("=");
+      if (idx <= 0) continue;
+      const k = p.slice(0, idx);
+      const v = p.slice(idx + 1);
+      if (k === "ws_access_token" || k === "access_token") {
+        return decodeURIComponent(v);
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const authTokenStorage = {
   set(accessToken?: string | null, refreshToken?: string | null) {
     if (typeof window === "undefined") return;

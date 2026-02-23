@@ -106,17 +106,27 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         styles={{ body: { padding: "12px" } }}
       >
         <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-          <Flex align="center" gap="small">
+          <Flex align="flex-start" gap="small">
             <Avatar
               size="default"
               icon={currentAgent.icon}
-              style={{ backgroundColor: currentAgent.color }}
+              style={{ backgroundColor: currentAgent.color, flexShrink: 0 }}
             />
-            <div>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <Text strong style={{ color: currentAgent.color, fontSize: "14px" }}>
                 {currentAgent.name}
               </Text>
-              <div style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)", lineHeight: 1.2 }}>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--ws-color-text-secondary)",
+                  lineHeight: 1.6,
+                  whiteSpace: "normal",
+                  wordBreak: "break-word",
+                  textAlign: "justify",
+                  hyphens: "auto",
+                }}
+              >
                 {currentAgent.description}
               </div>
             </div>

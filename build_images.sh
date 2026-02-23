@@ -29,6 +29,16 @@ docker buildx build \
   --load \
   backend
 
+echo "==> Building pythonlab-worker ..."
+docker buildx build \
+  --platform "${PLATFORM}" \
+  --target worker_runtime \
+  -t "${REGISTRY}/wangsh-pythonlab-worker:${VERSION}" \
+  -t "${REGISTRY}/wangsh-pythonlab-worker:latest" \
+  -f backend/Dockerfile.prod \
+  --load \
+  backend
+
 echo "==> Building frontend ..."
 docker buildx build \
   --platform "${PLATFORM}" \
@@ -49,4 +59,4 @@ docker buildx build \
   gateway
 
 echo "==> Done. Local images built and loaded:"
-docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker)" | grep "${VERSION}" || true
+docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker|pythonlab-worker)" | grep "${VERSION}" || true

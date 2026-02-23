@@ -131,26 +131,18 @@ export const getAgentColumns = (
     },
   },
   {
-    title: "API地址",
-    dataIndex: "api_endpoint",
-    key: "api_endpoint",
-    width: 220,
-    render: (url: string | undefined) => (
-      <Tooltip title={url || "未配置"}>
-        <div
-          style={{
-            maxWidth: "200px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            color: "#7f8c8d", // Softened link color
-            fontSize: 13
-          }}
-        >
-          {url ? url.replace(/^https?:\/\//, "") : "-"}
-        </div>
-      </Tooltip>
-    ),
+  },
+  {
+    title: "描述",
+    dataIndex: "description",
+    key: "description",
+    width: 260,
+    render: (text: string | undefined) => {
+      const v = (text || "").trim();
+      if (!v) return <span style={{ color: '#bfbfbf' }}>无</span>;
+      const short = v.length > 60 ? v.slice(0, 60) + "…" : v;
+      return <span title={v}>{short}</span>;
+    },
   },
   {
     title: "API密钥",

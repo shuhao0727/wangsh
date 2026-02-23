@@ -164,6 +164,7 @@ const AdminAIAgents: React.FC = () => {
         const response = await aiAgentsApi.updateAgent(editingAgent.id, {
           name: values.name,
           agent_type: values.agent_type,
+          description: values.description,
           model_name: values.model_name,
           api_endpoint: values.api_endpoint,
           api_key: values.api_key,
@@ -183,6 +184,7 @@ const AdminAIAgents: React.FC = () => {
         const response = await aiAgentsApi.createAgent({
           name: values.name,
           agent_type: values.agent_type || "general",
+          description: values.description,
           model_name: values.model_name,
           api_endpoint: values.api_endpoint,
           api_key: values.api_key,

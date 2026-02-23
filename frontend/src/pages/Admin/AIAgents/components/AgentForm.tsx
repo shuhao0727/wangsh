@@ -60,7 +60,6 @@ const AgentForm: React.FC<AgentFormProps> = ({
   const [revealVisible, setRevealVisible] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
-
   // 检查是否可以测试
   const checkCanTest = useCallback(() => {
     const url = form.getFieldValue("api_endpoint");
@@ -128,12 +127,34 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (!resp.success || !resp.data) {
         Modal.error({
           title: "获取API密钥失败",
-          content: resp.message || "获取API密钥失败",
+          content: resp.message || "获取API密钥失败（可能为401未授权或404未配置）",
         });
         return;
       }
+      // 回填到表单，便于后续复制或更新
       form.setFieldValue("api_key", resp.data);
+      // 弹窗显示明文并支持复制
+      Modal.success({
+        title: "API密钥已获取",
+        content: (
+          <div>
+            <div style={{ marginBottom: 8 }}>以下为该智能体的API密钥：</div>
+            <div style={{ fontFamily: 'monospace', background: '#fafafa', padding: 8, borderRadius: 4 }}>
+              <span style={{ marginRight: 8 }}>密钥：</span>
+              <span>{resp.data}</span>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <Input value={resp.data} readOnly addonAfter={<Button onClick={() => navigator.clipboard.writeText(resp.data)}>复制</Button>} />
+            </div>
+          </div>
+        ),
+      });
       setRevealVisible(false);
+    } catch (error: any) {
+      Modal.error({
+        title: "获取API密钥失败",
+        content: error?.message || "请求失败（网络或权限错误）",
+      });
     } finally {
       setRevealLoading(false);
     }
@@ -575,9 +596,8 @@ const AgentForm: React.FC<AgentFormProps> = ({
       <Modal
         title="验证管理员密码"
         open={revealVisible}
-        onCancel={() => setRevealVisible(false)}
         onOk={handleRevealApiKey}
-        confirmLoading={revealLoading}
+        onCancel={() => setRevealVisible(false)}
         okText="确认"
         cancelText="取消"
       >

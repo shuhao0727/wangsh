@@ -18,5 +18,5 @@ celery.conf.update(
     task_routes={
         "app.tasks.typst_compile.compile_typst_note": {"queue": "typst"},
     },
-    imports=("app.tasks.typst_compile",),
+    imports=("app.tasks.typst_compile", "app.tasks.pythonlab"),
 )

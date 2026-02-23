@@ -69,6 +69,18 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+      # PythonLab 调试会话相关（从 .env 注入）
+      PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311}
+      PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
+      PYTHONLAB_SESSION_TTL_SECONDS: ${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
+      PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
+      PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
+      PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
+      PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
+      PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
+      PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
+      PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
+      HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +97,11 @@ services:
     command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
+      # 允许后端容器化运行 PythonLab sandbox（受控）
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/pythonlab/workspaces:/app/data/pythonlab/workspaces
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   typst-worker:
     platform: linux/amd64
@@ -106,6 +123,7 @@ services:
       AUTO_CREATE_TABLES: "false"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TZ: ${TIMEZONE:-Asia/Shanghai}
+      PYTHONPATH: "/app"
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
       POSTGRES_HOST: postgres
@@ -128,11 +146,70 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
-    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery_app worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
     networks:
       - wangsh-network
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
+
+  pythonlab-worker:
+    platform: linux/amd64
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      target: worker_runtime
+    image: shuhao07/wangsh-pythonlab-worker:1.0.1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      DEBUG: "False"
+      AUTO_CREATE_TABLES: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      PYTHONPATH: "/app"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_HOST: wangsh-redis
+      REDIS_PORT: "6379"
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+      # PythonLab 调试会话相关（从 .env 注入）
+      PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311}
+      PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
+      PYTHONLAB_SESSION_TTL_SECONDS: ${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
+      PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
+      PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
+      PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
+      PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
+      PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
+      PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
+      PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
+      HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
+    user: "0:0"
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
+    networks:
+      - wangsh-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
 
   frontend:
     platform: linux/amd64

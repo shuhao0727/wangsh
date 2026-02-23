@@ -1,4 +1,5 @@
 import asyncio
+import os
 import subprocess
 import shutil
 import logging
@@ -70,6 +71,12 @@ class DockerProvider(SandboxProvider):
             pass
 
         # 2. Build Command
+        host_ws_root_str = os.getenv("HOST_WORKSPACE_ROOT")
+        if host_ws_root_str:
+             mount_path = Path(host_ws_root_str) / session_id
+        else:
+             mount_path = ws_path
+
         loop_cmd = (
             "i=0; "
             "while true; do "
@@ -92,8 +99,8 @@ class DockerProvider(SandboxProvider):
             # "--network", "none", # Cannot use none if we want to expose ports
             "-e", "PYTHONPATH=/workspace",
             "-e", "PYTHONUNBUFFERED=1",
-            "-p", f"127.0.0.1::{self.debugpy_port}",
-            "-v", f"{str(ws_path)}:/workspace:rw",
+            "-p", f"{self.debugpy_port}",
+            "-v", f"{str(mount_path)}:/workspace:rw",
         ]
         
         # Apply Runtime (Phase 3: gVisor/Kata support)
@@ -136,7 +143,7 @@ class DockerProvider(SandboxProvider):
 
         return {
             "docker_container_id": container_id,
-            "dap_host": "127.0.0.1",
+            "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
             "dap_port": host_port,
             "workspace_path": str(ws_path)
         }
