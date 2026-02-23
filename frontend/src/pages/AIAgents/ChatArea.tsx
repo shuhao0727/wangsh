@@ -448,7 +448,6 @@ const MessageBubble: React.FC<{
                   </ReactMarkdown>
                 </div>
               )}
-              {!isUser && renderWorkflowGroups()}
             </>
           )}
         </div>
