@@ -99,7 +99,7 @@ services:
       - typst_pdfs:/app/data/typst_pdfs
       # 允许后端容器化运行 PythonLab sandbox（受控）
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/pythonlab/workspaces:/app/data/pythonlab/workspaces
+      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
