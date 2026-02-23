@@ -319,6 +319,7 @@ const MessageBubble: React.FC<{
             </div>
           ) : (
             <>
+              {!isUser && renderWorkflowGroups()}
               {isUser ? (
                 <div
                   style={{
@@ -474,6 +475,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   userDisplayName,
   isStreaming,
   streamingContent, // 新增：流式内容
+  currentStreamingMessageId,
   streamSeconds,
   onStopStream,
   onSendMessage,
@@ -657,6 +659,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 agentId: currentAgent.id
               }}
               currentAgent={currentAgent}
+              workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
               userDisplayName={userDisplayName}
             />
         )}

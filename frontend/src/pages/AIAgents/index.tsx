@@ -61,6 +61,7 @@ const AIAgentsPage: React.FC = () => {
   const [historyVisible, setHistoryVisible] = useState(true);
   const [workflowGroups, setWorkflowGroups] = useState<WorkflowGroup[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
   const [streamSeconds, setStreamSeconds] = useState(0);
   const streamTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -354,6 +355,7 @@ const AIAgentsPage: React.FC = () => {
     // 初始不添加空消息，改用 streamingContent 渲染
     setMessages((prev) => [...prev, userMessage]);
     setStreamingContent(""); // 重置流式内容
+    setCurrentStreamingMessageId(agentMessageId); // 设置当前流式消息ID
     setInputMessage("");
 
     const startStream = async () => {
@@ -500,6 +502,7 @@ const AIAgentsPage: React.FC = () => {
             };
             setMessages(prev => [...prev, finalMsg]);
             setStreamingContent(""); // 清空流式状态
+            setCurrentStreamingMessageId(null);
         };
         
         if (!res.ok) {
@@ -659,6 +662,7 @@ const AIAgentsPage: React.FC = () => {
       } finally {
         streamAbortRef.current = null;
         setIsStreaming(false);
+        setCurrentStreamingMessageId(null);
       }
     };
     startStream();
@@ -833,6 +837,7 @@ const AIAgentsPage: React.FC = () => {
             userDisplayName={auth.getDisplayName() || undefined}
             isStreaming={isStreaming}
             streamingContent={streamingContent} 
+            currentStreamingMessageId={currentStreamingMessageId}
             streamSeconds={streamSeconds}
             onStopStream={handleStopStream}
             onSendMessage={handleSendMessage}

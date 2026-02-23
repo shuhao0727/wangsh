@@ -70,6 +70,7 @@ export interface ChatAreaProps {
   userDisplayName?: string;
   isStreaming?: boolean;
   streamingContent?: string; // 新增：流式生成内容（独立于messages）
+  currentStreamingMessageId?: string | null; // 新增：当前正在流式生成的消息ID
   streamSeconds?: number;
   onStopStream?: () => void;
   onSendMessage: () => void;

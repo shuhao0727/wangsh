@@ -146,7 +146,7 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
-    command: [ "sh", "-c", "celery -A app.celery_app:celery_app worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
     networks:
       - wangsh-network
     volumes:
