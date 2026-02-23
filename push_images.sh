@@ -22,4 +22,8 @@ for IMG in "${IMAGES[@]}"; do
   docker push "${REGISTRY}/${IMG}:latest"
 done
 
+# Push sandbox image
+echo "--> Pushing ${REGISTRY}/pythonlab-sandbox:py311 ..."
+docker push "${REGISTRY}/pythonlab-sandbox:py311"
+
 echo "==> All images pushed successfully."

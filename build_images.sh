@@ -39,6 +39,13 @@ docker buildx build \
   --load \
   backend
 
+echo "==> Building pythonlab-sandbox ..."
+docker buildx build \
+  --platform "${PLATFORM}" \
+  -t "${REGISTRY}/pythonlab-sandbox:py311" \
+  backend/docker/pythonlab-sandbox \
+  --load
+
 echo "==> Building frontend ..."
 docker buildx build \
   --platform "${PLATFORM}" \
@@ -59,4 +66,21 @@ docker buildx build \
   gateway
 
 echo "==> Done. Local images built and loaded:"
-docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker|pythonlab-worker)" | grep "${VERSION}" || true
+
+IMAGES=(
+  "wangsh-backend"
+  "wangsh-frontend"
+  "wangsh-gateway"
+  "wangsh-typst-worker"
+  "wangsh-pythonlab-worker"
+  "pythonlab-sandbox:py311"
+)
+
+for IMG in "${IMAGES[@]}"; do
+  echo "--> Checking ${IMG} ..."
+  if [[ "${IMG}" == "pythonlab-sandbox:py311" ]]; then
+     docker images | grep -E "pythonlab-sandbox" | grep "py311" || true
+  else
+     docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker|pythonlab-worker)" | grep "${VERSION}" || true
+  fi
+done

@@ -20,7 +20,7 @@ def _workspace_root() -> Path:
 class DockerProvider(SandboxProvider):
     def __init__(self):
         self.runtime = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", "runc")
-        self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
+        self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "shuhao07/pythonlab-sandbox:py311")
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
         self._available_runtimes = None
 

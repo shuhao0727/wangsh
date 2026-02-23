@@ -24,7 +24,7 @@ class K8sProvider(SandboxProvider):
     
     def __init__(self):
         self.namespace = "default" # TODO: Make configurable via settings
-        self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
+        self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "shuhao07/pythonlab-sandbox:py311")
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
         self.runtime_class = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", None)
         if self.runtime_class == "runc":

@@ -287,7 +287,7 @@ class Settings(BaseSettings):
     REDIS_DB_CACHE: int = Field(default=0)                      # 缓存数据库索引
 
     # ==================== PythonLab 调试（V2：Docker + debugpy + Redis） ====================
-    PYTHONLAB_SANDBOX_IMAGE: str = Field(default="pythonlab-sandbox:py311")
+    PYTHONLAB_SANDBOX_IMAGE: str = Field(default="shuhao07/pythonlab-sandbox:py311")
     PYTHONLAB_WORKSPACE_ROOT: str = Field(default="/tmp/pythonlab/workspaces")
     PYTHONLAB_SESSION_TTL_SECONDS: int = Field(default=1800)
     PYTHONLAB_UNATTACHED_TTL_SECONDS: int = Field(default=300)
