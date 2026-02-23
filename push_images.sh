@@ -22,8 +22,13 @@ for IMG in "${IMAGES[@]}"; do
   docker push "${REGISTRY}/${IMG}:latest"
 done
 
-# Push sandbox image
-echo "--> Pushing ${REGISTRY}/pythonlab-sandbox:py311 ..."
-docker push "${REGISTRY}/pythonlab-sandbox:py311"
+# Push sandbox image (Multi-Arch: amd64 + arm64)
+# 沙箱镜像需要支持 x86_64 (amd64) 和 ARM64 (aarch64) 以兼容不同服务器
+echo "--> Building and Pushing Multi-Arch Sandbox Image: ${REGISTRY}/pythonlab-sandbox:py311 ..."
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t "${REGISTRY}/pythonlab-sandbox:py311" \
+  backend/docker/pythonlab-sandbox \
+  --push
 
 echo "==> All images pushed successfully."

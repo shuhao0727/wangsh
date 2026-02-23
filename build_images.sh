@@ -39,7 +39,10 @@ docker buildx build \
   --load \
   backend
 
-echo "==> Building pythonlab-sandbox ..."
+echo "==> Building pythonlab-sandbox (Multi-Arch) ..."
+# 注意：沙箱镜像需要在生产环境支持 amd64 (x86_64) 和 arm64 (aarch64)
+# 但 docker buildx load 不支持多架构同时加载，所以我们这里只构建本地架构用于测试
+# 真正的多架构构建和推送在 push_images.sh 中进行
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/pythonlab-sandbox:py311" \
