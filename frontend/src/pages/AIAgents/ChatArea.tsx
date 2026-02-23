@@ -108,10 +108,11 @@ const MessageBubble: React.FC<{
   const renderWorkflowGroups = () => {
     if (!workflowGroups || workflowGroups.length === 0) return null;
     return (
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 8, marginBottom: 12 }}>
         <Collapse
           ghost
-          defaultActiveKey={[]}
+          defaultActiveKey={workflowGroups.map((g) => g.id)}
+          expandIconPosition="end"
           items={workflowGroups.map((group) => ({
             key: group.id,
             label: (() => {
@@ -135,68 +136,60 @@ const MessageBubble: React.FC<{
                 durationText = `${seconds}s`;
               }
               return (
-                <Space size="middle">
-                  <Text>{group.label}</Text>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <BranchesOutlined />
+                  <Text type="secondary">{group.label}</Text>
                   <Text type="secondary">节点 {count}</Text>
                   <Text type="secondary">耗时 {durationText}</Text>
-                </Space>
+                </div>
               );
             })(),
             children:
               group.nodes.length === 0 ? (
-                <Text type="secondary">暂无节点</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  暂无节点
+                </Text>
               ) : (
-                <div>
+                <div style={{ paddingLeft: 12, borderLeft: "2px solid #f0f0f0" }}>
                   {group.nodes.map((n) => (
                     <div
                       key={n.id}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 8,
-                        padding: "6px 0",
-                        borderBottom: "1px dashed var(--ws-color-border)",
+                        gap: 12,
+                        padding: "4px 0",
+                        fontSize: 13,
                       }}
                     >
                       <Tag
                         color={
                           n.status === "finished"
-                            ? "green"
+                            ? "success"
                             : n.status === "error"
-                              ? "red"
-                              : "purple"
+                              ? "error"
+                              : "processing"
                         }
+                        style={{ margin: 0, minWidth: 48, textAlign: "center", border: "none" }}
+                        bordered={false}
                       >
                         {n.status === "finished"
                           ? "完成"
                           : n.status === "error"
                             ? "错误"
-                            : "进行中"}
+                            : "执行中"}
                       </Tag>
-                      <Text strong>{n.name}</Text>
-                      <Text type="secondary" style={{ marginLeft: 8 }}>
+
+                      <Text strong style={{ minWidth: 100 }}>
+                        {n.name}
+                      </Text>
+
+                      <Text type="secondary" style={{ fontSize: 12, color: "#999" }}>
                         {n.startedAt ? dayjs(n.startedAt).format("HH:mm:ss") : ""}
                         {n.finishedAt
                           ? ` → ${dayjs(n.finishedAt).format("HH:mm:ss")}`
                           : ""}
                       </Text>
-                      {n.detail && (
-                        <div
-                          style={{
-                            marginLeft: "auto",
-                            background: "var(--ws-color-surface-2)",
-                            border: "1px solid var(--ws-color-border)",
-                            borderRadius: 6,
-                            padding: "6px 8px",
-                            fontSize: 12,
-                            maxWidth: "50%",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {n.detail}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -583,7 +576,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       {/* 对话头部 */}
       <div
         style={{
-          padding: "16px 24px",
+          padding: "10px 24px",
           borderBottom: "1px solid var(--ws-color-border)",
           display: "flex",
           justifyContent: "space-between",
@@ -591,24 +584,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           flexShrink: 0,
         }}
       >
-        <Space>
+        <Space size="small">
           {!historyVisible && (
             <Tooltip title="显示侧边栏">
-              <Button icon={<HistoryOutlined />} onClick={onToggleSidebar} />
+              <Button icon={<HistoryOutlined />} onClick={onToggleSidebar} type="text" />
             </Tooltip>
           )}
           <Avatar
-            size="large"
+            size={32}
             icon={currentAgent.icon}
             style={{ backgroundColor: currentAgent.color }}
           />
-          <div>
-            <Title level={4} style={{ margin: 0, color: currentAgent.color }}>
+          <Space size="small" align="center" style={{ marginLeft: 4 }}>
+            <Text strong style={{ fontSize: 15, color: currentAgent.color }}>
               {currentAgent.name}
-            </Title>
-            <Text type="secondary">{currentAgent.description}</Text>
-          </div>
-          <Tag color={currentAgent.status === "online" ? "success" : "default"}>
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {currentAgent.description}
+            </Text>
+          </Space>
+          <Tag 
+            color={currentAgent.status === "online" ? "success" : "default"} 
+            style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px' }}
+            bordered={false}
+          >
             {currentAgent.status === "online" ? "在线" : "离线"}
           </Tag>
         </Space>
@@ -669,7 +668,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       {/* 输入区域 */}
       <div
         style={{
-          padding: "16px 24px",
+          padding: "12px 24px",
           borderTop: "1px solid var(--ws-color-border)",
           flexShrink: 0,
         }}
@@ -680,7 +679,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             value={inputMessage}
             onChange={(e) => onInputChange(e.target.value)}
             placeholder={`向${currentAgent.name}发送消息...`}
-            autoSize={{ minRows: 4, maxRows: 12 }}
+            autoSize={{ minRows: 2, maxRows: 6 }}
             onKeyDown={handleKeyPress}
             style={{ width: "100%" }}
           />
