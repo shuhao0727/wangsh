@@ -206,7 +206,7 @@ services:
       PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
     user: "0:0"
-    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
+    command: [ "sh", "-c", "pip install cachetools && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
     networks:
       - wangsh-network
     volumes:
