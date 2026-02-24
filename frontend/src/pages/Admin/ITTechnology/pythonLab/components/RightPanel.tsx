@@ -1121,8 +1121,8 @@ export function RightPanel(props: {
         open={editorOpen} 
         onClose={() => setEditorOpen(false)} 
         initialSize={{ 
-            w: typeof window !== 'undefined' ? window.innerWidth * 0.36 : 600, 
-            h: typeof window !== 'undefined' ? window.innerHeight * 0.32 : 400 
+            w: typeof window !== 'undefined' ? window.innerWidth * 0.30 : 600, 
+            h: typeof window !== 'undefined' ? window.innerHeight * 0.30 : 400 
         }}
         resizable 
         draggable 

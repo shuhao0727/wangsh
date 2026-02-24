@@ -22,8 +22,6 @@ export function FloatingPopup(props: {
 
   const [size, setSize] = useState(() => ({ w: initialSize?.w ?? 520, h: initialSize?.h ?? 360 }));
   const [pos, setPos] = useState({ x: padding, y: padding });
-  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
-  const resizeRef = useRef<{ startX: number; startY: number; baseW: number; baseH: number } | null>(null);
 
   const clampSize = useCallback((w: number, h: number) => {
     const maxW = Math.max(minW, window.innerWidth - padding * 2);
@@ -73,44 +71,44 @@ export function FloatingPopup(props: {
   const onHeaderPointerDown = (e: React.PointerEvent) => {
     if (!draggable) return;
     e.preventDefault();
-    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseX = pos.x;
+    const baseY = pos.y;
 
-  const onHeaderPointerMove = (e: React.PointerEvent) => {
-    if (!draggable) return;
-    const d = dragRef.current;
-    if (!d) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
-    setPos(clampPos(d.baseX + dx, d.baseY + dy));
-  };
-
-  const onHeaderPointerUp = () => {
-    if (!draggable) return;
-    dragRef.current = null;
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      setPos(clampPos(baseX + dx, baseY + dy));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   const onResizePointerDown = (e: React.PointerEvent) => {
     if (!resizable) return;
     e.preventDefault();
     e.stopPropagation();
-    resizeRef.current = { startX: e.clientX, startY: e.clientY, baseW: size.w, baseH: size.h };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseW = size.w;
+    const baseH = size.h;
 
-  const onResizePointerMove = (e: React.PointerEvent) => {
-    if (!resizable) return;
-    const r = resizeRef.current;
-    if (!r) return;
-    const dx = e.clientX - r.startX;
-    const dy = e.clientY - r.startY;
-    setSize(clampSize(r.baseW + dx, r.baseH + dy));
-  };
-
-  const onResizePointerUp = () => {
-    if (!resizable) return;
-    resizeRef.current = null;
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      setSize(clampSize(baseW + dx, baseH + dy));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   if (!open) return null;
@@ -135,8 +133,6 @@ export function FloatingPopup(props: {
     >
       <div
         onPointerDown={onHeaderPointerDown}
-        onPointerMove={onHeaderPointerMove}
-        onPointerUp={onHeaderPointerUp}
         style={{
           padding: "6px 8px",
           borderBottom: "1px solid var(--ws-color-border)",
@@ -160,8 +156,6 @@ export function FloatingPopup(props: {
       {resizable ? (
         <div
           onPointerDown={onResizePointerDown}
-          onPointerMove={onResizePointerMove}
-          onPointerUp={onResizePointerUp}
           style={{
             position: "absolute",
             right: 2,
