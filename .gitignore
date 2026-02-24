@@ -168,8 +168,6 @@ frontend/.pnp.js
 
 # testing
 frontend/coverage/
-
-# production
 frontend/build/
 frontend/dist/
 
@@ -323,3 +321,6 @@ docker-compose.local.yml
 
 # 忽略空目录占位文件（如果需要保留空目录，请删除）
 !.gitkeep
+
+# ==================== 个人笔记/说明 ====================
+注意.txt
