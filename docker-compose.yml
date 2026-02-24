@@ -38,7 +38,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: backend_runtime
-    image: shuhao07/wangsh-backend:1.0.1
+    image: shuhao07/wangsh-backend:1.0.2
     restart: unless-stopped
     environment:
       DEBUG: "False"
@@ -110,7 +110,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-typst-worker:1.0.1
+    image: shuhao07/wangsh-typst-worker:1.0.2
     restart: unless-stopped
     depends_on:
       postgres:
@@ -160,7 +160,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-pythonlab-worker:1.0.1
+    image: shuhao07/wangsh-pythonlab-worker:1.0.2
     restart: unless-stopped
     depends_on:
       postgres:
@@ -219,7 +219,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-    image: shuhao07/wangsh-frontend:1.0.1
+    image: shuhao07/wangsh-frontend:1.0.2
     restart: unless-stopped
     environment:
       http_proxy: ""
@@ -235,7 +235,7 @@ services:
   gateway:
     platform: linux/amd64
     build: ./gateway
-    image: shuhao07/wangsh-gateway:1.0.1
+    image: shuhao07/wangsh-gateway:1.0.2
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-6608}:80"
