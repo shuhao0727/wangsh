@@ -100,6 +100,7 @@ services:
       # 允许后端容器化运行 PythonLab sandbox（受控）
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ./backend/app:/app/app
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -151,6 +152,7 @@ services:
       - wangsh-network
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
+      - ./backend/app:/app/app
 
   pythonlab-worker:
     platform: linux/amd64
@@ -204,17 +206,13 @@ services:
       PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
     user: "0:0"
-    ulimits:
-      nproc: 65535
-      nofile:
-        soft: 65535
-        hard: 65535
     command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
     networks:
       - wangsh-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ./backend/app:/app/app
 
   frontend:
     platform: linux/amd64
