@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.core.deps import require_admin
+from app.core.deps import require_user
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.utils.cache import cache
@@ -106,7 +106,7 @@ class DebugSessionResponse(BaseModel):
 
 
 @router.post("/sessions", response_model=DebugSessionCreateResponse)
-async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[str, Any] = Depends(require_admin)):
+async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[str, Any] = Depends(require_user)):
     if payload.entry_path != "main.py":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="entry_path 目前仅支持 main.py")
     if payload.requirements:
@@ -178,7 +178,7 @@ async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[
 
 
 @router.get("/sessions/{session_id}", response_model=DebugSessionResponse)
-async def get_session(session_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
+async def get_session(session_id: str, current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     meta = await cache.get(session_key)
@@ -190,7 +190,7 @@ async def get_session(session_id: str, current_user: Dict[str, Any] = Depends(re
 
 
 @router.post("/sessions/{session_id}/stop")
-async def stop_session(session_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
+async def stop_session(session_id: str, current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     meta = await cache.get(session_key)
@@ -211,7 +211,7 @@ async def stop_session(session_id: str, current_user: Dict[str, Any] = Depends(r
 
 
 @router.get("/sessions")
-async def list_sessions(current_user: Dict[str, Any] = Depends(require_admin)):
+async def list_sessions(current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     if user_id <= 0:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未认证用户")
@@ -248,7 +248,7 @@ async def list_sessions(current_user: Dict[str, Any] = Depends(require_admin)):
 
 
 @router.post("/sessions/cleanup")
-async def cleanup_sessions(current_user: Dict[str, Any] = Depends(require_admin)):
+async def cleanup_sessions(current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     if user_id <= 0:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未认证用户")

@@ -378,7 +378,7 @@ def _build_pseudocode(code: str, options: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/pseudocode/parse")
-async def parse_pseudocode(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_admin)):
+async def parse_pseudocode(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     code = payload.get("code")
     if not isinstance(code, str):

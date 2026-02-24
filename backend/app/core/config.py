@@ -307,6 +307,7 @@ class Settings(BaseSettings):
     GROUP_DISCUSSION_LAST_ID_TTL: int = Field(default=86400)
     GROUP_DISCUSSION_LAST_AT_TTL: int = Field(default=86400)
     GROUP_DISCUSSION_RATE_LIMIT_SECONDS: int = Field(default=2)
+    GROUP_DISCUSSION_JOIN_LOCK_SECONDS: int = Field(default=300)
     GROUP_DISCUSSION_COMPARE_CACHE_TTL: int = Field(default=600)
 
     AUTO_CREATE_TABLES: bool = Field(default=False)

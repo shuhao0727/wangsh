@@ -21,7 +21,6 @@ from app.utils.cache import cache
 
 _GROUP_NO_RE = re.compile(r"^[0-9]{1,16}$")
 _CLASS_NAME_RE = re.compile(r"^[^\s]{1,64}$")
-_JOIN_LOCK_SECONDS = 180
 
 
 def _gd_key(prefix: str, *parts: Any) -> str:
@@ -126,8 +125,9 @@ async def get_or_create_today_session(
             joined_at = joined_at.replace(tzinfo=timezone.utc)
         
         delta = datetime.now(timezone.utc) - joined_at
-        if delta.total_seconds() < 180:
-            remain = 180 - int(delta.total_seconds())
+        lock_seconds = int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
+        if delta.total_seconds() < lock_seconds:
+            remain = lock_seconds - int(delta.total_seconds())
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"切换小组需等待 {remain} 秒",
@@ -178,17 +178,14 @@ async def list_today_groups(
     limit_n = max(1, min(int(limit or 50), 200))
     today = datetime.now().date()
     
-    # 子查询统计成员数
-    member_count_sub = (
-        select(func.count(GroupDiscussionMember.id))
-        .where(GroupDiscussionMember.session_id == GroupDiscussionSession.id)
-        .correlate(GroupDiscussionSession)
-        .scalar_subquery()
-    )
-
-    stmt = select(GroupDiscussionSession, member_count_sub.label("real_member_count")).where(
-        GroupDiscussionSession.session_date == today,
-        GroupDiscussionSession.class_name == class_name_n,
+    stmt = (
+        select(GroupDiscussionSession, func.count(GroupDiscussionMember.id).label("real_member_count"))
+        .outerjoin(GroupDiscussionMember, GroupDiscussionSession.id == GroupDiscussionMember.session_id)
+        .where(
+            GroupDiscussionSession.session_date == today,
+            GroupDiscussionSession.class_name == class_name_n,
+        )
+        .group_by(GroupDiscussionSession.id)
     )
     q = (keyword or "").strip()
     if q:
@@ -237,7 +234,7 @@ async def set_group_name(
 
 async def enforce_join_lock(*, user_id: int, requested_group_no: str) -> int:
     if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
-        return _JOIN_LOCK_SECONDS
+        return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
     key = _gd_key("join_lock", int(user_id))
     locked = await cache.get(key)
     ttl = await cache.ttl(key)
@@ -249,8 +246,8 @@ async def enforce_join_lock(*, user_id: int, requested_group_no: str) -> int:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"组号已锁定，{remaining}秒内不可更改",
             )
-    await cache.set(key, {"group_no": requested_group_no}, expire_seconds=_JOIN_LOCK_SECONDS)
-    return _JOIN_LOCK_SECONDS
+    await cache.set(key, {"group_no": requested_group_no}, expire_seconds=int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS))
+    return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
 
 
 async def list_messages(

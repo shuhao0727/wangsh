@@ -93,8 +93,6 @@ const ITTechnologyPage: React.FC = () => {
     return (
       <div style={{ padding: 24 }}>
         {renderBreadcrumb()}
-        <Title level={2}>请选择班级</Title>
-        <Divider />
         <ClassSelector onSelect={handleSelectClass} />
       </div>
     );

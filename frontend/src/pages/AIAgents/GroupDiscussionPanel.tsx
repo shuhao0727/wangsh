@@ -147,6 +147,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     }
   }, [open, view, searchKeyword]);
 
+  // 自动刷新：当切换到“加入小组”模式时
+  useEffect(() => {
+    if (introMode === 'join') {
+      fetchGroups();
+    }
+  }, [introMode, fetchGroups]);
+
   // 防抖搜索
   useEffect(() => {
     const timer = setTimeout(fetchGroups, 300);

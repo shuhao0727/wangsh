@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.deps import require_admin
+from app.core.deps import require_user
 from app.utils.cache import cache
 from app.api.endpoints.debug.constants import (
     CACHE_KEY_SESSION_PREFIX,
@@ -173,7 +173,7 @@ async def get_cfg(session_id: str, current_user: Dict[str, Any] = Depends(requir
 
 @router.post("/cfg/parse")
 async def parse_cfg(
-    payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_admin)
+    payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_user)
 ):
     code = payload.get("code")
     if not isinstance(code, str):

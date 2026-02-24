@@ -1115,27 +1115,31 @@ export function RightPanel(props: {
          </div>
       </Modal>
 
-      {/* Editor Modal */}
-      <Modal 
+      {/* Editor Popup (Resizable) */}
+      <FloatingPopup 
         title="Python 编辑器" 
         open={editorOpen} 
-        onCancel={() => setEditorOpen(false)} 
-        width="90vw" 
-        styles={{ body: { height: "80vh", display: "flex", flexDirection: "column", padding: 0 } }} 
-        footer={null}
-        centered
-        destroyOnClose
+        onClose={() => setEditorOpen(false)} 
+        initialSize={{ 
+            w: typeof window !== 'undefined' ? window.innerWidth * 0.36 : 600, 
+            h: typeof window !== 'undefined' ? window.innerHeight * 0.32 : 400 
+        }}
+        resizable 
+        draggable 
+        scrollable={false}
       >
-         <MonacoPythonEditor
-            value={code}
-            activeLine={runner.activeLine}
-            revealLine={revealLine}
-            breakpoints={runner.breakpoints}
-            onToggleBreakpoint={onToggleBreakpoint}
-            onChange={(next) => { setCodeMode("manual"); setCode(next); }}
-            syntaxErrors={backendSyntax.errors}
-         />
-      </Modal>
+         <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+             <MonacoPythonEditor
+                value={code}
+                activeLine={runner.activeLine}
+                revealLine={revealLine}
+                breakpoints={runner.breakpoints}
+                onToggleBreakpoint={onToggleBreakpoint}
+                onChange={(next) => { setCodeMode("manual"); setCode(next); }}
+                syntaxErrors={backendSyntax.errors}
+             />
+         </div>
+      </FloatingPopup>
 
       <FloatingPopup open={pipelineViewerOpen} title="流水线（放大查看）" initialSize={{ w: 980, h: 720 }} onClose={() => setPipelineViewerOpen(false)}>
         <div style={{ display: "grid", gap: 12 }}>
