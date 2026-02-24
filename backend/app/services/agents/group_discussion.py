@@ -193,6 +193,13 @@ async def list_today_groups(
             (GroupDiscussionSession.group_no.ilike(f"%{q}%"))
             | (GroupDiscussionSession.group_name.ilike(f"%{q}%"))
         )
+    
+    if settings.GROUP_DISCUSSION_LIST_RECENT_HOURS > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.GROUP_DISCUSSION_LIST_RECENT_HOURS)
+        stmt = stmt.where(
+            func.coalesce(GroupDiscussionSession.last_message_at, GroupDiscussionSession.created_at) >= cutoff
+        )
+
     rows = (
         await db.execute(
             stmt.order_by(

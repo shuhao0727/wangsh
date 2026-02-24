@@ -24,8 +24,8 @@ from app.utils.agent_secrets import encrypt_api_key, try_decrypt_api_key, last4
 from app.core.config import settings
 from cachetools import TTLCache
 
-# Agent Cache: key=agent_id, value=AIAgent, TTL=60s, maxsize=1000
-_AGENT_CACHE = TTLCache(maxsize=1000, ttl=60)
+# Agent Cache: key=agent_id, value=AIAgent, TTL=settings.AGENT_CACHE_TTL, maxsize=settings.AGENT_CACHE_MAXSIZE
+_AGENT_CACHE = TTLCache(maxsize=settings.AGENT_CACHE_MAXSIZE, ttl=settings.AGENT_CACHE_TTL)
 
 async def create_agent(
     db: AsyncSession,

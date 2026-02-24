@@ -79,8 +79,8 @@ class DockerProvider(SandboxProvider):
         
         # Resource Limits
         limits = meta.get("limits", {})
-        cpu_quota = int(limits.get("cpu_quota") or 50000) # Default 0.5 CPU (50000/100000)
-        mem_mb = int(limits.get("memory_mb") or 512)
+        cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
+        mem_mb = int(limits.get("memory_mb") or settings.PYTHONLAB_DEFAULT_MEMORY_MB)
 
         loop_cmd = (
             "i=0; "
@@ -99,15 +99,15 @@ class DockerProvider(SandboxProvider):
             "--security-opt", "no-new-privileges",
             "--cap-drop", "ALL",
             "--user", "1000:1000",
-            "--pids-limit", "128",
+            "--pids-limit", str(settings.PYTHONLAB_CONTAINER_PIDS_LIMIT),
             "--memory", f"{mem_mb}m",
             # "--memory-swap", f"{mem_mb}m", # Disabled: allow using swap for low-memory hosts
             "--cpu-period", "100000",
             "--cpu-quota", str(cpu_quota),
             # Log config to prevent disk usage from growing indefinitely
             "--log-driver", "json-file",
-            "--log-opt", "max-size=10m",
-            "--log-opt", "max-file=3",
+            "--log-opt", f"max-size={settings.PYTHONLAB_LOG_MAX_SIZE}",
+            "--log-opt", f"max-file={settings.PYTHONLAB_LOG_MAX_FILE}",
             # "--network", "none", # Cannot use none if we want to expose ports
             "-e", "PYTHONPATH=/workspace",
             "-e", "PYTHONUNBUFFERED=1",

@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: Optional[str] = Field(default=None)
     AGENT_API_KEY_ENCRYPTION_KEY: Optional[str] = Field(default=None)
     
+    # ==================== HTTPX 客户端配置 ====================
+    HTTPX_MAX_CONNECTIONS: int = Field(default=100)
+    HTTPX_MAX_KEEPALIVE_CONNECTIONS: int = Field(default=20)
+    HTTPX_TIMEOUT: float = Field(default=60.0)
+    HTTPX_CONNECT_TIMEOUT: float = Field(default=10.0)
+
+    # ==================== Agent 缓存配置 ====================
+    AGENT_CACHE_TTL: int = Field(default=60)
+    AGENT_CACHE_MAXSIZE: int = Field(default=1000)
+    
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
@@ -302,6 +312,13 @@ class Settings(BaseSettings):
     PYTHONLAB_SANDBOX_PROVIDER: str = Field(default="docker") # docker, k8s, nomad
     PYTHONLAB_DOCKER_RUNTIME: str = Field(default="runc") # runc, runsc (gVisor), kata-runtime
 
+    # Phase 3.1: Resource Limits
+    PYTHONLAB_DEFAULT_CPU_QUOTA: int = Field(default=50000)
+    PYTHONLAB_DEFAULT_MEMORY_MB: int = Field(default=512)
+    PYTHONLAB_CONTAINER_PIDS_LIMIT: int = Field(default=128)
+    PYTHONLAB_LOG_MAX_SIZE: str = Field(default="10m")
+    PYTHONLAB_LOG_MAX_FILE: str = Field(default="3")
+
     GROUP_DISCUSSION_REDIS_ENABLED: bool = Field(default=True)
     GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=False)
     GROUP_DISCUSSION_LAST_ID_TTL: int = Field(default=86400)
@@ -309,6 +326,7 @@ class Settings(BaseSettings):
     GROUP_DISCUSSION_RATE_LIMIT_SECONDS: int = Field(default=2)
     GROUP_DISCUSSION_JOIN_LOCK_SECONDS: int = Field(default=300)
     GROUP_DISCUSSION_COMPARE_CACHE_TTL: int = Field(default=600)
+    GROUP_DISCUSSION_LIST_RECENT_HOURS: int = Field(default=1)
 
     AUTO_CREATE_TABLES: bool = Field(default=False)
 
