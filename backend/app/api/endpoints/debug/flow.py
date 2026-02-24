@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.deps import require_user
+from app.core.deps import require_user, require_admin
 from app.utils.cache import cache
 from app.api.endpoints.debug.structured_ir import (
     IRAction,

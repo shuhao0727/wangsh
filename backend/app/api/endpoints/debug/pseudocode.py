@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.deps import require_admin
+from app.core.deps import require_admin, require_user
 from app.utils.cache import cache
 from app.api.endpoints.debug.constants import (
     API_VERSION_PSEUDO,
