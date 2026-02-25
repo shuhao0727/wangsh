@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${1:-1.0.1}"
+VERSION="${1:-1.0.4}"
 REGISTRY="shuhao07"
 PLATFORM="linux/amd64"
 

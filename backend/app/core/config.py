@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # ==================== 项目信息 ====================
     PROJECT_NAME: str = Field(default="WangSh")
-    VERSION: str = Field(default="1.0.1")
+    VERSION: str = Field(default="1.0.4")
     API_V1_STR: str = Field(default="/api/v1")
     
     # ==================== 部署环境 ====================

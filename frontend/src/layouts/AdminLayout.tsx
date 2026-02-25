@@ -370,7 +370,7 @@ const AdminLayout: React.FC = () => {
         {!collapsed && (
           <div className="admin-sidebar-footer">
             <Text type="secondary" style={{ fontSize: "12px" }}>
-              WangSh Admin v1.0.0
+              WangSh Admin v1.0.4
             </Text>
             <br />
             <Text type="secondary" style={{ fontSize: "10px" }}>

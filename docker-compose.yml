@@ -38,7 +38,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: backend_runtime
-    image: shuhao07/wangsh-backend:1.0.3
+    image: shuhao07/wangsh-backend:1.0.4
     restart: unless-stopped
     environment:
       DEBUG: "False"
@@ -69,7 +69,6 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
-      PYTHONLAB_DEFAULT_MEMORY_MB: "128"
       # PythonLab 调试会话相关（从 .env 注入）
       PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
       PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
@@ -77,7 +76,7 @@ services:
       PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
       PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
       PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
-      PYTHONLAB_DEFAULT_MEMORY_MB: 128
+      PYTHONLAB_DEFAULT_MEMORY_MB: ${PYTHONLAB_DEFAULT_MEMORY_MB:-128}
       PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
       PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
       PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
@@ -113,7 +112,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-typst-worker:1.0.3
+    image: shuhao07/wangsh-typst-worker:1.0.4
     restart: unless-stopped
     depends_on:
       postgres:
@@ -163,7 +162,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-pythonlab-worker:1.0.3
+    image: shuhao07/wangsh-pythonlab-worker:1.0.4
     restart: unless-stopped
     depends_on:
       postgres:
@@ -196,7 +195,6 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
-      PYTHONLAB_DEFAULT_MEMORY_MB: "128"
       # PythonLab 调试会话相关（从 .env 注入）
       PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
       PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
@@ -204,7 +202,7 @@ services:
       PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
       PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
       PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
-      PYTHONLAB_DEFAULT_MEMORY_MB: 128
+      PYTHONLAB_DEFAULT_MEMORY_MB: ${PYTHONLAB_DEFAULT_MEMORY_MB:-128}
       PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
       PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
       PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
@@ -225,7 +223,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-    image: shuhao07/wangsh-frontend:1.0.3
+    image: shuhao07/wangsh-frontend:1.0.4
     restart: unless-stopped
     environment:
       http_proxy: ""
@@ -241,7 +239,7 @@ services:
   gateway:
     platform: linux/amd64
     build: ./gateway
-    image: shuhao07/wangsh-gateway:1.0.3
+    image: shuhao07/wangsh-gateway:1.0.4
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-6608}:80"
