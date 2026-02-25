@@ -101,7 +101,7 @@ class DockerProvider(SandboxProvider):
             "--user", "1000:1000",
             "--pids-limit", str(settings.PYTHONLAB_CONTAINER_PIDS_LIMIT),
             "--memory", f"{mem_mb}m",
-            # "--memory-swap", f"{mem_mb}m", # Disabled: allow using swap for low-memory hosts
+            "--memory-swap", "-1", # Allow unlimited swap
             "--cpu-period", "100000",
             "--cpu-quota", str(cpu_quota),
             # Log config to prevent disk usage from growing indefinitely

@@ -69,6 +69,7 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+      PYTHONLAB_DEFAULT_MEMORY_MB: "128"
       # PythonLab 调试会话相关（从 .env 注入）
       PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
       PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
@@ -194,6 +195,7 @@ services:
       HTTPS_PROXY: ""
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+      PYTHONLAB_DEFAULT_MEMORY_MB: "128"
       # PythonLab 调试会话相关（从 .env 注入）
       PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
       PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
