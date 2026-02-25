@@ -136,6 +136,7 @@
   flex-direction: column;
   min-height: 0;
   margin-bottom: 0;
+  width: 100%; /* Ensure full width */
 }
 
 /* 2. Form Item Row (Antd wraps content in a row) */
@@ -144,6 +145,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
 }
 
 /* 3. Form Item Control (The column containing the input) */
@@ -152,6 +154,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
 }
 
 /* 4. Form Item Control Input (Wrapper around input) */
@@ -160,6 +163,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
 }
 
 /* 5. Form Item Control Input Content (Direct parent of Input) */
@@ -169,43 +173,52 @@
   flex-direction: column; /* Changed to column to handle showCount */
   min-height: 0;
   height: 100%;
+  width: 100%;
 }
 
 /* 
- * TextArea Specifics 
+ * TextArea Specifics - TARGETING GENERICALLY
+ * We target ANY .ant-input-affix-wrapper inside .article-editor-body
+ * to avoid issues with specific class names not being applied to the wrapper.
  */
 
 /* The Wrapper (ant-input-affix-wrapper) - usually a span */
-.article-editor-textarea.ant-input-affix-wrapper {
+.article-editor-body .ant-input-affix-wrapper {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   height: 100% !important;
+  width: 100% !important;
   padding: 0; /* Let textarea handle padding */
   border: 1px solid #d9d9d9; /* Re-apply border if lost */
   border-radius: 8px;
+  box-sizing: border-box;
 }
 
 /* The actual Textarea element */
-.article-editor-textarea textarea.ant-input {
+.article-editor-body textarea.ant-input {
   flex: 1;
   min-height: 0;
   height: 100% !important;
+  width: 100% !important;
   resize: none;
   border: none; /* Wrapper has border */
   padding: 12px;
   box-shadow: none !important; /* Remove focus shadow on textarea, wrapper handles it */
+  box-sizing: border-box;
 }
 
 /* If showCount is used, position the count nicely */
-.article-editor-textarea .ant-input-data-count {
+.article-editor-body .ant-input-data-count {
   text-align: right;
   padding: 4px 12px;
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
   background: #fff;
   border-top: 1px solid #f0f0f0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Responsive adjustments */
