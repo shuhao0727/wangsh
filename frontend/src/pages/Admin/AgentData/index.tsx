@@ -211,12 +211,14 @@ const AdminAgentData: React.FC = () => {
           nextParams.set("tab", next);
           setUrlSearchParams(nextParams, { replace: true });
         }}
+        // 确保 Tabs 占满剩余高度
+        style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
         items={[
           {
             key: "usage",
             label: "使用记录",
             children: (
-              <div>
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
                 <StatisticsCards data={statistics} />
                 <SearchBar
                   searchParams={searchParams}
@@ -225,39 +227,42 @@ const AdminAgentData: React.FC = () => {
                   onExport={handleExportSelected}
                   exportDisabled={selectedRowKeys.length === 0}
                 />
-                <AdminTablePanel
-                  loading={loading}
-                  isEmpty={data.length === 0}
-                  emptyDescription="暂无使用记录数据"
-                  emptyAction={
-                    <Button type="primary" onClick={handleReset}>
-                      重新加载
-                    </Button>
-                  }
-                  pagination={
-                    data.length > 0 ? (
-                      <Pagination
-                        current={currentPage}
-                        pageSize={pageSize}
-                        total={total}
-                        onChange={handlePageChange}
-                        showSizeChanger
-                        showQuickJumper
-                        showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
-                      />
-                    ) : null
-                  }
-                >
-                  <Table
-                    rowKey="id"
-                    columns={getAgentDataColumns(handleViewDetail)}
-                    dataSource={data}
-                    rowSelection={rowSelection}
-                    pagination={false}
-                    scroll={{ x: 1500 }}
-                    size="middle"
-                  />
-                </AdminTablePanel>
+                {/* 包裹 AdminTablePanel，确保其能够自适应填充剩余空间 */}
+                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <AdminTablePanel
+                    loading={loading}
+                    isEmpty={data.length === 0}
+                    emptyDescription="暂无使用记录数据"
+                    emptyAction={
+                      <Button type="primary" onClick={handleReset}>
+                        重新加载
+                      </Button>
+                    }
+                    pagination={
+                      data.length > 0 ? (
+                        <Pagination
+                          current={currentPage}
+                          pageSize={pageSize}
+                          total={total}
+                          onChange={handlePageChange}
+                          showSizeChanger
+                          showQuickJumper
+                          showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
+                        />
+                      ) : null
+                    }
+                  >
+                    <Table
+                      rowKey="id"
+                      columns={getAgentDataColumns(handleViewDetail)}
+                      dataSource={data}
+                      rowSelection={rowSelection}
+                      pagination={false}
+                      scroll={{ x: 1500 }}
+                      size="middle"
+                    />
+                  </AdminTablePanel>
+                </div>
               </div>
             ),
           },
