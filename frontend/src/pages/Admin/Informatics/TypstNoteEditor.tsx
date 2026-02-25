@@ -11,7 +11,7 @@ const { TextArea } = Input;
 
 type ViewMode = "split" | "edit" | "preview";
 
-const normalizePath = (p: string) => (p || "").replaceAll("\\", "/").replace(/^\/+/, "").trim();
+const normalizePath = (p: string) => (p || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
 
 const readAsUint8Array = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
 
@@ -25,13 +25,15 @@ const hashString = (s: string) => {
 
 const ensureDefaultStyleImport = (source: string) => {
   let s = source || "";
-  if (!s.includes('import "style/my_style.typ"')) {
+  const hasImport = /#import\s+['"]style\/my_style\.typ['"]/.test(s);
+  if (!hasImport) {
     s = `#import "style/my_style.typ":my_style\n${s}`;
   }
-  if (!s.includes('show: my_style')) {
+  
+  if (!/#show:\s*my_style/.test(s)) {
     // 找到 import 行，在它后面插入 show 规则
     const lines = s.split('\n');
-    const importIdx = lines.findIndex(l => l.includes('import "style/my_style.typ"'));
+    const importIdx = lines.findIndex(l => /#import\s+['"]style\/my_style\.typ['"]/.test(l));
     if (importIdx !== -1) {
       lines.splice(importIdx + 1, 0, '#show: my_style');
       s = lines.join('\n');
@@ -52,8 +54,6 @@ const TypstNoteEditor: React.FC<{
   const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [sideCollapsed, setSideCollapsed] = useState(false);
-  const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const panelHeightRef = useRef<number | null>(null);
 
   const [title, setTitle] = useState(note?.title || "");
   const [summary, setSummary] = useState(note?.summary || "");
@@ -99,8 +99,6 @@ const TypstNoteEditor: React.FC<{
     setCategoryPath(note?.category_path || "");
     setPublished(Boolean(note?.published));
     setStyleKey(note?.style_key || "my_style");
-    setPanelHeight(null);
-    panelHeightRef.current = null;
     setPreviewPdfData(null);
     const nf = (note?.files as any) && typeof note?.files === "object" ? (note?.files as any) : null;
     const nextFiles = (nf as Record<string, string>) || { "main.typ": note?.content_typst || "" };
@@ -157,7 +155,22 @@ const TypstNoteEditor: React.FC<{
     setStyleDraft(styleEditing ? { ...styleEditing } : null);
   }, [stylesManageOpen, styleEditing]);
 
-  const canSplit = useMemo(() => window.matchMedia && window.matchMedia("(min-width: 992px)").matches, []);
+  const [canSplit, setCanSplit] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const mql = window.matchMedia("(min-width: 992px)");
+      setCanSplit(mql.matches);
+      const handler = (e: any) => setCanSplit(e.matches);
+      if (mql.addEventListener) {
+        mql.addEventListener("change", handler);
+        return () => mql.removeEventListener("change", handler);
+      } else if (mql.addListener) {
+        mql.addListener(handler);
+        return () => mql.removeListener(handler);
+      }
+    }
+  }, []);
 
   const refreshAssetsCache = async (idOverride?: number) => {
     const id = idOverride ?? note?.id;
@@ -505,12 +518,6 @@ const TypstNoteEditor: React.FC<{
       ) : null}
       <PdfCanvasVirtualViewer
         data={previewPdfData}
-        onFirstPageWrapHeight={(h) => {
-          if (!panelHeightRef.current && h > 0) {
-            panelHeightRef.current = h;
-            setPanelHeight(h);
-          }
-        }}
       />
       {!renderLoading && !renderError && !previewPdfData ? <Text type="secondary">暂无预览</Text> : null}
     </div>
@@ -737,7 +744,7 @@ const TypstNoteEditor: React.FC<{
               lg={viewMode === "preview" ? 0 : viewMode === "split" && canSplit ? 10 : 24}
               style={{ display: viewMode === "preview" ? "none" : "block" }}
             >
-              <div className="typst-editor-panel" style={panelHeight ? { height: panelHeight } : undefined}>
+              <div className="typst-editor-panel">
                 {renderEditor()}
               </div>
             </Col>
@@ -746,7 +753,7 @@ const TypstNoteEditor: React.FC<{
               lg={viewMode === "edit" ? 0 : viewMode === "split" && canSplit ? 14 : 24}
               style={{ display: viewMode === "edit" ? "none" : "block" }}
             >
-              <div className="typst-editor-panel" style={panelHeight ? { height: panelHeight } : undefined}>
+              <div className="typst-editor-panel">
                 {renderPreviewCanvas()}
               </div>
             </Col>
