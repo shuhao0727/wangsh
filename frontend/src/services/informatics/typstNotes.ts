@@ -116,7 +116,7 @@ export const typstNotesApi = {
   },
 
   exportPdf: async (id: number) => {
-    const res = await api.get(`/informatics/typst-notes/${id}/export.pdf`, { responseType: "blob" });
+    const res = await api.get(`/informatics/typst-notes/${id}/export.pdf?t=${Date.now()}`, { responseType: "blob" });
     return res.data as unknown as Blob;
   },
 
