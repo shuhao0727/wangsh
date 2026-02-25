@@ -66,6 +66,7 @@ const TypstNoteEditor: React.FC<{
   const [styleOptions, setStyleOptions] = useState<string[]>(["my_style"]);
   const [autoPreview, setAutoPreview] = useState(true);
   const [assetsVersion, setAssetsVersion] = useState(0);
+  const [stylesVersion, setStylesVersion] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<TypstCategoryListItem[]>([]);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
   const [stylesManageOpen, setStylesManageOpen] = useState(false);
@@ -87,8 +88,10 @@ const TypstNoteEditor: React.FC<{
   const autoPreviewLastAtRef = useRef(0);
   const autoPreviewPendingKeyRef = useRef<string>("");
   const autoPreviewLastSuccessKeyRef = useRef<string>("");
+  const previewRefreshRequestRef = useRef<{ id?: number } | null>(null);
   const assetsCacheRef = useRef<Map<string, Uint8Array>>(new Map());
   const assetInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewRefreshSeq, setPreviewRefreshSeq] = useState(0);
 
   useEffect(() => {
     setTitle(note?.title || "");
@@ -156,14 +159,15 @@ const TypstNoteEditor: React.FC<{
 
   const canSplit = useMemo(() => window.matchMedia && window.matchMedia("(min-width: 992px)").matches, []);
 
-  const refreshAssetsCache = async () => {
-    if (!note?.id) return;
-    const list = await typstNotesApi.listAssets(note.id);
+  const refreshAssetsCache = async (idOverride?: number) => {
+    const id = idOverride ?? note?.id;
+    if (!id) return;
+    const list = await typstNotesApi.listAssets(id);
     setAssets(list || []);
     const cache = new Map<string, Uint8Array>();
     for (const a of list || []) {
       try {
-        const blob = await typstNotesApi.downloadAsset(note.id, a.id);
+        const blob = await typstNotesApi.downloadAsset(id, a.id);
         cache.set(normalizePath(a.path), await readAsUint8Array(blob));
       } catch {
         cache.set(normalizePath(a.path), new Uint8Array());
@@ -265,17 +269,34 @@ const TypstNoteEditor: React.FC<{
     }
   }, [categoryPath, content, note?.id, parseAxiosBlobError, published, styleKey, summary, title, toc]);
 
+  const queuePreviewRefresh = useCallback((id?: number) => {
+    previewRefreshRequestRef.current = { id };
+    setPreviewRefreshSeq((v) => v + 1);
+  }, []);
+
   const switchViewMode = async (next: ViewMode) => {
     setViewMode(next);
     if (next === "edit") return;
     if (!note?.id) {
       if (isCreateMode) {
-        await save();
+        const created = await save();
+        if (created?.id) queuePreviewRefresh(created.id);
       }
       return;
     }
-    await renderServerPreview(++previewTokenRef.current);
+    queuePreviewRefresh(note.id);
   };
+
+  useEffect(() => {
+    const req = previewRefreshRequestRef.current;
+    if (!req) return;
+    if (viewMode === "edit") return;
+    if (!note?.id) return;
+    if (req.id !== undefined && req.id !== note.id) return;
+    if (renderLoading) return;
+    previewRefreshRequestRef.current = null;
+    renderServerPreview(++previewTokenRef.current);
+  }, [note?.id, previewRefreshSeq, renderLoading, renderServerPreview, viewMode]);
 
   useEffect(() => {
     if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
@@ -290,6 +311,7 @@ const TypstNoteEditor: React.FC<{
       `c=${categoryPath || ""}`,
       `p=${published ? 1 : 0}`,
       `sk=${styleKey || ""}`,
+      `sv=${stylesVersion}`,
       `toc=${hashString(JSON.stringify(toc || []))}`,
       `a=${assetsVersion}`,
       `m=${hashString(ensureDefaultStyleImport(content || ""))}`,
@@ -337,17 +359,19 @@ const TypstNoteEditor: React.FC<{
     };
 
     previewTimerRef.current = window.setTimeout(run, 1200);
-  }, [assetsVersion, autoPreview, categoryPath, content, note?.id, previewPdfData, published, renderError, renderServerPreview, styleKey, summary, title, toc, viewMode]);
+  }, [assetsVersion, autoPreview, categoryPath, content, note?.id, previewPdfData, published, renderError, renderServerPreview, styleKey, stylesVersion, summary, title, toc, viewMode]);
 
   useEffect(() => {
     if (!note?.id) return;
-    renderServerPreview(++previewTokenRef.current);
-  }, [note?.id, renderServerPreview]);
+    if (viewMode === "edit") return;
+    queuePreviewRefresh(note.id);
+  }, [note?.id, queuePreviewRefresh, viewMode]);
 
-  const save = async () => {
+  const save = async (): Promise<TypstNote | null> => {
     const t = title.trim() || "未命名";
     setSubmitting(true);
     try {
+      const previewVisible = viewMode !== "edit";
       const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(content || "") };
       if (isCreateMode) {
         const created = await typstNotesApi.create({
@@ -363,10 +387,11 @@ const TypstNoteEditor: React.FC<{
         });
         message.success("创建成功");
         onCreated(created);
-        return;
+        if (previewVisible) queuePreviewRefresh(created.id);
+        return created;
       }
-      if (!note) return;
-      await typstNotesApi.update(note.id, {
+      if (!note) return null;
+      const updated = await typstNotesApi.update(note.id, {
         title: t,
         summary: summary || "",
         category_path: categoryPath || "",
@@ -378,8 +403,11 @@ const TypstNoteEditor: React.FC<{
         content_typst: nextFiles["main.typ"] || "",
       });
       message.success("保存成功");
+      if (previewVisible) queuePreviewRefresh(note.id);
+      return updated;
     } catch (e: any) {
       message.error(e?.response?.data?.detail || e?.message || "保存失败");
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -410,15 +438,15 @@ const TypstNoteEditor: React.FC<{
     if (!fileList || fileList.length === 0) return;
     setSubmitting(true);
     try {
-      await ensureSavedThen(async (id) => {
+      const id = await ensureSavedThen(async (id) => {
         const prefix = normalizePath(assetPrefix || "images");
         for (const f of Array.from(fileList)) {
           const p = prefix ? `${prefix}/${f.name}` : f.name;
           await typstNotesApi.uploadAsset(id, { path: p, file: f });
         }
-        return true;
+        return id;
       });
-      await refreshAssetsCache();
+      await refreshAssetsCache(id);
       message.success("资源上传成功");
     } catch (e: any) {
       message.error(e?.message || "上传失败");
@@ -622,7 +650,7 @@ const TypstNoteEditor: React.FC<{
               <Button icon={<UploadOutlined />} onClick={() => assetInputRef.current?.click()} disabled={submitting}>
                 上传资源
               </Button>
-              <Button onClick={refreshAssetsCache} disabled={submitting || !note?.id}>
+              <Button onClick={() => refreshAssetsCache()} disabled={submitting || !note?.id}>
                 刷新列表
               </Button>
               <input
@@ -746,7 +774,7 @@ const TypstNoteEditor: React.FC<{
             </Col>
             <Col>
               <Space>
-                <Button icon={<ReloadOutlined />} onClick={() => renderServerPreview(++previewTokenRef.current)} disabled={!note?.id}>
+                <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id)} disabled={!note?.id}>
                   刷新预览
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} loading={submitting} onClick={save}>
@@ -898,6 +926,7 @@ const TypstNoteEditor: React.FC<{
                 setStyleEditing(s);
                 setStyleDraft({ ...s });
                 await refreshStyles();
+                setStylesVersion((v) => v + 1);
                 message.success("已从资源重置");
               } catch (e: any) {
                 message.error(e?.response?.data?.detail || e?.message || "重置失败");
@@ -923,6 +952,7 @@ const TypstNoteEditor: React.FC<{
                 await refreshStyles();
                 const keys = await publicTypstNotesApi.listStyles();
                 setStyleOptions((keys && keys.length ? keys : ["my_style"]).filter(Boolean));
+                setStylesVersion((v) => v + 1);
                 message.success("已保存");
               } catch (e: any) {
                 message.error(e?.response?.data?.detail || e?.message || "保存失败");

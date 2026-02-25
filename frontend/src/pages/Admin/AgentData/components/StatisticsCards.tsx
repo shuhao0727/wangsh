@@ -14,7 +14,7 @@ import {
 
 import type { StatisticsData } from "@services/znt/types";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface StatisticsCardsProps {
   data: StatisticsData;
@@ -36,177 +36,117 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
+  const items = [
+    {
+      key: "total_usage",
+      label: "总使用量",
+      value: safeTotalUsage,
+      color: "#1890ff",
+      bg: "#e6f7ff",
+      icon: <BarChartOutlined style={{ fontSize: 14, color: "#1890ff" }} />,
+    },
+    {
+      key: "active_students",
+      label: "活跃学生",
+      value: safeActiveStudents,
+      color: "#52c41a",
+      bg: "#f6ffed",
+      icon: <UserOutlined style={{ fontSize: 14, color: "#52c41a" }} />,
+    },
+    {
+      key: "active_agents",
+      label: "活跃智能体",
+      value: safeActiveAgents,
+      color: "#722ed1",
+      bg: "#f9f0ff",
+      icon: <RobotOutlined style={{ fontSize: 14, color: "#722ed1" }} />,
+    },
+    {
+      key: "avg_response_time",
+      label: "平均响应时间",
+      value: formatResponseTime(safeAvgResponseTime),
+      color: "#fa8c16",
+      bg: "#fff7e6",
+      icon: <ClockCircleOutlined style={{ fontSize: 14, color: "#fa8c16" }} />,
+    },
+  ];
+
   return (
     <div className="statistics-cards" style={{ marginBottom: "24px" }}>
       <Row gutter={[24, 24]}>
-        {/* 总使用量 */}
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <Card
-            style={{
-              borderLeft: "4px solid #1890ff",
-              background: "#ffffff",
-              height: "80px",
-              display: "flex",
-              alignItems: "center",
-            }}
-            styles={{ body: { padding: "12px", width: "100%" } }}
-          >
-            <div
+        {items.map((item) => (
+          <Col key={item.key} xs={24} sm={12} md={8} lg={6}>
+            <Card
               style={{
+                borderLeft: `4px solid ${item.color}`,
+                background: "#ffffff",
+                height: 40,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
               }}
+              styles={{ body: { padding: 8, width: "100%" } }}
             >
-              <div>
-                <Title
-                  level={4}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  gap: 8,
+                }}
+              >
+                <div
                   style={{
-                    marginBottom: "4px",
-                    color: "#1890ff",
-                    fontSize: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    minWidth: 0,
+                    flex: 1,
                   }}
                 >
-                  {safeTotalUsage}
-                </Title>
-                <Text type="secondary" style={{ fontSize: "12px" }}>
-                  总使用量
-                </Text>
-              </div>
-              <BarChartOutlined
-                style={{ fontSize: "24px", color: "#1890ff", opacity: 0.3 }}
-              />
-            </div>
-          </Card>
-        </Col>
-
-        {/* 活跃学生 */}
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <Card
-            style={{
-              borderLeft: "4px solid #52c41a",
-              background: "#ffffff",
-              height: "80px",
-              display: "flex",
-              alignItems: "center",
-            }}
-            styles={{ body: { padding: "12px", width: "100%" } }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-              }}
-            >
-              <div>
-                <Title
-                  level={4}
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      background: item.bg,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {item.icon}
+                  </div>
+                  <Text
+                    type="secondary"
+                    style={{
+                      fontSize: 12,
+                      lineHeight: "16px",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </div>
+                <Text
                   style={{
-                    marginBottom: "4px",
-                    color: "#52c41a",
-                    fontSize: "20px",
+                    fontSize: 18,
+                    lineHeight: "22px",
+                    fontWeight: 600,
+                    color: item.color,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
                   }}
                 >
-                  {safeActiveStudents}
-                </Title>
-                <Text type="secondary" style={{ fontSize: "12px" }}>
-                  活跃学生
+                  {item.value}
                 </Text>
               </div>
-              <UserOutlined
-                style={{ fontSize: "24px", color: "#52c41a", opacity: 0.3 }}
-              />
-            </div>
-          </Card>
-        </Col>
-
-        {/* 活跃智能体 */}
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <Card
-            style={{
-              borderLeft: "4px solid #722ed1",
-              background: "#ffffff",
-              height: "80px",
-              display: "flex",
-              alignItems: "center",
-            }}
-            styles={{ body: { padding: "12px", width: "100%" } }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-              }}
-            >
-              <div>
-                <Title
-                  level={4}
-                  style={{
-                    marginBottom: "4px",
-                    color: "#722ed1",
-                    fontSize: "20px",
-                  }}
-                >
-                  {safeActiveAgents}
-                </Title>
-                <Text type="secondary" style={{ fontSize: "12px" }}>
-                  活跃智能体
-                </Text>
-              </div>
-              <RobotOutlined
-                style={{ fontSize: "24px", color: "#722ed1", opacity: 0.3 }}
-              />
-            </div>
-          </Card>
-        </Col>
-
-        {/* 平均响应时间 */}
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <Card
-            style={{
-              borderLeft: "4px solid #fa8c16",
-              background: "#ffffff",
-              height: "80px",
-              display: "flex",
-              alignItems: "center",
-            }}
-            styles={{ body: { padding: "12px", width: "100%" } }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-              }}
-            >
-              <div>
-                <Title
-                  level={4}
-                  style={{
-                    marginBottom: "4px",
-                    color: "#fa8c16",
-                    fontSize: "20px",
-                  }}
-                >
-                  {formatResponseTime(safeAvgResponseTime)}
-                </Title>
-                <Text type="secondary" style={{ fontSize: "12px" }}>
-                  平均响应时间
-                </Text>
-              </div>
-              <ClockCircleOutlined
-                style={{ fontSize: "24px", color: "#fa8c16", opacity: 0.3 }}
-              />
-            </div>
-          </Card>
-        </Col>
-
+            </Card>
+          </Col>
+        ))}
       </Row>
     </div>
   );

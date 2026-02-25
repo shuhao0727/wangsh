@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Typography,
   Space,
@@ -40,6 +40,7 @@ import type {
   ArticleFilterParams,
 } from "@services";
 import { AdminCard, AdminPage } from "@components/Admin";
+import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
 import "./AdminArticles.css";
 
@@ -215,6 +216,39 @@ const AdminArticles: React.FC = () => {
     }
   }, [searchParams]);
 
+  const refreshTimerRef = useRef<number | null>(null);
+  const lastRefreshAtRef = useRef(0);
+  const seenSignalIdsRef = useRef<Map<string, number>>(new Map());
+
+  const requestRefreshFromSignal = useCallback((signalId?: string) => {
+    const now = Date.now();
+    if (signalId) {
+      const seen = seenSignalIdsRef.current;
+      const prev = seen.get(signalId);
+      if (prev && now - prev < 60_000) return;
+      seen.set(signalId, now);
+      const toDelete: string[] = [];
+      seen.forEach((ts, id) => {
+        if (now - ts > 60_000) toDelete.push(id);
+      });
+      for (let i = 0; i < toDelete.length; i++) seen.delete(toDelete[i]);
+    }
+
+    const minInterval = 500;
+    const since = now - lastRefreshAtRef.current;
+    if (since >= minInterval) {
+      lastRefreshAtRef.current = now;
+      loadArticles();
+      return;
+    }
+    if (refreshTimerRef.current) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      lastRefreshAtRef.current = Date.now();
+      loadArticles();
+    }, minInterval - since);
+  }, [loadArticles]);
+
   // 加载分类列表
   const loadCategories = useCallback(async () => {
     try {
@@ -235,6 +269,41 @@ const AdminArticles: React.FC = () => {
     loadArticles();
     loadCategories();
   }, [loadArticles, loadCategories]);
+
+  useEffect(() => {
+    const unsub = subscribeArticleUpdated((_payload, meta) => {
+      requestRefreshFromSignal(meta?.id);
+    });
+
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const data: any = e.data;
+      if (!data || data.type !== "article_updated") return;
+      requestRefreshFromSignal(typeof data.id === "string" ? data.id : undefined);
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      unsub();
+      window.removeEventListener("message", onMessage);
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    };
+  }, [requestRefreshFromSignal]);
+
+  useEffect(() => {
+    const onFocus = () => requestRefreshFromSignal();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") requestRefreshFromSignal();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [requestRefreshFromSignal]);
 
   // 处理搜索
   const handleSearch = (value: string) => {

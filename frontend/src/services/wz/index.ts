@@ -5,10 +5,13 @@
 // 首先导入所有模块
 import articleApi, * as articlesModule from "./articles";
 import categoryApi, * as categoriesModule from "./categories";
+import { markdownStylesApi } from "./markdownStyles";
 
 // 重新导出文章相关接口和服务
 export * from "./articles";
 export { default as articleApi } from "./articles";
+export * from "./markdownStyles";
+export { markdownStylesApi } from "./markdownStyles";
 export type {
   Article,
   ArticleWithRelations,
@@ -44,6 +47,7 @@ export type {
 export const wzApi = {
   articles: articleApi,
   categories: categoryApi,
+  markdownStyles: markdownStylesApi,
 };
 
 export default wzApi;

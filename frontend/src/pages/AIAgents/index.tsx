@@ -304,16 +304,17 @@ const AIAgentsPage: React.FC = () => {
   };
 
   // 发送消息
-  const handleSendMessage = () => {
+  const handleSendMessage = (text?: string) => {
+    const content = (text ?? inputMessage).trim();
     logger.debug("🔍 handleSendMessage 被调用", {
-      inputMessage: inputMessage.trim(),
+      inputMessage: content,
       isAuthenticated: auth.isAuthenticated,
       isStudent: auth.isStudent(),
       isLoading: auth.isLoading,
       currentAgent: currentAgent ? currentAgent.name : "null",
     });
 
-    if (!inputMessage.trim()) {
+    if (!content) {
       message.warning("请输入消息内容");
       return;
     }
@@ -332,6 +333,12 @@ const AIAgentsPage: React.FC = () => {
       return;
     }
 
+    if (!auth.isAuthenticated) {
+      setDraftMessage(content);
+      setLoginModalVisible(true);
+      return;
+    }
+
     logger.debug("✅ 已登录，发送消息并开启SSE");
     const activeSessionId = currentSessionId || (
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -346,7 +353,7 @@ const AIAgentsPage: React.FC = () => {
     }
     const userMessage: Message = {
       id: `user-${Date.now()}`,
-      content: inputMessage,
+      content,
       sender: "user",
       timestamp: new Date().toISOString(),
       agentId: currentAgent.id,
@@ -366,7 +373,7 @@ const AIAgentsPage: React.FC = () => {
       streamAbortRef.current = controller;
       const body = {
         agent_id: parseInt(String(currentAgent.id), 10),
-        message: userMessage.content,
+        message: content,
         user: auth.getDisplayName() || "guest",
         inputs: {},
       };
@@ -747,28 +754,14 @@ const AIAgentsPage: React.FC = () => {
 
         // 登录成功后自动发送草稿消息
         if (draftMessage && currentAgent && auth.isAuthenticated) {
-          logger.debug("📝 登录成功后自动发送草稿消息", draftMessage);
-          setInputMessage(draftMessage);
-          setDraftMessage("");
-
-          // 直接发送消息
-          const userMessage: Message = {
-            id: `user-${Date.now()}`,
-            content: draftMessage,
-            sender: "user",
-            timestamp: new Date().toISOString(),
-            agentId: currentAgent.id,
-          };
-
-          const aiMessage: Message = {
-            id: `agent-${Date.now()}`,
-            content: `已收到你的消息："${draftMessage}"。我是${currentAgent.name}，正在思考如何回答...`,
-            sender: "agent",
-            timestamp: new Date().toISOString(),
-            agentId: currentAgent.id,
-          };
-
-          setMessages([...messages, userMessage, aiMessage]);
+          const draft = draftMessage.trim();
+          if (draft) {
+            logger.debug("📝 登录成功后自动发送草稿消息", draft);
+            setDraftMessage("");
+            handleSendMessage(draft);
+          } else {
+            setDraftMessage("");
+          }
         }
       } else {
         message.error(result.error || "登录失败");

@@ -2,8 +2,8 @@
 # 前端生产环境 Dockerfile
 # ============================================
 
-ARG NODE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
-ARG CADDY_IMAGE=public.ecr.aws/docker/library/caddy:latest
+ARG NODE_IMAGE=docker.io/library/node:20-alpine
+ARG CADDY_IMAGE=docker.io/library/caddy:2-alpine
 FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /app

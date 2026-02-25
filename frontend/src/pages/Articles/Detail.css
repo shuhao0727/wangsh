@@ -7,8 +7,8 @@
 .article-header {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  padding-top: 12px;
+  margin-bottom: 4px;
+  padding-top: 8px;
 }
 
 .article-detail-empty {

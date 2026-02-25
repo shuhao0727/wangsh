@@ -14,6 +14,7 @@ const AdminEditorLayout: React.FC = () => {
 
   const isArticleEditor = location.pathname.startsWith("/admin/articles/editor");
   const isTypstEditor = location.pathname.startsWith("/admin/informatics/editor");
+  const isFullscreenEditor = isTypstEditor || isArticleEditor;
 
   const backToList = () => {
     if (isTypstEditor) navigate("/admin/informatics");
@@ -54,8 +55,24 @@ const AdminEditorLayout: React.FC = () => {
           <Button onClick={() => window.close()}>关闭窗口</Button>
         </Space>
       </Header>
-      <Content style={{ padding: isTypstEditor || isArticleEditor ? 0 : 16 }}>
-        <div style={{ maxWidth: isTypstEditor || isArticleEditor ? "none" : 1600, margin: isTypstEditor || isArticleEditor ? 0 : "0 auto" }}>
+      <Content
+        style={{
+          padding: isFullscreenEditor ? 0 : 16,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: isFullscreenEditor ? "none" : 1600,
+            margin: isFullscreenEditor ? 0 : "0 auto",
+            flex: isFullscreenEditor ? 1 : undefined,
+            minHeight: isFullscreenEditor ? 0 : undefined,
+            display: isFullscreenEditor ? "flex" : undefined,
+            flexDirection: isFullscreenEditor ? "column" : undefined,
+          }}
+        >
           <Outlet />
         </div>
       </Content>

@@ -14,11 +14,14 @@ export type { AppConfig, FeatureFlags } from "./config";
 // 文章相关服务 (wz 模块)
 export { articleApi } from "./wz/articles";
 export { categoryApi } from "./wz/categories";
+export { markdownStylesApi } from "./wz/markdownStyles";
+export type { MarkdownStyleListItem, MarkdownStyleResponse } from "./wz/markdownStyles";
 export type {
   Article,
   ArticleWithRelations,
   ArticleListResponse,
   ArticleFilterParams,
+  MarkdownStyle,
   Category,
   CategoryResponse,
   CategoryWithUsage,

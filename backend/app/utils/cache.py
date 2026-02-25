@@ -346,17 +346,20 @@ class ArticleCacheKeys:
         page: int = 1,
         size: int = 20,
         published_only: bool = True,
+        include_relations: bool = False,
         category_id: Optional[int] = None,
         author_id: Optional[int] = None
     ) -> str:
         """管理文章列表缓存键（紧凑版）"""
-        # 使用固定顺序：page, size, published_only, category_id, author_id
+        # 使用固定顺序：page, size, published_only, include_relations, category_id, author_id
         published_num = 1 if published_only else 0
+        relation_num = 1 if include_relations else 0
         return compact_cache_key_generator(
             "articles:a:list",
             page,
             size,
             published_num,
+            relation_num,
             category_id or 0,
             author_id or 0
         )

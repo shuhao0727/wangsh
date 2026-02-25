@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Typography, Card, Row, Col, Switch, Button, message, Breadcrumb, Divider } from "antd";
+import { Typography, Row, Col, Button, message, Breadcrumb } from "antd";
 import { 
   ExperimentOutlined, 
   FormOutlined, 
@@ -7,86 +7,14 @@ import {
   CodeOutlined,
   SettingOutlined, 
   HomeOutlined,
-  ToolOutlined 
 } from "@ant-design/icons";
-import { AdminPage } from "@/components/Admin";
+import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 
 type ViewState = 'dashboard' | 'dianming-manager';
-
-interface AppCardProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  flagKey: string;
-  enabled: boolean;
-  onToggle: (checked: boolean) => void;
-  onManage?: () => void;
-  loading?: boolean;
-}
-
-const AppCard: React.FC<AppCardProps> = ({ 
-  title, description, icon, flagKey, enabled, onToggle, onManage, loading 
-}) => (
-  <Card
-    hoverable
-    style={{
-      borderRadius: 8,
-      border: '1px solid #f0f0f0',
-      height: '100%',
-      transition: 'all 0.3s ease',
-    }}
-    styles={{
-      body: { padding: 24 }
-    }}
-    className="it-app-card"
-  >
-    <div style={{ 
-      display: 'flex',
-      alignItems: 'flex-start',
-      marginBottom: 20
-    }}>
-      <div style={{ 
-        width: 48, height: 48, 
-        borderRadius: 8, 
-        background: 'linear-gradient(135deg, #e6f7ff 0%, #1890ff 100%)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', fontSize: 24,
-        marginRight: 16,
-        flexShrink: 0
-      }}>
-        {icon}
-      </div>
-      <div>
-        <Title level={5} style={{ marginBottom: 4, color: '#2c3e50', fontSize: 16 }}>{title}</Title>
-        <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.5, display: 'block' }}>
-          {description}
-        </Text>
-      </div>
-    </div>
-    
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Switch 
-          size="small"
-          checked={enabled} 
-          loading={loading}
-          onChange={onToggle} 
-        />
-        <Text type="secondary" style={{ fontSize: 12 }}>{enabled ? '已启用' : '已禁用'}</Text>
-      </div>
-      
-      {onManage && (
-        <Button type="link" size="small" icon={<SettingOutlined />} onClick={onManage} style={{ padding: 0 }}>
-          管理
-        </Button>
-      )}
-    </div>
-  </Card>
-);
 
 const AdminITTechnology: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
@@ -159,7 +87,7 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'dianming-manager') {
     return (
-      <AdminPage>
+      <AdminPage padding={16}>
         <Breadcrumb style={{ marginBottom: 16 }}>
           <Breadcrumb.Item>
             <Button type="link" onClick={() => setView('dashboard')} style={{ padding: 0 }}>
@@ -174,26 +102,33 @@ const AdminITTechnology: React.FC = () => {
   }
 
   return (
-    <AdminPage>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={4} style={{ margin: 0, color: "#2c3e50" }}>IT 应用管理</Title>
-        <Text type="secondary">配置前台应用的可见性与基础数据</Text>
+    <AdminPage padding={16}>
+      <div style={{ marginBottom: 12 }}>
+        <Title level={4} style={{ margin: 0, color: "#2c3e50" }}>
+          IT 应用管理
+        </Title>
       </div>
 
       <Row gutter={[24, 24]}>
         {appConfigs.map(app => (
           <Col xs={24} sm={12} md={8} lg={6} key={app.key}>
-            <AppCard
+            <AdminAppCard
               title={app.title}
               description={app.description}
               icon={app.icon}
-              flagKey={`${app.key}_enabled`}
               enabled={flags[`${app.key}_enabled`] || false}
               loading={loading[app.key]}
               onToggle={(checked) => handleToggle(app.key, checked)}
-              onManage={app.hasManager ? () => {
-                if (app.key === 'it_dianming') setView('dianming-manager');
-              } : undefined}
+              theme="blue"
+              actionLabel={app.hasManager ? "管理" : undefined}
+              actionIcon={app.hasManager ? <SettingOutlined /> : undefined}
+              onAction={
+                app.hasManager
+                  ? () => {
+                      if (app.key === "it_dianming") setView("dianming-manager");
+                    }
+                  : undefined
+              }
             />
           </Col>
         ))}

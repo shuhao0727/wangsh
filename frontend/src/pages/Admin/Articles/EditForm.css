@@ -1,155 +1,228 @@
 .article-edit-form {
-  padding: 0;
-}
-
-.article-edit-form .ant-card-head {
-  background: #ffffff;
-  border-bottom: 1px solid var(--ws-color-border);
-}
-
-.article-edit-form .ant-card-head-title {
-  font-weight: 600;
-  color: var(--ws-color-primary);
-}
-
-.article-edit-form .article-edit-basic-card {
-  margin-bottom: 16px;
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
-}
-
-.article-edit-form .article-edit-content-card {
-  margin-bottom: 20px;
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
-}
-
-.article-edit-content-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.article-edit-content-header-left {
-  font-weight: 600;
-  color: var(--ws-color-primary);
-}
-
-.article-edit-content-row {
-  min-height: 560px;
-}
-
-.article-edit-panel {
-  height: min(720px, calc(100vh - 360px));
-  min-height: 520px;
-}
-
-.article-edit-panel > .ant-card {
   height: 100%;
-}
-
-.article-editor-card,
-.article-preview-card {
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
-}
-
-.article-editor-toolbar,
-.article-preview-toolbar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface-2);
+  flex-direction: column;
+  overflow: hidden; /* Prevent scroll on the main container */
 }
 
-.article-editor-toolbar-label {
-  font-size: 12px;
+/* Ensure the Form takes full height */
+.article-edit-form > .ant-form {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Crucial for nested flex containers */
 }
 
-.article-editor-toolbar-btn {
-  border: 1px solid var(--ws-color-border) !important;
-  border-radius: 6px !important;
-  background: var(--ws-color-surface) !important;
+/* When in editor layout, remove bottom padding */
+.article-edit-form.is-editor-layout {
+  padding-bottom: 0;
 }
 
+/* Grid Layout for Editor Mode */
+.article-edit-editor-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: 1fr; /* Explicitly 1fr height */
+  gap: 16px;
+  height: 100%;
+  min-height: 0; /* Prevent overflow */
+  overflow: hidden; /* Ensure content scrolls inside cards */
+}
+
+/* Sidebar */
+.article-edit-editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto; /* Allow sidebar scrolling if needed */
+  padding-right: 4px; /* Space for scrollbar */
+}
+
+/* Main Content Area */
+.article-edit-editor-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Content Card Container */
+.article-edit-content-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Card Body - The Critical Middle Layer */
+.article-edit-content-card > .ant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important; /* Reset padding for full control */
+  overflow: hidden;
+}
+
+/* Content Row */
+.article-edit-content-row {
+  flex: 1;
+  display: flex;
+  flex-direction: row; /* Ensure row direction */
+  min-height: 0;
+  height: 100%; /* Force height */
+}
+
+/* Content Column */
+.article-edit-content-row > .ant-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Editor Panel */
+.article-edit-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Inner Editor Card */
+.article-editor-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  border: none !important; /* Optional: remove border inside panel */
+}
+
+.article-editor-card > .ant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* Editor Body (Toolbar below) */
 .article-editor-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 14px;
-  background: var(--ws-color-surface);
+  min-height: 0;
+  padding: 12px;
   overflow: hidden;
-}
-
-.article-editor-textarea {
-  width: 100%;
-}
-
-.article-editor-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface-2);
-}
-
-.article-preview-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 18px;
   background: var(--ws-color-surface);
 }
 
-.article-edit-actions-card {
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
-}
+/* 
+ * The Deep Flex Chain for Form.Item 
+ * We must target Antd internals to pass height down 
+ */
 
-.article-edit-editor-grid {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 16px;
-  align-items: start;
-}
-
-.article-edit-editor-side {
-  position: sticky;
-  top: 72px;
+/* 1. Form Item */
+.article-editor-body .ant-form-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  min-height: 0;
+  margin-bottom: 0;
 }
 
-.article-edit-form .article-edit-side-card {
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
-}
-
-.article-edit-editor-main {
-  min-width: 0;
+/* 2. Form Item Row (Antd wraps content in a row) */
+.article-editor-body .ant-form-item .ant-row {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  min-height: 0;
 }
 
+/* 3. Form Item Control (The column containing the input) */
+.article-editor-body .ant-form-item .ant-col.ant-form-item-control {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 4. Form Item Control Input (Wrapper around input) */
+.article-editor-body .ant-form-item .ant-form-item-control-input {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 5. Form Item Control Input Content (Direct parent of Input) */
+.article-editor-body .ant-form-item .ant-form-item-control-input-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column; /* Changed to column to handle showCount */
+  min-height: 0;
+  height: 100%;
+}
+
+/* 
+ * TextArea Specifics 
+ */
+
+/* The Wrapper (ant-input-affix-wrapper) - usually a span */
+.article-editor-textarea.ant-input-affix-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+  padding: 0; /* Let textarea handle padding */
+  border: 1px solid #d9d9d9; /* Re-apply border if lost */
+  border-radius: 8px;
+}
+
+/* The actual Textarea element */
+.article-editor-textarea textarea.ant-input {
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+  resize: none;
+  border: none; /* Wrapper has border */
+  padding: 12px;
+  box-shadow: none !important; /* Remove focus shadow on textarea, wrapper handles it */
+}
+
+/* If showCount is used, position the count nicely */
+.article-editor-textarea .ant-input-data-count {
+  text-align: right;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Responsive adjustments */
 @media (max-width: 1200px) {
   .article-edit-editor-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr; /* Sidebar auto height, Main 1fr */
+    overflow-y: auto; /* Allow full page scroll on smaller screens */
   }
 
   .article-edit-editor-side {
-    position: static;
-  }
-}
-
-@media (max-width: 768px) {
-  .article-edit-panel {
     height: auto;
-    min-height: 420px;
+    overflow: visible;
+  }
+  
+  .article-edit-editor-main {
+    height: auto;
+    min-height: 500px; /* Minimum height for editor */
   }
 }

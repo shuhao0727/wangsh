@@ -19,8 +19,10 @@ from app.schemas.articles import (
 from app.services.articles.article import ArticleService
 from app.core.config import settings
 from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
+from .markdown_styles import router as markdown_styles_router
 
 router = APIRouter()
+router.include_router(markdown_styles_router)
 
 
 @router.get("", response_model=ArticleList)
@@ -45,6 +47,7 @@ async def list_articles(
         page=page,
         size=size,
         published_only=published_only,
+        include_relations=include_relations,
         category_id=category_id,
         author_id=author_id
     )
@@ -75,6 +78,8 @@ async def list_articles(
             "slug": article.slug,
             "content": article.content or "",
             "summary": article.summary or "",
+            "custom_css": getattr(article, "custom_css", None),
+            "style_key": getattr(article, "style_key", None),
             "published": article.published,
             "author_id": article.author_id,  # Article模型有author_id字段
             "category_id": article.category_id,
@@ -112,6 +117,18 @@ async def list_articles(
                 }
             else:
                 article_dict["category"] = None
+
+            if getattr(article, "style", None):
+                article_dict["style"] = {
+                    "key": article.style.key,
+                    "title": article.style.title or "",
+                    "sort_order": article.style.sort_order or 0,
+                    "content": article.style.content or "",
+                    "created_at": article.style.created_at.isoformat(),
+                    "updated_at": article.style.updated_at.isoformat(),
+                }
+            else:
+                article_dict["style"] = None
             
             # 标签功能已移除，不再返回标签信息
             article_dict["tags"] = []
@@ -119,6 +136,7 @@ async def list_articles(
             # 如果不包含关联信息，设置为None
             article_dict["author"] = None
             article_dict["category"] = None
+            article_dict["style"] = None
             article_dict["tags"] = []
         
         articles_list.append(article_dict)
@@ -252,6 +270,8 @@ async def get_article(
         "slug": article.slug,
         "content": article.content or "",  # 处理可能的空值
         "summary": article.summary or "",  # 处理可能的空值
+        "custom_css": getattr(article, "custom_css", None),
+        "style_key": getattr(article, "style_key", None),
         "published": article.published,
         "author_id": article.author_id,
         "category_id": article.category_id,
@@ -278,6 +298,19 @@ async def get_article(
             }
         else:
             response_dict["category"] = None
+        if getattr(article, "style", None):
+            response_dict["style"] = {
+                "key": article.style.key,
+                "title": article.style.title or "",
+                "sort_order": article.style.sort_order or 0,
+                "content": article.style.content or "",
+                "created_at": article.style.created_at.isoformat(),
+                "updated_at": article.style.updated_at.isoformat(),
+            }
+        else:
+            response_dict["style"] = None
+    else:
+        response_dict["style"] = None
     
     # 缓存结果 - 缓存时间根据用户类型不同
     expire_seconds = settings.ARTICLE_CACHE_ADMIN_DETAIL_TTL if is_superuser else settings.ARTICLE_CACHE_USER_DETAIL_TTL
@@ -324,6 +357,8 @@ async def get_article_by_slug(
         "slug": article.slug,
         "content": article.content or "",  # 处理可能的空值
         "summary": article.summary or "",  # 处理可能的空值
+        "custom_css": getattr(article, "custom_css", None),
+        "style_key": getattr(article, "style_key", None),
         "published": article.published,
         "author_id": article.author_id,
         "category_id": article.category_id,
@@ -350,6 +385,19 @@ async def get_article_by_slug(
             }
         else:
             response_dict["category"] = None
+        if getattr(article, "style", None):
+            response_dict["style"] = {
+                "key": article.style.key,
+                "title": article.style.title or "",
+                "sort_order": article.style.sort_order or 0,
+                "content": article.style.content or "",
+                "created_at": article.style.created_at.isoformat(),
+                "updated_at": article.style.updated_at.isoformat(),
+            }
+        else:
+            response_dict["style"] = None
+    else:
+        response_dict["style"] = None
     
     return response_dict
 
@@ -367,6 +415,9 @@ async def update_article(
     权限：超级管理员
     """
     try:
+        old_article = await ArticleService.get_article_by_id(db=db, article_id=article_id)
+        old_slug = cast(Optional[str], getattr(old_article, "slug", None)) if old_article else None
+
         article = await ArticleService.update_article(
             db=db,
             article_id=article_id,
@@ -378,7 +429,14 @@ async def update_article(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"文章ID {article_id} 不存在"
             )
-        
+
+        try:
+            article_id_val = cast(int, article.id)
+            new_slug = cast(Optional[str], getattr(article, "slug", None))
+            await clear_article_cache(article_id=article_id_val, slug=old_slug or new_slug)
+        except Exception:
+            pass
+
         return article
         
     except ValueError as e:
@@ -545,6 +603,8 @@ async def list_public_articles(
             "slug": article.slug,
             "content": article.content or "",
             "summary": article.summary or "",
+            "custom_css": getattr(article, "custom_css", None),
+            "style_key": getattr(article, "style_key", None),
             "published": article.published,
             "author_id": article.author_id,  # Article模型有author_id字段
             "created_at": article.created_at.isoformat(),
@@ -581,6 +641,18 @@ async def list_public_articles(
         else:
             article_dict["category_id"] = None
             article_dict["category"] = None
+
+        if getattr(article, "style", None):
+            article_dict["style"] = {
+                "key": article.style.key,
+                "title": article.style.title or "",
+                "sort_order": article.style.sort_order or 0,
+                "content": article.style.content or "",
+                "created_at": article.style.created_at.isoformat(),
+                "updated_at": article.style.updated_at.isoformat(),
+            }
+        else:
+            article_dict["style"] = None
         
         # 标签功能已移除，不再返回标签信息
         article_dict["tags"] = []
@@ -646,6 +718,8 @@ async def get_public_article_by_slug(
         "slug": article.slug,
         "content": article.content or "",  # 处理可能的空值
         "summary": article.summary or "",  # 处理可能的空值
+        "custom_css": getattr(article, "custom_css", None),
+        "style_key": getattr(article, "style_key", None),
         "published": article.published,
         "author_id": article.author_id,
         "category_id": article.category_id,
@@ -663,6 +737,14 @@ async def get_public_article_by_slug(
             "slug": article.category.slug if hasattr(article.category, 'slug') else f"category-{article.category.id}",
             "description": article.category.description if hasattr(article.category, 'description') else None
         } if article.category else None,
+        "style": {
+            "key": article.style.key,
+            "title": article.style.title or "",
+            "sort_order": article.style.sort_order or 0,
+            "content": article.style.content or "",
+            "created_at": article.style.created_at.isoformat(),
+            "updated_at": article.style.updated_at.isoformat(),
+        } if getattr(article, "style", None) else None,
         "tags": []
     }
     

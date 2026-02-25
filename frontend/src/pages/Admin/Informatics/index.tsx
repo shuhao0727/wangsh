@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { AdminCard, AdminPage } from "@components/Admin";
@@ -7,12 +7,14 @@ import { typstCategoriesApi, typstNotesApi } from "@services";
 import type { TypstCategoryListItem, TypstNoteListItem } from "@services";
 
 const { Text } = Typography;
+const { Search } = Input;
 
 const AdminInformatics: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<TypstNoteListItem[]>([]);
   const [categories, setCategories] = useState<TypstCategoryListItem[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [titleKeyword, setTitleKeyword] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,14 +49,16 @@ const AdminInformatics: React.FC = () => {
   }, [categories]);
 
   const displayedItems = useMemo(() => {
+    const kw = titleKeyword.trim().toLowerCase();
     const filtered = categoryFilter ? (items || []).filter((x) => (x.category_path || "") === categoryFilter) : items || [];
-    return [...filtered].sort((a, b) => {
+    const searched = kw ? filtered.filter((x) => String(x.title || "").toLowerCase().includes(kw)) : filtered;
+    return [...searched].sort((a, b) => {
       const ao = categorySortMap.get((a.category_path || "").trim()) ?? 999999;
       const bo = categorySortMap.get((b.category_path || "").trim()) ?? 999999;
       if (ao !== bo) return ao - bo;
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
     });
-  }, [items, categoryFilter, categorySortMap]);
+  }, [items, categoryFilter, categorySortMap, titleKeyword]);
 
   const columns: ColumnsType<TypstNoteListItem> = [
     {
@@ -122,7 +126,7 @@ const AdminInformatics: React.FC = () => {
 
   return (
     <AdminPage>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
         <Space>
           <Select
             value={categoryFilter || undefined}
@@ -131,6 +135,13 @@ const AdminInformatics: React.FC = () => {
             style={{ width: 280 }}
             options={categories.map((c) => ({ value: c.path, label: c.path }))}
             onChange={(v) => setCategoryFilter(v || "")}
+          />
+          <Search
+            value={titleKeyword}
+            allowClear
+            placeholder="搜索标题..."
+            style={{ width: 260 }}
+            onChange={(e) => setTitleKeyword(e.target.value)}
           />
         </Space>
         <Space>
@@ -143,9 +154,7 @@ const AdminInformatics: React.FC = () => {
         </Space>
       </div>
 
-      <AdminCard
-        title="Typst 笔记"
-      >
+      <AdminCard styles={{ body: { padding: 0 } }}>
         <Table
           rowKey="id"
           loading={loading}

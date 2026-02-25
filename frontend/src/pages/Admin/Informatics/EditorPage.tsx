@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Spin, message } from "antd";
 import TypstNoteEditor from "./TypstNoteEditor";
@@ -12,6 +12,11 @@ const AdminTypstEditorPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<TypstNote | null>(null);
+  const noteRef = useRef<TypstNote | null>(null);
+
+  useEffect(() => {
+    noteRef.current = note;
+  }, [note]);
 
   useEffect(() => {
     const load = async () => {
@@ -21,9 +26,11 @@ const AdminTypstEditorPage: React.FC = () => {
         return;
       }
       if (!id) return;
-      setLoading(true);
+      const numericId = Number(id);
+      const current = noteRef.current;
+      if (!current || current.id !== numericId) setLoading(true);
       try {
-        const n = await typstNotesApi.get(Number(id));
+        const n = await typstNotesApi.get(numericId);
         setNote(n);
       } catch (e: any) {
         message.error(e?.response?.data?.detail || e?.message || "加载笔记失败");
@@ -48,6 +55,8 @@ const AdminTypstEditorPage: React.FC = () => {
       note={note}
       isCreateMode={isCreateMode}
       onCreated={(created) => {
+        setNote(created);
+        setLoading(false);
         navigate(`/admin/informatics/editor/${created.id}`, { replace: true });
       }}
       onBack={() => navigate("/admin/informatics")}
@@ -56,4 +65,3 @@ const AdminTypstEditorPage: React.FC = () => {
 };
 
 export default AdminTypstEditorPage;
-

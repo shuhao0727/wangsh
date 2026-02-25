@@ -5,6 +5,15 @@
 
 import { api } from "../api";
 
+export interface MarkdownStyle {
+  key: string;
+  title: string;
+  sort_order: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // 文章基础接口
 export interface Article {
   id: number;
@@ -12,6 +21,9 @@ export interface Article {
   slug: string;
   content: string;
   summary: string;
+  custom_css?: string | null;
+  style_key?: string | null;
+  style?: MarkdownStyle | null;
   published: boolean;
   author_id: number;
   category_id: number | null;
@@ -58,6 +70,8 @@ export interface CreateArticleRequest {
   published?: boolean;
   author_id: number;
   category_id?: number | null;
+  custom_css?: string | null;
+  style_key?: string | null;
 }
 
 // 更新文章请求
@@ -69,6 +83,8 @@ export interface UpdateArticleRequest {
   cover_image?: string | null;
   published?: boolean;
   category_id?: number | null;
+  custom_css?: string | null;
+  style_key?: string | null;
 }
 
 // 文章筛选参数

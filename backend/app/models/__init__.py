@@ -10,7 +10,7 @@ from app.db.database import Base
 from .core import User, RefreshToken, FeatureFlag
 
 # 文章系统模型 (wz_ 前缀)
-from .articles import Article, Category
+from .articles import Article, Category, MarkdownStyle
 
 # 智能体模型 (znt_ 前缀)
 from .agents import AIAgent, ZntConversation, GroupDiscussionSession, GroupDiscussionMessage, GroupDiscussionAnalysis
@@ -31,6 +31,7 @@ __all__ = [
     "FeatureFlag",
     "Article",
     "Category",
+    "MarkdownStyle",
     "AIAgent",
     "ZntConversation",
     "GroupDiscussionSession",

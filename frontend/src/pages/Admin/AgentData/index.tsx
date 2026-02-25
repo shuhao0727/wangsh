@@ -19,7 +19,7 @@ import StatisticsCards from "./components/StatisticsCards";
 import SearchBar from "./components/SearchBar";
 import DetailModal from "./components/DetailModal";
 import { getAgentDataColumns } from "./components/columns";
-import AnalysisPanel from "./components/AnalysisPanel";
+import { HotQuestionsPanel, StudentQuestionChainsPanel } from "./components/AnalysisPanel";
 
 // 导入类型和API
 import type {
@@ -30,10 +30,18 @@ import type {
 import { agentDataApi } from "@services/agents";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
 
+type TabKey = "usage" | "hot" | "chains";
+
+const normalizeTab = (tab: string | null): TabKey => {
+  if (tab === "analysis") return "hot";
+  if (tab === "usage" || tab === "hot" || tab === "chains") return tab;
+  return "usage";
+};
+
 const AdminAgentData: React.FC = () => {
-  const [urlSearchParams] = useSearchParams();
-  const [activeTabKey, setActiveTabKey] = useState<string>(
-    urlSearchParams.get("tab") === "analysis" ? "analysis" : "usage",
+  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
+  const [activeTabKey, setActiveTabKey] = useState<TabKey>(
+    normalizeTab(urlSearchParams.get("tab")),
   );
   // 状态管理
   const [loading, setLoading] = useState(false);
@@ -109,9 +117,8 @@ const AdminAgentData: React.FC = () => {
 
   useEffect(() => {
     const tab = urlSearchParams.get("tab");
-    if (tab && tab !== activeTabKey) {
-      setActiveTabKey(tab === "analysis" ? "analysis" : "usage");
-    }
+    const next = normalizeTab(tab);
+    if (next !== activeTabKey) setActiveTabKey(next);
   }, [urlSearchParams, activeTabKey]);
 
   // 处理搜索
@@ -194,10 +201,16 @@ const AdminAgentData: React.FC = () => {
   };
 
   return (
-    <AdminPage>
+    <AdminPage padding={16}>
       <Tabs
         activeKey={activeTabKey}
-        onChange={(key) => setActiveTabKey(key === "analysis" ? "analysis" : "usage")}
+        onChange={(key) => {
+          const next = normalizeTab(key);
+          setActiveTabKey(next);
+          const nextParams = new URLSearchParams(urlSearchParams);
+          nextParams.set("tab", next);
+          setUrlSearchParams(nextParams, { replace: true });
+        }}
         items={[
           {
             key: "usage",
@@ -249,9 +262,14 @@ const AdminAgentData: React.FC = () => {
             ),
           },
           {
-            key: "analysis",
-            label: "问题分析",
-            children: <AnalysisPanel />,
+            key: "hot",
+            label: "热点问题",
+            children: <HotQuestionsPanel />,
+          },
+          {
+            key: "chains",
+            label: "学生提问链条",
+            children: <StudentQuestionChainsPanel />,
           },
         ]}
       />

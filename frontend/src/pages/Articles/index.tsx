@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Typography, Card, Tag, Button, Empty, Spin, Pagination, Menu, Input } from "antd";
 import {
   CalendarOutlined,
@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
+import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import type {
   ArticleWithRelations,
   CategoryWithUsage,
@@ -116,6 +117,27 @@ const ArticlesPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(12);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState<string>("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refreshTimerRef = useRef<number | null>(null);
+  const lastRefreshAtRef = useRef(0);
+
+  const requestRefresh = useCallback(() => {
+    const now = Date.now();
+    const minInterval = 500;
+    const since = now - lastRefreshAtRef.current;
+    if (since >= minInterval) {
+      lastRefreshAtRef.current = now;
+      setRefreshKey((k) => k + 1);
+      return;
+    }
+    if (refreshTimerRef.current) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      lastRefreshAtRef.current = Date.now();
+      setRefreshKey((k) => k + 1);
+    }, minInterval - since);
+  }, []);
 
   // 从URL参数初始化状态
   useEffect(() => {
@@ -288,7 +310,28 @@ const ArticlesPage: React.FC = () => {
         abortController.abort();
       }
     };
-  }, [currentPage, pageSize, selectedCategory]);
+  }, [currentPage, pageSize, selectedCategory, refreshKey]);
+
+  useEffect(() => {
+    const unsub = subscribeArticleUpdated(() => {
+      requestRefresh();
+    });
+
+    const onFocus = () => requestRefresh();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") requestRefresh();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      unsub();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    };
+  }, [requestRefresh]);
 
   // 更新URL参数
   const updateUrlParams = (updates: {

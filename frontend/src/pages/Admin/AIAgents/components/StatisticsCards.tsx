@@ -11,7 +11,7 @@ import {
 } from "@ant-design/icons";
 import { AgentStatisticsData } from "@services/znt/types";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface StatisticsCardsProps {
   data: AgentStatisticsData;
@@ -26,236 +26,119 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
   const safeDifyCount = difyCount ?? 0;
   const safeActiveCount = activeCount ?? data.active_agents ?? 0;
 
+  const items = [
+    {
+      key: "total",
+      label: "智能体总数",
+      value: safeTotal,
+      color: "#1890ff",
+      bg: "#e6f7ff",
+      icon: <RobotOutlined style={{ fontSize: 16, color: "#1890ff" }} />,
+    },
+    {
+      key: "general",
+      label: "通用智能体",
+      value: safeGeneralCount,
+      color: "#52c41a",
+      bg: "#f6ffed",
+      icon: <ThunderboltOutlined style={{ fontSize: 16, color: "#52c41a" }} />,
+    },
+    {
+      key: "dify",
+      label: "Dify智能体",
+      value: safeDifyCount,
+      color: "#722ed1",
+      bg: "#f9f0ff",
+      icon: <CloudOutlined style={{ fontSize: 16, color: "#722ed1" }} />,
+    },
+    {
+      key: "active",
+      label: "启用中",
+      value: safeActiveCount,
+      color: "#fa8c16",
+      bg: "#fff7e6",
+      icon: <ApiOutlined style={{ fontSize: 16, color: "#fa8c16" }} />,
+    },
+  ];
+
   return (
-    <Row gutter={[24, 24]} style={{ marginBottom: "24px" }}>
-      <Col xs={24} sm={12} md={8} lg={6}>
-        <Card
-          styles={{
-            body: { padding: "12px", width: "100%" },
-          }}
-          style={{
-            borderLeft: "none",
-            borderTop: "4px solid #1890ff",
-            background: "#ffffff",
-            height: "100px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div
+    <Row gutter={[24, 16]} style={{ marginBottom: 16 }}>
+      {items.map((item) => (
+        <Col key={item.key} xs={24} sm={12} md={8} lg={6}>
+          <Card
+            styles={{
+              body: { padding: 8, width: "100%" },
+            }}
             style={{
+              borderLeft: "none",
+              borderTop: `4px solid ${item.color}`,
+              background: "#ffffff",
+              height: 40,
               display: "flex",
               alignItems: "center",
-              justifyContent: "flex-start", // Left align content
-              gap: "12px", // Reduced gap
-              width: "100%",
             }}
           >
-             <div style={{ 
-              width: 40, // Smaller icon container
-              height: 40, 
-              borderRadius: "50%", 
-              background: "#e6f7ff", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0
-            }}>
-              <RobotOutlined
-                style={{ fontSize: "20px", color: "#1890ff" }} // Smaller icon
-              />
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                智能体总数
-              </Text>
-              <Title
-                level={2}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                gap: 8,
+              }}
+            >
+              <div
                 style={{
-                  margin: "0",
-                  color: "#2c3e50",
-                  fontWeight: 600,
-                  fontSize: "24px", // Slightly smaller number
-                  lineHeight: 1
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  minWidth: 0,
+                  flex: 1,
                 }}
               >
-                {safeTotal}
-              </Title>
-            </div>
-          </div>
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} md={8} lg={6}>
-        <Card
-          styles={{
-            body: { padding: "16px", width: "100%" },
-          }}
-          style={{
-            borderLeft: "none",
-            borderTop: "4px solid #52c41a",
-            background: "#ffffff",
-            height: "100px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: "50%", 
-              background: "#f6ffed", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0
-            }}>
-              <ThunderboltOutlined
-                style={{ fontSize: "20px", color: "#52c41a" }}
-              />
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                通用智能体
-              </Text>
-              <Title
-                level={2}
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    background: item.bg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.icon}
+                </div>
+                <Text
+                  type="secondary"
+                  style={{
+                    fontSize: 12,
+                    lineHeight: "16px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </div>
+              <Text
                 style={{
-                  margin: "0",
-                  color: "#2c3e50",
+                  fontSize: 18,
+                  lineHeight: "22px",
                   fontWeight: 600,
-                  fontSize: "24px",
-                  lineHeight: 1
+                  color: "#2c3e50",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
                 }}
               >
-                {safeGeneralCount}
-              </Title>
-            </div>
-          </div>
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} md={8} lg={6}>
-        <Card
-          styles={{
-            body: { padding: "16px", width: "100%" },
-          }}
-          style={{
-            borderLeft: "none",
-            borderTop: "4px solid #722ed1",
-            background: "#ffffff",
-            height: "100px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: "50%", 
-              background: "#f9f0ff", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0
-            }}>
-              <CloudOutlined
-                style={{ fontSize: "20px", color: "#722ed1" }}
-              />
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                Dify智能体
+                {item.value}
               </Text>
-              <Title
-                level={2}
-                style={{
-                  margin: "0",
-                  color: "#2c3e50",
-                  fontWeight: 600,
-                  fontSize: "24px",
-                  lineHeight: 1
-                }}
-              >
-                {safeDifyCount}
-              </Title>
             </div>
-          </div>
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} md={8} lg={6}>
-        <Card
-          styles={{
-            body: { padding: "16px", width: "100%" },
-          }}
-          style={{
-            borderLeft: "none",
-            borderTop: "4px solid #fa8c16",
-            background: "#ffffff",
-            height: "100px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <div style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: "50%", 
-              background: "#fff7e6", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0
-            }}>
-              <ApiOutlined
-                style={{ fontSize: "20px", color: "#fa8c16" }}
-              />
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                启用中
-              </Text>
-              <Title
-                level={2}
-                style={{
-                  margin: "0",
-                  color: "#2c3e50",
-                  fontWeight: 600,
-                  fontSize: "24px",
-                  lineHeight: 1
-                }}
-              >
-                {safeActiveCount}
-              </Title>
-            </div>
-          </div>
-        </Card>
-      </Col>
+          </Card>
+        </Col>
+      ))}
     </Row>
   );
 };

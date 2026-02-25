@@ -5,8 +5,25 @@ type Props = React.ComponentProps<typeof Card>;
 
 const AdminCard: React.FC<Props> = ({
   style,
+  styles,
   ...rest
 }) => {
+  const mergedStyles = {
+    ...(styles as any),
+    header: {
+      padding: "12px 24px",
+      borderBottom: "none",
+      background: "transparent",
+      fontSize: 16,
+      fontWeight: 600,
+      ...(styles as any)?.header,
+    },
+    body: {
+      padding: "24px",
+      ...(styles as any)?.body,
+    },
+  };
+
   return (
     <Card
       bordered={false}
@@ -14,22 +31,11 @@ const AdminCard: React.FC<Props> = ({
       style={{
         background: "transparent",
         boxShadow: "none",
-        borderBottom: "none", // Remove subtle separator
+        borderBottom: "none",
         borderRadius: 0,
         ...style,
       }}
-      styles={{
-        header: {
-          padding: "12px 24px",
-          borderBottom: "none", // Remove header separator
-          background: "transparent",
-          fontSize: 16,
-          fontWeight: 600,
-        },
-        body: {
-          padding: "24px",
-        }
-      }}
+      styles={mergedStyles}
     />
   );
 };

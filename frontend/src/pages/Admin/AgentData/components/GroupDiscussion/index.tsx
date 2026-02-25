@@ -405,14 +405,10 @@ const GroupDiscussionAdminTab: React.FC = () => {
       </AdminCard>
 
       <AdminTablePanel
-        title="会话列表"
         loading={loading}
         isEmpty={!loading && sessions.length === 0}
         emptyDescription="暂无数据"
       >
-        <div style={{ marginBottom: 8 }}>
-          <Text type="secondary">点击“查看消息/分析”进入会话详情。</Text>
-        </div>
         <Table
           rowKey="id"
           loading={loading}

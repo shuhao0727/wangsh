@@ -200,6 +200,7 @@ const InformaticsReaderPage: React.FC = () => {
   return (
     <div className="informatics-page">
       <SplitPanePage
+        leftWidth={320}
         left={
           <PanelCard bodyPadding={12}>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>

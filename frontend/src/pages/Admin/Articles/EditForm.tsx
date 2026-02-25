@@ -20,6 +20,8 @@ import {
   Tag,
   Radio,
   Grid,
+  Modal,
+  InputNumber,
 } from "antd";
 import {
   EyeOutlined,
@@ -37,14 +39,42 @@ import {
 } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { articleApi } from "@services";
-import type { ArticleWithRelations } from "@services";
+import { articleApi, markdownStylesApi } from "@services";
+import type {
+  ArticleWithRelations,
+  MarkdownStyleListItem,
+  MarkdownStyleResponse,
+} from "@services";
 import { logger } from "@services/logger";
+import { publishArticleUpdated } from "@utils/articleUpdatedEvent";
+import { toScopedCss } from "@utils/scopedCss";
 import "./EditForm.css";
+import "../../../styles/markdown.css";
 
 const { TextArea } = Input;
 const { Text } = Typography;
 const { Option } = Select;
+
+const STYLE_PREVIEW_MD = `# 标题一
+
+这是段落，包含 \`行内代码\`、**粗体**、*斜体* 与 [链接](https://example.com)。
+
+## 标题二
+
+> 引用块：样式应该对引用也有明显效果。
+
+\`\`\`ts
+export const add = (a: number, b: number) => a + b;
+\`\`\`
+
+- 列表项 1
+- 列表项 2
+
+| 列 | 值 |
+| --- | --- |
+| A | 1 |
+| B | 2 |
+`;
 
 interface ArticleEditFormProps {
   article: ArticleWithRelations | null;
@@ -58,7 +88,12 @@ interface ArticleEditFormProps {
 // 标签功能已移除，删除了TagOption接口
 
 // 预览组件 - 使用react-markdown
-const PreviewContent: React.FC<{ content: string }> = ({ content }) => {
+const PreviewContent: React.FC<{
+  content: string;
+  scopeId: string;
+  styleCss?: string | null;
+  customCss?: string | null;
+}> = ({ content, scopeId, styleCss, customCss }) => {
   if (!content || content.trim() === "") {
     return (
       <div
@@ -82,187 +117,19 @@ const PreviewContent: React.FC<{ content: string }> = ({ content }) => {
     );
   }
 
+  const combinedCss = `${styleCss || ""}\n${customCss || ""}`;
+  const scopedCss = combinedCss.trim()
+    ? toScopedCss(combinedCss, `[data-article-scope="${scopeId}"]`)
+    : "";
+
   return (
-    <div style={{ height: "100%", minHeight: "100%" }}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({ node, ...props }) => (
-            <h1
-              style={{
-                fontSize: "1.8em",
-                fontWeight: "bold",
-                margin: "0.8em 0 0.4em",
-                paddingBottom: "6px",
-                borderBottom: "2px solid var(--ws-color-border)",
-                color: "var(--ws-color-text)",
-              }}
-              {...props}
-            >
-              {props.children}
-            </h1>
-          ),
-          h2: ({ node, ...props }) => (
-            <h2
-              style={{
-                fontSize: "1.5em",
-                fontWeight: "bold",
-                margin: "0.7em 0 0.3em",
-                paddingBottom: "4px",
-                borderBottom: "1px solid var(--ws-color-border)",
-                color: "var(--ws-color-text)",
-              }}
-              {...props}
-            >
-              {props.children}
-            </h2>
-          ),
-          h3: ({ node, ...props }) => (
-            <h3
-              style={{
-                fontSize: "1.25em",
-                fontWeight: "bold",
-                margin: "0.6em 0 0.2em",
-                color: "var(--ws-color-text)",
-              }}
-              {...props}
-            >
-              {props.children}
-            </h3>
-          ),
-          h4: ({ node, ...props }) => (
-            <h4
-              style={{
-                fontSize: "1.1em",
-                fontWeight: "bold",
-                margin: "0.5em 0 0.2em",
-                color: "var(--ws-color-text-secondary)",
-              }}
-              {...props}
-            >
-              {props.children}
-            </h4>
-          ),
-          p: ({ node, ...props }) => (
-            <p
-              style={{
-                margin: "0.8em 0",
-                lineHeight: 1.8,
-                color: "var(--ws-color-text)",
-              }}
-              {...props}
-            />
-          ),
-          ul: ({ node, ...props }) => (
-            <ul
-              style={{
-                margin: "0.8em 0",
-                paddingLeft: "1.8em",
-              }}
-              {...props}
-            />
-          ),
-          ol: ({ node, ...props }) => (
-            <ol
-              style={{
-                margin: "0.8em 0",
-                paddingLeft: "1.8em",
-              }}
-              {...props}
-            />
-          ),
-          li: ({ node, ...props }) => (
-            <li
-              style={{
-                margin: "0.4em 0",
-                lineHeight: 1.6,
-              }}
-              {...props}
-            />
-          ),
-          blockquote: ({ node, ...props }) => (
-            <blockquote
-              style={{
-                borderLeft: "3px solid var(--ws-color-info)",
-                margin: "1em 0",
-                padding: "0.5em 1em",
-                backgroundColor: "var(--ws-color-info-soft)",
-                color: "var(--ws-color-text-secondary)",
-                fontStyle: "normal",
-                borderRadius: "0 4px 4px 0",
-              }}
-              {...props}
-            />
-          ),
-          code: ({ node, ...props }) => {
-            const isBlockCode =
-              typeof props.children === "string" &&
-              props.children.includes("\n");
-            if (isBlockCode) {
-              return (
-                <pre
-                  style={{
-                    backgroundColor: "var(--ws-color-surface-2)",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    overflow: "auto",
-                    margin: "1em 0",
-                    fontFamily: "Consolas, Monaco, 'Courier New', monospace",
-                    fontSize: "0.9em",
-                    border: "1px solid var(--ws-color-border)",
-                  }}
-                >
-                  <code {...props} />
-                </pre>
-              );
-            }
-            return (
-              <code
-                style={{
-                  backgroundColor: "var(--ws-color-surface-2)",
-                  padding: "2px 6px",
-                  borderRadius: "3px",
-                  fontFamily: "Consolas, Monaco, 'Courier New', monospace",
-                  fontSize: "0.9em",
-                  border: "1px solid var(--ws-color-border)",
-                  color: "var(--ws-color-accent)",
-                }}
-                {...props}
-              />
-            );
-          },
-          a: ({ node, ...props }) => (
-            <a
-              style={{
-                color: "var(--ws-color-primary)",
-                textDecoration: "none",
-                borderBottom: "1px solid transparent",
-                transition: "border-color 0.2s",
-              }}
-              target="_blank"
-              rel="noopener noreferrer"
-              {...props}
-            >
-              {props.children}
-            </a>
-          ),
-          img: ({ node, ...props }) => (
-            <img
-              style={{
-                maxWidth: "100%",
-                borderRadius: "4px",
-                boxShadow: "none",
-                border: "1px solid var(--ws-color-border)",
-                margin: "1em 0",
-              }}
-              alt={(props as any).alt ?? ""}
-              {...props}
-            />
-          ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+    <div
+      className="ws-markdown"
+      data-article-scope={scopeId}
+      style={{ height: "100%", minHeight: "100%" }}
+    >
+      {scopedCss ? <style dangerouslySetInnerHTML={{ __html: scopedCss }} /> : null}
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );
 };
@@ -280,9 +147,23 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
   const [loading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [content, setContent] = useState("");
+  const [customCss, setCustomCss] = useState("");
+  const [styleKey, setStyleKey] = useState<string | null>(
+    article?.style_key || null,
+  );
+  const [styleCss, setStyleCss] = useState<string>("");
+  const [styleOptions, setStyleOptions] = useState<MarkdownStyleListItem[]>([]);
+  const [stylesManageOpen, setStylesManageOpen] = useState(false);
+  const [styleEditingKey, setStyleEditingKey] = useState<string>("");
+  const [styleDraft, setStyleDraft] = useState<MarkdownStyleResponse | null>(
+    null,
+  );
+  const [newStyleKey, setNewStyleKey] = useState("");
+  const [newStyleTitle, setNewStyleTitle] = useState("");
   const [viewMode, setViewMode] = useState<"split" | "edit" | "preview">(
     screens.lg ? "split" : "edit",
   );
+  const articleScopeId = article?.id ? `article-${article.id}` : "article-draft";
 
   useEffect(() => {
     if (!screens.lg && viewMode === "split") setViewMode("edit");
@@ -292,6 +173,63 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
     setContent(form.getFieldValue("content") || "");
     setViewMode(next);
   };
+
+  useEffect(() => {
+    markdownStylesApi
+      .list()
+      .then((items) => setStyleOptions(items || []))
+      .catch(() => setStyleOptions([]));
+  }, []);
+
+  useEffect(() => {
+    if (!styleKey) {
+      setStyleCss("");
+      return;
+    }
+    markdownStylesApi
+      .get(styleKey)
+      .then((s) => setStyleCss(s?.content || ""))
+      .catch(() => setStyleCss(""));
+  }, [styleKey]);
+
+  const refreshStyles = async () => {
+    const items = await markdownStylesApi.list();
+    setStyleOptions(items || []);
+    return items || [];
+  };
+
+  useEffect(() => {
+    if (!stylesManageOpen) return;
+    refreshStyles()
+      .then((items) => {
+        const nextKey = styleKey || items[0]?.key || "";
+        setStyleEditingKey(nextKey);
+        if (!nextKey) {
+          setStyleDraft(null);
+          return;
+        }
+        markdownStylesApi
+          .get(nextKey)
+          .then((s) => setStyleDraft(s))
+          .catch(() => setStyleDraft(null));
+      })
+      .catch(() => {
+        setStyleEditingKey("");
+        setStyleDraft(null);
+      });
+  }, [stylesManageOpen, styleKey]);
+
+  useEffect(() => {
+    if (!stylesManageOpen) return;
+    if (!styleEditingKey) {
+      setStyleDraft(null);
+      return;
+    }
+    markdownStylesApi
+      .get(styleEditingKey)
+      .then((s) => setStyleDraft(s))
+      .catch(() => setStyleDraft(null));
+  }, [stylesManageOpen, styleEditingKey]);
 
   // 编辑器工具栏按钮
   const editorTools = [
@@ -365,15 +303,23 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
         title: article.title,
         summary: article.summary,
         content: article.content,
+        custom_css: article.custom_css || "",
+        style_key: article.style_key || null,
         category_id: article.category_id,
         published: article.published,
       });
       // 设置内容状态
       setContent(article.content || "");
+      setCustomCss(article.custom_css || "");
+      setStyleKey(article.style_key || null);
+      setStyleCss(article.style?.content || "");
     } else {
       // 创建模式：清空表单
       form.resetFields();
       setContent("");
+      setCustomCss("");
+      setStyleKey(null);
+      setStyleCss("");
     }
   }, [article, form]);
 
@@ -422,6 +368,8 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           values.summary ||
           (values.content || "").substring(0, 200) ||
           "文章摘要",
+        custom_css: (values.custom_css || "").trim() || null,
+        style_key: values.style_key || null,
         published: values.published !== undefined ? values.published : false,
         author_id: 1, // 后端会从token获取当前用户ID，这里只是为了符合schema
         category_id: values.category_id || null,
@@ -433,6 +381,23 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
       if (isCreateMode) {
         // 创建文章
         const response = await articleApi.createArticle(articleData);
+        const saved = response.data;
+        const payload = {
+          articleId: saved.id,
+          action: "created" as const,
+          updatedAt: saved.updated_at,
+          slug: saved.slug,
+          title: saved.title,
+        };
+        const meta = publishArticleUpdated(payload);
+        if (meta && window.opener && window.opener !== window) {
+          try {
+            window.opener.postMessage(
+              { type: "article_updated", ...meta, payload },
+              window.location.origin,
+            );
+          } catch {}
+        }
         logger.debug("创建文章响应:", response.data);
         message.success("文章创建成功");
       } else {
@@ -441,6 +406,30 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           article!.id,
           articleData,
         );
+        const saved = response.data;
+        const oldSlug = article?.slug;
+        const newSlug = saved.slug;
+        const slugChanged =
+          typeof oldSlug === "string" &&
+          typeof newSlug === "string" &&
+          oldSlug !== newSlug;
+        const payload = {
+          articleId: saved.id,
+          action: "updated" as const,
+          updatedAt: saved.updated_at,
+          slug: saved.slug,
+          ...(slugChanged ? { oldSlug, newSlug } : {}),
+          title: saved.title,
+        };
+        const meta = publishArticleUpdated(payload);
+        if (meta && window.opener && window.opener !== window) {
+          try {
+            window.opener.postMessage(
+              { type: "article_updated", ...meta, payload },
+              window.location.origin,
+            );
+          } catch {}
+        }
         logger.debug("更新文章响应:", response.data);
         message.success("文章更新成功");
       }
@@ -491,6 +480,9 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
     if (changedValues.content !== undefined) {
       setContent(changedValues.content || "");
     }
+    if (changedValues.custom_css !== undefined) {
+      setCustomCss(changedValues.custom_css || "");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -519,9 +511,6 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
       styles={{
         body: {
           padding: 0,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
         },
       }}
     >
@@ -555,16 +544,6 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
             { required: true, message: "请输入文章内容" },
             { min: 10, message: "内容不能少于10个字符" },
           ]}
-          style={{
-            flex: 1,
-            margin: 0,
-            display: "flex",
-            flexDirection: "column",
-            border: "1px solid var(--ws-color-border)",
-            borderRadius: "8px",
-            background: "#fff",
-            overflow: "hidden",
-          }}
         >
           <TextArea
             id="article-content-textarea"
@@ -574,13 +553,6 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
               fontFamily: '"Consolas", "Monaco", "Courier New", monospace',
               fontSize: "14px",
               lineHeight: 1.7,
-              height: "100%",
-              resize: "vertical",
-              border: "none",
-              padding: "12px",
-              background: "#fff",
-              borderRadius: "8px",
-              minHeight: "420px",
             }}
             onFocus={(e) => {
               e.target.style.outline = "none";
@@ -621,9 +593,6 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
       styles={{
         body: {
           padding: 0,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
         },
       }}
     >
@@ -637,13 +606,18 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
         </Tag>
       </div>
       <div className="article-preview-body">
-        <PreviewContent content={content} />
+        <PreviewContent
+          content={content}
+          scopeId={articleScopeId}
+          styleCss={styleCss}
+          customCss={customCss}
+        />
       </div>
     </Card>
   );
 
   return (
-    <div className="article-edit-form">
+    <div className={`article-edit-form ${layout === "editor" ? "is-editor-layout" : ""}`}>
       <Form
         form={form}
         layout="vertical"
@@ -725,6 +699,37 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                       <Text copyable>{article.slug}</Text>
                     </div>
                   ) : null}
+                </Space>
+              </Card>
+
+              <Card size="small" title="样式" className="article-edit-side-card" styles={{ body: { padding: 12 } }}>
+                <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+                  <Form.Item name="style_key" style={{ marginBottom: 0 }}>
+                    <Select
+                      placeholder="选择 CSS 样式方案"
+                      allowClear
+                      onChange={(v) => {
+                        form.setFieldValue("style_key", v || null);
+                        setStyleKey(v || null);
+                      }}
+                      options={styleOptions.map((s) => ({
+                        value: s.key,
+                        label: s.title ? `${s.title}（${s.key}）` : s.key,
+                      }))}
+                    />
+                  </Form.Item>
+
+                  <Form.Item name="custom_css" hidden>
+                    <Input />
+                  </Form.Item>
+
+                  <Button size="small" block onClick={() => setStylesManageOpen(true)}>
+                    管理样式
+                  </Button>
+
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    仅作用于当前文章内容区域
+                  </Text>
                 </Space>
               </Card>
             </div>
@@ -900,6 +905,174 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           </>
         )}
       </Form>
+
+      <Modal
+        title="管理 CSS 样式方案"
+        open={stylesManageOpen}
+        width={960}
+        footer={null}
+        onCancel={() => setStylesManageOpen(false)}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 10, marginBottom: 12 }}>
+          <Input value={newStyleKey} onChange={(e) => setNewStyleKey(e.target.value)} placeholder="key（如：my_style）" />
+          <Input value={newStyleTitle} onChange={(e) => setNewStyleTitle(e.target.value)} placeholder="标题（可选）" />
+          <Button
+            onClick={async () => {
+              const key = newStyleKey.trim();
+              if (!key) {
+                message.error("请输入样式 key");
+                return;
+              }
+              try {
+                await markdownStylesApi.upsert({
+                  key,
+                  title: newStyleTitle.trim() || undefined,
+                  content: "",
+                  sort_order: 0,
+                });
+                setNewStyleKey("");
+                setNewStyleTitle("");
+                await refreshStyles();
+                setStyleEditingKey(key);
+                message.success("样式已创建");
+              } catch (e: any) {
+                message.error(e?.response?.data?.detail || "创建样式失败");
+              }
+            }}
+          >
+            新建
+          </Button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 12, minHeight: 520 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <Select
+              value={styleEditingKey || undefined}
+              placeholder="选择样式"
+              onChange={(v) => {
+                setStyleEditingKey(v);
+                form.setFieldValue("style_key", v || null);
+                setStyleKey(v || null);
+              }}
+              options={styleOptions.map((s) => ({
+                value: s.key,
+                label: s.title ? `${s.title}（${s.key}）` : s.key,
+              }))}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button
+                danger
+                size="small"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  if (!styleEditingKey) return;
+                  Modal.confirm({
+                    title: "删除样式方案？",
+                    content: styleEditingKey,
+                    okText: "删除",
+                    okButtonProps: { danger: true },
+                    cancelText: "取消",
+                    onOk: async () => {
+                      await markdownStylesApi.remove(styleEditingKey);
+                      const items = await refreshStyles();
+                      const next = items[0]?.key || "";
+                      setStyleEditingKey(next);
+                      if (styleKey === styleEditingKey) {
+                        form.setFieldValue("style_key", null);
+                        setStyleKey(null);
+                      }
+                      message.success("已删除");
+                    },
+                  });
+                }}
+              >
+                删除
+              </Button>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              样式方案可复用，文章通过 style_key 选择
+            </Text>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {styleDraft ? (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 120px", gap: 10 }}>
+                  <Input
+                    value={styleDraft.title || ""}
+                    onChange={(e) =>
+                      setStyleDraft((p) => (p ? { ...p, title: e.target.value } : p))
+                    }
+                    placeholder="标题"
+                  />
+                  <InputNumber
+                    value={styleDraft.sort_order ?? 0}
+                    onChange={(v) =>
+                      setStyleDraft((p) => (p ? { ...p, sort_order: Number(v || 0) } : p))
+                    }
+                    placeholder="排序"
+                    style={{ width: "100%" }}
+                  />
+                  <Button
+                    type="primary"
+                    onClick={async () => {
+                      if (!styleDraft) return;
+                      try {
+                        const saved = await markdownStylesApi.update(styleDraft.key, {
+                          title: styleDraft.title,
+                          sort_order: styleDraft.sort_order,
+                          content: styleDraft.content,
+                        });
+                        setStyleDraft(saved);
+                        await refreshStyles();
+                        if (styleKey === saved.key) setStyleCss(saved.content || "");
+                        message.success("已保存");
+                      } catch (e: any) {
+                        message.error(e?.response?.data?.detail || "保存失败");
+                      }
+                    }}
+                  >
+                    保存
+                  </Button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, minHeight: 420 }}>
+                  <TextArea
+                    value={styleDraft.content || ""}
+                    onChange={(e) =>
+                      setStyleDraft((p) => (p ? { ...p, content: e.target.value } : p))
+                    }
+                    rows={18}
+                    spellCheck={false}
+                    style={{
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    }}
+                  />
+                  <div
+                    style={{
+                      border: "1px solid var(--ws-color-border)",
+                      borderRadius: 8,
+                      background: "var(--ws-color-surface)",
+                      overflow: "auto",
+                      padding: 12,
+                    }}
+                  >
+                    <PreviewContent
+                      content={STYLE_PREVIEW_MD}
+                      scopeId={`style-preview-${styleDraft.key}`}
+                      styleCss={styleDraft.content || ""}
+                      customCss={null}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: 24 }}>
+                <Text type="secondary">暂无样式或未选择</Text>
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

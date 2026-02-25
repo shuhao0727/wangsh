@@ -8,6 +8,16 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, validator
 from uuid import UUID
 
+from app.schemas.articles.markdown_style import MarkdownStyleResponse
+
+
+def _sanitize_custom_css(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v)
+    s = s.replace("</style", "<\\/style").replace("</STYLE", "<\\/STYLE")
+    return s
+
 
 class ArticleBase(BaseModel):
     """文章基础模型"""
@@ -15,6 +25,8 @@ class ArticleBase(BaseModel):
     slug: str = Field(..., min_length=1, max_length=255, description="URL友好的别名")
     content: str = Field(..., description="文章正文内容 (Markdown格式)")
     summary: Optional[str] = Field(None, description="文章摘要 (可选)")
+    custom_css: Optional[str] = Field(None, max_length=50000, description="文章自定义CSS (可选)")
+    style_key: Optional[str] = Field(None, min_length=1, max_length=100, description="Markdown样式方案key (可选)")
     published: bool = Field(False, description="是否发布")
     
     @validator("slug")
@@ -23,6 +35,18 @@ class ArticleBase(BaseModel):
         if not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
         return v.lower()
+
+    @validator("custom_css")
+    def validate_custom_css(cls, v):
+        return _sanitize_custom_css(v)
+
+    @validator("style_key")
+    def validate_style_key(cls, v):
+        if v is None:
+            return None
+        if not v.replace("-", "").replace("_", "").isalnum():
+            raise ValueError("style_key只能包含字母、数字、破折号和下划线")
+        return v
 
 
 class ArticleCreate(ArticleBase):
@@ -45,6 +69,8 @@ class ArticleUpdate(BaseModel):
     slug: Optional[str] = Field(None, min_length=1, max_length=255, description="URL友好的别名")
     content: Optional[str] = Field(None, description="文章正文内容 (Markdown格式)")
     summary: Optional[str] = Field(None, description="文章摘要 (可选)")
+    custom_css: Optional[str] = Field(None, max_length=50000, description="文章自定义CSS (可选)")
+    style_key: Optional[str] = Field(None, min_length=1, max_length=100, description="Markdown样式方案key (可选)")
     published: Optional[bool] = Field(None, description="是否发布")
     category_id: Optional[int] = Field(None, description="分类ID (可选)")
     # 标签功能已移除，删除了tag_ids字段
@@ -55,6 +81,18 @@ class ArticleUpdate(BaseModel):
         if v is not None and not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
         return v.lower() if v else v
+
+    @validator("custom_css")
+    def validate_custom_css(cls, v):
+        return _sanitize_custom_css(v)
+
+    @validator("style_key")
+    def validate_style_key(cls, v):
+        if v is None:
+            return None
+        if not v.replace("-", "").replace("_", "").isalnum():
+            raise ValueError("style_key只能包含字母、数字、破折号和下划线")
+        return v
 
 
 class ArticleInDBBase(ArticleBase):
@@ -109,6 +147,7 @@ class ArticleWithRelations(ArticleResponse):
     """包含关系的文章响应模型"""
     author: Optional[AuthorInfo] = None
     category: Optional[CategoryInfo] = None
+    style: Optional[MarkdownStyleResponse] = None
     
     class Config:
         from_attributes = True

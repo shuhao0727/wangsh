@@ -365,6 +365,67 @@ const agentDataApi = {
       };
     }
   },
+
+  exportHotQuestions: async (params: {
+    agent_id: number;
+    start_at?: string;
+    end_at?: string;
+    bucket_seconds?: number;
+    top_n?: number;
+  }): Promise<BaseResponse<Blob>> => {
+    try {
+      const response = await api.client.get("/ai-agents/admin/export/hot-questions", {
+        params,
+        responseType: "blob",
+      });
+      return {
+        data: response.data as Blob,
+        success: true,
+        message: "导出成功",
+      };
+    } catch (error: any) {
+      logger.error("导出热点问题失败:", error);
+      return {
+        data: new Blob([""], { type: "application/octet-stream" }),
+        success: false,
+        message:
+          error.response?.data?.detail ||
+          error.message ||
+          "导出失败",
+      };
+    }
+  },
+
+  exportStudentChains: async (params: {
+    agent_id: number;
+    user_id?: number;
+    student_id?: string;
+    start_at?: string;
+    end_at?: string;
+    limit_sessions?: number;
+  }): Promise<BaseResponse<Blob>> => {
+    try {
+      const response = await api.client.get("/ai-agents/admin/export/student-chains", {
+        params,
+        responseType: "blob",
+      });
+      return {
+        data: response.data as Blob,
+        success: true,
+        message: "导出成功",
+      };
+    } catch (error: any) {
+      logger.error("导出学生提问链条失败:", error);
+      return {
+        data: new Blob([""], { type: "application/octet-stream" }),
+        success: false,
+        message:
+          error.response?.data?.detail ||
+          error.message ||
+          "导出失败",
+      };
+    }
+  },
 };
 
 // 导出所有API

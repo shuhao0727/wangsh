@@ -20,6 +20,8 @@ class Article(Base):
     slug = Column(String(255), unique=True, index=True, nullable=False, comment="URL友好的别名")
     content = Column(Text, nullable=False, comment="文章正文内容 (Markdown格式)")
     summary = Column(Text, nullable=True, comment="文章摘要 (可选)")
+    custom_css = Column(Text, nullable=True, comment="文章自定义CSS (可选)")
+    style_key = Column(String(100), ForeignKey("wz_markdown_styles.key"), nullable=True, comment="Markdown样式方案Key (可选)")
     
     # 外键关联 - 注意：用户表已改为 sys_users
     author_id = Column(Integer, ForeignKey("sys_users.id"), nullable=False, comment="作者ID")
@@ -35,6 +37,7 @@ class Article(Base):
     # 关系定义
     author = relationship("User", back_populates="articles", lazy="select")
     category = relationship("Category", back_populates="articles", lazy="select")
+    style = relationship("MarkdownStyle", back_populates="articles", lazy="select")
     # 标签功能已移除，删除了tags关系
     
     def __repr__(self):

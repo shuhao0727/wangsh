@@ -9,7 +9,7 @@ from sqlalchemy import select, update, delete, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.articles import Article, Category
+from app.models.articles import Article, Category, MarkdownStyle
 from app.models.core import User
 from app.schemas.articles import (
     ArticleCreate, 
@@ -37,6 +37,11 @@ class ArticleService:
         )
         if slug_check.scalar_one_or_none():
             raise ValueError(f"slug '{article_data.slug}' 已存在")
+
+        if article_data.style_key is not None:
+            style_check = await db.execute(select(MarkdownStyle).where(MarkdownStyle.key == article_data.style_key))
+            if not style_check.scalar_one_or_none():
+                raise ValueError(f"Markdown样式 '{article_data.style_key}' 不存在")
         
         # 创建文章对象
         article = Article(
@@ -44,6 +49,8 @@ class ArticleService:
             slug=article_data.slug,
             content=article_data.content,
             summary=article_data.summary,
+            custom_css=article_data.custom_css,
+            style_key=article_data.style_key,
             published=article_data.published,
             author_id=author_id,
             category_id=article_data.category_id
@@ -68,7 +75,8 @@ class ArticleService:
         if include_relations:
             query = query.options(
                 selectinload(Article.author),
-                selectinload(Article.category)
+                selectinload(Article.category),
+                selectinload(Article.style),
             )
         
         result = await db.execute(query)
@@ -88,7 +96,8 @@ class ArticleService:
         if include_relations:
             query = query.options(
                 selectinload(Article.author),
-                selectinload(Article.category)
+                selectinload(Article.category),
+                selectinload(Article.style),
             )
         
         result = await db.execute(query)
@@ -129,6 +138,13 @@ class ArticleService:
             update_data['content'] = article_data.content
         if article_data.summary is not None:
             update_data['summary'] = article_data.summary
+        if article_data.custom_css is not None:
+            update_data['custom_css'] = article_data.custom_css
+        if article_data.style_key is not None:
+            style_check = await db.execute(select(MarkdownStyle).where(MarkdownStyle.key == article_data.style_key))
+            if not style_check.scalar_one_or_none():
+                raise ValueError(f"Markdown样式 '{article_data.style_key}' 不存在")
+            update_data["style_key"] = article_data.style_key
         if article_data.published is not None:
             update_data['published'] = article_data.published
         if article_data.category_id is not None:
@@ -201,7 +217,8 @@ class ArticleService:
         if include_relations:
             query = query.options(
                 selectinload(Article.author),
-                selectinload(Article.category)
+                selectinload(Article.category),
+                selectinload(Article.style),
             )
         
         # 执行查询

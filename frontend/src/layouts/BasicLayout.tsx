@@ -29,6 +29,7 @@ const BasicLayout: React.FC = () => {
     isLoggedIn,
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
+  const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
 
   // 调试日志：显示认证状态
   useEffect(() => {
@@ -154,7 +155,10 @@ const BasicLayout: React.FC = () => {
       </Header>
 
       {/* 内容区域 */}
-      <Content className="main-content">
+      <Content
+        className="main-content"
+        style={isArticleDetailPage ? { padding: 0, margin: 0 } : undefined}
+      >
         <Outlet />
       </Content>
     </Layout>
