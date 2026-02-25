@@ -32,7 +32,7 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile.prod
-          target: production
+          target: backend_runtime
           platforms: linux/amd64
           push: true
           tags: |
@@ -43,11 +43,22 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile.prod
-          target: production
+          target: worker_runtime
           platforms: linux/amd64
           push: true
           tags: |
             docker.io/shuhao07/wangsh-typst-worker:${{ inputs.image_tag }}
+
+      - name: build pythonlab-worker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          target: worker_runtime
+          platforms: linux/amd64
+          push: true
+          tags: |
+            docker.io/shuhao07/wangsh-pythonlab-worker:${{ inputs.image_tag }}
 
       - name: build frontend
         uses: docker/build-push-action@v6
@@ -57,12 +68,26 @@ jobs:
           target: production
           platforms: linux/amd64
           push: true
+          build-args: |
+            REACT_APP_VERSION=${{ inputs.image_tag }}
           tags: |
             docker.io/shuhao07/wangsh-frontend:${{ inputs.image_tag }}
+
+      - name: build gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: ./gateway
+          file: ./gateway/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            docker.io/shuhao07/wangsh-gateway:${{ inputs.image_tag }}
 
       - name: push latest tags
         if: ${{ inputs.push_latest == 'true' }}
         run: |
           docker buildx imagetools create -t docker.io/shuhao07/wangsh-backend:latest docker.io/shuhao07/wangsh-backend:${{ inputs.image_tag }}
           docker buildx imagetools create -t docker.io/shuhao07/wangsh-typst-worker:latest docker.io/shuhao07/wangsh-typst-worker:${{ inputs.image_tag }}
+          docker buildx imagetools create -t docker.io/shuhao07/wangsh-pythonlab-worker:latest docker.io/shuhao07/wangsh-pythonlab-worker:${{ inputs.image_tag }}
           docker buildx imagetools create -t docker.io/shuhao07/wangsh-frontend:latest docker.io/shuhao07/wangsh-frontend:${{ inputs.image_tag }}
+          docker buildx imagetools create -t docker.io/shuhao07/wangsh-gateway:latest docker.io/shuhao07/wangsh-gateway:${{ inputs.image_tag }}

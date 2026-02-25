@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${1:-1.0.4}"
-REGISTRY="shuhao07"
+read_env_value() {
+  local key="$1"
+  local file="${2:-.env}"
+  if [ ! -f "${file}" ]; then
+    return 0
+  fi
+  awk -F= -v k="${key}" '$0 ~ ("^"k"=") {sub("^"k"=",""); print; exit}' "${file}" 2>/dev/null || true
+}
+
+VERSION="${1:-}"
+if [ -z "${VERSION}" ]; then
+  VERSION="$(read_env_value "APP_VERSION" ".env")"
+fi
+if [ -z "${VERSION}" ]; then
+  VERSION="unknown"
+fi
+
+REGISTRY="${DOCKERHUB_NAMESPACE:-$(read_env_value "DOCKERHUB_NAMESPACE" ".env")}"
+if [ -z "${REGISTRY}" ]; then
+  REGISTRY="shuhao07"
+fi
 PLATFORM="linux/amd64"
 
 echo "==> Using VERSION=${VERSION}, PLATFORM=${PLATFORM}"

@@ -38,7 +38,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: backend_runtime
-    image: shuhao07/wangsh-backend:1.0.4
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-backend:${IMAGE_TAG}
     restart: unless-stopped
     environment:
       DEBUG: "False"
@@ -46,6 +46,7 @@ services:
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TZ: ${TIMEZONE:-Asia/Shanghai}
+      APP_VERSION: ${APP_VERSION:-}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
       POSTGRES_HOST: postgres
@@ -112,7 +113,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-typst-worker:1.0.4
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -126,6 +127,7 @@ services:
       AUTO_CREATE_TABLES: "false"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TZ: ${TIMEZONE:-Asia/Shanghai}
+      APP_VERSION: ${APP_VERSION:-}
       PYTHONPATH: "/app"
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
@@ -162,7 +164,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
-    image: shuhao07/wangsh-pythonlab-worker:1.0.4
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -176,6 +178,7 @@ services:
       AUTO_CREATE_TABLES: "false"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TZ: ${TIMEZONE:-Asia/Shanghai}
+      APP_VERSION: ${APP_VERSION:-}
       PYTHONPATH: "/app"
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       AGENT_API_KEY_ENCRYPTION_KEY: ${AGENT_API_KEY_ENCRYPTION_KEY:-}
@@ -223,7 +226,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-    image: shuhao07/wangsh-frontend:1.0.4
+      args:
+        REACT_APP_VERSION: ${REACT_APP_VERSION:-}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-frontend:${IMAGE_TAG}
     restart: unless-stopped
     environment:
       http_proxy: ""
@@ -239,7 +244,7 @@ services:
   gateway:
     platform: linux/amd64
     build: ./gateway
-    image: shuhao07/wangsh-gateway:1.0.4
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-gateway:${IMAGE_TAG}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-6608}:80"

@@ -30,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import "./AdminLayout.css";
 import useAuth from "@hooks/useAuth";
+import config from "@services/config";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -370,7 +371,7 @@ const AdminLayout: React.FC = () => {
         {!collapsed && (
           <div className="admin-sidebar-footer">
             <Text type="secondary" style={{ fontSize: "12px" }}>
-              WangSh Admin v1.0.4
+              WangSh Admin v{config.version}
             </Text>
             <br />
             <Text type="secondary" style={{ fontSize: "10px" }}>

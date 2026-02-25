@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     
     # ==================== 项目信息 ====================
     PROJECT_NAME: str = Field(default="WangSh")
-    VERSION: str = Field(default="1.0.4")
+    APP_VERSION: Optional[str] = Field(default=None)
+    VERSION: str = Field(default="unknown")
     API_V1_STR: str = Field(default="/api/v1")
     
     # ==================== 部署环境 ====================
@@ -74,6 +75,13 @@ class Settings(BaseSettings):
                 # 如果不是JSON，尝试按逗号分割
                 return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def apply_app_version(self):
+        av = (self.APP_VERSION or "").strip()
+        if av:
+            self.VERSION = av
+        return self
     
     # ==================== 数据库配置 ====================
     POSTGRES_USER: str = Field(default="admin")

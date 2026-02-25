@@ -19,7 +19,23 @@ require_docker() {
 }
 
 compose() {
-  docker compose --env-file "${env_file}" -f "${compose_file}" "$@"
+  app_version="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  version="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  react_version="$(awk -F= '/^REACT_APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+
+  if [ -z "${tag}" ] && [ -n "${app_version}" ]; then
+    tag="${app_version}"
+  fi
+  if [ -z "${version}" ] && [ -n "${app_version}" ]; then
+    version="${app_version}"
+  fi
+  if [ -z "${react_version}" ] && [ -n "${app_version}" ]; then
+    react_version="${app_version}"
+  fi
+
+  APP_VERSION="${app_version}" IMAGE_TAG="${tag}" VERSION="${version}" REACT_APP_VERSION="${react_version}" \
+    docker compose --env-file "${env_file}" -f "${compose_file}" "$@"
 }
 
 retry() {
@@ -114,6 +130,9 @@ case "${cmd}" in
     registry="$(awk -F= '/^DOCKER_REGISTRY=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     ns="$(awk -F= '/^DOCKERHUB_NAMESPACE=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    if [ -z "${tag}" ]; then
+      tag="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    fi
     tag_latest="$(awk -F= '/^IMAGE_TAG_LATEST=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_backend="$(awk -F= '/^IMAGE_NAME_BACKEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_frontend="$(awk -F= '/^IMAGE_NAME_FRONTEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
@@ -171,12 +190,11 @@ case "${cmd}" in
 
     cat > "${tmp_env}" <<EOF
 PROJECT_NAME=WangSh
-VERSION=1.0.0
+APP_VERSION=1.0.0
 API_V1_STR=/api/v1
 
 DOCKER_REGISTRY=docker.io
 DOCKERHUB_NAMESPACE=local
-IMAGE_TAG=1.0.0
 IMAGE_TAG_LATEST=latest
 IMAGE_NAME_BACKEND=wangsh-backend
 IMAGE_NAME_FRONTEND=wangsh-frontend
@@ -193,7 +211,6 @@ SUPER_ADMIN_PASSWORD=${admin_password}
 CORS_ORIGINS=["http://localhost:16608","http://127.0.0.1:16608"]
 REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
-REACT_APP_VERSION=1.0.0
 WEB_PORT=16608
 EOF
 

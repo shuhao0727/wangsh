@@ -62,7 +62,7 @@ const getConfig = (): AppConfig => {
   return {
     apiUrl,
     env,
-    version: process.env.REACT_APP_VERSION || "1.0.0",
+    version: (process.env.REACT_APP_VERSION || "").trim() || "unknown",
     difyUrl,
     nasUrl,
 
