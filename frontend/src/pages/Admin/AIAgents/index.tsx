@@ -354,7 +354,7 @@ const AdminAIAgents: React.FC = () => {
   }, [loadAgents, loadStatistics]);
 
   return (
-    <AdminPage>
+    <AdminPage scrollable={false}>
       {/* 标题和操作栏 - 移除 redundant buttons */}
       <div style={{ height: 16 }} /> {/* Spacer instead of buttons */}
 
@@ -386,45 +386,47 @@ const AdminAIAgents: React.FC = () => {
       />
 
       {/* 智能体表格 */}
-      <AdminTablePanel
-        loading={loading}
-        isEmpty={agents.length === 0}
-        emptyDescription={searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"}
-        emptyAction={
-          <Button type="primary" onClick={handleAddAgent}>
-            添加第一个智能体
-          </Button>
-        }
-        pagination={
-          agents.length > 0 ? (
-            <Pagination
-              current={currentPage}
-              pageSize={pageSize}
-              total={total}
-              onChange={handlePageChange}
-              showSizeChanger
-              showQuickJumper
-              showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
-            />
-          ) : null
-        }
-      >
-        <Table
-          rowKey="id"
-          columns={getAgentColumns(
-            handleEdit,
-            handleDelete,
-            handleToggleActive,
-            handleViewDetails,
-            handleTestAgent,
-          )}
-          dataSource={agents}
-          rowSelection={rowSelection}
-          pagination={false}
-          scroll={{ x: 1200 }}
-          size="middle"
-        />
-      </AdminTablePanel>
+      <div style={{ flex: 1, minHeight: 0, marginTop: 16 }}>
+        <AdminTablePanel
+          loading={loading}
+          isEmpty={agents.length === 0}
+          emptyDescription={searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"}
+          emptyAction={
+            <Button type="primary" onClick={handleAddAgent}>
+              添加第一个智能体
+            </Button>
+          }
+          pagination={
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <Pagination
+                  current={currentPage}
+                  pageSize={pageSize}
+                  total={total}
+                  onChange={handlePageChange}
+                  showSizeChanger
+                  showQuickJumper
+                  showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
+                />
+              </div>
+          }
+        >
+          <Table
+            rowKey="id"
+            columns={getAgentColumns(
+              handleEdit,
+              handleDelete,
+              handleToggleActive,
+              handleViewDetails,
+              handleTestAgent,
+            )}
+            dataSource={agents}
+            rowSelection={rowSelection}
+            pagination={false}
+            scroll={{ x: 1200 }}
+            size="middle"
+          />
+        </AdminTablePanel>
+      </div>
 
       {/* 智能体表单弹窗 */}
       <AgentForm

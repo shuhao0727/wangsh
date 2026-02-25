@@ -6,7 +6,7 @@
 services:
   # PostgreSQL 数据库服务
   postgres:
-    image: public.ecr.aws/docker/library/postgres:15-alpine
+    image: public.ecr.aws/docker/library/postgres:16-alpine
     container_name: wangsh-postgres
     restart: unless-stopped
     ports:
@@ -92,6 +92,7 @@ services:
       - MAX_UPLOAD_SIZE=10485760
       # 开发模式热加载
       - BACKEND_RELOAD=True
+      - PYTHONLAB_DEFAULT_MEMORY_MB=128
     volumes:
       # 代码热重载：将本地代码挂载到容器
       - ./backend:/app
@@ -104,6 +105,9 @@ services:
         condition: service_healthy
     networks:
       - wangsh-network
+      - dify_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: >
       sh -c "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     healthcheck:
@@ -188,6 +192,7 @@ services:
       - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
       - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
+      - PYTHONLAB_DEFAULT_MEMORY_MB=128
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -226,26 +231,17 @@ services:
       - backend
     networks:
       - wangsh-network
-    command: sh -c "npm start"
-    # 网关反向代理服务（开发环境启用）- 唯一入口
-  caddy:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
-    container_name: wangsh-caddy
-    restart: unless-stopped
     ports:
-      - "8080:80"
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - wangsh-network
+      - "${WEB_PORT:-6608}:6608"
+    command: sh -c "npm start"
 
 # 网络配置
 networks:
   wangsh-network:
     driver: bridge
+  dify_network:
+    external: true
+    name: docker_default
 
 # 数据卷配置
 volumes:

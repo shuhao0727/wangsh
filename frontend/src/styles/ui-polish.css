@@ -20,6 +20,15 @@ body {
   margin-bottom: 16px;
 }
 
+.ant-card,
+.ant-card-hoverable {
+  box-shadow: none !important;
+}
+
+.ant-card-hoverable:hover {
+  box-shadow: none !important;
+}
+
 .ant-table-wrapper .ant-table-thead > tr > th {
   font-weight: 600;
 }

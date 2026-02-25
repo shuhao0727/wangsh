@@ -39,6 +39,7 @@ async def student_chains(
     agent_id: int = Query(..., ge=1, description="智能体ID"),
     user_id: Optional[int] = Query(None, ge=1, description="用户ID"),
     student_id: Optional[str] = Query(None, description="学号"),
+    class_name: Optional[str] = Query(None, description="班级名称"),
     start_at: Optional[datetime] = Query(None, description="开始时间(ISO)"),
     end_at: Optional[datetime] = Query(None, description="结束时间(ISO)"),
     limit_sessions: int = Query(5, ge=1, le=20, description="最多返回会话数"),
@@ -53,8 +54,8 @@ async def student_chains(
         agent_id=agent_id,
         user_id=user_id,
         student_id=student_id,
+        class_name=class_name,
         start_at=effective_start,
         end_at=effective_end,
         limit_sessions=limit_sessions,
     )
-

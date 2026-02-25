@@ -101,7 +101,7 @@ class DockerProvider(SandboxProvider):
             "--user", "1000:1000",
             "--pids-limit", str(settings.PYTHONLAB_CONTAINER_PIDS_LIMIT),
             "--memory", f"{mem_mb}m",
-            "--memory-swap", "-1", # Allow unlimited swap
+            "--memory-swap", "-1",
             "--cpu-period", "100000",
             "--cpu-quota", str(cpu_quota),
             # Log config to prevent disk usage from growing indefinitely
@@ -296,5 +296,4 @@ class DockerProvider(SandboxProvider):
         logs = _run(["docker", "logs", "--tail", "80", container_id], timeout_s=10)
         tail = (logs.stdout or logs.stderr or "").strip()[:1000]
         raise RuntimeError(f"debugpy readiness timeout after 30s. Logs: {tail}")
-
 

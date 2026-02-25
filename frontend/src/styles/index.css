@@ -56,6 +56,12 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-size: var(--ws-font-size-base);

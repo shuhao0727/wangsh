@@ -4,7 +4,7 @@
 # ============================================
 
 # 基础镜像：Node.js LTS（使用本地已有镜像）
-FROM node:lts-alpine3.23 AS development
+FROM node:20-alpine AS development
 
 # 设置工作目录
 WORKDIR /app

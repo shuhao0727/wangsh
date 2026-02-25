@@ -301,6 +301,7 @@ const agentDataApi = {
     agent_id: number;
     user_id?: number;
     student_id?: string;
+    class_name?: string;
     start_at?: string;
     end_at?: string;
     limit_sessions?: number;
@@ -310,6 +311,9 @@ const agentDataApi = {
         session_id: string;
         last_at: string;
         turns: number;
+        student_id?: string;
+        user_name?: string;
+        class_name?: string;
         messages: Array<{
           id: number;
           message_type: string;
@@ -400,6 +404,7 @@ const agentDataApi = {
     agent_id: number;
     user_id?: number;
     student_id?: string;
+    class_name?: string;
     start_at?: string;
     end_at?: string;
     limit_sessions?: number;

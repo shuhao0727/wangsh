@@ -4,9 +4,15 @@ type Props = {
   children: React.ReactNode;
   maxWidth?: number;
   padding?: number | string;
+  scrollable?: boolean;
 };
 
-const AdminPage: React.FC<Props> = ({ children, maxWidth, padding = 32 }) => {
+const AdminPage: React.FC<Props> = ({ 
+  children, 
+  maxWidth, 
+  padding = 32,
+  scrollable = true,
+}) => {
   return (
     <div 
       className="ws-admin-page" 
@@ -20,7 +26,7 @@ const AdminPage: React.FC<Props> = ({ children, maxWidth, padding = 32 }) => {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        overflow: "auto",
+        overflow: scrollable ? "auto" : "hidden",
       }}
     >
       {children}

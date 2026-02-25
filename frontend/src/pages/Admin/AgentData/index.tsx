@@ -1,34 +1,24 @@
 /**
  * 智能体数据统计页面 - 学生使用智能体情况统计
- * 参考首页和AI智能体管理页面的UI设计
+ * 重构版：手动 Tab 切换，彻底解决布局和滚动条问题
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  Button,
-  Tabs,
-  Table,
-  message,
-  Pagination,
-} from "antd";
-import dayjs from "dayjs";
+import { Tabs, message } from "antd";
 
 // 导入组件
 import StatisticsCards from "./components/StatisticsCards";
-import SearchBar from "./components/SearchBar";
-import DetailModal from "./components/DetailModal";
-import { getAgentDataColumns } from "./components/columns";
-import { HotQuestionsPanel, StudentQuestionChainsPanel } from "./components/AnalysisPanel";
+import UsageRecordPanel from "./components/UsageRecordPanel";
+import {
+  HotQuestionsPanel,
+  StudentQuestionChainsPanel,
+} from "./components/AnalysisPanel";
 
 // 导入类型和API
-import type {
-  AgentUsageData,
-  SearchFilterParams,
-  StatisticsData,
-} from "@services/znt/types";
+import type { StatisticsData } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
-import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { AdminPage } from "@components/Admin";
 
 type TabKey = "usage" | "hot" | "chains";
 
@@ -43,27 +33,6 @@ const AdminAgentData: React.FC = () => {
   const [activeTabKey, setActiveTabKey] = useState<TabKey>(
     normalizeTab(urlSearchParams.get("tab")),
   );
-  // 状态管理
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<AgentUsageData[]>([]);
-  const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  // 筛选状态
-  const [searchParams, setSearchParams] = useState<SearchFilterParams>({
-    page: 1,
-    page_size: 20,
-  });
-
-  // 详情弹窗状态
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [currentRecord, setCurrentRecord] = useState<AgentUsageData | null>(
-    null,
-  );
-
-  // 统计信息状态
   const [statistics, setStatistics] = useState<StatisticsData>({
     total_usage: 0,
     active_students: 0,
@@ -74,46 +43,22 @@ const AdminAgentData: React.FC = () => {
     month_usage: 0,
   });
 
-  // 加载数据
-  const loadData = useCallback(async () => {
+  const loadStatistics = useCallback(async () => {
     try {
-      setLoading(true);
-      const params = {
-        ...searchParams,
-        page: currentPage,
-        page_size: pageSize,
-      };
-
-      const [listResponse, statsResponse] = await Promise.all([
-        agentDataApi.getAgentData(params),
-        agentDataApi.getStatistics(params),
-      ]);
-
-      if (listResponse.success) {
-        setData(listResponse.data.items || []);
-        setTotal(listResponse.data.total || 0);
-        setSelectedRowKeys([]);
-      } else {
-        message.error(listResponse.message || "加载数据失败");
+      const res = await agentDataApi.getStatistics({ page: 1, page_size: 20 });
+      if (res.success) {
+        setStatistics(res.data);
+        return;
       }
-
-      if (statsResponse.success) {
-        setStatistics(statsResponse.data);
-      } else {
-        message.error(statsResponse.message || "加载统计信息失败");
-      }
-    } catch (error) {
-      console.error("加载数据失败:", error);
-      message.error("加载数据失败");
-    } finally {
-      setLoading(false);
+      message.error(res.message || "加载统计信息失败");
+    } catch {
+      message.error("加载统计信息失败");
     }
-  }, [currentPage, pageSize, searchParams]);
+  }, []);
 
-  // 初始加载
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadStatistics();
+  }, [loadStatistics]);
 
   useEffect(() => {
     const tab = urlSearchParams.get("tab");
@@ -121,170 +66,46 @@ const AdminAgentData: React.FC = () => {
     if (next !== activeTabKey) setActiveTabKey(next);
   }, [urlSearchParams, activeTabKey]);
 
-  // 处理搜索
-  const handleSearch = (params: SearchFilterParams) => {
-    setSearchParams({
-      ...params,
-      page: 1,
-      page_size: pageSize,
-    });
-    setCurrentPage(1);
-  };
-
-  // 处理重置
-  const handleReset = () => {
-    setSearchParams({
-      page: 1,
-      page_size: pageSize,
-    });
-    setCurrentPage(1);
-  };
-
-  // 处理分页变化
-  const handlePageChange = (page: number, size?: number) => {
-    setCurrentPage(page);
-    if (size) setPageSize(size);
-
-    setSearchParams((prev) => ({
-      ...prev,
-      page,
-      page_size: size || pageSize,
-    }));
-  };
-
-  // 处理查看详情
-  const handleViewDetail = (record: AgentUsageData) => {
-    setCurrentRecord(record);
-    setDetailVisible(true);
-  };
-
-  // 表格行选择
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
-  };
-
-  const handleExportSelected = async () => {
-    const selectedRecords = data.filter((r) => selectedRowKeys.includes(r.id));
-    const sessionIds = selectedRecords
-      .map((r) => r.session_id)
-      .filter((s): s is string => Boolean(s));
-    if (sessionIds.length === 0) {
-      message.warning("请先勾选要导出的会话（需要有会话ID）");
-      return;
-    }
-    try {
-      setLoading(true);
-      const res = await agentDataApi.exportSelectedConversations(sessionIds);
-      if (!res.success) {
-        message.error(res.message || "导出失败");
-        return;
-      }
-      const blob = res.data;
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute(
-        "download",
-        `conversations_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`,
-      );
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      message.success("Excel 已导出");
-    } catch {
-      message.error("导出失败");
-    } finally {
-      setLoading(false);
-    }
+  // Tab 切换处理
+  const handleTabChange = (key: string) => {
+    const next = normalizeTab(key);
+    setActiveTabKey(next);
+    const nextParams = new URLSearchParams(urlSearchParams);
+    nextParams.set("tab", next);
+    setUrlSearchParams(nextParams, { replace: true });
   };
 
   return (
-    <AdminPage padding={16}>
-      <Tabs
-        activeKey={activeTabKey}
-        onChange={(key) => {
-          const next = normalizeTab(key);
-          setActiveTabKey(next);
-          const nextParams = new URLSearchParams(urlSearchParams);
-          nextParams.set("tab", next);
-          setUrlSearchParams(nextParams, { replace: true });
-        }}
-        // 确保 Tabs 占满剩余高度
-        style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
-        items={[
-          {
-            key: "usage",
-            label: "使用记录",
-            children: (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                <StatisticsCards data={statistics} />
-                <SearchBar
-                  searchParams={searchParams}
-                  onSearch={handleSearch}
-                  onReset={handleReset}
-                  onExport={handleExportSelected}
-                  exportDisabled={selectedRowKeys.length === 0}
-                />
-                {/* 包裹 AdminTablePanel，确保其能够自适应填充剩余空间 */}
-                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                  <AdminTablePanel
-                    loading={loading}
-                    isEmpty={data.length === 0}
-                    emptyDescription="暂无使用记录数据"
-                    emptyAction={
-                      <Button type="primary" onClick={handleReset}>
-                        重新加载
-                      </Button>
-                    }
-                    pagination={
-                      data.length > 0 ? (
-                        <Pagination
-                          current={currentPage}
-                          pageSize={pageSize}
-                          total={total}
-                          onChange={handlePageChange}
-                          showSizeChanger
-                          showQuickJumper
-                          showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
-                        />
-                      ) : null
-                    }
-                  >
-                    <Table
-                      rowKey="id"
-                      columns={getAgentDataColumns(handleViewDetail)}
-                      dataSource={data}
-                      rowSelection={rowSelection}
-                      pagination={false}
-                      scroll={{ x: 1500 }}
-                      size="middle"
-                    />
-                  </AdminTablePanel>
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "hot",
-            label: "热点问题",
-            children: <HotQuestionsPanel />,
-          },
-          {
-            key: "chains",
-            label: "学生提问链条",
-            children: <StudentQuestionChainsPanel />,
-          },
-        ]}
-      />
+    <AdminPage padding={16} scrollable={false}>
+      {/* 使用 Flex 列布局，高度占满 */}
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        
+        {/* 顶部统计卡片 - 固定高度 */}
+        <div style={{ flex: "none" }}>
+          <StatisticsCards data={statistics} />
+        </div>
 
-      {/* 详情弹窗 */}
-      <DetailModal
-        visible={detailVisible}
-        record={currentRecord}
-        onClose={() => setDetailVisible(false)}
-      />
+        {/* Tab 导航栏 - 固定高度 */}
+        <div style={{ flex: "none", marginBottom: 16 }}>
+          <Tabs
+            activeKey={activeTabKey}
+            onChange={handleTabChange}
+            items={[
+              { key: "usage", label: "使用记录" },
+              { key: "hot", label: "热点问题" },
+              { key: "chains", label: "学生提问链条" },
+            ]}
+            // 关键：不使用 Tabs 的 children 渲染内容，仅作为导航
+          />
+        </div>
+
+        {/* 内容区域 - 占据剩余空间，严格限制溢出 */}
+        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {activeTabKey === "usage" && <UsageRecordPanel />}
+          {activeTabKey === "hot" && <HotQuestionsPanel />}
+          {activeTabKey === "chains" && <StudentQuestionChainsPanel />}
+        </div>
+      </div>
     </AdminPage>
   );
 };

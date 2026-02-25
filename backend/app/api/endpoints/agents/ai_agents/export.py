@@ -345,6 +345,7 @@ async def export_student_chains_excel(
     agent_id: int = Query(..., ge=1, description="智能体ID"),
     user_id: Optional[int] = Query(None, ge=1, description="用户ID"),
     student_id: Optional[str] = Query(None, description="学号"),
+    class_name: Optional[str] = Query(None, description="班级名称"),
     start_at: Optional[datetime] = Query(None, description="开始时间(ISO)"),
     end_at: Optional[datetime] = Query(None, description="结束时间(ISO)"),
     limit_sessions: int = Query(5, ge=1, le=20, description="最多返回会话数"),
@@ -359,6 +360,7 @@ async def export_student_chains_excel(
         agent_id=agent_id,
         user_id=user_id,
         student_id=student_id,
+        class_name=class_name,
         start_at=effective_start,
         end_at=effective_end,
         limit_sessions=limit_sessions,
@@ -374,7 +376,7 @@ async def export_student_chains_excel(
                 s = str(value)
             return s.replace("T", " ").replace("Z", "").replace("+00:00", "")
 
-        header = ["会话ID", "最后时间", "轮次", "提问链条", "会话摘要"]
+        header = ["班级", "学号", "姓名", "会话ID", "最后时间", "轮次", "提问链条", "会话摘要"]
 
         wb = Workbook()
         ws = wb.active
@@ -394,13 +396,19 @@ async def export_student_chains_excel(
             cell.alignment = header_alignment
 
         ws.freeze_panes = "A2"
-        ws.column_dimensions["A"].width = 38
-        ws.column_dimensions["B"].width = 22
-        ws.column_dimensions["C"].width = 8
-        ws.column_dimensions["D"].width = 60
-        ws.column_dimensions["E"].width = 90
+        ws.column_dimensions["A"].width = 18
+        ws.column_dimensions["B"].width = 16
+        ws.column_dimensions["C"].width = 14
+        ws.column_dimensions["D"].width = 38
+        ws.column_dimensions["E"].width = 22
+        ws.column_dimensions["F"].width = 8
+        ws.column_dimensions["G"].width = 60
+        ws.column_dimensions["H"].width = 90
 
         for s in items:
+            class_name_value = str(s.get("class_name") or "")
+            student_id_value = str(s.get("student_id") or "")
+            user_name_value = str(s.get("user_name") or "")
             sid = str(s.get("session_id") or "")
             last_at = fmt_time(s.get("last_at"))
             turns = int(s.get("turns") or 0)
@@ -420,11 +428,11 @@ async def export_student_chains_excel(
                     lines.append(f"{prefix}: {content}")
             summary_text = "\n".join([ln for ln in lines if ln.strip()])
 
-            ws.append([sid, last_at, turns, question_chain, summary_text])
+            ws.append([class_name_value, student_id_value, user_name_value, sid, last_at, turns, question_chain, summary_text])
 
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=5):
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=8):
             for cell in row:
-                if cell.column in (1, 2, 4, 5):
+                if cell.column in (1, 2, 3, 4, 5, 7, 8):
                     cell.alignment = left_alignment
                 else:
                     cell.alignment = center_alignment

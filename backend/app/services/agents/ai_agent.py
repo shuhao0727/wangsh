@@ -1242,6 +1242,7 @@ async def analyze_student_chains(
     agent_id: int,
     user_id: Optional[int] = None,
     student_id: Optional[str] = None,
+    class_name: Optional[str] = None,
     start_at: datetime,
     end_at: datetime,
     limit_sessions: int = 5,
@@ -1252,7 +1253,7 @@ async def analyze_student_chains(
         user = user_result.scalar_one_or_none()
         resolved_user_id = int(user.id) if user else None
 
-    if resolved_user_id is None:
+    if resolved_user_id is None and not class_name:
         return []
 
     if limit_sessions <= 0:
@@ -1260,19 +1261,27 @@ async def analyze_student_chains(
     if limit_sessions > 20:
         limit_sessions = 20
 
+    class_name_value = (class_name or "").strip() or None
+    class_name_like = f"%{class_name_value}%" if class_name_value else None
+
     sessions_sql = text(
         """
         SELECT
-            session_id,
-            max(created_at) AS last_at,
-            sum(CASE WHEN message_type = 'question' THEN 1 ELSE 0 END) AS turns
-        FROM v_conversations_with_deleted
-        WHERE agent_id = :agent_id
-          AND user_id = :user_id
-          AND session_id IS NOT NULL
-          AND created_at >= :start_at
-          AND created_at < :end_at
-        GROUP BY session_id
+            c.session_id,
+            max(c.created_at) AS last_at,
+            sum(CASE WHEN c.message_type = 'question' THEN 1 ELSE 0 END) AS turns,
+            max(u.student_id) AS student_id,
+            max(u.full_name) AS user_name,
+            max(u.class_name) AS class_name
+        FROM v_conversations_with_deleted c
+        JOIN sys_users u ON u.id = c.user_id
+        WHERE c.agent_id = :agent_id
+          AND (CAST(:user_id AS INTEGER) IS NULL OR c.user_id = CAST(:user_id AS INTEGER))
+          AND (CAST(:class_name_like AS TEXT) IS NULL OR u.class_name ILIKE CAST(:class_name_like AS TEXT))
+          AND c.session_id IS NOT NULL
+          AND c.created_at >= :start_at
+          AND c.created_at < :end_at
+        GROUP BY c.session_id
         ORDER BY last_at DESC
         LIMIT :limit_sessions
         """
@@ -1282,6 +1291,7 @@ async def analyze_student_chains(
         {
             "agent_id": agent_id,
             "user_id": resolved_user_id,
+            "class_name_like": class_name_like,
             "start_at": start_at,
             "end_at": end_at,
             "limit_sessions": limit_sessions,
@@ -1295,25 +1305,23 @@ async def analyze_student_chains(
     messages_sql = text(
         """
         SELECT
-            id,
-            session_id,
-            message_type,
-            content,
-            created_at
-        FROM v_conversations_with_deleted
-        WHERE agent_id = :agent_id
-          AND user_id = :user_id
-          AND session_id = ANY(:session_ids)
-          AND created_at >= :start_at
-          AND created_at < :end_at
-        ORDER BY session_id ASC, created_at ASC, id ASC
+            c.id,
+            c.session_id,
+            c.message_type,
+            c.content,
+            c.created_at
+        FROM v_conversations_with_deleted c
+        WHERE c.agent_id = :agent_id
+          AND c.session_id = ANY(:session_ids)
+          AND c.created_at >= :start_at
+          AND c.created_at < :end_at
+        ORDER BY c.session_id ASC, c.created_at ASC, c.id ASC
         """
     )
     messages_result = await db.execute(
         messages_sql,
         {
             "agent_id": agent_id,
-            "user_id": resolved_user_id,
             "session_ids": session_ids,
             "start_at": start_at,
             "end_at": end_at,
@@ -1330,6 +1338,9 @@ async def analyze_student_chains(
             "session_id": sid,
             "last_at": s.get("last_at"),
             "turns": int(s.get("turns") or 0),
+            "student_id": s.get("student_id"),
+            "user_name": s.get("user_name"),
+            "class_name": s.get("class_name"),
             "messages": [],
         }
 

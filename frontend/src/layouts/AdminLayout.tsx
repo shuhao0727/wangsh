@@ -461,7 +461,8 @@ const AdminLayout: React.FC = () => {
           style={{
             margin: 0,
             padding: 0, // Removed padding globally for "canvas" feel
-            minHeight: "calc(100vh - 64px)", // Full height minus header
+            height: "calc(100vh - 64px)", // Full height minus header
+            minHeight: 0,
             background: "transparent",
             overflow: "hidden", // Let children handle scroll
             display: "flex",
@@ -469,8 +470,8 @@ const AdminLayout: React.FC = () => {
           }}
         >
           {auth.isLoggedIn() && auth.isAdmin() ? (
-            <div style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column" }}>
-                <Outlet />
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <Outlet />
             </div>
           ) : (
             <div style={{ textAlign: "center", padding: "80px 24px" }}>

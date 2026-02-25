@@ -38,7 +38,12 @@ module.exports = {
 
   // 可选：如果需要修改其他配置可以在这里添加
   devServer: {
-    // 开发服务器配置
+    proxy: {
+      '/api': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+      },
+    },
   },
 
   plugins: [

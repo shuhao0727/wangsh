@@ -242,6 +242,9 @@ class StudentChainSession(BaseModel):
     session_id: str
     last_at: datetime
     turns: int
+    student_id: Optional[str] = None
+    user_name: Optional[str] = None
+    class_name: Optional[str] = None
     messages: List[StudentChainMessage]
 
 
