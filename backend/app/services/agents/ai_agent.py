@@ -79,12 +79,13 @@ async def get_agent(
     db: AsyncSession,
     agent_id: int,
     include_deleted: bool = False,
+    use_cache: bool = True,
 ) -> Optional[AIAgent]:
     """
     根据ID获取智能体 (带内存缓存)
     """
     # 仅针对未删除的智能体使用缓存
-    if not include_deleted:
+    if not include_deleted and use_cache:
         cached = _AGENT_CACHE.get(agent_id)
         if cached:
             return cached
@@ -185,7 +186,7 @@ async def update_agent(
     更新智能体信息
     """
     # 获取智能体
-    agent = await get_agent(db, agent_id)
+    agent = await get_agent(db, agent_id, use_cache=False)
     if not agent:
         return None
     
@@ -248,7 +249,7 @@ async def delete_agent(
     """
     删除智能体（默认软删除）
     """
-    agent = await get_agent(db, agent_id)
+    agent = await get_agent(db, agent_id, use_cache=False)
     if not agent:
         return False
     
