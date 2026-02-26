@@ -15,6 +15,9 @@ if [ -z "${VERSION}" ]; then
   VERSION="$(read_env_value "APP_VERSION" ".env")"
 fi
 if [ -z "${VERSION}" ]; then
+  VERSION="$(read_env_value "VERSION" ".env")"
+fi
+if [ -z "${VERSION}" ]; then
   VERSION="unknown"
 fi
 

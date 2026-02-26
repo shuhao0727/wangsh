@@ -24,6 +24,9 @@ compose() {
   version="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
   react_version="$(awk -F= '/^REACT_APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
 
+  if [ -z "${app_version}" ] && [ -n "${version}" ]; then
+    app_version="${version}"
+  fi
   if [ -z "${tag}" ] && [ -n "${app_version}" ]; then
     tag="${app_version}"
   fi
@@ -132,6 +135,9 @@ case "${cmd}" in
     tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     if [ -z "${tag}" ]; then
       tag="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    fi
+    if [ -z "${tag}" ]; then
+      tag="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     fi
     tag_latest="$(awk -F= '/^IMAGE_TAG_LATEST=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_backend="$(awk -F= '/^IMAGE_NAME_BACKEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
