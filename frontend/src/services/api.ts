@@ -14,7 +14,7 @@ const REFRESH_TOKEN_KEY = "ws_refresh_token";
 export const getStoredAccessToken = () => {
   if (typeof window === "undefined") return null;
   try {
-    return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    return sessionStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(ACCESS_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -23,7 +23,7 @@ export const getStoredAccessToken = () => {
 export const getStoredRefreshToken = () => {
   if (typeof window === "undefined") return null;
   try {
-    return sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    return sessionStorage.getItem(REFRESH_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -53,8 +53,14 @@ export const authTokenStorage = {
   set(accessToken?: string | null, refreshToken?: string | null) {
     if (typeof window === "undefined") return;
     try {
-      if (accessToken) sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-      if (refreshToken) sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      if (accessToken) {
+        sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+      }
+      if (refreshToken) {
+        sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      }
     } catch {
     }
   },
@@ -63,6 +69,8 @@ export const authTokenStorage = {
     try {
       sessionStorage.removeItem(ACCESS_TOKEN_KEY);
       sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
     } catch {
     }
   },
@@ -391,7 +399,7 @@ export const authApi = {
 
   // 刷新令牌
   refreshToken: (refreshToken?: string) => {
-    const token = refreshToken || (typeof window !== "undefined" ? sessionStorage.getItem("ws_refresh_token") : null);
+    const token = refreshToken || getStoredRefreshToken();
     return api.client.post("/auth/refresh", token ? { refresh_token: token } : {});
   },
 

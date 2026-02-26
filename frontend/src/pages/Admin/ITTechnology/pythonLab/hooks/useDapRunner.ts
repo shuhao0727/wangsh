@@ -331,18 +331,14 @@ export function useDapRunner(code: string) {
       if (!token) token = getCookieToken();
       if (!token) {
         try {
-          const r = await authApi.refreshToken();
+          const r = await authApi.refreshToken(undefined);
           const data: any = r?.data;
           if (data?.access_token || data?.refresh_token) {
             authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
             token = String(data?.access_token || "");
           }
         } catch {
-          // ignore; will fail below
         }
-      }
-      if (!token) {
-        throw new Error("登录状态缺失：请先登录后再运行（或刷新页面后重试）");
       }
       
       const url = wsUrl(`/api/v1/debug/sessions/${session.session_id}/ws`, token);

@@ -58,6 +58,7 @@ const TypstNoteEditorInner: React.FC<{
   const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [sideCollapsed, setSideCollapsed] = useState(false);
+  const viewModeRef = useRef<ViewMode>("split");
 
   const [title, setTitle] = useState(note?.title || "");
   const [summary, setSummary] = useState(note?.summary || "");
@@ -88,10 +89,11 @@ const TypstNoteEditorInner: React.FC<{
   const [renderError, setRenderError] = useState<string>("");
   const [previewPdfData, setPreviewPdfData] = useState<Uint8Array | null>(null);
   const previewTimerRef = useRef<number | null>(null);
+  const previewRefreshTimerRef = useRef<number | null>(null);
   const previewTokenRef = useRef(0);
   const renderTokenRef = useRef(0);
-  const autoPreviewInFlightRef = useRef(false);
-  const autoPreviewLastAtRef = useRef(0);
+  const previewInFlightRef = useRef(false);
+  const previewLastAtRef = useRef(0);
   const autoPreviewPendingKeyRef = useRef<string>("");
   const autoPreviewLastSuccessKeyRef = useRef<string>("");
   const previewRefreshRequestRef = useRef<{ id?: number } | null>(null);
@@ -99,6 +101,10 @@ const TypstNoteEditorInner: React.FC<{
   const assetInputRef = useRef<HTMLInputElement | null>(null);
   const [previewRefreshSeq, setPreviewRefreshSeq] = useState(0);
   const editorRef = useRef<any>(null);
+
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
 
   useEffect(() => {
     setTitle(note?.title || "");
@@ -284,10 +290,43 @@ const TypstNoteEditorInner: React.FC<{
     if (viewMode === "edit") return;
     if (!note?.id) return;
     if (req.id !== undefined && req.id !== note.id) return;
-    if (renderLoading) return;
-    previewRefreshRequestRef.current = null;
-    renderServerPreview(++previewTokenRef.current);
-  }, [note?.id, previewRefreshSeq, renderLoading, renderServerPreview, viewMode]);
+    if (previewRefreshTimerRef.current) window.clearTimeout(previewRefreshTimerRef.current);
+    const requestedId = req.id;
+    const run = async () => {
+      const currentReq = previewRefreshRequestRef.current;
+      if (!currentReq) return;
+      if (viewModeRef.current === "edit") return;
+      if (!note?.id) return;
+      if (requestedId !== undefined && requestedId !== note.id) return;
+
+      const minIntervalMs = 1500;
+      const now = Date.now();
+      const elapsed = now - previewLastAtRef.current;
+      if (elapsed >= 0 && elapsed < minIntervalMs) {
+        previewRefreshTimerRef.current = window.setTimeout(run, minIntervalMs - elapsed);
+        return;
+      }
+      if (previewInFlightRef.current) {
+        previewRefreshTimerRef.current = window.setTimeout(run, 300);
+        return;
+      }
+
+      previewInFlightRef.current = true;
+      previewLastAtRef.current = Date.now();
+      previewRefreshRequestRef.current = null;
+      const res = await renderServerPreview(++previewTokenRef.current);
+      previewInFlightRef.current = false;
+      if (res.rateLimited) {
+        previewRefreshRequestRef.current = { id: requestedId };
+        previewRefreshTimerRef.current = window.setTimeout(run, 1600);
+      }
+    };
+
+    previewRefreshTimerRef.current = window.setTimeout(run, 0);
+    return () => {
+      if (previewRefreshTimerRef.current) window.clearTimeout(previewRefreshTimerRef.current);
+    };
+  }, [note?.id, previewRefreshSeq, renderServerPreview, viewMode]);
 
   useEffect(() => {
     if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
@@ -317,22 +356,22 @@ const TypstNoteEditorInner: React.FC<{
 
       const minIntervalMs = 1500;
       const now = Date.now();
-      const elapsed = now - autoPreviewLastAtRef.current;
+      const elapsed = now - previewLastAtRef.current;
       if (elapsed >= 0 && elapsed < minIntervalMs) {
         previewTimerRef.current = window.setTimeout(run, minIntervalMs - elapsed);
         return;
       }
 
-      if (autoPreviewInFlightRef.current) {
+      if (previewInFlightRef.current) {
         previewTimerRef.current = window.setTimeout(run, 300);
         return;
       }
 
-      autoPreviewInFlightRef.current = true;
-      autoPreviewLastAtRef.current = Date.now();
+      previewInFlightRef.current = true;
+      previewLastAtRef.current = Date.now();
       const desiredKey = autoPreviewPendingKeyRef.current || previewKey;
       const res = await renderServerPreview(token);
-      autoPreviewInFlightRef.current = false;
+      previewInFlightRef.current = false;
       if (previewTokenRef.current !== token) return;
 
       if (res.ok) {

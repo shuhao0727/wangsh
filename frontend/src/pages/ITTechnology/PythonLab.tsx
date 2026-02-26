@@ -13,6 +13,8 @@ const PythonLabPage: React.FC = () => {
 
   const defaultId = useMemo(() => {
     try {
+      const fixed = "seq_basic";
+      if (experiments.some((x) => x.id === fixed)) return fixed;
       const last = localStorage.getItem(lastExperimentKey);
       if (last && experiments.some((x) => x.id === last)) return last;
     } catch {}

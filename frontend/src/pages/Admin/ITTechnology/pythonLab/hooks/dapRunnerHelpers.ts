@@ -61,11 +61,16 @@ export function wsUrl(path: string, token: string | null): string {
       
       // We assume 'path' is the full path from root, e.g. "/api/v1/debug/..."
       // So we just use protocol + host + path
-      // IMPORTANT: Encode token to handle special characters (e.g. =, +, /)
-      return `${protocol}//${host}${path}?token=${encodeURIComponent(token || "")}`;
+      if (token && token.trim()) {
+        return `${protocol}//${host}${path}?token=${encodeURIComponent(token)}`;
+      }
+      return `${protocol}//${host}${path}`;
   } catch (e) {
       // Fallback
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      return `${protocol}//${window.location.host}${path}?token=${encodeURIComponent(token || "")}`;
+      if (token && token.trim()) {
+        return `${protocol}//${window.location.host}${path}?token=${encodeURIComponent(token)}`;
+      }
+      return `${protocol}//${window.location.host}${path}`;
   }
 }

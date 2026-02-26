@@ -28,7 +28,7 @@ const AdminEditorLayout: React.FC = () => {
   })();
 
   return (
-    <Layout style={{ minHeight: "100vh", background: "var(--ws-color-bg)" }}>
+    <Layout style={{ height: "100vh", background: "var(--ws-color-bg)" }}>
       <Header
         style={{
           position: "sticky",
@@ -51,16 +51,15 @@ const AdminEditorLayout: React.FC = () => {
             {title}
           </Text>
         </Space>
-        <Space>
-          <Button onClick={() => window.close()}>关闭窗口</Button>
-        </Space>
       </Header>
       <Content
         style={{
           padding: isFullscreenEditor ? 0 : 16,
           display: "flex",
           flexDirection: "column",
+          flex: 1,
           minHeight: 0,
+          overflow: "hidden",
         }}
       >
         <div
