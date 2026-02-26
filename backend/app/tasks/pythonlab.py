@@ -83,16 +83,38 @@ def cleanup_orphans():
         except Exception:
             return
 
+        client = await cache.get_client()
+
         for sid in active_ids:
             if not sid:
                 continue
+            
+            # New Strategy: sid is u{user_id}
+            if sid.startswith("u"):
+                try:
+                    user_id = int(sid[1:])
+                    # Check if user has any active sessions
+                    user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
+                    count = await client.scard(user_sessions_key)
+                    if count > 0:
+                        continue # Keep container alive
+                    
+                    # No sessions, terminate container
+                    # We need to construct a fake meta to terminate
+                    fake_meta = {"owner_user_id": user_id}
+                    await provider.terminate_session("orphan", fake_meta)
+                except Exception:
+                    pass
+                continue
+
+            # Legacy Strategy: sid is session_id
             meta = await _get_session_meta(sid)
             if meta:
                 continue
 
             # Orphaned session (no meta found), request provider to stop it
             try:
-                await provider.stop_session(sid, {})
+                await provider.terminate_session(sid, {})
             except Exception:
                 pass
 
@@ -131,25 +153,32 @@ def cleanup_stale_sessions():
                 except Exception:
                     continue
                 age = (now - last_dt).total_seconds()
+                should_stop = False
+                
                 if st in {SESSION_STATUS_PENDING, SESSION_STATUS_READY}:
-                    if age <= unattached_ttl:
-                        continue
+                    if age > unattached_ttl:
+                        should_stop = True
                 else:
                     if st == SESSION_STATUS_RUNNING:
-                        continue
-                    if st in {SESSION_STATUS_ATTACHED, SESSION_STATUS_STOPPED}:
-                        if age <= idle_timeout:
-                            continue
+                         # Running sessions generally shouldn't timeout unless very long?
+                         # Let's say heartbeat timeout applies
+                         if age > heartbeat_timeout:
+                             should_stop = True
+                    elif st in {SESSION_STATUS_ATTACHED, SESSION_STATUS_STOPPED}:
+                        if age > idle_timeout:
+                            should_stop = True
                     else:
-                        if age <= heartbeat_timeout:
-                            continue
+                        if age > heartbeat_timeout:
+                            should_stop = True
 
-                try:
-                    celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid])
-                except Exception:
-                    pass
-                meta["status"] = SESSION_STATUS_TERMINATING
-                await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
+                if should_stop:
+                    try:
+                        # Force terminate for stale sessions
+                        celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid, True])
+                    except Exception:
+                        pass
+                    meta["status"] = SESSION_STATUS_TERMINATING
+                    await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
 
             if cursor == 0:
                 break
@@ -158,7 +187,7 @@ def cleanup_stale_sessions():
 
 
 @celery_app.task(name="app.tasks.pythonlab.stop_session")
-def stop_session(session_id: str):
+def stop_session(session_id: str, force: bool = False):
     import asyncio
 
     async def run():
@@ -167,7 +196,10 @@ def stop_session(session_id: str):
 
         # Stop Sandbox Resource
         try:
-            await provider.stop_session(session_id, meta or {})
+            if force:
+                await provider.terminate_session(session_id, meta or {})
+            else:
+                await provider.stop_session(session_id, meta or {})
         except Exception:
             pass
 
@@ -176,6 +208,12 @@ def stop_session(session_id: str):
             try:
                 client = await cache.get_client()
                 if owner > 0:
+                    # Only remove from active set if forced termination?
+                    # No, if we stop the session, it's effectively gone from UI.
+                    # But we want to keep container alive.
+                    # The set tracks "Sessions the user sees in UI".
+                    # If we remove it, UI won't show it.
+                    # So yes, remove it.
                     await client.srem(f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner}:sessions", session_id)
             except Exception:
                 pass
@@ -183,6 +221,4 @@ def stop_session(session_id: str):
             meta["status"] = SESSION_STATUS_TERMINATED
             await _set_session_meta(session_id, meta)
             
-            # Workspace cleanup is delegated to provider.stop_session
-
     asyncio.run(run())

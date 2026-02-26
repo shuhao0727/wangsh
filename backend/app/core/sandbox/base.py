@@ -27,7 +27,18 @@ class SandboxProvider(abc.ABC):
     @abc.abstractmethod
     async def stop_session(self, session_id: str, meta: Dict[str, Any]) -> None:
         """
-        Stop a sandbox session and cleanup resources.
+        Stop a sandbox session (soft stop).
+        
+        Args:
+            session_id: Unique session ID.
+            meta: Session metadata.
+        """
+        pass
+
+    @abc.abstractmethod
+    async def terminate_session(self, session_id: str, meta: Dict[str, Any]) -> None:
+        """
+        Terminate a sandbox session and cleanup resources (hard stop).
         
         Args:
             session_id: Unique session ID.

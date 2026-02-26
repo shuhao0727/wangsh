@@ -41,41 +41,72 @@ class DockerProvider(SandboxProvider):
             self._available_runtimes = ["runc"]
         return self._available_runtimes
 
+    def _container_name(self, meta: Dict[str, Any]) -> str:
+        user_id = meta.get("owner_user_id")
+        if user_id:
+            return f"pythonlab_u{user_id}"
+        return f"pythonlab_{meta.get('session_id')}"
+
+    def _ws_path_for_session(self, meta: Dict[str, Any]) -> Path:
+        user_id = meta.get("owner_user_id")
+        ws_root = _workspace_root()
+        if user_id:
+            return ws_root / f"u{user_id}"
+        return ws_root / str(meta.get("session_id"))
+
     async def start_session(self, session_id: str, code: str, meta: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Start a Docker container for the session.
-        Supports custom runtimes (gVisor/Kata) via self.runtime.
+        Start a Docker container for the session (with User-based Reuse Strategy).
         """
-        # 1. Prepare Workspace
-        ws_root = _workspace_root()
-        ws_path = ws_root / session_id
+        ws_path = self._ws_path_for_session(meta)
+        name = self._container_name(meta)
         
-        # ... (File writing logic same as before, simplified for provider) ...
-        # Note: The file writing logic is technically "storage" logic, but for local docker it's filesystem.
-        # In K8s, this might need to be a PVC or ConfigMap. 
-        # For now, we assume shared filesystem or volume mount logic stays here for Docker.
-        
-        # We need to ensure the directory exists and has files. 
-        # Since the original code did this in the task, we should do it here or helper.
-        # To keep it simple, I'll replicate the file creation here.
-        
+        # 1. Prepare Workspace Files (always overwrite)
         self._prepare_workspace_files(ws_path, code, meta)
 
         mem_mb = int(meta.get("limits", {}).get("memory_mb") or 512)
-        name = f"pythonlab_{session_id}"
         
-        # Cleanup existing
+        # 2. Check if container exists and is running (Reuse)
+        if self._docker_is_running(name):
+            logger.info(f"Reusing existing container: {name}")
+            # Soft restart: kill debugpy adapter loop to force reload
+            try:
+                _run(["docker", "exec", name, "pkill", "-f", "debugpy"], timeout_s=5)
+            except Exception:
+                pass
+            
+            # Resolve port
+            host_port = self._get_dynamic_port(name)
+            if host_port > 0:
+                # Wait for readiness (fast check)
+                try:
+                    await self._wait_for_readiness(name, host_port)
+                    return {
+                        "docker_container_id": name, # Use name as ID for easier lookup
+                        "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
+                        "dap_port": host_port,
+                        "workspace_path": str(ws_path)
+                    }
+                except Exception as e:
+                    logger.warning(f"Reuse failed readiness check: {e}, recreating...")
+                    # Fallthrough to recreate
+            
+            # If port resolution failed or readiness failed, kill and recreate
+            _run(["docker", "rm", "-f", name], timeout_s=30)
+
+        # Cleanup stopped/dead container with same name
         try:
             _run(["docker", "rm", "-f", name], timeout_s=30)
         except Exception:
             pass
 
-        # 2. Build Command
+        # 3. Build Command
         host_ws_root_str = os.getenv("HOST_WORKSPACE_ROOT")
         if host_ws_root_str:
-             mount_path = Path(host_ws_root_str) / session_id
+            # Map logic: /var/lib/pythonlab/workspaces/u123 -> $HOST_ROOT/u123
+            mount_path = Path(host_ws_root_str) / ws_path.name
         else:
-             mount_path = ws_path
+            mount_path = ws_path
         
         # Resource Limits
         limits = meta.get("limits", {})
@@ -104,28 +135,23 @@ class DockerProvider(SandboxProvider):
             "--memory-swap", "-1",
             "--cpu-period", "100000",
             "--cpu-quota", str(cpu_quota),
-            # Log config to prevent disk usage from growing indefinitely
             "--log-driver", "json-file",
             "--log-opt", f"max-size={settings.PYTHONLAB_LOG_MAX_SIZE}",
             "--log-opt", f"max-file={settings.PYTHONLAB_LOG_MAX_FILE}",
-            # "--network", "none", # Cannot use none if we want to expose ports
             "-e", "PYTHONPATH=/workspace",
             "-e", "PYTHONUNBUFFERED=1",
             "-p", f"{self.debugpy_port}",
             "-v", f"{str(mount_path)}:/workspace:rw",
         ]
         
-        # Apply Runtime (Phase 3: gVisor/Kata support)
         if self.runtime and self.runtime != "runc":
             available = self._get_available_runtimes()
-            if self.runtime not in available:
-                logger.warning(f"Requested runtime '{self.runtime}' not found in {available}, falling back to default")
-            else:
+            if self.runtime in available:
                 cmd.extend(["--runtime", self.runtime])
 
         cmd.extend([self.image, "sh", "-lc", loop_cmd])
 
-        # 3. Run Container
+        # 4. Run Container
         try:
             proc = _run(cmd, timeout_s=60)
             if proc.returncode != 0:
@@ -134,9 +160,9 @@ class DockerProvider(SandboxProvider):
         except Exception as e:
             raise RuntimeError(f"Docker start exception: {str(e)}")
 
-        # 4. Get Dynamic Port
+        # 5. Get Dynamic Port
         host_port = 0
-        for _ in range(5): # Retry 5 times (total 2.5s)
+        for _ in range(5): 
             host_port = self._get_dynamic_port(container_id)
             if host_port > 0:
                 break
@@ -148,9 +174,9 @@ class DockerProvider(SandboxProvider):
              try:
                 _run(["docker", "rm", "-f", container_id], timeout_s=30)
              except: pass
-             raise RuntimeError(f"Failed to resolve dynamic port. Container logs: {logs[:500]}")
+             raise RuntimeError(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
 
-        # 5. Wait for Readiness
+        # 6. Wait for Readiness
         await self._wait_for_readiness(container_id, host_port)
 
         return {
@@ -161,20 +187,26 @@ class DockerProvider(SandboxProvider):
         }
 
     async def stop_session(self, session_id: str, meta: Dict[str, Any]) -> None:
-        container_id = meta.get("docker_container_id")
-        name = f"pythonlab_{session_id}"
+        """Soft stop: kill process but keep container."""
+        name = self._container_name(meta)
         try:
-            if container_id:
-                _run(["docker", "rm", "-f", str(container_id)], timeout_s=30)
-            else:
-                _run(["docker", "rm", "-f", name], timeout_s=30)
+            # Only kill debugpy, loop will restart it and wait for next connection
+            _run(["docker", "exec", name, "pkill", "-f", "debugpy"], timeout_s=10)
+        except Exception:
+            pass
+        # Do NOT remove workspace or container
+
+    async def terminate_session(self, session_id: str, meta: Dict[str, Any]) -> None:
+        """Hard stop: remove container and workspace."""
+        name = self._container_name(meta)
+        try:
+            _run(["docker", "rm", "-f", name], timeout_s=30)
         except Exception:
             pass
         
-        # Cleanup Files
         ws_path = meta.get("workspace_path")
         if not ws_path:
-            ws_path = _workspace_root() / session_id
+            ws_path = self._ws_path_for_session(meta)
         
         try:
             p = Path(ws_path)
@@ -185,19 +217,20 @@ class DockerProvider(SandboxProvider):
 
     async def list_active_sessions(self) -> List[str]:
         try:
+            # Returns list of user_ids (e.g. "u123") derived from container names
             proc = _run(["docker", "ps", "-a", "--filter", "name=pythonlab_", "--format", "{{.Names}}"], timeout_s=20)
             if proc.returncode != 0:
                 return []
             names = [x.strip() for x in (proc.stdout or "").splitlines() if x.strip()]
+            # pythonlab_u123 -> u123
+            # pythonlab_sessionuuid -> sessionuuid
             return [name[len("pythonlab_") :] for name in names if name.startswith("pythonlab_")]
         except Exception:
             return []
 
     async def is_healthy(self, session_id: str, meta: Dict[str, Any]) -> bool:
-        cid = meta.get("docker_container_id")
-        if not cid:
-            return False
-        return self._docker_is_running(str(cid))
+        name = self._container_name(meta)
+        return self._docker_is_running(name)
 
     def _prepare_workspace_files(self, ws_path: Path, code: str, meta: Dict[str, Any]):
         import json
@@ -205,7 +238,6 @@ class DockerProvider(SandboxProvider):
         (ws_path / "main.py").write_text(code, encoding="utf-8")
         (ws_path / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
         from app.core.sandbox.base import get_sitecustomize_content
-        # Sitecustomize (Networking block)
         (ws_path / "sitecustomize.py").write_text(
             get_sitecustomize_content(), encoding="utf-8"
         )
@@ -221,24 +253,16 @@ class DockerProvider(SandboxProvider):
         try:
             cmd = ["docker", "port", container_id, f"{self.debugpy_port}/tcp"]
             proc_port = _run(cmd, timeout_s=10)
-            
-            # If docker port fails, it might be too early, return 0 to retry later or let caller handle
             if proc_port.returncode != 0:
-                logger.warning(f"docker port failed: {proc_port.stderr}")
                 return 0
-
             out = (proc_port.stdout or "").strip()
             if out:
-                # Handle multiple lines (e.g. IPv4 and IPv6)
-                # 0.0.0.0:55637
-                # [::]:55637
                 lines = out.splitlines()
                 for line in lines:
                     parts = line.strip().split(":")
                     if len(parts) >= 2:
                         try:
                             port = int(parts[-1])
-                            # Basic validation: avoid 0 or weird ports
                             if port > 0:
                                 return port
                         except ValueError:
@@ -259,7 +283,11 @@ class DockerProvider(SandboxProvider):
             
     def _debugpy_is_listening(self, container_id: str, port: int) -> bool:
         try:
-            # Parse /proc/net/tcp directly to avoid shell pipe issues
+            # Check if port is listening on HOST side (faster than docker exec)
+            # But we are in a container (backend), so we can't check host ports easily unless we use mapped IP
+            # We can try to connect to dap_host:port
+            
+            # Fallback to docker exec for reliability if network is tricky
             proc = _run(["docker", "exec", container_id, "cat", "/proc/net/tcp", "/proc/net/tcp6"], timeout_s=5)
             if proc.returncode != 0:
                 return False
@@ -267,7 +295,6 @@ class DockerProvider(SandboxProvider):
             port_hex = f"{int(port):04X}"
             for line in proc.stdout.splitlines():
                 parts = line.strip().split()
-                # 0: sl, 1: local_address, 2: rem_address, 3: st
                 if len(parts) >= 4:
                     if f":{port_hex}" in parts[1] and parts[3] == "0A":
                         return True
@@ -276,24 +303,15 @@ class DockerProvider(SandboxProvider):
             return False
 
     async def _wait_for_readiness(self, container_id: str, host_port: int):
-        logger.info(f"Waiting for debugpy readiness on {container_id}:{host_port}")
-        start_time = asyncio.get_event_loop().time()
+        # logger.info(f"Waiting for debugpy readiness on {container_id}:{host_port}")
         
         for _ in range(150): # 30 seconds
-            # Check if container is running first
             if not self._docker_is_running(container_id):
-                 logs = _run(["docker", "logs", "--tail", "50", container_id], timeout_s=5)
-                 tail = (logs.stdout or logs.stderr or "").strip()[:500]
-                 raise RuntimeError(f"Container exited prematurely. Logs: {tail}")
+                 raise RuntimeError(f"Container exited prematurely.")
 
-            # Check internal listening port
             if self._debugpy_is_listening(container_id, self.debugpy_port):
                 return
             
             await asyncio.sleep(0.2)
         
-        # Timeout handling
-        logs = _run(["docker", "logs", "--tail", "80", container_id], timeout_s=10)
-        tail = (logs.stdout or logs.stderr or "").strip()[:1000]
-        raise RuntimeError(f"debugpy readiness timeout after 30s. Logs: {tail}")
-
+        raise RuntimeError(f"debugpy readiness timeout after 30s")
