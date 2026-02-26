@@ -529,6 +529,7 @@ start_local_celery_worker() {
     nohup python3 -m celery -A app.core.celery_app:celery_app worker \
         -l INFO \
         -c 1 \
+        -Q celery,typst \
         --pool=solo \
         > "${CELERY_LOG}" 2>&1 &
     
