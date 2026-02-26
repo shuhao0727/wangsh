@@ -163,6 +163,7 @@ async def class_stats(
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
+    class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
@@ -177,6 +178,8 @@ async def class_stats(
         stmt = stmt.where(XbkStudent.term == term)
     if grade:
         stmt = stmt.where(XbkStudent.grade == grade)
+    if class_name:
+        stmt = stmt.where(XbkStudent.class_name == class_name)
     rows = (await db.execute(stmt)).all()
     items = [{"class_name": str(cls), "count": int(count)} for cls, count in rows]
     

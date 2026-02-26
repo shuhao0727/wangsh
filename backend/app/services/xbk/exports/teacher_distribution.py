@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
@@ -39,6 +40,16 @@ def _cn_len(value: object) -> int:
     return n
 
 
+def _wrap_len(value: object) -> float:
+    if value is None:
+        return 0.0
+    s = str(value)
+    n = 0.0
+    for ch in s:
+        n += 1.4 if ord(ch) > 127 else 1.0
+    return n
+
+
 def _apply_excel_style(ws, header_fill_color: str = "CCE5FF") -> None:
     header_fill = PatternFill(start_color=header_fill_color, end_color=header_fill_color, fill_type="solid")
     header_font = Font(bold=True, size=11)
@@ -67,16 +78,17 @@ def _apply_excel_style(ws, header_fill_color: str = "CCE5FF") -> None:
         cell = ws.cell(row=1, column=col)
         if not is_in_merged(cell) or is_top_left_of_merged(cell):
             cell.fill = header_fill
-            cell.font = header_font
+            if cell.value is None:
+                cell.font = header_font
             cell.border = thin_border
-            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     for row in range(2, ws.max_row + 1):
         for col in range(1, ws.max_column + 1):
             cell = ws.cell(row=row, column=col)
             if not is_in_merged(cell) or is_top_left_of_merged(cell):
                 cell.border = thin_border
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
 def _apply_merged_cell_borders(ws) -> None:
@@ -152,19 +164,31 @@ def _adjust_column_widths(ws) -> None:
 
 
 def _adjust_row_heights(ws) -> None:
-    if ws.max_row >= 1:
-        ws.row_dimensions[1].height = 35
-    if ws.max_row >= 2:
-        text = ws.cell(row=2, column=1).value
-        total_width = 0
+    def total_width_chars() -> float:
+        total = 0.0
         for letter in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
             w = ws.column_dimensions[letter].width
-            total_width += int(w) if w else 10
-        per_line = max(30, int(total_width * 1.2))
+            total += float(w) if w else 10.0
+        return total
+
+    if ws.max_row >= 1:
+        text = ws.cell(row=1, column=1).value
+        width = total_width_chars()
+        per_line = max(20.0, width * 0.95)
         lines = 1
         if text:
-            lines = max(1, (_cn_len(text) + per_line - 1) // per_line)
-        ws.row_dimensions[2].height = min(25 + (lines - 1) * 12, 60)
+            need = max(_wrap_len(text), _cn_len(text) * 0.7)
+            lines = max(1, int(math.ceil(need / per_line)))
+        ws.row_dimensions[1].height = min(25 + (lines - 1) * 16, 90)
+    if ws.max_row >= 2:
+        text = ws.cell(row=2, column=1).value
+        width = total_width_chars()
+        per_line = max(30.0, width * 0.95)
+        lines = 1
+        if text:
+            need = max(_wrap_len(text), _cn_len(text) * 0.7)
+            lines = max(1, int(math.ceil(need / per_line)))
+        ws.row_dimensions[2].height = min(20 + (lines - 1) * 18, 110)
     if ws.max_row >= 3:
         ws.row_dimensions[3].height = 20
     if ws.max_row >= 4:
@@ -264,7 +288,7 @@ async def build_teacher_distribution_xlsx(
         ws = wb.create_sheet(sheet_name)
 
         ws.merge_cells("A1:I1")
-        ws["A1"] = f"{ys}-{ye} 学年江苏省昆山中学 {grade} 校本课程学生签到表"
+        ws["A1"] = f"{ys}-{ye}学年江苏省昆山中学{term}校本课程学生签到表"
         ws["A1"].font = Font(size=14, bold=True)
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[1].height = 35
@@ -304,13 +328,12 @@ async def build_teacher_distribution_xlsx(
             ws.cell(row=row_no, column=1).value = r.class_name
             ws.cell(row=row_no, column=2).value = r.student_name
 
+        _apply_excel_style(ws)
         ws.cell(row=1, column=1).fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
         ws.cell(row=2, column=1).fill = PatternFill(start_color="F0F8FF", end_color="F0F8FF", fill_type="solid")
         ws.cell(row=3, column=1).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
         for col in range(3, 10):
             ws.cell(row=3, column=col).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
-
-        _apply_excel_style(ws)
         _apply_merged_cell_borders(ws)
         _adjust_column_widths(ws)
         _adjust_row_heights(ws)

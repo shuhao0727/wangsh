@@ -545,19 +545,36 @@ async def delete_data(
     scope: str = Query(..., pattern="^(all|students|courses|selections)$"),
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
     def base_conditions(model):
-        conds: List[Any] = [model.is_deleted.is_(False)]
+        conds: List[Any] = []
         if year is not None:
             conds.append(model.year == year)
         if term:
             conds.append(model.term == term)
+        if grade and hasattr(model, "grade"):
+            conds.append(model.grade == grade)
         return conds
 
     deleted = 0
+    student_no_sub = select(XbkStudent.student_no).where(*base_conditions(XbkStudent))
+    if class_name:
+        student_no_sub = student_no_sub.where(XbkStudent.class_name == class_name)
+
+    course_code_sub = select(XbkCourse.course_code).where(*base_conditions(XbkCourse))
+
+    if scope in ["all", "selections", "students", "courses"]:
+        stmt = delete(XbkSelection).where(*base_conditions(XbkSelection))
+        if scope in ["all", "students"] or class_name:
+            stmt = stmt.where(XbkSelection.student_no.in_(student_no_sub))
+        if scope in ["all", "courses"]:
+            stmt = stmt.where(XbkSelection.course_code.in_(course_code_sub))
+        res = await db.execute(stmt)
+        deleted += res.rowcount or 0
 
     if scope in ["all", "students"]:
         stmt = delete(XbkStudent).where(*base_conditions(XbkStudent))
@@ -568,19 +585,6 @@ async def delete_data(
 
     if scope in ["all", "courses"]:
         stmt = delete(XbkCourse).where(*base_conditions(XbkCourse))
-        res = await db.execute(stmt)
-        deleted += res.rowcount or 0
-
-    if scope in ["all", "selections"]:
-        stmt = delete(XbkSelection).where(*base_conditions(XbkSelection))
-        if class_name:
-            sub = select(XbkStudent.student_no).where(
-                XbkStudent.is_deleted.is_(False),
-                XbkStudent.class_name == class_name,
-                *( [XbkStudent.year == year] if year is not None else [] ),
-                *( [XbkStudent.term == term] if term else [] ),
-            )
-            stmt = stmt.where(XbkSelection.student_no.in_(sub))
         res = await db.execute(stmt)
         deleted += res.rowcount or 0
 

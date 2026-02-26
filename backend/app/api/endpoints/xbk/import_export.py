@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import StreamingResponse
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -583,10 +583,12 @@ async def import_data(
 
 @router.get("/export")
 async def export_data(
-    scope: str = Query(..., pattern="^(students|courses|selections)$"),
+    scope: str = Query(..., pattern="^(students|courses|selections|course_results|no_selection)$"),
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
+    search_text: Optional[str] = Query(None),
     format: str = Query("xlsx", pattern="^(xlsx|xls)$"),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
@@ -597,14 +599,26 @@ async def export_data(
             stmt = stmt.where(XbkStudent.year == year)
         if term:
             stmt = stmt.where(XbkStudent.term == term)
+        if grade:
+            stmt = stmt.where(XbkStudent.grade == grade)
         if class_name:
             stmt = stmt.where(XbkStudent.class_name == class_name)
+        if search_text and search_text.strip():
+            keyword = f"%{search_text.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    XbkStudent.student_no.ilike(keyword),
+                    XbkStudent.name.ilike(keyword),
+                    XbkStudent.class_name.ilike(keyword),
+                )
+            )
         rows = (await db.execute(stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
         df = pd.DataFrame(
             [
                 {
                     "年份": r.year,
                     "学期": r.term,
+                    "年级": r.grade,
                     "班级": r.class_name,
                     "学号": r.student_no,
                     "姓名": r.name,
@@ -619,12 +633,25 @@ async def export_data(
             stmt = stmt.where(XbkCourse.year == year)
         if term:
             stmt = stmt.where(XbkCourse.term == term)
+        if grade:
+            stmt = stmt.where(XbkCourse.grade == grade)
+        if search_text and search_text.strip():
+            keyword = f"%{search_text.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    XbkCourse.course_code.ilike(keyword),
+                    XbkCourse.course_name.ilike(keyword),
+                    XbkCourse.teacher.ilike(keyword),
+                    XbkCourse.location.ilike(keyword),
+                )
+            )
         rows = (await db.execute(stmt.order_by(XbkCourse.course_code.asc()))).scalars().all()
         df = pd.DataFrame(
             [
                 {
                     "年份": r.year,
                     "学期": r.term,
+                    "年级": r.grade,
                     "课程代码": r.course_code,
                     "课程名称": r.course_name,
                     "课程负责人": r.teacher,
@@ -634,12 +661,14 @@ async def export_data(
                 for r in rows
             ]
         )
-    else:
+    elif scope == "selections":
         stmt = select(XbkSelection).where(XbkSelection.is_deleted.is_(False))
         if year is not None:
             stmt = stmt.where(XbkSelection.year == year)
         if term:
             stmt = stmt.where(XbkSelection.term == term)
+        if grade:
+            stmt = stmt.where(XbkSelection.grade == grade)
         if class_name:
             sub = select(XbkStudent.student_no).where(
                 XbkStudent.is_deleted.is_(False),
@@ -648,17 +677,146 @@ async def export_data(
                 *( [XbkStudent.term == term] if term else [] ),
             )
             stmt = stmt.where(XbkSelection.student_no.in_(sub))
+        if search_text and search_text.strip():
+            keyword = f"%{search_text.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    XbkSelection.student_no.ilike(keyword),
+                    XbkSelection.course_code.ilike(keyword),
+                    XbkSelection.name.ilike(keyword),
+                )
+            )
         rows = (await db.execute(stmt.order_by(XbkSelection.student_no.asc(), XbkSelection.course_code.asc()))).scalars().all()
         df = pd.DataFrame(
             [
                 {
                     "年份": r.year,
                     "学期": r.term,
+                    "年级": r.grade,
                     "学号": r.student_no,
                     "姓名": r.name,
                     "课程代码": r.course_code,
                 }
                 for r in rows
+            ]
+        )
+    elif scope == "course_results":
+        stmt = (
+            select(
+                XbkSelection.year.label("year"),
+                XbkSelection.term.label("term"),
+                XbkSelection.grade.label("grade"),
+                XbkSelection.student_no.label("student_no"),
+                func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
+                XbkStudent.class_name.label("class_name"),
+                XbkSelection.course_code.label("course_code"),
+                XbkCourse.course_name.label("course_name"),
+                XbkCourse.teacher.label("teacher"),
+                XbkCourse.location.label("location"),
+            )
+            .select_from(XbkSelection)
+            .outerjoin(
+                XbkStudent,
+                and_(
+                    XbkStudent.is_deleted.is_(False),
+                    XbkStudent.year == XbkSelection.year,
+                    XbkStudent.term == XbkSelection.term,
+                    XbkStudent.student_no == XbkSelection.student_no,
+                ),
+            )
+            .outerjoin(
+                XbkCourse,
+                and_(
+                    XbkCourse.is_deleted.is_(False),
+                    XbkCourse.year == XbkSelection.year,
+                    XbkCourse.term == XbkSelection.term,
+                    XbkCourse.course_code == XbkSelection.course_code,
+                ),
+            )
+            .where(XbkSelection.is_deleted.is_(False))
+        )
+        if year is not None:
+            stmt = stmt.where(XbkSelection.year == year)
+        if term:
+            stmt = stmt.where(XbkSelection.term == term)
+        if grade:
+            stmt = stmt.where(XbkSelection.grade == grade)
+        if class_name:
+            stmt = stmt.where(XbkStudent.class_name == class_name)
+        if search_text and search_text.strip():
+            keyword = f"%{search_text.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    XbkSelection.student_no.ilike(keyword),
+                    XbkSelection.course_code.ilike(keyword),
+                    func.coalesce(XbkSelection.name, XbkStudent.name).ilike(keyword),
+                    XbkStudent.class_name.ilike(keyword),
+                    XbkCourse.course_name.ilike(keyword),
+                    XbkCourse.teacher.ilike(keyword),
+                    XbkCourse.location.ilike(keyword),
+                )
+            )
+        rows = (await db.execute(stmt.order_by(XbkStudent.class_name.asc(), XbkSelection.student_no.asc(), XbkSelection.course_code.asc()))).all()
+        df = pd.DataFrame(
+            [
+                {
+                    "年份": int(r.year),
+                    "学期": str(r.term),
+                    "年级": str(r.grade) if r.grade else None,
+                    "班级": str(r.class_name) if r.class_name else None,
+                    "学号": str(r.student_no),
+                    "姓名": str(r.student_name) if r.student_name else None,
+                    "课程代码": str(r.course_code),
+                    "课程名称": str(r.course_name) if r.course_name else None,
+                    "负责人": str(r.teacher) if r.teacher else None,
+                    "地点": str(r.location) if r.location else None,
+                }
+                for r in rows
+            ]
+        )
+    else:
+        students_stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
+        selections_stmt = (
+            select(XbkSelection.student_no)
+            .where(XbkSelection.is_deleted.is_(False))
+            .group_by(XbkSelection.student_no)
+        )
+        if year is not None:
+            students_stmt = students_stmt.where(XbkStudent.year == year)
+            selections_stmt = selections_stmt.where(XbkSelection.year == year)
+        if term:
+            students_stmt = students_stmt.where(XbkStudent.term == term)
+            selections_stmt = selections_stmt.where(XbkSelection.term == term)
+        if grade:
+            students_stmt = students_stmt.where(XbkStudent.grade == grade)
+            selections_stmt = selections_stmt.where(XbkSelection.grade == grade)
+        if class_name:
+            students_stmt = students_stmt.where(XbkStudent.class_name == class_name)
+        if search_text and search_text.strip():
+            keyword = f"%{search_text.strip()}%"
+            students_stmt = students_stmt.where(
+                or_(
+                    XbkStudent.student_no.ilike(keyword),
+                    XbkStudent.name.ilike(keyword),
+                    XbkStudent.class_name.ilike(keyword),
+                )
+            )
+        selection_rows = (await db.execute(selections_stmt)).all()
+        selected_student_nos = {row[0] for row in selection_rows} if selection_rows else set()
+        students = (await db.execute(students_stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
+        df = pd.DataFrame(
+            [
+                {
+                    "年份": r.year,
+                    "学期": r.term,
+                    "年级": r.grade,
+                    "班级": r.class_name,
+                    "学号": r.student_no,
+                    "姓名": r.name,
+                    "性别": r.gender,
+                }
+                for r in students
+                if r.student_no not in selected_student_nos
             ]
         )
 

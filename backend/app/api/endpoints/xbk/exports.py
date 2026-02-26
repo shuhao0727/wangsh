@@ -21,6 +21,7 @@ async def export_tables(
     export_type: str,
     year: int = Query(...),
     term: str = Query(...),
+    grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     year_start: Optional[int] = Query(None, alias="yearStart"),
     year_end: Optional[int] = Query(None, alias="yearEnd"),
@@ -34,14 +35,16 @@ async def export_tables(
         output = await build_student_course_selection_xlsx(db, year, term, class_name, year_start, year_end)
         prefix = "学生选课表"
     elif export_type == "distribution":
-        output = await build_class_distribution_xlsx(db, year, term, class_name, year_start, year_end)
+        output = await build_class_distribution_xlsx(db, year, term, grade, class_name, year_start, year_end)
         prefix = "各班分发表"
     else:
         output = await build_teacher_distribution_xlsx(db, year, term, class_name, year_start, year_end)
         prefix = "教师分发表"
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    parts = [prefix, f"{year}", term, timestamp]
+    ys = year_start if year_start is not None else year
+    ye = year_end if year_end is not None else year + 1
+    parts = [prefix, f"{ys}-{ye}", term, timestamp]
     if class_name:
         parts.insert(2, class_name)
     filename = "_".join(parts) + ".xlsx"

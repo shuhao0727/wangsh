@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
@@ -27,6 +28,26 @@ def _guess_grade(class_name: Optional[str]) -> str:
         if s.startswith(g):
             return g
     return ""
+
+
+def _format_grade_class(grade_filter: Optional[str], cls: str) -> str:
+    s = str(cls or "").strip()
+    if not s:
+        g = (grade_filter or "").strip() or "年级"
+        return f"{g} 班"
+
+    m = re.match(r"^(高一|高二|高三|初一|初二|初三)", s)
+    grade_in_name = m.group(1) if m else ""
+    g = (grade_filter or "").strip() or grade_in_name or _guess_grade(s) or "年级"
+
+    mnum = re.search(r"(\d+)", s)
+    if mnum:
+        num = mnum.group(1)
+        return f"{g} ({num})班"
+
+    if s.endswith("班"):
+        return s
+    return f"{g} {s}班"
 
 
 def _apply_distribution_style(ws) -> None:
@@ -137,6 +158,7 @@ async def build_class_distribution_xlsx(
     db: AsyncSession,
     year: int,
     term: str,
+    grade: Optional[str],
     class_name: Optional[str],
     year_start: Optional[int],
     year_end: Optional[int],
@@ -184,6 +206,8 @@ async def build_class_distribution_xlsx(
             XbkStudent.student_no.asc(),
         )
     )
+    if grade:
+        stmt = stmt.where(XbkSelection.grade == grade)
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
     rows = (await db.execute(stmt)).all()
@@ -211,10 +235,10 @@ async def build_class_distribution_xlsx(
 
     for cls in sorted(grouped.keys(), key=class_sort_key):
         items = grouped[cls]
-        grade = _guess_grade(cls) or "年级"
+        grade_class = _format_grade_class(grade, cls)
         ws = wb.create_sheet(safe_sheet_name(cls))
         ws.merge_cells("A1:E1")
-        ws["A1"] = f"{ys}-{ye} 学年江苏省昆山中学 {grade} {cls}班选课分发表"
+        ws["A1"] = f"{ys}-{ye}学年江苏省昆山中学{term}{grade_class}校本课程分发表"
         ws["A1"].font = Font(size=14, bold=True)
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[1].height = 35
@@ -231,7 +255,7 @@ async def build_class_distribution_xlsx(
         _adjust_row_heights(ws)
         _set_page_settings(ws)
         ws.freeze_panes = "A3"
-        ws.auto_filter.ref = f"A2:E{ws.max_row}"
+        ws.auto_filter.ref = None
 
     output = BytesIO()
     wb.save(output)

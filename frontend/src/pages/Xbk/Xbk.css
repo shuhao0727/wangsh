@@ -2,11 +2,31 @@
   max-width: 90%;
   margin: 0 auto;
   padding: 15px;
+  height: calc(100vh - 64px - 48px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.xbk-table-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.xbk-table-card .ant-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .xbk-table-card .ant-tabs-content-holder {
-  max-height: 65vh;
-  overflow-y: auto;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
 .xbk-filter-card,
@@ -44,10 +64,42 @@
 .xbk-toolbar {
   border-radius: var(--ws-radius-lg);
   /* border: 1px solid var(--ws-color-border); */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .xbk-kpis {
   margin-top: 16px;
+}
+
+.xbk-toolbar-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.xbk-kpis-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.xbk-kpi-inline-row {
+  padding: 8px 12px;
+}
+
+.xbk-kpi-inline-row .xbk-kpi-label {
+  font-size: 12px;
+}
+
+.xbk-kpi-inline-row .xbk-kpi-value {
+  font-size: 14px;
 }
 
 .xbk-kpi-card {
@@ -115,9 +167,15 @@
   .xbk-page {
     padding: 16px 12px 20px;
     max-width: 100%;
+    height: calc(100vh - 160px - 32px);
   }
 
   .xbk-filter-actions {
+    justify-content: flex-start;
+  }
+
+  .xbk-kpis-inline {
+    width: 100%;
     justify-content: flex-start;
   }
 }

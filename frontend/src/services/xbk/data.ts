@@ -257,7 +257,25 @@ export const xbkDataApi = {
     scope: XbkScope;
     year?: number;
     term?: string;
+    grade?: string;
     class_name?: string;
+    search_text?: string;
+    format?: "xlsx" | "xls";
+  }): Promise<Blob> => {
+    const res = await api.client.get("/xbk/export", {
+      params,
+      responseType: "blob",
+    });
+    return res.data as Blob;
+  },
+
+  exportCurrentTable: async (params: {
+    scope: "students" | "courses" | "selections" | "course_results" | "no_selection";
+    year?: number;
+    term?: string;
+    grade?: string;
+    class_name?: string;
+    search_text?: string;
     format?: "xlsx" | "xls";
   }): Promise<Blob> => {
     const res = await api.client.get("/xbk/export", {
@@ -313,6 +331,7 @@ export const xbkDataApi = {
     year?: number;
     term?: string;
     grade?: string;
+    class_name?: string;
   }): Promise<{ items: XbkClassStatItem[] }> => {
     const res = await api.client.get("/xbk/analysis/class-stats", { params });
     return res.data as { items: XbkClassStatItem[] };

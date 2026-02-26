@@ -73,7 +73,7 @@ def _set_course_code_validation(ws, column_letter: str, valid_course_codes: List
         dv.add(f"{column_letter}{row}")
 
 
-def _lock_sheet(ws, unlock_header: Optional[str] = None) -> None:
+def _lock_sheet(ws, unlock_header: Optional[str] = None, unlock_ranges: Optional[List[str]] = None) -> None:
     ws.protection.sheet = True
     ws.protection.set_password("")
     for row in ws.iter_rows():
@@ -84,6 +84,11 @@ def _lock_sheet(ws, unlock_header: Optional[str] = None) -> None:
             if ws.cell(row=1, column=col).value == unlock_header:
                 for r in range(2, ws.max_row + 1):
                     ws.cell(row=r, column=col).protection = Protection(locked=False)
+    if unlock_ranges:
+        for rng in unlock_ranges:
+            for row in ws[rng]:
+                for cell in row:
+                    cell.protection = Protection(locked=False)
 
 
 def _cn_len(value: object) -> int:
@@ -146,8 +151,6 @@ async def build_student_course_selection_xlsx(
     year_start: Optional[int],
     year_end: Optional[int],
 ) -> BytesIO:
-    ys, ye = _title_year_range(year, year_start, year_end)
-
     courses = (
         await db.execute(
             select(XbkCourse)
@@ -186,6 +189,8 @@ async def build_student_course_selection_xlsx(
         code = _parse_int(c.course_code) if _parse_int(c.course_code) is not None else c.course_code
         catalog.append([code, c.course_name, c.teacher, int(c.quota or 0), c.location])
 
+    ys, ye = _title_year_range(year, year_start, year_end)
+
     catalog.insert_rows(1)
     catalog["A1"] = f"江苏省昆山中学校本课程目录（{ys}-{ye} {term}）"
     catalog["A1"].font = Font(size=14, bold=True)
@@ -195,7 +200,7 @@ async def build_student_course_selection_xlsx(
     apply_table_style(catalog, header_row=2, start_row=3, end_row=catalog.max_row, start_col=1, end_col=5)
     _adjust_catalog_dimensions(catalog)
     catalog.freeze_panes = "A3"
-    catalog.auto_filter.ref = f"A2:E{catalog.max_row}"
+    catalog.auto_filter.ref = None
     _lock_sheet(catalog)
 
     valid_course_codes = _get_course_code_limits(catalog)
@@ -210,7 +215,7 @@ async def build_student_course_selection_xlsx(
         apply_table_style(ws, header_row=1, start_row=2, end_row=ws.max_row, start_col=1, end_col=4)
         auto_adjust_column_width(ws, max_width=30)
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:D{ws.max_row}"
+        ws.auto_filter.ref = None
 
         course_col_letter = get_column_letter(4)
         _set_course_code_validation(ws, course_col_letter, valid_course_codes, "校本课程目录")

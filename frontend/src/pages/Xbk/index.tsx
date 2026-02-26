@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   Typography,
@@ -21,18 +21,15 @@ import {
   Upload,
   Checkbox,
   Alert,
-  Divider,
   message,
 } from "antd";
 import {
   ArrowLeftOutlined,
-  SettingOutlined,
   UploadOutlined,
   DownloadOutlined,
   BarChartOutlined,
   ReloadOutlined,
   DeleteOutlined,
-  FileTextOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -58,7 +55,7 @@ import "./Xbk.css";
 const { Text } = Typography;
 const { Option } = Select;
 
-type DataTabKey = "course_results" | "students" | "courses" | "selections";
+type DataTabKey = "course_results" | "students" | "courses" | "selections" | "no_selection";
 
 type Filters = {
   year?: number;
@@ -94,6 +91,18 @@ const calcColumnWidth = (
   return clamp(maxLen * 8 + 24, min, max);
 };
 
+const getScrollY = (root: HTMLDivElement | null) => {
+  if (!root) return 360;
+  const holder = root.querySelector(".ant-tabs-content-holder") as HTMLElement | null;
+  const nav = root.querySelector(".ant-tabs-nav") as HTMLElement | null;
+  const pagination = root.querySelector(".ant-table-pagination") as HTMLElement | null;
+  const base = holder?.clientHeight || root.clientHeight;
+  const navH = nav?.offsetHeight || 0;
+  const pagH = pagination?.offsetHeight || 64;
+  const y = base - navH - pagH - 8;
+  return clamp(y, 220, 1200);
+};
+
 const XbkPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -121,6 +130,9 @@ const XbkPage: React.FC = () => {
   const [selectionsTotal, setSelectionsTotal] = useState(0);
   const [selectionsPage, setSelectionsPage] = useState(1);
   const [selectionsPageSize, setSelectionsPageSize] = useState(50);
+  const [noSelectionAll, setNoSelectionAll] = useState<XbkStudentRow[]>([]);
+  const [noSelectionPage, setNoSelectionPage] = useState(1);
+  const [noSelectionPageSize, setNoSelectionPageSize] = useState(50);
   const [courseResultsTotal, setCourseResultsTotal] = useState(0);
   const [courseResultsPage, setCourseResultsPage] = useState(1);
   const [courseResultsPageSize, setCourseResultsPageSize] = useState(50);
@@ -136,13 +148,19 @@ const XbkPage: React.FC = () => {
   const [importPreview, setImportPreview] = useState<XbkImportPreview | null>(null);
   const [importResult, setImportResult] = useState<XbkImportResult | null>(null);
   const [exportType, setExportType] = useState<XbkExportType>("course-selection");
+  const [exportYearStart, setExportYearStart] = useState<number | undefined>(undefined);
+  const [exportYearEnd, setExportYearEnd] = useState<number | undefined>(undefined);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingCurrent, setExportingCurrent] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisSummary, setAnalysisSummary] = useState<XbkSummary | null>(null);
   const [analysisCourseStats, setAnalysisCourseStats] = useState<XbkCourseStatItem[]>([]);
   const [analysisClassStats, setAnalysisClassStats] = useState<XbkClassStatItem[]>([]);
   const [analysisNoSelection, setAnalysisNoSelection] = useState<XbkStudentRow[]>([]);
+  const [analysisTab, setAnalysisTab] = useState<"overview" | "courses" | "classes" | "no_selection">("overview");
+  const [analysisCourseQuery, setAnalysisCourseQuery] = useState("");
+  const [analysisStudentQuery, setAnalysisStudentQuery] = useState("");
   const canEdit = auth.isAdmin();
   const [editVisible, setEditVisible] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -150,6 +168,18 @@ const XbkPage: React.FC = () => {
   const [editMode, setEditMode] = useState<"create" | "edit">("create");
   const [editTargetId, setEditTargetId] = useState<number | null>(null);
   const [editForm] = Form.useForm();
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const [tableScrollY, setTableScrollY] = useState<number>(360);
+
+  useLayoutEffect(() => {
+    const root = tableWrapRef.current;
+    if (!root) return;
+    if (loading || !enabled) return;
+    const ro = new ResizeObserver(() => setTableScrollY(getScrollY(root)));
+    ro.observe(root);
+    setTableScrollY(getScrollY(root));
+    return () => ro.disconnect();
+  }, [activeTab, enabled, loading]);
 
   const resetFilters = () => {
     setFilters({ year: 2026, term: "上学期", grade: undefined, class_name: undefined, search_text: "" });
@@ -231,6 +261,16 @@ const XbkPage: React.FC = () => {
         setCoursesTotal(res.total);
         return;
       }
+      if (activeTab === "no_selection") {
+        const res = await xbkDataApi.getStudentsWithoutSelection({
+          year: baseParams.year,
+          term: baseParams.term,
+          grade: baseParams.grade,
+          class_name: baseParams.class_name,
+        });
+        setNoSelectionAll(res.items || []);
+        return;
+      }
       const res = await xbkDataApi.listSelections({
         ...baseParams,
         page: selectionsPage,
@@ -244,6 +284,7 @@ const XbkPage: React.FC = () => {
       setCourses([]);
       setSelections([]);
       setCourseResults([]);
+      setNoSelectionAll([]);
     } finally {
       setDataLoading(false);
     }
@@ -299,6 +340,7 @@ const XbkPage: React.FC = () => {
     setStudentsPage(1);
     setCoursesPage(1);
     setSelectionsPage(1);
+    setNoSelectionPage(1);
     setCourseResultsPage(1);
   }, [enabled, filters.year, filters.term, filters.grade, filters.class_name, filters.search_text]);
 
@@ -313,6 +355,9 @@ const XbkPage: React.FC = () => {
   useEffect(() => {
     if (!analysisVisible) return;
     (async () => {
+      setAnalysisTab("overview");
+      setAnalysisCourseQuery("");
+      setAnalysisStudentQuery("");
       setAnalysisLoading(true);
       try {
         const params = {
@@ -325,7 +370,7 @@ const XbkPage: React.FC = () => {
           await Promise.all([
             xbkDataApi.getSummary(params),
             xbkDataApi.getCourseStats(params),
-            xbkDataApi.getClassStats({ year: filters.year, term: filters.term, grade: filters.grade }),
+            xbkDataApi.getClassStats(params),
             xbkDataApi.getStudentsWithoutSelection(params),
           ]);
         setAnalysisSummary(summary);
@@ -343,6 +388,162 @@ const XbkPage: React.FC = () => {
       }
     })();
   }, [analysisVisible, filters.year, filters.term, filters.grade, filters.class_name]);
+
+  const filteredAnalysisCourseStats = useMemo(() => {
+    const q = analysisCourseQuery.trim().toLowerCase();
+    if (!q) return analysisCourseStats;
+    return analysisCourseStats.filter((it) => {
+      const code = String(it.course_code || "").toLowerCase();
+      const name = String(it.course_name || "").toLowerCase();
+      return code.includes(q) || name.includes(q);
+    });
+  }, [analysisCourseQuery, analysisCourseStats]);
+
+  const filteredAnalysisNoSelection = useMemo(() => {
+    const q = analysisStudentQuery.trim().toLowerCase();
+    if (!q) return analysisNoSelection;
+    return analysisNoSelection.filter((s) => {
+      const cls = String(s.class_name || "").toLowerCase();
+      const name = String(s.name || "").toLowerCase();
+      const no = String(s.student_no || "").toLowerCase();
+      return cls.includes(q) || name.includes(q) || no.includes(q);
+    });
+  }, [analysisNoSelection, analysisStudentQuery]);
+
+  const filteredNoSelectionAll = useMemo(() => {
+    const q = String(filters.search_text || "").trim().toLowerCase();
+    if (!q) return noSelectionAll;
+    return noSelectionAll.filter((s) => {
+      const cls = String(s.class_name || "").toLowerCase();
+      const name = String(s.name || "").toLowerCase();
+      const no = String(s.student_no || "").toLowerCase();
+      return cls.includes(q) || name.includes(q) || no.includes(q);
+    });
+  }, [filters.search_text, noSelectionAll]);
+
+  const pagedNoSelection = useMemo(() => {
+    const start = (noSelectionPage - 1) * noSelectionPageSize;
+    return filteredNoSelectionAll.slice(start, start + noSelectionPageSize);
+  }, [filteredNoSelectionAll, noSelectionPage, noSelectionPageSize]);
+
+  const analysisCourseColumns: ColumnsType<any> = useMemo(
+    () => [
+      {
+        title: "课程",
+        dataIndex: "course",
+        render: (_: any, r: any) => (
+          <Text>
+            {r.course_code} · {r.course_name || "-"}
+          </Text>
+        ),
+      },
+      {
+        title: "人数",
+        dataIndex: "count",
+        width: 120,
+        align: "right",
+        render: (v: any, r: any) =>
+          typeof r.allowed_total === "number" && r.allowed_total > 0 ? (
+            <Tag color={r.count > r.allowed_total ? "red" : "orange"}>
+              {r.count}/{r.allowed_total}
+            </Tag>
+          ) : (
+            <Tag color="orange">{v}</Tag>
+          ),
+      },
+    ],
+    [],
+  );
+
+  const analysisClassColumns: ColumnsType<any> = useMemo(
+    () => [
+      { title: "班级", dataIndex: "class_name" },
+      {
+        title: "人数",
+        dataIndex: "count",
+        width: 120,
+        align: "right",
+        render: (v: any) => <Tag color="orange">{v}</Tag>,
+      },
+    ],
+    [],
+  );
+
+  const analysisNoSelectionColumns: ColumnsType<any> = useMemo(
+    () => [
+      { title: "班级", dataIndex: "class_name", width: 140, ellipsis: true },
+      { title: "学号", dataIndex: "student_no", width: 140, ellipsis: true },
+      { title: "姓名", dataIndex: "name", width: 120, ellipsis: true },
+    ],
+    [],
+  );
+
+  const noSelectionColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
+    const rows = pagedNoSelection as any[];
+    return [
+      { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
+      { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
+      { title: "年级", dataIndex: "grade", width: 80, render: (v) => v || "-" },
+      {
+        title: "班级",
+        dataIndex: "class_name",
+        width: calcColumnWidth(rows, "class_name", "班级", 110, 180),
+        ellipsis: true,
+      },
+      {
+        title: "学号",
+        dataIndex: "student_no",
+        width: calcColumnWidth(rows, "student_no", "学号", 120, 170),
+        ellipsis: true,
+      },
+      { title: "姓名", dataIndex: "name", width: calcColumnWidth(rows, "name", "姓名", 90, 130), ellipsis: true },
+      { title: "性别", dataIndex: "gender", width: 70, render: (v) => v || "-" },
+    ];
+  }, [pagedNoSelection]);
+
+  const handleExportCurrentTable = useCallback(() => {
+    (async () => {
+      setExportingCurrent(true);
+      try {
+        const scope =
+          activeTab === "course_results"
+            ? "course_results"
+            : activeTab === "no_selection"
+              ? "no_selection"
+              : activeTab;
+        const blob = await xbkDataApi.exportCurrentTable({
+          scope,
+          year: filters.year,
+          term: filters.term,
+          grade: filters.grade,
+          class_name: filters.class_name,
+          search_text: filters.search_text,
+          format: "xlsx",
+        });
+        const filename = `xbk_${scope}_${filters.year || "all"}_${filters.term || "all"}_${filters.grade || "all"}.xlsx`;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        message.success("导出成功");
+      } catch (e: any) {
+        message.error(getErrorMsg(e, "导出失败（需要管理员登录）"));
+      } finally {
+        setExportingCurrent(false);
+      }
+    })();
+  }, [
+    activeTab,
+    filters.grade,
+    filters.class_name,
+    filters.search_text,
+    filters.term,
+    filters.year,
+  ]);
 
   const runImportPreview = useCallback(async (file: File, scope: XbkScope) => {
     setImportPreviewLoading(true);
@@ -770,6 +971,26 @@ const XbkPage: React.FC = () => {
   };
 
   const handleExportConfirm = async () => {
+    if (!exportYearStart || !exportYearEnd) {
+      message.warning("请填写学年（起止年份）");
+      return;
+    }
+    if (!Number.isInteger(exportYearStart) || !Number.isInteger(exportYearEnd)) {
+      message.warning("学年必须为整数年份");
+      return;
+    }
+    if (exportYearStart < 2000 || exportYearStart > 2100 || exportYearEnd < 2000 || exportYearEnd > 2100) {
+      message.warning("学年年份范围不正确（建议填写4位年份，如 2025-2026）");
+      return;
+    }
+    if (exportYearEnd <= exportYearStart) {
+      message.warning("学年结束年份必须大于开始年份");
+      return;
+    }
+    if (exportType === "distribution" && !filters.grade) {
+      message.warning("请先选择年级（用于各班分发表表头）");
+      return;
+    }
     setExporting(true);
     try {
       const blob = await xbkDataApi.exportTables({
@@ -778,6 +999,8 @@ const XbkPage: React.FC = () => {
         term: filters.term || "上学期",
         grade: filters.grade,
         class_name: filters.class_name,
+        yearStart: exportYearStart,
+        yearEnd: exportYearEnd,
       });
       const filename = `xbk_${exportType}_${filters.year || "all"}_${filters.term || "all"}_${filters.grade || "all"}.xlsx`;
       const url = window.URL.createObjectURL(blob);
@@ -799,24 +1022,7 @@ const XbkPage: React.FC = () => {
 
   return (
     <div className="xbk-page">
-      <div className="xbk-hero">
-        <div className="xbk-hero-title">
-          <div className="xbk-hero-title-left">
-            <FileTextOutlined />
-            <span>校本课（XBK）处理系统</span>
-          </div>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/personal-programs")}>
-              返回
-            </Button>
-            <Button icon={<SettingOutlined />} onClick={() => window.open("/admin/personal-programs", "_blank")}>
-              后台设置
-            </Button>
-          </Space>
-        </div>
-      </div>
-
-      <div className="xbk-filter-card" style={{ marginTop: 16, padding: 16 }}>
+      <div className="xbk-filter-card" style={{ padding: 16 }}>
         <Row gutter={[12, 12]} align="middle">
           <Col flex="auto">
             <Form layout="inline" style={{ width: "100%" }}>
@@ -895,69 +1101,55 @@ const XbkPage: React.FC = () => {
         </Row>
       </div>
 
-      <div className="xbk-kpis">
-        <Row gutter={[12, 12]}>
-          <Col xs={12} md={6}>
-            <div className="xbk-kpi-card xbk-kpi-accent">
-              <div className="xbk-kpi-row">
-                <span className="xbk-kpi-label">学生数</span>
-                <span className="xbk-kpi-value">{kpiStudents}</span>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} md={6}>
-            <div className="xbk-kpi-card">
-              <div className="xbk-kpi-row">
-                <span className="xbk-kpi-label">课程数</span>
-                <span className="xbk-kpi-value">{kpiCourses}</span>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} md={6}>
-            <div className="xbk-kpi-card">
-              <div className="xbk-kpi-row">
-                <span className="xbk-kpi-label">选课条目</span>
-                <span className="xbk-kpi-value">{kpiSelections}</span>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} md={6}>
-            <div className="xbk-kpi-card">
-              <div className="xbk-kpi-row">
-                <span className="xbk-kpi-label">未选课学生</span>
-                <span className="xbk-kpi-value">{kpiNoSelection}</span>
-              </div>
-            </div>
-          </Col>
-        </Row>
-      </div>
-
       <div className="xbk-toolbar" style={{ marginTop: 16, padding: 14 }}>
-        <Space wrap>
-          <Button type="primary" icon={<UploadOutlined />} onClick={() => setImportVisible(true)}>
-            导入数据
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => setExportVisible(true)}>
-            导出数据
-          </Button>
-          {canEdit && (activeTab === "students" || activeTab === "courses" || activeTab === "selections") ? (
-            <Button icon={<PlusOutlined />} onClick={() => openCreateModal(activeTab)}>
-              新增
+        <div className="xbk-toolbar-left">
+          <Space wrap>
+            <Button type="primary" icon={<UploadOutlined />} onClick={() => setImportVisible(true)}>
+              导入数据
             </Button>
-          ) : null}
-          <Button icon={<BarChartOutlined />} onClick={() => setAnalysisVisible(true)}>
-            数据分析
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => setDeleteVisible(true)}>
-            删除数据
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={dataLoading}>
-            刷新
-          </Button>
-        </Space>
+            <Button icon={<DownloadOutlined />} onClick={() => setExportVisible(true)}>
+              导出数据
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExportCurrentTable} loading={exportingCurrent}>
+              导出当前表格
+            </Button>
+            {canEdit && (activeTab === "students" || activeTab === "courses" || activeTab === "selections") ? (
+              <Button icon={<PlusOutlined />} onClick={() => openCreateModal(activeTab)}>
+                新增
+              </Button>
+            ) : null}
+            <Button icon={<BarChartOutlined />} onClick={() => setAnalysisVisible(true)}>
+              数据分析
+            </Button>
+            <Button danger icon={<DeleteOutlined />} onClick={() => setDeleteVisible(true)}>
+              删除数据
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={dataLoading}>
+              刷新
+            </Button>
+          </Space>
+        </div>
+        <div className="xbk-kpis-inline">
+          <div className="xbk-kpi-row xbk-kpi-inline-row xbk-kpi-accent">
+            <span className="xbk-kpi-label">学生数</span>
+            <span className="xbk-kpi-value">{kpiStudents}</span>
+          </div>
+          <div className="xbk-kpi-row xbk-kpi-inline-row">
+            <span className="xbk-kpi-label">课程数</span>
+            <span className="xbk-kpi-value">{kpiCourses}</span>
+          </div>
+          <div className="xbk-kpi-row xbk-kpi-inline-row">
+            <span className="xbk-kpi-label">选课条目</span>
+            <span className="xbk-kpi-value">{kpiSelections}</span>
+          </div>
+          <div className="xbk-kpi-row xbk-kpi-inline-row">
+            <span className="xbk-kpi-label">未选课学生</span>
+            <span className="xbk-kpi-value">{kpiNoSelection}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="xbk-table-card" style={{ marginTop: 16 }}>
+      <div ref={tableWrapRef} className="xbk-table-card" style={{ marginTop: 16 }}>
         <Tabs
           activeKey={activeTab}
           onChange={(k) => {
@@ -967,6 +1159,7 @@ const XbkPage: React.FC = () => {
             if (key === "students") setStudentsPage(1);
             if (key === "courses") setCoursesPage(1);
             if (key === "selections") setSelectionsPage(1);
+            if (key === "no_selection") setNoSelectionPage(1);
           }}
           items={[
             {
@@ -990,7 +1183,7 @@ const XbkPage: React.FC = () => {
                     setCourseResultsPageSize(pagination.pageSize || 50);
                   }}
                   size="middle"
-                  scroll={{ x: "max-content" }}
+                  scroll={{ x: "max-content", y: tableScrollY }}
                 />
               ),
             },
@@ -1015,7 +1208,7 @@ const XbkPage: React.FC = () => {
                     setStudentsPageSize(pagination.pageSize || 50);
                   }}
                   size="middle"
-                  scroll={{ x: "max-content" }}
+                  scroll={{ x: "max-content", y: tableScrollY }}
                 />
               ),
             },
@@ -1040,7 +1233,7 @@ const XbkPage: React.FC = () => {
                     setCoursesPageSize(pagination.pageSize || 50);
                   }}
                   size="middle"
-                  scroll={{ x: "max-content" }}
+                  scroll={{ x: "max-content", y: tableScrollY }}
                 />
               ),
             },
@@ -1065,7 +1258,32 @@ const XbkPage: React.FC = () => {
                     setSelectionsPageSize(pagination.pageSize || 50);
                   }}
                   size="middle"
-                  scroll={{ x: "max-content" }}
+                  scroll={{ x: "max-content", y: tableScrollY }}
+                />
+              ),
+            },
+            {
+              key: "no_selection",
+              label: "未选课学生",
+              children: (
+                <Table
+                  rowKey="id"
+                  columns={noSelectionColumns}
+                  dataSource={pagedNoSelection}
+                  loading={dataLoading}
+                  tableLayout="fixed"
+                  pagination={{
+                    current: noSelectionPage,
+                    pageSize: noSelectionPageSize,
+                    total: filteredNoSelectionAll.length,
+                    showSizeChanger: true,
+                  }}
+                  onChange={(pagination) => {
+                    setNoSelectionPage(pagination.current || 1);
+                    setNoSelectionPageSize(pagination.pageSize || 50);
+                  }}
+                  size="middle"
+                  scroll={{ x: "max-content", y: tableScrollY }}
                 />
               ),
             },
@@ -1321,7 +1539,11 @@ const XbkPage: React.FC = () => {
         title="导出数据"
         open={exportVisible}
         confirmLoading={exporting}
-        onCancel={() => setExportVisible(false)}
+        onCancel={() => {
+          setExportVisible(false);
+          setExportYearStart(undefined);
+          setExportYearEnd(undefined);
+        }}
         onOk={handleExportConfirm}
         okText="导出"
       >
@@ -1334,16 +1556,40 @@ const XbkPage: React.FC = () => {
               <Option value="distribution">各班分发表</Option>
             </Select>
           </div>
+          <div>
+            <Text style={{ marginRight: 10 }}>学年</Text>
+            <InputNumber
+              placeholder="起"
+              style={{ width: 110 }}
+              value={exportYearStart}
+              min={2000}
+              max={2100}
+              precision={0}
+              onChange={(v) => setExportYearStart(typeof v === "number" ? v : undefined)}
+            />
+            <Text style={{ margin: "0 8px" }}>-</Text>
+            <InputNumber
+              placeholder="止"
+              style={{ width: 110 }}
+              value={exportYearEnd}
+              min={2000}
+              max={2100}
+              precision={0}
+              onChange={(v) => setExportYearEnd(typeof v === "number" ? v : undefined)}
+            />
+          </div>
           <Text type="secondary">
             将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} ·{" "}
             {filters.grade || "全部年级"}
             {filters.class_name ? ` · ${filters.class_name}` : ""}
           </Text>
+          <Text type="secondary">学期将按当前筛选的学期写入导出文件标题。</Text>
+          <Text type="secondary">示例：学年填 2025-2026。</Text>
         </Space>
       </Modal>
 
       <Modal
-        title="删除数据"
+        title="删除数据（彻底删除）"
         open={deleteVisible}
         onCancel={() => setDeleteVisible(false)}
         onOk={handleDeleteConfirm}
@@ -1351,6 +1597,12 @@ const XbkPage: React.FC = () => {
         okText="确认删除"
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="该操作为物理删除，不可恢复"
+            description="删除“学生名单/选课目录”时会同时删除其关联的选课结果，避免出现孤立数据。"
+          />
           <Text type="secondary">
             将按当前筛选条件删除数据：{filters.year || "全部年份"} ·{" "}
             {filters.term || "全部学期"} · {filters.grade || "全部年级"}
@@ -1376,14 +1628,19 @@ const XbkPage: React.FC = () => {
             关闭
           </Button>,
         ]}
-        width={860}
+        width={980}
       >
         {analysisLoading ? (
           <div style={{ padding: "56px 0", textAlign: "center" }}>
             <Spin />
           </div>
         ) : (
-          <>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Text type="secondary">
+              当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+              {filters.class_name ? ` · ${filters.class_name}` : ""}
+            </Text>
+
             <Row gutter={[16, 16]}>
               <Col xs={24} md={6}>
                 <Card size="small">
@@ -1407,79 +1664,105 @@ const XbkPage: React.FC = () => {
               </Col>
             </Row>
 
-            <Divider />
-
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={12}>
-                <Text strong>课程统计（按课程代码）</Text>
-                <div style={{ marginTop: 8 }}>
-                  {analysisCourseStats.length === 0 ? (
-                    <Text type="secondary">暂无数据</Text>
-                  ) : (
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      {analysisCourseStats.map((item) => (
-                        <Space
-                          key={item.course_code}
-                          style={{ justifyContent: "space-between", width: "100%" }}
-                        >
-                          <Text>
-                            {item.course_code} · {item.course_name || "-"}
-                          </Text>
-                          {typeof item.allowed_total === "number" && item.allowed_total > 0 ? (
-                            <Tag color={item.count > item.allowed_total ? "red" : "orange"}>
-                              {item.count}/{item.allowed_total}
-                            </Tag>
-                          ) : (
-                            <Tag color="orange">{item.count}</Tag>
-                          )}
-                        </Space>
-                      ))}
+            <Tabs
+              activeKey={analysisTab}
+              onChange={(k) => setAnalysisTab(k as any)}
+              items={[
+                {
+                  key: "overview",
+                  label: "概览",
+                  children: (
+                    <Row gutter={[16, 16]}>
+                      <Col xs={24} md={12}>
+                        <Text strong>课程统计（按课程代码）</Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Table
+                            rowKey="course_code"
+                            size="small"
+                            columns={analysisCourseColumns}
+                            dataSource={analysisCourseStats}
+                            pagination={false}
+                            scroll={{ y: 420 }}
+                          />
+                        </div>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Text strong>班级统计</Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Table
+                            rowKey="class_name"
+                            size="small"
+                            columns={analysisClassColumns}
+                            dataSource={analysisClassStats}
+                            pagination={false}
+                            scroll={{ y: 420 }}
+                          />
+                        </div>
+                      </Col>
+                    </Row>
+                  ),
+                },
+                {
+                  key: "courses",
+                  label: "课程统计",
+                  children: (
+                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                      <Input
+                        placeholder="搜索课程代码/名称"
+                        allowClear
+                        value={analysisCourseQuery}
+                        onChange={(e) => setAnalysisCourseQuery(e.target.value)}
+                      />
+                      <Table
+                        rowKey="course_code"
+                        size="small"
+                        columns={analysisCourseColumns}
+                        dataSource={filteredAnalysisCourseStats}
+                        pagination={false}
+                        scroll={{ y: 520 }}
+                      />
                     </Space>
-                  )}
-                </div>
-              </Col>
-              <Col xs={24} md={12}>
-                <Text strong>班级统计</Text>
-                <div style={{ marginTop: 8 }}>
-                  {analysisClassStats.length === 0 ? (
-                    <Text type="secondary">暂无数据</Text>
-                  ) : (
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      {analysisClassStats.map((item) => (
-                        <Space
-                          key={item.class_name}
-                          style={{ justifyContent: "space-between", width: "100%" }}
-                        >
-                          <Text>{item.class_name}</Text>
-                          <Tag color="orange">{item.count}</Tag>
-                        </Space>
-                      ))}
+                  ),
+                },
+                {
+                  key: "classes",
+                  label: "班级统计",
+                  children: (
+                    <Table
+                      rowKey="class_name"
+                      size="small"
+                      columns={analysisClassColumns}
+                      dataSource={analysisClassStats}
+                      pagination={false}
+                      scroll={{ y: 560 }}
+                    />
+                  ),
+                },
+                {
+                  key: "no_selection",
+                  label: `未选课学生 (${analysisNoSelection.length})`,
+                  children: (
+                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                      <Input
+                        placeholder="搜索班级/姓名/学号"
+                        allowClear
+                        value={analysisStudentQuery}
+                        onChange={(e) => setAnalysisStudentQuery(e.target.value)}
+                      />
+                      <Table
+                        rowKey="id"
+                        size="small"
+                        columns={analysisNoSelectionColumns}
+                        dataSource={filteredAnalysisNoSelection}
+                        pagination={false}
+                        scroll={{ y: 520 }}
+                      />
                     </Space>
-                  )}
-                </div>
-              </Col>
-            </Row>
-
-            <Divider />
-
-            <Text strong>未选课学生（按当前筛选）</Text>
-            <div style={{ marginTop: 8 }}>
-              {analysisNoSelection.length === 0 ? (
-                <Text type="secondary">暂无</Text>
-              ) : (
-                <Space size={6} wrap>
-                  {analysisNoSelection.slice(0, 20).map((s) => (
-                    <Tag key={s.id}>
-                      {s.class_name} {s.name}({s.student_no})
-                    </Tag>
-                  ))}
-                  {analysisNoSelection.length > 20 && (
-                    <Tag>+{analysisNoSelection.length - 20}</Tag>
-                  )}
-                </Space>
-              )}
-            </div>
-          </>
+                  ),
+                },
+              ]}
+            />
+          </Space>
         )}
       </Modal>
     </div>
