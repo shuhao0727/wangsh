@@ -38,6 +38,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: backend_runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-backend:${IMAGE_TAG}
     restart: unless-stopped
     environment:
@@ -113,6 +116,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG}
     restart: unless-stopped
     depends_on:
@@ -164,6 +170,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
       target: worker_runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG}
     restart: unless-stopped
     depends_on:
@@ -228,6 +237,8 @@ services:
       dockerfile: Dockerfile.prod
       args:
         REACT_APP_VERSION: ${REACT_APP_VERSION:-}
+        NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}
+        CADDY_IMAGE: ${CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2-alpine}
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-frontend:${IMAGE_TAG}
     restart: unless-stopped
     environment:
