@@ -319,6 +319,8 @@ export function useDapRunner(code: string) {
     try {
       dispatch({ type: "RESET_SESSION" });
       dispatch({ type: "SET_STATUS", payload: "starting" });
+      dispatch({ type: "SET_START_TIME", payload: Date.now() });
+      dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 });
       
       // 1. Create Session
       const session = await pythonlabSessionApi.create({ 
@@ -374,6 +376,12 @@ export function useDapRunner(code: string) {
       });
       
       client.on("stopped", (msg) => {
+        if (stateRef.current.startTime) {
+           const now = Date.now();
+           const elapsed = (now - stateRef.current.startTime) / 1000;
+           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+           dispatch({ type: "SET_START_TIME", payload: null });
+        }
         dispatch({ type: "SET_STATUS", payload: "paused" });
         dispatch({ type: "INCREMENT_STEPS" });
         fetchStack(msg.body?.threadId || 1);
@@ -388,7 +396,8 @@ export function useDapRunner(code: string) {
         if (stateRef.current.startTime) {
            const now = Date.now();
            const elapsed = (now - stateRef.current.startTime) / 1000;
-           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: elapsed });
+           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+           dispatch({ type: "SET_START_TIME", payload: null });
         }
         cleanup();
       });
@@ -436,8 +445,6 @@ export function useDapRunner(code: string) {
       });
       
       dispatch({ type: "SET_STATUS", payload: "running" });
-      dispatch({ type: "SET_START_TIME", payload: Date.now() }); // Use client timestamp
-      dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 }); // Reset elapsed time
 
     } catch (e: any) {
       let msg = e.message || "启动调试会话失败";
@@ -462,6 +469,8 @@ export function useDapRunner(code: string) {
 
   const stopDebug = useCallback(() => {
     cleanup();
+    dispatch({ type: "SET_START_TIME", payload: null });
+    dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 });
   }, [cleanup]);
 
   const continueRun = useCallback(async () => {

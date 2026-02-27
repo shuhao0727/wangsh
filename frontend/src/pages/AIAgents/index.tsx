@@ -768,9 +768,10 @@ const AIAgentsPage: React.FC = () => {
       className="ai-agents-page"
       style={{
         maxWidth: "1600px", // Increased max-width
+        width: "100%",
         margin: "0 auto",
-        padding: "24px", // Increased padding
-        height: "calc(100vh - 64px)", // Full height minus header
+        height: "calc(100vh - 64px - 48px)",
+        boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
       }}
@@ -780,10 +781,15 @@ const AIAgentsPage: React.FC = () => {
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
       />
-      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0 }}> {/* Ensure flex child can shrink/grow */}
+      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0, width: "100%" }}> {/* Ensure flex child can shrink/grow */}
         {/* 左侧：智能体列表和对话历史 */}
         {historyVisible && (
-          <Col xs={24} md={6} lg={5} style={{ height: "100%" }}>
+          <Col
+            xs={24}
+            md={6}
+            lg={5}
+            style={{ minHeight: 0, display: "flex", flexDirection: "column" }}
+          >
             <AgentSidebar
               agents={agents}
               currentAgent={currentAgent}
@@ -803,26 +809,28 @@ const AIAgentsPage: React.FC = () => {
           xs={24}
           md={historyVisible ? 18 : 24}
           lg={historyVisible ? 19 : 24}
-          style={{ height: "100%" }}
+          style={{ minHeight: 0, display: "flex", flexDirection: "column" }}
         >
-          <ChatArea
-            currentAgent={currentAgent}
-            messages={messages}
-            workflowGroups={workflowGroups}
-            inputMessage={inputMessage}
-            historyVisible={historyVisible}
-            isAuthenticated={auth.isAuthenticated}
-            isStudent={auth.isStudent()}
-            userDisplayName={auth.getDisplayName() || undefined}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent} 
-            currentStreamingMessageId={currentStreamingMessageId}
-            streamStartTime={streamStartTime}
-            onStopStream={handleStopStream}
-            onSendMessage={handleSendMessage}
-            onInputChange={setInputMessage}
-            onToggleSidebar={handleToggleSidebar}
-          />
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <ChatArea
+              currentAgent={currentAgent}
+              messages={messages}
+              workflowGroups={workflowGroups}
+              inputMessage={inputMessage}
+              historyVisible={historyVisible}
+              isAuthenticated={auth.isAuthenticated}
+              isStudent={auth.isStudent()}
+              userDisplayName={auth.getDisplayName() || undefined}
+              isStreaming={isStreaming}
+              streamingContent={streamingContent} 
+              currentStreamingMessageId={currentStreamingMessageId}
+              streamStartTime={streamStartTime}
+              onStopStream={handleStopStream}
+              onSendMessage={handleSendMessage}
+              onInputChange={setInputMessage}
+              onToggleSidebar={handleToggleSidebar}
+            />
+          </div>
         </Col>
       </Row>
 

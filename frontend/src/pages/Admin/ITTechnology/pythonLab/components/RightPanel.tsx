@@ -219,6 +219,7 @@ export function RightPanel(props: {
             isRunning={runner.status === "running"} 
             initialElapsed={runner.elapsedTime} 
             prefix="运行时间: "
+            alwaysShow={true}
          />
       </div>
   );

@@ -6,6 +6,7 @@ interface TimerDisplayProps {
     initialElapsed?: number;
     prefix?: string;
     suffix?: string;
+    alwaysShow?: boolean;
 }
 
 export const TimerDisplay: React.FC<TimerDisplayProps> = ({ 
@@ -13,7 +14,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     isRunning, 
     initialElapsed = 0, 
     prefix = "", 
-    suffix = " s" 
+    suffix = " s",
+    alwaysShow = false,
 }) => {
     const [displayTime, setDisplayTime] = useState(initialElapsed);
     const frameRef = useRef<number | null>(null);
@@ -22,12 +24,13 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         if (isRunning && startTime) {
             const update = () => {
                 const now = Date.now();
-                const elapsed = (now - startTime) / 1000;
+                const elapsed = initialElapsed + (now - startTime) / 1000;
                 setDisplayTime(elapsed);
                 frameRef.current = requestAnimationFrame(update);
             };
             frameRef.current = requestAnimationFrame(update);
         } else {
+            setDisplayTime(initialElapsed);
             // Stopped
             if (frameRef.current != null) {
                 cancelAnimationFrame(frameRef.current);
@@ -41,10 +44,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 frameRef.current = null;
             }
         };
-    }, [isRunning, startTime]);
+    }, [isRunning, startTime, initialElapsed]);
 
     // Format time (e.g., 1.23 s)
-    if (!startTime && initialElapsed === 0 && !isRunning) return null;
+    if (!alwaysShow && !startTime && initialElapsed === 0 && !isRunning) return null;
 
     return (
         <span style={{ fontVariantNumeric: "tabular-nums" }}>

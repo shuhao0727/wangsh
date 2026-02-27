@@ -92,10 +92,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import http.client; c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); c.request('GET','/health'); r=c.getresponse(); r.read(); print('ok')\"" ]
+      test: [ "CMD-SHELL", "for i in $(seq 1 30); do python -c \"import http.client; c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); c.request('GET','/health'); r=c.getresponse(); r.read(); print('ok')\" && exit 0; sleep 1; done; exit 1" ]
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 25s
+      retries: 20
     networks:
       - wangsh-network
       - dify_network

@@ -40,7 +40,7 @@ module.exports = {
   devServer: {
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: process.env.DEV_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
       },
     },

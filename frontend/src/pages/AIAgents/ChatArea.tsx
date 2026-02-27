@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import type { ChatAreaProps, Message, WorkflowGroup } from "./types";
 import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
+import { normalizeMarkdown } from "@utils/normalizeMarkdown";
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
@@ -32,30 +33,6 @@ const ThinkingBubble = () => (
     <span style={{ fontSize: 12, opacity: 0.8 }}>思考中...</span>
   </div>
 );
-
-const normalizeMarkdown = (text: string) => {
-  let s = (text || "").replace(/\r\n/g, "\n");
-  const lines = s.split("\n");
-  const cleaned: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const stripped = trimmed
-      .replace(/[\s\u3000]+/g, "")
-      .replace(/[*_`#>\-–—•·]+/g, "");
-    if (!stripped) continue;
-    cleaned.push(trimmed);
-  }
-
-  const escaped = cleaned.map((line) => {
-    const m = line.match(/^(\d+)\.\s+(.*)$/);
-    if (m) return `${m[1]}\\. ${m[2]}`;
-    if (/^[-*]\s+/.test(line)) return `\\${line}`;
-    return line;
-  });
-
-  return escaped.join("  \n").trim();
-};
 
 // 消息气泡组件
 const MessageBubble: React.FC<{
