@@ -71,7 +71,7 @@ export interface ChatAreaProps {
   isStreaming?: boolean;
   streamingContent?: string; // 新增：流式生成内容（独立于messages）
   currentStreamingMessageId?: string | null; // 新增：当前正在流式生成的消息ID
-  streamSeconds?: number;
+  streamStartTime?: number | null;
   onStopStream?: () => void;
   onSendMessage: () => void;
   onInputChange: (value: string) => void;

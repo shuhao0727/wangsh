@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
+
+// 配置 monaco-editor loader 使用本地 monaco 实例
+loader.config({ monaco });
 
 export function MonacoPythonEditor(props: {
   value: string;

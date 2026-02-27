@@ -23,6 +23,7 @@ import {
 } from "@ant-design/icons";
 import { MonacoPythonEditor } from "./MonacoPythonEditor";
 import XtermTerminal from "./XtermTerminal"; // Import XtermTerminal
+import { TimerDisplay } from "@components/TimerDisplay"; // Import global TimerDisplay
 import { validatePythonLite } from "../flow/python_sync";
 import type { RunnerState } from "../hooks/useDapRunner";
 import { pythonlabSessionApi, type PythonLabSessionMeta } from "../services/pythonlabSessionApi";
@@ -210,6 +211,17 @@ export function RightPanel(props: {
   const runnerTagColor = runner.ok ? "green" : "red";
   const statusColor = runner.status === "error" ? "red" : runner.status === "running" ? "blue" : runner.status === "paused" ? "orange" : "default";
   const statusText = runner.status === "error" ? "异常" : runner.status === "running" ? "运行中" : runner.status === "paused" ? "暂停" : "空闲";
+  // 使用独立的 TimerDisplay 组件，避免主组件频繁渲染
+  const timerContent = (
+      <div style={{ paddingRight: 12, color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
+         <TimerDisplay 
+            startTime={runner.startTime} 
+            isRunning={runner.status === "running"} 
+            initialElapsed={runner.elapsedTime} 
+            prefix="运行时间: "
+         />
+      </div>
+  );
 
   // Error handling
   const firstError = (runner.error) ?? runnerError ?? null;
@@ -599,6 +611,7 @@ export function RightPanel(props: {
             size="small"
             className="pythonlab-rightpanel-tabs"
             style={{ height: "100%" }}
+            tabBarExtraContent={timerContent}
             items={[
                 {
                     key: "terminal",

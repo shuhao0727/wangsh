@@ -46,6 +46,8 @@ export interface InternalRunnerState {
   history: any[]; // Keep simple for now
   historyIndex: number;
   activeFocusRole: string | null;
+  startTime: number | null; // 添加开始时间
+  elapsedTime: number; // 添加已运行时间（秒）
 }
 
 export interface RunnerState extends InternalRunnerState {
@@ -74,6 +76,8 @@ const initialState: InternalRunnerState = {
   history: [],
   historyIndex: 0,
   activeFocusRole: null,
+  startTime: null,
+  elapsedTime: 0,
 };
 
 type Action =
@@ -89,7 +93,9 @@ type Action =
   | { type: "UPDATE_WATCH_EXPRS"; payload: string[] }
   | { type: "SET_WATCH_RESULTS"; payload: WatchResult[] }
   | { type: "INCREMENT_STEPS" }
-  | { type: "RESET_SESSION" };
+  | { type: "RESET_SESSION" }
+  | { type: "UPDATE_ELAPSED_TIME"; payload: number }
+  | { type: "SET_START_TIME"; payload: number | null };
 
 function reducer(state: InternalRunnerState, action: Action): InternalRunnerState {
   switch (action.type) {
@@ -100,7 +106,7 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
     case "APPEND_STDOUT":
       return { ...state, stdout: [...state.stdout, action.payload].slice(-2000) }; // Limit buffer
     case "CLEAR_OUTPUT":
-      return { ...state, stdout: [], trace: [], steps: 0, activeLine: null, frames: [], variables: [], watchResults: [], error: null };
+      return { ...state, stdout: [], trace: [], steps: 0, activeLine: null, frames: [], variables: [], watchResults: [], error: null, startTime: null, elapsedTime: 0 };
     case "SET_FRAMES":
       return { ...state, frames: action.payload };
     case "SET_VARIABLES":
@@ -119,6 +125,10 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
       return { ...state, steps: state.steps + 1 };
     case "RESET_SESSION":
       return { ...initialState, breakpoints: state.breakpoints, watchExprs: state.watchExprs };
+    case "UPDATE_ELAPSED_TIME":
+      return { ...state, elapsedTime: action.payload };
+    case "SET_START_TIME":
+      return { ...state, startTime: action.payload };
     default:
       return state;
   }
@@ -207,10 +217,22 @@ export function useDapRunner(code: string) {
   const startInFlightRef = useRef(false);
   const startCooldownUntilRef = useRef(0);
   const startTokenRef = useRef(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync state to ref for callbacks if needed, but try to avoid it.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  // 计时器逻辑
+  // 优化：不再在 reducer 中高频 dispatch 更新时间，改为由 UI 组件自行根据 startTime 渲染动画
+  // 这里只负责在开始时记录 startTime，在结束时记录最终的 elapsedTime
+  useEffect(() => {
+    if (state.status === "running") {
+        if (!state.startTime) {
+           dispatch({ type: "SET_START_TIME", payload: Date.now() });
+        }
+    }
+  }, [state.status, state.startTime]);
 
   const cleanup = useCallback(() => {
     startTokenRef.current += 1;
@@ -363,6 +385,11 @@ export function useDapRunner(code: string) {
       
       client.on("terminated", () => {
         dispatch({ type: "SET_STATUS", payload: "stopped" });
+        if (stateRef.current.startTime) {
+           const now = Date.now();
+           const elapsed = (now - stateRef.current.startTime) / 1000;
+           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: elapsed });
+        }
         cleanup();
       });
 
@@ -409,6 +436,8 @@ export function useDapRunner(code: string) {
       });
       
       dispatch({ type: "SET_STATUS", payload: "running" });
+      dispatch({ type: "SET_START_TIME", payload: Date.now() }); // Use client timestamp
+      dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 }); // Reset elapsed time
 
     } catch (e: any) {
       let msg = e.message || "启动调试会话失败";

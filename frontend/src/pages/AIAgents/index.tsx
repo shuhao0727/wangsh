@@ -62,8 +62,7 @@ const AIAgentsPage: React.FC = () => {
   const [workflowGroups, setWorkflowGroups] = useState<WorkflowGroup[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
-  const [streamSeconds, setStreamSeconds] = useState(0);
-  const streamTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
   const streamAbortRef = useRef<AbortController | null>(null);
 
   // 加载启用的智能体
@@ -366,7 +365,7 @@ const AIAgentsPage: React.FC = () => {
     setInputMessage("");
 
     const startStream = async () => {
-      setStreamSeconds(0);
+      setStreamStartTime(Date.now());
       setIsStreaming(true);
       const streamStartedAt = Date.now();
       const controller = new AbortController();
@@ -721,23 +720,10 @@ const AIAgentsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isStreaming) {
-      if (streamTimerRef.current) {
-        clearInterval(streamTimerRef.current);
-      }
-      streamTimerRef.current = setInterval(() => {
-        setStreamSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (streamTimerRef.current) {
-      clearInterval(streamTimerRef.current);
-      streamTimerRef.current = null;
+    // Clean up startTime when streaming stops if needed, or keep it
+    if (!isStreaming) {
+       // setStreamStartTime(null); // Optional: clear timer on stop
     }
-    return () => {
-      if (streamTimerRef.current) {
-        clearInterval(streamTimerRef.current);
-        streamTimerRef.current = null;
-      }
-    };
   }, [isStreaming]);
 
   // 登录处理函数
@@ -831,7 +817,7 @@ const AIAgentsPage: React.FC = () => {
             isStreaming={isStreaming}
             streamingContent={streamingContent} 
             currentStreamingMessageId={currentStreamingMessageId}
-            streamSeconds={streamSeconds}
+            streamStartTime={streamStartTime}
             onStopStream={handleStopStream}
             onSendMessage={handleSendMessage}
             onInputChange={setInputMessage}

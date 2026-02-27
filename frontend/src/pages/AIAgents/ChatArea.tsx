@@ -1,14 +1,37 @@
 import React, { useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css"; // Import KaTeX CSS
 import { Card, Avatar, Button, Space, Tag, Tooltip, Flex, Typography, Input, Spin, Collapse } from "antd";
 import { HistoryOutlined, SendOutlined, UserOutlined, ClockCircleOutlined, BranchesOutlined, SettingOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { ChatAreaProps, Message, WorkflowGroup } from "./types";
 import { logger } from "@services/logger";
+import { TimerDisplay } from "@components/TimerDisplay";
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
+
+const ThinkingBubble = () => (
+  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 20 }}>
+    <style>
+      {`
+        @keyframes jump {
+          0%, 100% { transform: translateY(0); opacity: 0.5; }
+          50% { transform: translateY(-4px); opacity: 1; }
+        }
+      `}
+    </style>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0s' }} />
+      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0.2s' }} />
+      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0.4s' }} />
+    </div>
+    <span style={{ fontSize: 12, opacity: 0.8 }}>思考中...</span>
+  </div>
+);
 
 const normalizeMarkdown = (text: string) => {
   let s = (text || "").replace(/\r\n/g, "\n");
@@ -40,7 +63,8 @@ const MessageBubble: React.FC<{
   currentAgent: any;
   workflowGroups?: WorkflowGroup[];
   userDisplayName?: string;
-}> = ({ message, currentAgent, workflowGroups, userDisplayName }) => {
+  isThinking?: boolean;
+}> = ({ message, currentAgent, workflowGroups, userDisplayName, isThinking }) => {
   const [expanded, setExpanded] = React.useState(false);
   const formatTimestamp = (timestamp: string) => {
     return dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss");
@@ -50,6 +74,7 @@ const MessageBubble: React.FC<{
   const displayName = userDisplayName?.trim() || "我";
   const isWorkflowEvent =
     !isUser &&
+    message.content &&
     (message.content.startsWith("工作流启动") ||
       message.content.startsWith("工作流节点：") ||
       message.content.startsWith("节点完成：") ||
@@ -291,6 +316,31 @@ const MessageBubble: React.FC<{
                         fontSize: "12px",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
+                      }}color-text-secondary)",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => setExpanded(!expanded)}
+                      style={{ padding: 0 }}
+                    >
+                      {expanded ? "收起详情" : "查看详情"}
+                    </Button>
+                  </div>
+                  {expanded && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        background: "var(--ws-color-surface-2)",
+                        border: `1px solid ${wf.color}`,
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
                       }}
                     >
                       {wf.detail}
@@ -313,7 +363,11 @@ const MessageBubble: React.FC<{
           ) : (
             <>
               {!isUser && renderWorkflowGroups()}
-              {isUser ? (
+              {isThinking ? (
+                <div style={{ padding: '8px 4px', color: currentAgent.color }}>
+                  <ThinkingBubble />
+                </div>
+              ) : (isUser || message.content) ? (
                 <div
                   style={{
                     whiteSpace: "normal",
@@ -322,132 +376,124 @@ const MessageBubble: React.FC<{
                     fontSize: 14,
                   }}
                 >
-                  {message.content}
+                  {isUser ? message.content : (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({ children }) => (
+                          <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
+                        ),
+                        h1: ({ children }) => (
+                          <div
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 600,
+                              margin: 0,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {children}
+                          </div>
+                        ),
+                        h2: ({ children }) => (
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 600,
+                              margin: 0,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {children}
+                          </div>
+                        ),
+                        h3: ({ children }) => (
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              margin: 0,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {children}
+                          </div>
+                        ),
+                        ul: ({ children }) => (
+                          <ul
+                            style={{
+                              margin: 0,
+                              paddingLeft: 16,
+                              lineHeight: 1.6,
+                              listStylePosition: "inside",
+                            }}
+                          >
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol
+                            style={{
+                              margin: 0,
+                              paddingLeft: 16,
+                              lineHeight: 1.6,
+                              listStylePosition: "inside",
+                            }}
+                          >
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
+                            {children}
+                          </li>
+                        ),
+                        code: ({ children }) => (
+                          <code
+                            style={{
+                              background: "var(--ws-color-surface-2)",
+                              borderRadius: 4,
+                              padding: "0 4px",
+                              fontSize: 12,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre
+                            style={{
+                              background: "var(--ws-color-surface-2)",
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              overflowX: "auto",
+                              margin: "0 0 4px 0",
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {children}
+                          </pre>
+                        ),
+                        a: ({ children, href }) => (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--ws-color-primary)" }}
+                          >
+                            {children}
+                          </a>
+                        ),
+                        hr: () => null,
+                      }}
+                    >
+                      {normalizeMarkdown(message.content || "")}
+                    </ReactMarkdown>
+                  )}
                 </div>
-              ) : (
-                <div
-                  style={{
-                    whiteSpace: "normal",
-                    wordBreak: "break-word",
-                    lineHeight: 1.6,
-                    fontSize: 14,
-                  }}
-                >
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ children }) => (
-                        <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
-                      ),
-                      h1: ({ children }) => (
-                        <div
-                          style={{
-                            fontSize: 16,
-                            fontWeight: 600,
-                            margin: 0,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {children}
-                        </div>
-                      ),
-                      h2: ({ children }) => (
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 600,
-                            margin: 0,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {children}
-                        </div>
-                      ),
-                      h3: ({ children }) => (
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            margin: 0,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {children}
-                        </div>
-                      ),
-                      ul: ({ children }) => (
-                        <ul
-                          style={{
-                            margin: 0,
-                            paddingLeft: 16,
-                            lineHeight: 1.6,
-                            listStylePosition: "inside",
-                          }}
-                        >
-                          {children}
-                        </ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol
-                          style={{
-                            margin: 0,
-                            paddingLeft: 16,
-                            lineHeight: 1.6,
-                            listStylePosition: "inside",
-                          }}
-                        >
-                          {children}
-                        </ol>
-                      ),
-                      li: ({ children }) => (
-                        <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
-                          {children}
-                        </li>
-                      ),
-                      code: ({ children }) => (
-                        <code
-                          style={{
-                            background: "var(--ws-color-surface-2)",
-                            borderRadius: 4,
-                            padding: "0 4px",
-                            fontSize: 12,
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          {children}
-                        </code>
-                      ),
-                      pre: ({ children }) => (
-                        <pre
-                          style={{
-                            background: "var(--ws-color-surface-2)",
-                            padding: "4px 8px",
-                            borderRadius: 6,
-                            overflowX: "auto",
-                            margin: "0 0 4px 0",
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          {children}
-                        </pre>
-                      ),
-                      a: ({ children, href }) => (
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "var(--ws-color-primary)" }}
-                        >
-                          {children}
-                        </a>
-                      ),
-                      hr: () => null,
-                    }}
-                  >
-                    {normalizeMarkdown(message.content || "")}
-                  </ReactMarkdown>
-                </div>
-              )}
+              ) : null}
             </>
           )}
         </div>
@@ -468,7 +514,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   isStreaming,
   streamingContent, // 新增：流式内容
   currentStreamingMessageId,
-  streamSeconds,
+  streamStartTime,
   onStopStream,
   onSendMessage,
   onInputChange,
@@ -613,7 +659,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         <Space>
           {isStreaming && (
             <>
-              <Tag color="processing">执行中 {streamSeconds ?? 0}s</Tag>
+              <Tag color="processing">
+                <TimerDisplay 
+                  startTime={streamStartTime || null} 
+                  isRunning={true} 
+                  prefix="执行中 "
+                />
+              </Tag>
               <Button size="small" danger onClick={onStopStream}>
                 停止
               </Button>
@@ -647,11 +699,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           );
         })}
         {/* 渲染正在流式生成的内容 */}
-        {isStreaming && streamingContent && (
+        {isStreaming && (
             <MessageBubble
               message={{
                 id: 'streaming-temp',
-                content: streamingContent,
+                content: streamingContent || "",
                 sender: 'agent',
                 timestamp: new Date().toISOString(),
                 agentId: currentAgent.id
@@ -659,6 +711,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               currentAgent={currentAgent}
               workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
               userDisplayName={userDisplayName}
+              isThinking={!streamingContent}
             />
         )}
         <div ref={messagesEndRef} />
