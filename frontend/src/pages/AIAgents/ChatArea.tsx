@@ -316,31 +316,6 @@ const MessageBubble: React.FC<{
                         fontSize: "12px",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
-                      }}color-text-secondary)",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    <Button
-                      type="link"
-                      size="small"
-                      onClick={() => setExpanded(!expanded)}
-                      style={{ padding: 0 }}
-                    >
-                      {expanded ? "收起详情" : "查看详情"}
-                    </Button>
-                  </div>
-                  {expanded && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        background: "var(--ws-color-surface-2)",
-                        border: `1px solid ${wf.color}`,
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        fontSize: "12px",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
                       }}
                     >
                       {wf.detail}

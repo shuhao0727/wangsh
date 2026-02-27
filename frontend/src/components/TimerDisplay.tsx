@@ -16,7 +16,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     suffix = " s" 
 }) => {
     const [displayTime, setDisplayTime] = useState(initialElapsed);
-    const frameRef = useRef<number>();
+    const frameRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (isRunning && startTime) {
@@ -29,14 +29,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             frameRef.current = requestAnimationFrame(update);
         } else {
             // Stopped
-            if (frameRef.current) {
+            if (frameRef.current != null) {
                 cancelAnimationFrame(frameRef.current);
+                frameRef.current = null;
             }
         }
 
         return () => {
-            if (frameRef.current) {
+            if (frameRef.current != null) {
                 cancelAnimationFrame(frameRef.current);
+                frameRef.current = null;
             }
         };
     }, [isRunning, startTime]);
