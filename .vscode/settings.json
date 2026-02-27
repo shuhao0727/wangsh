@@ -53,5 +53,6 @@
   "typescript.preferences.importModuleSpecifier": "relative",
   "typescript.updateImportsOnFileMove.enabled": "always",
   "git.path": "/Applications/Xcode.app/Contents/Developer/usr/bin/git",
-  "git.autofetch": true
+  "git.autofetch": true,
+  "git.openRepositoryInParentFolders": "always"
 }
