@@ -769,11 +769,14 @@ const AIAgentsPage: React.FC = () => {
       style={{
         maxWidth: "1600px", // Increased max-width
         width: "100%",
+        height: "100%",
         margin: "0 auto",
-        height: "calc(100vh - 64px - 48px)",
+        flex: 1,
+        minHeight: 0,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       <GroupDiscussionPanel
@@ -781,14 +784,14 @@ const AIAgentsPage: React.FC = () => {
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
       />
-      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0, width: "100%" }}> {/* Ensure flex child can shrink/grow */}
+      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0, width: "100%", height: "100%" }}> {/* Ensure flex child can shrink/grow */}
         {/* 左侧：智能体列表和对话历史 */}
         {historyVisible && (
           <Col
             xs={24}
             md={6}
             lg={5}
-            style={{ minHeight: 0, display: "flex", flexDirection: "column" }}
+            style={{ minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}
           >
             <AgentSidebar
               agents={agents}
@@ -809,9 +812,9 @@ const AIAgentsPage: React.FC = () => {
           xs={24}
           md={historyVisible ? 18 : 24}
           lg={historyVisible ? 19 : 24}
-          style={{ minHeight: 0, display: "flex", flexDirection: "column" }}
+          style={{ minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}
         >
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1, minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}>
             <ChatArea
               currentAgent={currentAgent}
               messages={messages}

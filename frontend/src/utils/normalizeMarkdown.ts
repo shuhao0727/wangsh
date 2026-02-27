@@ -47,6 +47,14 @@ const looksLikeLatexInlineMath = (s: string) => {
   return false;
 };
 
+const stripKatexUnsupported = (s: string) => {
+  return (s || "")
+    .replace(/\\label\s*(\{[^}]*\}|\S+)?/g, "")
+    .replace(/\\tag\s*(\{[^}]*\}|\S+)?/g, "")
+    .replace(/\\eqref\s*\{[^}]*\}/g, "")
+    .replace(/\\ref\s*\{[^}]*\}/g, "");
+};
+
 export const normalizeMarkdown = (text: string) => {
   const s = (text || "").replace(/\r\n/g, "\n");
   const lines = s.split("\n");
@@ -179,6 +187,9 @@ export const normalizeMarkdown = (text: string) => {
     .split("\n")
     .map((line) => {
       if (line.includes("`")) return line;
+      if (line.includes("$")) return line;
+      const rest = line.replace(/\(([^()\n]{1,200})\)/g, "");
+      if (rest.includes("\\")) return line;
       return line.replace(/\(([^()\n]{1,200})\)/g, (m, body) => {
         const b = String(body ?? "");
         if (!b.includes("\\")) return m;
@@ -189,5 +200,5 @@ export const normalizeMarkdown = (text: string) => {
     })
     .join("\n");
 
-  return normalized.trimEnd();
+  return stripKatexUnsupported(normalized).trimEnd();
 };

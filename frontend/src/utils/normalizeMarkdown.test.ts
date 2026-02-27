@@ -61,3 +61,21 @@ test("normalizeMarkdown converts (latex) inline group to $\\left(\\cdot\\right)$
   expect(out).toContain("$\\left(\\frac{N}{k}\\right)$");
   expect(out).toContain("$\\left(\\lceil N/k \\rceil\\right)$");
 });
+
+test("normalizeMarkdown strips unsupported katex commands like \\label and \\tag", () => {
+  const input = [
+    "$$",
+    "x = y \\label{eq:test} \\tag{1}",
+    "$$",
+  ].join("\n");
+  const out = normalizeMarkdown(input);
+  expect(out).toContain("x = y");
+  expect(out).not.toContain("\\\\label");
+  expect(out).not.toContain("\\\\tag");
+});
+
+test("normalizeMarkdown does not split lines that contain other LaTeX outside parentheses", () => {
+  const input = "\\left\\{(\\frac{a}{b})\\right\\}";
+  const out = normalizeMarkdown(input);
+  expect(out).toBe(input);
+});

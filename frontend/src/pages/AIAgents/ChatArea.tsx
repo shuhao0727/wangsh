@@ -12,7 +12,7 @@ import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 
 const ThinkingBubble = () => (
@@ -485,8 +485,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       <Card
         style={{
           height: "100%",
+          minHeight: 0,
+          flex: 1,
           display: "flex",
           flexDirection: "column",
+        }}
+        bodyStyle={{
+          flex: 1,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          padding: 0,
         }}
         styles={{
           body: {
@@ -557,8 +566,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     <Card
       style={{
         height: "100%",
+        minHeight: 0,
+        flex: 1,
         display: "flex",
         flexDirection: "column",
+      }}
+      bodyStyle={{
+        flex: 1,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        padding: 0,
       }}
       styles={{
         body: {
@@ -633,6 +651,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           flex: 1,
           padding: "20px 24px",
           overflowY: "auto",
+          scrollbarGutter: "stable",
+          overscrollBehavior: "contain",
           background: "#fafafa", // Very light grey background for chat area
           minHeight: 0, 
         }}

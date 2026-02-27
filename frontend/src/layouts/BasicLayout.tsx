@@ -30,6 +30,7 @@ const BasicLayout: React.FC = () => {
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
+  const isAIAgentsPage = /^\/ai-agents(\/|$)/.test(location.pathname);
 
   // 调试日志：显示认证状态
   useEffect(() => {
@@ -157,7 +158,24 @@ const BasicLayout: React.FC = () => {
       {/* 内容区域 */}
       <Content
         className="main-content"
-        style={isArticleDetailPage ? { padding: 0, margin: 0 } : undefined}
+        style={
+          isAIAgentsPage
+            ? {
+                padding: 24,
+                margin: 0,
+                height: "calc(100vh - 64px)",
+                minHeight: 0,
+                overflow: "hidden",
+                boxSizing: "border-box",
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                position: "relative",
+              }
+            : isArticleDetailPage
+              ? { padding: 0, margin: 0 }
+              : undefined
+        }
       >
         <Outlet />
       </Content>
