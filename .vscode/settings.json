@@ -51,5 +51,7 @@
   
   // TypeScript 设置（用于前端开发）
   "typescript.preferences.importModuleSpecifier": "relative",
-  "typescript.updateImportsOnFileMove.enabled": "always"
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "git.path": "/Applications/Xcode.app/Contents/Developer/usr/bin/git",
+  "git.autofetch": true
 }
