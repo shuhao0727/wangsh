@@ -23,7 +23,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  SearchOutlined,
   EyeOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -32,7 +31,6 @@ import {
   FolderOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { Divider } from "antd";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
 import type {
@@ -44,7 +42,7 @@ import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
 import "./AdminArticles.css";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -581,7 +579,7 @@ const AdminArticles: React.FC = () => {
   };
 
   return (
-    <AdminPage>
+    <AdminPage padding={24}>
       {/* 搜索和操作栏 - 单行布局 */}
       <AdminCard
         size="small"
@@ -591,8 +589,6 @@ const AdminArticles: React.FC = () => {
         <Row gutter={16} align="middle" justify="space-between">
           <Col xs={24} md={12}>
             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>文章管理</Title>
-              <Divider type="vertical" style={{ height: "20px" }} />
               <Search
                 placeholder="搜索文章..."
                 allowClear
@@ -638,42 +634,16 @@ const AdminArticles: React.FC = () => {
       {/* 筛选表单 */}
       {filterVisible && (
         <AdminCard
-          title="高级筛选"
           size="small"
           className="admin-articles-filter"
-          extra={
-            <Button
-              type="link"
-              size="small"
-              onClick={() => setFilterVisible(false)}
-            >
-              收起
-            </Button>
-          }
+          styles={{ header: { display: "none" } }}
         >
           {renderFilterForm()}
         </AdminCard>
       )}
 
       {/* 文章表格 */}
-      <AdminCard
-        title={
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <span>文章列表</span>
-            {selectedRowKeys.length > 0 && (
-              <Tag color="orange" style={{ marginLeft: "8px" }}>
-                已选择 {selectedRowKeys.length} 项
-              </Tag>
-            )}
-          </div>
-        }
-        extra={
-          <Text type="secondary">
-            共 {total} 篇文章，当前显示第 {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, total)} 条
-          </Text>
-        }
-      >
+      <AdminCard styles={{ header: { display: "none" } }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: "40px" }}>
             <Spin size="large" />
@@ -708,7 +678,7 @@ const AdminArticles: React.FC = () => {
               scroll={{ x: 1300 }}
               size="middle"
             />
-            <div style={{ marginTop: "24px", textAlign: "center" }}>
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
               <Pagination
                 current={currentPage}
                 pageSize={pageSize}

@@ -11,12 +11,14 @@ import {
   FileTextOutlined,
 } from "@ant-design/icons";
 import { config } from "@services";
+import useAppMeta from "@hooks/useAppMeta";
 import { useNavigate } from "react-router-dom";
 
 const { Title, Text } = Typography;
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const { version, envLabel } = useAppMeta();
   const externalLinks = [
     {
       title: "Dify AI 平台",
@@ -236,10 +238,7 @@ const HomePage: React.FC = () => {
           color: "var(--ws-color-text-secondary)",
         }}
       >
-        <Text>
-          WangSh 平台 · 版本 {config.version} ·{" "}
-          {config.env === "development" ? "开发环境" : "生产环境"}
-        </Text>
+        <Text>WangSh 平台 · 版本 {version} · {envLabel || "本地开发"}</Text>
       </div>
     </div>
   );

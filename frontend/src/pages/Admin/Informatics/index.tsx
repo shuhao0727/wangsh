@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Input, Popconfirm, Select, Space, Table, Tag, Typography, message, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { AdminCard, AdminPage } from "@components/Admin";
@@ -11,6 +11,8 @@ const { Search } = Input;
 
 const AdminInformatics: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  // 发布开关的行内loading集合
+  const [publishingIds, setPublishingIds] = useState<Set<number>>(new Set());
   const [items, setItems] = useState<TypstNoteListItem[]>([]);
   const [categories, setCategories] = useState<TypstCategoryListItem[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
@@ -73,6 +75,62 @@ const AdminInformatics: React.FC = () => {
       key: "category_path",
       width: 220,
       render: (v: any) => (v ? <Tag>{String(v)}</Tag> : <Tag color="default">未分类</Tag>),
+    },
+    {
+      title: "发布",
+      key: "published",
+      width: 120,
+      render: (_, r) => {
+        const checked = !!r.published;
+        const loading = publishingIds.has(r.id);
+        return (
+          <Switch
+            checkedChildren="开"
+            unCheckedChildren="关"
+            checked={checked}
+            loading={loading}
+            disabled={loading}
+            onChange={async (val) => {
+              // 乐观更新
+              const prev = !!r.published;
+              setItems((list) => list.map((it) => (it.id === r.id ? { ...it, published: val } : it)));
+              setPublishingIds((s) => new Set(s).add(r.id));
+              try {
+                const payload: Partial<{
+                  title: string;
+                  summary: string;
+                  category_path: string;
+                  published: boolean;
+                }> = {
+                  title: r.title,
+                  // 仅当存在再传递，避免覆盖为undefined
+                  ...(typeof r.summary !== "undefined" ? { summary: r.summary as any } : {}),
+                  ...(typeof r.category_path !== "undefined" ? { category_path: r.category_path as any } : {}),
+                  published: val,
+                };
+                const updated = await typstNotesApi.update(r.id, payload);
+                // 成功后以返回为准刷新该行状态与更新时间
+                setItems((list) =>
+                  list.map((it) =>
+                    it.id === r.id ? { ...it, published: !!updated.published, updated_at: updated.updated_at } : it,
+                  ),
+                );
+                message.success(val ? "已发布" : "已停用");
+              } catch (e: any) {
+                // 回滚
+                setItems((list) => list.map((it) => (it.id === r.id ? { ...it, published: prev } : it)));
+                message.error(e?.response?.data?.detail || e?.message || "切换发布状态失败");
+              } finally {
+                setPublishingIds((s) => {
+                  const next = new Set(s);
+                  next.delete(r.id);
+                  return next;
+                });
+              }
+            }}
+          />
+        );
+      },
     },
     {
       title: "状态",

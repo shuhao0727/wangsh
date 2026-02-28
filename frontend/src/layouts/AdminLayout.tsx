@@ -30,7 +30,7 @@ import {
 } from "@ant-design/icons";
 import "./AdminLayout.css";
 import useAuth from "@hooks/useAuth";
-import config from "@services/config";
+import useAppMeta from "@hooks/useAppMeta";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -42,6 +42,7 @@ const AdminLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const { version, envLabel } = useAppMeta();
   
   // Directly use default values as we wrap with ConfigProvider in App
   const colorBgContainer = "#ffffff";
@@ -371,7 +372,7 @@ const AdminLayout: React.FC = () => {
         {!collapsed && (
           <div className="admin-sidebar-footer">
             <Text type="secondary" style={{ fontSize: "12px" }}>
-              WangSh Admin v{config.version}
+              WangSh 平台 · 版本 {version} · {envLabel || "本地开发"}
             </Text>
             <br />
             <Text type="secondary" style={{ fontSize: "10px" }}>

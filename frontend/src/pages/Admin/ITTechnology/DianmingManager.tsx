@@ -91,23 +91,28 @@ const DianmingManager: React.FC<Props> = () => {
       title: '年份/届别',
       dataIndex: 'year',
       key: 'year',
-      width: 150,
+      width: 120,
+      ellipsis: true as const,
     },
     {
       title: '班级名称',
       dataIndex: 'class_name',
       key: 'class_name',
-      width: 200,
+      width: 180,
+      ellipsis: true as const,
     },
     {
       title: '学生人数',
       dataIndex: 'count',
       key: 'count',
       width: 100,
+      align: 'right' as const,
     },
     {
       title: '操作',
       key: 'action',
+      width: 140,
+      align: 'center' as const,
       render: (_: any, record: DianmingClass) => (
         <Space>
           <Button 
@@ -154,6 +159,7 @@ const DianmingManager: React.FC<Props> = () => {
         loading={loading}
         dataSource={data}
         columns={columns}
+        size="middle"
         rowKey={(record) => `${record.year}-${record.class_name}`}
       />
 
