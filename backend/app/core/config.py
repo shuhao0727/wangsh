@@ -336,6 +336,14 @@ class Settings(BaseSettings):
     GROUP_DISCUSSION_COMPARE_CACHE_TTL: int = Field(default=600)
     GROUP_DISCUSSION_LIST_RECENT_HOURS: int = Field(default=1)
 
+    # ==================== 会话/IP 唯一性控制 ====================
+    AUTH_TRUST_X_FORWARDED_FOR: bool = Field(default=True)
+    AUTH_IP_HEADER_ORDER: str = Field(default="X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr")
+    AUTH_USER_UNIQUE_PER_IP: bool = Field(default=True)
+    AUTH_IP_UNIQUE_PER_USER: bool = Field(default=True)
+    AUTH_ENFORCE_SAME_IP_PER_REQUEST: bool = Field(default=False)
+    AUTH_SESSION_TTL_SECONDS: int = Field(default=0)  # 0 表示自动取 ACCESS_TOKEN_EXPIRE_MINUTES*60 或 STUDENT_SESSION_TTL
+
     AUTO_CREATE_TABLES: bool = Field(default=False)
 
     TYPST_COMPILE_MAX_CONCURRENCY: int = Field(default=2)

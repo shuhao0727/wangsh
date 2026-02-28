@@ -11,6 +11,8 @@ from app.db.database import get_db
 from app.core.config import settings
 from app.services.auth import get_current_user as auth_get_current_user
 from app.services.auth import get_current_user_or_student
+from app.services.auth import verify_token
+from app.core.session_guard import verify_request_session
 
 # OAuth2 配置
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -30,7 +32,8 @@ async def get_access_token(
 
 async def get_current_user(
     token: Optional[str] = Depends(get_access_token),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    request: Request = None
 ) -> Dict[str, Any]:
     """
     获取当前认证用户（必须有有效的认证令牌）
@@ -53,7 +56,20 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的认证令牌",
         )
-    
+    # 会话有效性校验（基于nonce，必要时校验IP）
+    try:
+        payload = verify_token(token) or {}
+        ok = await verify_request_session(int(user.get("id") or 0), payload, request)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="会话已失效，请重新登录",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # 降级为允许通过，避免硬失败（可按需开启严格模式）
+        pass
     return user
 
 

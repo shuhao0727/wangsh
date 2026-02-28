@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_db, get_access_token
 from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token
+from app.core.session_guard import on_successful_login
 
 router = APIRouter()
 
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.post("/login")
 async def login_for_access_token(
     response: Response,
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
@@ -46,9 +48,12 @@ async def login_for_access_token(
         "type": "admin" if user.get("role_code") in ["admin", "super_admin"] else "student"
     }
     
-    # 创建访问令牌
+    # 会话绑定：为该登录颁发会话nonce，并处理IP唯一性
+    nonce, client_ip = await on_successful_login(int(user["id"]), request)
+
+    # 创建访问令牌，加入会话nonce（sn）
     access_token = create_access_token(
-        data=token_data,
+        data={**token_data, "sn": nonce},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
@@ -86,6 +91,7 @@ async def login_for_access_token(
         "role_code": user.get("role_code", "guest"),
         "full_name": user.get("full_name", ""),
         "username": user.get("username", ""),
+        "client_ip": client_ip,
     }
     
     # 如果是学生，添加学生相关字段
@@ -213,9 +219,17 @@ async def refresh_access_token(
         "type": "admin" if user_info.get("role_code") in ["admin", "super_admin"] else "student"
     }
     
-    # 创建新的访问令牌
+    # 从会话守卫读取当前nonce（如未设置则不加入）
+    try:
+        from app.core.session_guard import get_user_session
+        sess = await get_user_session(int(user_info.get("user_id")))
+        nonce = (sess or {}).get("nonce")
+    except Exception:
+        nonce = None
+
+    # 创建新的访问令牌（带会话nonce）
     access_token = create_access_token(
-        data=token_data,
+        data=({**token_data, "sn": nonce} if nonce else token_data),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
