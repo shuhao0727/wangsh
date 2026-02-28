@@ -472,11 +472,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   onInputChange,
   onToggleSidebar,
 }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
 
   // 自动滚动到最新消息
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
   }, [messages, streamingContent]);
 
   // 如果当前智能体为null，显示加载状态或空状态
@@ -647,6 +649,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
       {/* 消息列表 - 固定高度，带滚动条 */}
       <div
+        ref={messageListRef}
         style={{
           flex: 1,
           padding: "20px 24px",
@@ -654,7 +657,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           scrollbarGutter: "stable",
           overscrollBehavior: "contain",
           background: "#fafafa", // Very light grey background for chat area
-          minHeight: 0, 
+          minHeight: 0,
+          scrollBehavior: "smooth",
         }}
       >
         {visibleMessages.map((message) => {
@@ -686,7 +690,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               isThinking={!streamingContent}
             />
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* 输入区域 */}

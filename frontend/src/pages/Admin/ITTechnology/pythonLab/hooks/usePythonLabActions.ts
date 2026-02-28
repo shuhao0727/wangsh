@@ -108,7 +108,7 @@ export function usePythonLabActions(params: {
   );
 
   const getDemo = (key: string): { nodes: FlowNode[]; edges: FlowEdge[]; code?: string; codeMode?: "auto" | "manual" } => {
-    const k = key || "while_sum_1_10";
+    const k = key || "seq_basic";
     const id = (name: string) => `demo_${k}_${name}`;
 
     if (k === "code_fib_for") {
@@ -310,7 +310,7 @@ export function usePythonLabActions(params: {
   };
 
   const loadDemoFlow = (key?: string) => {
-    const demo = getDemo(key ?? "while_sum_1_10");
+    const demo = getDemo(key ?? "seq_basic");
     if (demo.codeMode !== "manual") ensureAuto();
     setNodes(demo.nodes);
     setEdges(demo.edges);

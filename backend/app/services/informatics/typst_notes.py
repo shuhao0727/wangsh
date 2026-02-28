@@ -254,6 +254,7 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
             )
         )
         if note.compiled_hash == h:
+            # 优先读取磁盘缓存文件
             if note.compiled_pdf_path:
                 try:
                     p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, note.compiled_pdf_path)
@@ -281,11 +282,12 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
                         return pdf_bytes, h
                 except Exception:
                     pass
+            # 再读取数据库中的二进制PDF，并补写文件缓存
             if note.compiled_pdf:
-                if not note.compiled_pdf_path:
-                    try:
+                try:
+                    pdf_bytes = bytes(note.compiled_pdf)
+                    if not note.compiled_pdf_path:
                         rel = pdf_rel_path(note.id or 0, h)
-                        pdf_bytes = bytes(note.compiled_pdf)
                         await asyncio.to_thread(write_pdf_bytes, settings.TYPST_PDF_STORAGE_DIR, rel, pdf_bytes)
                         note.compiled_pdf_path = rel
                         note.compiled_pdf_size = len(pdf_bytes)
@@ -293,28 +295,33 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
                             note.compiled_pdf = None
                         await db.commit()
                         await db.refresh(note)
+                    dur_ms = int((time.perf_counter() - started) * 1000)
+                    logger.info("typst.compile ok cache_hit=true note_id={} dur_ms={} pdf_bytes={}", note.id, dur_ms, len(pdf_bytes))
+                    try:
+                        await cache.increment("typst:compile:hit")
                     except Exception:
-                        pdf_bytes = bytes(note.compiled_pdf)
-                else:
-                    pdf_bytes = bytes(note.compiled_pdf)
-                dur_ms = int((time.perf_counter() - started) * 1000)
-                logger.info("typst.compile ok cache_hit=true note_id={} dur_ms={} pdf_bytes={}", note.id, dur_ms, len(pdf_bytes))
-                try:
-                    await cache.increment("typst:compile:hit")
+                        pass
+                    try:
+                        client = await cache.get_client()
+                        await client.lpush("typst:compile:dur_ms", dur_ms)
+                        await client.ltrim("typst:compile:dur_ms", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
+                        await client.lpush("typst:compile:cache_hit", 1)
+                        await client.ltrim("typst:compile:cache_hit", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
+                    except Exception:
+                        pass
+                    return pdf_bytes, h
                 except Exception:
                     pass
-                try:
-                    client = await cache.get_client()
-                    await client.lpush("typst:compile:dur_ms", dur_ms)
-                    await client.ltrim("typst:compile:dur_ms", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
-                    await client.lpush("typst:compile:cache_hit", 1)
-                    await client.ltrim("typst:compile:cache_hit", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
-                except Exception:
-                    pass
-                return pdf_bytes, h
         try:
             await cache.increment("typst:compile:miss")
         except Exception:
+            pass
+
+        if settings.TYPST_COMPILE_USE_CELERY:
+            # 如果启用了Celery，则不应在本地执行同步编译，除非作为降级方案
+            # 但此函数(compile_note_pdf)现在主要作为Celery任务的实现或同步回退
+            # 如果是API直接调用且配置了Celery，API层应该已经派发了任务
+            # 这里我们继续执行本地编译（可能是Worker在执行，也可能是API层的同步回退）
             pass
 
         sem_wait_started = time.perf_counter()
@@ -344,6 +351,7 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
         dur_ms = int((time.perf_counter() - started) * 1000)
         logger.info("typst.compile ok cache_hit=false note_id={} dur_ms={} waited_ms={} pdf_bytes={}", note.id, dur_ms, waited_ms, len(pdf_bytes))
         try:
+            await cache.increment("typst:compile:miss")
             client = await cache.get_client()
             await client.lpush("typst:compile:dur_ms", dur_ms)
             await client.ltrim("typst:compile:dur_ms", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
@@ -353,6 +361,8 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
             await client.ltrim("typst:compile:cache_hit", 0, max(0, int(settings.TYPST_METRICS_SAMPLE_SIZE) - 1))
         except Exception:
             pass
+        if not pdf_bytes:
+            pdf_bytes = b""
         return pdf_bytes, h
 
 

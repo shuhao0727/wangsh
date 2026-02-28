@@ -784,7 +784,7 @@ const AIAgentsPage: React.FC = () => {
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
       />
-      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0, width: "100%", height: "100%" }}> {/* Ensure flex child can shrink/grow */}
+      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0 }}> {/* Ensure flex child can shrink/grow */}
         {/* 左侧：智能体列表和对话历史 */}
         {historyVisible && (
           <Col

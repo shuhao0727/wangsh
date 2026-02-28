@@ -241,8 +241,24 @@ stop_docker_containers() {
     else
         print_success "✅ Adminer容器已停止"
     fi
+
+    local typst_stopped=true
+    if docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+        print_error "❌ Typst Worker容器仍在运行"
+        typst_stopped=false
+    else
+        print_success "✅ Typst Worker容器已停止"
+    fi
+
+    local pythonlab_stopped=true
+    if docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+        print_error "❌ PythonLab Worker容器仍在运行"
+        pythonlab_stopped=false
+    else
+        print_success "✅ PythonLab Worker容器已停止"
+    fi
     
-    if $postgres_stopped && $redis_stopped && $adminer_stopped; then
+    if $postgres_stopped && $redis_stopped && $adminer_stopped && $typst_stopped && $pythonlab_stopped; then
         print_success "所有Docker容器已停止"
         return 0
     else
@@ -317,6 +333,18 @@ show_current_status() {
             echo -e "  ${YELLOW}⚠️  Adminer: 运行中${NC}"
         else
             echo -e "  ${GREEN}✅ Adminer: 已停止${NC}"
+        fi
+
+        if docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+            echo -e "  ${YELLOW}⚠️  Typst Worker: 运行中${NC}"
+        else
+            echo -e "  ${GREEN}✅ Typst Worker: 已停止${NC}"
+        fi
+
+        if docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+            echo -e "  ${YELLOW}⚠️  PythonLab Worker: 运行中${NC}"
+        else
+            echo -e "  ${GREEN}✅ PythonLab Worker: 已停止${NC}"
         fi
     fi
     

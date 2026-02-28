@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import {
   Badge,
   Button,
@@ -465,7 +466,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   // --- 主渲染 ---
   if (!canUse) return null;
 
-  return (
+  return ReactDOM.createPortal(
     <>
       {/* 悬浮按钮 */}
       {!open && (
@@ -548,7 +549,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 };
 

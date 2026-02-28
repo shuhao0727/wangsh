@@ -262,14 +262,22 @@ stop_existing_processes() {
 setup_environment() {
     print_info "设置环境变量..."
     
-    if [ -f "${PROJECT_ROOT}/.env" ]; then
+    # 开发环境优先加载 .env.dev
+    if [ -f "${PROJECT_ROOT}/.env.dev" ]; then
+        load_env_file "${PROJECT_ROOT}/.env.dev"
+    elif [ -f "${PROJECT_ROOT}/.env" ]; then
+        print_warning "未找到 .env.dev，使用 .env (生产配置?) 作为回退"
         load_env_file "${PROJECT_ROOT}/.env"
     fi
+
     if [ -f "${PROJECT_ROOT}/.env.local" ]; then
         load_env_file "${PROJECT_ROOT}/.env.local"
     fi
 
     if [ "${START_MODE:-local}" = "local" ]; then
+        # 本地开发：确保 PDF 存储目录指向宿主机可访问路径
+        set_default_env TYPST_PDF_STORAGE_DIR "${PROJECT_ROOT}/data/typst_pdfs"
+        mkdir -p "${TYPST_PDF_STORAGE_DIR}"
         if [ "${POSTGRES_HOST:-}" = "postgres" ]; then
             export POSTGRES_HOST="localhost"
         fi
@@ -366,7 +374,12 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-postgres"; then
         print_info "启动PostgreSQL容器..."
         cd "${PROJECT_ROOT}"
-        docker-compose -f docker-compose.dev.yml up -d postgres
+        # 使用 .env.dev 如果存在
+        if [ -f ".env.dev" ]; then
+            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres
+        else
+            docker-compose -f docker-compose.dev.yml up -d postgres
+        fi
         
         # 等待数据库就绪
         print_info "等待PostgreSQL就绪..."
@@ -399,7 +412,11 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-redis"; then
         print_info "启动Redis容器..."
         cd "${PROJECT_ROOT}"
-        docker-compose -f docker-compose.dev.yml up -d redis
+        if [ -f ".env.dev" ]; then
+            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d redis
+        else
+            docker-compose -f docker-compose.dev.yml up -d redis
+        fi
         
         # 等待Redis就绪
         print_info "等待Redis就绪..."
@@ -413,11 +430,41 @@ start_docker_infrastructure() {
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-adminer"; then
         print_info "启动Adminer数据库管理界面..."
         cd "${PROJECT_ROOT}"
-        docker-compose -f docker-compose.dev.yml up -d adminer
+        if [ -f ".env.dev" ]; then
+            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d adminer
+        else
+            docker-compose -f docker-compose.dev.yml up -d adminer
+        fi
         sleep 2
         print_success "Adminer已启动，访问: http://localhost:8081"
     else
         print_info "Adminer容器已在运行"
+    fi
+    
+    if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+        print_info "启动Typst Worker容器..."
+        cd "${PROJECT_ROOT}"
+        if [ -f ".env.dev" ]; then
+            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d typst-worker
+        else
+            docker-compose -f docker-compose.dev.yml up -d typst-worker
+        fi
+        print_success "Typst Worker已启动"
+    else
+        print_info "Typst Worker容器已在运行"
+    fi
+
+    if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+        print_info "启动PythonLab Worker容器..."
+        cd "${PROJECT_ROOT}"
+        if [ -f ".env.dev" ]; then
+            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d pythonlab-worker
+        else
+            docker-compose -f docker-compose.dev.yml up -d pythonlab-worker
+        fi
+        print_success "PythonLab Worker已启动"
+    else
+        print_info "PythonLab Worker容器已在运行"
     fi
     
     print_success "Docker基础设施启动完成"
@@ -426,7 +473,11 @@ start_docker_infrastructure() {
 start_docker_stack() {
     print_info "启动Docker开发环境服务栈..."
     cd "${PROJECT_ROOT}"
-    docker-compose -f docker-compose.dev.yml up -d postgres redis adminer backend frontend caddy
+    if [ -f ".env.dev" ]; then
+        docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres redis adminer backend frontend caddy
+    else
+        docker-compose -f docker-compose.dev.yml up -d postgres redis adminer backend frontend caddy
+    fi
 
     print_info "等待入口服务就绪..."
     local max_attempts=60
@@ -657,6 +708,18 @@ show_service_status() {
         echo -e "  ${RED}❌ Adminer:    未运行${NC}"
     fi
     
+    if docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+        echo -e "  ${GREEN}✅ Typst Worker: 运行中${NC}"
+    else
+        echo -e "  ${RED}❌ Typst Worker: 未运行${NC}"
+    fi
+
+    if docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+        echo -e "  ${GREEN}✅ PythonLab:    运行中${NC}"
+    else
+        echo -e "  ${RED}❌ PythonLab:    未运行${NC}"
+    fi
+    
     echo ""
     echo "🔧 开发工具："
     if [ "${START_MODE:-local}" = "docker" ]; then
@@ -729,7 +792,6 @@ main() {
         start_docker_stack
     else
         start_local_backend
-        start_local_celery_worker
         start_local_frontend
     fi
     

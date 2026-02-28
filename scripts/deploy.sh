@@ -2,6 +2,14 @@ set -euo pipefail
 
 cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
+
+# 部署脚本默认使用生产配置 (.env)
+if [ -z "${env_file}" ]; then
+  if [ -f ".env" ]; then
+    env_file=".env"
+  fi
+fi
+
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
 
 require_env_file() {
@@ -64,6 +72,13 @@ rand() {
   python3 - <<'PY'
 import secrets
 print(secrets.token_urlsafe(32))
+PY
+}
+
+fernet_key() {
+  python3 - <<'PY'
+import base64, os
+print(base64.urlsafe_b64encode(os.urandom(32)).decode())
 PY
 }
 
@@ -191,6 +206,7 @@ case "${cmd}" in
     tmp_env="$(mktemp -t wangsh_env_XXXXXX)"
     trap 'rm -f "${tmp_env}"' EXIT
     secret_key="$(rand)"
+    fernet="$(fernet_key)"
     pg_password="$(rand)"
     admin_password="$(rand)"
 
@@ -209,6 +225,7 @@ IMAGE_NAME_WORKER=wangsh-typst-worker
 TIMEZONE=Asia/Shanghai
 LOG_LEVEL=INFO
 SECRET_KEY=${secret_key}
+AGENT_API_KEY_ENCRYPTION_KEY=${fernet}
 POSTGRES_DB=wangsh_db
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=${pg_password}

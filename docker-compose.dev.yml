@@ -90,6 +90,7 @@ services:
       - APP_VERSION=${APP_VERSION}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - UPLOAD_FOLDER=./uploads
+      - TYPST_PDF_STORAGE_DIR=/app/data/typst_pdfs
       - MAX_UPLOAD_SIZE=10485760
       # 开发模式热加载
       - BACKEND_RELOAD=True
@@ -99,6 +100,8 @@ services:
       - ./backend:/app
       # 上传文件持久化 - 使用容器内的绝对路径
       - ./data/uploads:/app/uploads
+      # Typst PDF 存储目录（与 worker 共享）
+      - ./data/typst_pdfs:/app/data/typst_pdfs
     depends_on:
       postgres:
         condition: service_healthy
@@ -238,6 +241,24 @@ services:
     ports:
       - "${WEB_PORT:-6608}:6608"
     command: sh -c "npm start"
+
+
+
+  # Caddy 服务 (反向代理)
+  caddy:
+    image: public.ecr.aws/docker/library/caddy:2-alpine
+    container_name: wangsh-caddy
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ./gateway/Caddyfile.dev:/etc/caddy/Caddyfile
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - wangsh-network
+      - dify_network
 
 # 网络配置
 networks:

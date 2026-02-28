@@ -1,0 +1,19 @@
+:80 {
+    # 开发环境 Caddy 配置
+    # 将 8080 端口请求转发到后端 (8000) 和前端 (6608)
+
+    # 后端 API 反向代理
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # 健康检查
+    handle /health {
+        reverse_proxy backend:8000
+    }
+
+    # 前端 React 开发服务器 (WebSocket 支持热更新)
+    handle {
+        reverse_proxy frontend:6608
+    }
+}
