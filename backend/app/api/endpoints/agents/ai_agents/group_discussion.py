@@ -12,6 +12,10 @@ from app.core.config import settings
 from app.schemas.agents import (
     GroupDiscussionJoinRequest,
     GroupDiscussionJoinResponse,
+    GroupDiscussionMuteRequest,
+    GroupDiscussionUnmuteRequest,
+    GroupDiscussionAddMemberRequest,
+    GroupDiscussionRemoveMemberRequest,
     GroupDiscussionMessageListResponse,
     GroupDiscussionMessageOut,
     GroupDiscussionSendRequest,
@@ -26,10 +30,16 @@ from app.schemas.agents import (
     GroupDiscussionAdminAnalysisListResponse,
     GroupDiscussionAdminAnalysisOut,
     GroupDiscussionPublicConfig,
+    GroupDiscussionMemberOut,
+    GroupDiscussionAdminMemberListResponse,
+    GroupDiscussionAdminDeleteSessionsRequest,
 )
+from typing import List
 from app.services.agents.group_discussion import (
     admin_analyze_session,
     admin_compare_analyze_sessions,
+    admin_delete_session,
+    admin_delete_sessions,
     admin_list_analyses,
     admin_list_messages,
     admin_list_sessions,
@@ -39,6 +49,12 @@ from app.services.agents.group_discussion import (
     list_messages,
     send_message,
     set_group_name,
+    mute_member,
+    unmute_member,
+    admin_add_member,
+    admin_remove_member,
+    admin_list_members,
+    list_classes,
 )
 from app.services.agents.group_discussion_public_config import GroupDiscussionPublicConfigService
 from app.utils.cache import cache
@@ -68,7 +84,11 @@ async def get_public_config(
     db: AsyncSession = Depends(get_db),
 ) -> GroupDiscussionPublicConfig:
     enabled = await GroupDiscussionPublicConfigService.get_enabled(db)
-    return GroupDiscussionPublicConfig(enabled=enabled)
+    return GroupDiscussionPublicConfig(
+        enabled=enabled,
+        join_lock_seconds=settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS,
+        rate_limit_seconds=settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS,
+    )
 
 
 @router.get("/public-config/stream")
@@ -141,7 +161,11 @@ async def set_public_config(
             await cache.publish(PUBLIC_CONFIG_CHANNEL, {"enabled": bool(enabled)})
         except Exception:
             pass
-    return GroupDiscussionPublicConfig(enabled=enabled)
+    return GroupDiscussionPublicConfig(
+        enabled=enabled,
+        join_lock_seconds=settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS,
+        rate_limit_seconds=settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS,
+    )
 
 
 @router.post("/join", response_model=GroupDiscussionJoinResponse)
@@ -153,15 +177,15 @@ async def join_group_discussion(
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
     role = str(user.get("role_code") or "")
-    if role == "student":
-        class_name = (user.get("class_name") or "").strip() or "未知班级"
-    else:
-        class_name = "管理员"
 
-    lock_seconds = await enforce_join_lock(user_id=int(user["id"]), requested_group_no=str(payload.group_no).strip())
+    lock_seconds = await enforce_join_lock(
+        user_id=int(user["id"]),
+        requested_group_no=str(payload.group_no).strip(),
+        user_role=role,
+    )
     session = await get_or_create_today_session(
         db,
-        class_name=class_name,
+        class_name=payload.class_name,
         group_no=payload.group_no,
         group_name=payload.group_name,
         user=user,
@@ -180,6 +204,8 @@ async def join_group_discussion(
 
 @router.get("/groups", response_model=GroupDiscussionGroupListResponse)
 async def list_groups(
+    date: Optional[date] = Query(None, description="可选：按日期筛选"),
+    class_name: Optional[str] = Query(None, description="可选：按班级筛选"),
     keyword: Optional[str] = Query(None, description="可选：按组号或组名搜索"),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -189,10 +215,21 @@ async def list_groups(
     await _enforce_frontend_visibility(db, user)
     role = str(user.get("role_code") or "")
     if role == "student":
-        class_name = (user.get("class_name") or "").strip() or "未知班级"
+        final_class_name = (user.get("class_name") or "").strip() or "未知班级"
+        ignore_time = False
     else:
-        class_name = "管理员"
-    rows = await list_today_groups(db, class_name=class_name, keyword=keyword, limit=limit)
+        final_class_name = class_name
+        # 管理员，或者指定了日期（可能是查询历史），则忽略时间限制
+        ignore_time = True if (role in ["admin", "super_admin"] or date) else False
+
+    rows = await list_today_groups(
+        db, 
+        date=date, 
+        class_name=final_class_name, 
+        keyword=keyword, 
+        limit=limit, 
+        ignore_time_limit=ignore_time
+    )
     items = [
         GroupDiscussionGroupOut(
             session_id=int(r.id),
@@ -346,6 +383,46 @@ async def post_group_discussion_message(
     )
 
 
+@router.post("/mute", status_code=status.HTTP_200_OK)
+async def mute_user(
+    payload: GroupDiscussionMuteRequest,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    await mute_member(db, session_id=payload.session_id, user_id=payload.user_id, minutes=payload.minutes)
+    return {"success": True}
+
+
+@router.post("/unmute", status_code=status.HTTP_200_OK)
+async def unmute_user(
+    payload: GroupDiscussionUnmuteRequest,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    await unmute_member(db, session_id=payload.session_id, user_id=payload.user_id)
+    return {"success": True}
+
+
+@router.post("/add-member", status_code=status.HTTP_200_OK)
+async def add_member_to_session(
+    payload: GroupDiscussionAddMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    await admin_add_member(db, session_id=payload.session_id, user_id=payload.user_id)
+    return {"success": True}
+
+
+@router.post("/remove-member", status_code=status.HTTP_200_OK)
+async def remove_member_from_session(
+    payload: GroupDiscussionRemoveMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    await admin_remove_member(db, session_id=payload.session_id, user_id=payload.user_id)
+    return {"success": True}
+
+
 @router.get("/admin/sessions", response_model=GroupDiscussionAdminSessionListResponse)
 async def admin_get_sessions(
     start_date: Optional[date] = Query(None),
@@ -392,6 +469,26 @@ async def admin_get_sessions(
     )
 
 
+@router.delete("/admin/sessions/{session_id}", status_code=status.HTTP_200_OK)
+async def admin_delete_session_api(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    await admin_delete_session(db, session_id=session_id)
+    return {"success": True}
+
+
+@router.post("/admin/sessions/batch-delete", status_code=status.HTTP_200_OK)
+async def admin_batch_delete_sessions_api(
+    payload: GroupDiscussionAdminDeleteSessionsRequest,
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    deleted = await admin_delete_sessions(db, session_ids=payload.session_ids)
+    return {"success": True, "deleted": deleted}
+
+
 @router.get("/admin/messages", response_model=GroupDiscussionAdminMessageListResponse)
 async def admin_get_messages(
     session_id: int = Query(..., ge=1),
@@ -419,6 +516,37 @@ async def admin_get_messages(
         page_size=size,
         total_pages=total_pages,
     )
+
+
+@router.get("/admin/members", response_model=GroupDiscussionAdminMemberListResponse)
+async def admin_get_members(
+    session_id: int = Query(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> GroupDiscussionAdminMemberListResponse:
+    members = await admin_list_members(db, session_id=session_id)
+    items = []
+    for m in members:
+        items.append(
+            GroupDiscussionMemberOut(
+                user_id=m.user_id,
+                username=getattr(m.user, "username", None),
+                full_name=getattr(m.user, "full_name", None),
+                student_id=getattr(m.user, "student_id", None),
+                joined_at=m.joined_at,
+                muted_until=m.muted_until,
+            )
+        )
+    return GroupDiscussionAdminMemberListResponse(items=items)
+
+
+@router.get("/admin/classes", response_model=List[str])
+async def admin_list_classes(
+    date: Optional[date] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+) -> List[str]:
+    return await list_classes(db, date=date)
 
 
 @router.post("/admin/analyze", response_model=GroupDiscussionAdminAnalyzeResponse)

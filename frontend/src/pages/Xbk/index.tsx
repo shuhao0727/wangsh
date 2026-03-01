@@ -1435,7 +1435,7 @@ const XbkPage: React.FC = () => {
             (importPreview ? importPreview.valid_rows === 0 : false),
         }}
       >
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
           <div>
             <Text style={{ marginRight: 10 }}>导入类型</Text>
             <Select value={importScope} style={{ width: 140 }} onChange={(v) => setImportScope(v)}>
@@ -1547,7 +1547,7 @@ const XbkPage: React.FC = () => {
         onOk={handleExportConfirm}
         okText="导出"
       >
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
           <div>
             <Text style={{ marginRight: 10 }}>导出类型</Text>
             <Select value={exportType} style={{ width: 220 }} onChange={(v) => setExportType(v)}>
@@ -1596,7 +1596,7 @@ const XbkPage: React.FC = () => {
         okButtonProps={{ danger: true }}
         okText="确认删除"
       >
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
           <Alert
             type="warning"
             showIcon
@@ -1635,7 +1635,7 @@ const XbkPage: React.FC = () => {
             <Spin />
           </div>
         ) : (
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
             <Text type="secondary">
               当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
               {filters.class_name ? ` · ${filters.class_name}` : ""}
@@ -1706,7 +1706,7 @@ const XbkPage: React.FC = () => {
                   key: "courses",
                   label: "课程统计",
                   children: (
-                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                    <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                       <Input
                         placeholder="搜索课程代码/名称"
                         allowClear
@@ -1742,7 +1742,7 @@ const XbkPage: React.FC = () => {
                   key: "no_selection",
                   label: `未选课学生 (${analysisNoSelection.length})`,
                   children: (
-                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                    <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                       <Input
                         placeholder="搜索班级/姓名/学号"
                         allowClear

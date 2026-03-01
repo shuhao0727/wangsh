@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
@@ -110,6 +111,8 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         return
 
     host = meta.get("dap_host") or DAP_HOST_DEFAULT
+    if host == "host.docker.internal" and not os.path.exists("/.dockerenv") and settings.DEPLOYMENT_ENV != "docker":
+        host = "127.0.0.1"
     port = int(meta.get("dap_port") or 0)
     if port <= 0:
         await websocket.close(code=4410)

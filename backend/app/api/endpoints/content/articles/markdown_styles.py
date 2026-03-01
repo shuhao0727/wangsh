@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_super_admin
+from app.core.deps import get_db, require_admin
 from app.schemas.articles.markdown_style import (
     MarkdownStyleListItem,
     MarkdownStyleResponse,
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/markdown-styles")
 @router.get("", response_model=list[MarkdownStyleListItem])
 async def api_list_markdown_styles(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_super_admin),
+    _: dict = Depends(require_admin),
 ):
     styles = await list_styles(db=db)
     return [
@@ -29,7 +29,7 @@ async def api_list_markdown_styles(
 async def api_get_markdown_style(
     key: str,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_super_admin),
+    _: dict = Depends(require_admin),
 ):
     s = await get_style(db=db, key=key)
     if not s:
@@ -48,7 +48,7 @@ async def api_get_markdown_style(
 async def api_upsert_markdown_style(
     payload: MarkdownStyleUpsert,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_super_admin),
+    _: dict = Depends(require_admin),
 ):
     s = await upsert_style(
         db=db,
@@ -72,7 +72,7 @@ async def api_update_markdown_style(
     key: str,
     payload: MarkdownStyleUpdate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_super_admin),
+    _: dict = Depends(require_admin),
 ):
     try:
         s = await update_style(db=db, key=key, title=payload.title, content=payload.content, sort_order=payload.sort_order)
@@ -92,7 +92,7 @@ async def api_update_markdown_style(
 async def api_delete_markdown_style(
     key: str,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_super_admin),
+    _: dict = Depends(require_admin),
 ):
     await delete_style(db=db, key=key)
     return {"ok": True}

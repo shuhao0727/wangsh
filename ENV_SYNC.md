@@ -52,4 +52,3 @@
 1. `bash scripts/deploy.sh up-amd64`
 2. 访问 `http://localhost:6608` 与 `http://localhost:6608/api/health`
 3. 登录后执行 Typst “编译/预览”，确认页面可下载 PDF
-

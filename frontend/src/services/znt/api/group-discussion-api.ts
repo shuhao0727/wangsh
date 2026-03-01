@@ -31,6 +31,8 @@ export type GroupDiscussionGroupListResponse = {
 
 export type GroupDiscussionPublicConfig = {
   enabled: boolean;
+  join_lock_seconds: number;
+  rate_limit_seconds: number;
 };
 
 export type GroupDiscussionMessage = {
@@ -94,6 +96,19 @@ export type GroupDiscussionAdminAnalysisListResponse = {
   items: GroupDiscussionAdminAnalysis[];
 };
 
+export type GroupDiscussionMember = {
+  user_id: number;
+  username?: string | null;
+  full_name?: string | null;
+  student_id?: string | null;
+  joined_at: string;
+  muted_until?: string | null;
+};
+
+export type GroupDiscussionAdminMemberListResponse = {
+  items: GroupDiscussionMember[];
+};
+
 export const groupDiscussionApi = {
   getPublicConfig: async (): Promise<BaseResponse<GroupDiscussionPublicConfig>> => {
     try {
@@ -106,7 +121,7 @@ export const groupDiscussionApi = {
       return {
         success: false,
         message: error.response?.data?.detail || error.message || "获取失败",
-        data: { enabled: false },
+        data: { enabled: false, join_lock_seconds: 180, rate_limit_seconds: 5 },
       };
     }
   },
@@ -124,7 +139,7 @@ export const groupDiscussionApi = {
       return {
         success: false,
         message: error.response?.data?.detail || error.message || "设置失败",
-        data: { enabled: params.enabled },
+        data: { enabled: params.enabled, join_lock_seconds: 180, rate_limit_seconds: 5 },
       };
     }
   },
@@ -162,12 +177,19 @@ export const groupDiscussionApi = {
   },
 
   listGroups: async (params?: {
+    date?: string;
+    className?: string;
     keyword?: string;
     limit?: number;
   }): Promise<BaseResponse<GroupDiscussionGroupListResponse>> => {
     try {
       const response = await api.get(`${BASE_PATH}/groups`, {
-        params: { keyword: params?.keyword, limit: params?.limit ?? 50 },
+        params: {
+          date: params?.date,
+          class_name: params?.className,
+          keyword: params?.keyword,
+          limit: params?.limit ?? 50,
+        },
       });
       const raw: any = response.data as any;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
@@ -266,6 +288,88 @@ export const groupDiscussionApi = {
     }
   },
 
+  adminMuteUser: async (params: {
+    sessionId: number;
+    userId: number;
+    minutes: number;
+  }): Promise<BaseResponse<boolean>> => {
+    try {
+      await api.post(`${BASE_PATH}/mute`, {
+        session_id: params.sessionId,
+        user_id: params.userId,
+        minutes: params.minutes,
+      });
+      return { success: true, message: "禁言成功", data: true };
+    } catch (error: any) {
+      logger.error("禁言失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "禁言失败",
+        data: false,
+      };
+    }
+  },
+
+  adminUnmuteUser: async (params: {
+    sessionId: number;
+    userId: number;
+  }): Promise<BaseResponse<boolean>> => {
+    try {
+      await api.post(`${BASE_PATH}/unmute`, {
+        session_id: params.sessionId,
+        user_id: params.userId,
+      });
+      return { success: true, message: "解除禁言成功", data: true };
+    } catch (error: any) {
+      logger.error("解除禁言失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "解除禁言失败",
+        data: false,
+      };
+    }
+  },
+
+  adminAddMember: async (params: {
+    sessionId: number;
+    userId: number;
+  }): Promise<BaseResponse<boolean>> => {
+    try {
+      await api.post(`${BASE_PATH}/add-member`, {
+        session_id: params.sessionId,
+        user_id: params.userId,
+      });
+      return { success: true, message: "添加成员成功", data: true };
+    } catch (error: any) {
+      logger.error("添加成员失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "添加成员失败",
+        data: false,
+      };
+    }
+  },
+
+  adminRemoveMember: async (params: {
+    sessionId: number;
+    userId: number;
+  }): Promise<BaseResponse<boolean>> => {
+    try {
+      await api.post(`${BASE_PATH}/remove-member`, {
+        session_id: params.sessionId,
+        user_id: params.userId,
+      });
+      return { success: true, message: "移除成员成功", data: true };
+    } catch (error: any) {
+      logger.error("移除成员失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "移除成员失败",
+        data: false,
+      };
+    }
+  },
+
   adminListSessions: async (params: {
     startDate?: string;
     endDate?: string;
@@ -298,6 +402,38 @@ export const groupDiscussionApi = {
         success: false,
         message: error.response?.data?.detail || error.message || "获取失败",
         data: { items: [], total: 0, page: 1, page_size: params.size ?? 20, total_pages: 0 },
+      };
+    }
+  },
+
+  adminDeleteSession: async (params: { sessionId: number }): Promise<BaseResponse<boolean>> => {
+    try {
+      await api.delete(`${BASE_PATH}/admin/sessions/${params.sessionId}`);
+      return { success: true, message: "删除成功", data: true };
+    } catch (error: any) {
+      logger.error("删除小组讨论会话失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "删除失败",
+        data: false,
+      };
+    }
+  },
+
+  adminBatchDeleteSessions: async (params: { sessionIds: number[] }): Promise<BaseResponse<number>> => {
+    try {
+      const response = await api.post(`${BASE_PATH}/admin/sessions/batch-delete`, {
+        session_ids: params.sessionIds,
+      });
+      const raw: any = response.data as any;
+      const deleted = Number(raw?.deleted || 0);
+      return { success: true, message: "删除成功", data: deleted };
+    } catch (error: any) {
+      logger.error("批量删除小组讨论会话失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "删除失败",
+        data: 0,
       };
     }
   },
@@ -370,6 +506,47 @@ export const groupDiscussionApi = {
         success: false,
         message: error.response?.data?.detail || error.message || "获取失败",
         data: { items: [] },
+      };
+    }
+  },
+
+  adminListMembers: async (params: {
+    sessionId: number;
+  }): Promise<BaseResponse<GroupDiscussionAdminMemberListResponse>> => {
+    try {
+      const response = await api.get(`${BASE_PATH}/admin/members`, {
+        params: { session_id: params.sessionId },
+      });
+      const raw: any = response.data as any;
+      const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
+      return { success: true, message: "获取成功", data: data as GroupDiscussionAdminMemberListResponse };
+    } catch (error: any) {
+      logger.error("获取小组成员失败:", error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "获取失败",
+        data: { items: [] },
+      };
+    }
+  },
+
+  adminListClasses: async (params?: { date?: string }): Promise<BaseResponse<string[]>> => {
+    try {
+      const response = await api.get(
+        `${BASE_PATH}/admin/classes`,
+        ({ params: { date: params?.date }, silent: true } as any),
+      );
+      const raw: any = response.data as any;
+      const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
+      return { success: true, message: "获取成功", data: data as string[] };
+    } catch (error: any) {
+      if (error?.response?.status !== 401) {
+        logger.error("获取班级列表失败:", error);
+      }
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message || "获取失败",
+        data: [],
       };
     }
   },

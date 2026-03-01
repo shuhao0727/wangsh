@@ -71,7 +71,7 @@ const AdminUsers: React.FC = () => {
              <UserOutlined style={{ fontSize: 18, color: "var(--ws-color-primary)" }} />
              <span style={{ fontSize: 16, fontWeight: 600 }}>用户管理</span>
           </div>
-          <Divider type="vertical" style={{ height: 24, margin: 0 }} />
+          <Divider orientation="vertical" style={{ height: 24, margin: 0 }} />
           
           <Space size={8}>
             <Search
@@ -127,7 +127,7 @@ const AdminUsers: React.FC = () => {
           >
             <Button type="text" icon={<UploadOutlined />} title="导入用户" />
           </Upload>
-          <Divider type="vertical" />
+          <Divider orientation="vertical" />
           {state.selectedRowKeys.length > 0 && (
             <Button
               type="text"

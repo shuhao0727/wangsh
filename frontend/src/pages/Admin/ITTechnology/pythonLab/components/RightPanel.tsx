@@ -216,7 +216,7 @@ export function RightPanel(props: {
       <div style={{ paddingRight: 12, color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
          <TimerDisplay 
             startTime={runner.startTime} 
-            isRunning={runner.status === "running"} 
+            isRunning={runner.status === "running" || runner.status === "starting"} 
             initialElapsed={runner.elapsedTime} 
             prefix="运行时间: "
             alwaysShow={true}

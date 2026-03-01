@@ -305,6 +305,7 @@ class Settings(BaseSettings):
     REDIS_DB_CACHE: int = Field(default=0)                      # 缓存数据库索引
 
     # ==================== PythonLab 调试（V2：Docker + debugpy + Redis） ====================
+    DAP_HOST_IP: Optional[str] = Field(default=None)
     PYTHONLAB_SANDBOX_IMAGE: str = Field(default="pythonlab-sandbox:py311")
     PYTHONLAB_WORKSPACE_ROOT: str = Field(default="/tmp/pythonlab/workspaces")
     PYTHONLAB_SESSION_TTL_SECONDS: int = Field(default=1800)
@@ -369,6 +370,16 @@ class Settings(BaseSettings):
         self.COOKIE_SAMESITE = (self.COOKIE_SAMESITE or "lax").lower()
 
         if self.DEBUG:
+            if not (self.TYPST_PDF_STORAGE_DIR or "").strip() or str(self.TYPST_PDF_STORAGE_DIR).startswith("/app/"):
+                if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
+                    self.TYPST_PDF_STORAGE_DIR = "/app/data/typst_pdfs"
+                else:
+                    self.TYPST_PDF_STORAGE_DIR = str(PROJECT_ROOT / "data" / "typst_pdfs")
+            if not (self.DAP_HOST_IP or "").strip():
+                if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
+                    self.DAP_HOST_IP = "host.docker.internal"
+                else:
+                    self.DAP_HOST_IP = "127.0.0.1"
             return self
 
         def must_set(name: str, value: str):
@@ -383,6 +394,16 @@ class Settings(BaseSettings):
         if len(self.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY 长度过短，建议至少 32 字符")
 
+        if not (self.TYPST_PDF_STORAGE_DIR or "").strip() or str(self.TYPST_PDF_STORAGE_DIR).startswith("/app/"):
+            if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
+                self.TYPST_PDF_STORAGE_DIR = "/app/data/typst_pdfs"
+            else:
+                self.TYPST_PDF_STORAGE_DIR = str(PROJECT_ROOT / "data" / "typst_pdfs")
+        if not (self.DAP_HOST_IP or "").strip():
+            if self.DEPLOYMENT_ENV == "docker" or os.path.exists("/.dockerenv"):
+                self.DAP_HOST_IP = "host.docker.internal"
+            else:
+                self.DAP_HOST_IP = "127.0.0.1"
         return self
     
     class Config:

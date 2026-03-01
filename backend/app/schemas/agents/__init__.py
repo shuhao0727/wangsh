@@ -39,6 +39,10 @@ from .model_discovery import (
 from .group_discussion import (
     GroupDiscussionJoinRequest,
     GroupDiscussionJoinResponse,
+    GroupDiscussionMuteRequest,
+    GroupDiscussionUnmuteRequest,
+    GroupDiscussionAddMemberRequest,
+    GroupDiscussionRemoveMemberRequest,
     GroupDiscussionMessageOut,
     GroupDiscussionMessageListResponse,
     GroupDiscussionSendRequest,
@@ -53,6 +57,9 @@ from .group_discussion import (
     GroupDiscussionAdminCompareAnalyzeRequest,
     GroupDiscussionAdminAnalysisOut,
     GroupDiscussionAdminAnalysisListResponse,
+    GroupDiscussionMemberOut,
+    GroupDiscussionAdminMemberListResponse,
+    GroupDiscussionAdminDeleteSessionsRequest,
 )
 
 __all__ = [
@@ -87,6 +94,10 @@ __all__ = [
     "COMMON_MODEL_PRESETS",
     "GroupDiscussionJoinRequest",
     "GroupDiscussionJoinResponse",
+    "GroupDiscussionMuteRequest",
+    "GroupDiscussionUnmuteRequest",
+    "GroupDiscussionAddMemberRequest",
+    "GroupDiscussionRemoveMemberRequest",
     "GroupDiscussionMessageOut",
     "GroupDiscussionMessageListResponse",
     "GroupDiscussionSendRequest",
@@ -101,4 +112,7 @@ __all__ = [
     "GroupDiscussionAdminCompareAnalyzeRequest",
     "GroupDiscussionAdminAnalysisOut",
     "GroupDiscussionAdminAnalysisListResponse",
+    "GroupDiscussionMemberOut",
+    "GroupDiscussionAdminMemberListResponse",
+    "GroupDiscussionAdminDeleteSessionsRequest",
 ]

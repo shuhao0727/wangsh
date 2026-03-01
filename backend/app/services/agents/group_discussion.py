@@ -5,8 +5,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.agents.group_discussion import (
@@ -72,12 +73,22 @@ def _display_name(user: Dict[str, Any]) -> str:
 async def get_or_create_today_session(
     db: AsyncSession,
     *,
-    class_name: str,
+    class_name: Optional[str] = None,
     group_no: str,
     group_name: Optional[str] = None,
     user: Dict[str, Any],
 ) -> GroupDiscussionSession:
-    class_name_n = _normalize_class_name(class_name)
+    # Prioritize explicit class_name, fallback to user's class_name
+    if class_name and class_name.strip():
+        raw_class_name = class_name
+    else:
+        role = str(user.get("role_code") or "")
+        if role == "student":
+            raw_class_name = (user.get("class_name") or "").strip() or "未知班级"
+        else:
+            raw_class_name = "管理员"
+
+    class_name_n = _normalize_class_name(raw_class_name)
     group_no_n = _normalize_group_no(group_no)
     group_name_n = _normalize_group_name(group_name)
     user_id = int(user.get("id") or 0)
@@ -119,7 +130,9 @@ async def get_or_create_today_session(
         return row
 
     # 否则（切换或新建），检查冷却
-    if last_member:
+    # 管理员/超级管理员跳过冷却检查
+    user_role = str(user.get("role_code") or "")
+    if last_member and user_role not in ["admin", "super_admin"]:
         joined_at = last_member.joined_at
         if joined_at.tzinfo is None:
             joined_at = joined_at.replace(tzinfo=timezone.utc)
@@ -158,7 +171,13 @@ async def get_or_create_today_session(
 
     # 5. 处理成员变更
     if last_member:
-        await db.delete(last_member)
+        prev_session = (
+            await db.execute(
+                select(GroupDiscussionSession).where(GroupDiscussionSession.id == last_member.session_id)
+            )
+        ).scalar_one_or_none()
+        if prev_session and prev_session.session_date == today:
+            db.delete(last_member)
 
     new_mem = GroupDiscussionMember(session_id=row.id, user_id=user_id)
     db.add(new_mem)
@@ -170,23 +189,27 @@ async def get_or_create_today_session(
 async def list_today_groups(
     db: AsyncSession,
     *,
-    class_name: str,
+    date: Optional[date] = None,
+    class_name: Optional[str],
     keyword: Optional[str] = None,
     limit: int = 50,
+    ignore_time_limit: bool = False,
 ) -> List[Any]:
-    class_name_n = _normalize_class_name(class_name)
     limit_n = max(1, min(int(limit or 50), 200))
-    today = datetime.now().date()
+    target_date = date if date else datetime.now().date()
     
     stmt = (
         select(GroupDiscussionSession, func.count(GroupDiscussionMember.id).label("real_member_count"))
         .outerjoin(GroupDiscussionMember, GroupDiscussionSession.id == GroupDiscussionMember.session_id)
         .where(
-            GroupDiscussionSession.session_date == today,
-            GroupDiscussionSession.class_name == class_name_n,
+            GroupDiscussionSession.session_date == target_date,
         )
-        .group_by(GroupDiscussionSession.id)
     )
+    if class_name is not None:
+        class_name_n = _normalize_class_name(class_name)
+        stmt = stmt.where(GroupDiscussionSession.class_name == class_name_n)
+    
+    stmt = stmt.group_by(GroupDiscussionSession.id)
     q = (keyword or "").strip()
     if q:
         stmt = stmt.where(
@@ -194,7 +217,7 @@ async def list_today_groups(
             | (GroupDiscussionSession.group_name.ilike(f"%{q}%"))
         )
     
-    if settings.GROUP_DISCUSSION_LIST_RECENT_HOURS > 0:
+    if not ignore_time_limit and settings.GROUP_DISCUSSION_LIST_RECENT_HOURS > 0:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.GROUP_DISCUSSION_LIST_RECENT_HOURS)
         stmt = stmt.where(
             func.coalesce(GroupDiscussionSession.last_message_at, GroupDiscussionSession.created_at) >= cutoff
@@ -239,7 +262,11 @@ async def set_group_name(
     return session
 
 
-async def enforce_join_lock(*, user_id: int, requested_group_no: str) -> int:
+async def enforce_join_lock(*, user_id: int, requested_group_no: str, user_role: str = "student") -> int:
+    # 管理员不受锁定限制
+    if user_role in ["admin", "super_admin"]:
+        return 0
+
     if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
         return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
     key = _gd_key("join_lock", int(user_id))
@@ -322,6 +349,13 @@ async def send_message(
     ).scalar_one_or_none()
     if not is_member:
         raise HTTPException(status_code=403, detail="请先加入该小组")
+
+    if is_member.muted_until:
+        muted_until = is_member.muted_until
+        if muted_until.tzinfo is None:
+            muted_until = muted_until.replace(tzinfo=timezone.utc)
+        if muted_until > now:
+            raise HTTPException(status_code=403, detail="您已被禁言")
 
     rate_seconds = int(settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS or 0)
     if rate_seconds > 0:
@@ -418,6 +452,50 @@ async def send_message(
     return msg
 
 
+async def mute_member(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user_id: int,
+    minutes: int,
+) -> None:
+    member = (
+        await db.execute(
+            select(GroupDiscussionMember).where(
+                GroupDiscussionMember.session_id == session_id,
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="成员不存在")
+
+    now = datetime.now(timezone.utc)
+    member.muted_until = now + timedelta(minutes=minutes)
+    await db.commit()
+
+
+async def unmute_member(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user_id: int,
+) -> None:
+    member = (
+        await db.execute(
+            select(GroupDiscussionMember).where(
+                GroupDiscussionMember.session_id == session_id,
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="成员不存在")
+
+    member.muted_until = None
+    await db.commit()
+
+
 async def admin_list_sessions(
     db: AsyncSession,
     *,
@@ -470,6 +548,50 @@ async def admin_list_sessions(
     ).scalars().all()
     total_pages = (total + size_n - 1) // size_n if size_n else 1
     return rows, total, page_n, total_pages
+
+
+async def admin_delete_session(
+    db: AsyncSession,
+    *,
+    session_id: int,
+) -> None:
+    session_id_n = int(session_id)
+    exists_row = (
+        await db.execute(
+            select(GroupDiscussionSession.id).where(GroupDiscussionSession.id == session_id_n)
+        )
+    ).scalar_one_or_none()
+    if not exists_row:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    await db.execute(
+        delete(GroupDiscussionAnalysis).where(GroupDiscussionAnalysis.session_id == session_id_n)
+    )
+    await db.execute(
+        delete(GroupDiscussionMessage).where(GroupDiscussionMessage.session_id == session_id_n)
+    )
+    await db.execute(
+        delete(GroupDiscussionMember).where(GroupDiscussionMember.session_id == session_id_n)
+    )
+    await db.execute(delete(GroupDiscussionSession).where(GroupDiscussionSession.id == session_id_n))
+    await db.commit()
+
+
+async def admin_delete_sessions(
+    db: AsyncSession,
+    *,
+    session_ids: List[int],
+) -> int:
+    ids = sorted({int(i) for i in (session_ids or []) if int(i) > 0})
+    if not ids:
+        return 0
+
+    await db.execute(delete(GroupDiscussionAnalysis).where(GroupDiscussionAnalysis.session_id.in_(ids)))
+    await db.execute(delete(GroupDiscussionMessage).where(GroupDiscussionMessage.session_id.in_(ids)))
+    await db.execute(delete(GroupDiscussionMember).where(GroupDiscussionMember.session_id.in_(ids)))
+    res = await db.execute(delete(GroupDiscussionSession).where(GroupDiscussionSession.id.in_(ids)))
+    await db.commit()
+    return int(getattr(res, "rowcount", 0) or 0)
 
 
 async def admin_list_analyses(
@@ -580,7 +702,12 @@ async def admin_analyze_session(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
-        raise HTTPException(status_code=422, detail=f"智能体分析失败: {msg}")
+        result_text = (
+            "fallback_analysis\n"
+            + f"error={msg}\n"
+            + f"session_id={int(session_id)}\n"
+            + f"analysis_type={analysis_type}\n"
+        ).strip()
 
     analysis = GroupDiscussionAnalysis(
         session_id=session_id,
@@ -717,7 +844,13 @@ async def admin_compare_analyze_sessions(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
-        raise HTTPException(status_code=422, detail=f"智能体分析失败: {msg}")
+        per_session = {int(s.id): int(getattr(s, "message_count", 0) or 0) for s in sessions}
+        result_text = (
+            "fallback_compare\n"
+            + f"error={msg}\n"
+            + f"sessions={json.dumps(ids, ensure_ascii=False)}\n"
+            + f"message_counts={json.dumps(per_session, ensure_ascii=False)}\n"
+        ).strip()
 
     analysis = GroupDiscussionAnalysis(
         session_id=int(ids[0]),
@@ -734,3 +867,85 @@ async def admin_compare_analyze_sessions(
     if cache_key:
         await cache.set(cache_key, int(analysis.id), expire_seconds=int(settings.GROUP_DISCUSSION_COMPARE_CACHE_TTL))
     return analysis
+
+
+async def admin_add_member(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user_id: int,
+) -> GroupDiscussionMember:
+    # 1. 获取目标会话
+    session = (
+        await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id == session_id))
+    ).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="讨论组不存在")
+
+    # 2. 检查用户是否已在当天其他会话中
+    existing_member = (
+        await db.execute(
+            select(GroupDiscussionMember)
+            .join(GroupDiscussionSession, GroupDiscussionMember.session_id == GroupDiscussionSession.id)
+            .where(
+                GroupDiscussionMember.user_id == user_id,
+                GroupDiscussionSession.session_date == session.session_date,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing_member:
+        # 如果已存在，先移除（即移动分组）
+        await db.delete(existing_member)
+
+    # 添加新成员
+    new_member = GroupDiscussionMember(session_id=session_id, user_id=user_id)
+    db.add(new_member)
+    await db.commit()
+    await db.refresh(new_member)
+    return new_member
+
+
+async def admin_remove_member(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user_id: int,
+) -> None:
+    member = (
+        await db.execute(
+            select(GroupDiscussionMember).where(
+                GroupDiscussionMember.session_id == session_id,
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="成员不存在")
+
+    await db.delete(member)
+    await db.commit()
+
+
+async def admin_list_members(
+    db: AsyncSession,
+    *,
+    session_id: int,
+) -> List[GroupDiscussionMember]:
+    stmt = (
+        select(GroupDiscussionMember)
+        .options(selectinload(GroupDiscussionMember.user))
+        .where(GroupDiscussionMember.session_id == session_id)
+        .order_by(GroupDiscussionMember.joined_at.desc())
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+async def list_classes(db: AsyncSession, *, date: Optional[date] = None) -> List[str]:
+    stmt = select(GroupDiscussionSession.class_name).distinct().order_by(GroupDiscussionSession.class_name)
+    if date:
+        stmt = stmt.where(GroupDiscussionSession.session_date == date)
+    rows = await db.execute(stmt)
+    return [r for r in rows.scalars().all() if r]

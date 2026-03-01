@@ -18,7 +18,7 @@ const PanelCard: React.FC<Props> = ({ children, title, extra, bodyPadding = 12 }
         body: { padding: bodyPadding },
         header: !title && !extra ? { display: 'none', borderBottom: 'none' } : undefined 
       }}
-      bordered={false}
+      variant="borderless"
     >
       {children}
     </Card>
@@ -26,4 +26,3 @@ const PanelCard: React.FC<Props> = ({ children, title, extra, bodyPadding = 12 }
 };
 
 export default PanelCard;
-

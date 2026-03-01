@@ -39,7 +39,7 @@ const getConfig = (): AppConfig => {
     process.env.REACT_APP_API_URL ||
     (env === "development" ? "http://localhost:8000/api/v1" : "/api/v1");
   const apiUrl = (() => {
-    const v = String(rawApiUrl || "").trim();
+    let v = String(rawApiUrl || "").trim();
     if (!v) return env === "development" ? "http://localhost:8000/api/v1" : "/api/v1";
     if (v.startsWith("http://") || v.startsWith("https://")) {
       try {

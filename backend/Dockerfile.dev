@@ -51,12 +51,19 @@ ARG TYPST_VERSION=0.14.2
 
 RUN apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
-    ca-certificates curl xz-utils fontconfig \
+    ca-certificates curl xz-utils fontconfig docker.io \
     fonts-noto-cjk fonts-noto-core fonts-noto-extra \
     fonts-liberation fonts-dejavu-core \
     fonts-arphic-ukai fonts-arphic-uming \
     fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/* \
+    && DOCKER_CLI_VERSION="${DOCKER_CLI_VERSION:-26.1.4}" \
+    && ARCH="$(uname -m)" \
+    && if [ "$ARCH" = "x86_64" ]; then DARCH="x86_64"; elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then DARCH="aarch64"; else echo "unsupported arch: $ARCH" && exit 1; fi \
+    && curl --noproxy '*' -x '' -fsSL "https://download.docker.com/linux/static/stable/${DARCH}/docker-${DOCKER_CLI_VERSION}.tgz" -o /tmp/docker.tgz \
+    && tar -xzf /tmp/docker.tgz -C /tmp \
+    && install -m 0755 /tmp/docker/docker /usr/local/bin/docker \
+    && rm -rf /tmp/docker /tmp/docker.tgz \
     && printf '%s\n' \
     '<?xml version="1.0"?>' \
     '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
@@ -170,15 +177,22 @@ ENV no_proxy=
 ENV NO_PROXY=
 
 ARG TYPST_VERSION=0.14.2
+ARG DOCKER_CLI_VERSION=26.1.4
 
 RUN apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
-    ca-certificates curl xz-utils fontconfig \
+    ca-certificates curl xz-utils fontconfig docker.io \
     fonts-noto-cjk fonts-noto-core fonts-noto-extra \
     fonts-liberation fonts-dejavu-core \
     fonts-arphic-ukai fonts-arphic-uming \
     fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/* \
+    && ARCH="$(uname -m)" \
+    && if [ "$ARCH" = "x86_64" ]; then DARCH="x86_64"; elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then DARCH="aarch64"; else echo "unsupported arch: $ARCH" && exit 1; fi \
+    && curl --noproxy '*' -x '' -fsSL "https://download.docker.com/linux/static/stable/${DARCH}/docker-${DOCKER_CLI_VERSION}.tgz" -o /tmp/docker.tgz \
+    && tar -xzf /tmp/docker.tgz -C /tmp \
+    && install -m 0755 /tmp/docker/docker /usr/local/bin/docker \
+    && rm -rf /tmp/docker /tmp/docker.tgz \
     && printf '%s\n' \
     '<?xml version="1.0"?>' \
     '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \

@@ -4,6 +4,14 @@ export const pythonLabStorageKey = "python_lab_experiments";
 
 const defaultExperiments: PythonLabExperiment[] = [
   {
+    id: "seq_basic",
+    title: "顺序结构",
+    level: "入门",
+    tags: ["assign", "print"],
+    scenario: "顺序结构",
+    starterCode: "a = 3\nb = 5\nc = a + b\nprint(c)\n",
+  },
+  {
     id: "loops",
     title: "循环：求和",
     level: "基础",
@@ -103,6 +111,7 @@ function normalizeExperiment(raw: any, defaultsById: Map<string, PythonLabExperi
   const d = id ? defaultsById.get(id) : undefined;
   const scenarioRaw = typeof raw.scenario === "string" ? raw.scenario : "";
   const scenario =
+    scenarioRaw === "顺序结构" ||
     scenarioRaw === "循环" ||
     scenarioRaw === "条件分支" ||
     scenarioRaw === "函数调用" ||

@@ -154,7 +154,6 @@ case "${cmd}" in
     if [ -z "${tag}" ]; then
       tag="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     fi
-    tag_latest="$(awk -F= '/^IMAGE_TAG_LATEST=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_backend="$(awk -F= '/^IMAGE_NAME_BACKEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_frontend="$(awk -F= '/^IMAGE_NAME_FRONTEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
     name_worker="$(awk -F= '/^IMAGE_NAME_WORKER=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
@@ -171,15 +170,6 @@ case "${cmd}" in
     retry 5 docker push "${img_backend}"
     retry 5 docker push "${img_frontend}"
     retry 5 docker push "${img_worker}"
-
-    if [ -n "${tag_latest}" ]; then
-      docker tag "${img_backend}" "${registry}/${ns}/${name_backend}:${tag_latest}"
-      docker tag "${img_frontend}" "${registry}/${ns}/${name_frontend}:${tag_latest}"
-      docker tag "${img_worker}" "${registry}/${ns}/${name_worker}:${tag_latest}"
-      retry 5 docker push "${registry}/${ns}/${name_backend}:${tag_latest}"
-      retry 5 docker push "${registry}/${ns}/${name_frontend}:${tag_latest}"
-      retry 5 docker push "${registry}/${ns}/${name_worker}:${tag_latest}"
-    fi
     ;;
   down)
     require_env_file
@@ -217,7 +207,6 @@ API_V1_STR=/api/v1
 
 DOCKER_REGISTRY=docker.io
 DOCKERHUB_NAMESPACE=local
-IMAGE_TAG_LATEST=latest
 IMAGE_NAME_BACKEND=wangsh-backend
 IMAGE_NAME_FRONTEND=wangsh-frontend
 IMAGE_NAME_WORKER=wangsh-typst-worker

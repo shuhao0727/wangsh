@@ -3,19 +3,12 @@ import {
   Typography,
   Space,
   Button,
-  Row,
-  Col,
   Table,
   Tag,
   Input,
   Select,
-  DatePicker,
-  Form,
   Modal,
   message,
-  Spin,
-  Empty,
-  Pagination,
   Switch,
   Dropdown,
 } from "antd";
@@ -27,8 +20,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   MoreOutlined,
-  FilterOutlined,
   FolderOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { articleApi, categoryApi } from "@services";
@@ -44,8 +37,6 @@ import "./AdminArticles.css";
 
 const { Text } = Typography;
 const { Search } = Input;
-const { Option } = Select;
-const { RangePicker } = DatePicker;
 
 // 表格列配置
 const getArticleColumns = (
@@ -187,10 +178,8 @@ const AdminArticles: React.FC = () => {
     include_relations: true,
   });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  // 筛选表单
-  const [filterForm] = Form.useForm();
-  const [filterVisible, setFilterVisible] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<number | undefined>(undefined);
+  const [titleKeyword, setTitleKeyword] = useState<string>("");
 
   // 分类管理弹窗状态
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -303,65 +292,15 @@ const AdminArticles: React.FC = () => {
     };
   }, [requestRefreshFromSignal]);
 
-  // 处理搜索
-  const handleSearch = (value: string) => {
-    const newParams = {
-      ...searchParams,
-      page: 1,
-    };
-
-    // 如果搜索值不为空，添加搜索条件
-    if (value.trim()) {
-      // 这里可以调用搜索API，暂时使用筛选
-      // 实际应该调用 articleApi.searchArticles
-      newParams.page = 1;
-    }
-
-    setSearchParams(newParams);
-    loadArticles(newParams);
-  };
-
-  // 处理筛选表单提交
-  const handleFilterSubmit = (values: any) => {
-    const { category_id, status, dateRange } = values;
-    const newParams: ArticleFilterParams = {
-      ...searchParams,
-      page: 1,
-      category_id: category_id || undefined,
-    };
-
-    // 处理发布状态
-    if (status === "published") {
-      newParams.published_only = true;
-    } else if (status === "draft") {
-      newParams.published_only = false;
-    } else {
-      newParams.published_only = undefined;
-    }
-
-    // 处理日期范围
-    if (dateRange && dateRange.length === 2) {
-      // 这里可以根据需要添加日期筛选逻辑
-    }
-
-    setSearchParams(newParams);
-    setFilterVisible(false);
-    loadArticles(newParams);
-  };
-
-  // 重置筛选
-  const handleFilterReset = () => {
-    filterForm.resetFields();
-    const defaultParams: ArticleFilterParams = {
-      page: 1,
-      size: pageSize,
-      published_only: false,
-      include_relations: true,
-    };
-    setSearchParams(defaultParams);
-    setFilterVisible(false);
-    loadArticles(defaultParams);
-  };
+  const displayedArticles = React.useMemo(() => {
+    const kw = titleKeyword.trim().toLowerCase();
+    if (!kw) return articles;
+    return (articles || []).filter((a) => {
+      const t = String(a.title || "").toLowerCase();
+      const s = String(a.slug || "").toLowerCase();
+      return t.includes(kw) || s.includes(kw);
+    });
+  }, [articles, titleKeyword]);
 
   // 处理分页变化
   const handlePageChange = (page: number, size?: number) => {
@@ -517,42 +456,6 @@ const AdminArticles: React.FC = () => {
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
   };
 
-  // 筛选表单 - 单行布局
-  const renderFilterForm = () => (
-    <Form form={filterForm} layout="inline" onFinish={handleFilterSubmit}>
-      <Form.Item name="category_id" label="分类">
-        <Select placeholder="选择分类" allowClear style={{ width: 150 }}>
-          {categories.map((category) => (
-            <Option key={category.id} value={category.id}>
-              {category.name}
-            </Option>
-          ))}
-        </Select>
-      </Form.Item>
-
-      <Form.Item name="status" label="状态">
-        <Select placeholder="选择状态" allowClear style={{ width: 120 }}>
-          <Option value="all">全部</Option>
-          <Option value="published">已发布</Option>
-          <Option value="draft">草稿</Option>
-        </Select>
-      </Form.Item>
-
-      <Form.Item name="dateRange" label="时间范围">
-        <RangePicker style={{ width: 220 }} />
-      </Form.Item>
-
-      <Form.Item>
-        <Space>
-          <Button onClick={handleFilterReset}>重置</Button>
-          <Button type="primary" htmlType="submit">
-            筛选
-          </Button>
-        </Space>
-      </Form.Item>
-    </Form>
-  );
-
   // 批量操作菜单 - antd v6 使用 items 数组
   const batchMenu = {
     items: [
@@ -579,120 +482,73 @@ const AdminArticles: React.FC = () => {
   };
 
   return (
-    <AdminPage padding={24}>
-      {/* 搜索和操作栏 - 单行布局 */}
-      <AdminCard
-        size="small"
-        className="admin-articles-toolbar"
-        styles={{ body: { padding: "16px" } }}
-      >
-        <Row gutter={16} align="middle" justify="space-between">
-          <Col xs={24} md={12}>
-            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-              <Search
-                placeholder="搜索文章..."
-                allowClear
-                onSearch={handleSearch}
-                style={{ maxWidth: "320px" }}
-              />
-            </div>
-          </Col>
-          <Col xs={24} md={12} style={{ textAlign: "right" }}>
-            <Space size="middle">
-              {selectedRowKeys.length > 0 && (
-                <Dropdown menu={batchMenu}>
-                  <Button icon={<MoreOutlined />}>
-                    批量操作 ({selectedRowKeys.length})
-                  </Button>
-                </Dropdown>
-              )}
-              <Button
-                icon={<FilterOutlined />}
-                onClick={() => setFilterVisible(!filterVisible)}
-                type={filterVisible ? "primary" : "default"}
-              >
-                筛选
-              </Button>
-              <Button
-                icon={<FolderOutlined />}
-                onClick={() => setCategoryModalVisible(true)}
-              >
-                分类管理
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAddArticle}
-              >
-                新建文章
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </AdminCard>
+    <AdminPage>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
+        <Space>
+          <Select
+            value={categoryFilter}
+            allowClear
+            placeholder="按分类筛选"
+            style={{ width: 280 }}
+            options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            onChange={(v) => {
+              const next = typeof v === "number" ? v : undefined;
+              setCategoryFilter(next);
+              const newParams: ArticleFilterParams = {
+                ...searchParams,
+                page: 1,
+                category_id: next,
+              };
+              setCurrentPage(1);
+              setSearchParams(newParams);
+              loadArticles(newParams);
+            }}
+          />
+          <Search
+            value={titleKeyword}
+            allowClear
+            placeholder="搜索标题..."
+            style={{ width: 260 }}
+            onChange={(e) => setTitleKeyword(e.target.value)}
+            onSearch={(v) => setTitleKeyword(v)}
+          />
+        </Space>
+        <Space>
+          {selectedRowKeys.length > 0 && (
+            <Dropdown menu={batchMenu}>
+              <Button icon={<MoreOutlined />}>批量操作 ({selectedRowKeys.length})</Button>
+            </Dropdown>
+          )}
+          <Button icon={<ReloadOutlined />} onClick={() => loadArticles()} loading={loading}>
+            刷新
+          </Button>
+          <Button icon={<FolderOutlined />} onClick={() => setCategoryModalVisible(true)}>
+            分类管理
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddArticle}>
+            新建文章
+          </Button>
+        </Space>
+      </div>
 
-      {/* 筛选表单 */}
-      {filterVisible && (
-        <AdminCard
-          size="small"
-          className="admin-articles-filter"
-          styles={{ header: { display: "none" } }}
-        >
-          {renderFilterForm()}
-        </AdminCard>
-      )}
-
-      {/* 文章表格 */}
-      <AdminCard styles={{ header: { display: "none" } }}>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "40px" }}>
-            <Spin size="large" />
-          </div>
-        ) : articles.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "24px" }}>
-                <Text type="secondary" style={{ fontSize: "16px" }}>暂无已发布内容</Text>
-                <Text type="secondary" style={{ fontSize: "14px" }}>您可以开始创作第一篇文章，或从草稿箱中发布。</Text>
-              </div>
-            }
-          >
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddArticle}>
-              立即创作
-            </Button>
-          </Empty>
-        ) : (
-          <>
-            <Table
-              rowKey="id"
-              columns={getArticleColumns(
-                handleEdit,
-                handleDelete,
-                handleTogglePublish,
-                handleView,
-              )}
-              dataSource={articles}
-              rowSelection={rowSelection}
-              pagination={false}
-              scroll={{ x: 1300 }}
-              size="middle"
-            />
-            <div style={{ marginTop: "16px", textAlign: "center" }}>
-              <Pagination
-                current={currentPage}
-                pageSize={pageSize}
-                total={total}
-                onChange={handlePageChange}
-                showSizeChanger
-                showQuickJumper
-                showTotal={(total, range) =>
-                  `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                }
-              />
-            </div>
-          </>
-        )}
+      <AdminCard styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={getArticleColumns(handleEdit, handleDelete, handleTogglePublish, handleView)}
+          dataSource={displayedArticles}
+          rowSelection={rowSelection}
+          scroll={{ x: 1300 }}
+          size="middle"
+          pagination={{
+            current: currentPage,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50],
+            onChange: handlePageChange,
+          }}
+        />
       </AdminCard>
 
       {/* 分类管理弹窗 */}

@@ -53,6 +53,7 @@ class GroupDiscussionMember(Base):
     session_id = Column(Integer, ForeignKey("znt_group_discussion_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), nullable=False, index=True)
     joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    muted_until = Column(DateTime(timezone=True), nullable=True, comment="禁言截止时间")
 
     session = relationship("GroupDiscussionSession", backref="members")
     user = relationship("User", backref="joined_groups")

@@ -1,7 +1,7 @@
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.core.deps import require_user
@@ -25,6 +25,22 @@ from app.api.endpoints.debug.constants import (
 from app.api.endpoints.debug.utils import now_iso, sha256_text
 
 router = APIRouter()
+
+def _public_host(request: Request) -> str:
+    xf = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    v = (xf or "").split(",")[0].strip()
+    if not v:
+        return str(getattr(request.url, "hostname", "") or "") or "127.0.0.1"
+    if ":" in v:
+        return v.split(":", 1)[0].strip() or "127.0.0.1"
+    return v
+
+def _rewrite_dap_host_for_client(meta: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    v = dict(meta or {})
+    dap_host = str(v.get("dap_host") or "").strip()
+    if dap_host == "host.docker.internal":
+        v["dap_host"] = _public_host(request)
+    return v
 
 
 async def _cleanup_and_count_active_sessions(user_id: int) -> int:
@@ -178,7 +194,7 @@ async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[
 
 
 @router.get("/sessions/{session_id}", response_model=DebugSessionResponse)
-async def get_session(session_id: str, current_user: Dict[str, Any] = Depends(require_user)):
+async def get_session(session_id: str, request: Request, current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     meta = await cache.get(session_key)
@@ -186,7 +202,7 @@ async def get_session(session_id: str, current_user: Dict[str, Any] = Depends(re
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已过期")
     if int(meta.get("owner_user_id") or 0) != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问该会话")
-    return DebugSessionResponse(**meta)
+    return DebugSessionResponse(**_rewrite_dap_host_for_client(meta, request))
 
 
 @router.post("/sessions/{session_id}/stop")
@@ -211,7 +227,7 @@ async def stop_session(session_id: str, current_user: Dict[str, Any] = Depends(r
 
 
 @router.get("/sessions")
-async def list_sessions(current_user: Dict[str, Any] = Depends(require_user)):
+async def list_sessions(request: Request, current_user: Dict[str, Any] = Depends(require_user)):
     user_id = int(current_user.get("id") or 0)
     if user_id <= 0:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未认证用户")
@@ -241,7 +257,7 @@ async def list_sessions(current_user: Dict[str, Any] = Depends(require_user)):
             except Exception:
                 pass
             continue
-        items.append(meta)
+        items.append(_rewrite_dap_host_for_client(meta, request))
 
     items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return {"items": items, "total": len(items)}

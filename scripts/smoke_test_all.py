@@ -5,10 +5,11 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import sys
+import os
 
-BASE_URL = 'http://localhost:6608/api/v1'
-ADMIN_USER = 'admin'
-ADMIN_PASS = 'dev_admin_password'
+BASE_URL = os.environ.get('BASE_URL','http://localhost:8000/api/v1').rstrip('/')
+ADMIN_USER = os.environ.get('ADMIN_USER','admin')
+ADMIN_PASS = os.environ.get('ADMIN_PASS','dev_admin_password')
 
 def log(msg, status="INFO"):
     print(f"[{status}] {msg}")
@@ -53,21 +54,33 @@ def request(method, path, token=None, data=None):
 def test_auth():
     log("Testing Auth...")
     # Login
-    body = urllib.parse.urlencode({'username': ADMIN_USER, 'password': ADMIN_PASS}).encode('utf-8')
-    req = urllib.request.Request(f"{BASE_URL}/auth/login", data=body, headers={'Content-Type': 'application/x-www-form-urlencoded'})
-    try:
-        resp = urllib.request.urlopen(req)
-        data = json.loads(resp.read().decode())
-        token = data.get('access_token')
-        if token:
-            log("Login successful")
-            return token
-        else:
-            fail("Login failed: no token")
+    candidates = [
+        (ADMIN_PASS or '').strip(),
+        (os.environ.get('SUPER_ADMIN_PASSWORD','') or '').strip(),
+        'dev_admin_password',
+        'wangshuhao0727',
+        'change_me',
+    ]
+    for pwd in [x for x in candidates if x]:
+        body = urllib.parse.urlencode({'username': ADMIN_USER, 'password': pwd}).encode('utf-8')
+        req = urllib.request.Request(f"{BASE_URL}/auth/login", data=body, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        try:
+            resp = urllib.request.urlopen(req)
+            data = json.loads(resp.read().decode())
+            token = data.get('access_token')
+            if token:
+                log("Login successful")
+                return token
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                continue
+            fail(f"Login failed: {e.code}")
             return None
-    except Exception as e:
-        fail(f"Login failed: {e}")
-        return None
+        except Exception as e:
+            fail(f"Login failed: {e}")
+            return None
+    fail("Login failed: no valid password candidate")
+    return None
 
 def test_system(token):
     log("Testing System...")
@@ -79,10 +92,20 @@ def test_system(token):
     # Actually standard health check is usually root level or /health.
     # Let's check /api/health (which Caddy checks).
     try:
-        resp = urllib.request.urlopen('http://localhost:6608/api/health')
+        root = BASE_URL
+        if root.endswith('/api/v1'):
+            root = root[: -len('/api/v1')]
+        resp = urllib.request.urlopen(root + '/health')
         log(f"Global Health: {resp.status}")
     except Exception as e:
-        fail(f"Global Health failed: {e}")
+        try:
+            root = BASE_URL
+            if root.endswith('/api/v1'):
+                root = root[: -len('/api/v1')]
+            resp = urllib.request.urlopen(root + '/api/health')
+            log(f"Global Health: {resp.status}")
+        except Exception as e2:
+            fail(f"Global Health failed: {e} / {e2}")
 
     # System Metrics
     s, d = request('GET', '/system/metrics', token)

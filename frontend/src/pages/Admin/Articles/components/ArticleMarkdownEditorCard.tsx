@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Card, Form, Space, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Form, Radio, Space, Tag, Tooltip, Typography } from "antd";
 import {
   BarChartOutlined,
   BoldOutlined,
@@ -22,7 +22,13 @@ type Tool = {
   action: () => void;
 };
 
-export default function ArticleMarkdownEditorCard() {
+type Props = {
+  viewMode: "split" | "edit" | "preview";
+  canSplit: boolean;
+  onViewModeChange: (next: "split" | "edit" | "preview") => void;
+};
+
+export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewModeChange }: Props) {
   const form = Form.useFormInstance();
   const content = Form.useWatch("content", form) || "";
 
@@ -80,6 +86,17 @@ export default function ArticleMarkdownEditorCard() {
           ))}
         </Space>
         <div style={{ flex: 1 }} />
+        <Radio.Group
+          value={viewMode}
+          onChange={(e) => onViewModeChange(e.target.value)}
+          optionType="button"
+          buttonStyle="solid"
+          size="small"
+        >
+          {canSplit && <Radio.Button value="split">分屏</Radio.Button>}
+          <Radio.Button value="edit">编辑</Radio.Button>
+          <Radio.Button value="preview">预览</Radio.Button>
+        </Radio.Group>
         <Tag color="orange" style={{ fontSize: "11px" }}>
           Markdown
         </Tag>

@@ -29,6 +29,8 @@ from app.core.http_client import HttpClientManager
 from app.models import User
 from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
+from app.services.articles.markdown_style_examples import ensure_style_examples
+from app.services.articles.article_examples import ensure_article_examples
 
 
 @asynccontextmanager
@@ -58,6 +60,14 @@ async def lifespan(app: FastAPI):
                 if content.strip():
                     db.add(TypstStyle(key="my_style", title="my_style", content=content, sort_order=0))
                     await db.commit()
+        except Exception:
+            pass
+        try:
+            await ensure_style_examples(db)
+        except Exception:
+            pass
+        try:
+            await ensure_article_examples(db)
         except Exception:
             pass
     

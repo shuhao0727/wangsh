@@ -26,7 +26,7 @@ const AdminCard: React.FC<Props> = ({
 
   return (
     <Card
-      bordered={false}
+      variant="borderless"
       {...rest}
       style={{
         background: "transparent",

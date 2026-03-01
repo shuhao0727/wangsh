@@ -196,12 +196,15 @@ const PythonLabStudio: React.FC<{
       const isGetRangeAt = msg.includes("getRangeAt") || stack.includes("getRangeAt");
       const isThirdParty =
         file.includes("content.js") ||
+        file.includes("content-script") ||
         file.startsWith("chrome-extension://") ||
         file.startsWith("moz-extension://") ||
         file.startsWith("safari-extension://") ||
         file.startsWith("ms-browser-extension://") ||
         stack.includes("content.js") ||
+        stack.includes("content-script") ||
         msg.includes("content.js") ||
+        msg.includes("content-script") ||
         stack.includes("Content.isSelection") ||
         stack.includes("Content.handleSelection") ||
         msg.includes("Content.isSelection") ||
@@ -211,6 +214,7 @@ const PythonLabStudio: React.FC<{
           warnedThirdPartySelection = true;
           console.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
         }
+        // 尝试全面阻止冒泡和默认行为
         event.preventDefault();
         event.stopImmediatePropagation();
         event.stopPropagation();
@@ -226,7 +230,9 @@ const PythonLabStudio: React.FC<{
       const isGetRangeAt = msg.includes("getRangeAt") || stack.includes("getRangeAt");
       const isThirdParty =
         msg.includes("content.js") ||
+        msg.includes("content-script") ||
         stack.includes("content.js") ||
+        stack.includes("content-script") ||
         msg.includes("chrome-extension://") ||
         stack.includes("chrome-extension://") ||
         msg.includes("moz-extension://") ||
@@ -462,7 +468,10 @@ const PythonLabStudio: React.FC<{
     clearOutput();
     clearBreakpoints();
     setWatchExprs([]);
-    if (typeof experiment?.starterCode === "string") {
+    
+    if (experiment?.id === "seq_basic") {
+       loadDemoFlow("seq_basic");
+    } else if (typeof experiment?.starterCode === "string") {
       setCodeMode("manual");
       setCode(experiment.starterCode);
     }
@@ -747,7 +756,7 @@ const PythonLabStudio: React.FC<{
               <Space>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>画布</span>
                 {experiment?.title ? <Tag color="blue">{experiment.title}</Tag> : <Tag color="blue">UI</Tag>}
-                {experiment?.scenario ? <Tag bordered={false}>{experiment.scenario}</Tag> : null}
+                {experiment?.scenario ? <Tag variant="filled">{experiment.scenario}</Tag> : null}
               </Space>
             }
             extra={
@@ -787,7 +796,7 @@ const PythonLabStudio: React.FC<{
                 />
               </Space>
             }
-            bordered={false}
+            variant="borderless"
             style={{ borderRadius: 8, height: "100%", display: "flex", flexDirection: "column", boxShadow: "none" }}
             styles={{ body: { padding: 0, flex: 1, minHeight: 0 }, header: { padding: "0 16px", minHeight: 48 } }}
           >

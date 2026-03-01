@@ -65,6 +65,15 @@ async def run_agent_chat_blocking(
             api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
         if not api_key:
             api_key = settings.OPENROUTER_API_KEY
+    allow_stub = bool(settings.DEBUG) or str(getattr(settings, "REACT_APP_ENV", "") or "").lower() not in {
+        "production",
+        "prod",
+    }
+    if allow_stub and (
+        not api_endpoint or not api_key or (agent.agent_type != "dify" and not agent.model_name)
+    ):
+        msg = (message or "").strip()
+        return f"debug_stub: {msg[:800]}"
     if not api_endpoint or not api_key:
         raise ValueError("invalid_agent")
     is_dify = agent.agent_type == "dify"

@@ -311,11 +311,67 @@ async def api_compile_pdf(
                                 filename=filename,
                                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
                             )
+                        else:
+                            # 文件不存在，可能是共享存储挂载问题
+                            pass
                     except Exception:
                         pass
-                if not note.compiled_pdf:
-                    raise HTTPException(status_code=500, detail="编译任务已完成，但未生成PDF")
-                pdf_bytes = bytes(note.compiled_pdf)
+                
+                # 如果数据库中没有记录，但Worker返回成功，可能是Worker认为cache hit但API侧db未更新
+                # 尝试再次从磁盘读取（如果不依赖数据库路径）
+                # 这里我们做一个补救：如果compiled_pdf_path为空，但我们知道Worker应该生成了文件
+                if not getattr(note, "compiled_pdf_path", None):
+                     # 尝试根据hash手动推断路径
+                     # 注意：async_result.get() 返回了 compiled_hash
+                     res_dict = async_result.get()
+                     if isinstance(res_dict, dict) and "compiled_hash" in res_dict:
+                         from app.utils.typst_pdf_storage import pdf_rel_path
+                         h = res_dict["compiled_hash"]
+                         rel = pdf_rel_path(note.id, h)
+                         p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, rel)
+                         if os.path.exists(p):
+                              # 补救成功：文件存在
+                              # 顺便更新一下数据库（虽然这应该是Worker的工作）
+                              note.compiled_pdf_path = rel
+                              note.compiled_hash = h
+                              await db.commit()
+                              
+                              filename = f"typst-note-{note.id}.pdf"
+                              return FileResponse(
+                                 p,
+                                 media_type="application/pdf",
+                                 filename=filename,
+                                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                             )
+ 
+                # 最后的防线：如果上述所有尝试都失败了（Worker说成功但文件找不到，或者DB未更新且补救失败）
+                # 并且没有 compiled_pdf 二进制数据
+                # 则降级为本地同步编译，确保用户能拿到结果
+                if not note.compiled_pdf and not getattr(note, "compiled_pdf_path", None):
+                     # 本地重试
+                     pdf_bytes, _ = await compile_note_pdf(db=db, note=note)
+                elif not note.compiled_pdf:
+                     # 有路径但文件不存在？尝试读取路径看看
+                     try:
+                         p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, note.compiled_pdf_path)
+                         if not os.path.exists(p):
+                             # 路径有但文件丢了，重新编译
+                             pdf_bytes, _ = await compile_note_pdf(db=db, note=note)
+                         else:
+                             # 文件存在，但上面的 FileResponse 可能因为某种原因没返回？
+                             # 应该是逻辑漏了，这里手动读取
+                             filename = f"typst-note-{note.id}.pdf"
+                             return FileResponse(
+                                p,
+                                media_type="application/pdf",
+                                filename=filename,
+                                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                            )
+                     except Exception:
+                         # 读取异常，重新编译
+                         pdf_bytes, _ = await compile_note_pdf(db=db, note=note)
+                else:
+                     pdf_bytes = bytes(note.compiled_pdf)
         else:
             pdf_bytes, _ = await compile_note_pdf(db=db, note=note)
     except Exception as e:

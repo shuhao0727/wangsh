@@ -39,10 +39,10 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
   }
 
   const combinedCss = `${styleCss || ""}\n${customCss || ""}`;
-  const scopedCss = combinedCss.trim() ? toScopedCss(combinedCss, `[data-article-scope="${scopeId}"]`) : "";
+  const scopedCss = combinedCss.trim() ? toScopedCss(combinedCss, `.ws-markdown[data-article-scope="${scopeId}"]`) : "";
 
   return (
-    <div className="ws-markdown" data-article-scope={scopeId} style={{ height: "100%", minHeight: "100%" }}>
+    <div className="ws-markdown" data-article-scope={scopeId} style={{ flex: 1, minHeight: 0 }}>
       {scopedCss ? <style dangerouslySetInnerHTML={{ __html: scopedCss }} /> : null}
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>

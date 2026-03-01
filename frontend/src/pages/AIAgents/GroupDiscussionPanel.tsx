@@ -1,21 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
+  App,
+  DatePicker,
+  Select,
   Badge,
   Button,
   Card,
   Divider,
   Input,
-  List,
   Segmented,
   Space,
   Spin,
   Typography,
-  message,
+  Popconfirm,
   Tag,
   Tooltip,
   Form,
-  Empty
+  Empty,
+  Drawer,
+  Modal,
+  Avatar
 } from "antd";
 import {
   PushpinFilled,
@@ -25,11 +30,14 @@ import {
   SearchOutlined,
   PlusOutlined,
   LogoutOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  UserAddOutlined,
+  DeleteOutlined
 } from "@ant-design/icons";
 import { groupDiscussionApi } from "@services/agents";
-import { config } from "@services";
-import type { GroupDiscussionGroup } from "@services/znt/api/group-discussion-api";
+import { userApi } from "@services";
+import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionPublicConfig } from "@services/znt/api/group-discussion-api";
+import type { User } from "@services/users";
 import dayjs from "dayjs";
 
 const { Text, Title } = Typography;
@@ -50,6 +58,7 @@ type Props = {
 };
 
 const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin }) => {
+  const { message } = App.useApp();
   // --- 窗口状态管理 ---
   const [open, setOpen] = useState(false);
   const [floatingPinned, setFloatingPinned] = useState(() => localStorage.getItem(STORAGE_KEYS.FLOATING_PINNED) === "1");
@@ -68,6 +77,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   
   const draggingRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
+
+  const [config, setConfig] = useState<GroupDiscussionPublicConfig>({ enabled: true, join_lock_seconds: 180, rate_limit_seconds: 5 });
+  const [filterDate, setFilterDate] = useState<string | null>(() => dayjs().format("YYYY-MM-DD"));
+  const [filterClass, setFilterClass] = useState<string | null>(null);
+  const [classList, setClassList] = useState<string[]>([]);
 
   // --- 业务状态管理 ---
   const [view, setView] = useState<"intro" | "chat">("intro");
@@ -93,7 +107,98 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const listRef = useRef<HTMLDivElement>(null);
   const afterIdRef = useRef(0);
 
+  // --- 成员管理状态 ---
+  const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
+  const [members, setMembers] = useState<GroupDiscussionMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  
+  // --- 邀请用户状态 ---
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteKeyword, setInviteKeyword] = useState("");
+  const [inviteUsers, setInviteUsers] = useState<User[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [invitingUserId, setInvitingUserId] = useState<number | null>(null);
+
   const canUse = isAuthenticated && (isStudent || isAdmin);
+
+  // --- 业务逻辑：成员管理 ---
+  const fetchMembers = useCallback(async () => {
+    if (!sessionId) return;
+    setMembersLoading(true);
+    try {
+      const res = await groupDiscussionApi.adminListMembers({ sessionId });
+      if (res.success) {
+        setMembers(res.data.items || []);
+      } else {
+        message.error(res.message);
+      }
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (membersDrawerOpen) {
+      fetchMembers();
+    }
+  }, [membersDrawerOpen, fetchMembers]);
+
+  const handleKick = async (userId: number) => {
+    if (!sessionId) return;
+    try {
+      const res = await groupDiscussionApi.adminRemoveMember({ sessionId, userId });
+      if (res.success) {
+        message.success("移除成功");
+        fetchMembers();
+      } else {
+        message.error(res.message);
+      }
+    } catch (err) {
+      console.error(err);
+      message.error("移除成员失败，请重试");
+    }
+  };
+
+  const handleSearchUsers = async () => {
+    if (!inviteKeyword.trim()) return;
+    setInviteLoading(true);
+    try {
+      const res = await userApi.getUsers({ search: inviteKeyword, limit: 20 });
+      setInviteUsers(res.users || []);
+    } catch (err) {
+      console.error(err);
+      message.error("搜索用户失败");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  // 防抖搜索用户
+  useEffect(() => {
+    if (!inviteModalOpen) return;
+    const timer = setTimeout(handleSearchUsers, 300);
+    return () => clearTimeout(timer);
+  }, [inviteKeyword, inviteModalOpen]);
+
+  const handleInvite = async (userId: number) => {
+    if (!sessionId) return;
+    setInvitingUserId(userId);
+    try {
+      const res = await groupDiscussionApi.adminAddMember({ sessionId, userId });
+      if (res.success) {
+        message.success("邀请成功");
+        setInviteModalOpen(false);
+        fetchMembers();
+      } else {
+        message.error(res.message);
+      }
+    } catch (err) {
+      console.error(err);
+      message.error("邀请失败，请重试");
+    } finally {
+      setInvitingUserId(null);
+    }
+  };
 
   // --- 窗口拖拽逻辑 ---
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -122,6 +227,38 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   // --- 初始化与会话恢复 ---
   useEffect(() => {
+    groupDiscussionApi.getPublicConfig().then(res => {
+      if (res.success) {
+        setConfig(res.data);
+      }
+    });
+  }, []);
+
+  // 监听 filterDate 变化，动态更新班级列表
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
+      // 无论 filterDate 是否为空，都去获取班级列表
+      // 如果 filterDate 为空，后端应当返回所有日期的班级列表（或默认策略）
+      // 如果 filterDate 不为空，后端返回该日期的班级列表
+      groupDiscussionApi.adminListClasses({ date: filterDate || undefined }).then(res => {
+        if (res.success) {
+          setClassList(res.data);
+          return;
+        }
+      });
+      return;
+    }
+    setClassList([]);
+    setFilterClass(null);
+  }, [isAuthenticated, isAdmin, filterDate]);
+
+  useEffect(() => {
+    if (filterClass && !classList.includes(filterClass)) {
+      setFilterClass(null);
+    }
+  }, [filterClass, classList]);
+
+  useEffect(() => {
     if (open && sessionId) {
       setView("chat");
       // 尝试加载一次消息来验证 Session 有效性
@@ -139,16 +276,21 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     if (!open || view !== "intro") return;
     setGroupsLoading(true);
     try {
-      const res = await groupDiscussionApi.listGroups({ keyword: searchKeyword, limit: 100 });
+      const res = await groupDiscussionApi.listGroups({
+        keyword: searchKeyword,
+        limit: 100,
+        date: filterDate || undefined,
+        className: filterClass || undefined,
+      });
       if (res.success) {
         setGroups(res.data.items || []);
       }
     } finally {
       setGroupsLoading(false);
     }
-  }, [open, view, searchKeyword]);
+  }, [open, view, searchKeyword, filterDate, filterClass]);
 
-  // 自动刷新：当切换到“加入小组”模式时
+  // 自动刷新：当切换到“加入小组”模式或筛选变更时
   useEffect(() => {
     if (introMode === 'join') {
       fetchGroups();
@@ -162,11 +304,12 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   }, [searchKeyword]);
 
   // --- 业务逻辑：加入/创建小组 ---
-  const handleJoinOrCreate = async (values: { groupNo: string; groupName?: string }) => {
+  const handleJoinOrCreate = async (values: { groupNo: string; groupName?: string; className?: string }) => {
     try {
       const res = await groupDiscussionApi.join({
         groupNo: values.groupNo,
         groupName: values.groupName,
+        className: values.className,
       });
       
       if (!res.success) {
@@ -200,8 +343,9 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     
     // 前端冷却校验
     const now = Date.now();
-    if (now - lastSendTime < 5000) {
-      message.warning(`请等待 ${Math.ceil((5000 - (now - lastSendTime)) / 1000)} 秒后再发送`);
+    const rateMs = (config.rate_limit_seconds || 5) * 1000;
+    if (!isAdmin && now - lastSendTime < rateMs) {
+      message.warning(`请等待 ${Math.ceil((rateMs - (now - lastSendTime)) / 1000)} 秒后再发送`);
       return;
     }
 
@@ -297,45 +441,100 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
       {introMode === 'join' ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="搜索组号或组名..."
-            value={searchKeyword}
-            onChange={e => setSearchKeyword(e.target.value)}
-            style={{ marginBottom: 12 }}
-            allowClear
-          />
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <List
-              dataSource={groups}
-              loading={groupsLoading}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无小组，快去新建一个吧" /> }}
-              renderItem={item => (
-                <List.Item
-                  actions={[
-                    <Button type="link" size="small" onClick={() => handleJoinOrCreate({ groupNo: item.group_no })}>
-                      加入
-                    </Button>
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Text strong>{item.group_no}组</Text>
-                        {item.group_name && <Tag>{item.group_name}</Tag>}
-                      </Space>
-                    }
-                    description={
-                      <Space split={<Divider type="vertical" />}>
-                        <Text type="secondary" style={{ fontSize: 12 }}><UserOutlined /> {item.member_count}人</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{item.message_count}条消息</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(item.session_date).format("MM-DD")}</Text>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
+          {isAdmin && (
+            <Space style={{ marginBottom: 12, display: 'flex' }}>
+              <DatePicker 
+                value={filterDate ? dayjs(filterDate, "YYYY-MM-DD") : null}
+                format="YYYY-MM-DD"
+                allowClear
+                onChange={(d) => setFilterDate(d ? d.format("YYYY-MM-DD") : null)} 
+                placeholder="日期" 
+                style={{ width: 130 }}
+              />
+              <Select
+                placeholder="班级"
+                value={filterClass}
+                onChange={setFilterClass}
+                allowClear
+                style={{ width: 110 }}
+                options={classList.map(c => ({ label: c, value: c }))}
+              />
+              <Input
+                prefix={<SearchOutlined />}
+                placeholder="搜索组号/组名"
+                value={searchKeyword}
+                onChange={e => setSearchKeyword(e.target.value)}
+                allowClear
+                style={{ flex: 1 }}
+              />
+            </Space>
+          )}
+          {!isAdmin && (
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="搜索组号或组名..."
+              value={searchKeyword}
+              onChange={e => setSearchKeyword(e.target.value)}
+              style={{ marginBottom: 12 }}
+              allowClear
             />
+          )}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {groupsLoading ? (
+              <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+                <Spin />
+              </div>
+            ) : groups.length ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 2px" }}>
+                {groups.map((item) => (
+                  <Card
+                    key={`${item.session_date}-${item.class_name || ""}-${item.group_no}`}
+                    size="small"
+                    styles={{ body: { padding: 12 } }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <Text strong>{item.group_no}组</Text>
+                          {item.group_name && <Tag>{item.group_name}</Tag>}
+                        </div>
+                        <div style={{ marginTop: 6 }}>
+                          <Space
+                            size={0}
+                            separator={<Divider orientation="vertical" style={{ margin: "0 8px" }} />}
+                          >
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              <UserOutlined /> {item.member_count}人
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {item.message_count}条消息
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {dayjs(item.session_date).format("MM-DD")}
+                            </Text>
+                          </Space>
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() =>
+                            handleJoinOrCreate({ groupNo: item.group_no, className: item.class_name })
+                          }
+                        >
+                          加入
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 24 }}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无小组，快去新建一个吧" />
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -365,8 +564,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             <div style={{ marginTop: 20, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 <div style={{ marginBottom: 4 }}>⚠️ 注意事项：</div>
-                <div>1. 创建/加入小组后，需等待 3 分钟才能切换其他小组。</div>
-                <div>2. 发送消息有 5 秒冷却限制。</div>
+                <div>1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。</div>
+                <div>2. 发送消息有 {config.rate_limit_seconds} 秒冷却限制。</div>
               </Text>
             </div>
           </Form>
@@ -395,9 +594,14 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             <TeamOutlined /> 正在讨论中
           </Text>
         </div>
-        <Button danger size="small" icon={<LogoutOutlined />} onClick={handleExit}>
-          切换小组
-        </Button>
+        <Space>
+          <Button size="small" icon={<TeamOutlined />} onClick={() => setMembersDrawerOpen(true)}>
+            成员
+          </Button>
+          <Button danger size="small" icon={<LogoutOutlined />} onClick={handleExit}>
+            切换小组
+          </Button>
+        </Space>
       </div>
 
       {/* 消息列表 */}
@@ -457,7 +661,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           </Button>
         </Space.Compact>
         <Text type="secondary" style={{ fontSize: 10, marginTop: 4, display: 'block', textAlign: 'center' }}>
-          每 5 秒可发送一条消息
+          每 {config.rate_limit_seconds} 秒可发送一条消息
         </Text>
       </div>
     </div>
@@ -549,6 +753,131 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           </div>
         </div>
       )}
+
+      {/* 成员列表抽屉 */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>成员列表 ({members.length})</span>
+            {isAdmin && (
+              <Button type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setInviteModalOpen(true)}>
+                邀请
+              </Button>
+            )}
+          </div>
+        }
+        placement="right"
+        onClose={() => setMembersDrawerOpen(false)}
+        open={membersDrawerOpen}
+        getContainer={floatingRef.current || document.body}
+        size="default"
+        mask={false}
+        rootStyle={{ position: 'absolute' }}
+      >
+        {membersLoading ? (
+          <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+            <Spin />
+          </div>
+        ) : members.length ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {members.map((item) => (
+              <Card
+                key={String(item.user_id)}
+                size="small"
+                styles={{ body: { padding: 12 } }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#1677ff" }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.full_name || item.username || `User ${item.user_id}`}
+                      </div>
+                      <Space orientation="vertical" size={0}>
+                        {item.student_id && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {item.student_id}
+                          </Text>
+                        )}
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {dayjs(item.joined_at).format("MM-DD HH:mm")}
+                        </Text>
+                      </Space>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <Popconfirm title="确认移除该成员吗？" onConfirm={() => handleKick(item.user_id)}>
+                      <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无成员" />
+        )}
+      </Drawer>
+
+      {/* 邀请用户弹窗 */}
+      <Modal
+        title="邀请用户"
+        open={inviteModalOpen}
+        onCancel={() => setInviteModalOpen(false)}
+        footer={null}
+        destroyOnHidden
+        width={500}
+      >
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="搜索姓名、学号..."
+          value={inviteKeyword}
+          onChange={e => setInviteKeyword(e.target.value)}
+          style={{ marginBottom: 16 }}
+          autoFocus
+        />
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {inviteLoading ? (
+            <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+              <Spin />
+            </div>
+          ) : inviteUsers.length ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {inviteUsers.map((user) => {
+                const isMember = members.some((m) => m.user_id === user.id);
+                return (
+                  <Card key={String(user.id)} size="small" styles={{ body: { padding: 12 } }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+                        <Avatar>{(user.full_name || user.username || "?")[0]}</Avatar>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {user.full_name}
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {`${user.student_id || ""} ${user.class_name || ""}`.trim()}
+                          </Text>
+                        </div>
+                      </div>
+                      <Button
+                        type="primary"
+                        size="small"
+                        disabled={isMember}
+                        loading={invitingUserId === user.id}
+                        onClick={() => handleInvite(user.id)}
+                      >
+                        {isMember ? "已加入" : "邀请"}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={inviteKeyword ? "未找到用户" : "请输入关键词搜索"} />
+          )}
+        </div>
+      </Modal>
     </>,
     document.body
   );

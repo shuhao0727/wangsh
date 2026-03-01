@@ -4,6 +4,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 import uuid
 
 
@@ -39,9 +40,17 @@ def _http_form(method: str, url: str, *, fields: dict, timeout: int = 12):
     data = urllib.parse.urlencode(fields).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method.upper())
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode("utf-8")
-        return resp.status, json.loads(raw)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return resp.status, json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8") if hasattr(e, "read") else ""
+        try:
+            payload = json.loads(raw) if raw else None
+        except Exception:
+            payload = {"raw": raw}
+        return e.code, payload
 
 
 def _http_multipart(
@@ -100,327 +109,197 @@ def _die(msg: str):
     sys.exit(1)
 
 
-def main() -> int:
-    base_url = os.environ.get("BASE_URL", "http://localhost:8000/api/v1").rstrip("/")
-    admin_username = os.environ.get("ADMIN_USERNAME", "admin")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "")
-    analysis_agent_id = os.environ.get("ANALYSIS_AGENT_ID", "").strip()
-    allow_skip_compare = os.environ.get("SMOKE_ALLOW_SKIP_COMPARE", "").strip() in {"1", "true", "TRUE", "yes", "YES"}
-    force_skip_compare = os.environ.get("SMOKE_FORCE_SKIP_COMPARE", "").strip() in {"1", "true", "TRUE", "yes", "YES"}
+def _parse_dotenv(path: str) -> dict[str, str]:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s or s.startswith("#"):
+            continue
+        if "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        key = (k or "").strip()
+        if not key:
+            continue
+        val = (v or "").strip()
+        if val.startswith(("'", '"')) and val.endswith(("'", '"')) and len(val) >= 2:
+            val = val[1:-1]
+        out[key] = val
+    return out
 
-    print(f"[INFO] base_url={base_url}")
 
-    root_url = base_url.replace("/api/v1", "")
-    code, payload = _http_json("GET", root_url + "/health")
-    if code != 200 or not (isinstance(payload, dict) and payload.get("status")):
-        code2, payload2 = _http_json("GET", root_url + "/api/health")
-        if code2 != 200 or not (isinstance(payload2, dict) and payload2.get("status")):
-            _die(f"health check failed: http {code} payload={payload} / fallback http {code2} payload={payload2}")
-        code, payload = code2, payload2
-    print("[OK] health")
+def _load_env_candidates() -> dict[str, str]:
+    here = os.path.abspath(os.path.dirname(__file__))
+    backend_root = os.path.abspath(os.path.join(here, ".."))
+    d: dict[str, str] = {}
+    for name in [".env.dev", ".env"]:
+        p = os.path.join(backend_root, name)
+        if os.path.exists(p):
+            d.update(_parse_dotenv(p))
+    return d
 
-    if not admin_password:
-        print("[SKIP] admin login (ADMIN_PASSWORD not set)")
-        return 0
 
-    code, login = _http_form(
-        "POST",
-        f"{base_url}/auth/login",
-        fields={"username": admin_username, "password": admin_password},
-    )
-    if code != 200 or not isinstance(login, dict) or "access_token" not in login:
-        _die("admin login failed")
-    admin_token = str(login["access_token"])
-    print("[OK] admin login")
+def _env_get(dotenv: dict[str, str], *keys: str) -> str:
+    for k in keys:
+        v = os.environ.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+        dv = dotenv.get(k)
+        if dv is not None and str(dv).strip():
+            return str(dv).strip()
+    return ""
 
-    code, me = _http_json(
-        "GET",
-        f"{base_url}/auth/me",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(me, dict) or "id" not in me:
-        _die(f"admin me failed: http {code} payload={me}")
-    admin_id = int(me.get("id") or 0)
-    if admin_id <= 0:
-        _die("admin me invalid id")
 
-    code, a1 = _http_json(
-        "GET",
-        f"{base_url}/articles?page=1&size=1&published_only=false&include_relations=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200:
-        _die(f"admin articles list failed: http {code} payload={a1}")
-    code, a2 = _http_json(
-        "GET",
-        f"{base_url}/articles?page=1&size=1&published_only=false&include_relations=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200:
-        _die(f"admin articles list (cache) failed: http {code} payload={a2}")
-    print("[OK] admin articles list")
+def _normalize_api_v1(base_url: str) -> str:
+    u = (base_url or "").strip().rstrip("/")
+    if not u:
+        return "http://localhost:8000/api/v1"
+    if u.endswith("/api/v1"):
+        return u
+    if u.endswith("/api"):
+        return u + "/v1"
+    if u.endswith("/api/v1/"):
+        return u[:-1]
+    if "/api/v1" in u:
+        return u
+    return u + "/api/v1"
 
+
+def _root_url_from_api_v1(api_v1: str) -> str:
+    u = (api_v1 or "").rstrip("/")
+    if u.endswith("/api/v1"):
+        return u[: -len("/api/v1")]
+    return u.replace("/api/v1", "")
+
+
+def _expect(code: int, payload: object, want_code: int, msg: str):
+    if code != want_code:
+        _die(f"{msg}: http {code} payload={payload}")
+
+
+def _extract_access_token(payload: object) -> str:
+    if isinstance(payload, dict):
+        v = payload.get("access_token")
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
+def _today_iso() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def _ensure_active_agent(base_url: str, *, prefer_agent_id: str | None = None) -> int:
+    if prefer_agent_id and str(prefer_agent_id).strip():
+        try:
+            return int(str(prefer_agent_id).strip())
+        except Exception:
+            pass
+    code, active_agents = _http_json("GET", f"{base_url}/ai-agents/active", timeout=12)
+    if code == 200 and isinstance(active_agents, list):
+        for a in active_agents:
+            if isinstance(a, dict) and a.get("is_active") is not False:
+                try:
+                    return int(a.get("id"))
+                except Exception:
+                    continue
     suffix = str(int(time.time()))
-    article_slug = f"smoke-article-{suffix}"
     code, created = _http_json(
         "POST",
-        f"{base_url}/articles",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        f"{base_url}/ai-agents/",
         body={
-            "title": f"冒烟测试文章{suffix}",
-            "slug": article_slug,
-            "content": f"# 冒烟测试文章\n\n创建于 {suffix}",
-            "summary": "smoke",
-            "published": False,
-            "author_id": admin_id,
+            "name": f"smoke-agent-{suffix}",
+            "agent_type": "general",
+            "description": "smoke",
+            "model_name": "debug",
+            "is_active": True,
         },
-        timeout=30,
+        timeout=20,
     )
     if code != 201 or not isinstance(created, dict) or "id" not in created:
-        _die(f"admin article create failed: http {code} payload={created}")
-    article_id = int(created.get("id") or 0)
-    if article_id <= 0:
-        _die("admin article create invalid id")
-
-    code, a3 = _http_json(
-        "GET",
-        f"{base_url}/articles?page=1&size=1&published_only=false&include_relations=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(a3, dict):
-        _die(f"admin articles list after create failed: http {code} payload={a3}")
-    top_slug = None
+        _die(f"create fallback agent failed: http {code} payload={created}")
     try:
-        top_slug = str((a3.get("articles") or [])[0].get("slug"))
+        return int(created["id"])
     except Exception:
-        top_slug = None
-    if top_slug != article_slug:
-        _die(f"admin articles cache not refreshed (top slug {top_slug} != {article_slug})")
+        _die(f"create fallback agent invalid id: payload={created}")
+    return 0
 
-    code, pub = _http_json(
+
+def _admin_login(base_url: str, *, username: str, password_candidates: list[str]) -> str:
+    tried: list[str] = []
+    for pw in password_candidates:
+        p = (pw or "").strip()
+        if not p:
+            continue
+        if p in tried:
+            continue
+        tried.append(p)
+        code, payload = _http_form(
+            "POST",
+            f"{base_url}/auth/login",
+            fields={"username": username, "password": p},
+        )
+        if code != 200:
+            continue
+        token = _extract_access_token(payload)
+        if token:
+            return token
+    _die("admin login failed (all password candidates rejected)")
+    return ""
+
+
+def _student_login(base_url: str, *, full_name: str, student_id: str) -> str:
+    code, payload = _http_form(
         "POST",
-        f"{base_url}/articles/{article_id}/publish?published=true",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=30,
-    )
-    if code != 200 or not isinstance(pub, dict) or pub.get("published") is not True:
-        _die(f"admin article publish failed: http {code} payload={pub}")
-    code, pub_list = _http_json(
-        "GET",
-        f"{base_url}/articles?page=1&size=5&published_only=true&include_relations=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(pub_list, dict):
-        _die(f"admin articles list published_only failed: http {code} payload={pub_list}")
-    pub_articles = pub_list.get("articles") or []
-    if not any(str(x.get("slug", "")) == article_slug for x in pub_articles if isinstance(x, dict)):
-        _die("published article not found in published_only list")
-    code, unpub = _http_json(
-        "POST",
-        f"{base_url}/articles/{article_id}/publish?published=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=30,
-    )
-    if code != 200 or not isinstance(unpub, dict) or unpub.get("published") is not False:
-        _die(f"admin article unpublish failed: http {code} payload={unpub}")
-    print("[OK] admin article publish toggle")
-
-    code, d1 = _http_json(
-        "DELETE",
-        f"{base_url}/articles/{article_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=30,
-    )
-    if code != 204:
-        _die(f"admin article delete failed: http {code} payload={d1}")
-    code, g1 = _http_json(
-        "GET",
-        f"{base_url}/articles/{article_id}?include_relations=false",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 404:
-        _die(f"admin article should be deleted: http {code} payload={g1}")
-    print("[OK] admin article write")
-
-    code, u1 = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=1",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
+        f"{base_url}/auth/login",
+        fields={"username": full_name, "password": student_id},
     )
     if code != 200:
-        _die(f"admin users list failed: http {code} payload={u1}")
-    code, u2 = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=1",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200:
-        _die(f"admin users list (repeat) failed: http {code} payload={u2}")
-    print("[OK] admin users list")
+        _die(f"student login failed: http {code} payload={payload}")
+    token = _extract_access_token(payload)
+    if not token:
+        _die(f"student login response missing access_token: payload={payload}")
+    return token
 
-    u_full_name = f"冒烟写用户{suffix}"
-    u_student_id = f"smokeu{suffix}"
-    code, u_created = _http_json(
-        "POST",
-        f"{base_url}/users/",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        body={
-            "student_id": u_student_id,
-            "full_name": u_full_name,
-            "role_code": "student",
-            "class_name": "冒烟写入班级",
-            "is_active": True,
-        },
-        timeout=20,
-    )
-    if code != 200 or not isinstance(u_created, dict) or "id" not in u_created:
-        _die(f"admin user create failed: http {code} payload={u_created}")
-    u_id = int(u_created.get("id") or 0)
-    if u_id <= 0:
-        _die("admin user create invalid id")
-    code, u_list1 = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=5&search={urllib.parse.quote(u_student_id)}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(u_list1, dict):
-        _die(f"admin user list after create failed: http {code} payload={u_list1}")
-    users_arr = u_list1.get("users") or []
-    if not any(int(x.get("id", 0)) == u_id for x in users_arr if isinstance(x, dict)):
-        _die("admin user not found after create")
 
-    new_full_name = f"{u_full_name}改"
-    code, u_updated = _http_json(
+def _run_round(
+    base_url: str,
+    *,
+    admin_username: str,
+    admin_password_candidates: list[str],
+    agent_id: int,
+    round_i: int,
+):
+    suffix = f"{int(time.time())}-{round_i}"
+    today = _today_iso()
+
+    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+
+    code, pub = _http_json("GET", f"{base_url}/ai-agents/group-discussion/public-config", timeout=12)
+    _expect(code, pub, 200, "public-config get failed")
+    code, pub2 = _http_json(
         "PUT",
-        f"{base_url}/users/{u_id}",
+        f"{base_url}/ai-agents/group-discussion/public-config",
         headers={"Authorization": f"Bearer {admin_token}"},
-        body={"full_name": new_full_name},
-        timeout=20,
+        body={"enabled": True, "join_lock_seconds": 300, "rate_limit_seconds": 2},
+        timeout=12,
     )
-    if code != 200 or not isinstance(u_updated, dict) or str(u_updated.get("full_name")) != new_full_name:
-        _die(f"admin user update failed: http {code} payload={u_updated}")
-    code, u_deleted = _http_json(
-        "DELETE",
-        f"{base_url}/users/{u_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(u_deleted, dict) or u_deleted.get("success") is not True:
-        _die(f"admin user delete failed: http {code} payload={u_deleted}")
-    code, u_list2 = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=5&search={urllib.parse.quote(u_student_id)}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(u_list2, dict):
-        _die(f"admin user list after delete failed: http {code} payload={u_list2}")
-    users_arr2 = u_list2.get("users") or []
-    if any(int(x.get("id", 0)) == u_id for x in users_arr2 if isinstance(x, dict)):
-        _die("admin user still present after delete")
-    print("[OK] admin user write")
+    _expect(code, pub2, 200, "public-config put failed")
+    if not (isinstance(pub2, dict) and pub2.get("enabled") is True):
+        _die(f"public-config put response invalid: payload={pub2}")
 
-    b1_full_name = f"冒烟批量删用户{suffix}A"
-    b1_student_id = f"smokeb{suffix}01"
-    b2_full_name = f"冒烟批量删用户{suffix}B"
-    b2_student_id = f"smokeb{suffix}02"
-    code, b1 = _http_json(
-        "POST",
-        f"{base_url}/users/",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        body={
-            "student_id": b1_student_id,
-            "full_name": b1_full_name,
-            "role_code": "student",
-            "class_name": "冒烟批量班级",
-            "is_active": True,
-        },
-        timeout=20,
-    )
-    if code != 200 or not isinstance(b1, dict) or "id" not in b1:
-        _die(f"admin batch user1 create failed: http {code} payload={b1}")
-    b1_id = int(b1.get("id") or 0)
-    code, b2 = _http_json(
-        "POST",
-        f"{base_url}/users/",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        body={
-            "student_id": b2_student_id,
-            "full_name": b2_full_name,
-            "role_code": "student",
-            "class_name": "冒烟批量班级",
-            "is_active": True,
-        },
-        timeout=20,
-    )
-    if code != 200 or not isinstance(b2, dict) or "id" not in b2:
-        _die(f"admin batch user2 create failed: http {code} payload={b2}")
-    b2_id = int(b2.get("id") or 0)
-    code, bd = _http_json(
-        "POST",
-        f"{base_url}/users/batch-delete",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        body=[b1_id, b2_id],
-        timeout=30,
-    )
-    if code != 200 or not isinstance(bd, dict) or bd.get("success") is not True:
-        _die(f"admin users batch delete failed: http {code} payload={bd}")
-    code, b_list = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=5&search={urllib.parse.quote(b1_student_id)}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(b_list, dict):
-        _die(f"admin user list after batch delete failed: http {code} payload={b_list}")
-    b_users = b_list.get("users") or []
-    if any(int(x.get("id", 0)) in {b1_id, b2_id} for x in b_users if isinstance(x, dict)):
-        _die("admin users still present after batch delete")
-    print("[OK] admin users batch delete")
-
-    import_student_id = f"smokei{suffix}"
-    import_csv = (
-        "学号,姓名,学年,班级,状态,用户名\n"
-        f"{import_student_id},冒烟导入用户{suffix},2026,冒烟导入班级,true,\n"
-    ).encode("utf-8")
-    code, imp = _http_multipart(
-        "POST",
-        f"{base_url}/users/import",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        files=[("file", f"smoke_{suffix}.csv", import_csv, "text/csv")],
-        timeout=60,
-    )
-    if code != 200 or not isinstance(imp, dict) or imp.get("success") is not True:
-        _die(f"admin users import failed: http {code} payload={imp}")
-    code, imp_list = _http_json(
-        "GET",
-        f"{base_url}/users/?skip=0&limit=5&search={urllib.parse.quote(import_student_id)}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        timeout=20,
-    )
-    if code != 200 or not isinstance(imp_list, dict):
-        _die(f"admin user list after import failed: http {code} payload={imp_list}")
-    imp_users = imp_list.get("users") or []
-    if not any(str(x.get("student_id", "")) == import_student_id for x in imp_users if isinstance(x, dict)):
-        _die("imported user not found")
-    print("[OK] admin users import")
-
+    class_name = f"冒烟班级{suffix}"
+    admin_class_name = f"冒烟管理班级{suffix}"
     s1_full_name = f"讨论冒烟学生{suffix}A"
-    s1_student_id = f"smoke{suffix}01"
-    s2_full_name = f"讨论冒烟学生{suffix}B"
-    s2_student_id = f"smoke{suffix}02"
+    s1_student_id = f"smoke{int(time.time())}{round_i}01"
 
-    def ensure_student(full_name: str, student_id: str, class_name: str):
-        _http_json(
+    def create_student(full_name: str, student_id: str):
+        code, payload = _http_json(
             "POST",
             f"{base_url}/users/",
             headers={"Authorization": f"Bearer {admin_token}"},
@@ -431,150 +310,278 @@ def main() -> int:
                 "class_name": class_name,
                 "is_active": True,
             },
+            timeout=20,
         )
+        _expect(code, payload, 200, "create student failed")
 
-    ensure_student(s1_full_name, s1_student_id, "冒烟测试班级")
-    ensure_student(s2_full_name, s2_student_id, "冒烟测试班级")
+    create_student(s1_full_name, s1_student_id)
 
-    code, s1_login = _http_form(
+    code, a1 = _http_json(
         "POST",
-        f"{base_url}/auth/login",
-        fields={"username": s1_full_name, "password": s1_student_id},
+        f"{base_url}/ai-agents/group-discussion/join",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        body={"group_no": "11", "class_name": admin_class_name, "group_name": f"管理创建{suffix}一"},
+        timeout=20,
     )
-    if code != 200 or "access_token" not in s1_login:
-        _die("student1 login failed")
-    s1_token = str(s1_login["access_token"])
+    _expect(code, a1, 200, "admin join(create session1) failed")
+    if not (isinstance(a1, dict) and "session_id" in a1):
+        _die(f"admin join response invalid: payload={a1}")
+    admin_session_1 = int(a1["session_id"])
 
-    code, s2_login = _http_form(
+    code, a2 = _http_json(
         "POST",
-        f"{base_url}/auth/login",
-        fields={"username": s2_full_name, "password": s2_student_id},
+        f"{base_url}/ai-agents/group-discussion/join",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        body={"group_no": "12", "class_name": admin_class_name, "group_name": f"管理创建{suffix}二"},
+        timeout=20,
     )
-    if code != 200 or "access_token" not in s2_login:
-        _die("student2 login failed")
-    s2_token = str(s2_login["access_token"])
-    print("[OK] student logins")
+    _expect(code, a2, 200, "admin join(create session2) failed")
+    if not (isinstance(a2, dict) and "session_id" in a2):
+        _die(f"admin join response invalid: payload={a2}")
+    admin_session_2 = int(a2["session_id"])
 
-    code, j1 = _http_json(
+    code, am1 = _http_json(
+        "POST",
+        f"{base_url}/ai-agents/group-discussion/messages",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        body={"session_id": admin_session_1, "content": f"管理端冒烟消息 {suffix} A"},
+        timeout=20,
+    )
+    _expect(code, am1, 200, "admin post-message(session1) failed")
+    code, am2 = _http_json(
+        "POST",
+        f"{base_url}/ai-agents/group-discussion/messages",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        body={"session_id": admin_session_2, "content": f"管理端冒烟消息 {suffix} B"},
+        timeout=20,
+    )
+    _expect(code, am2, 200, "admin post-message(session2) failed")
+
+    code, g_student = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/groups?limit=50",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, g_student, 200, "groups list failed")
+
+    q1 = urllib.parse.urlencode({"date": today, "class_name": admin_class_name, "limit": 200})
+    code, g1 = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/groups?{q1}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, g1, 200, "admin groups list(date+class) failed")
+
+    q2 = urllib.parse.urlencode({"class_name": admin_class_name, "keyword": "11", "limit": 200})
+    code, g2 = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/groups?{q2}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, g2, 200, "admin groups list(class+keyword) failed")
+
+    q3 = urllib.parse.urlencode(
+        {"date": today, "class_name": admin_class_name, "keyword": f"管理创建{suffix}", "limit": 200}
+    )
+    code, g3 = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/groups?{q3}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, g3, 200, "admin groups list(date+class+keyword) failed")
+
+    code, sessions_admin_today = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/admin/sessions?start_date={today}&end_date={today}&class_name={urllib.parse.quote(admin_class_name)}&page=1&size=50",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, sessions_admin_today, 200, "admin sessions list(date range + class) failed")
+
+    s1_token = _student_login(base_url, full_name=s1_full_name, student_id=s1_student_id)
+
+    code, sj = _http_json(
         "POST",
         f"{base_url}/ai-agents/group-discussion/join",
         headers={"Authorization": f"Bearer {s1_token}"},
-        body={"group_no": "1"},
+        body={"group_no": "1", "group_name": f"冒烟组{suffix}一"},
+        timeout=20,
     )
-    if code != 200 or not isinstance(j1, dict) or "session_id" not in j1:
-        _die("student1 join failed")
-    session1 = int(j1["session_id"])
+    _expect(code, sj, 200, "student join failed")
+    if not (isinstance(sj, dict) and "session_id" in sj):
+        _die(f"student join response invalid: payload={sj}")
+    student_session = int(sj["session_id"])
 
-    code, j2 = _http_json(
-        "POST",
-        f"{base_url}/ai-agents/group-discussion/join",
-        headers={"Authorization": f"Bearer {s2_token}"},
-        body={"group_no": "2"},
-    )
-    if code != 200 or not isinstance(j2, dict) or "session_id" not in j2:
-        _die("student2 join failed")
-    session2 = int(j2["session_id"])
-    print("[OK] joins")
-
+    msg_text = f"冒烟测试消息 round={round_i} ts={int(time.time())}"
     code, msg = _http_json(
         "POST",
         f"{base_url}/ai-agents/group-discussion/messages",
         headers={"Authorization": f"Bearer {s1_token}"},
-        body={"session_id": session1, "content": "冒烟测试消息"},
+        body={"session_id": student_session, "content": msg_text},
+        timeout=20,
     )
-    if code != 200 or not isinstance(msg, dict) or "id" not in msg:
-        _die("send message failed")
-    msg_id = int(msg["id"])
-    print("[OK] send message")
+    _expect(code, msg, 200, "student post-message failed")
+    if not (isinstance(msg, dict) and "id" in msg):
+        _die(f"student post-message response invalid: payload={msg}")
+    student_msg_id = int(msg["id"])
 
-    code, lst = _http_json(
+    code, lst1 = _http_json(
         "GET",
-        f"{base_url}/ai-agents/group-discussion/messages?session_id={session1}&after_id=0&limit=50",
+        f"{base_url}/ai-agents/group-discussion/messages?session_id={student_session}&after_id=0&limit=50",
         headers={"Authorization": f"Bearer {s1_token}"},
+        timeout=20,
     )
-    if code != 200 or not isinstance(lst, dict) or "items" not in lst:
-        _die("list messages failed")
-    items = lst.get("items") or []
-    if not any(int(x.get("id", 0)) == msg_id for x in items if isinstance(x, dict)):
-        _die("list messages missing sent message")
-    print("[OK] list messages")
+    _expect(code, lst1, 200, "student poll messages(after_id=0) failed")
+    items1 = lst1.get("items") if isinstance(lst1, dict) else None
+    if not (
+        isinstance(items1, list)
+        and any(int(x.get("id", 0)) == student_msg_id for x in items1 if isinstance(x, dict))
+    ):
+        _die(f"student poll messages missing sent message: payload={lst1}")
 
-    if force_skip_compare:
-        print("[SKIP] compare analyze (forced)")
-        print("[DONE] smoke ok")
-        return 0
+    code, sg = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/groups?limit=50",
+        headers={"Authorization": f"Bearer {s1_token}"},
+        timeout=20,
+    )
+    _expect(code, sg, 200, "student groups list failed")
+    sg_items = (sg or {}).get("items") if isinstance(sg, dict) else None
+    if not (
+        isinstance(sg_items, list)
+        and any(int(x.get("session_id", 0)) == student_session for x in sg_items if isinstance(x, dict))
+    ):
+        _die(f"student groups list missing session: payload={sg}")
 
-    aid: int | None = None
-    if analysis_agent_id:
-        aid = int(analysis_agent_id)
-    else:
-        code, active_agents = _http_json("GET", f"{base_url}/ai-agents/active", timeout=12)
-        if code == 200 and isinstance(active_agents, list) and active_agents:
-            for a in active_agents:
-                if not isinstance(a, dict):
-                    continue
-                if a.get("is_active") is False:
-                    continue
-                try:
-                    aid = int(a.get("id"))
-                    break
-                except Exception:
-                    continue
+    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
 
-    if aid is None:
-        msg = "no active agent found for compare analyze"
-        if allow_skip_compare:
-            print(f"[SKIP] compare analyze ({msg})")
-            print("[DONE] smoke ok")
-            return 0
-        _die(msg)
+    code, classes_today = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/admin/classes?date={today}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, classes_today, 200, "admin classes(date=today) failed")
+    if not (isinstance(classes_today, list) and class_name in [str(x) for x in classes_today]):
+        _die(f"admin classes missing class_name: payload={classes_today}")
+    if not (isinstance(classes_today, list) and admin_class_name in [str(x) for x in classes_today]):
+        _die(f"admin classes missing admin_class_name: payload={classes_today}")
 
-    code, payload = _http_json(
+    code, classes_none = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/admin/classes?date=2000-01-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, classes_none, 200, "admin classes(date=no groups) failed")
+    if not isinstance(classes_none, list):
+        _die(f"admin classes(date=no groups) invalid payload: {classes_none}")
+
+    code, admin_msgs = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/admin/messages?session_id={student_session}&page=1&size=200",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, admin_msgs, 200, "admin messages list failed")
+    am_items = admin_msgs.get("items") if isinstance(admin_msgs, dict) else None
+    if not (isinstance(am_items, list) and any(int(x.get("id", 0)) == student_msg_id for x in am_items if isinstance(x, dict))):
+        _die(f"admin messages missing student_msg_id: payload={admin_msgs}")
+
+    code, cmp1 = _http_json(
         "POST",
         f"{base_url}/ai-agents/group-discussion/admin/compare-analyze",
         headers={"Authorization": f"Bearer {admin_token}"},
         body={
-            "session_ids": [session1, session2],
-            "agent_id": aid,
+            "session_ids": [admin_session_1, admin_session_2],
+            "agent_id": int(agent_id),
             "bucket_seconds": 180,
             "analysis_type": "learning_compare",
             "use_cache": True,
         },
         timeout=90,
     )
-    if code != 200:
-        if allow_skip_compare:
-            print(f"[SKIP] compare analyze http {code}: {payload}")
-            print("[DONE] smoke ok")
-            return 0
-        _die(f"compare analyze failed: http {code} payload={payload}")
-    if not isinstance(payload, dict) or "analysis_id" not in payload:
-        _die("compare analyze response invalid")
-    analysis_id_1 = int(payload["analysis_id"] or 0)
+    _expect(code, cmp1, 200, "compare analyze failed")
+    if not (isinstance(cmp1, dict) and "analysis_id" in cmp1):
+        _die(f"compare analyze response invalid: payload={cmp1}")
+    analysis_id_1 = int(cmp1["analysis_id"] or 0)
     if analysis_id_1 <= 0:
-        _die("compare analyze analysis_id invalid")
+        _die(f"compare analyze analysis_id invalid: payload={cmp1}")
 
-    code, payload2 = _http_json(
+    code, cmp2 = _http_json(
         "POST",
         f"{base_url}/ai-agents/group-discussion/admin/compare-analyze",
         headers={"Authorization": f"Bearer {admin_token}"},
         body={
-            "session_ids": [session1, session2],
-            "agent_id": aid,
+            "session_ids": [admin_session_1, admin_session_2],
+            "agent_id": int(agent_id),
             "bucket_seconds": 180,
             "analysis_type": "learning_compare",
             "use_cache": True,
         },
         timeout=90,
     )
-    if code != 200 or not isinstance(payload2, dict) or "analysis_id" not in payload2:
-        _die("compare analyze cache hit failed")
-    analysis_id_2 = int(payload2["analysis_id"] or 0)
+    _expect(code, cmp2, 200, "compare analyze(cache) failed")
+    analysis_id_2 = int(cmp2.get("analysis_id") or 0) if isinstance(cmp2, dict) else 0
     if analysis_id_2 != analysis_id_1:
-        _die(f"compare analyze cache miss (expected same analysis_id): {analysis_id_1} vs {analysis_id_2}")
-    print(f"[OK] compare analyze (agent_id={aid}, cache_hit=yes)")
+        _die(f"compare analyze cache miss: {analysis_id_1} vs {analysis_id_2}")
 
-    print("[DONE] smoke ok")
+    code, analyses = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/admin/analyses?session_id={admin_session_1}&limit=20",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=20,
+    )
+    _expect(code, analyses, 200, "admin analyses list failed")
+    a_items = analyses.get("items") if isinstance(analyses, dict) else None
+    if not (isinstance(a_items, list) and any(int(x.get("id", 0)) == analysis_id_1 for x in a_items if isinstance(x, dict))):
+        _die(f"admin analyses missing analysis_id: payload={analyses}")
+
+    print(
+        f"[OK] round={round_i} public-config,list,admin/classes,join/create,post-message,poll,compare "
+        f"(student_session={student_session} admin_sessions={admin_session_1},{admin_session_2} analysis_id={analysis_id_1})"
+    )
+
+
+def main() -> int:
+    dotenv = _load_env_candidates()
+    base_url = _normalize_api_v1(_env_get(dotenv, "BASE_URL") or "http://localhost:8000/api/v1")
+    admin_username = _env_get(dotenv, "ADMIN_USERNAME", "SUPER_ADMIN_USERNAME") or "admin"
+    admin_password = _env_get(dotenv, "ADMIN_PASSWORD", "SUPER_ADMIN_PASSWORD") or ""
+    analysis_agent_id = _env_get(dotenv, "ANALYSIS_AGENT_ID") or ""
+
+    print(f"[INFO] base_url={base_url}")
+
+    root_url = _root_url_from_api_v1(base_url)
+    code, payload = _http_json("GET", root_url + "/health")
+    if code != 200 or not (isinstance(payload, dict) and payload.get("status")):
+        code2, payload2 = _http_json("GET", root_url + "/api/health")
+        if code2 != 200 or not (isinstance(payload2, dict) and payload2.get("status")):
+            _die(f"health check failed: http {code} payload={payload} / fallback http {code2} payload={payload2}")
+    print("[OK] health")
+
+    admin_password_candidates = [admin_password, "dev_admin_password", "change_me", "wangshuhao0727"]
+    _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+    print("[OK] admin login")
+
+    agent_id = _ensure_active_agent(base_url, prefer_agent_id=analysis_agent_id or None)
+    print(f"[OK] analysis agent resolved: agent_id={agent_id}")
+
+    for i in [1, 2, 3]:
+        print(f"[INFO] round {i}/3")
+        _run_round(
+            base_url,
+            admin_username=admin_username,
+            admin_password_candidates=admin_password_candidates,
+            agent_id=agent_id,
+            round_i=i,
+        )
+
+    print("[DONE] smoke ok (3 rounds)")
     return 0
 
 

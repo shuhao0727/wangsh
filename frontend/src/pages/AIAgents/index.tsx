@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  App,
   Row,
   Col,
   Button,
-  message,
   Modal,
   Form,
   Input,
@@ -32,6 +32,7 @@ import { config } from "@services";
 import { logger } from "@services/logger";
 
 const AIAgentsPage: React.FC = () => {
+  const { message } = App.useApp();
   // 统一认证状态
   const auth = useAuth();
 

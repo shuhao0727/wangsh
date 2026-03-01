@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message, Tag, Radio, InputNumber } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
 import { aiAgentsApi, groupDiscussionApi } from "@services/agents";
+import { userApi } from "@services/users";
+import type { User } from "@services/users";
 import type { AIAgent } from "@services/znt/types";
+import type { GroupDiscussionMember } from "@services/znt/api/group-discussion-api";
 import type { ColumnsType } from "antd/es/table";
 import { AdminCard, AdminTablePanel } from "@components/Admin";
 
@@ -33,6 +36,8 @@ type MessageRow = {
 
 const GroupDiscussionAdminTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -53,6 +58,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<SessionRow | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [members, setMembers] = useState<GroupDiscussionMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [sessionModalTab, setSessionModalTab] = useState<string>("messages");
 
@@ -78,6 +85,18 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [compareResult, setCompareResult] = useState<string>("");
   const [compareLastAnalysisId, setCompareLastAnalysisId] = useState<number | null>(null);
   const [compareUseCache, setCompareUseCache] = useState(true);
+
+  const [addMemberVisible, setAddMemberVisible] = useState(false);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [searchedUsers, setSearchedUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+
+  const [muteModalVisible, setMuteModalVisible] = useState(false);
+  const [muteTargetMember, setMuteTargetMember] = useState<GroupDiscussionMember | null>(null);
+  const [muteDurationType, setMuteDurationType] = useState<"10m" | "1h" | "24h" | "custom">("10m");
+  const [muteCustomMinutes, setMuteCustomMinutes] = useState<number>(10);
+  const [muteLoading, setMuteLoading] = useState(false);
 
   const loadAgents = useCallback(async () => {
     const res = await aiAgentsApi.getAgents({ limit: 200 });
@@ -122,6 +141,57 @@ const GroupDiscussionAdminTab: React.FC = () => {
     }
   }, [dateRange, className, groupNo, groupName, userName, page, pageSize]);
 
+  const handleDeleteSession = useCallback(
+    async (row: SessionRow) => {
+      setDeletingSessionId(row.id);
+      try {
+        const res = await groupDiscussionApi.adminDeleteSession({ sessionId: row.id });
+        if (!res.success) {
+          message.error(res.message || "删除失败");
+          return;
+        }
+        if (currentSession?.id === row.id) {
+          setSessionModalOpen(false);
+          setCurrentSession(null);
+          setMessages([]);
+          setMembers([]);
+          setAnalyses([]);
+          setAnalysisResult("");
+        }
+        message.success("删除成功");
+        loadSessions();
+      } finally {
+        setDeletingSessionId(null);
+      }
+    },
+    [currentSession?.id, loadSessions],
+  );
+
+  const handleBatchDeleteSessions = useCallback(async () => {
+    if (!selectedSessionIds.length) return;
+    setBatchDeleting(true);
+    try {
+      const res = await groupDiscussionApi.adminBatchDeleteSessions({ sessionIds: selectedSessionIds });
+      if (!res.success) {
+        message.error(res.message || "删除失败");
+        return;
+      }
+      if (currentSession?.id && selectedSessionIds.includes(currentSession.id)) {
+        setSessionModalOpen(false);
+        setCurrentSession(null);
+        setMessages([]);
+        setMembers([]);
+        setAnalyses([]);
+        setAnalysisResult("");
+      }
+      setSelectedSessionIds([]);
+      message.success(`已删除 ${res.data} 个会话`);
+      loadSessions();
+    } finally {
+      setBatchDeleting(false);
+    }
+  }, [currentSession?.id, loadSessions, selectedSessionIds]);
+
   useEffect(() => {
     loadPublicConfig();
   }, [loadPublicConfig]);
@@ -142,6 +212,23 @@ const GroupDiscussionAdminTab: React.FC = () => {
       setMessages(res.data.items || []);
     } finally {
       setMessagesLoading(false);
+    }
+  }, [currentSession]);
+
+  const loadMembers = useCallback(async () => {
+    if (!currentSession) return;
+    setMembersLoading(true);
+    try {
+      const res = await groupDiscussionApi.adminListMembers({
+        sessionId: currentSession.id,
+      });
+      if (!res.success) {
+        message.error(res.message || "加载成员失败");
+        return;
+      }
+      setMembers(res.data.items || []);
+    } finally {
+      setMembersLoading(false);
     }
   }, [currentSession]);
 
@@ -174,8 +261,9 @@ const GroupDiscussionAdminTab: React.FC = () => {
   useEffect(() => {
     if (!sessionModalOpen) return;
     loadMessages();
+    loadMembers();
     loadAnalyses();
-  }, [sessionModalOpen, loadMessages, loadAnalyses]);
+  }, [sessionModalOpen, loadMessages, loadMembers, loadAnalyses]);
 
   const sessionColumns: ColumnsType<SessionRow> = useMemo(
     () => [
@@ -199,7 +287,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       {
         title: "操作",
         key: "actions",
-        width: 180,
+        width: 260,
         render: (_: any, r) => (
           <Space size={8}>
             <Button
@@ -230,11 +318,23 @@ const GroupDiscussionAdminTab: React.FC = () => {
             >
               分析
             </Button>
+            <Popconfirm
+              title="确认删除该会话吗？"
+              description="将同时删除该会话下的消息、成员与分析记录，且不可恢复。"
+              onConfirm={() => handleDeleteSession(r)}
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: deletingSessionId === r.id }}
+            >
+              <Button danger size="small" loading={deletingSessionId === r.id}>
+                删除
+              </Button>
+            </Popconfirm>
           </Space>
         ),
       },
     ],
-    [analysisForm],
+    [analysisForm, deletingSessionId, handleDeleteSession],
   );
 
   const handleAnalyze = async () => {
@@ -290,6 +390,118 @@ const GroupDiscussionAdminTab: React.FC = () => {
       if (Number.isFinite(nextId) && nextId > 0) setCompareLastAnalysisId(nextId);
     } finally {
       setCompareLoading(false);
+    }
+  };
+
+  const handleSearchUsers = useCallback(async (value: string) => {
+    if (!value) {
+      setSearchedUsers([]);
+      return;
+    }
+    setUserSearchLoading(true);
+    try {
+      const res = await userApi.getUsers({ search: value, limit: 20 });
+      setSearchedUsers(res.users || []);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }, []);
+
+  const handleAddMember = async () => {
+    if (!currentSession || !selectedUserId) return;
+    setAddMemberLoading(true);
+    try {
+      const res = await groupDiscussionApi.adminAddMember({
+        sessionId: currentSession.id,
+        userId: selectedUserId,
+      });
+      if (res.success) {
+        message.success("添加成功");
+        setAddMemberVisible(false);
+        loadMembers();
+      } else {
+        message.error(res.message || "添加失败");
+      }
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  const handleKickMember = async (userId: number) => {
+    if (!currentSession) return;
+    Modal.confirm({
+      title: "确认移除成员？",
+      content: "移除后该成员将无法继续参与讨论。",
+      onOk: async () => {
+        try {
+          const res = await groupDiscussionApi.adminRemoveMember({
+            sessionId: currentSession.id,
+            userId,
+          });
+          if (res.success) {
+            message.success("移除成功");
+            loadMembers();
+          } else {
+            message.error(res.message || "移除失败");
+          }
+        } catch (e) {
+          message.error("移除失败");
+        }
+      },
+    });
+  };
+
+  const handleMuteClick = (member: GroupDiscussionMember) => {
+    setMuteTargetMember(member);
+    setMuteDurationType("10m");
+    setMuteCustomMinutes(10);
+    setMuteModalVisible(true);
+  };
+
+  const handleUnmuteClick = async (member: GroupDiscussionMember) => {
+    if (!currentSession) return;
+    try {
+      const res = await groupDiscussionApi.adminUnmuteUser({
+        sessionId: currentSession.id,
+        userId: member.user_id,
+      });
+      if (res.success) {
+        message.success("解除禁言成功");
+        loadMembers();
+      } else {
+        message.error(res.message || "解除禁言失败");
+      }
+    } catch (e) {
+      message.error("解除禁言失败");
+    }
+  };
+
+  const handleConfirmMute = async () => {
+    if (!currentSession || !muteTargetMember) return;
+    setMuteLoading(true);
+    try {
+      let minutes = 10;
+      if (muteDurationType === "10m") minutes = 10;
+      else if (muteDurationType === "1h") minutes = 60;
+      else if (muteDurationType === "24h") minutes = 1440;
+      else if (muteDurationType === "custom") minutes = muteCustomMinutes;
+
+      const res = await groupDiscussionApi.adminMuteUser({
+        sessionId: currentSession.id,
+        userId: muteTargetMember.user_id,
+        minutes,
+      });
+      if (res.success) {
+        message.success("禁言成功");
+        setMuteModalVisible(false);
+        loadMembers();
+      } else {
+        message.error(res.message || "禁言失败");
+      }
+    } catch (e) {
+      message.error("禁言失败");
+    } finally {
+      setMuteLoading(false);
     }
   };
 
@@ -375,6 +587,19 @@ const GroupDiscussionAdminTab: React.FC = () => {
           >
             横向对比分析（{selectedSessionIds.length}）
           </Button>
+          <Popconfirm
+            title={`确认删除所选 ${selectedSessionIds.length} 个会话吗？`}
+            description="将同时删除这些会话下的消息、成员与分析记录，且不可恢复。"
+            onConfirm={handleBatchDeleteSessions}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true, loading: batchDeleting }}
+            disabled={selectedSessionIds.length === 0}
+          >
+            <Button danger loading={batchDeleting} disabled={selectedSessionIds.length === 0}>
+              批量删除（{selectedSessionIds.length}）
+            </Button>
+          </Popconfirm>
           <Button
             disabled={selectedSessionIds.length === 0}
             onClick={() => setSelectedSessionIds([])}
@@ -507,6 +732,80 @@ const GroupDiscussionAdminTab: React.FC = () => {
                     </Space>
                   )}
                 </div>
+              ),
+            },
+            {
+              key: "members",
+              label: "成员",
+              children: (
+                <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => {
+                        setSearchedUsers([]);
+                        setSelectedUserId(null);
+                        setAddMemberVisible(true);
+                      }}
+                    >
+                      添加成员
+                    </Button>
+                  </div>
+                  <Table
+                    loading={membersLoading}
+                    dataSource={members}
+                    rowKey="user_id"
+                    pagination={false}
+                    scroll={{ y: 400 }}
+                    columns={[
+                        { title: "ID", dataIndex: "user_id", width: 80 },
+                        { title: "姓名", dataIndex: "full_name", width: 100 },
+                        { title: "学号", dataIndex: "student_id", width: 120 },
+                        { title: "用户名", dataIndex: "username", width: 120 },
+                        {
+                          title: "加入时间",
+                          dataIndex: "joined_at",
+                          width: 160,
+                          render: (v) => dayjs(v).format("YYYY-MM-DD HH:mm:ss"),
+                        },
+                        {
+                          title: "状态",
+                          key: "status",
+                          render: (_, r) => {
+                            if (r.muted_until && dayjs(r.muted_until).isAfter(dayjs())) {
+                              return <Tag color="error">禁言至 {dayjs(r.muted_until).format("HH:mm")}</Tag>;
+                            }
+                            return <Tag color="success">正常</Tag>;
+                          },
+                        },
+                        {
+                          title: "操作",
+                          key: "actions",
+                          width: 180,
+                          render: (_, r) => {
+                            const isMuted = r.muted_until && dayjs(r.muted_until).isAfter(dayjs());
+                            return (
+                              <Space size={4}>
+                                {isMuted ? (
+                                  <Button size="small" onClick={() => handleUnmuteClick(r)}>
+                                    解除禁言
+                                  </Button>
+                                ) : (
+                                  <Button size="small" danger onClick={() => handleMuteClick(r)}>
+                                    禁言
+                                  </Button>
+                                )}
+                                <Button size="small" danger onClick={() => handleKickMember(r.user_id)}>
+                                  移除
+                                </Button>
+                              </Space>
+                            );
+                          },
+                        },
+                      ]}
+                  />
+                </Space>
               ),
             },
             {
@@ -751,6 +1050,75 @@ const GroupDiscussionAdminTab: React.FC = () => {
             )}
           </Card>
         </Space>
+      </Modal>
+
+      <Modal
+        title={`禁言成员：${muteTargetMember?.full_name || muteTargetMember?.username}`}
+        open={muteModalVisible}
+        onCancel={() => setMuteModalVisible(false)}
+        onOk={handleConfirmMute}
+        confirmLoading={muteLoading}
+        width={400}
+      >
+        <div style={{ padding: "20px 0" }}>
+          <Text style={{ display: "block", marginBottom: 12 }}>请选择禁言时长：</Text>
+          <Radio.Group
+            onChange={(e) => {
+              setMuteDurationType(e.target.value);
+              if (e.target.value === "10m") setMuteCustomMinutes(10);
+              if (e.target.value === "1h") setMuteCustomMinutes(60);
+              if (e.target.value === "24h") setMuteCustomMinutes(1440);
+            }}
+            value={muteDurationType}
+          >
+            <Space orientation="vertical">
+              <Radio value="10m">10分钟</Radio>
+              <Radio value="1h">1小时</Radio>
+              <Radio value="24h">24小时</Radio>
+              <Radio value="custom">
+                自定义时长
+                {muteDurationType === "custom" ? (
+                  <InputNumber
+                    style={{ width: 100, marginLeft: 10 }}
+                    min={1}
+                    value={muteCustomMinutes}
+                    onChange={(v) => setMuteCustomMinutes(v || 1)}
+                    addonAfter="分钟"
+                  />
+                ) : null}
+              </Radio>
+            </Space>
+          </Radio.Group>
+        </div>
+      </Modal>
+
+      <Modal
+        title="添加成员"
+        open={addMemberVisible}
+        onCancel={() => setAddMemberVisible(false)}
+        onOk={handleAddMember}
+        confirmLoading={addMemberLoading}
+        width={500}
+      >
+        <div style={{ padding: "20px 0" }}>
+          <Text style={{ display: "block", marginBottom: 8 }}>搜索用户：</Text>
+          <Select
+            showSearch
+            style={{ width: "100%" }}
+            placeholder="输入姓名或学号搜索"
+            defaultActiveFirstOption={false}
+            filterOption={false}
+            onSearch={handleSearchUsers}
+            onChange={setSelectedUserId}
+            notFoundContent={userSearchLoading ? <Text type="secondary">搜索中...</Text> : null}
+            loading={userSearchLoading}
+            value={selectedUserId}
+            options={(searchedUsers || []).map((d) => ({
+              value: d.id,
+              label: `${d.full_name} (${d.student_id || d.username})`,
+            }))}
+          />
+        </div>
       </Modal>
     </div>
   );

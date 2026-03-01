@@ -1,6 +1,7 @@
 export type PythonLabLevel = "入门" | "基础" | "进阶";
 
 export type PythonLabScenario =
+  | "顺序结构"
   | "循环"
   | "条件分支"
   | "函数调用"

@@ -309,7 +309,7 @@ const ArticleDetailPage: React.FC = () => {
     const scopeId = article?.id ? `article-${article.id}` : `article-${article.slug}`;
     const combinedCss = `${article?.style?.content || ""}\n${article?.custom_css || ""}`;
     const scopedCss = combinedCss.trim()
-      ? toScopedCss(combinedCss, `[data-article-scope="${scopeId}"]`)
+      ? toScopedCss(combinedCss, `.ws-markdown[data-article-scope="${scopeId}"]`)
       : "";
 
     return (
@@ -480,49 +480,57 @@ const ArticleDetailPage: React.FC = () => {
         </Button>
       </div>
 
-      <SplitPanePage
-        leftWidth={280}
-        left={
-          <PanelCard
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <BookOutlined />
-                <span>文章目录</span>
-              </div>
-            }
-            bodyPadding={0}
-          >
-            <div className="article-toc-list" style={{ border: "none" }}>
-              {tableOfContents.length > 0 ? (
-                tableOfContents.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => scrollToTocItem(item.id)}
-                    className="article-toc-item"
-                    style={{ paddingLeft: `${(item.level - 1) * 16 + 12}px` }}
-                  >
-                    <Text
-                      ellipsis={{ tooltip: item.text }}
-                      style={{ fontSize: 14 }}
-                    >
-                      {item.text}
-                    </Text>
+      <div className="article-body">
+        <SplitPanePage
+          leftWidth={280}
+          alignItems="stretch"
+          style={{ height: "100%" }}
+          left={
+            <div className="article-left-pane">
+              <PanelCard
+                title={
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <BookOutlined />
+                    <span>文章目录</span>
                   </div>
-                ))
-              ) : (
-                <div style={{ padding: 16, textAlign: "center" }}>
-                  <Text type="secondary">暂无目录</Text>
+                }
+                bodyPadding={0}
+              >
+                <div className="article-toc-list" style={{ border: "none" }}>
+                  {tableOfContents.length > 0 ? (
+                    tableOfContents.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => scrollToTocItem(item.id)}
+                        className="article-toc-item"
+                        style={{ paddingLeft: `${(item.level - 1) * 16 + 12}px` }}
+                      >
+                        <Text
+                          ellipsis={{ tooltip: item.text }}
+                          style={{ fontSize: 14 }}
+                        >
+                          {item.text}
+                        </Text>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: 16, textAlign: "center" }}>
+                      <Text type="secondary">暂无目录</Text>
+                    </div>
+                  )}
                 </div>
-              )}
+              </PanelCard>
             </div>
-          </PanelCard>
-        }
-        right={
-          <PanelCard bodyPadding={24}>
-            {renderContent()}
-          </PanelCard>
-        }
-      />
+          }
+          right={
+            <div className="article-right-pane">
+              <PanelCard bodyPadding={24}>
+                {renderContent()}
+              </PanelCard>
+            </div>
+          }
+        />
+      </div>
     </div>
   );
 };

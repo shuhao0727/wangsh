@@ -120,8 +120,8 @@ const createApiClient = (): AxiosInstance => {
   // 请求拦截器
   instance.interceptors.request.use(
     (requestConfig) => {
-      const token = getStoredAccessToken();
-      if (token && !requestConfig.headers?.Authorization) {
+      const token = getStoredAccessToken() || getCookieToken();
+      if (token && !isAuthEndpoint(requestConfig.url)) {
         requestConfig.headers = requestConfig.headers ?? {};
         (requestConfig.headers as any).Authorization = `Bearer ${token}`;
       }
@@ -231,27 +231,46 @@ const createApiClient = (): AxiosInstance => {
 
           if (!refreshPromise) {
             const storedRefreshToken = getStoredRefreshToken();
-            refreshPromise = instance
-              .post(
-                "/auth/refresh",
-                storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
-              )
-              .then((resp) => {
-                const data: any = resp?.data;
+            refreshPromise = (async () => {
+              const applyTokens = (resp: any) => {
+                const raw: any = resp?.data;
+                const data: any =
+                  raw && typeof raw === "object" && "data" in raw ? (raw as any).data : raw;
                 if (data?.access_token || data?.refresh_token) {
                   authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
                 }
-                return undefined;
-              })
-              .finally(() => {
-                refreshPromise = null;
-              });
+              };
+
+              try {
+                const resp = await instance.post(
+                  "/auth/refresh",
+                  storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
+                );
+                applyTokens(resp);
+                return;
+              } catch (e: any) {
+                const status = e?.response?.status;
+                if (status === 401 && storedRefreshToken) {
+                  const resp2 = await instance.post("/auth/refresh", {});
+                  applyTokens(resp2);
+                  return;
+                }
+                throw e;
+              }
+            })().finally(() => {
+              refreshPromise = null;
+            });
           }
           await refreshPromise;
           logger.debug("✅ API: 会话刷新成功，重试原始请求");
           return instance(originalRequest);
         } catch (_refreshError) {
-          logger.debug("⚠️ API: 会话刷新失败");
+          const detail =
+            (_refreshError as any)?.response?.data?.detail ||
+            (_refreshError as any)?.response?.data?.message ||
+            (_refreshError as any)?.message;
+          logger.debug("⚠️ API: 会话刷新失败", detail);
+          authTokenStorage.clear();
           return Promise.reject(error);
         }
       }

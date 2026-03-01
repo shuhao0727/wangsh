@@ -173,7 +173,7 @@ const MessageBubble: React.FC<{
                               : "processing"
                         }
                         style={{ margin: 0, minWidth: 48, textAlign: "center", border: "none" }}
-                        bordered={false}
+                        variant="filled"
                       >
                         {n.status === "finished"
                           ? "完成"
@@ -492,13 +492,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           display: "flex",
           flexDirection: "column",
         }}
-        bodyStyle={{
-          flex: 1,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          padding: 0,
-        }}
         styles={{
           body: {
             flex: 1,
@@ -573,13 +566,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         display: "flex",
         flexDirection: "column",
       }}
-      bodyStyle={{
-        flex: 1,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        padding: 0,
-      }}
       styles={{
         body: {
           flex: 1,
@@ -623,7 +609,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <Tag 
             color={currentAgent.status === "online" ? "success" : "default"} 
             style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px' }}
-            bordered={false}
+            variant="filled"
           >
             {currentAgent.status === "online" ? "在线" : "离线"}
           </Tag>

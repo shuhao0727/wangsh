@@ -64,7 +64,7 @@ const AdminDashboard: React.FC = () => {
         justifyContent: "space-between", 
         alignItems: "center" 
       }}>
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Title level={4} style={{ margin: 0 }}>状态概览</Title>
           <Text type="secondary" style={{ fontSize: 12 }}>实时监控系统运行状态与核心指标</Text>
         </Space>

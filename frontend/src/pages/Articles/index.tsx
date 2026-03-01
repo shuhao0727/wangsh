@@ -19,7 +19,7 @@ import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
 import "./Articles.css"; // 导入样式文件
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 // 工具函数：检测对象是否是验证错误对象 - 更严格的检查
 const isValidationError = (obj: any): boolean => {
@@ -497,7 +497,8 @@ const ArticlesPage: React.FC = () => {
         className="article-item-row"
       >
         <div className="article-card-title">{articleTitle}</div>
-        <div className="article-card-meta">
+        <div className="article-card-subline">
+          <div className="article-card-meta">
             <Text type="secondary" style={{ fontSize: "0.8125rem" }}>
               <CalendarOutlined /> {articleDate}
             </Text>
@@ -510,130 +511,125 @@ const ArticlesPage: React.FC = () => {
               作者：{authorName}
             </Text>
           </div>
-          <div className="article-card-summary">{articleSummary}</div>
+          <div className="article-card-summary-inline">{articleSummary}</div>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="informatics-page">
-      <SplitPanePage
-        leftWidth={320}
-        left={
-          <PanelCard bodyPadding={12} title=" " extra={<span></span>}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <Input
-                placeholder="搜索文章..."
-                value={searchKeyword}
-                onChange={handleSearchInputChange}
-                onKeyDown={handleSearchKeyDown}
-                onPressEnter={handleSearch}
-                allowClear
-                prefix={<SearchOutlined />}
-              />
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  setSearchKeyword("");
-                  handleCategorySelect(null);
-                }}
-                disabled={!selectedCategory && !searchKeyword.trim()}
-              />
-            </div>
-
-            <div
-              style={{
-                maxHeight: "calc(100vh - 260px)",
-                overflow: "auto",
-                border: "none",
-                borderRadius: "var(--ws-radius-md)",
-              }}
-            >
-              {categoriesLoading ? (
-                <div style={{ textAlign: "center", padding: 18 }}>
-                  <Spin />
-                </div>
-              ) : null}
-              <Menu
-                mode="inline"
-                className="category-menu"
-                selectedKeys={selectedCategory ? [selectedCategory.toString()] : ["all"]}
-                onClick={({ key }) => handleCategorySelect(key === "all" ? null : parseInt(key))}
-                items={categoryMenuItems}
-              />
-              {categories.length === 0 && !categoriesLoading ? (
-                <Empty description="暂无分类" style={{ marginTop: 12 }} />
-              ) : null}
-            </div>
-          </PanelCard>
-        }
-        right={
-          <PanelCard
-            title={
-              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>
-                {selectedCategory ? selectedCategoryName : "文章"}
-              </Title>
-            }
-            extra={
-              selectedCategory ? (
-                <Button type="link" onClick={() => handleCategorySelect(null)}>
-                  清除筛选
-                </Button>
-              ) : null
-            }
-            bodyPadding={12}
-          >
-            {loading ? (
-              <div className="loading-container">
-                <Spin size="large" />
-                <div style={{ marginTop: 16 }}>加载文章中...</div>
-              </div>
-            ) : displayedArticles.length === 0 ? (
-              <div className="empty-container">
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    searchKeyword.trim()
-                      ? "未找到匹配的文章（当前页）"
-                      : selectedCategory
-                        ? "该分类下暂无文章"
-                        : "暂无文章"
-                  }
-                >
-                  {(selectedCategory || searchKeyword.trim()) && (
+    <div className="informatics-page articles-page">
+      <div className="articles-split-pane">
+        <SplitPanePage
+          leftWidth={320}
+          alignItems="stretch"
+          left={
+            <div className="articles-left-sticky">
+              <PanelCard bodyPadding={12}>
+                <div className="articles-left">
+                  <div className="articles-left-search">
+                    <Input
+                      placeholder="搜索文章..."
+                      value={searchKeyword}
+                      onChange={handleSearchInputChange}
+                      onKeyDown={handleSearchKeyDown}
+                      onPressEnter={handleSearch}
+                      allowClear
+                      prefix={<SearchOutlined />}
+                    />
                     <Button
-                      type="primary"
+                      icon={<ReloadOutlined />}
                       onClick={() => {
                         setSearchKeyword("");
                         handleCategorySelect(null);
                       }}
-                    >
-                      清除筛选
-                    </Button>
-                  )}
-                </Empty>
-              </div>
-            ) : (
-              <>
-                <div>{displayedArticles.map(renderArticleItem)}</div>
-                {total > pageSize && !searchKeyword.trim() && (
-                  <div className="articles-pagination">
-                    <Pagination
-                      current={currentPage}
-                      pageSize={pageSize}
-                      total={total}
-                      onChange={handlePageChange}
-                      showSizeChanger
-                      showQuickJumper
-                      showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`}
+                      disabled={!selectedCategory && !searchKeyword.trim()}
                     />
                   </div>
-                )}
-              </>
-            )}
-          </PanelCard>
-        }
-      />
+
+                  <div className="articles-left-menu">
+                    {categoriesLoading ? (
+                      <div style={{ textAlign: "center", padding: 18 }}>
+                        <Spin />
+                      </div>
+                    ) : null}
+                    <Menu
+                      mode="inline"
+                      className="category-menu"
+                      selectedKeys={selectedCategory ? [selectedCategory.toString()] : ["all"]}
+                      onClick={({ key }) => handleCategorySelect(key === "all" ? null : parseInt(key))}
+                      items={categoryMenuItems}
+                    />
+                    {categories.length === 0 && !categoriesLoading ? (
+                      <Empty description="暂无分类" style={{ marginTop: 12 }} />
+                    ) : null}
+                  </div>
+                </div>
+              </PanelCard>
+            </div>
+          }
+          right={
+            <div className="articles-right-shell">
+              <PanelCard
+                bodyPadding={12}
+              >
+                <div className="articles-right-body">
+                  <div className="articles-right-scroll">
+                    {loading ? (
+                      <div className="loading-container">
+                        <Spin size="large" />
+                        <div style={{ marginTop: 16 }}>加载文章中...</div>
+                      </div>
+                    ) : displayedArticles.length === 0 ? (
+                      <div className="empty-container">
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description={
+                            searchKeyword.trim()
+                              ? "未找到匹配的文章（当前页）"
+                              : selectedCategory
+                                ? "该分类下暂无文章"
+                                : "暂无文章"
+                          }
+                        >
+                          {(selectedCategory || searchKeyword.trim()) && (
+                            <Button
+                              type="primary"
+                              onClick={() => {
+                                setSearchKeyword("");
+                                handleCategorySelect(null);
+                              }}
+                            >
+                              清除筛选
+                            </Button>
+                          )}
+                        </Empty>
+                      </div>
+                    ) : (
+                      <div>{displayedArticles.map(renderArticleItem)}</div>
+                    )}
+                  </div>
+
+                  {!searchKeyword.trim() && total > 0 ? (
+                    <div className="articles-pagination-bar">
+                      <Pagination
+                        current={currentPage}
+                        pageSize={pageSize}
+                        total={total}
+                        onChange={handlePageChange}
+                        hideOnSinglePage={false}
+                        showSizeChanger
+                        showQuickJumper
+                        showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </PanelCard>
+            </div>
+          }
+        />
+      </div>
     </div>
   );
 };

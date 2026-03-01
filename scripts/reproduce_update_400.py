@@ -1,20 +1,35 @@
 
-import json, time, urllib.request, urllib.parse, urllib.error
+import json, os, time, urllib.request, urllib.parse, urllib.error
 
-base='http://localhost:6608/api/v1'
+base=os.environ.get('BASE_URL','http://localhost:8000/api/v1').rstrip('/')
 
 def get_token():
-    body=urllib.parse.urlencode({'username':'admin','password':'dev_admin_password'}).encode('utf-8')
-    req=urllib.request.Request(base+'/auth/login', data=body, headers={'Content-Type':'application/x-www-form-urlencoded'})
-    return json.loads(urllib.request.urlopen(req).read().decode())['access_token']
+    user=os.environ.get('ADMIN_USER','admin')
+    candidates=[
+        os.environ.get('ADMIN_PASS','').strip(),
+        os.environ.get('SUPER_ADMIN_PASSWORD','').strip(),
+        'dev_admin_password',
+        'wangshuhao0727',
+        'change_me',
+    ]
+    for pwd in [x for x in candidates if x]:
+        body=urllib.parse.urlencode({'username':user,'password':pwd}).encode('utf-8')
+        req=urllib.request.Request(base+'/auth/login', data=body, headers={'Content-Type':'application/x-www-form-urlencoded'})
+        try:
+            return json.loads(urllib.request.urlopen(req).read().decode())['access_token']
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                continue
+            raise
+    raise RuntimeError('Login failed: no valid password candidate')
 
 def create_agent(token):
     payload={
       'name': f'test_update_{int(time.time())}_{int(time.perf_counter()*1000)}',
       'agent_type': 'general',
       'description': 'for update test',
-      'api_endpoint': '',
-      'api_key': '',
+      'api_endpoint': None,
+      'api_key': None,
       'is_active': True,
     }
     req=urllib.request.Request(

@@ -17,7 +17,6 @@ import {
   Row,
   Col,
   Tooltip,
-  Radio,
   Grid,
 } from "antd";
 import {
@@ -343,22 +342,6 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
 
             <div className="article-edit-editor-main">
               <Card
-                title={
-                  <div className="article-edit-content-header">
-                    <div style={{ flex: 1 }} />
-                    <Radio.Group
-                      value={viewMode}
-                      onChange={(e) => switchViewMode(e.target.value)}
-                      optionType="button"
-                      buttonStyle="solid"
-                      size="small"
-                    >
-                      {screens.lg && <Radio.Button value="split">分屏</Radio.Button>}
-                      <Radio.Button value="edit">编辑</Radio.Button>
-                      <Radio.Button value="preview">预览</Radio.Button>
-                    </Radio.Group>
-                  </div>
-                }
                 size="small"
                 className="article-edit-content-card"
               >
@@ -369,7 +352,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                     style={{ display: viewMode === "preview" ? "none" : "block" }}
                   >
                     <div className="article-edit-panel">
-                      <ArticleMarkdownEditorCard />
+                      <ArticleMarkdownEditorCard viewMode={viewMode} canSplit={!!screens.lg} onViewModeChange={switchViewMode} />
                     </div>
                   </Col>
                   <Col
@@ -455,26 +438,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
               </Row>
             </Card>
 
-            <Card
-              title={
-                <div className="article-edit-content-header">
-                  <div style={{ flex: 1 }} />
-                  <Radio.Group
-                    value={viewMode}
-                    onChange={(e) => switchViewMode(e.target.value)}
-                    optionType="button"
-                    buttonStyle="solid"
-                    size="small"
-                  >
-                    {screens.lg && <Radio.Button value="split">分屏</Radio.Button>}
-                    <Radio.Button value="edit">编辑</Radio.Button>
-                    <Radio.Button value="preview">预览</Radio.Button>
-                  </Radio.Group>
-                </div>
-              }
-              size="small"
-              className="article-edit-content-card"
-            >
+            <Card size="small" className="article-edit-content-card">
               <Row gutter={16} className="article-edit-content-row">
                 <Col
                   xs={24}
@@ -482,7 +446,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                   style={{ display: viewMode === "preview" ? "none" : "block" }}
                 >
                   <div className="article-edit-panel">
-                    <ArticleMarkdownEditorCard />
+                    <ArticleMarkdownEditorCard viewMode={viewMode} canSplit={!!screens.lg} onViewModeChange={switchViewMode} />
                   </div>
                 </Col>
                 <Col

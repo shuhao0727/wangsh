@@ -61,7 +61,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
 # Install Docker CLI
-RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends docker-cli \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1000 appuser \
     && mkdir -p /app/data/typst_pdfs \

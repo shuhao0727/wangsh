@@ -39,6 +39,27 @@ class GroupDiscussionSendRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=500)
 
 
+class GroupDiscussionMuteRequest(BaseModel):
+    session_id: int
+    user_id: int
+    minutes: int = Field(..., ge=1, le=1440, description="禁言分钟数")
+
+
+class GroupDiscussionUnmuteRequest(BaseModel):
+    session_id: int
+    user_id: int
+
+
+class GroupDiscussionAddMemberRequest(BaseModel):
+    session_id: int
+    user_id: int
+
+
+class GroupDiscussionRemoveMemberRequest(BaseModel):
+    session_id: int
+    user_id: int
+
+
 class GroupDiscussionAdminSessionOut(BaseModel):
     id: int
     session_date: date
@@ -67,6 +88,8 @@ class GroupDiscussionGroupListResponse(BaseModel):
 
 class GroupDiscussionPublicConfig(BaseModel):
     enabled: bool = Field(..., description="前端小组讨论是否可见（学生端）")
+    join_lock_seconds: int = Field(default=300, description="加入小组锁定时间（秒）")
+    rate_limit_seconds: int = Field(default=2, description="消息发送频率限制（秒）")
 
 
 class GroupDiscussionAdminSessionListResponse(BaseModel):
@@ -120,3 +143,20 @@ class GroupDiscussionAdminAnalysisOut(BaseModel):
 
 class GroupDiscussionAdminAnalysisListResponse(BaseModel):
     items: List[GroupDiscussionAdminAnalysisOut]
+
+
+class GroupDiscussionMemberOut(BaseModel):
+    user_id: int
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    student_id: Optional[str] = None
+    joined_at: datetime
+    muted_until: Optional[datetime] = None
+
+
+class GroupDiscussionAdminMemberListResponse(BaseModel):
+    items: List[GroupDiscussionMemberOut]
+
+
+class GroupDiscussionAdminDeleteSessionsRequest(BaseModel):
+    session_ids: List[int] = Field(..., min_length=1, description="要删除的会话ID列表")

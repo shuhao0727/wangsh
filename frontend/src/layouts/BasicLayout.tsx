@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu, Typography, message } from "antd";
+import { App, Layout, Menu, Typography } from "antd";
 import {
   HomeOutlined,
   RobotOutlined,
@@ -18,6 +18,7 @@ const { Header, Content } = Layout;
 const { Title } = Typography;
 
 const BasicLayout: React.FC = () => {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -31,6 +32,8 @@ const BasicLayout: React.FC = () => {
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
   const isAIAgentsPage = /^\/ai-agents(\/|$)/.test(location.pathname);
+  const isArticlesListPage = location.pathname === "/articles";
+  const isInformaticsPage = /^\/informatics(\/|$)/.test(location.pathname);
 
   // 调试日志：显示认证状态
   useEffect(() => {
@@ -172,8 +175,42 @@ const BasicLayout: React.FC = () => {
                 width: "100%",
                 position: "relative",
               }
+            : isArticlesListPage
+              ? {
+                  padding: 0,
+                  margin: 0,
+                  height: "calc(100vh - 64px)",
+                  minHeight: 0,
+                  overflow: "hidden",
+                  boxSizing: "border-box",
+                  display: "flex",
+                  flexDirection: "column",
+                  width: "100%",
+                }
+            : isInformaticsPage
+              ? {
+                  padding: 0,
+                  margin: 0,
+                  height: "calc(100vh - 64px)",
+                  minHeight: 0,
+                  overflow: "hidden",
+                  boxSizing: "border-box",
+                  display: "flex",
+                  flexDirection: "column",
+                  width: "100%",
+                }
             : isArticleDetailPage
-              ? { padding: 0, margin: 0 }
+              ? {
+                  padding: 0,
+                  margin: 0,
+                  height: "calc(100vh - 64px)",
+                  minHeight: 0,
+                  overflow: "hidden",
+                  boxSizing: "border-box",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }
               : undefined
         }
       >

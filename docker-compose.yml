@@ -44,6 +44,8 @@ services:
     image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-backend:${IMAGE_TAG}
     restart: unless-stopped
     environment:
+      DEPLOYMENT_ENV: "production"
+      REACT_APP_ENV: "production"
       DEBUG: "False"
       AUTO_CREATE_TABLES: "false"
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
@@ -128,6 +130,8 @@ services:
       backend:
         condition: service_healthy
     environment:
+      DEPLOYMENT_ENV: "production"
+      REACT_APP_ENV: "production"
       DEBUG: "False"
       AUTO_CREATE_TABLES: "false"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -182,6 +186,8 @@ services:
       backend:
         condition: service_healthy
     environment:
+      DEPLOYMENT_ENV: "production"
+      REACT_APP_ENV: "production"
       DEBUG: "False"
       AUTO_CREATE_TABLES: "false"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -227,6 +233,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
       - ./backend/app:/app/app
+
+  pythonlab-sandbox:
+    platform: linux/amd64
+    image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
+    restart: unless-stopped
+    command: [ "sh", "-lc", "sleep infinity" ]
+    networks:
+      - wangsh-network
 
   frontend:
     platform: linux/amd64

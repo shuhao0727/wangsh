@@ -317,7 +317,7 @@ const TypstNotesPanel: React.FC = () => {
           ) : !selectedId ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择或新建一个笔记" />
           ) : (
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Space orientation="vertical" size={12} style={{ width: "100%" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <Text type="secondary">标题</Text>
