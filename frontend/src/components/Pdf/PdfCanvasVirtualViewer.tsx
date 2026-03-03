@@ -98,54 +98,57 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
       inFlightRef.current.clear();
 
       const run = async () => {
-        const pdfjs: any = await import("pdfjs-dist/webpack.mjs");
-        const nextPdf = await pdfjs.getDocument({ data }).promise;
-        if (loadTokenRef.current !== token) return;
-        pdfRef.current = nextPdf;
-        onPdfLoaded?.(nextPdf);
+        try {
+          const pdfjs: any = await import("pdfjs-dist/webpack.mjs");
+          const nextPdf = await pdfjs.getDocument({ data }).promise;
+          if (loadTokenRef.current !== token) return;
+          pdfRef.current = nextPdf;
+          onPdfLoaded?.(nextPdf);
 
-        const dpr = window.devicePixelRatio || 1;
-        const numPages = Number(nextPdf.numPages) || 0;
-        const metas: PageMeta[] = new Array(numPages);
+          const dpr = window.devicePixelRatio || 1;
+          const numPages = Number(nextPdf.numPages) || 0;
+          const metas: PageMeta[] = new Array(numPages);
 
-        let nextIndex = 1;
-        const concurrency = Math.max(1, Math.min(4, numPages));
-        await Promise.all(
-          Array.from({ length: concurrency }, async () => {
-            while (nextIndex <= numPages) {
-              const i = nextIndex;
-              nextIndex += 1;
-              try {
-                const page = await nextPdf.getPage(i);
-                const viewport = page.getViewport({ scale: scale * dpr });
-                metas[i - 1] = {
-                  pageNumber: i,
-                  width: Math.floor(viewport.width),
-                  height: Math.floor(viewport.height),
-                  cssWidth: Math.floor(viewport.width / dpr),
-                  cssHeight: Math.floor(viewport.height / dpr),
-                };
-              } catch {
-                metas[i - 1] = { pageNumber: i, width: 0, height: 0, cssWidth: 0, cssHeight: 0 };
+          let nextIndex = 1;
+          const concurrency = Math.max(1, Math.min(4, numPages));
+          await Promise.all(
+            Array.from({ length: concurrency }, async () => {
+              while (nextIndex <= numPages) {
+                const i = nextIndex;
+                nextIndex += 1;
+                try {
+                  const page = await nextPdf.getPage(i);
+                  const viewport = page.getViewport({ scale: scale * dpr });
+                  metas[i - 1] = {
+                    pageNumber: i,
+                    width: Math.floor(viewport.width),
+                    height: Math.floor(viewport.height),
+                    cssWidth: Math.floor(viewport.width / dpr),
+                    cssHeight: Math.floor(viewport.height / dpr),
+                  };
+                } catch {
+                  metas[i - 1] = { pageNumber: i, width: 0, height: 0, cssWidth: 0, cssHeight: 0 };
+                }
               }
-            }
-          }),
-        );
+            }),
+          );
 
-        if (loadTokenRef.current !== token) return;
-        setPageMetas(metas);
-        const flags = new Array(metas.length).fill(false);
-        renderedRef.current = flags;
-        setLoading(false);
-        if (metas[0] && metas[0].cssHeight > 0) {
-          onFirstPageWrapHeight?.(metas[0].cssHeight + pagePadding * 2);
+          if (loadTokenRef.current !== token) return;
+          setPageMetas(metas);
+          const flags = new Array(metas.length).fill(false);
+          renderedRef.current = flags;
+          setLoading(false);
+          if (metas[0] && metas[0].cssHeight > 0) {
+            onFirstPageWrapHeight?.(metas[0].cssHeight + pagePadding * 2);
+          }
+        } catch (err) {
+          console.error("Failed to load PDF:", err);
+          if (loadTokenRef.current !== token) return;
+          setLoading(false);
         }
       };
 
-      run().catch(() => {
-        if (loadTokenRef.current !== token) return;
-        setLoading(false);
-      });
+      run();
     }, [data, scale, pagePadding, onPdfLoaded, onFirstPageWrapHeight]);
 
     const wrapStyle = useMemo<React.CSSProperties>(

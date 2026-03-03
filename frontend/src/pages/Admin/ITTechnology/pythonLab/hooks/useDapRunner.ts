@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { authApi, getStoredAccessToken, getCookieToken, authTokenStorage } from "@services/api";
 import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
 import { diffVarTrace, extractLatestTraceback, wsUrl, wsCloseHint } from "./dapRunnerHelpers";
+import { computeDebugNodeSelection, type DebugMap } from "../flow/debugMap";
 
 // --- Types ---
 
@@ -35,6 +36,8 @@ export interface InternalRunnerState {
   stdout: string[];
   trace: string[]; // For variable trace log
   activeLine: number | null;
+  activeFlowLine: number | null;
+  activeNodeId: string | null;
   frames: Frame[];
   selectedFrameIndex: number;
   variables: Variable[];
@@ -65,6 +68,8 @@ const initialState: InternalRunnerState = {
   stdout: [],
   trace: [],
   activeLine: null,
+  activeFlowLine: null,
+  activeNodeId: null,
   frames: [],
   selectedFrameIndex: 0,
   variables: [],
@@ -84,10 +89,12 @@ type Action =
   | { type: "SET_STATUS"; payload: RunnerStatus }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "APPEND_STDOUT"; payload: string }
+  | { type: "APPEND_TRACE_LINES"; payload: string[] }
   | { type: "CLEAR_OUTPUT" }
   | { type: "SET_FRAMES"; payload: Frame[] }
   | { type: "SET_VARIABLES"; payload: Variable[] }
   | { type: "SET_ACTIVE_LINE"; payload: number | null }
+  | { type: "SET_ACTIVE_EMPHASIS"; payload: { activeFlowLine: number | null; activeFocusRole: string | null; activeNodeId: string | null } }
   | { type: "SET_SELECTED_FRAME"; payload: number }
   | { type: "UPDATE_BREAKPOINTS"; payload: (prev: InternalRunnerState["breakpoints"]) => InternalRunnerState["breakpoints"] }
   | { type: "UPDATE_WATCH_EXPRS"; payload: string[] }
@@ -105,14 +112,38 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
       return { ...state, error: action.payload, status: action.payload ? "error" : state.status };
     case "APPEND_STDOUT":
       return { ...state, stdout: [...state.stdout, action.payload].slice(-2000) }; // Limit buffer
+    case "APPEND_TRACE_LINES":
+      return { ...state, trace: [...state.trace, ...action.payload].slice(-2000) };
     case "CLEAR_OUTPUT":
-      return { ...state, stdout: [], trace: [], steps: 0, activeLine: null, frames: [], variables: [], watchResults: [], error: null, startTime: null, elapsedTime: 0 };
+      return {
+        ...state,
+        stdout: [],
+        trace: [],
+        steps: 0,
+        activeLine: null,
+        activeFlowLine: null,
+        activeNodeId: null,
+        activeFocusRole: null,
+        frames: [],
+        variables: [],
+        watchResults: [],
+        error: null,
+        startTime: null,
+        elapsedTime: 0,
+      };
     case "SET_FRAMES":
       return { ...state, frames: action.payload };
     case "SET_VARIABLES":
       return { ...state, variables: action.payload };
     case "SET_ACTIVE_LINE":
       return { ...state, activeLine: action.payload };
+    case "SET_ACTIVE_EMPHASIS":
+      return {
+        ...state,
+        activeFlowLine: action.payload.activeFlowLine,
+        activeFocusRole: action.payload.activeFocusRole,
+        activeNodeId: action.payload.activeNodeId,
+      };
     case "SET_SELECTED_FRAME":
       return { ...state, selectedFrameIndex: action.payload };
     case "UPDATE_BREAKPOINTS":
@@ -210,35 +241,54 @@ class DapClient {
 
 // --- Hook ---
 
-export function useDapRunner(code: string) {
+export function useDapRunner(params: { code: string; debugMap: DebugMap | null; structuredEmphasisLog?: boolean }) {
+  const { code, debugMap, structuredEmphasisLog } = params;
   const [state, dispatch] = useReducer(reducer, initialState);
   const clientRef = useRef<DapClient>(new DapClient());
   const sessionIdRef = useRef<string | null>(null);
   const startInFlightRef = useRef(false);
   const startCooldownUntilRef = useRef(0);
   const startTokenRef = useRef(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const prevVarsRef = useRef(new Map<string, { value: string; type: string }>());
+  const prevActiveLineRef = useRef<number | null>(null);
+  const emphasisSeqRef = useRef(0);
+  const emphasisTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debugMapRef = useRef<DebugMap | null>(debugMap);
+  const structuredEmphasisLogRef = useRef(!!structuredEmphasisLog);
 
   // Sync state to ref for callbacks if needed, but try to avoid it.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  useEffect(() => {
+    debugMapRef.current = debugMap;
+  }, [debugMap]);
+
+  useEffect(() => {
+    structuredEmphasisLogRef.current = !!structuredEmphasisLog;
+  }, [structuredEmphasisLog]);
 
   // 计时器逻辑
   // 优化：不再在 reducer 中高频 dispatch 更新时间，改为由 UI 组件自行根据 startTime 渲染动画
   // 这里只负责在开始时记录 startTime，在结束时记录最终的 elapsedTime
   useEffect(() => {
     if (state.status === "running") {
-        if (!state.startTime) {
-           dispatch({ type: "SET_START_TIME", payload: Date.now() });
-        }
+      if (!state.startTime) {
+        dispatch({ type: "SET_START_TIME", payload: Date.now() });
+      }
     }
   }, [state.status, state.startTime]);
 
   const cleanup = useCallback(() => {
     startTokenRef.current += 1;
+    emphasisSeqRef.current += 1;
+    if (emphasisTimerRef.current) {
+      clearTimeout(emphasisTimerRef.current);
+      emphasisTimerRef.current = null;
+    }
     clientRef.current.disconnect();
     if (sessionIdRef.current) {
-      pythonlabSessionApi.stop(sessionIdRef.current).catch(() => {});
+      pythonlabSessionApi.stop(sessionIdRef.current).catch(() => { });
       sessionIdRef.current = null;
     }
     dispatch({ type: "SET_STATUS", payload: "stopped" });
@@ -271,36 +321,98 @@ export function useDapRunner(code: string) {
 
       dispatch({ type: "SET_FRAMES", payload: mappedFrames });
       dispatch({ type: "SET_ACTIVE_LINE", payload: topFrame.line });
+      dispatch({ type: "SET_ACTIVE_EMPHASIS", payload: { activeFlowLine: topFrame.line, activeFocusRole: null, activeNodeId: null } });
 
       // Fetch variables for top frame
       const scopesResp = await clientRef.current.request("scopes", { frameId: topFrame.id });
       const scopes = scopesResp.body?.scopes || [];
       const localScope = scopes.find((s: any) => s.name === "Locals") || scopes[0];
-      
+
       if (localScope) {
         const varsResp = await clientRef.current.request("variables", { variablesReference: localScope.variablesReference });
         const vars = (varsResp.body?.variables || [])
-            .filter((v: any) => !v.name.startsWith("__") && !v.name.includes("special variables") && !v.name.includes("function variables"))
-            .map((v: any) => ({
-                name: v.name,
-                value: v.value,
-                type: v.type || "unknown"
-            }));
+          .filter((v: any) => !v.name.startsWith("__") && !v.name.includes("special variables") && !v.name.includes("function variables"))
+          .map((v: any) => ({
+            name: v.name,
+            value: v.value,
+            type: v.type || "unknown"
+          }));
         dispatch({ type: "SET_VARIABLES", payload: vars });
+
+        const prevVars = prevVarsRef.current;
+        const stepNo = (stateRef.current.steps || 0) + 1;
+        const diff = diffVarTrace(stepNo, prevVars, vars);
+        if (diff.lines.length) dispatch({ type: "APPEND_TRACE_LINES", payload: diff.lines });
+
+        const selection = computeDebugNodeSelection({
+          debugMap: debugMapRef.current,
+          activeLine: topFrame.line ?? null,
+          prevActiveLine: prevActiveLineRef.current,
+          prevVars,
+          nextVars: diff.next,
+        });
+
+        emphasisSeqRef.current += 1;
+        const mySeq = emphasisSeqRef.current;
+        if (emphasisTimerRef.current) {
+          clearTimeout(emphasisTimerRef.current);
+          emphasisTimerRef.current = null;
+        }
+
+        dispatch({
+          type: "SET_ACTIVE_EMPHASIS",
+          payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: selection.activeFocusRole, activeNodeId: selection.activeNodeId },
+        });
+
+        if (structuredEmphasisLogRef.current) {
+          dispatch({
+            type: "APPEND_TRACE_LINES",
+            payload: [
+              JSON.stringify(
+                {
+                  kind: "debug_emphasis",
+                  activeLine: topFrame.line ?? null,
+                  prevActiveLine: prevActiveLineRef.current,
+                  inferred: selection.inferred,
+                  chosen: selection.primary,
+                  transitionQueue: selection.transitionQueue,
+                },
+                null,
+                0
+              ),
+            ],
+          });
+        }
+
+        if (selection.transitionQueue.length >= 2) {
+          const nextNodeId = selection.transitionQueue[1];
+          const thenRole = selection.inferred?.thenRole ?? null;
+          emphasisTimerRef.current = setTimeout(() => {
+            if (emphasisSeqRef.current !== mySeq) return;
+            if (stateRef.current.status !== "paused") return;
+            dispatch({
+              type: "SET_ACTIVE_EMPHASIS",
+              payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: thenRole, activeNodeId: nextNodeId },
+            });
+          }, 220);
+        }
+
+        prevVarsRef.current = diff.next;
+        prevActiveLineRef.current = topFrame.line ?? null;
       }
 
       // Process Watch Expressions
       if (stateRef.current.watchExprs.length > 0) {
-          const watchResults: WatchResult[] = [];
-          for (const expr of stateRef.current.watchExprs) {
-              try {
-                  const resp = await clientRef.current.request("evaluate", { expression: expr, frameId: topFrame.id, context: "watch" });
-                  watchResults.push({ expr, ok: true, value: resp.body.result, type: resp.body.type });
-              } catch (e: any) {
-                  watchResults.push({ expr, ok: false, error: e.message || "Error" });
-              }
+        const watchResults: WatchResult[] = [];
+        for (const expr of stateRef.current.watchExprs) {
+          try {
+            const resp = await clientRef.current.request("evaluate", { expression: expr, frameId: topFrame.id, context: "watch" });
+            watchResults.push({ expr, ok: true, value: resp.body.result, type: resp.body.type });
+          } catch (e: any) {
+            watchResults.push({ expr, ok: false, error: e.message || "Error" });
           }
-          dispatch({ type: "SET_WATCH_RESULTS", payload: watchResults });
+        }
+        dispatch({ type: "SET_WATCH_RESULTS", payload: watchResults });
       }
     } catch (e) {
       console.error("Fetch stack failed", e);
@@ -317,25 +429,28 @@ export function useDapRunner(code: string) {
     startInFlightRef.current = true;
     const myToken = (startTokenRef.current += 1);
     try {
+      prevVarsRef.current = new Map();
+      prevActiveLineRef.current = null;
       dispatch({ type: "RESET_SESSION" });
       dispatch({ type: "SET_STATUS", payload: "starting" });
       dispatch({ type: "SET_START_TIME", payload: Date.now() });
       dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 });
-      
+
       // 1. Create Session
-      const session = await pythonlabSessionApi.create({ 
-        title: "pythonlab", 
-        code, 
-        entry_path: "main.py", 
-        requirements: [] 
+      const session = await pythonlabSessionApi.create({
+        title: "pythonlab",
+        code,
+        entry_path: "main.py",
+        requirements: []
       });
       sessionIdRef.current = session.session_id;
 
-      // 2. Wait for Ready
+      // 2. Wait for Ready (Adaptive Polling)
       const maxWaitMs = 90000;
-      const pollMs = 750;
-      let retries = Math.ceil(maxWaitMs / pollMs);
-      while (retries-- > 0) {
+      const startTime = Date.now();
+      let waited = 0;
+
+      while (waited < maxWaitMs) {
         if (startTokenRef.current !== myToken) return;
         let meta: any;
         try {
@@ -346,9 +461,14 @@ export function useDapRunner(code: string) {
         }
         if (meta.status === "READY") break;
         if (meta.status === "FAILED") throw new Error(meta.error_detail || "Session failed to start");
-        await new Promise((r) => setTimeout(r, pollMs));
+
+        // Adaptive interval: 200ms for first 3s, then 500ms, then 1000ms
+        const elapsed = Date.now() - startTime;
+        const nextPoll = elapsed < 3000 ? 200 : elapsed < 10000 ? 500 : 1000;
+        await new Promise((r) => setTimeout(r, nextPoll));
+        waited += nextPoll; // Approx
       }
-      if (retries <= 0) throw new Error("调试会话启动超时：容器/调试器仍在启动或队列拥堵；可点右侧“会话”查看后重试");
+      if (waited >= maxWaitMs) throw new Error("调试会话启动超时：容器/调试器仍在启动或队列拥堵；可点右侧“会话”查看后重试");
 
       // 3. Acquire token for WS (prefer sessionStorage; fall back to refresh)
       let token = getStoredAccessToken();
@@ -364,62 +484,62 @@ export function useDapRunner(code: string) {
         } catch {
         }
       }
-      
+
       const url = wsUrl(`/api/v1/debug/sessions/${session.session_id}/ws`, token);
-      
+
       // Setup listeners
       const client = clientRef.current;
       client.disconnect(); // Ensure clean slate
-      
+
       client.on("output", (msg) => {
         if (msg.body?.output) dispatch({ type: "APPEND_STDOUT", payload: msg.body.output });
       });
-      
+
       client.on("stopped", (msg) => {
         if (stateRef.current.startTime) {
-           const now = Date.now();
-           const elapsed = (now - stateRef.current.startTime) / 1000;
-           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
-           dispatch({ type: "SET_START_TIME", payload: null });
+          const now = Date.now();
+          const elapsed = (now - stateRef.current.startTime) / 1000;
+          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+          dispatch({ type: "SET_START_TIME", payload: null });
         }
         dispatch({ type: "SET_STATUS", payload: "paused" });
         dispatch({ type: "INCREMENT_STEPS" });
         fetchStack(msg.body?.threadId || 1);
       });
-      
+
       client.on("continued", () => {
         dispatch({ type: "SET_STATUS", payload: "running" });
       });
-      
+
       client.on("terminated", () => {
         dispatch({ type: "SET_STATUS", payload: "stopped" });
         if (stateRef.current.startTime) {
-           const now = Date.now();
-           const elapsed = (now - stateRef.current.startTime) / 1000;
-           dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
-           dispatch({ type: "SET_START_TIME", payload: null });
+          const now = Date.now();
+          const elapsed = (now - stateRef.current.startTime) / 1000;
+          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+          dispatch({ type: "SET_START_TIME", payload: null });
         }
         cleanup();
       });
 
       client.on("initialized", async () => {
-         // DAP Lifecycle: After 'initialized' event, we must send breakpoints and then configurationDone
-         try {
-            await refreshBreakpoints();
-            await client.request("configurationDone");
-         } catch (e) {
-            console.error("Failed to configure DAP", e);
-         }
+        // DAP Lifecycle: After 'initialized' event, we must send breakpoints and then configurationDone
+        try {
+          await refreshBreakpoints();
+          await client.request("configurationDone");
+        } catch (e) {
+          console.error("Failed to configure DAP", e);
+        }
       });
 
       client.on("close", (ev: CloseEvent) => {
-         const hint = wsCloseHint(ev.code);
-         if (ev.code === 4401) {
-            dispatch({ type: "SET_ERROR", payload: "登录已过期，请刷新页面" });
-         } else if (ev.code !== 1000) {
-            dispatch({ type: "SET_ERROR", payload: `连接已关闭（${ev.code}）：${hint || ev.reason || "未知原因"}` });
-         }
-         dispatch({ type: "SET_STATUS", payload: "stopped" });
+        const hint = wsCloseHint(ev.code);
+        if (ev.code === 4401) {
+          dispatch({ type: "SET_ERROR", payload: "登录已过期，请刷新页面" });
+        } else if (ev.code !== 1000) {
+          dispatch({ type: "SET_ERROR", payload: `连接已关闭（${ev.code}）：${hint || ev.reason || "未知原因"}` });
+        }
+        dispatch({ type: "SET_STATUS", payload: "stopped" });
       });
 
       await client.connect(url);
@@ -427,14 +547,14 @@ export function useDapRunner(code: string) {
       // 4. Initialize DAP
       // Note: We do NOT await launch here. We await initialize, then send launch.
       // The server will send 'initialized' event when ready for breakpoints.
-      
-      await client.request("initialize", { 
-        adapterID: "python", 
-        linesStartAt1: true, 
+
+      await client.request("initialize", {
+        adapterID: "python",
+        linesStartAt1: true,
         columnsStartAt1: true,
         pathFormat: "path"
       });
-      
+
       await client.request("launch", {
         name: "PythonLab",
         type: "python",
@@ -443,21 +563,21 @@ export function useDapRunner(code: string) {
         console: "internalConsole",
         justMyCode: true
       });
-      
+
       dispatch({ type: "SET_STATUS", payload: "running" });
 
     } catch (e: any) {
       let msg = e.message || "启动调试会话失败";
-      
+
       // Handle 429 specifically
       if (e.response && e.response.status === 429) {
-          msg = "并发调试会话数已达上限，请先停止其他会话或稍后再试";
-          startCooldownUntilRef.current = Date.now() + 10000;
+        msg = "并发调试会话数已达上限，请先停止其他会话或稍后再试";
+        startCooldownUntilRef.current = Date.now() + 10000;
       } else if (e.response && e.response.data && e.response.data.detail) {
-          // Handle standard FastAPI error details
-          msg = typeof e.response.data.detail === "string" ? e.response.data.detail : JSON.stringify(e.response.data.detail);
+        // Handle standard FastAPI error details
+        msg = typeof e.response.data.detail === "string" ? e.response.data.detail : JSON.stringify(e.response.data.detail);
       } else if (msg === "[object Object]") {
-          msg = "启动失败，服务器返回了未知错误";
+        msg = "启动失败，服务器返回了未知错误";
       }
 
       dispatch({ type: "SET_ERROR", payload: msg });
@@ -477,34 +597,34 @@ export function useDapRunner(code: string) {
     try {
       await clientRef.current.request("continue", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const pauseRun = useCallback(async () => {
     try {
       await clientRef.current.request("pause", { threadId: 1 });
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const stepOver = useCallback(async () => {
     try {
       await clientRef.current.request("next", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const stepInto = useCallback(async () => {
     try {
       await clientRef.current.request("stepIn", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const stepOut = useCallback(async () => {
     try {
       await clientRef.current.request("stepOut", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const evaluate = useCallback(async (expr: string) => {
@@ -512,7 +632,7 @@ export function useDapRunner(code: string) {
       // Use top frame
       const frameId = stateRef.current.frames[0]?.id;
       if (!frameId) throw new Error("No active frame");
-      
+
       const resp = await clientRef.current.request("evaluate", { expression: expr, frameId, context: "repl" });
       return { ok: true, value: resp.body.result, type: resp.body.type };
     } catch (e: any) {
@@ -522,11 +642,13 @@ export function useDapRunner(code: string) {
 
   // --- Breakpoint Helpers ---
   const toggleBreakpoint = useCallback((line: number) => {
-    dispatch({ type: "UPDATE_BREAKPOINTS", payload: (prev) => {
-      const idx = prev.findIndex(b => b.line === line);
-      if (idx >= 0) return prev.filter(b => b.line !== line);
-      return [...prev, { line, enabled: true }];
-    }});
+    dispatch({
+      type: "UPDATE_BREAKPOINTS", payload: (prev) => {
+        const idx = prev.findIndex(b => b.line === line);
+        if (idx >= 0) return prev.filter(b => b.line !== line);
+        return [...prev, { line, enabled: true }];
+      }
+    });
   }, []);
 
   const setBreakpointEnabled = useCallback((line: number, enabled: boolean) => {
@@ -544,47 +666,47 @@ export function useDapRunner(code: string) {
   // Sync breakpoints when they change (if running)
   useEffect(() => {
     if (state.status === "running" || state.status === "paused") {
-      refreshBreakpoints().catch(() => {});
+      refreshBreakpoints().catch(() => { });
     }
   }, [state.breakpoints, refreshBreakpoints, state.status]);
 
   const addWatch = useCallback(async (expr: string) => {
     if (stateRef.current.watchExprs.includes(expr)) return;
-    
+
     // 1. Update state
     dispatch({ type: "UPDATE_WATCH_EXPRS", payload: [...stateRef.current.watchExprs, expr] });
-    
+
     // 2. If paused, evaluate immediately
     if (stateRef.current.status === "paused" && stateRef.current.frames.length > 0) {
-        try {
-            const frameId = stateRef.current.frames[0].id;
-            const resp = await clientRef.current.request("evaluate", { expression: expr, frameId, context: "watch" });
-            const result: WatchResult = { expr, ok: true, value: resp.body.result, type: resp.body.type };
-            
-            // Merge with existing results (dedupe by expr)
-            dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), result] });
-        } catch (e: any) {
-            dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), { expr, ok: false, error: e.message || "Error" }] });
-        }
+      try {
+        const frameId = stateRef.current.frames[0].id;
+        const resp = await clientRef.current.request("evaluate", { expression: expr, frameId, context: "watch" });
+        const result: WatchResult = { expr, ok: true, value: resp.body.result, type: resp.body.type };
+
+        // Merge with existing results (dedupe by expr)
+        dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), result] });
+      } catch (e: any) {
+        dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), { expr, ok: false, error: e.message || "Error" }] });
+      }
     }
   }, []);
 
   const removeWatch = useCallback((expr: string) => {
-      dispatch({ type: "UPDATE_WATCH_EXPRS", payload: stateRef.current.watchExprs.filter(e => e !== expr) });
-      dispatch({ type: "SET_WATCH_RESULTS", payload: stateRef.current.watchResults.filter(r => r.expr !== expr) });
+    dispatch({ type: "UPDATE_WATCH_EXPRS", payload: stateRef.current.watchExprs.filter(e => e !== expr) });
+    dispatch({ type: "SET_WATCH_RESULTS", payload: stateRef.current.watchResults.filter(r => r.expr !== expr) });
   }, []);
 
   return {
     state: {
-       ...state,
-       // Compatibility with old interface
-       ok: true,
-       timeTravel: false,
-       historyLength: 0,
-       callStack: state.frames.map(f => f.name),
-       watch: state.watchResults,
-       frame: state.frames[state.selectedFrameIndex]?.name || "",
-       warnings: [],
+      ...state,
+      // Compatibility with old interface
+      ok: true,
+      timeTravel: false,
+      historyLength: 0,
+      callStack: state.frames.map(f => f.name),
+      watch: state.watchResults,
+      frame: state.frames[state.selectedFrameIndex]?.name || "",
+      warnings: [],
     },
     error: state.error,
     startDebug,
@@ -606,10 +728,10 @@ export function useDapRunner(code: string) {
     removeWatch,
     evaluate,
     // History stubs to satisfy interface
-    historyBack: () => {},
-    historyForward: () => {},
-    historyToLatest: () => {},
-    setHistoryIndex: () => {},
+    historyBack: () => { },
+    historyForward: () => { },
+    historyToLatest: () => { },
+    setHistoryIndex: () => { },
     setSelectedFrameIndex: (idx: number) => dispatch({ type: "SET_SELECTED_FRAME", payload: idx }),
     selectFrame: (idx: number) => dispatch({ type: "SET_SELECTED_FRAME", payload: idx }),
     setWatchExprs: (exprs: string[]) => dispatch({ type: "UPDATE_WATCH_EXPRS", payload: exprs }),

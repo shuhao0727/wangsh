@@ -57,8 +57,21 @@ export type PythonLabFlowResponse = {
   stats?: PythonLabFlowStats;
 };
 
+export type PythonLabFlowParseOptions = {
+  expand?: {
+    functions?: "all" | "top" | "none";
+    maxDepth?: number;
+  };
+  limits?: {
+    maxParseMs?: number;
+    maxNodes?: number;
+    maxEdges?: number;
+  };
+  [k: string]: unknown;
+};
+
 export const pythonlabFlowApi = {
-  parseFlow: async (code: string, options?: any): Promise<PythonLabFlowResponse> => {
+  parseFlow: async (code: string, options?: PythonLabFlowParseOptions): Promise<PythonLabFlowResponse> => {
     const resp = await api.client.post("/debug/flow/parse", { code, options: options ?? {} });
     return resp.data as PythonLabFlowResponse;
   },
@@ -83,8 +96,15 @@ export type PythonLabPseudocodeParseResponse = {
   stats?: { parseMs?: number; cacheHit?: boolean };
 };
 
+export type PythonLabPseudocodeParseOptions = {
+  limits?: {
+    maxParseMs?: number;
+  };
+  [k: string]: unknown;
+};
+
 export const pythonlabPseudocodeApi = {
-  parsePseudocode: async (code: string, options?: any): Promise<PythonLabPseudocodeParseResponse> => {
+  parsePseudocode: async (code: string, options?: PythonLabPseudocodeParseOptions): Promise<PythonLabPseudocodeParseResponse> => {
     const resp = await api.client.post("/debug/pseudocode/parse", { code, options: options ?? {} });
     return resp.data as PythonLabPseudocodeParseResponse;
   },

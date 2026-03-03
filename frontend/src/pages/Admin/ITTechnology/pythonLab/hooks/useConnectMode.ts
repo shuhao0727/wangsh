@@ -16,7 +16,7 @@ export function useConnectMode(params: {
   setConnectFromPort: React.Dispatch<React.SetStateAction<PortSide | null>>;
   setEdges: React.Dispatch<React.SetStateAction<FlowEdge[]>>;
   nextId: (prefix: string) => string;
-  onInteract?: () => void;
+  onSemanticEdit?: () => void;
 }) {
   const {
     nodes,
@@ -32,7 +32,7 @@ export function useConnectMode(params: {
     setConnectFromPort,
     setEdges,
     nextId,
-    onInteract,
+    onSemanticEdit,
   } = params;
 
   const deletePendingEdgeRef = useRef<{ from: string; to: string } | null>(null);
@@ -47,7 +47,7 @@ export function useConnectMode(params: {
 
   const applyPortChange = useCallback(
     (edgeId: string, which: "from" | "to", nodeId: string, port: PortSide) => {
-      onInteract?.();
+      onSemanticEdit?.();
       setEdges((prev) =>
         prev.map((e) => {
           if (e.id !== edgeId) return e;
@@ -57,12 +57,11 @@ export function useConnectMode(params: {
         })
       );
     },
-    [onInteract, setEdges]
+    [onSemanticEdit, setEdges]
   );
 
   const onPortClick = useCallback(
     (nodeId: string, port: PortSide) => {
-      onInteract?.();
       const node = nodes.find((n) => n.id === nodeId);
       if (!node) return;
       const allowed = allowedPortsForShape(node.shape, node.title);
@@ -81,6 +80,7 @@ export function useConnectMode(params: {
 
         deletePendingEdgeRef.current = { from: connectFromId, to: nodeId };
         setEdges((prev) => {
+          onSemanticEdit?.();
           const key = deletePendingEdgeRef.current;
           if (!key) return prev;
           const exists = prev.find((x) => x.from === key.from && x.to === key.to && !x.toEdge);
@@ -149,7 +149,7 @@ export function useConnectMode(params: {
       edges,
       nextId,
       nodes,
-      onInteract,
+      onSemanticEdit,
       selectedEdgeId,
       setConnectFromId,
       setConnectFromPort,
@@ -161,7 +161,6 @@ export function useConnectMode(params: {
 
   const onNodeClick = useCallback(
     (nodeId: string) => {
-      onInteract?.();
       setSelectedNodeId(nodeId);
       setSelectedEdgeId(null);
       if (!connectMode) return;
@@ -175,7 +174,7 @@ export function useConnectMode(params: {
       if (connectFromId === nodeId) return;
       onPortClick(nodeId, defaultPortForNode(node, "to"));
     },
-    [connectFromId, connectMode, defaultPortForNode, nodes, onInteract, onPortClick, setConnectFromId, setConnectFromPort, setSelectedEdgeId, setSelectedNodeId]
+    [connectFromId, connectMode, defaultPortForNode, nodes, onPortClick, setConnectFromId, setConnectFromPort, setSelectedEdgeId, setSelectedNodeId]
   );
 
   const toggleConnect = useCallback(() => {
@@ -192,4 +191,3 @@ export function useConnectMode(params: {
 
   return { onPortClick, onNodeClick, toggleConnect, resetConnectSelection };
 }
-

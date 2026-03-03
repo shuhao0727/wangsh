@@ -1,5 +1,5 @@
 import { buildUnifiedFlowFromPython } from "./python_sync";
-import { arrangeFromIRElk } from "./ir_layout_elk";
+import { arrangeWithGraphviz } from "./layout_graphviz";
 import { nodeSize } from "./ports";
 
 function rectFor(n: { x: number; y: number; shape: any }) {
@@ -15,7 +15,7 @@ async function assertLayoutOk(code: string) {
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
   if (!built) return;
-  const laid = await arrangeFromIRElk(built.nodes, built.edges, { width: 1200, height: 800 });
+  const laid = await arrangeWithGraphviz(built.nodes, built.edges, { width: 1200, height: 800 });
   for (let i = 0; i < laid.nodes.length; i++) {
     for (let j = i + 1; j < laid.nodes.length; j++) {
       expect(rectIntersects(rectFor(laid.nodes[i]), rectFor(laid.nodes[j]))).toBe(false);
@@ -68,3 +68,48 @@ test("baseline: function definition + main", async () => {
   );
 });
 
+test("baseline: if/elif/else ladder", async () => {
+  await assertLayoutOk(
+    [
+      "score = 72",
+      "if score >= 90:",
+      "  grade = 'A'",
+      "elif score >= 60:",
+      "  grade = 'B'",
+      "else:",
+      "  grade = 'C'",
+      "print(grade)",
+      "",
+    ].join("\n")
+  );
+});
+
+test("baseline: for loop with continue/break", async () => {
+  await assertLayoutOk(
+    [
+      "total = 0",
+      "for i in range(10):",
+      "  if i % 2 == 0:",
+      "    continue",
+      "  total += i",
+      "  if total > 10:",
+      "    break",
+      "print(total)",
+      "",
+    ].join("\n")
+  );
+});
+
+test("baseline: recursion", async () => {
+  await assertLayoutOk(
+    [
+      "def fact(n):",
+      "  if n <= 1:",
+      "    return 1",
+      "  return n * fact(n - 1)",
+      "",
+      "print(fact(5))",
+      "",
+    ].join("\n")
+  );
+});

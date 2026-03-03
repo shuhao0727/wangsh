@@ -7,19 +7,20 @@ export type PythonLabPipelineRecordV1 = {
   createdAt: number;
   experimentId: string;
   ruleSetHash: string;
-  tidy?: any;
-  beautify?: any;
+  tidy?: unknown;
+  beautify?: unknown;
 };
 
-export const pythonLabPipelineRecordsKey = "python_lab_pipeline_records_v1";
+export const pythonLabPipelineRecordsKey = "python_lab_pipeline_records";
+export const pythonLabPipelineRecordsKeyV1 = "python_lab_pipeline_records_v1";
 
-function isObj(v: any): v is Record<string, any> {
+function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
 export function loadPipelineRecords(): PythonLabPipelineRecordV1[] {
   try {
-    const raw = localStorage.getItem(pythonLabPipelineRecordsKey);
+    const raw = localStorage.getItem(pythonLabPipelineRecordsKey) ?? localStorage.getItem(pythonLabPipelineRecordsKeyV1);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -41,11 +42,11 @@ export function loadPipelineRecords(): PythonLabPipelineRecordV1[] {
 
 export function savePipelineRecords(items: PythonLabPipelineRecordV1[]) {
   localStorage.setItem(pythonLabPipelineRecordsKey, JSON.stringify(items));
+  localStorage.setItem(pythonLabPipelineRecordsKeyV1, JSON.stringify(items));
 }
 
-export async function createRecord(input: { experimentId: string; ruleSet: PythonLabRuleSetV1; tidy?: any; beautify?: any }): Promise<PythonLabPipelineRecordV1> {
+export async function createRecord(input: { experimentId: string; ruleSet: PythonLabRuleSetV1; tidy?: unknown; beautify?: unknown }): Promise<PythonLabPipelineRecordV1> {
   const ruleSetHash = await sha256Hex(JSON.stringify(input.ruleSet));
   const id = await sha256Hex(`${Date.now()}|${Math.random()}|${input.experimentId}`);
   return { version: 1, id, createdAt: Date.now(), experimentId: input.experimentId, ruleSetHash, tidy: input.tidy, beautify: input.beautify };
 }
-

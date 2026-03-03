@@ -86,6 +86,12 @@ export function FlowEdgesSvg(props: {
         const stroke = selected ? "#1677ff" : "#595959";
         const strokeWidth = selected ? 2.2 : 1.6;
         const anchors = geom.anchors as { x: number; y: number }[];
+        
+        // Use custom label position if available (Graphviz lp)
+        const labelX = e.labelPosition ? e.labelPosition.x : geom.labelPos?.x;
+        const labelY = e.labelPosition ? e.labelPosition.y : geom.labelPos?.y;
+        const hasLabel = geom.label && (labelX !== undefined && labelY !== undefined);
+
         return (
           <g key={e.id}>
             <path
@@ -98,7 +104,9 @@ export function FlowEdgesSvg(props: {
               style={{ cursor: "pointer", pointerEvents: "stroke" }}
               onClick={(evt) => {
                 evt.stopPropagation();
+                // ... click handler logic ...
                 if (connectMode && connectFromId) {
+                  // ... connect mode logic ...
                   if (!canvasRef.current) return;
                   const rect = canvasRef.current.getBoundingClientRect();
                   const p = { x: (evt.clientX - rect.left - offsetX) / scale, y: (evt.clientY - rect.top - offsetY) / scale };
@@ -147,6 +155,7 @@ export function FlowEdgesSvg(props: {
               }}
               onDoubleClick={(evt) => {
                 evt.stopPropagation();
+                // ... double click logic ...
                 if (!canvasRef.current) return;
                 const rect = canvasRef.current.getBoundingClientRect();
                 const p = { x: (evt.clientX - rect.left - offsetX) / scale, y: (evt.clientY - rect.top - offsetY) / scale };
@@ -177,10 +186,10 @@ export function FlowEdgesSvg(props: {
               opacity={0.95}
               style={{ pointerEvents: "none" }}
             />
-            {geom.label && geom.labelPos && (
+            {hasLabel && (
               <text
-                x={geom.labelPos.x}
-                y={geom.labelPos.y}
+                x={labelX}
+                y={labelY}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize="12"
@@ -250,6 +259,16 @@ export function FlowEdgesSvg(props: {
                   <circle cx={a.x} cy={a.y} r={6} fill="#fff" stroke="#1677ff" strokeWidth={2} style={{ pointerEvents: "none" }} />
                 </g>
               ))}
+              
+             {/* Debug visualization for Bezier control points (Optional) */}
+             {selected && e.style === "bezier" && e.anchors && (
+                <g opacity={0.3}>
+                    {e.anchors.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r={2} fill="red" />
+                    ))}
+                    <polyline points={e.anchors.map(p => `${p.x},${p.y}`).join(" ")} fill="none" stroke="red" strokeWidth={1} strokeDasharray="2,2" />
+                </g>
+             )}
           </g>
         );
       })}

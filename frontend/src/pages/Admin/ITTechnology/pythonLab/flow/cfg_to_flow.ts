@@ -1,5 +1,5 @@
 import type { FlowEdge, FlowNode } from "./model";
-import type { PythonLabCfgResponse } from "../services/pythonlabDebugApi";
+import type { PythonLabCfgResponse, PythonLabFlowResponse } from "../services/pythonlabDebugApi";
 import type { FlowNodeShape } from "../types";
 
 type SourceRange = {
@@ -210,7 +210,7 @@ function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: Flow
   return { nodes, edges };
 }
 
-export function cfgToFlow(cfg: PythonLabCfgResponse): { nodes: (FlowNode & { sourceRange?: SourceRange })[]; edges: FlowEdge[] } {
+export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { nodes: (FlowNode & { sourceRange?: SourceRange })[]; edges: FlowEdge[] } {
   const kindToShape = (kind: string): FlowNodeShape => {
     const k = (kind || "").toLowerCase();
     if (k === "module") return "start_end";
@@ -224,7 +224,7 @@ export function cfgToFlow(cfg: PythonLabCfgResponse): { nodes: (FlowNode & { sou
   const moduleIds = new Set(cfg.nodes.filter((n) => n.kind === "Module").map((n) => n.id));
   const startId = "__cfg_start__";
   const endId = "__cfg_end__";
-  const entryTarget = (cfg as any)?.entryNodeId ?? (cfg.edges.find((e) => e.kind === "Entry")?.to ?? null);
+  const entryTarget = cfg.entryNodeId ?? (cfg.edges.find((e) => e.kind === "Entry")?.to ?? null);
 
   const nodes: (FlowNode & { sourceRange?: SourceRange })[] = cfg.nodes
     .filter((n) => !moduleIds.has(n.id))
@@ -261,15 +261,13 @@ export function cfgToFlow(cfg: PythonLabCfgResponse): { nodes: (FlowNode & { sou
     edges.unshift({ id: `${startId}__entry`, from: startId, to: entryTarget, style: "straight" });
   }
 
-  const exitEdgesRaw: Array<{ from: string; kind: string; label?: string }> = Array.isArray((cfg as any)?.exitEdges) ? ((cfg as any).exitEdges as any) : [];
-  const exitEdges = exitEdgesRaw.filter((e) => nodes.some((n) => n.id === e.from));
+  const exitEdges = (cfg.exitEdges ?? []).filter((e) => nodes.some((n) => n.id === e.from));
   if (exitEdges.length) {
     exitEdges.forEach((e, idx) =>
       edges.push({ id: `${e.from}__to_end__${e.kind}_${idx}`, from: e.from, to: endId, style: "straight", label: e.kind === "False" ? "否" : e.label })
     );
   } else {
-    const exitNodeIds: string[] = Array.isArray((cfg as any)?.exitNodeIds) ? ((cfg as any).exitNodeIds as string[]) : [];
-    const exits = exitNodeIds.filter((id) => nodes.some((n) => n.id === id));
+    const exits = (cfg.exitNodeIds ?? []).filter((id) => nodes.some((n) => n.id === id));
     if (exits.length) {
       exits.forEach((id) => edges.push({ id: `${id}__to_end`, from: id, to: endId, style: "straight" }));
       return normalizeDecisionChainJoins({ nodes, edges });

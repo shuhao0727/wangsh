@@ -1,5 +1,5 @@
 import { cfgToFlow } from "./cfg_to_flow";
-import { arrangeFromIRElk } from "./ir_layout_elk";
+import { arrangeWithGraphviz } from "./layout_graphviz";
 
 test("cfgToFlow normalizes if/elif/else merges via join connector before shared successor", async () => {
   const cfg: any = {
@@ -43,7 +43,7 @@ test("cfgToFlow normalizes if/elif/else merges via join connector before shared 
   const inToJoin = flow.edges.filter((e) => e.to === join.id).map((e) => e.from).sort();
   expect(inToJoin).toEqual(["a", "b", "c"].sort());
 
-  const laid = await arrangeFromIRElk(flow.nodes as any, flow.edges as any, { width: 800, height: 600 });
+  const laid = await arrangeWithGraphviz(flow.nodes as any, flow.edges as any, { width: 800, height: 600 });
   const byId = new Map(laid.nodes.map((n) => [n.id, n] as const));
   const joinL = byId.get(join.id);
   const printL = byId.get(printNode.id);
@@ -52,4 +52,3 @@ test("cfgToFlow normalizes if/elif/else merges via join connector before shared 
   if (!joinL || !printL) return;
   expect(printL.y).toBeGreaterThan(joinL.y);
 });
-

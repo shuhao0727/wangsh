@@ -1,5 +1,5 @@
 import { buildUnifiedFlowFromPython } from "./python_sync";
-import { arrangeFromIRElk } from "./ir_layout_elk";
+import { __resetGraphvizLayoutCacheForTest, arrangeWithGraphviz } from "./layout_graphviz";
 import { nodeSize } from "./ports";
 
 function rectFor(n: { x: number; y: number; shape: any }) {
@@ -11,13 +11,13 @@ function rectIntersects(a: { minX: number; minY: number; maxX: number; maxY: num
   return !(a.maxX <= b.minX || a.minX >= b.maxX || a.maxY <= b.minY || a.minY >= b.maxY);
 }
 
-test("ELK layout keeps fib for-range loop body below decision and no node overlaps", async () => {
+test("Graphviz layout keeps fib for-range loop body below decision and no node overlaps", async () => {
   const code = ["n = 10", "a = 0", "b = 1", "for i in range(n):", "  print(a)", "  a, b = b, a + b", ""].join("\n");
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
   if (!built) return;
 
-  const laid = await arrangeFromIRElk(built.nodes, built.edges);
+  const laid = await arrangeWithGraphviz(built.nodes, built.edges);
   const nodeById = new Map(laid.nodes.map((n) => [n.id, n] as const));
 
   const decision = laid.nodes.find((n) => n.shape === "decision" && n.title.replaceAll(" ", "").includes("i<n"));
@@ -46,7 +46,7 @@ test("ELK layout keeps fib for-range loop body below decision and no node overla
   }
 });
 
-test("ELK layout keeps if/else branches below decision and print after merge", async () => {
+test("Graphviz layout keeps if/else branches below decision and print after merge", async () => {
   const code = [
     "x = 3",
     "if x % 2 == 0:",
@@ -59,7 +59,7 @@ test("ELK layout keeps if/else branches below decision and print after merge", a
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
   if (!built) return;
-  const laid = await arrangeFromIRElk(built.nodes, built.edges);
+  const laid = await arrangeWithGraphviz(built.nodes, built.edges);
   const nodeById = new Map(laid.nodes.map((n) => [n.id, n] as const));
 
   const decision = laid.nodes.find((n) => n.shape === "decision" && n.title.includes("%") && n.title.includes("=="));
@@ -82,7 +82,7 @@ test("ELK layout keeps if/else branches below decision and print after merge", a
   expect(print.y).toBeGreaterThan(Math.max(thenN.y, elseN.y) - 1);
 });
 
-test("ELK layout packs main and function flows without overlapping", async () => {
+test("Graphviz layout packs main and function flows without overlapping", async () => {
   const code = [
     "def sum_n(n):",
     "  total = 0",
@@ -97,7 +97,7 @@ test("ELK layout packs main and function flows without overlapping", async () =>
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
   if (!built) return;
-  const laid = await arrangeFromIRElk(built.nodes, built.edges);
+  const laid = await arrangeWithGraphviz(built.nodes, built.edges);
 
   const mainStart = laid.nodes.find((n) => n.shape === "start_end" && n.title.includes("开始"));
   const fnStart = laid.nodes.find((n) => n.shape === "start_end" && n.title.trim().toLowerCase().startsWith("def "));
@@ -140,7 +140,7 @@ test("ELK layout packs main and function flows without overlapping", async () =>
   expect(rectIntersects(bA, bB)).toBe(false);
 });
 
-test("ELK layout is deterministic for same input", async () => {
+test("Graphviz layout is deterministic for same input", async () => {
   const code = [
     "def sum_n(n):",
     "  total = 0",
@@ -156,8 +156,10 @@ test("ELK layout is deterministic for same input", async () => {
   expect(built).not.toBeNull();
   if (!built) return;
 
-  const a = await arrangeFromIRElk(built.nodes, built.edges, { width: 1000, height: 700 });
-  const b = await arrangeFromIRElk(built.nodes, built.edges, { width: 1000, height: 700 });
+  __resetGraphvizLayoutCacheForTest();
+  const a = await arrangeWithGraphviz(built.nodes, built.edges, { width: 1000, height: 700 });
+  __resetGraphvizLayoutCacheForTest();
+  const b = await arrangeWithGraphviz(built.nodes, built.edges, { width: 1000, height: 700 });
   const byIdA = new Map(a.nodes.map((n) => [n.id, n] as const));
   for (const n of b.nodes) {
     const nA = byIdA.get(n.id);
@@ -168,7 +170,7 @@ test("ELK layout is deterministic for same input", async () => {
   }
 });
 
-test("ELK layout is deterministic for demo function graph (no def title)", async () => {
+test("Graphviz layout is deterministic for demo function graph (no def title)", async () => {
   const id = (name: string) => `demo_det_${name}`;
   const fnNodes = [
     { id: id("fn_start"), shape: "start_end", title: "sum_n(n)", x: 0, y: 0 },
@@ -201,8 +203,10 @@ test("ELK layout is deterministic for demo function graph (no def title)", async
 
   const nodes = [...fnNodes, ...mainNodes];
   const edges = [...fnEdges, ...mainEdges];
-  const a = await arrangeFromIRElk(nodes, edges, { width: 1000, height: 700 });
-  const b = await arrangeFromIRElk(nodes, edges, { width: 1000, height: 700 });
+  __resetGraphvizLayoutCacheForTest();
+  const a = await arrangeWithGraphviz(nodes, edges, { width: 1000, height: 700 });
+  __resetGraphvizLayoutCacheForTest();
+  const b = await arrangeWithGraphviz(nodes, edges, { width: 1000, height: 700 });
   const byIdA = new Map(a.nodes.map((n) => [n.id, n] as const));
   for (const n of b.nodes) {
     const nA = byIdA.get(n.id);

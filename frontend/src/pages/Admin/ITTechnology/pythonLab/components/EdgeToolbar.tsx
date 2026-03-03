@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button, Input } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 import type { FlowEdge } from "../flow/model";
+import { clampBetween } from "../flow/math";
 
 export function EdgeToolbar(props: {
   canvasRef: React.RefObject<HTMLDivElement | null>;
@@ -41,8 +42,7 @@ export function EdgeToolbar(props: {
       if (!offset) return;
       const x = evt.clientX - rect.left - offset.dx;
       const y = evt.clientY - rect.top - offset.dy;
-      const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-      setPos({ x: clamp(x, 12, rect.width - 12), y: clamp(y, 12, rect.height - 12) });
+      setPos({ x: clampBetween(x, 12, rect.width - 12), y: clampBetween(y, 12, rect.height - 12) });
     };
     const onUp = () => {
       setDragging(false);

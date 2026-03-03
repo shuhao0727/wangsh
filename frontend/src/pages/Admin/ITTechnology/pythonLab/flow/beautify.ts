@@ -1,6 +1,8 @@
 import type { FlowEdge, FlowNode } from "./model";
 import { nodeSizeForTitle } from "./ports";
 import { renderGraphviz } from "./graphviz";
+import { sortFlowGraphStable } from "./determinism";
+import { clampFinite } from "./math";
 
 export type FlowBeautifyRankdir = "TB" | "LR";
 
@@ -70,10 +72,9 @@ export const DEFAULT_BEAUTIFY_THRESHOLDS: FlowBeautifyThresholds = {
   maxFlowAngle: 15,
 };
 
-function clamp(v: number, lo: number, hi: number) {
-  if (!Number.isFinite(v)) return lo;
-  return Math.max(lo, Math.min(hi, v));
-}
+export type FlowGraphvizApplyOptions = {
+  snapToGrid?: boolean;
+};
 
 function escapeDotLabel(s: string) {
   return String(s ?? "")
@@ -128,14 +129,13 @@ function buildDotInternal(params: {
 }) {
   const { nodes, edges, beautify, reuseNameById, mode } = params;
   const { idByName, nameById } = buildNameMaps(nodes, reuseNameById);
-  const edgeNameById = mode === "mapping" ? new Map<string, string>() : null;
 
   const colors = themeColors(beautify.theme);
   const rankdir = beautify.rankdir;
-  const nodesep = clamp(beautify.nodesep, 0.05, 2.5);
-  const ranksep = clamp(beautify.ranksep, 0.05, 3.5);
-  const fontSize = clamp(beautify.fontSize, 8, 22);
-  const pad = clamp(beautify.pad, 0, 1.5);
+  const nodesep = clampFinite(beautify.nodesep, 0.05, 2.5);
+  const ranksep = clampFinite(beautify.ranksep, 0.05, 3.5);
+  const fontSize = clampFinite(beautify.fontSize, 8, 22);
+  const pad = clampFinite(beautify.pad, 0, 1.5);
   const splines = beautify.splines === "ortho" ? "ortho" : beautify.splines === "polyline" ? "polyline" : "spline";
   const concentrate = !!beautify.concentrate;
 
@@ -146,8 +146,8 @@ function buildDotInternal(params: {
     const s = dotNodeShape(n);
     const label = escapeDotLabel((n.title || "").trim()) || n.id;
     const size = nodeSizeForTitle(n.shape, n.title);
-    const wIn = clamp(size.w / 72, 0.4, 6);
-    const hIn = clamp(size.h / 72, 0.25, 4);
+    const wIn = clampFinite(size.w / 72, 0.4, 6);
+    const hIn = clampFinite(size.h / 72, 0.25, 4);
     const attrs: string[] = [];
     attrs.push(`label="${label}"`);
     attrs.push(`shape=${s.shape}`);
@@ -170,8 +170,6 @@ function buildDotInternal(params: {
   edgeBaseAttrs.push(`fontsize=${Math.max(8, Math.round(fontSize - 1))}`);
 
   const edgeLines: string[] = [];
-  const helperNodeLines: string[] = [];
-  let edgeSeq = 0;
   for (const e of edges) {
     if (e.toEdge) continue;
     const from = nameById.get(e.from);
@@ -179,21 +177,9 @@ function buildDotInternal(params: {
     if (!from || !to) continue;
     const label = e.label && String(e.label).trim() ? escapeDotLabel(String(e.label).trim()) : "";
 
-    if (mode === "display") {
-      const attrs = edgeBaseAttrs.slice();
-      if (label) attrs.push(`label="${label}"`);
-      edgeLines.push(`  ${from} -> ${to} [${attrs.join(", ")}];`);
-      continue;
-    }
-
-    edgeSeq += 1;
-    const helper = `e_${edgeSeq}`;
-    edgeNameById!.set(e.id, helper);
-    helperNodeLines.push(`  ${helper} [shape=point, width=0.01, height=0.01, label="", fixedsize=true, style="invis"];`);
-    edgeLines.push(`  ${from} -> ${helper} [${edgeBaseAttrs.concat([`arrowhead=none`]).join(", ")}];`);
-    const attrs2 = edgeBaseAttrs.slice();
-    if (label) attrs2.push(`label="${label}"`);
-    edgeLines.push(`  ${helper} -> ${to} [${attrs2.join(", ")}];`);
+    const attrs = edgeBaseAttrs.slice();
+    if (label) attrs.push(`label="${label}"`);
+    edgeLines.push(`  ${from} -> ${to} [${attrs.join(", ")}];`);
   }
 
   const dot = [
@@ -202,12 +188,12 @@ function buildDotInternal(params: {
     `  node [margin="0.10,0.06"];`,
     `  edge [arrowsize=0.8];`,
     ...nodeLines,
-    ...helperNodeLines,
     ...edgeLines,
     `}`,
   ].join("\n");
 
-  return { dot, nameById, idByName, edgeNameById };
+  void mode;
+  return { dot, nameById, idByName };
 }
 
 export function buildDotDisplay(
@@ -216,7 +202,8 @@ export function buildDotDisplay(
   params: FlowBeautifyParams,
   reuseNameById?: Map<string, string>
 ): { dot: string; nameById: Map<string, string>; idByName: Map<string, string> } {
-  const res = buildDotInternal({ nodes, edges, beautify: params, reuseNameById, mode: "display" });
+  const sorted = sortFlowGraphStable({ nodes, edges });
+  const res = buildDotInternal({ nodes: sorted.nodes, edges: sorted.edges, beautify: params, reuseNameById, mode: "display" });
   return { dot: res.dot, nameById: res.nameById, idByName: res.idByName };
 }
 
@@ -224,18 +211,58 @@ export function buildDot(
   nodes: FlowNode[],
   edges: FlowEdge[],
   params: FlowBeautifyParams
-): { dot: string; nameById: Map<string, string>; idByName: Map<string, string>; edgeNameById: Map<string, string> } {
-  const res = buildDotInternal({ nodes, edges, beautify: params, mode: "mapping" });
-  if (!res.edgeNameById) throw new Error("edgeNameById missing");
-  return { dot: res.dot, nameById: res.nameById, idByName: res.idByName, edgeNameById: res.edgeNameById };
+): { dot: string; nameById: Map<string, string>; idByName: Map<string, string> } {
+  const sorted = sortFlowGraphStable({ nodes, edges });
+  const res = buildDotInternal({ nodes: sorted.nodes, edges: sorted.edges, beautify: params, mode: "mapping" });
+  return { dot: res.dot, nameById: res.nameById, idByName: res.idByName };
 }
 
 type PlainGraph = {
   widthIn: number;
   heightIn: number;
   nodes: Map<string, { cxIn: number; cyIn: number; wIn: number; hIn: number }>;
-  edges: Map<string, { points: { xIn: number; yIn: number }[] }[]>;
+  edges: Map<string, { points: { xIn: number; yIn: number }[]; label?: string; labelPosIn?: { xIn: number; yIn: number } }[]>;
 };
+
+function tokenizePlainLine(line: string) {
+  const s = String(line || "");
+  const out: string[] = [];
+  let i = 0;
+  const isWs = (c: string) => c === " " || c === "\t" || c === "\r" || c === "\n";
+  while (i < s.length) {
+    while (i < s.length && isWs(s[i])) i += 1;
+    if (i >= s.length) break;
+    if (s[i] === '"') {
+      i += 1;
+      let buf = "";
+      while (i < s.length) {
+        const c = s[i];
+        if (c === '"') {
+          i += 1;
+          break;
+        }
+        if (c === "\\" && i + 1 < s.length) {
+          const n = s[i + 1];
+          if (n === "n") buf += "\n";
+          else if (n === "r") buf += "\r";
+          else if (n === "t") buf += "\t";
+          else buf += n;
+          i += 2;
+          continue;
+        }
+        buf += c;
+        i += 1;
+      }
+      out.push(buf);
+      continue;
+    }
+    let j = i;
+    while (j < s.length && !isWs(s[j])) j += 1;
+    out.push(s.slice(i, j));
+    i = j;
+  }
+  return out;
+}
 
 export function parsePlain(plain: string): PlainGraph {
   const lines = String(plain || "")
@@ -243,14 +270,14 @@ export function parsePlain(plain: string): PlainGraph {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!lines.length) throw new Error("Graphviz plain 输出为空");
-  const head = lines[0].split(/\s+/);
+  const head = tokenizePlainLine(lines[0]);
   if (head[0] !== "graph" || head.length < 3) throw new Error("Graphviz plain 头部解析失败");
   const widthIn = Number(head[1]);
   const heightIn = Number(head[2]);
   const nodes = new Map<string, { cxIn: number; cyIn: number; wIn: number; hIn: number }>();
-  const edges = new Map<string, { points: { xIn: number; yIn: number }[] }[]>();
+  const edges = new Map<string, { points: { xIn: number; yIn: number }[]; label?: string; labelPosIn?: { xIn: number; yIn: number } }[]>();
   for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(/\s+/);
+    const parts = tokenizePlainLine(lines[i]);
     if (!parts.length) continue;
     if (parts[0] !== "node") continue;
     if (parts.length < 6) continue;
@@ -263,7 +290,7 @@ export function parsePlain(plain: string): PlainGraph {
     nodes.set(name, { cxIn, cyIn, wIn, hIn });
   }
   for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(/\s+/);
+    const parts = tokenizePlainLine(lines[i]);
     if (!parts.length) continue;
     if (parts[0] !== "edge") continue;
     if (parts.length < 4) continue;
@@ -283,7 +310,17 @@ export function parsePlain(plain: string): PlainGraph {
     if (pts.length >= 2) {
       const key = `${from}__${to}`;
       const arr = edges.get(key) || [];
-      arr.push({ points: pts });
+      let label: string | undefined;
+      let labelPosIn: { xIn: number; yIn: number } | undefined;
+      if (parts.length >= need + 3) {
+        const lx = Number(parts[need + 1]);
+        const ly = Number(parts[need + 2]);
+        if (Number.isFinite(lx) && Number.isFinite(ly)) {
+          label = parts[need] ?? "";
+          labelPosIn = { xIn: lx, yIn: ly };
+        }
+      }
+      arr.push({ points: pts, label, labelPosIn });
       edges.set(key, arr);
     }
   }
@@ -295,51 +332,15 @@ export function applyPlainLayoutToCanvas(
   edges: FlowEdge[],
   plain: string,
   nameById: Map<string, string>,
-  edgeNameById: Map<string, string>
+  options?: FlowGraphvizApplyOptions
 ) {
-  const simplifyFree = (pts: { x: number; y: number }[]) => {
-    const minDist = 8;
-    const out1: { x: number; y: number }[] = [];
-    for (const p of pts) {
-      const last = out1[out1.length - 1];
-      if (last && Math.hypot(p.x - last.x, p.y - last.y) < minDist) continue;
-      out1.push(p);
-    }
-    if (out1.length <= 2) return out1;
-    const out2: { x: number; y: number }[] = [out1[0]];
-    for (let i = 1; i < out1.length - 1; i++) {
-      const a = out2[out2.length - 1];
-      const b = out1[i];
-      const c = out1[i + 1];
-      const abx = b.x - a.x;
-      const aby = b.y - a.y;
-      const bcx = c.x - b.x;
-      const bcy = c.y - b.y;
-      const cross = Math.abs(abx * bcy - aby * bcx);
-      const dot = abx * bcx + aby * bcy;
-      const ab = Math.hypot(abx, aby);
-      const bc = Math.hypot(bcx, bcy);
-      const nearColinear = ab > 1e-6 && bc > 1e-6 ? cross / (ab * bc) < 0.02 : true;
-      if (nearColinear && dot > 0) continue;
-      out2.push(b);
-    }
-    out2.push(out1[out1.length - 1]);
-    if (out2.length <= 14) return out2;
-    const first = out2[0];
-    const last = out2[out2.length - 1];
-    const keep: { x: number; y: number }[] = [first];
-    const k = 12;
-    for (let i = 1; i < k - 1; i++) {
-      const idx = Math.round((i * (out2.length - 1)) / (k - 1));
-      keep.push(out2[Math.max(1, Math.min(out2.length - 2, idx))]);
-    }
-    keep.push(last);
-    return keep;
-  };
-
   const parsed = parsePlain(plain);
   const pxPerIn = 72;
   const graphH = parsed.heightIn * pxPerIn;
+  const snapToGrid = options?.snapToGrid ?? true;
+  const grid = 10;
+  const snap = (v: number) => Math.round(v / grid) * grid;
+  const fmt = (v: number) => Number.isFinite(v) ? Number(v.toFixed(2)) : 0;
 
   const nextNodes: FlowNode[] = nodes.map((n) => {
     const gv = nameById.get(n.id);
@@ -351,34 +352,80 @@ export function applyPlainLayoutToCanvas(
     const cy = (parsed.heightIn - p.cyIn) * pxPerIn;
     const x = cx - size.w / 2;
     const y = cy - size.h / 2;
-    return { ...(n as any), x: Math.round(x / 10) * 10, y: Math.round(y / 10) * 10 };
+    const outX = snapToGrid ? snap(x) : fmt(x);
+    const outY = snapToGrid ? snap(y) : fmt(y);
+    return { ...(n as any), x: outX, y: outY };
   });
+  
+  // Create a map for quick node lookup by ID
+  const nodeMap = new Map(nextNodes.map(n => [n.id, n]));
+  const attachFromAbsPoint = (node: FlowNode, abs: { x: number; y: number }) => {
+    const s = nodeSizeForTitle(node.shape, node.title);
+    const w = s.w || 1;
+    const h = s.h || 1;
+    const x = clampFinite((abs.x - node.x) / w, 0, 1);
+    const y = clampFinite((abs.y - node.y) / h, 0, 1);
+    return { x: fmt(x), y: fmt(y) };
+  };
 
   const nextEdges: FlowEdge[] = edges.map((e) => {
     if (e.toEdge) return e;
     const from = nameById.get(e.from);
     const to = nameById.get(e.to);
-    const helper = edgeNameById.get(e.id);
-    if (!from || !to || !helper) return { ...e, style: "straight", routeMode: "auto", anchor: null, anchors: undefined };
-    const p1 = parsed.edges.get(`${from}__${helper}`)?.[0]?.points ?? null;
-    const p2 = parsed.edges.get(`${helper}__${to}`)?.[0]?.points ?? null;
-    if (!p1 || !p2) return { ...e, style: "straight", routeMode: "auto", anchor: null, anchors: undefined };
-    const merged = p1.concat(p2.slice(1));
-    const poly0 = merged
-      .map((p) => ({ x: p.xIn * pxPerIn, y: (parsed.heightIn - p.yIn) * pxPerIn }))
-      .map((p) => ({ x: Number(p.x.toFixed(1)), y: Number(p.y.toFixed(1)) }));
-    const poly = simplifyFree(poly0);
-    if (poly.length <= 2) return { ...e, style: "straight", routeMode: "auto", anchor: null, anchors: undefined };
-    const dir0 = { dx: poly[1].x - poly[0].x, dy: poly[1].y - poly[0].y };
-    const dir1 = { dx: poly[poly.length - 1].x - poly[poly.length - 2].x, dy: poly[poly.length - 1].y - poly[poly.length - 2].y };
-    const abs0x = Math.abs(dir0.dx);
-    const abs0y = Math.abs(dir0.dy);
-    const abs1x = Math.abs(dir1.dx);
-    const abs1y = Math.abs(dir1.dy);
-    const fromPort = abs0x >= abs0y ? (dir0.dx >= 0 ? "right" : "left") : dir0.dy >= 0 ? "bottom" : "top";
-    const toPort = abs1x >= abs1y ? (dir1.dx >= 0 ? "left" : "right") : dir1.dy >= 0 ? "top" : "bottom";
-    const middle = poly.slice(1, poly.length - 1);
-    return { ...e, style: "polyline", routeMode: "manual", routeShape: "free", fromPort, toPort, anchor: null, anchors: middle };
+    if (!from || !to) return { ...e, style: "straight", routeMode: "auto", anchor: null, anchors: undefined };
+
+    const segs = parsed.edges.get(`${from}__${to}`) ?? null;
+    if (!segs || !segs.length) return { ...e, style: "straight", routeMode: "auto", anchor: null, anchors: undefined };
+
+    const norm = (s: string | undefined) => String(s ?? "").trim().toLowerCase();
+    const want = norm(e.label ? String(e.label) : "");
+    const chosen =
+      segs.length === 1
+        ? segs[0]
+        : want
+          ? segs.find((x) => norm(x.label) === want) ?? segs[0]
+          : segs.find((x) => !norm(x.label)) ?? segs[0];
+
+    const poly = (chosen.points ?? [])
+      .map((p) => ({ x: Number((p.xIn * pxPerIn).toFixed(2)), y: Number(((parsed.heightIn - p.yIn) * pxPerIn).toFixed(2)) }));
+
+    const fromNode = nodeMap.get(e.from);
+    const toNode = nodeMap.get(e.to);
+    const fromAttach = fromNode && poly.length ? attachFromAbsPoint(fromNode, poly[0]) : undefined;
+    const toAttach = toNode && poly.length ? attachFromAbsPoint(toNode, poly[poly.length - 1]) : undefined;
+
+    const labelPosition = chosen.labelPosIn && (e.label || "").trim()
+      ? {
+          x: fmt(chosen.labelPosIn.xIn * pxPerIn),
+          y: fmt((parsed.heightIn - chosen.labelPosIn.yIn) * pxPerIn),
+        }
+      : undefined;
+
+    if (poly.length <= 2) {
+      return {
+        ...e,
+        style: "straight",
+        routeMode: "auto",
+        routeShape: undefined,
+        anchor: null,
+        anchors: undefined,
+        fromAttach,
+        toAttach,
+        labelPosition,
+      };
+    }
+
+    return {
+      ...e,
+      style: "bezier",
+      routeMode: "manual",
+      routeShape: "bezier",
+      anchor: null,
+      anchors: poly,
+      fromAttach,
+      toAttach,
+      labelPosition,
+    };
   });
 
   return { nodes: nextNodes, edges: nextEdges, graphHeightPx: graphH };
@@ -481,12 +528,17 @@ function flowAngle(nodes: FlowNode[], edges: FlowEdge[], rankdir: FlowBeautifyRa
   return p95;
 }
 
-export async function computeBeautify(nodes: FlowNode[], edges: FlowEdge[], params: FlowBeautifyParams, thresholds: FlowBeautifyThresholds = DEFAULT_BEAUTIFY_THRESHOLDS): Promise<FlowBeautifyResult> {
-  const mapping = buildDot(nodes, edges, params);
-  const display = buildDotDisplay(nodes, edges, params, mapping.nameById);
-  const renderedDisplay = await renderGraphviz(display.dot, params.engine ?? "dot", ["svg"]);
-  const renderedMapping = await renderGraphviz(mapping.dot, params.engine ?? "dot", ["plain"]);
-  const applied = applyPlainLayoutToCanvas(nodes, edges, renderedMapping.plain || "", mapping.nameById, mapping.edgeNameById);
+export async function computeBeautify(
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+  params: FlowBeautifyParams,
+  thresholds: FlowBeautifyThresholds = DEFAULT_BEAUTIFY_THRESHOLDS,
+  applyOptions?: FlowGraphvizApplyOptions
+): Promise<FlowBeautifyResult> {
+  const sorted = sortFlowGraphStable({ nodes, edges });
+  const mapping = buildDot(sorted.nodes, sorted.edges, params);
+  const rendered = await renderGraphviz(mapping.dot, params.engine ?? "dot", ["svg", "plain"]);
+  const applied = applyPlainLayoutToCanvas(sorted.nodes, sorted.edges, rendered.plain || "", mapping.nameById, applyOptions);
   const afterNodes = applied.nodes;
   const afterEdges = applied.edges;
 
@@ -505,9 +557,9 @@ export async function computeBeautify(nodes: FlowNode[], edges: FlowEdge[], para
   ];
 
   return {
-    dot: display.dot,
-    svg: renderedDisplay.svg || "",
-    plain: renderedMapping.plain || "",
+    dot: mapping.dot,
+    svg: rendered.svg || "",
+    plain: rendered.plain || "",
     layout: { nodes: afterNodes, edges: afterEdges },
     metrics,
     stats: { nodeCount, edgeCount, crossings, contrast: Number(contrast.toFixed(2)), flowAngle: Number(angle.toFixed(1)) },

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button, Space, Tabs, Tag, Typography } from "antd";
 import { CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import XtermTerminal from "./XtermTerminal";
+import { clampBetween } from "../flow/math";
 
 const { Text } = Typography;
 
@@ -39,8 +40,8 @@ export function TerminalPopup(props: {
   const clamp = useCallback((x: number, y: number) => {
     const maxX = Math.max(padding, window.innerWidth - size.w - padding);
     const maxY = Math.max(padding, window.innerHeight - size.h - padding);
-    const nx = Math.max(padding, Math.min(maxX, x));
-    const ny = Math.max(padding, Math.min(maxY, y));
+    const nx = clampBetween(x, padding, maxX);
+    const ny = clampBetween(y, padding, maxY);
     return { x: nx, y: ny };
   }, [size.h, size.w]);
 

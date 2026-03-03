@@ -23,6 +23,8 @@ export function CanvasToolbar(props: {
   demoOptions: { key: string; label: string; description?: string }[];
   onLoadDemo: (key: string) => void;
   onArrange: () => void | Promise<void>;
+  autoLayout: boolean;
+  onToggleAutoLayout: () => void;
   connectMode: boolean;
   onToggleConnect: () => void;
   panMode: boolean;
@@ -43,6 +45,8 @@ export function CanvasToolbar(props: {
     demoOptions,
     onLoadDemo,
     onArrange,
+    autoLayout,
+    onToggleAutoLayout,
     connectMode,
     onToggleConnect,
     panMode,
@@ -93,8 +97,16 @@ export function CanvasToolbar(props: {
           <Button type="text" icon={<ExperimentOutlined />} />
         </Tooltip>
       </Dropdown>
-      <Tooltip title="自动整理布局">
+      <Tooltip title="立即执行整理">
         <Button type="text" icon={<ApartmentOutlined />} onClick={onArrange} />
+      </Tooltip>
+      <Tooltip title={autoLayout ? "自动整理模式：开启" : "自动整理模式：关闭"}>
+        <Button
+          type="text"
+          icon={<ApartmentOutlined style={{ color: autoLayout ? "#1890ff" : undefined }} />}
+          style={{ background: autoLayout ? "#e6f7ff" : undefined }}
+          onClick={onToggleAutoLayout}
+        />
       </Tooltip>
       
       <div style={{ width: 1, height: 16, background: "#f0f0f0", margin: "0 4px" }} />

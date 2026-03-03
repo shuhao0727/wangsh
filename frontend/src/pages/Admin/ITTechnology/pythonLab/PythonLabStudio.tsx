@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input, Layout, Space, Tag, Typography } from "antd";
 import type { PythonLabExperiment } from "./types";
-import type { FlowEdge, FlowNode, PortSide } from "./flow/model";
+import { normalizeFlowImport, type FlowEdge, type FlowNode, type PortSide } from "./flow/model";
 import { pointAtT } from "./flow/geometry";
 import { nodeSizeForTitle } from "./flow/ports";
+import { clampBetween } from "./flow/math";
 import { RightPanel } from "./components/RightPanel";
 import { FloatingPopup } from "./components/FloatingPopup";
 import { useEdgeGeometries } from "./hooks/useEdgeGeometries";
@@ -23,7 +24,10 @@ import { TerminalPopup } from "./components/TerminalPopup";
 import { pythonlabPseudocodeApi, type PythonLabPseudocodeParseResponse } from "./services/pythonlabDebugApi";
 import { computeTidy, type FlowTidyResult } from "./flow/tidy";
 import { computeBeautify, type FlowBeautifyResult } from "./flow/beautify";
+import { sortFlowGraphStable } from "./flow/determinism";
 import { loadEffectiveRuleSetV1, type PythonLabRuleSetV1 } from "./pipeline/rules";
+import { ensurePythonLabStorageCompatible } from "./storageCompat";
+import { toErrorMessage } from "./errorMessage";
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -42,6 +46,10 @@ function nextId(prefix: string) {
 const PythonLabStudio: React.FC<{
   experiment?: PythonLabExperiment;
 }> = ({ experiment }) => {
+  useEffect(() => {
+    ensurePythonLabStorageCompatible();
+  }, []);
+
   const [pipelineMode, setPipelineMode] = useState(() => {
     try {
       return localStorage.getItem("python_lab_pipeline_mode") === "1";
@@ -71,6 +79,9 @@ const PythonLabStudio: React.FC<{
   const [panMode, setPanMode] = useState(false);
   const [followMode, setFollowMode] = useState(true);
   const [followTick, setFollowTick] = useState(0);
+  const [interactionFlag, setInteractionFlag] = useState(false);
+  const [canvasBusy, setCanvasBusy] = useState(false);
+  const [autoLayout, setAutoLayout] = useState(true);
 
   const [demoAutoArrangeToken, setDemoAutoArrangeToken] = useState(0);
   const demoAutoArrangeHandledRef = useRef(0);
@@ -96,7 +107,14 @@ const PythonLabStudio: React.FC<{
       centersX.push(n.x + s.w / 2);
     }
     for (const e of nextEdges) {
-      const pts = e.style === "polyline" ? (e.anchors && e.anchors.length ? e.anchors : e.anchor ? [e.anchor] : []) : [];
+      const pts =
+        e.style === "polyline" || e.style === "bezier"
+          ? e.anchors && e.anchors.length
+            ? e.anchors
+            : e.anchor
+              ? [e.anchor]
+              : []
+          : [];
       for (const p of pts) {
         minX = Math.min(minX, p.x);
         minY = Math.min(minY, p.y);
@@ -260,9 +278,14 @@ const PythonLabStudio: React.FC<{
     };
   }, []);
 
-  const { code, setCode, codeMode, setCodeMode, codeIr, generated, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions } = usePythonFlowSync({
+  const { code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions } = usePythonFlowSync({
     starterCode: experiment?.starterCode,
     preferBackendCfg: true,
+    beautifyParams: ruleSet.beautify.params,
+    beautifyThresholds: ruleSet.beautify.thresholds,
+    beautifyAlignMode: ruleSet.beautify.alignMode,
+    autoLayout,
+    interacting: interactionFlag,
     nodes,
     edges,
     setNodes,
@@ -277,7 +300,39 @@ const PythonLabStudio: React.FC<{
     canvasRef,
   });
 
-  const { addNode, removeSelected, clearAll, loadDemoFlow, demoOptions, variableColumns } = usePythonLabActions({
+  const [structuredEmphasisLog, setStructuredEmphasisLog] = useState(() => {
+    try {
+      return localStorage.getItem("python_lab_structured_emphasis_log") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("python_lab_structured_emphasis_log", structuredEmphasisLog ? "1" : "0");
+    } catch {}
+  }, [structuredEmphasisLog]);
+
+  const {
+    ensureAuto,
+    setNodesAuto,
+    setEdgesAuto,
+    setNodesAndEdgesAuto,
+    setFlowAuto,
+    addNode,
+    removeSelected,
+    clearAll,
+    updateNodeTitle,
+    setEdgeStraight,
+    setEdgePolyline,
+    clearEdgeAnchors,
+    addEdgeAnchor,
+    reverseEdge,
+    loadDemoFlow,
+    peekDemoFlow,
+    demoOptions,
+    variableColumns,
+  } = usePythonLabActions({
     canvasRef,
     nextId,
     codeMode,
@@ -314,14 +369,10 @@ const PythonLabStudio: React.FC<{
     } catch {
       return;
     }
-    const ns = Array.isArray(parsed?.nodes) ? parsed.nodes : null;
-    const es = Array.isArray(parsed?.edges) ? parsed.edges : null;
-    if (!ns || !es) return;
-    if (codeMode !== "auto") setCodeMode("auto");
-    setSelectedNodeId(null);
-    setSelectedEdgeId(null);
-    setNodes(ns);
-    setEdges(es);
+    const normalized = normalizeFlowImport(parsed);
+    if (!normalized) return;
+    const { nodes: ns, edges: es } = normalized;
+    setFlowAuto({ nodes: ns, edges: es, resetSelection: true, resetConnect: true });
     fitViewTo(ns, es);
   };
 
@@ -337,8 +388,9 @@ const PythonLabStudio: React.FC<{
     setConnectFromId,
     connectFromPort,
     setConnectFromPort,
-    setEdges,
+    setEdges: setEdgesAuto,
     nextId,
+    onSemanticEdit: ensureAuto,
   });
 
   const handleNodeClick = (e: React.MouseEvent, nodeId: string) => {
@@ -389,7 +441,7 @@ const PythonLabStudio: React.FC<{
     historyForward,
     historyToLatest,
     setWatchExprs,
-  } = useDapRunner(code);
+  } = useDapRunner({ code, debugMap, structuredEmphasisLog });
   const [terminalOpen, setTerminalOpen] = useState(false);
 
   useEffect(() => {
@@ -417,11 +469,8 @@ const PythonLabStudio: React.FC<{
         const resp = await pythonlabPseudocodeApi.parsePseudocode(code);
         setPseudocode(resp);
         setPseudocodeError(null);
-      } catch (e: any) {
-        const msg =
-          (e?.response?.data?.detail && String(e.response.data.detail)) ||
-          (e?.message && String(e.message)) ||
-          "获取伪代码失败";
+      } catch (e: unknown) {
+        const msg = toErrorMessage(e, "获取伪代码失败");
         setPseudocode(null);
         setPseudocodeError(msg);
       } finally {
@@ -447,11 +496,14 @@ const PythonLabStudio: React.FC<{
     const tid = window.setTimeout(async () => {
       setBeautifyLoading(true);
       try {
-        const resp = await computeBeautify(nodes, edges, ruleSet.beautify.params, ruleSet.beautify.thresholds);
+        const sorted = sortFlowGraphStable({ nodes, edges });
+        const resp = await computeBeautify(sorted.nodes, sorted.edges, ruleSet.beautify.params, ruleSet.beautify.thresholds, {
+          snapToGrid: !ruleSet.beautify.alignMode,
+        });
         setBeautifyResult(resp);
         setBeautifyError(null);
-      } catch (e: any) {
-        const msg = (e?.message && String(e.message)) || "Graphviz 渲染失败";
+      } catch (e: unknown) {
+        const msg = toErrorMessage(e, "Graphviz 渲染失败");
         setBeautifyResult(null);
         setBeautifyError(msg);
       } finally {
@@ -459,7 +511,59 @@ const PythonLabStudio: React.FC<{
       }
     }, 500);
     return () => window.clearTimeout(tid);
-  }, [beautifyRefreshToken, edges, nodes, pipelineMode, ruleSet.beautify.params, ruleSet.beautify.thresholds]);
+  }, [beautifyRefreshToken, edges, nodes, pipelineMode, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds]);
+
+  const fitViewToCenter = useCallback(
+    (nextNodes: FlowNode[], nextEdges: FlowEdge[]) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+
+      for (const n of nextNodes) {
+        const s = nodeSizeForTitle(n.shape, n.title);
+        minX = Math.min(minX, n.x);
+        minY = Math.min(minY, n.y);
+        maxX = Math.max(maxX, n.x + s.w);
+        maxY = Math.max(maxY, n.y + s.h);
+      }
+      for (const e of nextEdges) {
+        const pts =
+          e.style === "polyline" || e.style === "bezier"
+            ? e.anchors && e.anchors.length
+              ? e.anchors
+              : e.anchor
+                ? [e.anchor]
+                : []
+            : [];
+        for (const p of pts) {
+          minX = Math.min(minX, p.x);
+          minY = Math.min(minY, p.y);
+          maxX = Math.max(maxX, p.x);
+          maxY = Math.max(maxY, p.y);
+        }
+      }
+
+      if (!Number.isFinite(minX)) return;
+      const contentW = maxX - minX;
+      const contentH = maxY - minY;
+      const fitX = (rect.width - 80) / Math.max(1, contentW);
+      const fitY = (rect.height - 80) / Math.max(1, contentH);
+      const fit = Math.max(0.2, Math.min(1, fitX, fitY));
+      const nextScale = fit >= 1 ? 1 : Math.max(0.2, fit);
+      const contentCenterX = minX + contentW / 2;
+      const contentCenterY = minY + contentH / 2;
+      const nextOffsetX = Math.round(rect.width / 2 - contentCenterX * nextScale);
+      const nextOffsetY = Math.round(rect.height / 2 - contentCenterY * nextScale);
+      setScale(nextScale);
+      setOffsetX(nextOffsetX);
+      setOffsetY(nextOffsetY);
+    },
+    [setOffsetX, setOffsetY, setScale]
+  );
 
   // Removed auto-open terminal effect since it is now embedded in RightPanel
 
@@ -469,25 +573,42 @@ const PythonLabStudio: React.FC<{
     clearBreakpoints();
     setWatchExprs([]);
     
-    if (experiment?.id === "seq_basic") {
-       loadDemoFlow("seq_basic");
-    } else if (typeof experiment?.starterCode === "string") {
-      setCodeMode("manual");
-      setCode(experiment.starterCode);
-    }
     setRevealLine(null);
-    setVariables([]);
-    setNodes([]);
-    setEdges([]);
-    setSelectedNodeId(null);
-    setSelectedEdgeId(null);
-    setConnectMode(false);
-    setConnectFromId(null);
-    setConnectFromPort(null);
+    setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
     setPanMode(false);
     setFollowMode(true);
     setNodeInspectorOpen(false);
     setTerminalOpen(false);
+
+    if (experiment?.id === "seq_basic") {
+      const demo = peekDemoFlow("seq_basic");
+      setCanvasBusy(true);
+      setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
+      void (async () => {
+        try {
+          const sorted = sortFlowGraphStable({ nodes: demo.nodes, edges: demo.edges });
+          const resp = await computeBeautify(sorted.nodes, sorted.edges, ruleSet.beautify.params, ruleSet.beautify.thresholds, {
+            snapToGrid: !ruleSet.beautify.alignMode,
+          });
+          setNodes(resp.layout.nodes);
+          setEdges(resp.layout.edges);
+          setSelectedNodeId(null);
+          setSelectedEdgeId(null);
+          setConnectFromId(null);
+          setConnectFromPort(null);
+          setVariables([]);
+          requestAnimationFrame(() => fitViewToCenter(resp.layout.nodes, resp.layout.edges));
+        } catch {
+          setFlowAuto({ nodes: demo.nodes, edges: demo.edges, resetSelection: true, resetConnect: true, resetVariables: true });
+          requestAnimationFrame(() => fitViewToCenter(demo.nodes, demo.edges));
+        } finally {
+          setCanvasBusy(false);
+        }
+      })();
+    } else if (typeof experiment?.starterCode === "string") {
+      setCodeMode("manual");
+      setCode(experiment.starterCode);
+    }
   }, [experiment?.id]);
 
 
@@ -555,7 +676,6 @@ const PythonLabStudio: React.FC<{
     const maxOffsetX = Math.round(margin - minX * scale);
     const minOffsetY = Math.round(rect.height - margin - maxY * scale);
     const maxOffsetY = Math.round(margin - minY * scale);
-    const clamp = (v: number, a: number, b: number) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
 
     let nextOffsetX = offsetX;
     let nextOffsetY = offsetY;
@@ -564,8 +684,8 @@ const PythonLabStudio: React.FC<{
     if (targetT < margin) nextOffsetY += margin - targetT;
     else if (targetB > rect.height - margin) nextOffsetY -= targetB - (rect.height - margin);
 
-    nextOffsetX = clamp(Math.round(nextOffsetX), minOffsetX, maxOffsetX);
-    nextOffsetY = clamp(Math.round(nextOffsetY), minOffsetY, maxOffsetY);
+    nextOffsetX = clampBetween(Math.round(nextOffsetX), minOffsetX, maxOffsetX);
+    nextOffsetY = clampBetween(Math.round(nextOffsetY), minOffsetY, maxOffsetY);
     if (nextOffsetX !== offsetX) setOffsetX(nextOffsetX);
     if (nextOffsetY !== offsetY) setOffsetY(nextOffsetY);
     setFollowTick((t) => t + 1);
@@ -585,11 +705,16 @@ const PythonLabStudio: React.FC<{
       panMode,
       nodes,
       edges,
-      setNodes,
-      setEdges,
+      setNodes: setNodesAuto,
+      setEdges: setEdgesAuto,
       canvasMetricsRef,
       edgeGeometryCacheRef,
+      onSemanticEdit: ensureAuto,
     });
+
+  useEffect(() => {
+    setInteractionFlag(interacting);
+  }, [interacting]);
 
   const { canvasMetrics, edgeGeometries } = useEdgeGeometries(nodes, edges, canvasRoutingStyle, interacting);
   useEffect(() => {
@@ -607,15 +732,19 @@ const PythonLabStudio: React.FC<{
     setOffsetY,
     nodes,
     edges,
-    setNodes,
-    setEdges,
+    setNodes: setNodesAuto,
+    setEdges: setEdgesAuto,
     codeMode,
+    onSemanticEdit: ensureAuto,
     generatedIr: generated.ir,
     codeIr,
     setSelectedNodeId,
     setSelectedEdgeId,
     setConnectFromId,
     setConnectFromPort,
+    beautifyParams: ruleSet.beautify.params,
+    beautifyThresholds: ruleSet.beautify.thresholds,
+    beautifyAlignMode: ruleSet.beautify.alignMode,
   });
 
   useEffect(() => {
@@ -644,37 +773,21 @@ const PythonLabStudio: React.FC<{
 
   const setSelectedEdgeStraight = () => {
     if (!selectedEdgeId) return;
-    if (codeMode !== "auto") setCodeMode("auto");
-    setEdges((prev) =>
-      prev.map((e) =>
-        e.id === selectedEdgeId ? { ...e, style: "straight", routeMode: "manual", anchor: null, anchors: undefined } : e
-      )
-    );
+    setEdgeStraight(selectedEdgeId);
   };
 
   const setSelectedEdgePolyline = () => {
     if (!selectedEdgeId) return;
-    if (codeMode !== "auto") setCodeMode("auto");
-    setEdges((prev) =>
-      prev.map((e) =>
-        e.id === selectedEdgeId
-          ? { ...e, style: "polyline", routeMode: "manual", anchors: e.anchors ?? (e.anchor ? [e.anchor] : []), anchor: null }
-          : e
-      )
-    );
+    setEdgePolyline(selectedEdgeId);
   };
 
   const clearSelectedEdgeAnchors = () => {
     if (!selectedEdgeId) return;
-    if (codeMode !== "auto") setCodeMode("auto");
-    setEdges((prev) =>
-      prev.map((e) => (e.id === selectedEdgeId ? { ...e, style: "polyline", routeMode: "manual", anchors: [], anchor: null } : e))
-    );
+    clearEdgeAnchors(selectedEdgeId);
   };
 
   const addSelectedEdgeAnchor = () => {
     if (!selectedEdgeId) return;
-    if (codeMode !== "auto") setCodeMode("auto");
     const geom = edgeGeometries.cache.get(selectedEdgeId);
     if (!geom) return;
     const p = pointAtT(geom.poly, 0.5);
@@ -698,46 +811,19 @@ const PythonLabStudio: React.FC<{
       ax = Math.max(minX, Math.min(maxX, ax));
       ay = Math.max(minY, Math.min(maxY, ay));
     }
-    setEdges((prev) =>
-      prev.map((e) => {
-        if (e.id !== selectedEdgeId) return e;
-        const list = (e.anchors && e.anchors.length ? e.anchors : e.anchor ? [e.anchor] : []).slice();
-        list.push({ x: ax, y: ay });
-        return { ...e, style: "polyline", routeMode: "manual", anchors: list, anchor: null };
-      })
-    );
+    addEdgeAnchor(selectedEdgeId, { x: ax, y: ay });
   };
 
   const reverseSelectedEdge = () => {
     if (!selectedEdgeId) return;
-    if (codeMode !== "auto") setCodeMode("auto");
-    setEdges((prev) =>
-      prev.map((e) =>
-        e.id === selectedEdgeId
-          ? {
-              ...e,
-              routeMode: "manual",
-              from: e.to,
-              to: e.from,
-              fromPort: e.toPort,
-              toPort: e.fromPort,
-              fromDir: e.toDir,
-              toDir: e.fromDir,
-              fromFree: e.toFree ?? null,
-              toFree: e.fromFree ?? null,
-              toEdge: undefined,
-              toEdgeT: undefined,
-            }
-          : e
-      )
-    );
+    reverseEdge(selectedEdgeId);
   };
 
   return (
     <div style={{ height: "calc(100vh - 130px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <Layout style={{ background: "transparent", height: "100%" }}>
         <Sider
-          width={220}
+          width={250}
           collapsedWidth={0}
           collapsible
           collapsed={leftCollapsed}
@@ -756,7 +842,9 @@ const PythonLabStudio: React.FC<{
               <Space>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>画布</span>
                 {experiment?.title ? <Tag color="blue">{experiment.title}</Tag> : <Tag color="blue">UI</Tag>}
-                {experiment?.scenario ? <Tag variant="filled">{experiment.scenario}</Tag> : null}
+                {experiment?.scenario && experiment.scenario !== experiment.title ? (
+                  <Tag variant="filled">{experiment.scenario}</Tag>
+                ) : null}
               </Space>
             }
             extra={
@@ -766,13 +854,41 @@ const PythonLabStudio: React.FC<{
                   toggleLeft={() => setLeftCollapsed((v) => !v)}
                   demoOptions={demoOptions}
                   onLoadDemo={(key) => {
-                    const meta = loadDemoFlow(key);
                     clearBreakpoints();
-                    if (meta?.codeMode) setCodeMode(meta.codeMode);
-                    if (typeof meta?.code === "string") setCode(meta.code);
-                    setDemoAutoArrangeToken((v) => v + 1);
+                    const demo = peekDemoFlow(key);
+                    setCanvasBusy(true);
+                    setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
+                    if (demo.codeMode === "manual") {
+                      setCodeMode("manual");
+                      if (typeof demo.code === "string") setCode(demo.code);
+                    } else {
+                      setCodeMode("auto");
+                    }
+                    void (async () => {
+                      try {
+                        const sorted = sortFlowGraphStable({ nodes: demo.nodes, edges: demo.edges });
+                        const resp = await computeBeautify(sorted.nodes, sorted.edges, ruleSet.beautify.params, ruleSet.beautify.thresholds, {
+                          snapToGrid: !ruleSet.beautify.alignMode,
+                        });
+                        setNodes(resp.layout.nodes);
+                        setEdges(resp.layout.edges);
+                        setSelectedNodeId(null);
+                        setSelectedEdgeId(null);
+                        setConnectFromId(null);
+                        setConnectFromPort(null);
+                        setVariables([]);
+                        requestAnimationFrame(() => fitViewToCenter(resp.layout.nodes, resp.layout.edges));
+                      } catch {
+                        setFlowAuto({ nodes: demo.nodes, edges: demo.edges, resetSelection: true, resetConnect: true, resetVariables: true });
+                        requestAnimationFrame(() => fitViewToCenter(demo.nodes, demo.edges));
+                      } finally {
+                        setCanvasBusy(false);
+                      }
+                    })();
                   }}
                   onArrange={arrangeLayout}
+                  autoLayout={autoLayout}
+                  onToggleAutoLayout={() => setAutoLayout((v) => !v)}
                   connectMode={connectMode}
                   onToggleConnect={toggleConnect}
                   panMode={panMode}
@@ -823,6 +939,23 @@ const PythonLabStudio: React.FC<{
                 }
               }}
             >
+              {canvasBusy && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(255,255,255,0.65)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 5,
+                    userSelect: "none",
+                    cursor: "wait",
+                  }}
+                >
+                  <span style={{ color: "rgba(0,0,0,0.55)" }}>布局计算中…</span>
+                </div>
+              )}
               <FlowEdgesSvg
                 canvasRef={canvasRef}
                 canvasMetrics={canvasMetrics}
@@ -839,7 +972,7 @@ const PythonLabStudio: React.FC<{
                 connectFromPort={connectFromPort}
                 setConnectFromId={setConnectFromId}
                 setConnectFromPort={setConnectFromPort}
-                setEdges={setEdges}
+                setEdges={setEdgesAuto}
                 nextId={nextId}
                 onSourcePointerDown={onSourcePointerDown}
                 onTargetPointerDown={onTargetPointerDown}
@@ -856,7 +989,7 @@ const PythonLabStudio: React.FC<{
                   onDelete={removeSelected}
                   onReverse={reverseSelectedEdge}
                   onSetLabel={(v) => {
-                    setEdges((prev) =>
+                    setEdgesAuto((prev) =>
                       prev.map((x) => {
                         if (x.id !== selectedEdge.id) return x;
                         const trimmed = v.trim();
@@ -895,7 +1028,8 @@ const PythonLabStudio: React.FC<{
                 selectedNodeId={selectedNodeId}
                 selectedEdgeId={selectedEdgeId}
                 selectedEdge={selectedEdge}
-                activeLine={runner.activeLine}
+                activeNodeId={runner.activeNodeId}
+                activeLine={runner.activeFlowLine ?? runner.activeLine}
                 activeFocusRole={runner.activeFocusRole}
                 followMode={followMode}
                 followTick={followTick}
@@ -921,6 +1055,8 @@ const PythonLabStudio: React.FC<{
             variableColumns={variableColumns}
             runner={runner}
             runnerError={runnerError}
+            structuredEmphasisLog={structuredEmphasisLog}
+            onToggleStructuredEmphasisLog={setStructuredEmphasisLog}
             flowDiagnostics={flowDiagnostics}
             flowExpandFunctions={flowExpandFunctions}
             setFlowExpandFunctions={setFlowExpandFunctions}
@@ -950,8 +1086,7 @@ const PythonLabStudio: React.FC<{
             tidyResult={tidyResult}
             onApplyTidy={() => {
               if (!tidyResult) return;
-              setNodes(tidyResult.tidy.nodes);
-              setEdges(tidyResult.tidy.edges);
+              setNodesAndEdgesAuto(tidyResult.tidy.nodes, tidyResult.tidy.edges);
               fitViewTo(tidyResult.tidy.nodes, tidyResult.tidy.edges);
             }}
             beautifyParams={ruleSet.beautify.params}
@@ -962,8 +1097,8 @@ const PythonLabStudio: React.FC<{
             onRefreshBeautify={() => setBeautifyRefreshToken((t) => t + 1)}
             onApplyBeautify={(mode) => {
               if (!beautifyResult) return;
-              setNodes(beautifyResult.layout.nodes);
-              if ((mode ?? "nodes") === "nodes_edges") setEdges(beautifyResult.layout.edges);
+              setNodesAuto(beautifyResult.layout.nodes);
+              if ((mode ?? "nodes") === "nodes_edges") setEdgesAuto(beautifyResult.layout.edges);
               fitViewTo(beautifyResult.layout.nodes, (mode ?? "nodes") === "nodes_edges" ? beautifyResult.layout.edges : edges);
             }}
             canvasRoutingStyle={canvasRoutingStyle}
@@ -993,9 +1128,7 @@ const PythonLabStudio: React.FC<{
                 size="small"
                 value={selectedNode.title}
                 onChange={(e) => {
-                  if (codeMode !== "auto") setCodeMode("auto");
-                  const v = e.target.value;
-                  setNodes((prev) => prev.map((x) => (x.id === selectedNode.id ? { ...x, title: v } : x)));
+                  updateNodeTitle(selectedNode.id, e.target.value);
                 }}
               />
             </div>

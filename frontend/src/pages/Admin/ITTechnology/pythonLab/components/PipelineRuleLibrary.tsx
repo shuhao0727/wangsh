@@ -18,9 +18,10 @@ import { createRecord, loadPipelineRecords, savePipelineRecords, type PythonLabP
 import { loadPythonLabExperiments } from "../storage";
 import { pythonlabFlowApi } from "../services/pythonlabDebugApi";
 import { cfgToFlow } from "../flow/cfg_to_flow";
-import { arrangeFlow } from "../flow/arrange";
+import { arrangeWithGraphviz } from "../flow/layout_graphviz";
 import { computeTidy } from "../flow/tidy";
-import { computeBeautify } from "../flow/beautify";
+import { computeBeautify, type FlowBeautifyResult } from "../flow/beautify";
+import { toErrorMessage } from "../errorMessage";
 
 const { Text } = Typography;
 
@@ -40,8 +41,8 @@ export function PipelineRuleLibrary(props: {
   experimentId: string;
   ruleSet: PythonLabRuleSetV1;
   setRuleSet: (next: PythonLabRuleSetV1) => void;
-  currentTidy?: any;
-  currentBeautify?: any;
+  currentTidy?: unknown;
+  currentBeautify?: unknown;
 }) {
   const { experimentId, ruleSet, setRuleSet, currentTidy, currentBeautify } = props;
   const auth = useAuth();
@@ -104,8 +105,8 @@ export function PipelineRuleLibrary(props: {
       saveByScope(normalized);
       setRuleSet(normalized);
       setJsonError(null);
-    } catch (e: any) {
-      setJsonError((e?.message && String(e.message)) || "JSON 解析失败");
+    } catch (e: unknown) {
+      setJsonError(toErrorMessage(e, "JSON 解析失败"));
     }
   };
 
@@ -122,8 +123,8 @@ export function PipelineRuleLibrary(props: {
       saveByScope(normalized);
       setRuleSet(normalized);
       setJsonError(null);
-    } catch (e: any) {
-      setJsonError((e?.message && String(e.message)) || "规则集应用失败");
+    } catch (e: unknown) {
+      setJsonError(toErrorMessage(e, "规则集应用失败"));
     }
   };
 
@@ -187,30 +188,30 @@ export function PipelineRuleLibrary(props: {
         setProgress({ total: exps.length, done: i, current: exp.title });
         try {
           const flow = await pythonlabFlowApi.parseFlow(exp.starterCode, { limits: { maxParseMs: 1500 } });
-          const cfg: any = { sourcePath: `/${exp.id}.py`, version: flow.parserVersion, nodes: flow.nodes, edges: flow.edges, diagnostics: flow.diagnostics || [], exitNodeIds: flow.exitNodeIds, exitEdges: flow.exitEdges, entryNodeId: flow.entryNodeId };
-          const raw = cfgToFlow(cfg as any);
-          const laid = await arrangeFlow(raw.nodes as any, raw.edges as any, { width: 1200, height: 800 });
+          const raw = cfgToFlow(flow);
+          const laid = await arrangeWithGraphviz(raw.nodes as any, raw.edges as any, { width: 1200, height: 800 });
           const tidy = computeTidy(laid.nodes as any, laid.edges as any, { enabled: ruleSet.tidy.enabled });
-          let beautify: any = null;
+          let beautify: FlowBeautifyResult | null = null;
           let beautifyError: string | null = null;
           try {
             beautify = await computeBeautify(tidy.tidy.nodes as any, tidy.tidy.edges as any, ruleSet.beautify.params, ruleSet.beautify.thresholds);
-          } catch (e: any) {
-            beautifyError = (e?.message && String(e.message)) || "Beautify 失败";
+          } catch (e: unknown) {
+            beautifyError = toErrorMessage(e, "Beautify 失败");
           }
           const rec = await createRecord({
             experimentId: exp.id,
             ruleSet,
             tidy: { raw: tidy.raw.stats, tidy: tidy.tidy.stats, log: tidy.log },
-            beautify: beautifyError ? { error: beautifyError } : { stats: beautify.stats, metrics: beautify.metrics },
+            beautify: beautifyError || !beautify ? { error: beautifyError || "Beautify 失败" } : { stats: beautify.stats, metrics: beautify.metrics },
           });
           produced.push(rec);
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const msg = toErrorMessage(e, "pipeline 失败");
           const rec = await createRecord({
             experimentId: exp.id,
             ruleSet,
-            tidy: { error: (e?.message && String(e.message)) || "pipeline 失败" },
-            beautify: { error: (e?.message && String(e.message)) || "pipeline 失败" },
+            tidy: { error: msg },
+            beautify: { error: msg },
           });
           produced.push(rec);
         }
@@ -438,6 +439,15 @@ export function PipelineRuleLibrary(props: {
                           beautify: { ...ruleSet.beautify, params: { ...ruleSet.beautify.params, pad: typeof v === "number" ? v : ruleSet.beautify.params.pad } },
                         })
                       }
+                    />
+                    <Text type="secondary">对齐模式</Text>
+                    <Switch
+                      disabled={!canEdit}
+                      checked={!!ruleSet.beautify.alignMode}
+                      onChange={(v) => {
+                        if (!canEdit) return;
+                        setRuleSet({ ...ruleSet, beautify: { ...ruleSet.beautify, alignMode: v } });
+                      }}
                     />
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
 import { allowedPortsForShape, fixedPortForStartEnd, nodePortLocal, nodeScale, nodeSizeForTitle, shapeColor, wrapNodeTitle } from "../flow/ports";
+import { matchesNodeLine } from "../flow/nodeLineMatch";
 
 export function FlowNodesLayer(props: {
   nodes: FlowNode[];
@@ -10,6 +11,7 @@ export function FlowNodesLayer(props: {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   selectedEdge: FlowEdge | null;
+  activeNodeId?: string | null;
   activeLine?: number | null;
   activeFocusRole?: string | null;
   followMode?: boolean;
@@ -29,6 +31,7 @@ export function FlowNodesLayer(props: {
     selectedNodeId,
     selectedEdgeId,
     selectedEdge,
+    activeNodeId,
     activeLine,
     activeFocusRole,
     followMode,
@@ -41,15 +44,22 @@ export function FlowNodesLayer(props: {
     onPortClick,
   } = props;
 
-  const matchesLine = (n: FlowNode, line: number) => {
-    const r = (n as any).sourceRange as { startLine: number; endLine: number } | undefined;
-    if (r && Number.isFinite(r.startLine) && Number.isFinite(r.endLine)) {
-      return line >= r.startLine && line <= r.endLine;
+  const canUseActiveNodeId = !!activeNodeId && nodes.some((n) => n.id === activeNodeId);
+
+  const defaultRoleForLine = (line: number): string | null => {
+    const roles = new Set<string>();
+    for (const n of nodes) {
+      if (!matchesNodeLine(n, line)) continue;
+      const r = (n as any).sourceRole;
+      if (typeof r === "string" && r.trim()) roles.add(r);
     }
-    return n.sourceLine === line;
+    const order = ["for_check", "for_inc", "for_init"];
+    for (const r of order) if (roles.has(r)) return r;
+    return null;
   };
 
-  const hasRoleTarget = !!activeLine && !!activeFocusRole && nodes.some((n) => matchesLine(n, activeLine) && n.sourceRole === activeFocusRole);
+  const effectiveFocusRole = activeLine && !activeFocusRole ? defaultRoleForLine(activeLine) : activeFocusRole ?? null;
+  const hasRoleTarget = !!activeLine && !!effectiveFocusRole && nodes.some((n) => matchesNodeLine(n, activeLine) && n.sourceRole === effectiveFocusRole);
 
   return (
     <div
@@ -78,11 +88,12 @@ export function FlowNodesLayer(props: {
       {nodes.map((n) => {
         if (n.shape === "connector" && !String(n.title || "").trim()) return null;
         const selected = n.id === selectedNodeId;
-        const active =
-          !!activeLine &&
-          matchesLine(n, activeLine) &&
-          (!hasRoleTarget || !activeFocusRole || n.sourceRole === activeFocusRole) &&
-          !selected;
+        const active = canUseActiveNodeId
+          ? !!activeNodeId && n.id === activeNodeId && !selected
+          : !!activeLine &&
+            matchesNodeLine(n, activeLine) &&
+            (!hasRoleTarget || !effectiveFocusRole || n.sourceRole === effectiveFocusRole) &&
+            !selected;
         const pulse = !!followMode && !!active && typeof followTick === "number";
         const size = nodeSizeForTitle(n.shape, n.title);
         const borderColor = selected ? "#1677ff" : active ? "#1677ff" : shapeColor(n.shape);

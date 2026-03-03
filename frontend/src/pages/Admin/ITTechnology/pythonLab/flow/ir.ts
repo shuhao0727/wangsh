@@ -173,7 +173,10 @@ const emitLinear = (nodes: FlowNode[], edges: FlowEdge[]): GeneratePythonResult 
   while (cur && !visited.has(cur)) {
     visited.add(cur);
     const n = nodeById.get(cur);
-    if (n && n.shape !== "start_end") lines.push(normalizeStmt(n.title));
+    if (n && n.shape !== "start_end") {
+      const t = String(n.title ?? "").trim();
+      if (!(n.shape === "connector" && t.length === 0)) lines.push(normalizeStmt(n.title));
+    }
     const outs: FlowEdge[] = edgesByFrom.get(cur) || [];
     if (!outs.length) break;
     const next: FlowEdge = outs.length === 1 ? outs[0] : outs.find(isYes) || outs[0];
@@ -219,7 +222,8 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
       }
 
       if (n.shape !== "decision") {
-        items.push({ kind: "stmt", text: normalizeStmt(n.title), nodeId: n.id });
+        const t = String(n.title ?? "").trim();
+        if (!(n.shape === "connector" && t.length === 0)) items.push({ kind: "stmt", text: normalizeStmt(n.title), nodeId: n.id });
         if (!outs.length) return { block: { kind: "block", items }, exit: null, ok: true };
         if (outs.length !== 1) return { block: { kind: "block", items }, exit: cur, ok: false };
         cur = outs[0].to;

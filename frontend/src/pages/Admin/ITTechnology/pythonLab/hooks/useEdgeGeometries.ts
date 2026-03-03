@@ -1,8 +1,8 @@
 import { useMemo, useRef } from "react";
 import type { FlowEdge, FlowNode } from "../flow/model";
 import type { FlowNodeShape } from "../types";
-import { chooseSide, fixedPortForStartEnd, nodePortLocal, nodeSize, shapePolygonForAttach } from "../flow/ports";
-import { catmullRomToBezierPath, type Direction, type Rect, cleanupOrthogonalPolyline, edgePolylinePoints, norm, pointAtT, polylineClear, polylineToPath, rayIntersectPolygon, routeOrthogonalLoopTemplate, routeOrthogonalVisioLike } from "../flow/geometry";
+import { chooseSide, fixedPortForStartEnd, nodePortLocal, nodeSizeForTitle, shapePolygonForAttach } from "../flow/ports";
+import { edgePointsToSmoothPath, type Direction, type Rect, cleanupOrthogonalPolyline, edgePolylinePoints, norm, pointAtT, polylineClear, polylineToPath, rayIntersectPolygon, routeOrthogonalLoopTemplate, routeOrthogonalVisioLike, smoothPointsToPolyline } from "../flow/geometry";
 import { routeWithPolicy } from "../flow/routingPolicy";
 
 export type CanvasMetric = { cx: number; cy: number; w: number; h: number; shape: FlowNodeShape };
@@ -12,7 +12,7 @@ export type EdgeGeometry =
       start: { x: number; y: number };
       end: { x: number; y: number };
       anchors: { x: number; y: number }[];
-      style: "straight" | "polyline";
+      style: "straight" | "polyline" | "bezier";
       poly: { x: number; y: number }[];
       hitPath: string;
       drawPath: string;
@@ -25,7 +25,7 @@ export function useCanvasMetrics(nodes: FlowNode[]) {
   return useMemo(() => {
     const map = new Map<string, CanvasMetric>();
     for (const n of nodes) {
-      const s = nodeSize(n.shape);
+      const s = nodeSizeForTitle(n.shape, n.title);
       map.set(n.id, { cx: n.x + s.w / 2, cy: n.y + s.h / 2, w: s.w, h: s.h, shape: n.shape });
     }
     return map;
@@ -35,6 +35,40 @@ export function useCanvasMetrics(nodes: FlowNode[]) {
 export function cheapAutoRoute(params: { start: { x: number; y: number }; end: { x: number; y: number }; startDir?: Direction; endDir?: Direction; routingStyle: "orthogonal" | "direct" }) {
   if (params.routingStyle === "direct") return [params.start, params.end];
   return edgePolylinePoints({ start: params.start, end: params.end, style: "polyline", anchors: [], sourceDir: params.startDir, targetDir: params.endDir });
+}
+
+export function shortenEndForArrow(poly: { x: number; y: number }[], amount: number, opts?: { preserveBezierTangent?: boolean }) {
+  if (poly.length < 2) return poly;
+  const out = poly.slice();
+  if (opts?.preserveBezierTangent && out.length >= 4 && (out.length - 1) % 3 === 0) {
+    const cp2Idx = out.length - 2;
+    const endIdx = out.length - 1;
+    const a = out[cp2Idx];
+    const b = out[endIdx];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len >= 1e-6) {
+      const retreat = Math.min(amount, Math.max(0, len - 2));
+      const rx = (dx / len) * retreat;
+      const ry = (dy / len) * retreat;
+      out[endIdx] = { x: b.x - rx, y: b.y - ry };
+      out[cp2Idx] = { x: a.x - rx, y: a.y - ry };
+      return out;
+    }
+  }
+  for (let i = out.length - 1; i >= 1; i--) {
+    const a = out[i - 1];
+    const b = out[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const retreat = Math.min(amount, Math.max(0, len - 2));
+    out[i] = { x: b.x - (dx / len) * retreat, y: b.y - (dy / len) * retreat };
+    break;
+  }
+  return out;
 }
 
 export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingStyle: "orthogonal" | "direct" = "orthogonal", interactive = false) {
@@ -64,22 +98,6 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
       const dx = p.x < r.minX ? r.minX - p.x : p.x > r.maxX ? p.x - r.maxX : 0;
       const dy = p.y < r.minY ? r.minY - p.y : p.y > r.maxY ? p.y - r.maxY : 0;
       return Math.hypot(dx, dy);
-    };
-    const shortenEndForArrow = (poly: { x: number; y: number }[], amount: number) => {
-      if (poly.length < 2) return poly;
-      const out = poly.slice();
-      for (let i = out.length - 1; i >= 1; i--) {
-        const a = out[i - 1];
-        const b = out[i];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const len = Math.hypot(dx, dy);
-        if (len < 1e-6) continue;
-        const retreat = Math.min(amount, Math.max(0, len - 2));
-        out[i] = { x: b.x - (dx / len) * retreat, y: b.y - (dy / len) * retreat };
-        break;
-      }
-      return out;
     };
     const bestLabelPos = (poly: { x: number; y: number }[], label: string, obstacles: Rect[]) => {
       const text = label.trim();
@@ -149,6 +167,27 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
     const nodePortAbs = (m: CanvasMetric, side: "top" | "right" | "bottom" | "left") => {
       const p = nodePortLocal(m.shape, m.w, m.h, side);
       return { x: m.cx + p.x, y: m.cy + p.y };
+    };
+
+    const nodeAttachAbs = (m: CanvasMetric, attach: { x: number; y: number }) => {
+      const ax = attach?.x;
+      const ay = attach?.y;
+      if (!Number.isFinite(ax) || !Number.isFinite(ay)) return null;
+      const isNorm = ax >= 0 && ax <= 1 && ay >= 0 && ay <= 1;
+      const lx = isNorm ? (Math.max(0, Math.min(1, ax)) - 0.5) * m.w : ax;
+      const ly = isNorm ? (Math.max(0, Math.min(1, ay)) - 0.5) * m.h : ay;
+      const d = norm(lx, ly);
+      if (Math.abs(d.ux) < 1e-6 && Math.abs(d.uy) < 1e-6) return null;
+      const poly = shapePolygonForAttach(m.shape, m.w, m.h);
+      const hit = rayIntersectPolygon({ x: d.ux, y: d.uy }, poly);
+      if (hit) return { x: m.cx + hit.x, y: m.cy + hit.y };
+      const hw = m.w / 2;
+      const hh = m.h / 2;
+      const side = chooseSide(lx, ly);
+      if (side === "left") return { x: m.cx - hw, y: m.cy + Math.max(-hh, Math.min(hh, ly)) };
+      if (side === "right") return { x: m.cx + hw, y: m.cy + Math.max(-hh, Math.min(hh, ly)) };
+      if (side === "top") return { x: m.cx + Math.max(-hw, Math.min(hw, lx)), y: m.cy - hh };
+      return { x: m.cx + Math.max(-hw, Math.min(hw, lx)), y: m.cy + hh };
     };
 
     const obstacleRectById = new Map<string, Rect>();
@@ -346,22 +385,38 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
 
       let start: { x: number; y: number };
       let startDir: Direction | undefined;
-      const fixedFrom = fromMeta.shape === "start_end" ? fixedPortForStartEnd(fromMeta.title) : null;
-      const resolvedFromPort = fixedFrom ?? e.fromPort ?? null;
-      if (resolvedFromPort) {
-        start = nodePortAbs(fromM, resolvedFromPort);
-        startDir = resolvedFromPort;
-      } else if (fromMeta.shape !== "decision" && fromMeta.shape !== "io") {
-        start = nodePortAbs(fromM, "bottom");
-        startDir = "bottom";
-      } else if (e.fromFree) {
+      if (e.fromFree) {
         start = e.fromFree;
-      } else if (e.fromDir && (Math.abs(e.fromDir.ux) > 1e-6 || Math.abs(e.fromDir.uy) > 1e-6)) {
-        const poly = shapePolygonForAttach(fromM.shape, fromM.w, fromM.h);
-        const hit = rayIntersectPolygon({ x: e.fromDir.ux, y: e.fromDir.uy }, poly);
-        if (hit) {
-          start = { x: fromM.cx + hit.x, y: fromM.cy + hit.y };
-          startDir = Math.abs(e.fromDir.ux) >= Math.abs(e.fromDir.uy) ? (e.fromDir.ux > 0 ? "right" : "left") : e.fromDir.uy > 0 ? "bottom" : "top";
+        startDir = undefined;
+      } else if (e.fromAttach) {
+        const p = nodeAttachAbs(fromM, e.fromAttach);
+        start = p ?? nodePortAbs(fromM, "bottom");
+        startDir = p ? chooseSide(p.x - fromM.cx, p.y - fromM.cy) : "bottom";
+      } else {
+        const fixedFrom = fromMeta.shape === "start_end" ? fixedPortForStartEnd(fromMeta.title) : null;
+        const resolvedFromPort = fixedFrom ?? e.fromPort ?? null;
+        if (resolvedFromPort) {
+          start = nodePortAbs(fromM, resolvedFromPort);
+          startDir = resolvedFromPort;
+        } else if (fromMeta.shape !== "decision" && fromMeta.shape !== "io") {
+          start = nodePortAbs(fromM, "bottom");
+          startDir = "bottom";
+        } else if (e.fromDir && (Math.abs(e.fromDir.ux) > 1e-6 || Math.abs(e.fromDir.uy) > 1e-6)) {
+          const poly = shapePolygonForAttach(fromM.shape, fromM.w, fromM.h);
+          const hit = rayIntersectPolygon({ x: e.fromDir.ux, y: e.fromDir.uy }, poly);
+          if (hit) {
+            start = { x: fromM.cx + hit.x, y: fromM.cy + hit.y };
+            startDir = Math.abs(e.fromDir.ux) >= Math.abs(e.fromDir.uy) ? (e.fromDir.ux > 0 ? "right" : "left") : e.fromDir.uy > 0 ? "bottom" : "top";
+          } else {
+            const fromSide =
+              fromM.shape === "decision" && e.label === "是"
+                ? "bottom"
+                : fromM.shape === "decision" && e.label === "否"
+                  ? "right"
+                  : chooseSide(fallbackTarget.x - fromM.cx, fallbackTarget.y - fromM.cy);
+            start = nodePortAbs(fromM, fromSide);
+            startDir = fromSide;
+          }
         } else {
           const fromSide =
             fromM.shape === "decision" && e.label === "是"
@@ -372,53 +427,53 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
           start = nodePortAbs(fromM, fromSide);
           startDir = fromSide;
         }
-      } else {
-        const fromSide =
-          fromM.shape === "decision" && e.label === "是"
-            ? "bottom"
-            : fromM.shape === "decision" && e.label === "否"
-              ? "right"
-              : chooseSide(fallbackTarget.x - fromM.cx, fallbackTarget.y - fromM.cy);
-        start = nodePortAbs(fromM, fromSide);
-        startDir = fromSide;
       }
 
       let end: { x: number; y: number };
       let endDir: Direction | undefined;
       if (e.toFree) {
         end = e.toFree;
+        endDir = undefined;
       } else if (targetPoint) {
         end = targetPoint;
+        endDir = undefined;
       } else if (toM) {
-        const fixedTo = toMeta?.shape === "start_end" ? fixedPortForStartEnd(toMeta.title) : null;
-        const resolvedToPort = fixedTo ?? e.toPort ?? null;
-        if (resolvedToPort) {
-          end = nodePortAbs(toM, resolvedToPort);
-          endDir = resolvedToPort;
-        } else if (toMeta?.shape === "decision") {
-          end = nodePortAbs(toM, "top");
-          endDir = "top";
-        } else if (toMeta && toMeta.shape !== "io") {
-          end = nodePortAbs(toM, "top");
-          endDir = "top";
-        } else if (e.toDir && (Math.abs(e.toDir.ux) > 1e-6 || Math.abs(e.toDir.uy) > 1e-6)) {
-          const poly = shapePolygonForAttach(toM.shape, toM.w, toM.h);
-          const hit = rayIntersectPolygon({ x: e.toDir.ux, y: e.toDir.uy }, poly);
-          if (hit) {
-            end = { x: toM.cx + hit.x, y: toM.cy + hit.y };
-            endDir = Math.abs(e.toDir.ux) >= Math.abs(e.toDir.uy) ? (e.toDir.ux > 0 ? "right" : "left") : e.toDir.uy > 0 ? "bottom" : "top";
+        if (e.toAttach) {
+          const p = nodeAttachAbs(toM, e.toAttach);
+          end = p ?? nodePortAbs(toM, "top");
+          endDir = p ? chooseSide(p.x - toM.cx, p.y - toM.cy) : "top";
+        } else {
+          const fixedTo = toMeta?.shape === "start_end" ? fixedPortForStartEnd(toMeta.title) : null;
+          const resolvedToPort = fixedTo ?? e.toPort ?? null;
+          if (resolvedToPort) {
+            end = nodePortAbs(toM, resolvedToPort);
+            endDir = resolvedToPort;
+          } else if (toMeta?.shape === "decision") {
+            end = nodePortAbs(toM, "top");
+            endDir = "top";
+          } else if (toMeta && toMeta.shape !== "io") {
+            end = nodePortAbs(toM, "top");
+            endDir = "top";
+          } else if (e.toDir && (Math.abs(e.toDir.ux) > 1e-6 || Math.abs(e.toDir.uy) > 1e-6)) {
+            const poly = shapePolygonForAttach(toM.shape, toM.w, toM.h);
+            const hit = rayIntersectPolygon({ x: e.toDir.ux, y: e.toDir.uy }, poly);
+            if (hit) {
+              end = { x: toM.cx + hit.x, y: toM.cy + hit.y };
+              endDir = Math.abs(e.toDir.ux) >= Math.abs(e.toDir.uy) ? (e.toDir.ux > 0 ? "right" : "left") : e.toDir.uy > 0 ? "bottom" : "top";
+            } else {
+              const toSide = chooseSide(fromM.cx - toM.cx, fromM.cy - toM.cy);
+              end = nodePortAbs(toM, toSide);
+              endDir = toSide;
+            }
           } else {
             const toSide = chooseSide(fromM.cx - toM.cx, fromM.cy - toM.cy);
             end = nodePortAbs(toM, toSide);
             endDir = toSide;
           }
-        } else {
-          const toSide = chooseSide(fromM.cx - toM.cx, fromM.cy - toM.cy);
-          end = nodePortAbs(toM, toSide);
-          endDir = toSide;
         }
       } else {
         end = { x: start.x, y: start.y };
+        endDir = undefined;
       }
 
       const label = (e.label ?? "").trim().toLowerCase();
@@ -436,105 +491,66 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
         return Math.max(18, Math.min(120, Math.max(baseFrom, baseTo, minExit, Math.round(minSeg * 0.85))));
       })();
 
-      const anchors = e.style === "polyline" ? (e.anchors && e.anchors.length ? e.anchors : e.anchor ? [e.anchor] : []) : [];
+      const anchors = e.style === "polyline" || e.style === "bezier" ? (e.anchors && e.anchors.length ? e.anchors : e.anchor ? [e.anchor] : []) : [];
       const isManual = e.routeMode === "manual";
       const isFreeManual = isManual && e.style === "polyline" && anchors.length > 0 && e.routeShape === "free";
-
-      if (qualityMode === "interactive" && !isManual && !e.toEdge) {
-        const poly = cheapAutoRoute({ start, end, startDir, endDir, routingStyle });
-        const polyWithArrow = shortenEndForArrow(poly, 3);
-        const hitPath = polylineToPath(polyWithArrow);
-        const drawPath =
-          e.style === "polyline" && polyWithArrow.length >= 3 && e.routeShape === "free"
-            ? catmullRomToBezierPath(polyWithArrow)
-            : hitPath;
-        const key =
-          `${qualityMode}|${routingStyle}|${e.id}|${e.style}|${e.routeMode || ""}|${e.routeShape || ""}|` +
-          `${e.from}|${e.to}|${fromMeta.shape}|${fromMeta.title}|${toMeta?.shape || ""}|${toMeta?.title || ""}|` +
-          `${q1(start.x)}|${q1(start.y)}|${startDir || ""}|${q1(end.x)}|${q1(end.y)}|${endDir || ""}|` +
-          `${q1(corridorX)}|${q1(loopTrackY ?? -1)}|${q1(stub)}|${q1(minSeg)}|` +
-          `${q1(bundleOffsetFromByEdgeId.get(edgeId) ?? 0)}|${q1(bundleOffsetToByEdgeId.get(edgeId) ?? 0)}|` +
-          `0|${label}`;
-        const prevKey = keyById.get(edgeId);
-        if (prevKey === key && cache.has(edgeId)) return cache.get(edgeId) ?? null;
-        const geom: EdgeGeometry = { start, end, anchors: [], style: e.style, poly, hitPath, drawPath, label: e.label, labelPos: undefined };
-        cache.set(edgeId, geom);
-        keyById.set(edgeId, key);
-        return geom;
-      }
+      const isBezier = e.style === "bezier" && anchors.length > 0;
 
       const obstacles: Rect[] = [];
-      let obstaclesHash = 2166136261 >>> 0;
-      const pushObstacle = (tag: string, r: Rect) => {
+      let obstaclesHash = 0;
+
+      const addTargetObstacleExceptEntry = (out: Rect[], r: Rect, entryDir: Direction, entryPt: { x: number; y: number }, offset: number) => {
+        const push = (rr: Rect) => {
+          if (!Number.isFinite(rr.minX) || !Number.isFinite(rr.minY) || !Number.isFinite(rr.maxX) || !Number.isFinite(rr.maxY)) return;
+          if (rr.maxX - rr.minX < 1 || rr.maxY - rr.minY < 1) return;
+          out.push(rr);
+          obstaclesHash = hashRect(obstaclesHash, "t", rr);
+        };
+        const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+        const gapHalf = 18;
+        const gapDepth = 28;
+        const pt =
+          entryDir === "top" || entryDir === "bottom"
+            ? { x: entryPt.x + offset, y: entryPt.y }
+            : { x: entryPt.x, y: entryPt.y + offset };
+
+        if (entryDir === "top") {
+          const x1 = clamp(pt.x - gapHalf, r.minX, r.maxX);
+          const x2 = clamp(pt.x + gapHalf, r.minX, r.maxX);
+          push({ minX: r.minX, minY: r.minY, maxX: x1, maxY: r.maxY });
+          push({ minX: x2, minY: r.minY, maxX: r.maxX, maxY: r.maxY });
+          push({ minX: x1, minY: clamp(pt.y + gapDepth, r.minY, r.maxY), maxX: x2, maxY: r.maxY });
+          return;
+        }
+        if (entryDir === "bottom") {
+          const x1 = clamp(pt.x - gapHalf, r.minX, r.maxX);
+          const x2 = clamp(pt.x + gapHalf, r.minX, r.maxX);
+          push({ minX: r.minX, minY: r.minY, maxX: x1, maxY: r.maxY });
+          push({ minX: x2, minY: r.minY, maxX: r.maxX, maxY: r.maxY });
+          push({ minX: x1, minY: r.minY, maxX: x2, maxY: clamp(pt.y - gapDepth, r.minY, r.maxY) });
+          return;
+        }
+        if (entryDir === "left") {
+          const y1 = clamp(pt.y - gapHalf, r.minY, r.maxY);
+          const y2 = clamp(pt.y + gapHalf, r.minY, r.maxY);
+          push({ minX: r.minX, minY: r.minY, maxX: r.maxX, maxY: y1 });
+          push({ minX: r.minX, minY: y2, maxX: r.maxX, maxY: r.maxY });
+          push({ minX: clamp(pt.x + gapDepth, r.minX, r.maxX), minY: y1, maxX: r.maxX, maxY: y2 });
+          return;
+        }
+        const y1 = clamp(pt.y - gapHalf, r.minY, r.maxY);
+        const y2 = clamp(pt.y + gapHalf, r.minY, r.maxY);
+        push({ minX: r.minX, minY: r.minY, maxX: r.maxX, maxY: y1 });
+        push({ minX: r.minX, minY: y2, maxX: r.maxX, maxY: r.maxY });
+        push({ minX: r.minX, minY: y1, maxX: clamp(pt.x - gapDepth, r.minX, r.maxX), maxY: y2 });
+      };
+
+      obstacleRectById.forEach((r, id) => {
+        if (id === e.from || id === e.to) return;
         obstacles.push(r);
-        obstaclesHash = hashRect(obstaclesHash, tag, r);
-      };
+        obstaclesHash = hashRect(obstaclesHash, id, r);
+      });
 
-      const addTargetObstacleExceptEntry = (rect: Rect, dir: Direction, entry: { x: number; y: number }, offset: number) => {
-        const grid = 10;
-        const snap = (v: number) => Math.round(v / grid) * grid;
-        const w = rect.maxX - rect.minX;
-        const h = rect.maxY - rect.minY;
-        const base = Math.max(20, Math.round(Math.min(w, h) * 0.22));
-        const depth = snap(Math.max(base + 18, Math.min(Math.max(34, base + 28), Math.min(w, h) * 0.6)));
-        const notch = snap(Math.max(50, Math.min(Math.max(70, base * 3), Math.min(w, h) * 0.9)) + Math.abs(offset) * 2);
-        const half = notch / 2;
-
-        if (dir === "top") {
-          const stripY = Math.min(rect.maxY, rect.minY + depth);
-          const gapL = entry.x - half;
-          const gapR = entry.x + half;
-          pushObstacle("to:strip", { minX: rect.minX, minY: stripY, maxX: rect.maxX, maxY: rect.maxY });
-          if (gapL > rect.minX + 4) pushObstacle("to:gapL", { minX: rect.minX, minY: rect.minY, maxX: Math.min(rect.maxX, gapL), maxY: stripY });
-          if (gapR < rect.maxX - 4) pushObstacle("to:gapR", { minX: Math.max(rect.minX, gapR), minY: rect.minY, maxX: rect.maxX, maxY: stripY });
-          return;
-        }
-        if (dir === "bottom") {
-          const stripY = Math.max(rect.minY, rect.maxY - depth);
-          const gapL = entry.x - half;
-          const gapR = entry.x + half;
-          pushObstacle("to:strip", { minX: rect.minX, minY: rect.minY, maxX: rect.maxX, maxY: stripY });
-          if (gapL > rect.minX + 4) pushObstacle("to:gapL", { minX: rect.minX, minY: stripY, maxX: Math.min(rect.maxX, gapL), maxY: rect.maxY });
-          if (gapR < rect.maxX - 4) pushObstacle("to:gapR", { minX: Math.max(rect.minX, gapR), minY: stripY, maxX: rect.maxX, maxY: rect.maxY });
-          return;
-        }
-        if (dir === "left") {
-          const stripX = Math.min(rect.maxX, rect.minX + depth);
-          const gapT = entry.y - half;
-          const gapB = entry.y + half;
-          pushObstacle("to:strip", { minX: stripX, minY: rect.minY, maxX: rect.maxX, maxY: rect.maxY });
-          if (gapT > rect.minY + 4) pushObstacle("to:gapT", { minX: rect.minX, minY: rect.minY, maxX: stripX, maxY: Math.min(rect.maxY, gapT) });
-          if (gapB < rect.maxY - 4) pushObstacle("to:gapB", { minX: rect.minX, minY: Math.max(rect.minY, gapB), maxX: stripX, maxY: rect.maxY });
-          return;
-        }
-        const stripX = Math.max(rect.minX, rect.maxX - depth);
-        const gapT = entry.y - half;
-        const gapB = entry.y + half;
-        pushObstacle("to:strip", { minX: rect.minX, minY: rect.minY, maxX: stripX, maxY: rect.maxY });
-        if (gapT > rect.minY + 4) pushObstacle("to:gapT", { minX: stripX, minY: rect.minY, maxX: rect.maxX, maxY: Math.min(rect.maxY, gapT) });
-        if (gapB < rect.maxY - 4) pushObstacle("to:gapB", { minX: stripX, minY: Math.max(rect.minY, gapB), maxX: rect.maxX, maxY: rect.maxY });
-      };
-
-      const targetOffset = bundleOffsetToByEdgeId.get(edgeId) ?? 0;
-      const focusPad = 260;
-      const focus: Rect = {
-        minX: Math.min(start.x, end.x, corridorX) - focusPad,
-        maxX: Math.max(start.x, end.x, corridorX) + focusPad,
-        minY: Math.min(start.y, end.y, loopTrackY ?? start.y) - focusPad,
-        maxY: Math.max(start.y, end.y, loopTrackY ?? end.y) + focusPad,
-      };
-      const focusLoose = expandRect(focus, Math.max(140, Math.min(360, Math.round(Math.max(maxNodeW, maxNodeH) * 1.2))));
-      for (let i = 0; i < obstacleRects.length; i++) {
-        const id = obstacleRects[i].id;
-        const r = obstacleRects[i].rect;
-        if (id === e.from) continue;
-        if (!rectIntersects(r, focusLoose)) continue;
-        if (!e.toEdge && id === e.to && endDir && toM) {
-          addTargetObstacleExceptEntry(r, endDir, end, targetOffset);
-          continue;
-        }
-        pushObstacle(id, r);
-      }
 
       const key =
         `${qualityMode}|${routingStyle}|${e.id}|${e.style}|${e.routeMode || ""}|${e.routeShape || ""}|` +
@@ -548,231 +564,276 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
       const prevKey = keyById.get(edgeId);
       if (prevKey === key && cache.has(edgeId)) return cache.get(edgeId) ?? null;
 
-      const orthogonalizeWaypoints = (pts: { x: number; y: number }[]) => {
-        const out: { x: number; y: number }[] = [];
-        const push = (p: { x: number; y: number }) => {
-          const last = out[out.length - 1];
-          if (last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6) return;
-          out.push(p);
-        };
-        for (let i = 0; i < pts.length; i++) {
-          if (i === 0) {
-            push(pts[i]);
-            continue;
-          }
-          const a = out[out.length - 1];
-          const b = pts[i];
-          if (Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6) {
-            push(b);
-            continue;
-          }
-          const c1 = [{ x: a.x, y: b.y }, b];
-          const c2 = [{ x: b.x, y: a.y }, b];
-          const p1 = cleanupOrthogonalPolyline({ points: [a, c1[0], c1[1]], obstacles, grid: 10, minSeg: 0 });
-          const p2 = cleanupOrthogonalPolyline({ points: [a, c2[0], c2[1]], obstacles, grid: 10, minSeg: 0 });
-          const ok1 = polylineClear(p1, obstacles);
-          const ok2 = polylineClear(p2, obstacles);
-          const len = (p: { x: number; y: number }[]) => {
-            let s = 0;
-            for (let k = 1; k < p.length; k++) s += Math.hypot(p[k].x - p[k - 1].x, p[k].y - p[k - 1].y);
-            return s;
-          };
-          const pick = ok1 && ok2 ? (len(p1) <= len(p2) ? c1 : c2) : ok1 ? c1 : c2;
-          push(pick[0]);
-          push(pick[1]);
-        }
-        return out;
-      };
+      let poly: { x: number; y: number }[] = [];
+      let smoothInput: "bezier" | "polyline" | null = null;
 
-      const rawPoly =
-        e.style === "polyline" && anchors.length > 0 && isManual
-          ? isFreeManual
-            ? [start, ...anchors, end]
-            : orthogonalizeWaypoints([start, ...anchors, end])
-          : routingStyle === "direct" && !isManual && e.style === "straight" && !e.toEdge
-            ? [start, end]
-          : loopTrackY !== undefined
-            ? routeOrthogonalLoopTemplate({
+      if (isBezier) {
+        const pts = anchors.slice();
+        if (pts.length >= 2) {
+          const first = pts[0];
+          const last = pts[pts.length - 1];
+          const dsx = start.x - first.x;
+          const dsy = start.y - first.y;
+          const dex = end.x - last.x;
+          const dey = end.y - last.y;
+          const tol = 40;
+          const nearStart = Math.hypot(dsx, dsy) <= tol;
+          const nearEnd = Math.hypot(dex, dey) <= tol;
+
+          if (nearStart) {
+            pts[0] = start;
+            if (pts.length >= 2) pts[1] = { x: pts[1].x + dsx, y: pts[1].y + dsy };
+          } else {
+            pts.unshift(start);
+          }
+
+          if (nearEnd) {
+            const li = pts.length - 1;
+            pts[li] = end;
+            if (li - 1 >= 0) pts[li - 1] = { x: pts[li - 1].x + dex, y: pts[li - 1].y + dey };
+          } else {
+            pts.push(end);
+          }
+        }
+        poly = pts.length ? pts : [start, end];
+        smoothInput = "bezier";
+      } else {
+          const orthogonalizeWaypoints = (pts: { x: number; y: number }[]) => {
+            const out: { x: number; y: number }[] = [];
+            const push = (p: { x: number; y: number }) => {
+              const last = out[out.length - 1];
+              if (last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6) return;
+              out.push(p);
+            };
+            for (let i = 0; i < pts.length; i++) {
+              if (i === 0) {
+                push(pts[i]);
+                continue;
+              }
+              const a = out[out.length - 1];
+              const b = pts[i];
+              if (Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6) {
+                push(b);
+                continue;
+              }
+              const c1 = [{ x: a.x, y: b.y }, b];
+              const c2 = [{ x: b.x, y: a.y }, b];
+              const p1 = cleanupOrthogonalPolyline({ points: [a, c1[0], c1[1]], obstacles, grid: 10, minSeg: 0 });
+              const p2 = cleanupOrthogonalPolyline({ points: [a, c2[0], c2[1]], obstacles, grid: 10, minSeg: 0 });
+              const ok1 = polylineClear(p1, obstacles);
+              const ok2 = polylineClear(p2, obstacles);
+              const len = (p: { x: number; y: number }[]) => {
+                let s = 0;
+                for (let k = 1; k < p.length; k++) s += Math.hypot(p[k].x - p[k - 1].x, p[k].y - p[k - 1].y);
+                return s;
+              };
+              const pick = ok1 && ok2 ? (len(p1) <= len(p2) ? c1 : c2) : ok1 ? c1 : c2;
+              push(pick[0]);
+              push(pick[1]);
+            }
+            return out;
+          };
+
+          const isGraphvizLayoutEdge = !isManual && !e.toEdge && (!!e.fromAttach || !!e.toAttach || !!e.labelPosition);
+          const isInteractiveLite = interactive && !isGraphvizLayoutEdge && !isManual && !e.toEdge;
+          const rawPoly =
+            e.style === "polyline" && anchors.length > 0 && isManual
+              ? isFreeManual
+                ? [start, ...anchors, end]
+                : orthogonalizeWaypoints([start, ...anchors, end])
+              : isGraphvizLayoutEdge && e.style === "straight"
+                ? [start, end]
+              : isGraphvizLayoutEdge && e.style === "polyline" && anchors.length > 0
+                ? [start, ...anchors, end]
+              : isInteractiveLite
+                ? cheapAutoRoute({ start, end, startDir, endDir, routingStyle })
+              : routingStyle === "direct" && !isManual && e.style === "straight" && !e.toEdge
+                ? [start, end]
+              : loopTrackY !== undefined
+                ? routeOrthogonalLoopTemplate({
+                    start,
+                    end,
+                    sourceDir: startDir,
+                    targetDir: endDir,
+                    corridorX,
+                    trackY: loopTrackY,
+                    sourceOffset: bundleOffsetFromByEdgeId.get(edgeId) ?? 0,
+                    targetOffset: bundleOffsetToByEdgeId.get(edgeId) ?? 0,
+                    stub,
+                    grid: 10,
+                  })
+                : routeWithPolicy({
+                    start,
+                    end,
+                    startDir,
+                    endDir,
+                    obstacles,
+                    corridorX,
+                    sourceOffset: bundleOffsetFromByEdgeId.get(edgeId) ?? 0,
+                    targetOffset: bundleOffsetToByEdgeId.get(edgeId) ?? 0,
+                    stub,
+                    grid: 10,
+                    minSeg,
+                    fanIn: (() => {
+                      if (isManual) return undefined;
+                      if (e.toEdge) return undefined;
+                      if (!toM) return undefined;
+                      if (!endDir || endDir !== "top") return undefined;
+                      if (!startDir || startDir !== "bottom") return undefined;
+                      if (loopTrackY !== undefined) return undefined;
+                      const incomings = incomingByTo.get(e.to) || [];
+                      if (incomings.length < 2) return undefined;
+    
+                      const stubFor = (fm: CanvasMetric) => {
+                        const fromPad = Math.max(10, Math.min(28, Math.round(Math.min(fm.w, fm.h) * 0.35)));
+                        const toPad = Math.max(10, Math.min(28, Math.round(Math.min(toM.w, toM.h) * 0.35)));
+                        const baseFrom = Math.round(Math.min(fm.w, fm.h) * 0.6);
+                        const baseTo = Math.round(Math.min(toM.w, toM.h) * 0.6);
+                        const minExit = Math.max(fromPad, toPad) + 20;
+                        return Math.max(18, Math.min(120, Math.max(baseFrom, baseTo, minExit, Math.round(minSeg * 0.85))));
+                      };
+    
+                      const buildObstaclesForIncoming = (fromId: string) => {
+                        const obs: Rect[] = [];
+                        const targetOffset = bundleOffsetToByEdgeId.get(edgeId) ?? 0;
+                        obstacleRectById.forEach((r, id) => {
+                          if (id === fromId) return;
+                          if (id === e.to) {
+                            addTargetObstacleExceptEntry(obs, r, endDir, end, targetOffset);
+                            return;
+                          }
+                          obs.push(r);
+                        });
+                        return obs;
+                      };
+    
+                      const incomingInfo: { start: { x: number; y: number }; stub: number; obstacles: Rect[] }[] = [];
+                      for (const ie of incomings) {
+                        if (ie.toEdge) return undefined;
+                        const fm = canvasMetrics.get(ie.from);
+                        if (!fm) return undefined;
+                        const meta = nodeMeta.get(ie.from) || { shape: fm.shape, title: "" };
+                        const fixed = meta.shape === "start_end" ? fixedPortForStartEnd(meta.title) : null;
+                        const fromPort = fixed ?? ie.fromPort ?? null;
+                        if (fromPort !== "bottom") return undefined;
+                        incomingInfo.push({ start: nodePortAbs(fm, "bottom"), stub: stubFor(fm), obstacles: buildObstaclesForIncoming(ie.from) });
+                      }
+                      return { incomings: incomingInfo };
+                    })(),
+                  });
+    
+          poly = isGraphvizLayoutEdge || isInteractiveLite || isFreeManual ? rawPoly : cleanupOrthogonalPolyline({ points: rawPoly, obstacles, grid: 10, minSeg });
+          if (!isGraphvizLayoutEdge && !isInteractiveLite && !isFreeManual) {
+            if (!polylineClear(poly, obstacles)) {
+              const fallback = routeOrthogonalVisioLike({
                 start,
                 end,
                 sourceDir: startDir,
                 targetDir: endDir,
-                corridorX,
-                trackY: loopTrackY,
-                sourceOffset: bundleOffsetFromByEdgeId.get(edgeId) ?? 0,
-                targetOffset: bundleOffsetToByEdgeId.get(edgeId) ?? 0,
-                stub,
-                grid: 10,
-              })
-            : routeWithPolicy({
-                start,
-                end,
-                startDir,
-                endDir,
                 obstacles,
                 corridorX,
-                sourceOffset: bundleOffsetFromByEdgeId.get(edgeId) ?? 0,
-                targetOffset: bundleOffsetToByEdgeId.get(edgeId) ?? 0,
                 stub,
                 grid: 10,
                 minSeg,
-                fanIn: (() => {
-                  if (isManual) return undefined;
-                  if (e.toEdge) return undefined;
-                  if (!toM) return undefined;
-                  if (!endDir || endDir !== "top") return undefined;
-                  if (!startDir || startDir !== "bottom") return undefined;
-                  if (loopTrackY !== undefined) return undefined;
-                  const incomings = incomingByTo.get(e.to) || [];
-                  if (incomings.length < 2) return undefined;
-
-                  const stubFor = (fm: CanvasMetric) => {
-                    const fromPad = Math.max(10, Math.min(28, Math.round(Math.min(fm.w, fm.h) * 0.35)));
-                    const toPad = Math.max(10, Math.min(28, Math.round(Math.min(toM.w, toM.h) * 0.35)));
-                    const baseFrom = Math.round(Math.min(fm.w, fm.h) * 0.6);
-                    const baseTo = Math.round(Math.min(toM.w, toM.h) * 0.6);
-                    const minExit = Math.max(fromPad, toPad) + 20;
-                    return Math.max(18, Math.min(120, Math.max(baseFrom, baseTo, minExit, Math.round(minSeg * 0.85))));
-                  };
-
-                  const buildObstaclesForIncoming = (fromId: string) => {
-                    const obs: Rect[] = [];
-                    const targetOffset = bundleOffsetToByEdgeId.get(edgeId) ?? 0;
-                    obstacleRectById.forEach((r, id) => {
-                      if (id === fromId) return;
-                      if (id === e.to) {
-                        addTargetObstacleExceptEntry(r, endDir, end, targetOffset);
-                        return;
-                      }
-                      obs.push(r);
-                    });
-                    return obs;
-                  };
-
-                  const incomingInfo: { start: { x: number; y: number }; stub: number; obstacles: Rect[] }[] = [];
-                  for (const ie of incomings) {
-                    if (ie.toEdge) return undefined;
-                    const fm = canvasMetrics.get(ie.from);
-                    if (!fm) return undefined;
-                    const meta = nodeMeta.get(ie.from) || { shape: fm.shape, title: "" };
-                    const fixed = meta.shape === "start_end" ? fixedPortForStartEnd(meta.title) : null;
-                    const fromPort = fixed ?? ie.fromPort ?? null;
-                    if (fromPort !== "bottom") return undefined;
-                    incomingInfo.push({ start: nodePortAbs(fm, "bottom"), stub: stubFor(fm), obstacles: buildObstaclesForIncoming(ie.from) });
-                  }
-                  return { incomings: incomingInfo };
-                })(),
               });
-
-      let poly = isFreeManual ? rawPoly : cleanupOrthogonalPolyline({ points: rawPoly, obstacles, grid: 10, minSeg });
-      if (!isFreeManual) {
-        if (!polylineClear(poly, obstacles)) {
-          const fallback = routeOrthogonalVisioLike({
-            start,
-            end,
-            sourceDir: startDir,
-            targetDir: endDir,
-            obstacles,
-            corridorX,
-            stub,
-            grid: 10,
-            minSeg,
-          });
-          poly = cleanupOrthogonalPolyline({ points: fallback, obstacles, grid: 10, minSeg });
-        }
+              poly = cleanupOrthogonalPolyline({ points: fallback, obstacles, grid: 10, minSeg });
+            }
+          }
+    
+          if (!isGraphvizLayoutEdge && !isInteractiveLite && !isFreeManual && poly.length >= 2) {
+            const next = poly.slice();
+            const dedup = (pts: { x: number; y: number }[]) => {
+              const out: { x: number; y: number }[] = [];
+              for (const p of pts) {
+                const last = out[out.length - 1];
+                if (last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6) continue;
+                out.push(p);
+              }
+              if (out.length <= 2) return out;
+              const slim: { x: number; y: number }[] = [out[0]];
+              for (let i = 1; i < out.length - 1; i++) {
+                const a = slim[slim.length - 1];
+                const b = out[i];
+                const c = out[i + 1];
+                const collinearX = Math.abs(a.x - b.x) < 1e-6 && Math.abs(b.x - c.x) < 1e-6;
+                const collinearY = Math.abs(a.y - b.y) < 1e-6 && Math.abs(b.y - c.y) < 1e-6;
+                if (collinearX || collinearY) continue;
+                slim.push(b);
+              }
+              slim.push(out[out.length - 1]);
+              return slim;
+            };
+    
+            const ensureOrthogonalEnd = () => {
+              if (!endDir) return;
+              if (next.length < 2) return;
+              const endP = next[next.length - 1];
+              const prev = next[next.length - 2];
+              const prev2 = next.length >= 3 ? next[next.length - 3] : null;
+              const minEndSeg = 10;
+              if (endDir === "top" || endDir === "bottom") {
+                const desiredY = endDir === "top" ? Math.min(prev.y, endP.y - minEndSeg) : Math.max(prev.y, endP.y + minEndSeg);
+                const newPrev = { x: endP.x, y: desiredY };
+                next[next.length - 2] = newPrev;
+                if (prev2 && Math.abs(prev2.x - newPrev.x) > 1e-6 && Math.abs(prev2.y - newPrev.y) > 1e-6) {
+                  const mid = { x: prev2.x, y: newPrev.y };
+                  next.splice(next.length - 2, 0, mid);
+                }
+              } else {
+                const desiredX = endDir === "left" ? Math.min(prev.x, endP.x - minEndSeg) : Math.max(prev.x, endP.x + minEndSeg);
+                const newPrev = { x: desiredX, y: endP.y };
+                next[next.length - 2] = newPrev;
+                if (prev2 && Math.abs(prev2.x - newPrev.x) > 1e-6 && Math.abs(prev2.y - newPrev.y) > 1e-6) {
+                  const mid = { x: newPrev.x, y: prev2.y };
+                  next.splice(next.length - 2, 0, mid);
+                }
+              }
+            };
+    
+            const ensureOrthogonalStart = () => {
+              if (!startDir) return;
+              if (next.length < 2) return;
+              const startP = next[0];
+              const p1 = next[1];
+              const p2 = next.length >= 3 ? next[2] : null;
+              if (startDir === "top" || startDir === "bottom") {
+                const newP1 = { x: startP.x, y: p1.y };
+                next[1] = newP1;
+                if (p2 && Math.abs(p2.x - newP1.x) > 1e-6 && Math.abs(p2.y - newP1.y) > 1e-6) {
+                  const mid = { x: newP1.x, y: p2.y };
+                  next.splice(2, 0, mid);
+                }
+              } else {
+                const newP1 = { x: p1.x, y: startP.y };
+                next[1] = newP1;
+                if (p2 && Math.abs(p2.x - newP1.x) > 1e-6 && Math.abs(p2.y - newP1.y) > 1e-6) {
+                  const mid = { x: p2.x, y: newP1.y };
+                  next.splice(2, 0, mid);
+                }
+              }
+            };
+    
+            ensureOrthogonalStart();
+            ensureOrthogonalEnd();
+            poly = dedup(next);
+          }
       }
 
-      if (!isFreeManual && poly.length >= 2) {
-        const next = poly.slice();
-        const dedup = (pts: { x: number; y: number }[]) => {
-          const out: { x: number; y: number }[] = [];
-          for (const p of pts) {
-            const last = out[out.length - 1];
-            if (last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6) continue;
-            out.push(p);
-          }
-          if (out.length <= 2) return out;
-          const slim: { x: number; y: number }[] = [out[0]];
-          for (let i = 1; i < out.length - 1; i++) {
-            const a = slim[slim.length - 1];
-            const b = out[i];
-            const c = out[i + 1];
-            const collinearX = Math.abs(a.x - b.x) < 1e-6 && Math.abs(b.x - c.x) < 1e-6;
-            const collinearY = Math.abs(a.y - b.y) < 1e-6 && Math.abs(b.y - c.y) < 1e-6;
-            if (collinearX || collinearY) continue;
-            slim.push(b);
-          }
-          slim.push(out[out.length - 1]);
-          return slim;
-        };
+      if (!smoothInput && e.style === "polyline" && poly.length >= 3 && e.routeShape === "free") smoothInput = "polyline";
 
-        const ensureOrthogonalEnd = () => {
-          if (!endDir) return;
-          if (next.length < 2) return;
-          const endP = next[next.length - 1];
-          const prev = next[next.length - 2];
-          const prev2 = next.length >= 3 ? next[next.length - 3] : null;
-          const minEndSeg = 10;
-          if (endDir === "top" || endDir === "bottom") {
-            const desiredY = endDir === "top" ? Math.min(prev.y, endP.y - minEndSeg) : Math.max(prev.y, endP.y + minEndSeg);
-            const newPrev = { x: endP.x, y: desiredY };
-            next[next.length - 2] = newPrev;
-            if (prev2 && Math.abs(prev2.x - newPrev.x) > 1e-6 && Math.abs(prev2.y - newPrev.y) > 1e-6) {
-              const mid = { x: prev2.x, y: newPrev.y };
-              next.splice(next.length - 2, 0, mid);
-            }
-          } else {
-            const desiredX = endDir === "left" ? Math.min(prev.x, endP.x - minEndSeg) : Math.max(prev.x, endP.x + minEndSeg);
-            const newPrev = { x: desiredX, y: endP.y };
-            next[next.length - 2] = newPrev;
-            if (prev2 && Math.abs(prev2.x - newPrev.x) > 1e-6 && Math.abs(prev2.y - newPrev.y) > 1e-6) {
-              const mid = { x: newPrev.x, y: prev2.y };
-              next.splice(next.length - 2, 0, mid);
-            }
-          }
-        };
+      const polyWithArrow = shortenEndForArrow(poly, 3, { preserveBezierTangent: smoothInput === "bezier" });
+      const shouldSmooth = !!smoothInput && (smoothInput === "bezier" || polyWithArrow.length >= 3);
+      const smoothKind = smoothInput ?? "auto";
+      const drawPath = shouldSmooth ? edgePointsToSmoothPath(polyWithArrow, { input: smoothKind }) : polylineToPath(polyWithArrow);
+      const polyForHit = shouldSmooth ? smoothPointsToPolyline(polyWithArrow, { input: smoothKind, stepsPerSegment: 14 }) : polyWithArrow;
+      const hitPath = shouldSmooth ? drawPath : polylineToPath(polyForHit);
 
-        const ensureOrthogonalStart = () => {
-          if (!startDir) return;
-          if (next.length < 2) return;
-          const startP = next[0];
-          const p1 = next[1];
-          const p2 = next.length >= 3 ? next[2] : null;
-          if (startDir === "top" || startDir === "bottom") {
-            const newP1 = { x: startP.x, y: p1.y };
-            next[1] = newP1;
-            if (p2 && Math.abs(p2.x - newP1.x) > 1e-6 && Math.abs(p2.y - newP1.y) > 1e-6) {
-              const mid = { x: newP1.x, y: p2.y };
-              next.splice(2, 0, mid);
-            }
-          } else {
-            const newP1 = { x: p1.x, y: startP.y };
-            next[1] = newP1;
-            if (p2 && Math.abs(p2.x - newP1.x) > 1e-6 && Math.abs(p2.y - newP1.y) > 1e-6) {
-              const mid = { x: p2.x, y: newP1.y };
-              next.splice(2, 0, mid);
-            }
-          }
-        };
-
-        ensureOrthogonalStart();
-        ensureOrthogonalEnd();
-        poly = dedup(next);
+      let labelPos: { x: number; y: number } | undefined = e.labelPosition;
+      if (!interactive && e.label && !labelPos && polyForHit.length >= 2) {
+        labelPos = bestLabelPos(polyForHit, e.label, obstacles);
       }
 
-      const polyWithArrow = shortenEndForArrow(poly, 3);
-      const hitPath = polylineToPath(polyWithArrow);
-      const drawPath =
-        e.style === "polyline" && polyWithArrow.length >= 3 && e.routeShape === "free"
-          ? catmullRomToBezierPath(polyWithArrow)
-          : hitPath;
-
-      let labelPos: { x: number; y: number } | undefined;
-      if (!interactive && e.label && polyWithArrow.length >= 2) {
-        labelPos = bestLabelPos(polyWithArrow, e.label, obstacles);
-      }
-
-      const geom: EdgeGeometry = { start, end, anchors, style: e.style, poly, hitPath, drawPath, label: e.label, labelPos };
+      const geom: EdgeGeometry = { start, end, anchors, style: e.style, poly: polyForHit, hitPath, drawPath, label: e.label, labelPos };
       cache.set(edgeId, geom);
       keyById.set(edgeId, key);
       return geom;

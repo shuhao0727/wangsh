@@ -1,6 +1,7 @@
 import type { FlowEdge, FlowNode } from "./model";
 import type { IRBlock, IRIf, IRNode, IRStmt, IRWhile } from "./ir";
 import type { FlowNodeShape } from "../types";
+import { buildDebugMapFromNodes, type DebugForRangeEntry, type DebugMap } from "./debugMap";
 
 type CodeIRBlock = { kind: "block"; items: CodeIRNode[] };
 type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRDef;
@@ -35,6 +36,14 @@ const parseHeader = (line: string, prefix: "if" | "while") => {
   if (!t.startsWith(prefix + " ")) return null;
   if (!t.endsWith(":")) return null;
   const cond = t.slice(prefix.length + 1, -1).trim();
+  return cond.length ? cond : null;
+};
+
+const parseElifHeader = (line: string) => {
+  const t = line.trim();
+  if (!t.startsWith("elif ")) return null;
+  if (!t.endsWith(":")) return null;
+  const cond = t.slice("elif".length + 1, -1).trim();
   return cond.length ? cond : null;
 };
 
@@ -265,10 +274,29 @@ export function parsePythonToIR(code: string): ParsePythonResult {
 
       const ifCond = parseHeader(trimmed, "if");
       if (ifCond) {
-        const thenRes = parseBlock(i + 1, baseIndent + indentStep);
-        if (!thenRes.ok) return { block: { kind: "block", items }, nextIdx: thenRes.nextIdx, ok: false };
-        let j = thenRes.nextIdx;
+        const firstThen = parseBlock(i + 1, baseIndent + indentStep);
+        if (!firstThen.ok) return { block: { kind: "block", items }, nextIdx: firstThen.nextIdx, ok: false };
+
+        const branches: { cond: string; then: CodeIRBlock; loc: SourceLoc }[] = [{ cond: ifCond, then: firstThen.block, loc }];
+        let j = firstThen.nextIdx;
         while (j < lines.length && isBlank(lines[j])) j += 1;
+
+        while (j < lines.length) {
+          const line = lines[j];
+          if (isBlank(line)) {
+            j += 1;
+            continue;
+          }
+          if (indentOf(line) !== baseIndent) break;
+          const elifCond = parseElifHeader(line.trim());
+          if (!elifCond) break;
+          const elifThen = parseBlock(j + 1, baseIndent + indentStep);
+          if (!elifThen.ok) return { block: { kind: "block", items }, nextIdx: elifThen.nextIdx, ok: false };
+          branches.push({ cond: elifCond, then: elifThen.block, loc: { line: j + 1 } });
+          j = elifThen.nextIdx;
+          while (j < lines.length && isBlank(lines[j])) j += 1;
+        }
+
         let elseBlock: CodeIRBlock | null = null;
         if (j < lines.length) {
           const elseLine = lines[j];
@@ -279,7 +307,15 @@ export function parsePythonToIR(code: string): ParsePythonResult {
             j = elseRes.nextIdx;
           }
         }
-        items.push({ kind: "if", cond: ifCond, then: thenRes.block, else: elseBlock, loc });
+
+        let nestedElse: CodeIRBlock | null = elseBlock;
+        let nestedIf: CodeIRIf | null = null;
+        for (let k = branches.length - 1; k >= 0; k--) {
+          const br = branches[k];
+          const elseForThis: CodeIRBlock | null = k === branches.length - 1 ? nestedElse : { kind: "block", items: [nestedIf as CodeIRIf] };
+          nestedIf = { kind: "if", cond: br.cond, then: br.then, else: elseForThis, loc: br.loc };
+        }
+        items.push(nestedIf as CodeIRIf);
         i = j;
         continue;
       }
@@ -296,8 +332,8 @@ export function parsePythonToIR(code: string): ParsePythonResult {
   return { ok: true, ir: top.block, warnings };
 }
 
-type BuildResult = { nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; warnings: string[] };
-export type FunctionFlowResult = { name: string; params: string[]; nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock };
+type BuildResult = { nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; warnings: string[]; debugMap: DebugMap };
+export type FunctionFlowResult = { name: string; params: string[]; nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; debugMap: DebugMap };
 export type BuildFlowsResult = { main: BuildResult; functions: FunctionFlowResult[] };
 export type BuildUnifiedFlowResult = BuildResult;
 
@@ -345,7 +381,7 @@ export function buildFlowsFromPython(code: string): BuildFlowsResult | null {
   const functions: FunctionFlowResult[] = defs.map((d) => {
     const title = `def ${d.name}(${d.params.join(", ")})`;
     const f = buildFlowFromCodeIR(d.body, [], { startTitle: title, endTitle: "结束" });
-    return { name: d.name, params: d.params, nodes: f.nodes, edges: f.edges, ir: f.ir };
+    return { name: d.name, params: d.params, nodes: f.nodes, edges: f.edges, ir: f.ir, debugMap: f.debugMap };
   });
   return { main, functions };
 }
@@ -355,6 +391,7 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
   if (!built) return null;
   const nodes: FlowNode[] = [...built.main.nodes];
   const edges: FlowEdge[] = [...built.main.edges];
+  const forRanges: DebugForRangeEntry[] = [...built.main.debugMap.forRanges];
 
   const remapGraph = (fn: FunctionFlowResult, idx: number) => {
     const prefix = `fn_${fn.name}_${idx}__`;
@@ -370,16 +407,26 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
       to: idMap.get(e.to) ?? e.to,
       toEdge: e.toEdge ? edgeId(e.toEdge) : e.toEdge,
     }));
-    return { mappedNodes, mappedEdges };
+    const mappedForRanges = fn.debugMap.forRanges
+      .map((x) => ({
+        ...x,
+        initNodeId: idMap.get(x.initNodeId) ?? x.initNodeId,
+        checkNodeId: idMap.get(x.checkNodeId) ?? x.checkNodeId,
+        incNodeId: idMap.get(x.incNodeId) ?? x.incNodeId,
+      }))
+      .filter((x) => x.initNodeId.startsWith(prefix) && x.checkNodeId.startsWith(prefix) && x.incNodeId.startsWith(prefix));
+    return { mappedNodes, mappedEdges, mappedForRanges };
   };
 
   built.functions.forEach((fn, i) => {
-    const { mappedNodes, mappedEdges } = remapGraph(fn, i);
+    const { mappedNodes, mappedEdges, mappedForRanges } = remapGraph(fn, i);
     nodes.push(...mappedNodes);
     edges.push(...mappedEdges);
+    forRanges.push(...mappedForRanges);
   });
 
-  return { nodes, edges, ir: built.main.ir, warnings: built.main.warnings };
+  const debugMap = buildDebugMapFromNodes(nodes, forRanges);
+  return { nodes, edges, ir: built.main.ir, warnings: built.main.warnings, debugMap };
 }
 
 function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { startTitle: string; endTitle: string }): BuildResult {
@@ -388,6 +435,33 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
 
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
+  const forRanges: DebugForRangeEntry[] = [];
+
+  const codeBlockLineRange = (b: CodeIRBlock | null | undefined): { startLine: number; endLine: number } | null => {
+    if (!b) return null;
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    const walk = (x: CodeIRNode) => {
+      min = Math.min(min, x.loc.line);
+      max = Math.max(max, x.loc.line);
+      if (x.kind === "if") {
+        walkBlock(x.then);
+        if (x.else) walkBlock(x.else);
+      } else if (x.kind === "while") {
+        walkBlock(x.body);
+      } else if (x.kind === "for_range") {
+        walkBlock(x.body);
+      } else if (x.kind === "def") {
+        walkBlock(x.body);
+      }
+    };
+    const walkBlock = (blk: CodeIRBlock) => {
+      for (const it of blk.items) walk(it);
+    };
+    walkBlock(b);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+    return { startLine: min, endLine: max };
+  };
 
   const startNode: FlowNode = { id: nextId("start"), shape: "start_end", title: titles.startTitle, x: 0, y: 0 };
   nodes.push(startNode);
@@ -530,6 +604,8 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     nodes.push(d);
     const bodyRes = emitBlock(it.body);
     const inc = emitStmtNode(`${it.v} += ${stepText}`, it.loc.line, "for_inc");
+    const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
+    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: init.nodeId, checkNodeId: d.id, incNodeId: inc.nodeId, bodyLineRange });
 
     emitEdge(init.nodeId, d.id);
     emitEdge(d.id, bodyRes.entry, "是");
@@ -605,5 +681,6 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     items: body.ir.items,
   };
 
-  return { nodes, edges, ir, warnings };
+  const debugMap = buildDebugMapFromNodes(nodes, forRanges);
+  return { nodes, edges, ir, warnings, debugMap };
 }

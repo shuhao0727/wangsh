@@ -166,6 +166,20 @@ export function polylineToPath(poly: { x: number; y: number }[]) {
   return d;
 }
 
+export function bezierPointsToPath(pts: { x: number; y: number }[]) {
+  if (!pts || pts.length < 4) return polylineToPath(pts);
+  const fmt = (n: number) => (Number.isFinite(n) ? String(Number(n.toFixed(2))) : "0");
+  let d = `M ${fmt(pts[0].x)} ${fmt(pts[0].y)}`;
+  for (let i = 1; i < pts.length; i += 3) {
+    if (i + 2 >= pts.length) break;
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2];
+    d += ` C ${fmt(p1.x)} ${fmt(p1.y)} ${fmt(p2.x)} ${fmt(p2.y)} ${fmt(p3.x)} ${fmt(p3.y)}`;
+  }
+  return d;
+}
+
 export function catmullRomToBezierPath(poly: { x: number; y: number }[]) {
   const pts = poly || [];
   if (pts.length < 2) return "";
@@ -184,6 +198,128 @@ export function catmullRomToBezierPath(poly: { x: number; y: number }[]) {
     d += ` C ${fmt(cp1.x)} ${fmt(cp1.y)} ${fmt(cp2.x)} ${fmt(cp2.y)} ${fmt(p2.x)} ${fmt(p2.y)}`;
   }
   return d;
+}
+
+export function edgePointsToSmoothPath(
+  points: { x: number; y: number }[],
+  opts?: { input?: "auto" | "polyline" | "bezier" }
+) {
+  const src = points || [];
+  const cleaned: { x: number; y: number }[] = [];
+  for (const p of src) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    const last = cleaned[cleaned.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) < 1e-6) continue;
+    cleaned.push({ x: p.x, y: p.y });
+  }
+
+  if (cleaned.length <= 2) return polylineToPath(cleaned);
+  if (cleaned.length > 200) return polylineToPath(cleaned);
+
+  if (opts?.input === "polyline") return catmullRomToBezierPath(cleaned);
+
+  const is3n1 = (pts: { x: number; y: number }[]) => pts.length >= 4 && (pts.length - 1) % 3 === 0;
+  if (is3n1(cleaned)) return bezierPointsToPath(cleaned);
+
+  const tol = 5;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) <= tol;
+  if (cleaned.length >= 5 && (cleaned.length - 2) % 3 === 0) {
+    if (near(cleaned[0], cleaned[1])) return bezierPointsToPath(cleaned.slice(1));
+    if (near(cleaned[cleaned.length - 1], cleaned[cleaned.length - 2])) return bezierPointsToPath(cleaned.slice(0, -1));
+  }
+  if (cleaned.length >= 6 && (cleaned.length - 3) % 3 === 0) {
+    if (near(cleaned[0], cleaned[1]) && near(cleaned[cleaned.length - 1], cleaned[cleaned.length - 2])) return bezierPointsToPath(cleaned.slice(1, -1));
+  }
+
+  return catmullRomToBezierPath(cleaned);
+}
+
+export function catmullRomToBezierPoints(poly: { x: number; y: number }[]) {
+  const pts = poly || [];
+  if (pts.length < 2) return [];
+  if (pts.length === 2) return [pts[0], pts[1]];
+  const t = 1;
+  const p = (i: number) => pts[Math.max(0, Math.min(pts.length - 1, i))];
+  const out: { x: number; y: number }[] = [{ x: pts[0].x, y: pts[0].y }];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = p(i - 1);
+    const p1 = p(i);
+    const p2 = p(i + 1);
+    const p3 = p(i + 2);
+    const cp1 = { x: p1.x + ((p2.x - p0.x) * t) / 6, y: p1.y + ((p2.y - p0.y) * t) / 6 };
+    const cp2 = { x: p2.x - ((p3.x - p1.x) * t) / 6, y: p2.y - ((p3.y - p1.y) * t) / 6 };
+    out.push(cp1, cp2, { x: p2.x, y: p2.y });
+  }
+  return out;
+}
+
+function cubicAt(p0: number, p1: number, p2: number, p3: number, t: number) {
+  const mt = 1 - t;
+  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+}
+
+export function sampleBezierToPolyline(pts: { x: number; y: number }[], stepsPerSegment = 16) {
+  const src = pts || [];
+  if (src.length < 2) return [];
+  if (src.length < 4) return src.slice();
+  if ((src.length - 1) % 3 !== 0) return src.slice();
+  const steps = Math.max(4, Math.min(60, Math.floor(stepsPerSegment)));
+  const out: { x: number; y: number }[] = [{ x: src[0].x, y: src[0].y }];
+  const segs = (src.length - 1) / 3;
+  for (let s = 0; s < segs; s++) {
+    const i = s * 3;
+    const p0 = src[i];
+    const p1 = src[i + 1];
+    const p2 = src[i + 2];
+    const p3 = src[i + 3];
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      out.push({ x: cubicAt(p0.x, p1.x, p2.x, p3.x, t), y: cubicAt(p0.y, p1.y, p2.y, p3.y, t) });
+    }
+  }
+  return out;
+}
+
+export function smoothPointsToPolyline(
+  points: { x: number; y: number }[],
+  opts?: { input?: "auto" | "polyline" | "bezier"; stepsPerSegment?: number }
+) {
+  const src = points || [];
+  const cleaned: { x: number; y: number }[] = [];
+  for (const p of src) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    const last = cleaned[cleaned.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) < 1e-6) continue;
+    cleaned.push({ x: p.x, y: p.y });
+  }
+
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length > 200) return cleaned;
+
+  const steps = opts?.stepsPerSegment ?? 16;
+
+  if (opts?.input === "polyline") {
+    const bez = catmullRomToBezierPoints(cleaned);
+    return sampleBezierToPolyline(bez, steps);
+  }
+
+  const is3n1 = (pts: { x: number; y: number }[]) => pts.length >= 4 && (pts.length - 1) % 3 === 0;
+  if (is3n1(cleaned)) return sampleBezierToPolyline(cleaned, steps);
+
+  const tol = 5;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) <= tol;
+  if (cleaned.length >= 5 && (cleaned.length - 2) % 3 === 0) {
+    if (near(cleaned[0], cleaned[1])) return sampleBezierToPolyline(cleaned.slice(1), steps);
+    if (near(cleaned[cleaned.length - 1], cleaned[cleaned.length - 2])) return sampleBezierToPolyline(cleaned.slice(0, -1), steps);
+  }
+  if (cleaned.length >= 6 && (cleaned.length - 3) % 3 === 0) {
+    if (near(cleaned[0], cleaned[1]) && near(cleaned[cleaned.length - 1], cleaned[cleaned.length - 2])) {
+      return sampleBezierToPolyline(cleaned.slice(1, -1), steps);
+    }
+  }
+
+  const bez = catmullRomToBezierPoints(cleaned);
+  return sampleBezierToPolyline(bez, steps);
 }
 
 function rectContains(r: Rect, p: { x: number; y: number }) {
@@ -931,15 +1067,34 @@ export function edgePolylinePoints(points: {
 export function edgePath(points: {
   start: { x: number; y: number };
   end: { x: number; y: number };
-  style: "straight" | "polyline";
+  style: "straight" | "polyline" | "bezier";
   anchors: { x: number; y: number }[];
   prefer?: "hv" | "vh";
   sourceDir?: Direction;
   targetDir?: Direction;
 }) {
-  const poly = edgePolylinePoints(points);
+  if (points.style === "bezier" && points.anchors && points.anchors.length >= 2) {
+    const cleaned: { x: number; y: number }[] = [];
+    for (const p of points.anchors) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const last = cleaned[cleaned.length - 1];
+      if (last && Math.hypot(p.x - last.x, p.y - last.y) < 1e-6) continue;
+      cleaned.push({ x: p.x, y: p.y });
+    }
+
+    if (cleaned.length >= 2) {
+      const pts = cleaned.slice();
+      const tol = 5;
+      if (Math.hypot(pts[0].x - points.start.x, pts[0].y - points.start.y) > tol) pts.unshift(points.start);
+      else pts[0] = points.start;
+      if (Math.hypot(pts[pts.length - 1].x - points.end.x, pts[pts.length - 1].y - points.end.y) > tol) pts.push(points.end);
+      else pts[pts.length - 1] = points.end;
+
+      return edgePointsToSmoothPath(pts, { input: "bezier" });
+    }
+  }
+
+  const poly = edgePolylinePoints({ ...points, style: points.style === "bezier" ? "polyline" : points.style });
   if (!poly || poly.length === 0) return "";
-  let d = `M ${poly[0].x} ${poly[0].y}`;
-  for (let i = 1; i < poly.length; i++) d += ` L ${poly[i].x} ${poly[i].y}`;
-  return d;
+  return polylineToPath(poly);
 }

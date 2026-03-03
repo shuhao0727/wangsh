@@ -30,7 +30,7 @@ export type PythonLabSessionMeta = {
   created_at: string;
   last_heartbeat_at: string;
   ttl_seconds: number;
-  limits: Record<string, any>;
+  limits: PythonLabDebugLimits & Record<string, unknown>;
   entry_path: string;
   code_sha256: string;
   dap_host?: string | null;
@@ -57,11 +57,11 @@ export const pythonlabSessionApi = {
     return resp.data as PythonLabCreateSessionResponse;
   },
   get: async (sessionId: string): Promise<PythonLabSessionMeta> => {
-    const resp = await api.client.get(`/debug/sessions/${sessionId}`, { silent: true } as any);
+    const resp = await api.client.get(`/debug/sessions/${sessionId}`, { silent: true });
     return resp.data as PythonLabSessionMeta;
   },
   list: async (): Promise<PythonLabSessionListResponse> => {
-    const resp = await api.client.get(`/debug/sessions`, { silent: true } as any);
+    const resp = await api.client.get(`/debug/sessions`, { silent: true });
     return resp.data as PythonLabSessionListResponse;
   },
   stop: async (sessionId: string): Promise<{ ok: boolean }> => {

@@ -1,8 +1,46 @@
 import { useEffect, useRef, useState } from "react";
-import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
-import { allowedPortsForShape, nodePortLocal } from "../flow/ports";
+import type { FlowEdge, FlowNode } from "../flow/model";
 import { edgePolylinePoints, nearestTOnPolyline, pointAtT } from "../flow/geometry";
 import type { CanvasMetric } from "./useEdgeGeometries";
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const fmt = (v: number) => Number(v.toFixed(4));
+
+const toAttachFromAbsPointOnBBox = (m: CanvasMetric, abs: { x: number; y: number }) => {
+  const w = m.w || 1;
+  const h = m.h || 1;
+  const left = m.cx - w / 2;
+  const top = m.cy - h / 2;
+  return { x: fmt(clamp01((abs.x - left) / w)), y: fmt(clamp01((abs.y - top) / h)) };
+};
+
+const closestPointOnBBox = (m: CanvasMetric, p: { x: number; y: number }) => {
+  const left = m.cx - m.w / 2;
+  const right = m.cx + m.w / 2;
+  const top = m.cy - m.h / 2;
+  const bottom = m.cy + m.h / 2;
+
+  if (p.x < left) return { x: left, y: Math.max(top, Math.min(bottom, p.y)) };
+  if (p.x > right) return { x: right, y: Math.max(top, Math.min(bottom, p.y)) };
+  if (p.y < top) return { x: Math.max(left, Math.min(right, p.x)), y: top };
+  if (p.y > bottom) return { x: Math.max(left, Math.min(right, p.x)), y: bottom };
+
+  const dl = p.x - left;
+  const dr = right - p.x;
+  const dt = p.y - top;
+  const db = bottom - p.y;
+  const min = Math.min(dl, dr, dt, db);
+  if (min === dl) return { x: left, y: p.y };
+  if (min === dr) return { x: right, y: p.y };
+  if (min === dt) return { x: p.x, y: top };
+  return { x: p.x, y: bottom };
+};
+
+const distToBBox = (m: CanvasMetric, p: { x: number; y: number }) => {
+  const dx = Math.max(0, Math.abs(p.x - m.cx) - m.w / 2);
+  const dy = Math.max(0, Math.abs(p.y - m.cy) - m.h / 2);
+  return Math.hypot(dx, dy);
+};
 
 export function useFlowCanvasInteractions(params: {
   canvasRef: React.RefObject<HTMLDivElement | null>;
@@ -19,9 +57,9 @@ export function useFlowCanvasInteractions(params: {
   setEdges: React.Dispatch<React.SetStateAction<FlowEdge[]>>;
   canvasMetricsRef: React.MutableRefObject<Map<string, CanvasMetric>>;
   edgeGeometryCacheRef: React.MutableRefObject<Map<string, any>>;
-  onInteract?: () => void;
+  onSemanticEdit?: () => void;
 }) {
-  const { canvasRef, scale, offsetX, offsetY, setOffsetX, setOffsetY, connectMode, panMode, nodes, edges, setNodes, setEdges, canvasMetricsRef, edgeGeometryCacheRef, onInteract } = params;
+  const { canvasRef, scale, offsetX, offsetY, setOffsetX, setOffsetY, connectMode, panMode, nodes, setNodes, setEdges, canvasMetricsRef, edgeGeometryCacheRef, onSemanticEdit } = params;
 
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const nodeOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
@@ -61,7 +99,7 @@ export function useFlowCanvasInteractions(params: {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [canvasRef, draggingNodeId, scale, setNodes]);
+  }, [canvasRef, draggingNodeId, offsetX, offsetY, scale, setNodes]);
 
   useEffect(() => {
     if (!draggingAnchor) return;
@@ -112,7 +150,7 @@ export function useFlowCanvasInteractions(params: {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [canvasRef, draggingAnchor, edgeGeometryCacheRef, scale, setEdges]);
+  }, [canvasRef, draggingAnchor, edgeGeometryCacheRef, offsetX, offsetY, scale, setEdges]);
 
   useEffect(() => {
     if (!draggingTargetEdgeId) return;
@@ -128,36 +166,32 @@ export function useFlowCanvasInteractions(params: {
         prev.map((ed) => {
           if (ed.id !== draggingTargetEdgeId) return ed;
           const snapDist = 24;
-          let best: { id: string; dist: number; port: PortSide } | null = null;
+          let best: { id: string; dist: number; m: CanvasMetric } | null = null;
           for (const n of nodes) {
             const m = canvasMetricsRef.current.get(n.id);
             if (!m) continue;
-            const ports = allowedPortsForShape(n.shape, n.title);
-            for (const p of ports) {
-              const local = nodePortLocal(n.shape, m.w, m.h, p);
-              const ax = m.cx + local.x;
-              const ay = m.cy + local.y;
-              const dist = Math.hypot(px - ax, py - ay);
-              if (!best || dist < best.dist) best = { id: n.id, dist, port: p };
-            }
+            const dist = distToBBox(m, { x: px, y: py });
+            if (!best || dist < best.dist) best = { id: n.id, dist, m };
           }
           if (best && best.dist <= snapDist) {
-            return { ...ed, to: best.id, toPort: best.port, toDir: undefined, toFree: null, toEdge: undefined, toEdgeT: undefined };
+            const snapPoint = closestPointOnBBox(best.m, { x: px, y: py });
+            const attach = toAttachFromAbsPointOnBBox(best.m, snapPoint);
+            return { ...ed, to: best.id, toAttach: attach, toPort: undefined, toDir: undefined, toFree: null, toEdge: undefined, toEdgeT: undefined };
           }
           if (ed.toEdge) {
             const targetGeom = edgeGeometryCacheRef.current.get(ed.toEdge);
             if (!targetGeom) {
-              return { ...ed, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
+              return { ...ed, toAttach: null, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
             }
             const t = nearestTOnPolyline(targetGeom.poly, { x: px, y: py });
             const tp = pointAtT(targetGeom.poly, t);
             const detachDist = 28;
             if (Math.hypot(px - tp.x, py - tp.y) > detachDist) {
-              return { ...ed, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
+              return { ...ed, toAttach: null, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
             }
-            return { ...ed, toEdgeT: t, toFree: null };
+            return { ...ed, toAttach: null, toPort: undefined, toDir: undefined, toEdgeT: t, toFree: null };
           }
-          return { ...ed, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
+          return { ...ed, toAttach: null, toPort: undefined, toDir: undefined, toFree: { x: px, y: py }, toEdge: undefined, toEdgeT: undefined };
         })
       );
     };
@@ -171,7 +205,7 @@ export function useFlowCanvasInteractions(params: {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [canvasMetricsRef, canvasRef, draggingTargetEdgeId, edgeGeometryCacheRef, nodes, scale, setEdges]);
+  }, [canvasMetricsRef, canvasRef, draggingTargetEdgeId, edgeGeometryCacheRef, nodes, offsetX, offsetY, scale, setEdges]);
 
   useEffect(() => {
     if (!draggingSourceEdgeId) return;
@@ -187,23 +221,19 @@ export function useFlowCanvasInteractions(params: {
         prev.map((ed) => {
           if (ed.id !== draggingSourceEdgeId) return ed;
           const snapDist = 24;
-          let best: { id: string; dist: number; port: PortSide } | null = null;
+          let best: { id: string; dist: number; m: CanvasMetric } | null = null;
           for (const n of nodes) {
             const m = canvasMetricsRef.current.get(n.id);
             if (!m) continue;
-            const ports = allowedPortsForShape(n.shape, n.title);
-            for (const p of ports) {
-              const local = nodePortLocal(n.shape, m.w, m.h, p);
-              const ax = m.cx + local.x;
-              const ay = m.cy + local.y;
-              const dist = Math.hypot(px - ax, py - ay);
-              if (!best || dist < best.dist) best = { id: n.id, dist, port: p };
-            }
+            const dist = distToBBox(m, { x: px, y: py });
+            if (!best || dist < best.dist) best = { id: n.id, dist, m };
           }
           if (best && best.dist <= snapDist) {
-            return { ...ed, from: best.id, fromPort: best.port, fromDir: undefined, fromFree: null, routeMode: "manual" };
+            const snapPoint = closestPointOnBBox(best.m, { x: px, y: py });
+            const attach = toAttachFromAbsPointOnBBox(best.m, snapPoint);
+            return { ...ed, from: best.id, fromAttach: attach, fromPort: undefined, fromDir: undefined, fromFree: null, routeMode: "manual" };
           }
-          return { ...ed, fromPort: undefined, fromDir: undefined, fromFree: { x: px, y: py }, routeMode: "manual" };
+          return { ...ed, fromAttach: null, fromPort: undefined, fromDir: undefined, fromFree: { x: px, y: py }, routeMode: "manual" };
         })
       );
     };
@@ -217,7 +247,7 @@ export function useFlowCanvasInteractions(params: {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [canvasMetricsRef, canvasRef, draggingSourceEdgeId, nodes, scale, setEdges]);
+  }, [canvasMetricsRef, canvasRef, draggingSourceEdgeId, nodes, offsetX, offsetY, scale, setEdges]);
 
   useEffect(() => {
     if (!panning) return;
@@ -244,7 +274,6 @@ export function useFlowCanvasInteractions(params: {
 
   const onNodePointerDown = (e: React.PointerEvent, nodeId: string) => {
     if (connectMode) return;
-    onInteract?.();
     if (!canvasRef.current) return;
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -255,7 +284,6 @@ export function useFlowCanvasInteractions(params: {
 
   const onAnchorPointerDown = (evt: React.PointerEvent, edgeId: string, index: number, x: number, y: number) => {
     evt.stopPropagation();
-    onInteract?.();
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     anchorOffsetRef.current = { dx: (evt.clientX - rect.left - offsetX) / scale - x, dy: (evt.clientY - rect.top - offsetY) / scale - y };
@@ -264,7 +292,7 @@ export function useFlowCanvasInteractions(params: {
 
   const onSourcePointerDown = (evt: React.PointerEvent, edgeId: string, x: number, y: number) => {
     evt.stopPropagation();
-    onInteract?.();
+    onSemanticEdit?.();
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     sourceOffsetRef.current = { dx: (evt.clientX - rect.left - offsetX) / scale - x, dy: (evt.clientY - rect.top - offsetY) / scale - y };
@@ -273,7 +301,7 @@ export function useFlowCanvasInteractions(params: {
 
   const onTargetPointerDown = (evt: React.PointerEvent, edgeId: string, x: number, y: number) => {
     evt.stopPropagation();
-    onInteract?.();
+    onSemanticEdit?.();
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     targetOffsetRef.current = { dx: (evt.clientX - rect.left - offsetX) / scale - x, dy: (evt.clientY - rect.top - offsetY) / scale - y };
@@ -284,7 +312,6 @@ export function useFlowCanvasInteractions(params: {
     if (!panMode) return;
     if (connectMode) return;
     if (e.button !== 0) return;
-    onInteract?.();
     panSuppressClickRef.current = false;
     panStartRef.current = { clientX: e.clientX, clientY: e.clientY, offsetX, offsetY };
     setPanning(true);

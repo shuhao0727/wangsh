@@ -2,10 +2,12 @@ import type { FlowBeautifyParams, FlowBeautifyThresholds } from "../flow/beautif
 import type { FlowTidyRuleId } from "../flow/tidy";
 import { DEFAULT_BEAUTIFY_PARAMS, DEFAULT_BEAUTIFY_THRESHOLDS } from "../flow/beautify";
 
+export const PYTHONLAB_RULESET_SCHEMA_VERSION = 1 as const;
+
 export type PythonLabRuleSetV1 = {
   version: 1;
   tidy: { enabled: Record<FlowTidyRuleId, boolean> };
-  beautify: { params: FlowBeautifyParams; thresholds: FlowBeautifyThresholds };
+  beautify: { params: FlowBeautifyParams; thresholds: FlowBeautifyThresholds; alignMode: boolean };
 };
 
 export type PythonLabRuleSetBundleV1 = {
@@ -26,11 +28,13 @@ export const DEFAULT_RULESET_V1: PythonLabRuleSetV1 = {
       R_TIDY_MARK_CRITICAL: true,
     },
   },
-  beautify: { params: DEFAULT_BEAUTIFY_PARAMS, thresholds: DEFAULT_BEAUTIFY_THRESHOLDS },
+  beautify: { params: DEFAULT_BEAUTIFY_PARAMS, thresholds: DEFAULT_BEAUTIFY_THRESHOLDS, alignMode: false },
 };
 
-export const pythonLabRuleSetKey = "python_lab_ruleset_v1";
-export const pythonLabRuleSetBundleKey = "python_lab_ruleset_bundle_v1";
+export const pythonLabRuleSetKey = "python_lab_ruleset";
+export const pythonLabRuleSetBundleKey = "python_lab_ruleset_bundle";
+export const pythonLabRuleSetKeyV1 = "python_lab_ruleset_v1";
+export const pythonLabRuleSetBundleKeyV1 = "python_lab_ruleset_bundle_v1";
 
 export const RULESET_PRESETS_V1: Array<{ key: string; label: string; ruleSet: PythonLabRuleSetV1 }> = [
   { key: "classroom", label: "课堂演示（默认）", ruleSet: DEFAULT_RULESET_V1 },
@@ -58,37 +62,66 @@ export const RULESET_PRESETS_V1: Array<{ key: string; label: string; ruleSet: Py
   },
 ];
 
-function isObj(v: any): v is Record<string, any> {
+type AnyObj = Record<string, unknown>;
+
+function isObj(v: unknown): v is AnyObj {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-export function normalizeRuleSetV1(raw: any): PythonLabRuleSetV1 {
-  const base = DEFAULT_RULESET_V1;
-  if (!isObj(raw) || raw.version !== 1) return base;
-  const tidyRaw = isObj(raw.tidy) ? raw.tidy : {};
-  const enabledRaw = isObj(tidyRaw.enabled) ? tidyRaw.enabled : {};
-  const enabled: any = { ...base.tidy.enabled };
-  (Object.keys(base.tidy.enabled) as FlowTidyRuleId[]).forEach((k) => {
-    if (typeof enabledRaw[k] === "boolean") enabled[k] = enabledRaw[k];
-  });
-
-  const beautifyRaw = isObj(raw.beautify) ? raw.beautify : {};
-  const paramsRaw = isObj(beautifyRaw.params) ? beautifyRaw.params : {};
-  const thresholdsRaw = isObj(beautifyRaw.thresholds) ? beautifyRaw.thresholds : {};
-  const params: any = { ...DEFAULT_BEAUTIFY_PARAMS, ...paramsRaw };
-  const thresholds: any = { ...DEFAULT_BEAUTIFY_THRESHOLDS, ...thresholdsRaw };
-
-  return { version: 1, tidy: { enabled }, beautify: { params, thresholds } };
+function normalizeBeautifyParams(raw: unknown): FlowBeautifyParams {
+  const base = DEFAULT_BEAUTIFY_PARAMS;
+  if (!isObj(raw)) return base;
+  const out: FlowBeautifyParams = { ...base };
+  if (raw.rankdir === "TB" || raw.rankdir === "LR") out.rankdir = raw.rankdir;
+  if (typeof raw.nodesep === "number") out.nodesep = raw.nodesep;
+  if (typeof raw.ranksep === "number") out.ranksep = raw.ranksep;
+  if (raw.theme === "light") out.theme = raw.theme;
+  if (raw.engine === "dot" || raw.engine === "neato" || raw.engine === "fdp") out.engine = raw.engine;
+  if (raw.splines === "spline" || raw.splines === "polyline" || raw.splines === "ortho") out.splines = raw.splines;
+  if (typeof raw.concentrate === "boolean") out.concentrate = raw.concentrate;
+  if (typeof raw.fontSize === "number") out.fontSize = raw.fontSize;
+  if (typeof raw.pad === "number") out.pad = raw.pad;
+  return out;
 }
 
-export function normalizeRuleSetBundleV1(raw: any): PythonLabRuleSetBundleV1 {
+function normalizeBeautifyThresholds(raw: unknown): FlowBeautifyThresholds {
+  const base = DEFAULT_BEAUTIFY_THRESHOLDS;
+  if (!isObj(raw)) return base;
+  const out: FlowBeautifyThresholds = { ...base };
+  if (typeof raw.maxNodes === "number") out.maxNodes = raw.maxNodes;
+  if (typeof raw.maxCrossings === "number") out.maxCrossings = raw.maxCrossings;
+  if (typeof raw.minContrast === "number") out.minContrast = raw.minContrast;
+  if (typeof raw.maxFlowAngle === "number") out.maxFlowAngle = raw.maxFlowAngle;
+  return out;
+}
+
+export function normalizeRuleSetV1(raw: unknown): PythonLabRuleSetV1 {
+  const base = DEFAULT_RULESET_V1;
+  if (!isObj(raw) || raw.version !== 1) return base;
+  const tidyRaw = isObj(raw.tidy) ? raw.tidy : null;
+  const enabledRaw = tidyRaw && isObj(tidyRaw.enabled) ? tidyRaw.enabled : null;
+  const enabled: Record<FlowTidyRuleId, boolean> = { ...base.tidy.enabled };
+  (Object.keys(enabled) as FlowTidyRuleId[]).forEach((k) => {
+    const v = enabledRaw ? enabledRaw[k] : undefined;
+    if (typeof v === "boolean") enabled[k] = v;
+  });
+
+  const beautifyRaw = isObj(raw.beautify) ? raw.beautify : null;
+  const params = normalizeBeautifyParams(beautifyRaw?.params);
+  const thresholds = normalizeBeautifyThresholds(beautifyRaw?.thresholds);
+  const alignMode = beautifyRaw && typeof beautifyRaw.alignMode === "boolean" ? beautifyRaw.alignMode : base.beautify.alignMode;
+
+  return { version: 1, tidy: { enabled }, beautify: { params, thresholds, alignMode } };
+}
+
+export function normalizeRuleSetBundleV1(raw: unknown): PythonLabRuleSetBundleV1 {
   const base: PythonLabRuleSetBundleV1 = { version: 1, global: DEFAULT_RULESET_V1, overrides: {} };
   if (!isObj(raw) || raw.version !== 1) return base;
   const global = normalizeRuleSetV1(raw.global);
   const overridesRaw = isObj(raw.overrides) ? raw.overrides : {};
   const overrides: Record<string, PythonLabRuleSetV1> = {};
   Object.keys(overridesRaw).forEach((k) => {
-    overrides[String(k)] = normalizeRuleSetV1((overridesRaw as any)[k]);
+    overrides[String(k)] = normalizeRuleSetV1(overridesRaw[k]);
   });
   return { version: 1, global, overrides };
 }
@@ -100,9 +133,20 @@ export function loadRuleSetBundleV1(): PythonLabRuleSetBundleV1 {
   } catch {
   }
   try {
-    const legacy = localStorage.getItem(pythonLabRuleSetKey);
+    const raw = localStorage.getItem(pythonLabRuleSetBundleKeyV1);
+    if (raw) {
+      const normalized = normalizeRuleSetBundleV1(JSON.parse(raw));
+      saveRuleSetBundleV1(normalized);
+      return normalized;
+    }
+  } catch {
+  }
+  try {
+    const legacy = localStorage.getItem(pythonLabRuleSetKey) ?? localStorage.getItem(pythonLabRuleSetKeyV1);
     if (legacy) {
-      return { version: 1, global: normalizeRuleSetV1(JSON.parse(legacy)), overrides: {} };
+      const normalized = { version: 1 as const, global: normalizeRuleSetV1(JSON.parse(legacy)), overrides: {} };
+      saveRuleSetBundleV1(normalized);
+      return normalized;
     }
   } catch {
   }
@@ -112,6 +156,8 @@ export function loadRuleSetBundleV1(): PythonLabRuleSetBundleV1 {
 export function saveRuleSetBundleV1(next: PythonLabRuleSetBundleV1) {
   localStorage.setItem(pythonLabRuleSetBundleKey, JSON.stringify(next));
   localStorage.setItem(pythonLabRuleSetKey, JSON.stringify(next.global));
+  localStorage.setItem(pythonLabRuleSetBundleKeyV1, JSON.stringify(next));
+  localStorage.setItem(pythonLabRuleSetKeyV1, JSON.stringify(next.global));
 }
 
 export function loadEffectiveRuleSetV1(experimentId: string): PythonLabRuleSetV1 {
