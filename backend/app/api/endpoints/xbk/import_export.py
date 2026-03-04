@@ -51,15 +51,16 @@ async def _read_excel(file: UploadFile) -> pd.DataFrame:
         raise HTTPException(status_code=400, detail=f"读取Excel失败: {e}")
 
 
-def _get_year_term(row: pd.Series, year: Optional[int], term: Optional[str]) -> Tuple[int, str]:
+def _get_year_term(row: pd.Series) -> Tuple[int, str]:
     y = row.get("年份")
     t = row.get("学期")
-    final_year = year if year is not None else (_normalize_str(y) if pd.notna(y) else None)
-    final_term = term if term else (_normalize_str(t) if pd.notna(t) else None)
+    final_year = _normalize_str(y) if pd.notna(y) else None
+    final_term = _normalize_str(t) if pd.notna(t) else None
+    
     if final_year is None or not final_term:
-        raise HTTPException(status_code=422, detail="缺少年份/学期（可通过查询参数传入或Excel列提供）")
+        raise HTTPException(status_code=422, detail="缺少年份/学期")
     try:
-        return int(str(final_year)), str(final_term)
+        return int(float(str(final_year))), str(final_term)
     except Exception:
         raise HTTPException(status_code=422, detail="年份格式不正确")
 
@@ -208,8 +209,6 @@ async def download_template(
 @router.post("/import/preview")
 async def preview_import(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
-    year: Optional[int] = Query(None),
-    term: Optional[str] = Query(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
@@ -237,7 +236,7 @@ async def preview_import(
         row_dict = {k: _normalize_str(row.get(k)) for k in df.columns}
         messages: List[str] = []
         try:
-            _get_year_term(row, year, term)
+            _get_year_term(row)
         except HTTPException as e:
             messages.append(str(e.detail))
         if scope == "students":
@@ -280,8 +279,6 @@ async def preview_import(
 @router.post("/import", status_code=200)
 async def import_data(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
-    year: Optional[int] = Query(None),
-    term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     skip_invalid: bool = Query(True),
     file: UploadFile = File(...),
@@ -308,7 +305,7 @@ async def import_data(
         keys = []
         for _, row in df.iterrows():
             try:
-                y, t = _get_year_term(row, year, term)
+                y, t = _get_year_term(row)
             except HTTPException:
                 continue
             student_no = _normalize_str(row.get("学号"))
@@ -330,7 +327,7 @@ async def import_data(
         for i, (_, row) in enumerate(df.iterrows(), start=2):
             row_errors: List[str] = []
             try:
-                y, t = _get_year_term(row, year, term)
+                y, t = _get_year_term(row)
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
@@ -403,7 +400,7 @@ async def import_data(
         keys = []
         for _, row in df.iterrows():
             try:
-                y, t = _get_year_term(row, year, term)
+                y, t = _get_year_term(row)
             except HTTPException:
                 continue
             course_code = _normalize_str(row.get("课程代码"))
@@ -425,7 +422,7 @@ async def import_data(
         for i, (_, row) in enumerate(df.iterrows(), start=2):
             row_errors: List[str] = []
             try:
-                y, t = _get_year_term(row, year, term)
+                y, t = _get_year_term(row)
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
@@ -502,7 +499,7 @@ async def import_data(
     keys = []
     for _, row in df.iterrows():
         try:
-            y, t = _get_year_term(row, year, term)
+            y, t = _get_year_term(row)
         except HTTPException:
             continue
         student_no = _normalize_str(row.get("学号"))
@@ -525,7 +522,7 @@ async def import_data(
     for i, (_, row) in enumerate(df.iterrows(), start=2):
         row_errors: List[str] = []
         try:
-            y, t = _get_year_term(row, year, term)
+            y, t = _get_year_term(row)
         except HTTPException as e:
             row_errors.append(str(e.detail))
             y = t = None
@@ -533,11 +530,10 @@ async def import_data(
         row_grade = _get_row_grade(row, grade)
         student_no = _normalize_str(row.get("学号"))
         name = _normalize_str(row.get("姓名"))
-        course_code = _normalize_str(row.get("课程代码"))
+        course_code = _normalize_str(row.get("课程代码")) or "" # Allow empty course code
         if not student_no:
             row_errors.append("学号不能为空")
-        if not course_code:
-            row_errors.append("课程代码不能为空")
+        # Removed course_code check to allow "Unselected" status
         if row_errors:
             invalid += 1
             if not skip_invalid:
@@ -583,7 +579,7 @@ async def import_data(
 
 @router.get("/export")
 async def export_data(
-    scope: str = Query(..., pattern="^(students|courses|selections|course_results|no_selection)$"),
+    scope: str = Query(..., pattern="^(students|courses|selections|course_results|unselected|suspended)$"),
     year: Optional[int] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
@@ -774,7 +770,49 @@ async def export_data(
                 for r in rows
             ]
         )
-    else:
+    elif scope == "unselected":
+        stmt = (
+            select(XbkStudent)
+            .select_from(XbkSelection)
+            .join(
+                XbkStudent,
+                and_(
+                    XbkStudent.is_deleted.is_(False),
+                    XbkStudent.year == XbkSelection.year,
+                    XbkStudent.term == XbkSelection.term,
+                    XbkStudent.student_no == XbkSelection.student_no,
+                ),
+            )
+            .where(
+                XbkSelection.is_deleted.is_(False),
+                XbkSelection.course_code == ""
+            )
+        )
+        if year is not None:
+            stmt = stmt.where(XbkSelection.year == year)
+        if term:
+            stmt = stmt.where(XbkSelection.term == term)
+        if grade:
+            stmt = stmt.where(XbkSelection.grade == grade)
+        if class_name:
+            stmt = stmt.where(XbkStudent.class_name == class_name)
+        
+        rows = (await db.execute(stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
+        df = pd.DataFrame(
+            [
+                {
+                    "年份": r.year,
+                    "学期": r.term,
+                    "年级": r.grade,
+                    "班级": r.class_name,
+                    "学号": r.student_no,
+                    "姓名": r.name,
+                    "性别": r.gender,
+                }
+                for r in rows
+            ]
+        )
+    elif scope == "suspended":
         students_stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
         selections_stmt = (
             select(XbkSelection.student_no)
@@ -819,6 +857,8 @@ async def export_data(
                 if r.student_no not in selected_student_nos
             ]
         )
+    else:
+        raise HTTPException(status_code=422, detail=f"不支持的导出范围: {scope}")
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:

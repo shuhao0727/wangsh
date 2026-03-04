@@ -63,6 +63,7 @@ export type {
   XbkPublicConfig,
   XbkScope,
   XbkExportType,
+  XbkExportScope,
   XbkListResponse,
   XbkStudentRow,
   XbkCourseRow,

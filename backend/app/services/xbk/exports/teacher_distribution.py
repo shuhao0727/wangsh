@@ -288,7 +288,7 @@ async def build_teacher_distribution_xlsx(
         ws = wb.create_sheet(sheet_name)
 
         ws.merge_cells("A1:I1")
-        ws["A1"] = f"{ys}-{ye}学年江苏省昆山中学{term}校本课程学生签到表"
+        ws["A1"] = f"{ys}-{ye}学年{term}江苏省昆山中学校本课程学生签到表"
         ws["A1"].font = Font(size=14, bold=True)
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[1].height = 35

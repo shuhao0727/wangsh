@@ -205,14 +205,36 @@ export const userApi = {
   },
 
   /**
-   * 批量导入用户（CSV格式，需要管理员权限）
-   * @param file CSV文件
+   * 下载导入模板（支持 xlsx / csv）
+   */
+  downloadImportTemplate: async (
+    format: "xlsx" | "csv" = "xlsx",
+    config?: any,
+  ) => {
+    try {
+      const response = await api.client.get<Blob>(
+        `/users/import/template?format=${format}`,
+        {
+          ...config,
+          responseType: "blob",
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("下载导入模板失败:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 批量导入用户（CSV / XLSX 格式，需要管理员权限）
+   * @param file 导入文件
    */
   importUsers: async (file: File, config?: any) => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      
+
       const response = await api.client.post<UserImportResult>(
         "/users/import",
         formData,

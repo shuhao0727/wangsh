@@ -4,11 +4,14 @@
 支持管理员管理所有用户，包括学生和管理员
 """
 
-from typing import List, Optional, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 from datetime import datetime
 import csv
 import io
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, UploadFile
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +21,81 @@ from app.core.deps import require_admin, get_db
 from app.models import User
 
 router = APIRouter()
+
+USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名"]
+USER_IMPORT_REQUIRED_FIELDS = ["学号", "姓名"]
+USER_IMPORT_TEMPLATE_ROWS = [
+    ["20230001", "张三", "2025", "高一(1)班", "true", "zhangsan"],
+    ["20230002", "李四", "2025", "高一(2)班", "true", "lisi"],
+    ["20230003", "王五", "2025", "高一(3)班", "false", "wangwu"],
+    ["20230004", "赵六", "2025", "高一(1)班", "true", ""],
+]
+
+
+def _normalize_cell_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value).strip()
+
+
+def _parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
+    content_text = content.decode("utf-8-sig")
+    csv_file = io.StringIO(content_text)
+    reader = csv.DictReader(csv_file)
+    if not reader.fieldnames:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV文件为空或格式不正确",
+        )
+
+    fieldnames = [str(name).strip() for name in reader.fieldnames if name]
+    return fieldnames, reader
+
+
+def _parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
+    workbook = load_workbook(filename=io.BytesIO(content), data_only=True, read_only=True)
+    worksheet = workbook.active
+    row_iterator = worksheet.iter_rows(values_only=True)
+    header_row = next(row_iterator, None)
+    if not header_row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Excel文件为空或格式不正确",
+        )
+
+    fieldnames = [_normalize_cell_value(value) for value in header_row]
+    if not any(fieldnames):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Excel文件缺少表头",
+        )
+
+    def row_generator() -> Iterator[Dict[str, str]]:
+        for row in row_iterator:
+            current_row = row or ()
+            parsed_row: Dict[str, str] = {}
+            for idx, header in enumerate(fieldnames):
+                if not header:
+                    continue
+                value = current_row[idx] if idx < len(current_row) else ""
+                parsed_row[header] = _normalize_cell_value(value)
+            yield parsed_row
+
+    return [header for header in fieldnames if header], row_generator()
+
+
+def _parse_import_rows(file_name: str, content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
+    lower_name = file_name.lower()
+    if lower_name.endswith((".csv", ".txt")):
+        return _parse_csv_rows(content)
+    if lower_name.endswith(".xlsx"):
+        return _parse_xlsx_rows(content)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="只支持 CSV、TXT 或 XLSX 文件",
+    )
 
 
 # Pydantic 模型定义
@@ -474,6 +552,60 @@ class UserImportResult(BaseModel):
     errors: List[ImportUserResponse] = []
 
 
+@router.get("/import/template")
+async def download_user_import_template(
+    format: str = Query("xlsx", pattern="^(xlsx|csv)$"),
+    current_user = Depends(require_admin),
+) -> StreamingResponse:
+    """
+    下载用户导入模板，支持 xlsx / csv。
+    """
+    file_name = f"user_import_template.{format}"
+    encoded_name = quote(file_name)
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"}
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(USER_IMPORT_HEADERS)
+        writer.writerow(["# 注意：只能导入学生用户，不允许导入管理员"])
+        writer.writerow(["# 状态：true=激活，false=未激活（可选，默认为true）"])
+        writer.writerow(["# 用户名：可选字段，如果不填将使用学号作为登录账号"])
+        writer.writerow(["# 示例数据："])
+        for sample_row in USER_IMPORT_TEMPLATE_ROWS:
+            writer.writerow(sample_row)
+
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        return StreamingResponse(
+            io.BytesIO(csv_bytes),
+            media_type="text/csv; charset=utf-8",
+            headers=headers,
+        )
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "用户导入模板"
+    worksheet.append(USER_IMPORT_HEADERS)
+    for sample_row in USER_IMPORT_TEMPLATE_ROWS:
+        worksheet.append(sample_row)
+
+    notes_sheet = workbook.create_sheet(title="填写说明")
+    notes_sheet.append(["说明"])
+    notes_sheet.append(["1. 只能导入学生用户，不允许导入管理员"])
+    notes_sheet.append(["2. 状态字段可填 true/false（默认为 true）"])
+    notes_sheet.append(["3. 用户名字段可选，不填将使用学号作为登录账号"])
+    notes_sheet.append(["4. 学号、姓名为必填字段"])
+
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
 @router.post("/import", response_model=UserImportResult)
 async def import_users(
     file: UploadFile,
@@ -481,38 +613,27 @@ async def import_users(
     db: AsyncSession = Depends(get_db)
 ) -> UserImportResult:
     """
-    批量导入用户（CSV格式，需要管理员权限）
+    批量导入用户（CSV / XLSX 格式，需要管理员权限）
     注意：只能导入学生用户，不允许导入管理员
     """
     try:
         # 检查文件类型
-        if not file.filename or not file.filename.lower().endswith(('.csv', '.txt')):
+        if not file.filename:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="只支持CSV或文本文件"
+                detail="文件名不能为空"
             )
-        
+
         # 读取文件内容
         content = await file.read()
-        content_text = content.decode('utf-8-sig')  # 处理BOM
-        
-        # 解析CSV
-        csv_file = io.StringIO(content_text)
-        reader = csv.DictReader(csv_file)
-        
-        if not reader.fieldnames:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="CSV文件为空或格式不正确"
-            )
-        
+        fieldnames, reader = _parse_import_rows(file.filename, content)
+
         # 验证必要字段
-        required_fields = ['学号', '姓名']
-        for field in required_fields:
-            if field not in reader.fieldnames:
+        for field in USER_IMPORT_REQUIRED_FIELDS:
+            if field not in fieldnames:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"CSV文件缺少必要字段: {field}"
+                    detail=f"导入文件缺少必要字段: {field}"
                 )
         
         results = []

@@ -31,16 +31,16 @@ export interface FeatureFlags {
 
 // 从环境变量构建配置
 const getConfig = (): AppConfig => {
-  // 优先使用环境变量；开发环境默认直连后端 http://localhost:8000/api/v1
+  // 优先使用环境变量；开发环境默认走同源 /api/v1（由 devServer 代理到后端）
   const env =
     (process.env.REACT_APP_ENV as "development" | "production" | "test") ||
     "development";
   const rawApiUrl =
     process.env.REACT_APP_API_URL ||
-    (env === "development" ? "http://localhost:8000/api/v1" : "/api/v1");
+    "/api/v1";
   const apiUrl = (() => {
     let v = String(rawApiUrl || "").trim();
-    if (!v) return env === "development" ? "http://localhost:8000/api/v1" : "/api/v1";
+    if (!v) return "/api/v1";
     if (v.startsWith("http://") || v.startsWith("https://")) {
       try {
         const u = new URL(v);
@@ -54,7 +54,7 @@ const getConfig = (): AppConfig => {
       return v;
     }
     if (v.startsWith("/")) return v;
-    return env === "development" ? "http://localhost:8000/api/v1" : "/api/v1";
+    return "/api/v1";
   })();
   const difyUrl = process.env.REACT_APP_DIFY_URL || "";
   const nasUrl = process.env.REACT_APP_NAS_URL || "";

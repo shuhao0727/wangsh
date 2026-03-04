@@ -42,6 +42,7 @@ import type {
   XbkStudentRow,
   XbkScope,
   XbkExportType,
+  XbkExportScope,
   XbkMeta,
   XbkImportPreview,
   XbkImportResult,
@@ -55,7 +56,7 @@ import "./Xbk.css";
 const { Text } = Typography;
 const { Option } = Select;
 
-type DataTabKey = "course_results" | "students" | "courses" | "selections" | "no_selection";
+type DataTabKey = "course_results" | "students" | "courses" | "selections" | "unselected" | "suspended";
 
 type Filters = {
   year?: number;
@@ -130,9 +131,12 @@ const XbkPage: React.FC = () => {
   const [selectionsTotal, setSelectionsTotal] = useState(0);
   const [selectionsPage, setSelectionsPage] = useState(1);
   const [selectionsPageSize, setSelectionsPageSize] = useState(50);
-  const [noSelectionAll, setNoSelectionAll] = useState<XbkStudentRow[]>([]);
-  const [noSelectionPage, setNoSelectionPage] = useState(1);
-  const [noSelectionPageSize, setNoSelectionPageSize] = useState(50);
+  const [unselectedAll, setUnselectedAll] = useState<XbkStudentRow[]>([]);
+  const [unselectedPage, setUnselectedPage] = useState(1);
+  const [unselectedPageSize, setUnselectedPageSize] = useState(50);
+  const [suspendedAll, setSuspendedAll] = useState<XbkStudentRow[]>([]);
+  const [suspendedPage, setSuspendedPage] = useState(1);
+  const [suspendedPageSize, setSuspendedPageSize] = useState(50);
   const [courseResultsTotal, setCourseResultsTotal] = useState(0);
   const [courseResultsPage, setCourseResultsPage] = useState(1);
   const [courseResultsPageSize, setCourseResultsPageSize] = useState(50);
@@ -261,14 +265,24 @@ const XbkPage: React.FC = () => {
         setCoursesTotal(res.total);
         return;
       }
-      if (activeTab === "no_selection") {
+      if (activeTab === "unselected") {
+        const res = await xbkDataApi.getStudentsWithEmptySelection({
+          year: baseParams.year,
+          term: baseParams.term,
+          grade: baseParams.grade,
+          class_name: baseParams.class_name,
+        });
+        setUnselectedAll(res.items || []);
+        return;
+      }
+      if (activeTab === "suspended") {
         const res = await xbkDataApi.getStudentsWithoutSelection({
           year: baseParams.year,
           term: baseParams.term,
           grade: baseParams.grade,
           class_name: baseParams.class_name,
         });
-        setNoSelectionAll(res.items || []);
+        setSuspendedAll(res.items || []);
         return;
       }
       const res = await xbkDataApi.listSelections({
@@ -284,7 +298,8 @@ const XbkPage: React.FC = () => {
       setCourses([]);
       setSelections([]);
       setCourseResults([]);
-      setNoSelectionAll([]);
+      setUnselectedAll([]);
+      setSuspendedAll([]);
     } finally {
       setDataLoading(false);
     }
@@ -340,7 +355,8 @@ const XbkPage: React.FC = () => {
     setStudentsPage(1);
     setCoursesPage(1);
     setSelectionsPage(1);
-    setNoSelectionPage(1);
+    setUnselectedPage(1);
+    setSuspendedPage(1);
     setCourseResultsPage(1);
   }, [enabled, filters.year, filters.term, filters.grade, filters.class_name, filters.search_text]);
 
@@ -410,21 +426,37 @@ const XbkPage: React.FC = () => {
     });
   }, [analysisNoSelection, analysisStudentQuery]);
 
-  const filteredNoSelectionAll = useMemo(() => {
+  const filteredUnselectedAll = useMemo(() => {
     const q = String(filters.search_text || "").trim().toLowerCase();
-    if (!q) return noSelectionAll;
-    return noSelectionAll.filter((s) => {
+    if (!q) return unselectedAll;
+    return unselectedAll.filter((s) => {
       const cls = String(s.class_name || "").toLowerCase();
       const name = String(s.name || "").toLowerCase();
       const no = String(s.student_no || "").toLowerCase();
       return cls.includes(q) || name.includes(q) || no.includes(q);
     });
-  }, [filters.search_text, noSelectionAll]);
+  }, [filters.search_text, unselectedAll]);
 
-  const pagedNoSelection = useMemo(() => {
-    const start = (noSelectionPage - 1) * noSelectionPageSize;
-    return filteredNoSelectionAll.slice(start, start + noSelectionPageSize);
-  }, [filteredNoSelectionAll, noSelectionPage, noSelectionPageSize]);
+  const pagedUnselected = useMemo(() => {
+    const start = (unselectedPage - 1) * unselectedPageSize;
+    return filteredUnselectedAll.slice(start, start + unselectedPageSize);
+  }, [filteredUnselectedAll, unselectedPage, unselectedPageSize]);
+
+  const filteredSuspendedAll = useMemo(() => {
+    const q = String(filters.search_text || "").trim().toLowerCase();
+    if (!q) return suspendedAll;
+    return suspendedAll.filter((s) => {
+      const cls = String(s.class_name || "").toLowerCase();
+      const name = String(s.name || "").toLowerCase();
+      const no = String(s.student_no || "").toLowerCase();
+      return cls.includes(q) || name.includes(q) || no.includes(q);
+    });
+  }, [filters.search_text, suspendedAll]);
+
+  const pagedSuspended = useMemo(() => {
+    const start = (suspendedPage - 1) * suspendedPageSize;
+    return filteredSuspendedAll.slice(start, start + suspendedPageSize);
+  }, [filteredSuspendedAll, suspendedPage, suspendedPageSize]);
 
   const analysisCourseColumns: ColumnsType<any> = useMemo(
     () => [
@@ -478,8 +510,8 @@ const XbkPage: React.FC = () => {
     [],
   );
 
-  const noSelectionColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
-    const rows = pagedNoSelection as any[];
+  const unselectedColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
+    const rows = pagedUnselected as any[];
     return [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -499,18 +531,36 @@ const XbkPage: React.FC = () => {
       { title: "姓名", dataIndex: "name", width: calcColumnWidth(rows, "name", "姓名", 90, 130), ellipsis: true },
       { title: "性别", dataIndex: "gender", width: 70, render: (v) => v || "-" },
     ];
-  }, [pagedNoSelection]);
+  }, [pagedUnselected]);
+
+  const suspendedColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
+    const rows = pagedSuspended as any[];
+    return [
+      { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
+      { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
+      { title: "年级", dataIndex: "grade", width: 80, render: (v) => v || "-" },
+      {
+        title: "班级",
+        dataIndex: "class_name",
+        width: calcColumnWidth(rows, "class_name", "班级", 110, 180),
+        ellipsis: true,
+      },
+      {
+        title: "学号",
+        dataIndex: "student_no",
+        width: calcColumnWidth(rows, "student_no", "学号", 120, 170),
+        ellipsis: true,
+      },
+      { title: "姓名", dataIndex: "name", width: calcColumnWidth(rows, "name", "姓名", 90, 130), ellipsis: true },
+      { title: "性别", dataIndex: "gender", width: 70, render: (v) => v || "-" },
+    ];
+  }, [pagedSuspended]);
 
   const handleExportCurrentTable = useCallback(() => {
     (async () => {
       setExportingCurrent(true);
       try {
-        const scope =
-          activeTab === "course_results"
-            ? "course_results"
-            : activeTab === "no_selection"
-              ? "no_selection"
-              : activeTab;
+        const scope: XbkExportScope = activeTab;
         const blob = await xbkDataApi.exportCurrentTable({
           scope,
           year: filters.year,
@@ -907,9 +957,14 @@ const XbkPage: React.FC = () => {
   const kpiStudents = summary?.students ?? studentsTotal;
   const kpiCourses = summary?.courses ?? coursesTotal;
   const kpiSelections = summary?.selections ?? selectionsTotal;
-  const kpiNoSelection = summary?.no_selection_students ?? 0;
+  const kpiUnselected = summary?.unselected_count ?? 0;
+  const kpiSuspended = summary?.suspended_count ?? 0;
 
   const handleDeleteConfirm = async () => {
+    if (!filters.year || !filters.term) {
+      message.error("删除操作必须先在上方筛选栏选择具体的年份和学期");
+      return;
+    }
     try {
       const scope = deleteType === "all" ? "all" : deleteType;
       const res = await xbkDataApi.deleteData({
@@ -1143,8 +1198,12 @@ const XbkPage: React.FC = () => {
             <span className="xbk-kpi-value">{kpiSelections}</span>
           </div>
           <div className="xbk-kpi-row xbk-kpi-inline-row">
-            <span className="xbk-kpi-label">未选课学生</span>
-            <span className="xbk-kpi-value">{kpiNoSelection}</span>
+            <span className="xbk-kpi-label">未选课</span>
+            <span className="xbk-kpi-value">{kpiUnselected}</span>
+          </div>
+          <div className="xbk-kpi-row xbk-kpi-inline-row">
+            <span className="xbk-kpi-label">休学或其他</span>
+            <span className="xbk-kpi-value">{kpiSuspended}</span>
           </div>
         </div>
       </div>
@@ -1159,7 +1218,8 @@ const XbkPage: React.FC = () => {
             if (key === "students") setStudentsPage(1);
             if (key === "courses") setCoursesPage(1);
             if (key === "selections") setSelectionsPage(1);
-            if (key === "no_selection") setNoSelectionPage(1);
+            if (key === "unselected") setUnselectedPage(1);
+            if (key === "suspended") setSuspendedPage(1);
           }}
           items={[
             {
@@ -1263,24 +1323,49 @@ const XbkPage: React.FC = () => {
               ),
             },
             {
-              key: "no_selection",
-              label: "未选课学生",
+              key: "unselected",
+              label: "未选课",
               children: (
                 <Table
                   rowKey="id"
-                  columns={noSelectionColumns}
-                  dataSource={pagedNoSelection}
+                  columns={unselectedColumns}
+                  dataSource={pagedUnselected}
                   loading={dataLoading}
                   tableLayout="fixed"
                   pagination={{
-                    current: noSelectionPage,
-                    pageSize: noSelectionPageSize,
-                    total: filteredNoSelectionAll.length,
+                    current: unselectedPage,
+                    pageSize: unselectedPageSize,
+                    total: filteredUnselectedAll.length,
                     showSizeChanger: true,
                   }}
                   onChange={(pagination) => {
-                    setNoSelectionPage(pagination.current || 1);
-                    setNoSelectionPageSize(pagination.pageSize || 50);
+                    setUnselectedPage(pagination.current || 1);
+                    setUnselectedPageSize(pagination.pageSize || 50);
+                  }}
+                  size="middle"
+                  scroll={{ x: "max-content", y: tableScrollY }}
+                />
+              ),
+            },
+            {
+              key: "suspended",
+              label: "休学或其他",
+              children: (
+                <Table
+                  rowKey="id"
+                  columns={suspendedColumns}
+                  dataSource={pagedSuspended}
+                  loading={dataLoading}
+                  tableLayout="fixed"
+                  pagination={{
+                    current: suspendedPage,
+                    pageSize: suspendedPageSize,
+                    total: filteredSuspendedAll.length,
+                    showSizeChanger: true,
+                  }}
+                  onChange={(pagination) => {
+                    setSuspendedPage(pagination.current || 1);
+                    setSuspendedPageSize(pagination.pageSize || 50);
                   }}
                   size="middle"
                   scroll={{ x: "max-content", y: tableScrollY }}
@@ -1657,9 +1742,14 @@ const XbkPage: React.FC = () => {
                   <Statistic title="选课条目" value={analysisSummary?.selections ?? 0} />
                 </Card>
               </Col>
-              <Col xs={24} md={6}>
+              <Col xs={24} md={3}>
                 <Card size="small">
-                  <Statistic title="未选课学生" value={analysisNoSelection.length} />
+                  <Statistic title="未选课" value={analysisSummary?.unselected_count ?? 0} />
+                </Card>
+              </Col>
+              <Col xs={24} md={3}>
+                <Card size="small">
+                  <Statistic title="休学或其他" value={analysisSummary?.suspended_count ?? 0} />
                 </Card>
               </Col>
             </Row>

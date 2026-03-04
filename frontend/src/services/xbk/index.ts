@@ -5,6 +5,7 @@ export { xbkDataApi } from "./data";
 export type {
   XbkScope,
   XbkExportType,
+  XbkExportScope,
   XbkListResponse,
   XbkStudentRow,
   XbkCourseRow,

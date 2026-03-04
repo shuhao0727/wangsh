@@ -2,6 +2,13 @@ import { api } from "../api";
 
 export type XbkScope = "students" | "courses" | "selections";
 export type XbkExportType = "course-selection" | "teacher-distribution" | "distribution";
+export type XbkExportScope =
+  | "students"
+  | "courses"
+  | "selections"
+  | "course_results"
+  | "unselected"
+  | "suspended";
 
 export interface XbkListResponse<T> {
   total: number;
@@ -59,7 +66,9 @@ export interface XbkSummary {
   students: number;
   courses: number;
   selections: number;
-  no_selection_students: number;
+  no_selection_students: number; // Deprecated, kept for compat
+  unselected_count: number;
+  suspended_count: number;
 }
 
 export interface XbkCourseStatItem {
@@ -125,7 +134,7 @@ export const xbkDataApi = {
     const form = new FormData();
     form.append("file", params.file);
     const res = await api.client.post("/xbk/import/preview", form, {
-      params: { scope: params.scope, year: params.year, term: params.term, grade: params.grade },
+      params: { scope: params.scope, grade: params.grade },
     });
     return res.data as XbkImportPreview;
   },
@@ -244,8 +253,6 @@ export const xbkDataApi = {
     const res = await api.client.post("/xbk/import", form, {
       params: {
         scope: params.scope,
-        year: params.year,
-        term: params.term,
         grade: params.grade,
         skip_invalid: params.skip_invalid ?? true,
       },
@@ -254,7 +261,7 @@ export const xbkDataApi = {
   },
 
   exportData: async (params: {
-    scope: XbkScope;
+    scope: XbkExportScope;
     year?: number;
     term?: string;
     grade?: string;
@@ -270,7 +277,7 @@ export const xbkDataApi = {
   },
 
   exportCurrentTable: async (params: {
-    scope: "students" | "courses" | "selections" | "course_results" | "no_selection";
+    scope: XbkExportScope;
     year?: number;
     term?: string;
     grade?: string;
@@ -344,6 +351,18 @@ export const xbkDataApi = {
     class_name?: string;
   }): Promise<{ items: XbkStudentRow[] }> => {
     const res = await api.client.get("/xbk/analysis/students-without-selection", {
+      params,
+    });
+    return res.data as { items: XbkStudentRow[] };
+  },
+
+  getStudentsWithEmptySelection: async (params: {
+    year?: number;
+    term?: string;
+    grade?: string;
+    class_name?: string;
+  }): Promise<{ items: XbkStudentRow[] }> => {
+    const res = await api.client.get("/xbk/analysis/students-with-empty-selection", {
       params,
     });
     return res.data as { items: XbkStudentRow[] };

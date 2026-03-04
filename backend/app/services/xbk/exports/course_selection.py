@@ -192,7 +192,7 @@ async def build_student_course_selection_xlsx(
     ys, ye = _title_year_range(year, year_start, year_end)
 
     catalog.insert_rows(1)
-    catalog["A1"] = f"江苏省昆山中学校本课程目录（{ys}-{ye} {term}）"
+    catalog["A1"] = f"江苏省昆山中学校本课程目录（{ys}-{ye} 学年）"
     catalog["A1"].font = Font(size=14, bold=True)
     catalog["A1"].alignment = Alignment(horizontal="center", vertical="center")
     catalog.merge_cells("A1:E1")

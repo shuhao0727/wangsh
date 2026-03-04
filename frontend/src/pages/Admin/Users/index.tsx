@@ -6,6 +6,7 @@
 import React from "react";
 import {
   Button,
+  Dropdown,
   Input,
   Space,
   Table,
@@ -19,6 +20,7 @@ import {
   SearchOutlined,
   ReloadOutlined,
   DownloadOutlined,
+  DownOutlined,
   UploadOutlined,
   DeleteOutlined,
   UserOutlined,
@@ -119,10 +121,30 @@ const AdminUsers: React.FC = () => {
 
         <Space size={4}>
           <Button type="text" icon={<ReloadOutlined />} onClick={actions.handleReset} title="重置" />
-          <Button type="text" icon={<DownloadOutlined />} onClick={actions.handleDownloadTemplate} title="下载模板" />
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "xlsx",
+                  label: "下载 XLSX 模板",
+                  onClick: () => actions.handleDownloadTemplate("xlsx"),
+                },
+                {
+                  key: "csv",
+                  label: "下载 CSV 模板",
+                  onClick: () => actions.handleDownloadTemplate("csv"),
+                },
+              ],
+            }}
+          >
+            <Button type="text" icon={<DownloadOutlined />} title="下载模板">
+              模板
+              <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
+            </Button>
+          </Dropdown>
           <Upload
             beforeUpload={actions.handleFileUpload}
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.csv,.txt"
             showUploadList={false}
           >
             <Button type="text" icon={<UploadOutlined />} title="导入用户" />

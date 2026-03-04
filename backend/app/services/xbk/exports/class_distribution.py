@@ -238,7 +238,7 @@ async def build_class_distribution_xlsx(
         grade_class = _format_grade_class(grade, cls)
         ws = wb.create_sheet(safe_sheet_name(cls))
         ws.merge_cells("A1:E1")
-        ws["A1"] = f"{ys}-{ye}学年江苏省昆山中学{term}{grade_class}校本课程分发表"
+        ws["A1"] = f"{ys}-{ye}学年{term}江苏省昆山中学{grade_class}校本课程分发表"
         ws["A1"].font = Font(size=14, bold=True)
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[1].height = 35

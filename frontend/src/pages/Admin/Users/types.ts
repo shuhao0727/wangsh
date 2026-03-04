@@ -63,7 +63,7 @@ export interface UserActions {
   handleFormSubmit: (values: any) => Promise<void>;
   handleView: (record: User) => void;
   handleBatchDelete: () => void;
-  handleDownloadTemplate: () => Promise<void>;
+  handleDownloadTemplate: (format?: "xlsx" | "csv") => Promise<void>;
   handleFileUpload: (file: File) => Promise<boolean>;
   setSelectedRowKeys: (keys: React.Key[]) => void;
   handleRoleFilter: (roleCode: string | undefined) => void;

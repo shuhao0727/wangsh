@@ -405,34 +405,57 @@ async def list_selections(
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
-    stmt = select(XbkSelection).where(XbkSelection.is_deleted.is_(False))
-    stmt = _apply_common_filters(stmt, XbkSelection, year, term, grade, search_text)
+    # 改为以学生表为主，Left Join 选课表，确保未选课学生也能显示
+    stmt = (
+        select(XbkStudent, XbkSelection)
+        .select_from(XbkStudent)
+        .outerjoin(
+            XbkSelection,
+            and_(
+                XbkSelection.is_deleted.is_(False),
+                XbkSelection.year == XbkStudent.year,
+                XbkSelection.term == XbkStudent.term,
+                XbkSelection.student_no == XbkStudent.student_no,
+            ),
+        )
+        .where(XbkStudent.is_deleted.is_(False))
+    )
+    
+    # 过滤条件作用于 XbkStudent
+    stmt = _apply_common_filters(stmt, XbkStudent, year, term, grade, search_text)
 
     if class_name:
-        sub = (
-            select(XbkStudent.student_no)
-            .where(
-                XbkStudent.is_deleted.is_(False),
-                XbkStudent.class_name == class_name,
-                *( [XbkStudent.year == year] if year is not None else [] ),
-                *( [XbkStudent.term == term] if term else [] ),
-            )
-            .subquery()
-        )
-        stmt = stmt.where(XbkSelection.student_no.in_(select(sub.c.student_no)))
+        stmt = stmt.where(XbkStudent.class_name == class_name)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar_one() or 0
 
     rows = (
         await db.execute(
-            stmt.order_by(XbkSelection.student_no.asc(), XbkSelection.course_code.asc())
+            stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc(), XbkSelection.course_code.asc())
             .offset((page - 1) * size)
             .limit(size)
         )
-    ).scalars().all()
+    ).all()
 
-    items = [XbkSelectionOut.model_validate(r).model_dump() for r in rows]
+    items = []
+    for student, selection in rows:
+        if selection:
+            item = XbkSelectionOut.model_validate(selection).model_dump()
+            if not item["course_code"]:
+                item["course_code"] = "未选" # Map empty string to "未选"
+            items.append(item)
+        else:
+            # 构造虚拟未选记录 (Suspended/Other)
+            items.append({
+                "id": 0, # Virtual ID
+                "year": student.year,
+                "term": student.term,
+                "grade": student.grade,
+                "student_no": student.student_no,
+                "name": student.name,
+                "course_code": "休学或其他", # Mark as Suspended
+            })
     return {"total": total, "items": items}
 
 
@@ -451,25 +474,25 @@ async def list_course_results(
     stmt = (
         select(
             XbkSelection.id.label("id"),
-            XbkSelection.year.label("year"),
-            XbkSelection.term.label("term"),
-            XbkSelection.grade.label("grade"),
-            XbkSelection.student_no.label("student_no"),
-            func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
+            XbkStudent.year.label("year"),
+            XbkStudent.term.label("term"),
+            XbkStudent.grade.label("grade"),
+            XbkStudent.student_no.label("student_no"),
+            XbkStudent.name.label("student_name"),
             XbkStudent.class_name.label("class_name"),
             XbkSelection.course_code.label("course_code"),
             XbkCourse.course_name.label("course_name"),
             XbkCourse.teacher.label("teacher"),
             XbkCourse.location.label("location"),
         )
-        .select_from(XbkSelection)
+        .select_from(XbkStudent)
         .outerjoin(
-            XbkStudent,
+            XbkSelection,
             and_(
-                XbkStudent.is_deleted.is_(False),
-                XbkStudent.year == XbkSelection.year,
-                XbkStudent.term == XbkSelection.term,
-                XbkStudent.student_no == XbkSelection.student_no,
+                XbkSelection.is_deleted.is_(False),
+                XbkSelection.year == XbkStudent.year,
+                XbkSelection.term == XbkStudent.term,
+                XbkSelection.student_no == XbkStudent.student_no,
             ),
         )
         .outerjoin(
@@ -481,30 +504,13 @@ async def list_course_results(
                 XbkCourse.course_code == XbkSelection.course_code,
             ),
         )
-        .where(XbkSelection.is_deleted.is_(False))
+        .where(XbkStudent.is_deleted.is_(False))
     )
 
-    if year is not None:
-        stmt = stmt.where(XbkSelection.year == year)
-    if term:
-        stmt = stmt.where(XbkSelection.term == term)
-    if grade:
-        stmt = stmt.where(XbkSelection.grade == grade)
+    stmt = _apply_common_filters(stmt, XbkStudent, year, term, grade, search_text)
+
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
-    if search_text and search_text.strip():
-        keyword = f"%{search_text.strip()}%"
-        stmt = stmt.where(
-            or_(
-                XbkSelection.student_no.ilike(keyword),
-                XbkSelection.course_code.ilike(keyword),
-                func.coalesce(XbkSelection.name, XbkStudent.name).ilike(keyword),
-                XbkStudent.class_name.ilike(keyword),
-                XbkCourse.course_name.ilike(keyword),
-                XbkCourse.teacher.ilike(keyword),
-                XbkCourse.location.ilike(keyword),
-            )
-        )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar_one() or 0
@@ -513,8 +519,9 @@ async def list_course_results(
         await db.execute(
             stmt.order_by(
                 XbkStudent.class_name.asc(),  # 先按班级
-                cast(func.regexp_replace(XbkSelection.student_no, '\D', '', 'g'), Integer).asc(), # 再按学号数字部分
-                XbkSelection.student_no.asc() # 最后按学号字符串
+                cast(func.regexp_replace(XbkStudent.student_no, '\D', '', 'g'), Integer).asc(), # 再按学号数字部分
+                XbkStudent.student_no.asc(), # 最后按学号字符串
+                XbkSelection.course_code.asc() # 如果选多门课，按课程排序
             )
             .offset((page - 1) * size)
             .limit(size)
@@ -523,15 +530,15 @@ async def list_course_results(
 
     items = [
         {
-            "id": int(r.id),
+            "id": int(r.id) if r.id else 0, # Virtual ID for unselected
             "year": int(r.year),
             "term": str(r.term),
             "grade": str(r.grade) if r.grade else None,
             "student_no": str(r.student_no),
             "student_name": str(r.student_name) if r.student_name else None,
             "class_name": str(r.class_name) if r.class_name else None,
-            "course_code": str(r.course_code),
-            "course_name": str(r.course_name) if r.course_name else None,
+            "course_code": str(r.course_code) if r.course_code else ("未选" if r.id else "休学或其他"), # Map empty to "未选", NULL to "休学或其他"
+            "course_name": str(r.course_name) if r.course_name else ("未选" if r.id else "休学或其他"),
             "teacher": str(r.teacher) if r.teacher else None,
             "location": str(r.location) if r.location else None,
         }
@@ -550,6 +557,9 @@ async def delete_data(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
+    if year is None or not term:
+        raise HTTPException(status_code=400, detail="删除操作必须指定年份和学期")
+
     def base_conditions(model):
         conds: List[Any] = []
         if year is not None:

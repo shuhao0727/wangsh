@@ -312,7 +312,8 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
 if settings.DEBUG:
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
+        allow_origin_regex=r"^https?://((localhost|127\.0\.0\.1)|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[0-1])(\.\d{1,3}){2})(:\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

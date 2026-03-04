@@ -1,12 +1,13 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.api.endpoints.xbk.data import require_xbk_access
+from app.schemas.xbk.data import XbkStudentOut
 
 router = APIRouter()
 
@@ -22,27 +23,31 @@ async def get_summary(
 ) -> Dict[str, Any]:
     student_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
     course_stmt = select(func.count()).select_from(XbkCourse).where(XbkCourse.is_deleted.is_(False))
-    selection_stmt = select(func.count()).select_from(XbkSelection).where(XbkSelection.is_deleted.is_(False))
-    no_sel_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
+    selection_stmt = select(func.count()).select_from(XbkSelection).where(XbkSelection.is_deleted.is_(False), XbkSelection.course_code != "")
+    unselected_stmt = select(func.count()).select_from(XbkSelection).where(XbkSelection.is_deleted.is_(False), XbkSelection.course_code == "")
+    suspended_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
 
     if year is not None:
         student_stmt = student_stmt.where(XbkStudent.year == year)
         course_stmt = course_stmt.where(XbkCourse.year == year)
         selection_stmt = selection_stmt.where(XbkSelection.year == year)
-        no_sel_stmt = no_sel_stmt.where(XbkStudent.year == year)
+        unselected_stmt = unselected_stmt.where(XbkSelection.year == year)
+        suspended_stmt = suspended_stmt.where(XbkStudent.year == year)
     if term:
         student_stmt = student_stmt.where(XbkStudent.term == term)
         course_stmt = course_stmt.where(XbkCourse.term == term)
         selection_stmt = selection_stmt.where(XbkSelection.term == term)
-        no_sel_stmt = no_sel_stmt.where(XbkStudent.term == term)
+        unselected_stmt = unselected_stmt.where(XbkSelection.term == term)
+        suspended_stmt = suspended_stmt.where(XbkStudent.term == term)
     if grade:
         student_stmt = student_stmt.where(XbkStudent.grade == grade)
         course_stmt = course_stmt.where(XbkCourse.grade == grade)
         selection_stmt = selection_stmt.where(XbkSelection.grade == grade)
-        no_sel_stmt = no_sel_stmt.where(XbkStudent.grade == grade)
+        unselected_stmt = unselected_stmt.where(XbkSelection.grade == grade)
+        suspended_stmt = suspended_stmt.where(XbkStudent.grade == grade)
     if class_name:
         student_stmt = student_stmt.where(XbkStudent.class_name == class_name)
-        no_sel_stmt = no_sel_stmt.where(XbkStudent.class_name == class_name)
+        suspended_stmt = suspended_stmt.where(XbkStudent.class_name == class_name)
         sub = select(XbkStudent.student_no).where(
             XbkStudent.is_deleted.is_(False),
             XbkStudent.class_name == class_name,
@@ -51,10 +56,13 @@ async def get_summary(
             *( [XbkStudent.grade == grade] if grade else [] ),
         )
         selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
+        unselected_stmt = unselected_stmt.where(XbkSelection.student_no.in_(sub))
 
     students = (await db.execute(student_stmt)).scalar_one() or 0
     courses = (await db.execute(course_stmt)).scalar_one() or 0
     selections = (await db.execute(selection_stmt)).scalar_one() or 0
+    unselected_count = (await db.execute(unselected_stmt)).scalar_one() or 0
+    
     selected_student_sub = (
         select(XbkSelection.student_no)
         .where(XbkSelection.is_deleted.is_(False))
@@ -68,14 +76,16 @@ async def get_summary(
         selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
     if class_name:
         selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(sub))
-    no_sel_stmt = no_sel_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
-    no_selection_students = (await db.execute(no_sel_stmt)).scalar_one() or 0
+    
+    suspended_stmt = suspended_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
+    suspended_count = (await db.execute(suspended_stmt)).scalar_one() or 0
 
     return {
         "students": students,
         "courses": courses,
         "selections": selections,
-        "no_selection_students": no_selection_students,
+        "unselected_count": unselected_count,
+        "suspended_count": suspended_count,
     }
 
 
@@ -147,9 +157,57 @@ async def course_stats(
         for code, count in rows
     ]
     
+    # Calculate unselected students (Actually Suspended/Other in new logic)
+    suspended_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
+    if year is not None:
+        suspended_stmt = suspended_stmt.where(XbkStudent.year == year)
+    if term:
+        suspended_stmt = suspended_stmt.where(XbkStudent.term == term)
+    if grade:
+        suspended_stmt = suspended_stmt.where(XbkStudent.grade == grade)
+    if class_name:
+        suspended_stmt = suspended_stmt.where(XbkStudent.class_name == class_name)
+    
+    # Reuse the subquery logic from get_summary
+    selected_student_sub = (
+        select(XbkSelection.student_no)
+        .where(XbkSelection.is_deleted.is_(False))
+        .group_by(XbkSelection.student_no)
+    )
+    if year is not None:
+        selected_student_sub = selected_student_sub.where(XbkSelection.year == year)
+    if term:
+        selected_student_sub = selected_student_sub.where(XbkSelection.term == term)
+    if grade:
+        selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
+    if class_name:
+        selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(sub))
+        
+    suspended_stmt = suspended_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
+    suspended_count = (await db.execute(suspended_stmt)).scalar_one() or 0
+    
+    # Add virtual row for "休学或其他"
+    if suspended_count > 0:
+        items.append({
+            "course_code": "休学或其他",
+            "course_name": "休学或其他",
+            "count": suspended_count,
+            "quota": 0,
+            "class_count": 0,
+            "allowed_total": 0,
+        })
+    
     # 按照课程代码排序 (尝试转换为数字排序)
     def _sort_key(item):
         code = item["course_code"]
+        if code == "":
+            item["course_code"] = "未选"
+            item["course_name"] = "未选"
+            return (2, 0) # Unselected
+        if code == "未选": # In case it's already "未选"
+             return (2, 0)
+        if code == "休学或其他":
+            return (3, 0) # Suspended at the very end
         if code.isdigit():
             return (0, int(code))
         return (1, code)
@@ -194,6 +252,47 @@ async def class_stats(
         return (1, 0, name)
         
     items.sort(key=_sort_key)
+    return {"items": items}
+
+
+@router.get("/students-with-empty-selection")
+async def students_with_empty_selection(
+    year: Optional[int] = Query(None),
+    term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
+    class_name: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
+) -> Dict[str, Any]:
+    stmt = (
+        select(XbkStudent)
+        .select_from(XbkSelection)
+        .join(
+            XbkStudent,
+            and_(
+                XbkStudent.is_deleted.is_(False),
+                XbkStudent.year == XbkSelection.year,
+                XbkStudent.term == XbkSelection.term,
+                XbkStudent.student_no == XbkSelection.student_no,
+            ),
+        )
+        .where(
+            XbkSelection.is_deleted.is_(False),
+            XbkSelection.course_code == ""
+        )
+    )
+
+    if year is not None:
+        stmt = stmt.where(XbkSelection.year == year)
+    if term:
+        stmt = stmt.where(XbkSelection.term == term)
+    if grade:
+        stmt = stmt.where(XbkSelection.grade == grade)
+    if class_name:
+        stmt = stmt.where(XbkStudent.class_name == class_name)
+
+    rows = (await db.execute(stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
+    items = [XbkStudentOut.model_validate(r).model_dump() for r in rows]
     return {"items": items}
 
 

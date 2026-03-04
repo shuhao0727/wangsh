@@ -264,33 +264,20 @@ export const useUsers = (initialParams: SearchParams = {}) => {
   }, [state.selectedRowKeys, loadUsers]);
 
   // 处理下载模板
-  const handleDownloadTemplate = useCallback(async () => {
+  const handleDownloadTemplate = useCallback(async (format: "xlsx" | "csv" = "xlsx") => {
     try {
       setState((prev) => ({ ...prev, loading: true }));
-
-      // 创建完整的CSV模板内容，包含示例数据和说明
-      const templateContent = `学号,姓名,学年,班级,状态,用户名
-# 注意：只能导入学生用户，不允许导入管理员
-# 状态：true=激活，false=未激活（可选，默认为true）
-# 用户名：可选字段，如果不填将使用学号作为登录账号
-# 示例数据：
-20230001,张三,2025,高一(1)班,true,zhangsan
-20230002,李四,2025,高一(2)班,true,lisi
-20230003,王五,2025,高一(3)班,false,wangwu
-20230004,赵六,2025,高一(1)班,true,`;
-      const blob = new Blob([templateContent], {
-        type: "text/csv;charset=utf-8",
-      });
+      const blob = await userApi.downloadImportTemplate(format);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "user_import_template.csv");
+      link.setAttribute("download", `user_import_template.${format}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      message.success("模板下载成功，请按照模板格式填写数据");
+      message.success(`模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`);
     } catch (error) {
       console.error("下载模板失败:", error);
       message.error("下载模板失败");
@@ -307,15 +294,15 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
         // 调用真实的后端导入API
         const result = await userApi.importUsers(file);
-        
+
         if (result.success) {
           // 显示详细的导入结果
           const successMessage = result.message || `导入完成。成功导入: ${result.imported_count}, 更新: ${result.updated_count}, 失败: ${result.error_count}`;
-          
+
           if (result.error_count > 0) {
             // 如果有错误，显示警告消息
             message.warning(successMessage);
-            
+
             // 可以在这里添加错误详情显示逻辑
             if (result.errors.length > 0) {
               console.warn("导入错误详情:", result.errors);
@@ -328,12 +315,12 @@ export const useUsers = (initialParams: SearchParams = {}) => {
           // 导入失败
           message.error(result.message || "文件上传失败");
         }
-        
+
         await loadUsers(); // 重新加载用户列表
         return false; // 阻止默认上传行为
       } catch (error: any) {
         console.error("文件上传失败:", error);
-        
+
         // 显示具体的错误信息
         if (error.response?.data?.detail) {
           message.error(`文件上传失败: ${error.response.data.detail}`);
@@ -342,7 +329,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         } else {
           message.error("文件上传失败");
         }
-        
+
         return false;
       } finally {
         setState((prev) => ({ ...prev, loading: false }));

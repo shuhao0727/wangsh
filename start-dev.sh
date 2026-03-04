@@ -320,9 +320,11 @@ setup_environment() {
     set_default_env FRONTEND_PORT "6608"
     set_default_env PORT "${FRONTEND_PORT}"
     if [ "${START_MODE:-local}" = "docker" ]; then
+        set_default_env DEV_PROXY_TARGET "http://backend:8000"
         set_default_env REACT_APP_API_URL "/api/v1"
     else
-        set_default_env REACT_APP_API_URL "http://localhost:${BACKEND_PORT:-8000}/api/v1"
+        set_default_env DEV_PROXY_TARGET "http://localhost:${BACKEND_PORT:-8000}"
+        set_default_env REACT_APP_API_URL "/api/v1"
     fi
     set_default_env REACT_APP_ENV "development"
     
