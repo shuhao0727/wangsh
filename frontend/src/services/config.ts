@@ -56,8 +56,8 @@ const getConfig = (): AppConfig => {
     if (v.startsWith("/")) return v;
     return "/api/v1";
   })();
-  const difyUrl = process.env.REACT_APP_DIFY_URL || "";
-  const nasUrl = process.env.REACT_APP_NAS_URL || "";
+  const difyUrl = process.env.REACT_APP_DIFY_URL || "http://wangsh.cn:6606";
+  const nasUrl = process.env.REACT_APP_NAS_URL || "http://wangsh.cn:5000";
 
   return {
     apiUrl,
