@@ -54,7 +54,7 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile.prod
-          target: worker_runtime
+          target: pythonlab_worker_runtime
           platforms: linux/amd64
           push: true
           tags: |

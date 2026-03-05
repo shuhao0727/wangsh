@@ -186,3 +186,20 @@
   background-color: var(--ws-color-primary-bg);
   color: var(--ws-color-primary);
 }
+
+@media (max-width: 768px) {
+  .article-card-subline {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .article-card-meta {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .articles-pagination-bar {
+    justify-content: center;
+    padding-right: 0;
+  }
+}

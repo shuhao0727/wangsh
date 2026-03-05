@@ -1,0 +1,41 @@
+.admin-users-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.admin-users-toolbar .admin-users-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.admin-users-toolbar .admin-users-search {
+  width: min(260px, 100%);
+}
+
+.admin-users-toolbar .admin-users-select {
+  width: 110px;
+}
+
+.admin-users-table-wrap {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .admin-users-toolbar {
+    padding: 12px;
+  }
+
+  .admin-users-toolbar .admin-users-search,
+  .admin-users-toolbar .admin-users-select {
+    width: 100% !important;
+  }
+}

@@ -54,9 +54,11 @@ docker buildx build \
 echo "==> Building pythonlab-worker ..."
 docker buildx build \
   --platform "${PLATFORM}" \
-  --target worker_runtime \
+  --target pythonlab_worker_runtime \
   -t "${REGISTRY}/wangsh-pythonlab-worker:${VERSION}" \
   -t "${REGISTRY}/wangsh-pythonlab-worker:latest" \
+  --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -68,6 +70,8 @@ echo "==> Building pythonlab-sandbox (Multi-Arch) ..."
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/pythonlab-sandbox:py311" \
+  --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
   backend/docker/pythonlab-sandbox \
   --load
 

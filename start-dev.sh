@@ -211,7 +211,8 @@ stop_existing_processes() {
 
     local ports_to_check=()
     if [ "${START_MODE:-local}" = "docker" ]; then
-        ports_to_check=(8080 8081 5432 6379)
+        local docker_web_port="${WEB_PORT:-8080}"
+        ports_to_check=("${docker_web_port}" 8081 5432 6379)
     else
         ports_to_check=(${BACKEND_PORT} ${FRONTEND_PORT})
     fi
@@ -340,6 +341,9 @@ stop_existing_docker_containers() {
         "wangsh-redis"
         "wangsh-celery-worker"
         "wangsh-adminer"
+        "wangsh-typst-worker"
+        "wangsh-pythonlab-worker"
+        "wangsh-pythonlab-sandbox"
     )
 
     local any_running=0
@@ -484,7 +488,8 @@ start_docker_stack() {
     print_info "等待入口服务就绪..."
     local max_attempts=60
     local attempt=1
-    while ! curl -fsS "http://localhost:8080/health" > /dev/null 2>&1; do
+    local docker_web_port="${WEB_PORT:-8080}"
+    while ! curl -fsS "http://localhost:${docker_web_port}/health" > /dev/null 2>&1; do
         if [ ${attempt} -ge ${max_attempts} ]; then
             print_error "Docker服务栈启动超时（入口未就绪）"
             docker-compose -f docker-compose.dev.yml ps
@@ -672,8 +677,9 @@ show_service_status() {
     echo "📊 服务状态："
     
     if [ "${START_MODE:-local}" = "docker" ]; then
-        if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo -e "  ${GREEN}✅ 入口页面:    http://localhost:8080${NC}"
+        local docker_web_port="${WEB_PORT:-8080}"
+        if lsof -Pi :"${docker_web_port}" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✅ 入口页面:    http://localhost:${docker_web_port}${NC}"
         else
             echo -e "  ${RED}❌ 入口页面:    未运行${NC}"
         fi
@@ -725,7 +731,7 @@ show_service_status() {
     echo ""
     echo "🔧 开发工具："
     if [ "${START_MODE:-local}" = "docker" ]; then
-        echo "  📚 API文档:      http://localhost:8080/docs"
+        echo "  📚 API文档:      http://localhost:${WEB_PORT:-8080}/docs"
     else
         echo "  📚 API文档:      http://localhost:${BACKEND_PORT}/docs"
     fi
@@ -807,8 +813,8 @@ main() {
     # 尝试打开浏览器
     if command -v open > /dev/null; then
         if [ "${START_MODE}" = "docker" ]; then
-            open "http://localhost:8080"
-            open "http://localhost:8080/docs"
+            open "http://localhost:${WEB_PORT:-8080}"
+            open "http://localhost:${WEB_PORT:-8080}/docs"
         else
             open "http://localhost:${FRONTEND_PORT}"
             open "http://localhost:${BACKEND_PORT}/docs"

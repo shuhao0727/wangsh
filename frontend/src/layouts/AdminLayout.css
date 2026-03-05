@@ -74,6 +74,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 /* 响应式设计 */
@@ -81,15 +82,57 @@
   .admin-layout .ant-layout-sider {
     position: fixed !important;
     height: 100vh;
-    z-index: 1000;
+    z-index: 1100;
   }
 
   .admin-layout .ant-layout {
     margin-left: 0 !important;
   }
 
-  .admin-layout .ant-layout-sider-collapsed + .ant-layout {
-    margin-left: 80px !important;
+  .admin-layout .ant-layout-header {
+    padding: 0 12px !important;
+    height: auto !important;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 8px;
+    z-index: 1000 !important;
+  }
+
+  .admin-header-left,
+  .admin-header-right {
+    width: 100%;
+  }
+
+  .admin-header-right {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-layout .ant-layout-content {
+    height: calc(100vh - 56px) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-layout .ant-layout-sider {
+    width: min(82vw, 260px) !important;
+    max-width: min(82vw, 260px) !important;
+    min-width: min(82vw, 260px) !important;
+  }
+
+  .admin-layout .ant-layout-sider-collapsed {
+    transform: translateX(-100%);
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    overflow: hidden;
+  }
+
+  .admin-layout .ant-layout-sider-trigger {
+    right: auto !important;
+    left: 0;
+    width: 44px !important;
   }
 }
 

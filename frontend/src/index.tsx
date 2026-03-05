@@ -5,6 +5,7 @@ import { App as AntdApp, ConfigProvider } from 'antd';
 import 'antd/dist/reset.css';
 import './styles/index.css';
 import './styles/ui-polish.css';
+import "./styles/responsive-audit.css";
 import "./utils/dayjs";
 import App from './App';
 import { AuthProvider } from '@hooks/useAuth';

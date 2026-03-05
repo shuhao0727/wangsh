@@ -76,7 +76,11 @@ EXPOSE 8000
 
 CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-4}"]
 
-FROM runtime_base AS worker_runtime
+FROM runtime_base AS pythonlab_worker_runtime
+
+USER root
+
+FROM runtime_base AS typst_worker_runtime
 
 USER root
 
@@ -125,3 +129,6 @@ RUN ARCH="$(uname -m)" \
     && rm -rf /tmp/typst.tar.xz "/tmp/${TDIR}" /tmp/typst_dir
 
 USER appuser
+
+# backward-compatible alias
+FROM typst_worker_runtime AS worker_runtime

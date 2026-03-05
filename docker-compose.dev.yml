@@ -238,11 +238,7 @@ services:
       - backend
     networks:
       - wangsh-network
-    ports:
-      - "${WEB_PORT:-6608}:6608"
     command: sh -c "npm start"
-
-
 
   # Caddy 服务 (反向代理)
   caddy:

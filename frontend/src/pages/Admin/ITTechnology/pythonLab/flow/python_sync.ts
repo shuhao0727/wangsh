@@ -488,49 +488,49 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   // Helper: Detect if a block is effectively just a single "if" statement (representing an "elif")
   // We use this to flatten nested else-if chains.
   const isElifBlock = (block: CodeIRBlock) => {
-      return block.items.length === 1 && block.items[0].kind === "if";
+    return block.items.length === 1 && block.items[0].kind === "if";
   };
 
   const emitIf = (it: CodeIRIf, parentJoinId?: string): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
     const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line };
     nodes.push(d);
-    
+
     // If we are part of an elif chain (parentJoinId provided), we reuse the parent's join node.
     // Otherwise, we create a new join node for this if-else structure.
     const joinId = parentJoinId || nextId("join");
-    
+
     // Only create the join node if it's new (not passed from parent)
     if (!parentJoinId) {
-        const join: FlowNode = { id: joinId, shape: "connector", title: "", x: 0, y: 0 };
-        nodes.push(join);
+      const join: FlowNode = { id: joinId, shape: "connector", title: "", x: 0, y: 0 };
+      nodes.push(join);
     }
 
     const thenRes = emitBlock(it.then);
-    
+
     // Check if the else block is an "elif" (single if statement)
     const isElif = it.else && isElifBlock(it.else);
-    
+
     let elseRes: { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } | null = null;
     let elseEntry: string | null = null;
 
     if (it.else) {
-        if (isElif) {
-            // RECURSIVE FLATTENING:
-            // Instead of emitting the else block as a standard block, we directly emit the inner IF
-            // passing OUR joinId down to it. This effectively merges the exit points.
-            elseRes = emitIf(it.else.items[0] as CodeIRIf, joinId);
-            elseEntry = elseRes.entry;
-        } else {
-            // Standard else block
-            const blockRes = emitBlock(it.else);
-            elseRes = { 
-                entry: blockRes.entry, 
-                exit: blockRes.exit, 
-                irItems: blockRes.ir.items, 
-                whileDecisionId: null 
-            };
-            elseEntry = blockRes.entry;
-        }
+      if (isElif) {
+        // RECURSIVE FLATTENING:
+        // Instead of emitting the else block as a standard block, we directly emit the inner IF
+        // passing OUR joinId down to it. This effectively merges the exit points.
+        elseRes = emitIf(it.else.items[0] as CodeIRIf, joinId);
+        elseEntry = elseRes.entry;
+      } else {
+        // Standard else block
+        const blockRes = emitBlock(it.else);
+        elseRes = {
+          entry: blockRes.entry,
+          exit: blockRes.exit,
+          irItems: blockRes.ir.items,
+          whileDecisionId: null
+        };
+        elseEntry = blockRes.entry;
+      }
     }
 
     // Edge: Decision -> Then
@@ -541,12 +541,12 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     if (elseEntry) {
       // Edge: Decision -> Else/Elif
       emitEdge(d.id, elseEntry, "否");
-      
+
       // Edge: Else/Elif -> Join
       // If it was an Elif, its exit is already wired to joinId by the recursive call (or it's the joinId itself)
       // So we only need to wire if it's a standard else block and has an exit.
       if (!isElif && elseRes && elseRes.exit) {
-          emitEdge(elseRes.exit, joinId);
+        emitEdge(elseRes.exit, joinId);
       }
     } else {
       // No else branch: Decision -> Join (False path)
@@ -561,12 +561,12 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
       decisionId: d.id,
       joinId: joinId,
     };
-    
+
     // If we are in an elif chain (parentJoinId exists), our "exit" is the shared joinId.
     // But strictly speaking, emitIf returns the entry/exit of this structure.
     // If we flattened, the "exit" of this whole structure IS the joinId (or whatever leads to it).
     // For standard block composition, we return joinId as the single exit point.
-    
+
     return { entry: d.id, exit: joinId, irItems: [irIf as IRNode], whileDecisionId: null as string | null };
   };
 

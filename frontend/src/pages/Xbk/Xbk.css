@@ -1,5 +1,5 @@
 .xbk-page {
-  max-width: 90%;
+  width: min(1440px, 100%);
   margin: 0 auto;
   padding: 15px;
   height: calc(100vh - 64px - 48px);
@@ -27,6 +27,16 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.xbk-table-card .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.xbk-table-card .ant-tabs-nav-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .xbk-filter-card,
@@ -63,7 +73,6 @@
 
 .xbk-toolbar {
   border-radius: var(--ws-radius-lg);
-  /* border: 1px solid var(--ws-color-border); */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -79,6 +88,12 @@
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 1;
+}
+
+.xbk-toolbar-left .ant-space {
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 .xbk-kpis-inline {
@@ -92,6 +107,7 @@
 
 .xbk-kpi-inline-row {
   padding: 8px 12px;
+  min-height: 44px;
 }
 
 .xbk-kpi-inline-row .xbk-kpi-label {
@@ -106,16 +122,11 @@
   text-align: center;
   border-radius: var(--ws-radius-md);
   transition: all 0.3s ease;
-  border: 1px solid transparent !important; /* 保持透明边框，或者彻底去掉 */
+  border: 1px solid transparent !important;
   box-shadow: none !important;
-  background: transparent !important; /* 透明背景 */
+  background: transparent !important;
   padding: 8px;
 }
-
-/* 如果需要一点背景区分KPI，可以给一个很淡的背景，或者完全透明 */
-/* .xbk-kpi-card:hover {
-  background: var(--ws-color-surface-2) !important;
-} */
 
 .xbk-kpi-accent .ant-statistic-content {
   color: #fa541c;
@@ -150,7 +161,6 @@
 
 .xbk-filter-card {
   border-radius: var(--ws-radius-lg);
-  /* border: 1px solid var(--ws-color-border); */
 }
 
 .xbk-filter-actions {
@@ -160,14 +170,55 @@
 
 .xbk-table-card {
   border-radius: var(--ws-radius-lg);
-  /* border: 1px solid var(--ws-color-border); */
+}
+
+.xbk-filter-form {
+  width: 100%;
+}
+
+.xbk-filter-form .ant-form-item {
+  margin-bottom: 8px;
+}
+
+.xbk-filter-form .ant-form-item:last-child {
+  margin-right: 0;
+}
+
+.xbk-filter-form .xbk-filter-item-sm {
+  width: 120px;
+}
+
+.xbk-filter-form .xbk-filter-item-md {
+  width: 170px;
+}
+
+.xbk-filter-form .xbk-filter-item-lg {
+  width: 280px;
+}
+
+.xbk-cell-ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
   .xbk-page {
     padding: 16px 12px 20px;
-    max-width: 100%;
+    width: 100%;
     height: calc(100vh - 160px - 32px);
+  }
+
+  .xbk-filter-form .xbk-filter-item-sm,
+  .xbk-filter-form .xbk-filter-item-md,
+  .xbk-filter-form .xbk-filter-item-lg {
+    width: 100%;
+  }
+
+  .xbk-toolbar-left {
+    width: 100%;
   }
 
   .xbk-filter-actions {
@@ -177,5 +228,16 @@
   .xbk-kpis-inline {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .xbk-kpi-inline-row {
+    width: calc(50% - 6px);
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 480px) {
+  .xbk-kpi-inline-row {
+    width: 100%;
   }
 }

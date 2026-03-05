@@ -2,14 +2,14 @@
  * 搜索栏组件
  */
 import React from "react";
-import { Input, Select, Button, Space, Card, Row, Col } from "antd";
+import { Input, Select, Button, Row, Col } from "antd";
 import {
-  SearchOutlined,
   ReloadOutlined,
   DeleteOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { AgentTypeValues } from "@services/znt/types";
+import "./SearchBar.css";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -38,9 +38,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onAddAgent,
 }) => {
   return (
-    <div style={{ marginBottom: "24px" }}>
-      <Row gutter={16} align="middle" justify="space-between">
-        <Col xs={24} md={16} style={{ display: 'flex', gap: '16px' }}> {/* Increased gap */}
+    <div className="admin-ai-searchbar">
+      <Row gutter={16} align="middle" justify="space-between" className="ws-responsive-toolbar">
+        <Col xs={24} md={16} className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
           <Search
             placeholder="搜索智能体..."
             allowClear
@@ -48,13 +48,13 @@ const SearchBar: React.FC<SearchBarProps> = ({
             value={searchKeyword}
             onChange={(e) => onSearchChange(e.target.value)}
             onSearch={onSearch}
-            style={{ maxWidth: "480px" }} // Wider search bar
+            className="admin-ai-search-input"
           />
           <Select
             value={selectedType}
             onChange={onTypeChange}
             size="large"
-            style={{ width: "180px" }} // Wider select
+            className="admin-ai-type-select"
           >
             <Option value="all">全部类型</Option>
             <Option value={AgentTypeValues.GENERAL}>通用智能体</Option>
@@ -62,7 +62,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           </Select>
           <Button icon={<ReloadOutlined />} onClick={onReset} />
         </Col>
-        <Col xs={24} md={8} style={{ textAlign: 'right', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <Col xs={24} md={8} className="ws-responsive-toolbar__group" style={{ justifyContent: "flex-end" }}>
             {selectedRowKeys.length > 0 && (
               <Button danger size="middle" icon={<DeleteOutlined />} onClick={onBatchDelete}>
                 批量删除 ({selectedRowKeys.length})

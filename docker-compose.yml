@@ -208,7 +208,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-      target: worker_runtime
+      target: pythonlab_worker_runtime
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
@@ -267,7 +267,7 @@ services:
       PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
     user: "0:0"
-    command: [ "sh", "-c", "pip install cachetools && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
     networks:
       - wangsh-network
     volumes:
@@ -281,6 +281,11 @@ services:
 
   pythonlab-sandbox:
     platform: linux/amd64
+    build:
+      context: ./backend/docker/pythonlab-sandbox
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:py311}
     restart: unless-stopped
     command: [ "sh", "-lc", "sleep infinity" ]

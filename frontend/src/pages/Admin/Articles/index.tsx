@@ -483,13 +483,13 @@ const AdminArticles: React.FC = () => {
 
   return (
     <AdminPage>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
-        <Space>
+      <div className="ws-responsive-toolbar" style={{ marginBottom: 12 }}>
+        <Space wrap className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
           <Select
             value={categoryFilter}
             allowClear
             placeholder="按分类筛选"
-            style={{ width: 280 }}
+            style={{ width: 280, maxWidth: "100%" }}
             options={categories.map((c) => ({ value: c.id, label: c.name }))}
             onChange={(v) => {
               const next = typeof v === "number" ? v : undefined;
@@ -508,12 +508,12 @@ const AdminArticles: React.FC = () => {
             value={titleKeyword}
             allowClear
             placeholder="搜索标题..."
-            style={{ width: 260 }}
+            style={{ width: 260, maxWidth: "100%" }}
             onChange={(e) => setTitleKeyword(e.target.value)}
             onSearch={(v) => setTitleKeyword(v)}
           />
         </Space>
-        <Space>
+        <Space wrap className="ws-responsive-toolbar__group">
           {selectedRowKeys.length > 0 && (
             <Dropdown menu={batchMenu}>
               <Button icon={<MoreOutlined />}>批量操作 ({selectedRowKeys.length})</Button>

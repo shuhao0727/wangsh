@@ -27,6 +27,7 @@
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
 }
 
 /* Logo 样式 */
@@ -70,12 +71,16 @@
   border-bottom: none;
   background: transparent;
   line-height: 62px;
-  min-width: 600px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 /* 清除Ant Design默认的选中状态样式 */
 .horizontal-menu.ant-menu-horizontal {
   border-bottom: none !important;
+  white-space: nowrap;
 }
 
 .horizontal-menu .ant-menu-item {
@@ -156,10 +161,6 @@
 
 /* 响应式调整 */
 @media (max-width: 1024px) {
-  .horizontal-menu {
-    min-width: 500px;
-  }
-
   .horizontal-menu .ant-menu-item {
     padding: 0 16px;
     font-size: 14px;
@@ -187,7 +188,8 @@
   }
 
   .horizontal-menu {
-    min-width: 100%;
+    width: 100%;
+    min-width: 0;
     line-height: 40px;
   }
 

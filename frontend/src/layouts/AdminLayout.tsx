@@ -422,9 +422,7 @@ const AdminLayout: React.FC = () => {
                 管理员登录
               </Button>
             ) : (
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "16px" }}
-              >
+              <div className="admin-header-right" style={{ gap: "12px" }}>
                 <Button
                   type="text"
                   icon={<MonitorOutlined />}

@@ -738,14 +738,14 @@ const XbkPage: React.FC = () => {
         title: "课程名称",
         dataIndex: "course_name",
         width: calcColumnWidth(rows, "course_name", "课程名称", 160, 320),
-        render: (v) => v || "-",
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
       {
         title: "班级",
         dataIndex: "class_name",
         width: calcColumnWidth(rows, "class_name", "班级", 110, 160),
-        render: (v) => v || "-",
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
       {
@@ -772,7 +772,7 @@ const XbkPage: React.FC = () => {
         title: "地点",
         dataIndex: "location",
         width: calcColumnWidth(rows, "location", "地点", 140, 280),
-        render: (v) => v || "-",
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
     ];
@@ -838,13 +838,14 @@ const XbkPage: React.FC = () => {
         title: "课程名称",
         dataIndex: "course_name",
         width: calcColumnWidth(rows, "course_name", "课程名称", 180, 360),
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
       {
         title: "负责人",
         dataIndex: "teacher",
         width: calcColumnWidth(rows, "teacher", "负责人", 100, 180),
-        render: (v) => v || "-",
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
       {
@@ -857,7 +858,7 @@ const XbkPage: React.FC = () => {
         title: "地点",
         dataIndex: "location",
         width: calcColumnWidth(rows, "location", "地点", 140, 320),
-        render: (v) => v || "-",
+        render: (v) => <span className="xbk-cell-ellipsis">{v || "-"}</span>,
         ellipsis: true,
       },
     ];
@@ -1080,11 +1081,11 @@ const XbkPage: React.FC = () => {
       <div className="xbk-filter-card" style={{ padding: 16 }}>
         <Row gutter={[12, 12]} align="middle">
           <Col flex="auto">
-            <Form layout="inline" style={{ width: "100%" }}>
+            <Form layout="inline" className="xbk-filter-form">
               <Form.Item label="年份">
                 <Select
                   value={filters.year}
-                  style={{ width: 120 }}
+                  className="xbk-filter-item-sm"
                   onChange={(v) => setFilters((p) => ({ ...p, year: v }))}
                   allowClear
                   placeholder="选择年份"
@@ -1099,7 +1100,7 @@ const XbkPage: React.FC = () => {
               <Form.Item label="学期">
                 <Select
                   value={filters.term}
-                  style={{ width: 120 }}
+                  className="xbk-filter-item-sm"
                   onChange={(v) => setFilters((p) => ({ ...p, term: v }))}
                   allowClear
                   placeholder="选择学期"
@@ -1111,7 +1112,7 @@ const XbkPage: React.FC = () => {
               <Form.Item label="年级">
                 <Select
                   value={filters.grade}
-                  style={{ width: 100 }}
+                  className="xbk-filter-item-sm"
                   onChange={(v) => setFilters((p) => ({ ...p, grade: v }))}
                   allowClear
                   placeholder="选择年级"
@@ -1123,7 +1124,7 @@ const XbkPage: React.FC = () => {
               <Form.Item label="班级">
                 <Select
                   value={filters.class_name}
-                  style={{ width: 170 }}
+                  className="xbk-filter-item-md"
                   onChange={(v) => setFilters((p) => ({ ...p, class_name: v }))}
                   allowClear
                   placeholder="选择班级"
@@ -1138,7 +1139,7 @@ const XbkPage: React.FC = () => {
               <Form.Item label="搜索">
                 <Input
                   value={filters.search_text}
-                  style={{ width: 280 }}
+                  className="xbk-filter-item-lg"
                   placeholder="学号/姓名/课程代码/课程名称…"
                   allowClear
                   onChange={(e) =>

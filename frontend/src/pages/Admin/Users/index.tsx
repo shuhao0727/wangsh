@@ -33,6 +33,7 @@ import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
 import { roleOptions, statusOptions } from "./data";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
+import "./index.css";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -58,24 +59,16 @@ const AdminUsers: React.FC = () => {
     <AdminPage>
       {/* 顶部工具栏 (Toolbar) - 类似于 PythonLab 的 CanvasToolbar */}
       <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 24px",
-          borderBottom: "1px solid #f0f0f0",
-          background: "#ffffff",
-          flexShrink: 0,
-        }}
+        className="admin-users-toolbar ws-responsive-toolbar"
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
+          <div className="admin-users-title">
              <UserOutlined style={{ fontSize: 18, color: "var(--ws-color-primary)" }} />
-             <span style={{ fontSize: 16, fontWeight: 600 }}>用户管理</span>
+             <span>用户管理</span>
           </div>
           <Divider orientation="vertical" style={{ height: 24, margin: 0 }} />
           
-          <Space size={8}>
+          <Space size={8} wrap>
             <Search
               placeholder="搜索用户..."
               allowClear
@@ -83,12 +76,12 @@ const AdminUsers: React.FC = () => {
               value={state.searchKeyword}
               onChange={(e) => actions.handleSearch(e.target.value)}
               onSearch={actions.handleSearch}
-              style={{ width: 240 }}
+              className="admin-users-search"
               prefix={<SearchOutlined style={{ color: "rgba(0,0,0,0.25)" }} />}
             />
             <Select
               placeholder="角色"
-              style={{ width: 100 }}
+              className="admin-users-select"
               allowClear
               size="middle"
               onChange={(value) => actions.handleRoleFilter(value as string)}
@@ -103,7 +96,7 @@ const AdminUsers: React.FC = () => {
             </Select>
             <Select
               placeholder="状态"
-              style={{ width: 100 }}
+              className="admin-users-select"
               allowClear
               size="middle"
               onChange={(value) => actions.handleStatusFilter(value as boolean)}
@@ -119,7 +112,7 @@ const AdminUsers: React.FC = () => {
           </Space>
         </div>
 
-        <Space size={4}>
+        <Space size={4} wrap className="ws-responsive-toolbar__group">
           <Button type="text" icon={<ReloadOutlined />} onClick={actions.handleReset} title="重置" />
           <Dropdown
             menu={{
@@ -173,7 +166,7 @@ const AdminUsers: React.FC = () => {
       </div>
 
       {/* 表格区域 */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div className="admin-users-table-wrap">
         <AdminTablePanel
           loading={state.loading}
           isEmpty={state.users.length === 0}
