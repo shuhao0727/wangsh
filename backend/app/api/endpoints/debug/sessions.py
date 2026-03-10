@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -83,7 +83,7 @@ async def _cleanup_and_count_active_sessions(user_id: int) -> int:
 class DebugLimits(BaseModel):
     cpu_ms: int = Field(default=30000, ge=1000, le=300000)
     wall_ms: int = Field(default=600000, ge=1000, le=3600000)
-    memory_mb: int = Field(default=512, ge=128, le=4096)
+    memory_mb: int = Field(default=32, ge=32, le=4096)
     max_stdout_kb: int = Field(default=WS_MAX_STDOUT_KB, ge=16, le=4096)
     max_dap_msg_bytes: int = Field(default=WS_MAX_DAP_MSG_BYTES, ge=65536, le=4 * 1024 * 1024)
 
@@ -91,6 +91,7 @@ class DebugLimits(BaseModel):
 class DebugSessionCreateRequest(BaseModel):
     title: str = Field(default="pythonlab", max_length=120)
     code: str = Field(..., min_length=1)
+    runtime_mode: Literal["plain", "debug"] = "debug"
     python_version: str = Field(default="3.11", max_length=16)
     requirements: List[str] = Field(default_factory=list)
     entry_path: str = Field(default="main.py", max_length=64)
@@ -101,7 +102,6 @@ class DebugSessionCreateResponse(BaseModel):
     session_id: str
     status: str
     ws_url: str
-    cfg_url: str
 
 
 class DebugSessionResponse(BaseModel):
@@ -113,6 +113,7 @@ class DebugSessionResponse(BaseModel):
     ttl_seconds: int
     limits: Dict[str, Any]
     entry_path: str
+    runtime_mode: Literal["plain", "debug"] = "debug"
     code_sha256: str
     dap_host: Optional[str] = None
     dap_port: Optional[int] = None
@@ -154,6 +155,7 @@ async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[
         "ttl_seconds": ttl_seconds,
         "limits": payload.limits.model_dump(),
         "entry_path": "main.py",
+        "runtime_mode": payload.runtime_mode,
         "python_version": payload.python_version,
         "requirements": [],
         "code_sha256": code_sha256,
@@ -163,6 +165,21 @@ async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[
         "error_code": None,
         "error_detail": None,
     }
+
+    # Cleanup old sessions to enforce limit of 1
+    try:
+        client = await cache.get_client()
+        user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
+        members = await client.smembers(user_sessions_key)
+        if members:
+            for old_sid in members:
+                try:
+                    celery_app.send_task("app.tasks.pythonlab.stop_session", args=[old_sid])
+                    await client.srem(user_sessions_key, old_sid)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     ok = await cache.set(session_key, meta, expire_seconds=ttl_seconds)
@@ -189,7 +206,6 @@ async def create_session(payload: DebugSessionCreateRequest, current_user: Dict[
         session_id=session_id,
         status=SESSION_STATUS_PENDING,
         ws_url=f"/api/v1/debug/sessions/{session_id}/ws",
-        cfg_url=f"/api/v1/debug/sessions/{session_id}/cfg",
     )
 
 

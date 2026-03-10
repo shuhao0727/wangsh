@@ -11,37 +11,84 @@ import type { ChatAreaProps, Message, WorkflowGroup } from "./types";
 import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
+import "./ChatArea.css";
 
 const { Text } = Typography;
 const { TextArea } = Input;
 
 const ThinkingBubble = () => (
-  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 20 }}>
-    <style>
-      {`
-        @keyframes jump {
-          0%, 100% { transform: translateY(0); opacity: 0.5; }
-          50% { transform: translateY(-4px); opacity: 1; }
-        }
-      `}
-    </style>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0s' }} />
-      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0.2s' }} />
-      <div style={{ width: 6, height: 6, background: 'currentColor', borderRadius: '50%', animation: 'jump 1s infinite 0.4s' }} />
+  <div className="thinking-bubble">
+    <div className="thinking-dots">
+      <div className="thinking-dot" style={{ animationDelay: '0s' }} />
+      <div className="thinking-dot" style={{ animationDelay: '0.2s' }} />
+      <div className="thinking-dot" style={{ animationDelay: '0.4s' }} />
     </div>
     <span style={{ fontSize: 12, opacity: 0.8 }}>思考中...</span>
   </div>
 );
 
-// 消息气泡组件
-const MessageBubble: React.FC<{
+// Markdown components definition (stable reference)
+const markdownComponents: any = {
+  p: ({ children }: any) => (
+    <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
+  ),
+  h1: ({ children }: any) => (
+    <div style={{ fontSize: 16, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+      {children}
+    </div>
+  ),
+  h2: ({ children }: any) => (
+    <div style={{ fontSize: 14, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+      {children}
+    </div>
+  ),
+  h3: ({ children }: any) => (
+    <div style={{ fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+      {children}
+    </div>
+  ),
+  ul: ({ children }: any) => (
+    <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children }: any) => (
+    <ol style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
+      {children}
+    </ol>
+  ),
+  li: ({ children }: any) => (
+    <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
+      {children}
+    </li>
+  ),
+  code: ({ children }: any) => (
+    <code>{children}</code>
+  ),
+  pre: ({ children }: any) => (
+    <pre>{children}</pre>
+  ),
+  a: ({ children, href }: any) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: "var(--ws-color-primary)" }}
+    >
+      {children}
+    </a>
+  ),
+  hr: () => null,
+};
+
+// Memoized MessageBubble component
+const MessageBubble = React.memo<{
   message: Message;
   currentAgent: any;
   workflowGroups?: WorkflowGroup[];
   userDisplayName?: string;
   isThinking?: boolean;
-}> = ({ message, currentAgent, workflowGroups, userDisplayName, isThinking }) => {
+}>(({ message, currentAgent, workflowGroups, userDisplayName, isThinking }) => {
   const [expanded, setExpanded] = React.useState(false);
   const formatTimestamp = (timestamp: string) => {
     return dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss");
@@ -90,7 +137,7 @@ const MessageBubble: React.FC<{
         ? <BranchesOutlined />
         : type === "node"
           ? <SettingOutlined />
-          : type === "finish"
+        : type === "finish"
             ? <CheckCircleOutlined />
             : type === "error"
               ? <CloseCircleOutlined />
@@ -203,50 +250,25 @@ const MessageBubble: React.FC<{
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        marginBottom: "14px",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "74%",
-          display: "flex",
-          flexDirection: isUser ? "row-reverse" : "row",
-          alignItems: "flex-start",
-          gap: "12px",
-        }}
-      >
+    <div className={`message-bubble-container ${isUser ? 'user' : 'agent'}`}>
+      <div className={`message-content-wrapper ${isUser ? 'user' : 'agent'}`}>
         <Avatar
           size={32}
           icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent.icon)}
           style={{
             backgroundColor: isUser
-              ? "#1890ff" // Consistent blue for user avatar
+              ? "#1890ff"
               : (wf ? wf.color : currentAgent.color),
             flexShrink: 0,
           }}
         />
-        <div
-          style={{
-            background: isUser
-              ? "#e6f7ff" // Softer blue background for user
-              : "#ffffff", // White background for agent
-            color: "#2c3e50", // Dark text for readability
-            padding: "14px 18px",
-            borderRadius: isUser ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)", // Softer shadow
-            border: isUser ? "1px solid #bae7ff" : "1px solid #f0f0f0", // Subtle border
-          }}
-        >
+        <div className={`message-bubble ${isUser ? 'user' : 'agent'}`}>
           <div style={{ marginBottom: "4px" }}>
             <Text
               strong
               style={{
                 fontSize: "12px",
-                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent.color), // Colored name
+                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent.color),
               }}
             >
               {isUser ? displayName : (wf ? wf.label : currentAgent.name)}
@@ -320,126 +342,12 @@ const MessageBubble: React.FC<{
                   <ThinkingBubble />
                 </div>
               ) : (isUser || message.content) ? (
-                <div
-                  style={{
-                    whiteSpace: "normal",
-                    wordBreak: "break-word",
-                    lineHeight: 1.6,
-                    fontSize: 14,
-                  }}
-                >
+                <div className="markdown-body">
                   {isUser ? message.content : (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm, remarkMath]}
                       rehypePlugins={[rehypeKatex]}
-                      components={{
-                        p: ({ children }) => (
-                          <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
-                        ),
-                        h1: ({ children }) => (
-                          <div
-                            style={{
-                              fontSize: 16,
-                              fontWeight: 600,
-                              margin: 0,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {children}
-                          </div>
-                        ),
-                        h2: ({ children }) => (
-                          <div
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 600,
-                              margin: 0,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {children}
-                          </div>
-                        ),
-                        h3: ({ children }) => (
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              margin: 0,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {children}
-                          </div>
-                        ),
-                        ul: ({ children }) => (
-                          <ul
-                            style={{
-                              margin: 0,
-                              paddingLeft: 16,
-                              lineHeight: 1.6,
-                              listStylePosition: "inside",
-                            }}
-                          >
-                            {children}
-                          </ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol
-                            style={{
-                              margin: 0,
-                              paddingLeft: 16,
-                              lineHeight: 1.6,
-                              listStylePosition: "inside",
-                            }}
-                          >
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => (
-                          <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
-                            {children}
-                          </li>
-                        ),
-                        code: ({ children }) => (
-                          <code
-                            style={{
-                              background: "var(--ws-color-surface-2)",
-                              borderRadius: 4,
-                              padding: "0 4px",
-                              fontSize: 12,
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {children}
-                          </code>
-                        ),
-                        pre: ({ children }) => (
-                          <pre
-                            style={{
-                              background: "var(--ws-color-surface-2)",
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              overflowX: "auto",
-                              margin: "0 0 4px 0",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {children}
-                          </pre>
-                        ),
-                        a: ({ children, href }) => (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: "var(--ws-color-primary)" }}
-                          >
-                            {children}
-                          </a>
-                        ),
-                        hr: () => null,
-                      }}
+                      components={markdownComponents}
                     >
                       {normalizeMarkdown(message.content || "")}
                     </ReactMarkdown>
@@ -452,7 +360,15 @@ const MessageBubble: React.FC<{
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent re-renders unless necessary
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.isThinking === nextProps.isThinking &&
+    prevProps.workflowGroups === nextProps.workflowGroups // This might need deeper comparison if array changes ref but content is same
+  );
+});
 
 const ChatArea: React.FC<ChatAreaProps> = ({
   currentAgent,
@@ -559,12 +475,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   return (
     <Card
+      className="chat-area-card"
+      bordered={false}
       style={{
         height: "100%",
         minHeight: 0,
         flex: 1,
         display: "flex",
         flexDirection: "column",
+        background: "transparent",
       }}
       styles={{
         body: {
@@ -577,16 +496,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       }}
     >
       {/* 对话头部 */}
-      <div
-        style={{
-          padding: "10px 24px",
-          borderBottom: "1px solid var(--ws-color-border)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexShrink: 0,
-        }}
-      >
+      <div className="chat-header">
         <Space size="small">
           {!historyVisible && (
             <Tooltip title="显示侧边栏">
@@ -636,16 +546,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       {/* 消息列表 - 固定高度，带滚动条 */}
       <div
         ref={messageListRef}
-        style={{
-          flex: 1,
-          padding: "20px 24px",
-          overflowY: "auto",
-          scrollbarGutter: "stable",
-          overscrollBehavior: "contain",
-          background: "#fafafa", // Very light grey background for chat area
-          minHeight: 0,
-          scrollBehavior: "smooth",
-        }}
+        className="chat-message-list"
       >
         {visibleMessages.map((message) => {
           const messageWorkflows =
@@ -679,13 +580,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* 输入区域 */}
-      <div
-        style={{
-          padding: "12px 24px",
-          borderTop: "1px solid var(--ws-color-border)",
-          flexShrink: 0,
-        }}
-      >
+      <div className="chat-input-area">
         <Space orientation="vertical" style={{ width: "100%" }}>
           <TextArea
             id="message-input"

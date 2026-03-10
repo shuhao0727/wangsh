@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Input, Layout, Space, Tag, Typography } from "antd";
+import { App, Button, Card, Grid, Input, Layout, Space, Tag, Typography } from "antd";
 import type { PythonLabExperiment } from "./types";
 import { normalizeFlowImport, type FlowEdge, type FlowNode, type PortSide } from "./flow/model";
+import { calculateFitView, calculateFitViewCenter } from "./flow/viewUtils";
 import { pointAtT } from "./flow/geometry";
 import { nodeSizeForTitle } from "./flow/ports";
 import { clampBetween } from "./flow/math";
@@ -20,14 +21,18 @@ import { usePythonLabActions } from "./hooks/usePythonLabActions";
 import { useArrangeLayout } from "./hooks/useArrangeLayout";
 import { useConnectMode } from "./hooks/useConnectMode";
 import { useDapRunner } from "./hooks/useDapRunner";
-import { TerminalPopup } from "./components/TerminalPopup";
-import { pythonlabPseudocodeApi, type PythonLabPseudocodeParseResponse } from "./services/pythonlabDebugApi";
-import { computeTidy, type FlowTidyResult } from "./flow/tidy";
+import { usePyodideRunner } from "./hooks/usePyodideRunner";
 import { computeBeautify, type FlowBeautifyResult } from "./flow/beautify";
 import { sortFlowGraphStable } from "./flow/determinism";
 import { loadEffectiveRuleSetV1, type PythonLabRuleSetV1 } from "./pipeline/rules";
 import { ensurePythonLabStorageCompatible } from "./storageCompat";
 import { toErrorMessage } from "./errorMessage";
+import { decidePythonLabLaunchPlan } from "./launchPlan";
+import { createDebugFrontendAdapter } from "./adapters/debugFrontendAdapter";
+import { resolveFlowActivation, toDebugPauseEvent } from "./adapters/debugEventBridge";
+import { normalizeDebugSessionView } from "./adapters/debugSessionBridge";
+import { applyDapNegotiatedCapabilities } from "./adapters/debugCapabilityMap";
+import { pythonlabSessionApi } from "./services/pythonlabSessionApi";
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -46,26 +51,21 @@ function nextId(prefix: string) {
 const PythonLabStudio: React.FC<{
   experiment?: PythonLabExperiment;
 }> = ({ experiment }) => {
+  const screens = Grid.useBreakpoint();
+  const isCompactViewport = !screens.sm;
+  const { message } = App.useApp();
+
   useEffect(() => {
+    console.log("PythonLabStudio mounted - HMR Check");
+    message.info("PythonLab环境已就绪");
     ensurePythonLabStorageCompatible();
   }, []);
-
-  const [pipelineMode, setPipelineMode] = useState(() => {
-    try {
-      return localStorage.getItem("python_lab_pipeline_mode") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [pseudocode, setPseudocode] = useState<PythonLabPseudocodeParseResponse | null>(null);
-  const [pseudocodeLoading, setPseudocodeLoading] = useState(false);
-  const [pseudocodeError, setPseudocodeError] = useState<string | null>(null);
   const [ruleSet, setRuleSet] = useState<PythonLabRuleSetV1>(() => loadEffectiveRuleSetV1(experiment?.id ?? ""));
   const [beautifyResult, setBeautifyResult] = useState<FlowBeautifyResult | null>(null);
   const [beautifyLoading, setBeautifyLoading] = useState(false);
   const [beautifyError, setBeautifyError] = useState<string | null>(null);
   const [beautifyRefreshToken, setBeautifyRefreshToken] = useState(0);
-  const [canvasRoutingStyle, setCanvasRoutingStyle] = useState<"orthogonal" | "direct">(() => {
+  const [canvasRoutingStyle] = useState<"orthogonal" | "direct">(() => {
     try {
       return localStorage.getItem("python_lab_canvas_routing_style") === "direct" ? "direct" : "orthogonal";
     } catch {
@@ -81,84 +81,29 @@ const PythonLabStudio: React.FC<{
   const [followTick, setFollowTick] = useState(0);
   const [interactionFlag, setInteractionFlag] = useState(false);
   const [canvasBusy, setCanvasBusy] = useState(false);
-  const [autoLayout, setAutoLayout] = useState(true);
+  const [autoLayout, setAutoLayout] = useState(false);
 
-  const [demoAutoArrangeToken, setDemoAutoArrangeToken] = useState(0);
-  const demoAutoArrangeHandledRef = useRef(0);
+  const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
+  const canFrontendDebug = useMemo(() => {
+    try {
+      return typeof window !== "undefined" && (window as any).crossOriginIsolated === true && typeof SharedArrayBuffer !== "undefined";
+    } catch {
+      return false;
+    }
+  }, []);
+
   const arrangeLayoutRef = useRef<null | (() => Promise<void>)>(null);
 
   const fitViewTo = (nextNodes: FlowNode[], nextEdges: FlowEdge[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const marginScreen = Math.max(16, Math.min(40, Math.round(Math.min(rect.width, rect.height) * 0.04)));
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    const centersX: number[] = [];
-
-    for (const n of nextNodes) {
-      const s = nodeSizeForTitle(n.shape, n.title);
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + s.w);
-      maxY = Math.max(maxY, n.y + s.h);
-      centersX.push(n.x + s.w / 2);
+    const result = calculateFitView(nextNodes, nextEdges, rect.width, rect.height);
+    if (result) {
+      setScale(result.scale);
+      setOffsetX(result.offsetX);
+      setOffsetY(result.offsetY);
     }
-    for (const e of nextEdges) {
-      const pts =
-        e.style === "polyline" || e.style === "bezier"
-          ? e.anchors && e.anchors.length
-            ? e.anchors
-            : e.anchor
-              ? [e.anchor]
-              : []
-          : [];
-      for (const p of pts) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-      if (e.fromFree) {
-        minX = Math.min(minX, e.fromFree.x);
-        minY = Math.min(minY, e.fromFree.y);
-        maxX = Math.max(maxX, e.fromFree.x);
-        maxY = Math.max(maxY, e.fromFree.y);
-      }
-      if (e.toFree) {
-        minX = Math.min(minX, e.toFree.x);
-        minY = Math.min(minY, e.toFree.y);
-        maxX = Math.max(maxX, e.toFree.x);
-        maxY = Math.max(maxY, e.toFree.y);
-      }
-    }
-    if (!Number.isFinite(minX)) return;
-
-    centersX.sort((a, b) => a - b);
-    const trunkX =
-      centersX.length === 0
-        ? (minX + maxX) / 2
-        : centersX.length % 2
-          ? centersX[(centersX.length - 1) / 2]
-          : (centersX[centersX.length / 2 - 1] + centersX[centersX.length / 2]) / 2;
-
-    const boundsW = maxX - minX;
-    const boundsH = maxY - minY;
-    const fitX = (rect.width - marginScreen * 2) / Math.max(1, boundsW);
-    const fitY = (rect.height - marginScreen * 2) / Math.max(1, boundsH);
-    const fit = Math.max(0.2, Math.min(1, fitX, fitY));
-    const viewScale = fit >= 1 ? 1 : Math.max(0.2, fit);
-    setScale(viewScale);
-
-    const fitScreenW = rect.width - marginScreen * 2;
-    const fitScreenH = rect.height - marginScreen * 2;
-    const nextOffsetX = boundsW * viewScale <= fitScreenW ? Math.round(rect.width / 2 - trunkX * viewScale) : Math.round(marginScreen - minX * viewScale);
-    const nextOffsetY =
-      boundsH * viewScale <= fitScreenH ? Math.round(marginScreen + (fitScreenH - boundsH * viewScale) / 2 - minY * viewScale) : Math.round(marginScreen - minY * viewScale);
-    setOffsetX(nextOffsetX);
-    setOffsetY(nextOffsetY);
   };
 
   useEffect(() => {
@@ -193,11 +138,6 @@ const PythonLabStudio: React.FC<{
   const [connectFromId, setConnectFromId] = useState<string | null>(null);
   const [connectFromPort, setConnectFromPort] = useState<PortSide | null>(null);
   const [variables, setVariables] = useState<VariableRow[]>([]);
-  const tidyResult: FlowTidyResult | null = useMemo(() => {
-    if (!pipelineMode) return null;
-    if (!nodes.length) return null;
-    return computeTidy(nodes, edges, { enabled: ruleSet.tidy.enabled });
-  }, [edges, nodes, pipelineMode, ruleSet.tidy.enabled]);
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
@@ -205,14 +145,17 @@ const PythonLabStudio: React.FC<{
 
   useEffect(() => {
     let warnedThirdPartySelection = false;
-    const onError = (event: ErrorEvent) => {
-      const msg = String(event.message || "");
-      const name = (event.error as any)?.name ? String((event.error as any).name) : "";
-      const stack = (event.error as any)?.stack ? String((event.error as any).stack) : "";
-      const file = (event as any)?.filename ? String((event as any).filename) : "";
-      const isIndexSize = name === "IndexSizeError" || msg.includes("IndexSizeError");
-      const isGetRangeAt = msg.includes("getRangeAt") || stack.includes("getRangeAt");
-      const isThirdParty =
+    const shouldSuppressSelectionNoise = (msg: string, name: string, stack: string, file: string) => {
+      const normalizedMessage = `${msg}\n${stack}`.toLowerCase();
+      const isIndexSize =
+        name === "IndexSizeError" ||
+        normalizedMessage.includes("indexsizeerror") ||
+        normalizedMessage.includes("the index is not in the allowed range");
+      const isGetRangeAt =
+        normalizedMessage.includes("getrangeat") ||
+        normalizedMessage.includes("selection") ||
+        normalizedMessage.includes("domexception");
+      const isLikelyExternal =
         file.includes("content.js") ||
         file.includes("content-script") ||
         file.startsWith("chrome-extension://") ||
@@ -227,15 +170,23 @@ const PythonLabStudio: React.FC<{
         stack.includes("Content.handleSelection") ||
         msg.includes("Content.isSelection") ||
         msg.includes("Content.handleSelection");
-      if (isIndexSize && isGetRangeAt && isThirdParty) {
+      const isLikelySelectionNoise = normalizedMessage.includes("range 0") || normalizedMessage.includes("selection");
+      return isIndexSize && isGetRangeAt && (isLikelyExternal || isLikelySelectionNoise);
+    };
+    const onError = (event: ErrorEvent) => {
+      const msg = String(event.message || "");
+      const name = (event.error as any)?.name ? String((event.error as any).name) : "";
+      const stack = (event.error as any)?.stack ? String((event.error as any).stack) : "";
+      const file = (event as any)?.filename ? String((event as any).filename) : "";
+      if (shouldSuppressSelectionNoise(msg, name, stack, file)) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
           console.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
         }
-        // 尝试全面阻止冒泡和默认行为
         event.preventDefault();
         event.stopImmediatePropagation();
         event.stopPropagation();
+        (event as any).returnValue = true;
         return true;
       }
     };
@@ -244,24 +195,7 @@ const PythonLabStudio: React.FC<{
       const msg = reason ? String(reason?.message || reason) : "";
       const name = reason?.name ? String(reason.name) : "";
       const stack = reason?.stack ? String(reason.stack) : "";
-      const isIndexSize = name === "IndexSizeError" || msg.includes("IndexSizeError");
-      const isGetRangeAt = msg.includes("getRangeAt") || stack.includes("getRangeAt");
-      const isThirdParty =
-        msg.includes("content.js") ||
-        msg.includes("content-script") ||
-        stack.includes("content.js") ||
-        stack.includes("content-script") ||
-        msg.includes("chrome-extension://") ||
-        stack.includes("chrome-extension://") ||
-        msg.includes("moz-extension://") ||
-        stack.includes("moz-extension://") ||
-        msg.includes("safari-extension://") ||
-        stack.includes("safari-extension://") ||
-        stack.includes("Content.isSelection") ||
-        stack.includes("Content.handleSelection") ||
-        msg.includes("Content.isSelection") ||
-        msg.includes("Content.handleSelection");
-      if (isIndexSize && isGetRangeAt && isThirdParty) {
+      if (shouldSuppressSelectionNoise(msg, name, stack, "")) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
           console.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
@@ -270,15 +204,30 @@ const PythonLabStudio: React.FC<{
         return;
       }
     };
+    const prevOnError = window.onerror;
+    window.onerror = (message, source, _lineno, _colno, error) => {
+      const msg = String(message || "");
+      const name = error?.name ? String(error.name) : "";
+      const stack = error?.stack ? String(error.stack) : "";
+      const file = String(source || "");
+      if (shouldSuppressSelectionNoise(msg, name, stack, file)) {
+        return true;
+      }
+      if (typeof prevOnError === "function") {
+        return !!prevOnError(message, source, _lineno, _colno, error);
+      }
+      return false;
+    };
     window.addEventListener("error", onError, true);
     window.addEventListener("unhandledrejection", onUnhandledRejection, true);
     return () => {
+      window.onerror = prevOnError;
       window.removeEventListener("error", onError, true);
       window.removeEventListener("unhandledrejection", onUnhandledRejection, true);
     };
   }, []);
 
-  const { code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions } = usePythonFlowSync({
+  const { code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = usePythonFlowSync({
     starterCode: experiment?.starterCode,
     preferBackendCfg: true,
     beautifyParams: ruleSet.beautify.params,
@@ -300,24 +249,10 @@ const PythonLabStudio: React.FC<{
     canvasRef,
   });
 
-  const [structuredEmphasisLog, setStructuredEmphasisLog] = useState(() => {
-    try {
-      return localStorage.getItem("python_lab_structured_emphasis_log") === "1";
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("python_lab_structured_emphasis_log", structuredEmphasisLog ? "1" : "0");
-    } catch {}
-  }, [structuredEmphasisLog]);
-
   const {
     ensureAuto,
     setNodesAuto,
     setEdgesAuto,
-    setNodesAndEdgesAuto,
     setFlowAuto,
     addNode,
     removeSelected,
@@ -328,7 +263,6 @@ const PythonLabStudio: React.FC<{
     clearEdgeAnchors,
     addEdgeAnchor,
     reverseEdge,
-    loadDemoFlow,
     peekDemoFlow,
     demoOptions,
     variableColumns,
@@ -406,10 +340,19 @@ const PythonLabStudio: React.FC<{
   }, [selectedNodeId]);
 
   useEffect(() => {
+    if (isCompactViewport) {
+      setLeftCollapsed(true);
+    }
+  }, [isCompactViewport]);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
-      const active = document.activeElement;
-      if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) return;
+      if ((e as any).isComposing || (e as any).keyCode === 229) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.(".monaco-editor")) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT" || active.isContentEditable)) return;
       if (!selectedEdgeId && !selectedNodeId) return;
       e.preventDefault();
       removeSelected();
@@ -418,37 +361,42 @@ const PythonLabStudio: React.FC<{
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [removeSelected, selectedEdgeId, selectedNodeId]);
 
-  const {
-    state: runner,
-    error: runnerError,
-    runAll,
-    continueRun,
-    pause,
-    stepOver,
-    stepInto,
-    stepOut,
-    reset: resetRun,
-    clearOutput,
-    clearBreakpoints,
-    toggleBreakpoint,
-    setBreakpointEnabled,
-    setBreakpointCondition,
-    setBreakpointHitCount,
-    addWatch,
-    removeWatch,
-    evaluate,
-    historyBack,
-    historyForward,
-    historyToLatest,
-    setWatchExprs,
-  } = useDapRunner({ code, debugMap, structuredEmphasisLog });
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const dapApi = useDapRunner({ code, debugMap });
+  const pyApi = usePyodideRunner({ code, debugMap });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("python_lab_pipeline_mode", pipelineMode ? "1" : "0");
-    } catch {}
-  }, [pipelineMode]);
+  const [breakpoints, setBreakpoints] = useState<Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>>([]);
+  const [activeRunnerKind, setActiveRunnerKind] = useState<"pyodide" | "dap">("pyodide");
+  const [lastLaunchMode, setLastLaunchMode] = useState<"idle" | "run" | "debug">("idle");
+  const [lastDebugFallback, setLastDebugFallback] = useState<string | null>(null);
+
+  const updateBreakpoints = useCallback(
+    (updater: (prev: Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => {
+      setBreakpoints((prev) => {
+        const next = updater(prev);
+        const sorted = next.slice().sort((a, b) => a.line - b.line);
+        (pyApi as any).setBreakpoints?.(sorted);
+        (dapApi as any).setBreakpoints?.(sorted);
+        return sorted;
+      });
+    },
+    [dapApi, pyApi]
+  );
+
+  const enabledBreakpointCount = useMemo(() => breakpoints.filter((b) => b.enabled).length, [breakpoints]);
+
+  const activeApi = activeRunnerKind === "pyodide" ? (pyApi as any) : (dapApi as any);
+  const runnerError = (activeApi?.error as string | null) ?? null;
+  const runner = useMemo(() => {
+    const base = (activeApi?.state as any) ?? {};
+    const baseWarnings = Array.isArray(base?.warnings) ? base.warnings : [];
+    const warnings: string[] = [];
+    if (lastDebugFallback) warnings.push(lastDebugFallback);
+    if (enabledBreakpointCount > 0) warnings.push(...baseWarnings);
+    return { ...base, breakpoints, warnings };
+  }, [activeApi, breakpoints, enabledBreakpointCount, lastDebugFallback, lastLaunchMode]);
+  const runnerView = useMemo(() => normalizeDebugSessionView(runner), [runner]);
+
+  const needsStdin = useMemo(() => /\binput\s*\(/.test(code), [code]);
 
   useEffect(() => {
     try {
@@ -457,36 +405,6 @@ const PythonLabStudio: React.FC<{
   }, [experiment?.id]);
 
   useEffect(() => {
-    if (!pipelineMode) {
-      setPseudocode(null);
-      setPseudocodeLoading(false);
-      setPseudocodeError(null);
-      return;
-    }
-    const tid = window.setTimeout(async () => {
-      setPseudocodeLoading(true);
-      try {
-        const resp = await pythonlabPseudocodeApi.parsePseudocode(code);
-        setPseudocode(resp);
-        setPseudocodeError(null);
-      } catch (e: unknown) {
-        const msg = toErrorMessage(e, "获取伪代码失败");
-        setPseudocode(null);
-        setPseudocodeError(msg);
-      } finally {
-        setPseudocodeLoading(false);
-      }
-    }, 350);
-    return () => window.clearTimeout(tid);
-  }, [code, pipelineMode]);
-
-  useEffect(() => {
-    if (!pipelineMode) {
-      setBeautifyResult(null);
-      setBeautifyLoading(false);
-      setBeautifyError(null);
-      return;
-    }
     if (!nodes.length) {
       setBeautifyResult(null);
       setBeautifyLoading(false);
@@ -511,74 +429,48 @@ const PythonLabStudio: React.FC<{
       }
     }, 500);
     return () => window.clearTimeout(tid);
-  }, [beautifyRefreshToken, edges, nodes, pipelineMode, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds]);
+  }, [beautifyRefreshToken, edges, nodes, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds]);
 
   const fitViewToCenter = useCallback(
     (nextNodes: FlowNode[], nextEdges: FlowEdge[]) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      let minX = Number.POSITIVE_INFINITY;
-      let minY = Number.POSITIVE_INFINITY;
-      let maxX = Number.NEGATIVE_INFINITY;
-      let maxY = Number.NEGATIVE_INFINITY;
-
-      for (const n of nextNodes) {
-        const s = nodeSizeForTitle(n.shape, n.title);
-        minX = Math.min(minX, n.x);
-        minY = Math.min(minY, n.y);
-        maxX = Math.max(maxX, n.x + s.w);
-        maxY = Math.max(maxY, n.y + s.h);
+      const result = calculateFitViewCenter(nextNodes, nextEdges, rect.width, rect.height);
+      if (result) {
+        setScale(result.scale);
+        setOffsetX(result.offsetX);
+        setOffsetY(result.offsetY);
       }
-      for (const e of nextEdges) {
-        const pts =
-          e.style === "polyline" || e.style === "bezier"
-            ? e.anchors && e.anchors.length
-              ? e.anchors
-              : e.anchor
-                ? [e.anchor]
-                : []
-            : [];
-        for (const p of pts) {
-          minX = Math.min(minX, p.x);
-          minY = Math.min(minY, p.y);
-          maxX = Math.max(maxX, p.x);
-          maxY = Math.max(maxY, p.y);
-        }
-      }
-
-      if (!Number.isFinite(minX)) return;
-      const contentW = maxX - minX;
-      const contentH = maxY - minY;
-      const fitX = (rect.width - 80) / Math.max(1, contentW);
-      const fitY = (rect.height - 80) / Math.max(1, contentH);
-      const fit = Math.max(0.2, Math.min(1, fitX, fitY));
-      const nextScale = fit >= 1 ? 1 : Math.max(0.2, fit);
-      const contentCenterX = minX + contentW / 2;
-      const contentCenterY = minY + contentH / 2;
-      const nextOffsetX = Math.round(rect.width / 2 - contentCenterX * nextScale);
-      const nextOffsetY = Math.round(rect.height / 2 - contentCenterY * nextScale);
-      setScale(nextScale);
-      setOffsetX(nextOffsetX);
-      setOffsetY(nextOffsetY);
     },
     [setOffsetX, setOffsetY, setScale]
   );
 
   // Removed auto-open terminal effect since it is now embedded in RightPanel
+  const resetTokenRef = useRef<string>("");
+  const runClickLockUntilRef = useRef(0);
 
   useEffect(() => {
-    resetRun();
-    clearOutput();
-    clearBreakpoints();
-    setWatchExprs([]);
+    const token = `${experiment?.id ?? ""}|${typeof experiment?.starterCode === "string" ? experiment.starterCode : ""}`;
+    if (resetTokenRef.current === token) return;
+    resetTokenRef.current = token;
+
+    (dapApi as any).reset?.();
+    (pyApi as any).reset?.();
+    (dapApi as any).clearOutput?.();
+    (pyApi as any).clearOutput?.();
+    updateBreakpoints(() => []);
+    (dapApi as any).setWatchExprs?.([]);
+    (pyApi as any).setWatchExprs?.([]);
+    setActiveRunnerKind("pyodide");
+    setLastLaunchMode("idle");
+    setLastDebugFallback(null);
     
     setRevealLine(null);
     setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
     setPanMode(false);
     setFollowMode(true);
     setNodeInspectorOpen(false);
-    setTerminalOpen(false);
 
     if (experiment?.id === "seq_basic") {
       const demo = peekDemoFlow("seq_basic");
@@ -609,48 +501,223 @@ const PythonLabStudio: React.FC<{
       setCodeMode("manual");
       setCode(experiment.starterCode);
     }
-  }, [experiment?.id]);
+  }, [dapApi, experiment?.id, experiment?.starterCode, fitViewToCenter, peekDemoFlow, pyApi, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
 
+  const onRun = useCallback(
+    (_stdinLines: string[] = []) => {
+      // Idempotency: relying on runner status is better than ad-hoc lock for logic,
+      // but lock is good for debounce.
+      const now = Date.now();
+      if (now < runClickLockUntilRef.current) {
+        message.info("操作过快，请稍候再试");
+        return;
+      }
+      
+      // Auto-restart logic: If running or starting, stop first then restart
+      const isRestart = runner.status === "starting" || runner.status === "running" || runner.status === "paused";
+      if (isRestart) {
+        console.log("Auto-restarting session...");
+        // If it's DAP, we might need to stop it explicitly if we want clean restart,
+        // but runner.runPlain/startDebug handles internal state reset.
+        // However, stopping the previous session on backend is good practice to free resources.
+        if (runner.sessionId) {
+           pythonlabSessionApi.stop(runner.sessionId).catch(() => {});
+        }
+        // We don't return here, we proceed to start new run which will overwrite state
+      }
+      
+      // Set lock to prevent double-clicks
+      runClickLockUntilRef.current = now + 800;
 
-  const runAllWithTerminal = () => {
-    runAll();
-  };
-  const continueWithTerminal = () => {
-    continueRun();
-  };
-  const stepOverWithTerminal = () => {
-    stepOver();
-  };
-  const stepIntoWithTerminal = () => {
-    stepInto();
-  };
-  const stepOutWithTerminal = () => {
-    stepOut();
-  };
+      setLastLaunchMode("run");
+      setLastDebugFallback(null);
+
+      const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount: 0, pythonlabRuntime, canFrontendDebug, needsStdin });
+
+      // Clean logic: just call the runner. The runner handles tokens and status updates.
+      if (plan.runnerKind === "dap") {
+        setActiveRunnerKind("dap");
+        (pyApi as any).reset?.();
+        const run = (dapApi as any).runPlain;
+        if (typeof run !== "function") {
+          message.error("运行器未就绪，请刷新页面后重试");
+          return;
+        }
+        // No need for extra Promise wrapper, but catching is good practice
+        Promise.resolve(run()).catch((e: any) => {
+          // If the runner threw a "starting" error (idempotency), we can ignore or show info.
+          // But we expect runner to throw specific errors.
+          // If it's the "start in flight" error, we can suppress or show info.
+          const msg = e?.message || "启动运行失败";
+          if (msg.includes("会话正在启动中")) {
+             // If we just triggered a restart, this might happen if user spam clicks
+             message.info(msg);
+          } else {
+             message.error(msg);
+          }
+        });
+        return;
+      }
+      
+      setActiveRunnerKind("pyodide");
+      const dapStatus = (dapApi as any)?.state?.status;
+      if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
+        Promise.resolve((dapApi as any).stopDebug?.()).catch(() => {});
+      }
+      const run = (pyApi as any).runPlain;
+      if (typeof run !== "function") {
+        message.error("前端运行器未就绪，请刷新页面后重试");
+        return;
+      }
+      Promise.resolve(run()).catch((e: any) => {
+          const msg = e?.message || "启动运行失败";
+          if (msg.includes("会话正在启动中")) {
+             message.info(msg);
+          } else {
+             message.error(msg);
+          }
+      });
+    },
+    [canFrontendDebug, dapApi, needsStdin, pyApi, pythonlabRuntime, runner.sessionId, runner.status, message]
+  );
+
+  const onDebug = useCallback(() => {
+    const now = Date.now();
+    if (now < runClickLockUntilRef.current) return;
+    if (runner.status === "starting" || runner.status === "running") return;
+    runClickLockUntilRef.current = now + 800;
+
+    if (enabledBreakpointCount <= 0) {
+      message.warning("请先设置断点");
+      return;
+    }
+
+    const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin });
+    if (plan.mode !== "debug" && plan.debugFallbackReason) {
+      message.warning(plan.debugFallbackReason);
+      return;
+    }
+
+    setLastLaunchMode("debug");
+    setLastDebugFallback(null);
+
+    // Force DAP for debug
+    setActiveRunnerKind("dap");
+    (pyApi as any).reset?.();
+    Promise.resolve((dapApi as any).startDebug?.()).catch((e: any) => {
+      message.error(e?.message || "启动调试失败");
+    });
+  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, dapApi, pyApi, runner.status, message]);
+
+  const onContinue = useCallback(() => {
+    activeApi?.continueRun?.();
+  }, [activeApi]);
+  const onPause = useCallback(() => {
+    activeApi?.pause?.();
+  }, [activeApi]);
+  const onStepOver = useCallback(() => {
+    activeApi?.stepOver?.();
+  }, [activeApi]);
+  const onStepInto = useCallback(() => {
+    activeApi?.stepInto?.();
+  }, [activeApi]);
+  const onStepOut = useCallback(() => {
+    activeApi?.stepOut?.();
+  }, [activeApi]);
+  const onReset = useCallback(() => {
+    (dapApi as any).reset?.();
+    (pyApi as any).reset?.();
+    setLastLaunchMode("idle");
+    setLastDebugFallback(null);
+  }, [dapApi, pyApi]);
+
+  const debugFrontendAdapter = useMemo(
+    () =>
+      createDebugFrontendAdapter({
+        run: onRun,
+        debug: onDebug,
+        continueRun: onContinue,
+        pause: onPause,
+        stepOver: onStepOver,
+        stepInto: onStepInto,
+        stepOut: onStepOut,
+        reset: onReset,
+      }),
+    [onContinue, onDebug, onPause, onReset, onRun, onStepInto, onStepOut, onStepOver]
+  );
+  const dapNegotiatedCapabilities = useMemo(() => {
+    if (activeRunnerKind !== "dap") return null;
+    return ((dapApi as any)?.state?.dapCapabilities ?? null) as any;
+  }, [activeRunnerKind, dapApi]);
+  const resolvedDebugCapabilities = useMemo(
+    () => applyDapNegotiatedCapabilities(debugFrontendAdapter.capabilities, dapNegotiatedCapabilities),
+    [dapNegotiatedCapabilities, debugFrontendAdapter.capabilities]
+  );
+  const debugPauseEvent = useMemo(
+    () => toDebugPauseEvent({ source: debugFrontendAdapter.mode, runner: runnerView }),
+    [debugFrontendAdapter.mode, runnerView]
+  );
+  const flowActivation = useMemo(
+    () => resolveFlowActivation({ event: debugPauseEvent, runner: runnerView }),
+    [debugPauseEvent, runnerView]
+  );
+
+  const onToggleBreakpoint = useCallback(
+    (line: number) => {
+      updateBreakpoints((prev) => {
+        const idx = prev.findIndex((b) => b.line === line);
+        const next = idx >= 0 ? prev.filter((b) => b.line !== line) : [...prev, { line, enabled: true }];
+        return next;
+      });
+    },
+    [updateBreakpoints]
+  );
+
+  const onSetBreakpointEnabled = useCallback(
+    (line: number, enabled: boolean) => {
+      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, enabled } : b)));
+    },
+    [updateBreakpoints]
+  );
+  const onSetBreakpointCondition = useCallback(
+    (line: number, condition: string) => {
+      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, condition: condition || undefined } : b)));
+    },
+    [updateBreakpoints]
+  );
+  const onSetBreakpointHitCount = useCallback(
+    (line: number, hitCount: number | null) => {
+      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, hitCount: typeof hitCount === "number" ? hitCount : undefined } : b)));
+    },
+    [updateBreakpoints]
+  );
 
   const followKey = useMemo(() => {
+    const nodeId = runner.activeNodeId ?? "";
     const line = runner.activeLine ?? revealLine ?? null;
-    if (!line) return "";
     const role = runner.activeFocusRole ?? "";
-    return `${line}|${role}`;
-  }, [revealLine, runner.activeFocusRole, runner.activeLine]);
+    return `${nodeId}|${line ?? ""}|${role}`;
+  }, [revealLine, runner.activeFocusRole, runner.activeLine, runner.activeNodeId]);
 
   useEffect(() => {
     if (!followMode) return;
     if (!canvasRef.current) return;
-    const [lineStr, roleRaw] = followKey.split("|");
+    const [nodeIdRaw, lineStr, roleRaw] = followKey.split("|");
+    const nodeId = nodeIdRaw || null;
     const line = lineStr ? Number(lineStr) : null;
     const focusRole = roleRaw || null;
-    if (!line) return;
+    if (!nodeId && !line) return;
     const matchesLine = (n: any) => {
+      if (!line) return false;
       const r = n?.sourceRange;
       if (r && Number.isFinite(r.startLine) && Number.isFinite(r.endLine)) {
         return line >= r.startLine && line <= r.endLine;
       }
       return n.sourceLine === line;
     };
-    const byRole = focusRole ? nodes.filter((n: any) => matchesLine(n) && n.sourceRole === focusRole) : [];
-    const targets = byRole.length ? byRole : nodes.filter((n: any) => matchesLine(n));
+    const byId = nodeId ? nodes.filter((n: any) => n.id === nodeId) : [];
+    const byRole = !byId.length && line && focusRole ? nodes.filter((n: any) => matchesLine(n) && n.sourceRole === focusRole) : [];
+    const targets = byId.length ? byId : byRole.length ? byRole : line ? nodes.filter((n: any) => matchesLine(n)) : [];
     if (!targets.length) return;
     const target = targets.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id))[0];
     const rect = canvasRef.current.getBoundingClientRect();
@@ -751,13 +818,6 @@ const PythonLabStudio: React.FC<{
     arrangeLayoutRef.current = arrangeLayout;
   }, [arrangeLayout]);
 
-  useEffect(() => {
-    if (demoAutoArrangeToken <= 0) return;
-    if (demoAutoArrangeHandledRef.current === demoAutoArrangeToken) return;
-    demoAutoArrangeHandledRef.current = demoAutoArrangeToken;
-    void arrangeLayoutRef.current?.();
-  }, [demoAutoArrangeToken]);
-
   const selectedEdge = useMemo(() => {
     if (!selectedEdgeId) return null;
     return edges.find((e) => e.id === selectedEdgeId) || null;
@@ -821,22 +881,28 @@ const PythonLabStudio: React.FC<{
 
   return (
     <div style={{ height: "calc(100vh - 130px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <Layout style={{ background: "transparent", height: "100%" }}>
+      <Layout style={{ background: "transparent", height: "100%", flexDirection: isCompactViewport ? "column" : "row" }}>
         <Sider
-          width={250}
+          width={isCompactViewport ? "100%" : 250}
           collapsedWidth={0}
           collapsible
           collapsed={leftCollapsed}
           trigger={null}
           theme="light"
-          style={{ background: "transparent", height: "100%", overflow: "hidden", borderRight: "1px solid rgba(0,0,0,0.06)" }}
+          style={{
+            background: "transparent",
+            height: isCompactViewport ? "auto" : "100%",
+            overflow: "hidden",
+            borderRight: isCompactViewport ? "none" : "1px solid var(--ws-color-border-secondary)",
+            borderBottom: isCompactViewport && !leftCollapsed ? "1px solid var(--ws-color-border-secondary)" : "none",
+          }}
         >
           <div style={{ height: "100%" }}>
             <TemplatePalette basic={basicTemplates} advanced={advancedTemplates} onAddNode={addNode} />
           </div>
         </Sider>
 
-        <Content style={{ padding: "0 0 0 16px", height: "100%", overflow: "hidden" }}>
+        <Content style={{ padding: isCompactViewport ? "8px 0 0 0" : "0 0 0 16px", height: "100%", overflow: "hidden" }}>
           <Card
             title={
               <Space>
@@ -854,7 +920,7 @@ const PythonLabStudio: React.FC<{
                   toggleLeft={() => setLeftCollapsed((v) => !v)}
                   demoOptions={demoOptions}
                   onLoadDemo={(key) => {
-                    clearBreakpoints();
+                    updateBreakpoints(() => []);
                     const demo = peekDemoFlow(key);
                     setCanvasBusy(true);
                     setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
@@ -913,8 +979,8 @@ const PythonLabStudio: React.FC<{
               </Space>
             }
             variant="borderless"
-            style={{ borderRadius: 8, height: "100%", display: "flex", flexDirection: "column", boxShadow: "none" }}
-            styles={{ body: { padding: 0, flex: 1, minHeight: 0 }, header: { padding: "0 16px", minHeight: 48 } }}
+            style={{ borderRadius: "var(--ws-radius-lg)", height: "100%", display: "flex", flexDirection: "column", boxShadow: "none", border: "1px solid var(--ws-color-border)" }}
+            styles={{ body: { padding: 0, flex: 1, minHeight: 0 }, header: { padding: "0 16px", minHeight: 48, borderBottom: "1px solid var(--ws-color-border-secondary)" } }}
           >
             <div
               ref={canvasRef}
@@ -925,7 +991,6 @@ const PythonLabStudio: React.FC<{
                 background:
                   "linear-gradient(0deg, rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)",
                 backgroundSize: "24px 24px",
-                borderTop: "1px solid rgba(0,0,0,0.06)",
                 overflow: "hidden",
                 cursor: panMode ? (panning ? "grabbing" : "grab") : "default",
               }}
@@ -1028,9 +1093,10 @@ const PythonLabStudio: React.FC<{
                 selectedNodeId={selectedNodeId}
                 selectedEdgeId={selectedEdgeId}
                 selectedEdge={selectedEdge}
-                activeNodeId={runner.activeNodeId}
-                activeLine={runner.activeFlowLine ?? runner.activeLine}
-                activeFocusRole={runner.activeFocusRole}
+                activeNodeId={flowActivation.activeNodeId}
+                activeLine={flowActivation.activeLine}
+                activeFocusRole={flowActivation.activeFocusRole}
+                activeEnabled={flowActivation.activeEnabled}
                 followMode={followMode}
                 followTick={followTick}
                 connectMode={connectMode}
@@ -1044,7 +1110,11 @@ const PythonLabStudio: React.FC<{
           </Card>
         </Content>
 
-        <Sider width={440} theme="light" style={{ background: "transparent", height: "100%", overflow: "hidden" }}>
+        <Sider
+          width={isCompactViewport ? "100%" : 440}
+          theme="light"
+          style={{ background: "transparent", height: isCompactViewport ? "42vh" : "100%", overflow: "hidden" }}
+        >
           <RightPanel
             generated={generated}
             code={code}
@@ -1053,59 +1123,43 @@ const PythonLabStudio: React.FC<{
             setCodeMode={setCodeMode}
             revealLine={revealLine}
             variableColumns={variableColumns}
-            runner={runner}
+            runner={runnerView}
+            debugCapabilities={resolvedDebugCapabilities}
             runnerError={runnerError}
-            structuredEmphasisLog={structuredEmphasisLog}
-            onToggleStructuredEmphasisLog={setStructuredEmphasisLog}
+            lastLaunchMode={lastLaunchMode}
+            terminalBridge={activeRunnerKind === "pyodide" ? (pyApi as any).terminal : null}
             flowDiagnostics={flowDiagnostics}
             flowExpandFunctions={flowExpandFunctions}
             setFlowExpandFunctions={setFlowExpandFunctions}
-            onRun={runAllWithTerminal}
-            onContinue={continueWithTerminal}
-            onPause={pause}
-            onStepOver={stepOverWithTerminal}
-            onStepInto={stepIntoWithTerminal}
-            onStepOut={stepOutWithTerminal}
-            onReset={resetRun}
-            onToggleBreakpoint={toggleBreakpoint}
-            onSetBreakpointEnabled={setBreakpointEnabled}
-            onSetBreakpointCondition={setBreakpointCondition}
-            onSetBreakpointHitCount={setBreakpointHitCount}
-            onAddWatch={addWatch}
-            onRemoveWatch={removeWatch}
-            onEvaluate={evaluate}
-            onHistoryBack={historyBack}
-            onHistoryForward={historyForward}
-            onHistoryToLatest={historyToLatest}
-            onOpenTerminal={() => setTerminalOpen(true)}
-            pipelineMode={pipelineMode}
-            onTogglePipelineMode={setPipelineMode}
-            pseudocode={pseudocode}
-            pseudocodeLoading={pseudocodeLoading}
-            pseudocodeError={pseudocodeError}
-            tidyResult={tidyResult}
-            onApplyTidy={() => {
-              if (!tidyResult) return;
-              setNodesAndEdgesAuto(tidyResult.tidy.nodes, tidyResult.tidy.edges);
-              fitViewTo(tidyResult.tidy.nodes, tidyResult.tidy.edges);
-            }}
-            beautifyParams={ruleSet.beautify.params}
-            setBeautifyParams={(next) => setRuleSet((prev) => ({ ...prev, beautify: { ...prev.beautify, params: next } }))}
+            onRebuildFlowFromCode={rebuildFlowFromCode}
+            onRun={debugFrontendAdapter.run}
+            onDebug={debugFrontendAdapter.debug}
+            onTerminalInput={() => { }}
+            onContinue={debugFrontendAdapter.continueRun}
+            onPause={debugFrontendAdapter.pause}
+            onStepOver={debugFrontendAdapter.stepOver}
+            onStepInto={debugFrontendAdapter.stepInto}
+            onStepOut={debugFrontendAdapter.stepOut}
+            onReset={debugFrontendAdapter.reset}
+            onToggleBreakpoint={onToggleBreakpoint}
+            onSetBreakpointEnabled={onSetBreakpointEnabled}
+            onSetBreakpointCondition={onSetBreakpointCondition}
+            onSetBreakpointHitCount={onSetBreakpointHitCount}
+            onAddWatch={(expr) => activeApi?.addWatch?.(expr)}
+            onRemoveWatch={(expr) => activeApi?.removeWatch?.(expr)}
+            onEvaluate={(expr) =>
+              typeof activeApi?.evaluate === "function"
+                ? activeApi.evaluate(expr)
+                : Promise.resolve({ ok: false, error: "当前运行器不支持求值" })
+            }
+            onHistoryBack={() => activeApi?.historyBack?.()}
+            onHistoryForward={() => activeApi?.historyForward?.()}
+            onHistoryToLatest={() => activeApi?.historyToLatest?.()}
             beautifyResult={beautifyResult}
             beautifyLoading={beautifyLoading}
             beautifyError={beautifyError}
             onRefreshBeautify={() => setBeautifyRefreshToken((t) => t + 1)}
-            onApplyBeautify={(mode) => {
-              if (!beautifyResult) return;
-              setNodesAuto(beautifyResult.layout.nodes);
-              if ((mode ?? "nodes") === "nodes_edges") setEdgesAuto(beautifyResult.layout.edges);
-              fitViewTo(beautifyResult.layout.nodes, (mode ?? "nodes") === "nodes_edges" ? beautifyResult.layout.edges : edges);
-            }}
-            canvasRoutingStyle={canvasRoutingStyle}
-            setCanvasRoutingStyle={setCanvasRoutingStyle}
-            ruleSet={ruleSet}
-            setRuleSet={setRuleSet}
-            experimentId={experiment?.id ?? ""}
+            onClearPendingOutput={() => activeApi?.clearPendingOutput?.()}
           />
         </Sider>
       </Layout>
@@ -1125,6 +1179,9 @@ const PythonLabStudio: React.FC<{
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <Text type="secondary">标题</Text>
               <Input
+                id="pythonlab-node-title-input"
+                name="pythonlab-node-title-input"
+                aria-label="节点标题"
                 size="small"
                 value={selectedNode.title}
                 onChange={(e) => {
@@ -1146,15 +1203,6 @@ const PythonLabStudio: React.FC<{
           </div>
         ) : null}
       </FloatingPopup>
-
-      <TerminalPopup
-        open={terminalOpen}
-        stdout={runner.stdout}
-        trace={runner.trace}
-        error={runnerError ?? (runner.status === "error" ? runner.error ?? null : null)}
-        onClose={() => setTerminalOpen(false)}
-        onClear={clearOutput}
-      />
 
     </div>
   );

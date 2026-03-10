@@ -85,6 +85,12 @@ services:
       REDIS_HOST: wangsh-redis
       REDIS_PORT: "6379"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
+      AUTH_TRUST_X_FORWARDED_FOR: ${AUTH_TRUST_X_FORWARDED_FOR:-true}
+      AUTH_IP_HEADER_ORDER: ${AUTH_IP_HEADER_ORDER:-X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr}
+      AUTH_USER_UNIQUE_PER_IP: ${AUTH_USER_UNIQUE_PER_IP:-false}
+      AUTH_IP_UNIQUE_PER_USER: ${AUTH_IP_UNIQUE_PER_USER:-false}
+      AUTH_ENFORCE_SAME_IP_PER_REQUEST: ${AUTH_ENFORCE_SAME_IP_PER_REQUEST:-false}
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-0}
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
       TYPST_COMPILE_MAX_CONCURRENCY: ${TYPST_COMPILE_MAX_CONCURRENCY:-2}
@@ -267,7 +273,7 @@ services:
       PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       HOST_WORKSPACE_ROOT: ${PWD}/data/pythonlab/workspaces
     user: "0:0"
-    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab" ]
     networks:
       - wangsh-network
     volumes:

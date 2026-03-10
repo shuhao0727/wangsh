@@ -20,7 +20,7 @@ RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::http
     && rm -rf /var/lib/apt/lists/*
 
 RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
-    pip install --retries 5 --timeout 30 debugpy==1.8.1
+    pip install --retries 5 --timeout 30 debugpy==1.8.17
 
 RUN useradd -m -u 1000 sandbox
 USER 1000:1000

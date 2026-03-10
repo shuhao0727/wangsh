@@ -6,6 +6,20 @@
   min-width: 0;
 }
 
+.ws-admin-page .ant-row,
+.ws-admin-page .ant-col,
+.ws-admin-page .ant-space,
+.ws-admin-page .ant-space-item,
+.ws-admin-page .ant-form-item-control-input-content {
+  min-width: 0;
+}
+
+.ws-admin-page .ant-typography,
+.ws-admin-page .ant-tag,
+.ws-admin-page .ant-btn {
+  overflow-wrap: anywhere;
+}
+
 .ws-responsive-toolbar {
   display: flex;
   align-items: center;
@@ -53,6 +67,10 @@
   min-width: 100%;
 }
 
+.ws-admin-page .ant-table-cell .ant-space {
+  flex-wrap: wrap;
+}
+
 .ws-admin-page .ant-table-cell {
   word-break: break-word;
 }
@@ -89,6 +107,23 @@
   word-break: break-word;
 }
 
+.ws-no-horizontal-overflow {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.home-page,
+.ai-agents-page,
+.informatics-page,
+.xbk-page,
+.articles-page,
+.article-page-wrapper,
+.it-technology-page,
+.personal-programs-page {
+  font-size: var(--ws-text-sm);
+}
+
 @media (max-width: 1024px) {
   .ws-admin-page {
     padding: 16px !important;
@@ -105,12 +140,66 @@
   }
 
   .ws-responsive-toolbar__group .ant-input-search,
-  .ws-responsive-toolbar__group .ant-select {
+  .ws-responsive-toolbar__group .ant-select,
+  .ws-responsive-toolbar__group .ant-btn {
     width: 100% !important;
     min-width: 0;
   }
 
+  .ws-responsive-toolbar__group .ant-btn {
+    justify-content: center;
+  }
+
   .ws-admin-page .ant-table-wrapper .ant-table-cell {
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 430px) {
+  .main-content {
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+
+  .informatics-page,
+  .articles-page,
+  .xbk-page,
+  .ai-agents-page {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ant-pagination-options,
+  .ant-pagination-total-text {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (min-width: 1366px) {
+  .main-content {
+    padding: var(--ws-space-4) !important;
+  }
+}
+
+@media (min-width: 1920px) {
+  .main-content {
+    padding: var(--ws-space-5) !important;
+  }
+
+  .article-content {
+    line-height: 1.9;
+  }
+}
+
+@media (min-width: 2560px) {
+  .main-content {
+    padding-inline: clamp(28px, 2.6vw, 64px) !important;
+  }
+
+  .article-content,
+  .informatics-typst-viewer,
+  .xbk-page {
+    font-size: var(--ws-text-md);
   }
 }

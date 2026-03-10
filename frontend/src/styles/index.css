@@ -11,46 +11,72 @@
 }
 
 :root {
+  --ws-density-scale: clamp(0.94, calc(0.32vw + 0.86), 1.18);
+  --ws-page-max-width: clamp(1080px, 92vw, 1720px);
+  --ws-page-max-width-wide: clamp(1320px, 94vw, 2080px);
+  --ws-header-height: clamp(56px, 3.2vw, 68px);
   --ws-color-bg: #ffffff;
   --ws-color-surface: #ffffff;
-  --ws-color-surface-2: #fafafa;
+  --ws-color-surface-2: #f8fafc; /* Slate 50 */
   --ws-color-border: transparent; 
-  --ws-color-text: #2c3e50; /* Deep Blue Grey */
-  --ws-color-text-secondary: #7f8c8d;
-  --ws-color-primary: #3498db; /* Brand Blue */
-  --ws-color-primary-hover: #5dade2;
-  --ws-color-primary-active: #2980b9;
-  --ws-color-accent: #3498db; 
-  --ws-color-success: #2ecc71;
-  --ws-color-warning: #f1c40f;
-  --ws-color-error: #e74c3c;
-  --ws-color-info: #3498db;
-  --ws-color-hover-bg: #f8f9fa;
-  --ws-color-focus-ring: rgba(52, 152, 219, 0.2);
-  --ws-color-primary-soft: #ebf5fb;
-  --ws-color-success-soft: #eafaf1;
-  --ws-color-warning-soft: #fef9e7;
-  --ws-color-error-soft: #fdedec;
-  --ws-color-info-soft: #ebf5fb;
-  --ws-radius-sm: 4px; 
-  --ws-radius-md: 6px;
-  --ws-radius-lg: 8px;
-  --ws-shadow-sm: none;
-  --ws-space-1: 8px;
-  --ws-space-2: 12px;
-  --ws-space-3: 16px;
-  --ws-space-4: 24px;
-  --ws-space-5: 32px;
+  --ws-color-text: #0f172a; /* Slate 900 - High contrast */
+  --ws-color-text-secondary: #475569; /* Slate 600 - Improved readability */
+  --ws-color-primary: #1677ff; /* Ant Design Default Blue */
+  --ws-color-primary-hover: #4096ff;
+  --ws-color-primary-active: #0958d9;
+  --ws-color-accent: #1677ff;
+  --ws-color-success: #52c41a;
+  --ws-color-warning: #faad14;
+  --ws-color-error: #ff4d4f;
+  --ws-color-info: #1677ff;
+  --ws-color-hover-bg: rgba(0, 0, 0, 0.02);
+  --ws-color-focus-ring: rgba(22, 119, 255, 0.2);
+  --ws-color-primary-soft: #e6f4ff;
+  --ws-color-primary-light: #e6f4ff;
+  --ws-color-success-soft: #f6ffed;
+  --ws-color-warning-soft: #fffbe6;
+  --ws-color-error-soft: #fff2f0;
+  --ws-color-info-soft: #e6f4ff;
+  --ws-radius-sm: clamp(4px, calc(0.12vw + 3.6px), 5px);
+  --ws-radius-md: clamp(6px, calc(0.16vw + 5.4px), 8px);
+  --ws-radius-lg: clamp(8px, calc(0.24vw + 7.2px), 12px);
+  --ws-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --ws-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --ws-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --ws-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  --ws-z-index-dropdown: 1000;
+  --ws-z-index-sticky: 1020;
+  --ws-z-index-fixed: 1030;
+  --ws-z-index-modal-backdrop: 1040;
+  --ws-z-index-modal: 1050;
+  --ws-z-index-popover: 1060;
+  --ws-z-index-tooltip: 1070;
+
+  --ws-transition-base: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --ws-transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  --ws-space-1: clamp(6px, calc(0.28vw + 5px), 14px);
+  --ws-space-2: clamp(10px, calc(0.4vw + 8px), 18px);
+  --ws-space-3: clamp(14px, calc(0.58vw + 11px), 24px);
+  --ws-space-4: clamp(18px, calc(0.76vw + 13px), 34px);
+  --ws-space-5: clamp(24px, calc(0.92vw + 18px), 44px);
+  --ws-text-xs: clamp(12px, calc(0.14vw + 11.2px), 14px);
+  --ws-text-sm: clamp(13px, calc(0.22vw + 12.2px), 16px);
+  --ws-text-md: clamp(14px, calc(0.3vw + 13px), 18px);
+  --ws-text-lg: clamp(16px, calc(0.48vw + 14.3px), 22px);
+  --ws-text-xl: clamp(20px, calc(0.76vw + 17.2px), 30px);
   
   /* Typography - Clean & Modern */
   --ws-font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --ws-font-size-base: 14px;
-  --ws-font-size-sm: 12px; 
+  --ws-font-size-base: var(--ws-text-md);
+  --ws-font-size-sm: var(--ws-text-xs);
   --ws-line-height-base: 1.6; /* Increased line height for breathability */
 }
 
 html {
   font-family: var(--ws-font-family);
+  font-size: var(--ws-font-size-base);
   line-height: var(--ws-line-height-base);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -64,7 +90,7 @@ body,
 
 body {
   margin: 0;
-  font-size: var(--ws-font-size-base);
+  font-size: 1rem;
   font-weight: 400;
   color: var(--ws-color-text);
   background-color: var(--ws-color-bg);
@@ -148,9 +174,24 @@ a:active {
 /* 布局类 */
 .full-height { height: 100%; }
 .full-width { width: 100%; }
+.ws-fluid-container {
+  width: min(var(--ws-page-max-width), 100%);
+  margin-inline: auto;
+  padding-inline: var(--ws-space-3);
+}
+
+.ws-fluid-container--wide {
+  width: min(var(--ws-page-max-width-wide), 100%);
+}
+
+.ws-fluid-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ws-space-3);
+}
 
 .flex { display: flex; }
-.flex-center { display: flex; align-items: center; justifyContent: center; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
 .flex-column { display: flex; flex-direction: column; }
 .flex-1 { flex: 1; }
 
@@ -167,4 +208,24 @@ a:active {
 
 @media (min-width: 769px) {
   .hidden-desktop { display: none !important; }
+}
+
+@media (min-width: 1366px) {
+  :root {
+    --ws-page-max-width: clamp(1180px, 90vw, 1820px);
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --ws-page-max-width-wide: clamp(1520px, 92vw, 2140px);
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --ws-page-max-width: 1880px;
+    --ws-page-max-width-wide: 2320px;
+    --ws-density-scale: 1.18;
+  }
 }

@@ -74,6 +74,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       return { w: Math.max(320, Number(v.w) || 420), h: Math.max(400, Number(v.h) || 500) };
     } catch { return { w: 420, h: 500 }; }
   });
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth || 1280);
   
   const draggingRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
@@ -119,7 +120,18 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [inviteLoading, setInviteLoading] = useState(false);
   const [invitingUserId, setInvitingUserId] = useState<number | null>(null);
 
-  const canUse = isAuthenticated && (isStudent || isAdmin);
+  const canUse = isAuthenticated && config.enabled && (isStudent || isAdmin);
+  const isCompactViewport = viewportWidth <= 430;
+  const floatingRenderWidth = isCompactViewport ? Math.max(320, viewportWidth - 8) : floatingSize.w;
+  const floatingRenderHeight = isCompactViewport ? Math.max(360, Math.min(floatingSize.h, window.innerHeight - 90)) : floatingSize.h;
+  const floatingRenderLeft = isCompactViewport ? 4 : floatingPos.x;
+  const floatingRenderTop = isCompactViewport ? 72 : floatingPos.y;
+
+  useEffect(() => {
+    const syncViewport = () => setViewportWidth(window.innerWidth || 1280);
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
 
   // --- 业务逻辑：成员管理 ---
   const fetchMembers = useCallback(async () => {
@@ -442,21 +454,24 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {introMode === 'join' ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {isAdmin && (
-            <Space style={{ marginBottom: 12, display: 'flex' }}>
+            <Space
+              wrap
+              style={{ marginBottom: 12, display: 'flex', width: "100%" }}
+            >
               <DatePicker 
                 value={filterDate ? dayjs(filterDate, "YYYY-MM-DD") : null}
                 format="YYYY-MM-DD"
                 allowClear
                 onChange={(d) => setFilterDate(d ? d.format("YYYY-MM-DD") : null)} 
                 placeholder="日期" 
-                style={{ width: 130 }}
+                style={{ width: isCompactViewport ? "100%" : 130 }}
               />
               <Select
                 placeholder="班级"
                 value={filterClass}
                 onChange={setFilterClass}
                 allowClear
-                style={{ width: 110 }}
+                style={{ width: isCompactViewport ? "100%" : 110 }}
                 options={classList.map(c => ({ label: c, value: c }))}
               />
               <Input
@@ -465,7 +480,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                 value={searchKeyword}
                 onChange={e => setSearchKeyword(e.target.value)}
                 allowClear
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: isCompactViewport ? "100%" : 160 }}
               />
             </Space>
           )}
@@ -692,12 +707,12 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           ref={floatingRef}
           style={{
             position: "fixed",
-            left: floatingPos.x,
-            top: floatingPos.y,
-            width: floatingSize.w,
-            height: floatingSize.h,
+            left: floatingRenderLeft,
+            top: floatingRenderTop,
+            width: floatingRenderWidth,
+            height: floatingRenderHeight,
             zIndex: 1050,
-            resize: "both",
+            resize: isCompactViewport ? "none" : "both",
             overflow: "hidden",
             boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
             borderRadius: 12,

@@ -66,7 +66,7 @@ const AdminUsers: React.FC = () => {
              <UserOutlined style={{ fontSize: 18, color: "var(--ws-color-primary)" }} />
              <span>用户管理</span>
           </div>
-          <Divider orientation="vertical" style={{ height: 24, margin: 0 }} />
+          <Divider orientation="vertical" className="admin-users-toolbar-divider" style={{ height: 24, margin: 0 }} />
           
           <Space size={8} wrap>
             <Search

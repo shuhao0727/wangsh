@@ -10,7 +10,7 @@ import { cfgToFlow } from "../flow/cfg_to_flow";
 import { nodeSizeForTitle } from "../flow/ports";
 import { sortFlowGraphStable } from "../flow/determinism";
 import { toErrorMessage } from "../errorMessage";
-import { buildDebugMapFromNodes, type DebugForRangeEntry } from "../flow/debugMap";
+import { buildDebugMapFromNodes, type DebugForInEntry, type DebugForRangeEntry } from "../flow/debugMap";
 
 export function usePythonFlowSync(params: {
   starterCode?: string;
@@ -62,9 +62,17 @@ export function usePythonFlowSync(params: {
   const [flowDiagnostics, setFlowDiagnostics] = useState<PythonLabFlowDiagnostic[]>([]);
   const [flowExpandFunctions, setFlowExpandFunctions] = useState<"all" | "top" | "none">("all");
   const [debugForRanges, setDebugForRanges] = useState<DebugForRangeEntry[] | null>(null);
+  const [debugForIns, setDebugForIns] = useState<DebugForInEntry[] | null>(null);
+  const [debugMapCodeSha, setDebugMapCodeSha] = useState<string | null>(null);
+  const [flowRebuildToken, setFlowRebuildToken] = useState(0);
+  const pendingRebuildRef = useRef<{ token: number; resolve: () => void; reject: (reason?: unknown) => void } | null>(null);
 
   const generated = useMemo(() => generatePythonFromFlow(nodes, edges), [nodes, edges]);
-  const debugMap = useMemo(() => buildDebugMapFromNodes(nodes, debugForRanges), [debugForRanges, nodes]);
+  const debugMap = useMemo(() => {
+    const built = buildDebugMapFromNodes(nodes, debugForRanges, debugForIns);
+    if (debugMapCodeSha) return { ...built, codeSha256: debugMapCodeSha };
+    return built;
+  }, [debugForIns, debugForRanges, debugMapCodeSha, nodes]);
 
   const applyLayout = useCallback(
     async (rawNodes: FlowNode[], rawEdges: FlowEdge[]) => {
@@ -166,6 +174,19 @@ export function usePythonFlowSync(params: {
   }, [edges, nodes]);
 
   const lastAppliedSemanticKeyRef = useRef<string | null>(null);
+  const rebuildFlowFromCode = useCallback(() => {
+    setCodeMode("manual");
+    return new Promise<void>((resolve, reject) => {
+      setFlowRebuildToken((t) => {
+        const next = t + 1;
+        if (pendingRebuildRef.current) {
+          pendingRebuildRef.current.reject(new Error("流程图重建请求已被新请求替换"));
+        }
+        pendingRebuildRef.current = { token: next, resolve, reject };
+        return next;
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!starterCode) return;
@@ -196,6 +217,8 @@ export function usePythonFlowSync(params: {
       setCode(generated.python);
       setCodeIr(generated.ir);
       setDebugForRanges(null);
+      setDebugForIns(null);
+      setDebugMapCodeSha(null);
       const map = generated.nodeLineMap;
       if (map) {
         setNodes((prev) => {
@@ -217,9 +240,19 @@ export function usePythonFlowSync(params: {
     if (codeMode !== "manual") return;
     const t = window.setTimeout(() => {
       void (async () => {
+        const settleRebuild = (ok: boolean, reason?: string) => {
+          const p = pendingRebuildRef.current;
+          if (!p) return;
+          if (p.token !== flowRebuildToken) return;
+          pendingRebuildRef.current = null;
+          if (ok) p.resolve();
+          else p.reject(new Error(reason || "流程图重建失败"));
+        };
         const resetAndClear = () => {
           setCodeIr(null);
           setDebugForRanges(null);
+          setDebugForIns(null);
+          setDebugMapCodeSha(null);
           setNodes([]);
           setEdges([]);
           setSelectedNodeId(null);
@@ -238,11 +271,16 @@ export function usePythonFlowSync(params: {
             const flow = cfgToFlow(parsed);
             setCodeIr(null);
             setDebugForRanges(null);
+            setDebugForIns(null);
+            setDebugMapCodeSha(parsed.codeSha256 || null);
             await applyLayout(flow.nodes, flow.edges);
+            settleRebuild(true);
             return;
           } catch (e: unknown) {
-            setFlowDiagnostics([{ level: "error", code: "E_FLOW_PARSE", message: toErrorMessage(e, "流程图解析失败") }]);
+            const msg = toErrorMessage(e, "流程图解析失败");
+            setFlowDiagnostics([{ level: "error", code: "E_FLOW_PARSE", message: msg }]);
             resetAndClear();
+            settleRebuild(false, msg);
             return;
           }
         }
@@ -253,13 +291,18 @@ export function usePythonFlowSync(params: {
           setFlowDiagnostics([]);
           setCodeIr(built.ir);
           setDebugForRanges(built.debugMap.forRanges);
+          setDebugForIns(built.debugMap.forIns);
+          setDebugMapCodeSha(null);
           await applyLayout(built.nodes, built.edges);
+          settleRebuild(true);
           return;
         }
 
         if (!preferBackendCfg) {
-          setFlowDiagnostics([{ level: "error", code: "E_FLOW_BUILD", message: v.ok ? "流程图构建失败：暂不支持该代码结构" : "语法错误：无法生成流程图" }]);
+          const msg = v.ok ? "流程图构建失败：暂不支持该代码结构" : "语法错误：无法生成流程图";
+          setFlowDiagnostics([{ level: "error", code: "E_FLOW_BUILD", message: msg }]);
           resetAndClear();
+          settleRebuild(false, msg);
           return;
         }
 
@@ -268,10 +311,15 @@ export function usePythonFlowSync(params: {
           const flow = cfgToFlow(cfg);
           setFlowDiagnostics(cfg.diagnostics?.map((d) => ({ level: d.level, message: d.message, code: "W_CFG" })) ?? []);
           setCodeIr(null);
+          setDebugForIns(null);
+          setDebugMapCodeSha(null);
           await applyLayout(flow.nodes, flow.edges);
+          settleRebuild(true);
         } catch (e: unknown) {
-          setFlowDiagnostics([{ level: "error", code: "E_CFG_PARSE", message: toErrorMessage(e, "流程图解析失败") }]);
+          const msg = toErrorMessage(e, "流程图解析失败");
+          setFlowDiagnostics([{ level: "error", code: "E_CFG_PARSE", message: msg }]);
           resetAndClear();
+          settleRebuild(false, msg);
         }
       })();
     }, 600); // Increased debounce for Graphviz
@@ -281,6 +329,7 @@ export function usePythonFlowSync(params: {
     code,
     codeMode,
     applyLayout,
+    flowRebuildToken,
     flowExpandFunctions,
     preferBackendCfg,
     setConnectFromId,
@@ -312,5 +361,5 @@ export function usePythonFlowSync(params: {
     return () => window.clearTimeout(t);
   }, [applyLayout, autoLayout, codeMode, edges, interacting, nodes, semanticKey]);
 
-  return { code, setCode, codeMode, setCodeMode, codeIr, setCodeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions };
+  return { code, setCode, codeMode, setCodeMode, codeIr, setCodeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode };
 }

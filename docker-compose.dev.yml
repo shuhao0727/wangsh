@@ -70,6 +70,7 @@ services:
       target: development
     container_name: wangsh-backend
     restart: unless-stopped
+    user: "0:0"
     environment:
       # 设置部署环境为docker，配置类将自动调整主机地址
       - DEPLOYMENT_ENV=docker
@@ -89,12 +90,18 @@ services:
       - TZ=Asia/Shanghai
       - APP_VERSION=${APP_VERSION}
       - CORS_ORIGINS=${CORS_ORIGINS}
+      - AUTH_TRUST_X_FORWARDED_FOR=${AUTH_TRUST_X_FORWARDED_FOR:-true}
+      - AUTH_IP_HEADER_ORDER=${AUTH_IP_HEADER_ORDER:-X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr}
+      - AUTH_USER_UNIQUE_PER_IP=${AUTH_USER_UNIQUE_PER_IP:-false}
+      - AUTH_IP_UNIQUE_PER_USER=${AUTH_IP_UNIQUE_PER_USER:-false}
+      - AUTH_ENFORCE_SAME_IP_PER_REQUEST=${AUTH_ENFORCE_SAME_IP_PER_REQUEST:-false}
+      - AUTH_SESSION_TTL_SECONDS=${AUTH_SESSION_TTL_SECONDS:-0}
       - UPLOAD_FOLDER=./uploads
       - TYPST_PDF_STORAGE_DIR=/app/data/typst_pdfs
       - MAX_UPLOAD_SIZE=10485760
       # 开发模式热加载
       - BACKEND_RELOAD=True
-      - PYTHONLAB_DEFAULT_MEMORY_MB=128
+      - PYTHONLAB_DEFAULT_MEMORY_MB=50
     volumes:
       # 代码热重载：将本地代码挂载到容器
       - ./backend:/app
@@ -102,6 +109,8 @@ services:
       - ./data/uploads:/app/uploads
       # Typst PDF 存储目录（与 worker 共享）
       - ./data/typst_pdfs:/app/data/typst_pdfs
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     depends_on:
       postgres:
         condition: service_healthy
@@ -198,7 +207,7 @@ services:
       - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
       - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
-      - PYTHONLAB_DEFAULT_MEMORY_MB=128
+      - PYTHONLAB_DEFAULT_MEMORY_MB=50
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -214,7 +223,7 @@ services:
     networks:
       - wangsh-network
     command: >
-      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-1} --include app.tasks.pythonlab"
+      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab"
 
   # 前端服务 (React + TypeScript)
   frontend:

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message, Tag, Radio, InputNumber } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message, Tag, Radio, InputNumber, Switch } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
@@ -606,26 +606,31 @@ const GroupDiscussionAdminTab: React.FC = () => {
           >
             清空选择
           </Button>
-          <Button
-            loading={frontendVisibleLoading}
-            onClick={async () => {
-              const next = !frontendVisible;
-              setFrontendVisibleLoading(true);
-              try {
-                const res = await groupDiscussionApi.setPublicConfig({ enabled: next });
-                if (!res.success) {
-                  message.error(res.message || "设置失败");
-                  return;
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #d9d9d9', padding: '4px 12px', borderRadius: 6, background: '#fff' }}>
+            <Text>学生端弹窗：</Text>
+            <Switch
+              checked={frontendVisible}
+              loading={frontendVisibleLoading}
+              checkedChildren="可见"
+              unCheckedChildren="不可见"
+              onChange={async (checked) => {
+                setFrontendVisibleLoading(true);
+                try {
+                  const res = await groupDiscussionApi.setPublicConfig({ enabled: checked });
+                  if (!res.success) {
+                    message.error(res.message || "设置失败");
+                    // Revert visual state if needed, but since it's controlled by state which updates on success/load, we might need to handle failure carefully.
+                    // Ideally we fetch the config again or revert state.
+                    return;
+                  }
+                  setFrontendVisible(Boolean(res.data.enabled));
+                  message.success(`学生端小组讨论已${res.data.enabled ? "开启" : "关闭"}`);
+                } finally {
+                  setFrontendVisibleLoading(false);
                 }
-                setFrontendVisible(Boolean(res.data.enabled));
-                message.success(`学生端小组讨论已${res.data.enabled ? "开启" : "关闭"}`);
-              } finally {
-                setFrontendVisibleLoading(false);
-              }
-            }}
-          >
-            学生端弹窗：{frontendVisible ? "可见" : "不可见"}
-          </Button>
+              }}
+            />
+          </div>
         </Space>
       </AdminCard>
 

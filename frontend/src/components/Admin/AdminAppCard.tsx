@@ -13,7 +13,7 @@ type Props = {
   actionLabel?: string;
   actionIcon?: React.ReactNode;
   onAction?: () => void;
-  theme?: "blue" | "orange";
+  color?: string; // Add color prop
 };
 
 const AdminAppCard: React.FC<Props> = ({
@@ -26,60 +26,59 @@ const AdminAppCard: React.FC<Props> = ({
   actionLabel,
   actionIcon,
   onAction,
-  theme = "blue",
+  color = "var(--ws-color-primary)", // Default to primary
 }) => {
-  const iconStyle =
-    theme === "orange"
-      ? {
-          background: "linear-gradient(135deg, #fff2e8 0%, #ffbb96 100%)",
-          color: "#d4380d",
-        }
-      : {
-          background: "linear-gradient(135deg, #e6f7ff 0%, #1890ff 100%)",
-          color: "#fff",
-        };
-
   return (
     <Card
       hoverable
       style={{
         borderRadius: 8,
-        border: "1px solid #f0f0f0",
+        border: "1px solid #f0f0f0", // Subtle border for definition
+        borderTop: `4px solid ${color}`, // Top decorative line
+        boxShadow: "none", // Default to no shadow
         height: "100%",
         transition: "all 0.3s ease",
+        background: "#ffffff", // Explicit white background
       }}
       styles={{
-        body: { padding: 24, display: "flex", flexDirection: "column", height: "100%" },
+        body: { padding: "16px 12px 12px 12px", display: "flex", flexDirection: "column", alignItems: "center", height: "100%" },
+      }}
+      // Add hover effect via JS or separate CSS class if needed, or rely on Antd hoverable
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-4px)";
+        e.currentTarget.style.boxShadow = "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)"; // Subtle hover shadow
+        e.currentTarget.style.borderColor = "transparent"; // Remove side/bottom borders on hover
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.borderColor = "#f0f0f0"; // Restore border color
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 20 }}>
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 8,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 24,
-            marginRight: 16,
-            flexShrink: 0,
-            ...iconStyle,
-          }}
-        >
-          {icon}
-        </div>
-        <div>
-          <Title level={5} style={{ marginBottom: 4, color: "#2c3e50", fontSize: 16 }}>
-            {title}
-          </Title>
-          <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.5, display: "block" }}>
-            {description}
-          </Text>
-        </div>
+      <div
+        style={{
+          fontSize: 24,
+          marginBottom: 8,
+          color: color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: 32,
+          width: 32,
+        }}
+      >
+        {icon}
       </div>
+      
+      <Title level={4} style={{ marginBottom: 4, color: color, fontSize: 15, fontWeight: 600, textAlign: "center" }}>
+        {title}
+      </Title>
+      
+      <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.3, display: "block", textAlign: "center", marginBottom: 12, maxWidth: "180px", minHeight: "32px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+        {description}
+      </Text>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
+      <div style={{ width: "100%", marginTop: "auto", borderTop: "1px solid #f0f0f0", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Switch size="small" checked={enabled} loading={loading} onChange={onToggle} />
           <Text type="secondary" style={{ fontSize: 12 }}>

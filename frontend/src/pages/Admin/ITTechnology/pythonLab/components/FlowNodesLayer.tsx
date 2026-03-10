@@ -3,7 +3,7 @@ import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
 import { allowedPortsForShape, fixedPortForStartEnd, nodePortLocal, nodeScale, nodeSizeForTitle, shapeColor, wrapNodeTitle } from "../flow/ports";
 import { matchesNodeLine } from "../flow/nodeLineMatch";
 
-export function FlowNodesLayer(props: {
+export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
   nodes: FlowNode[];
   scale: number;
   offsetX: number;
@@ -14,6 +14,7 @@ export function FlowNodesLayer(props: {
   activeNodeId?: string | null;
   activeLine?: number | null;
   activeFocusRole?: string | null;
+  activeEnabled?: boolean;
   followMode?: boolean;
   followTick?: number;
   connectMode: boolean;
@@ -34,6 +35,7 @@ export function FlowNodesLayer(props: {
     activeNodeId,
     activeLine,
     activeFocusRole,
+    activeEnabled = true,
     followMode,
     followTick,
     connectMode,
@@ -53,7 +55,7 @@ export function FlowNodesLayer(props: {
       const r = (n as any).sourceRole;
       if (typeof r === "string" && r.trim()) roles.add(r);
     }
-    const order = ["for_check", "for_inc", "for_init"];
+    const order = ["for_check", "for_inc", "for_init", "for_in_next", "for_in_bind", "while_check", "aug_assign", "call_site", "return_stmt"];
     for (const r of order) if (roles.has(r)) return r;
     return null;
   };
@@ -88,7 +90,9 @@ export function FlowNodesLayer(props: {
       {nodes.map((n) => {
         if (n.shape === "connector" && !String(n.title || "").trim()) return null;
         const selected = n.id === selectedNodeId;
-        const active = canUseActiveNodeId
+        const active = !activeEnabled
+          ? false
+          : canUseActiveNodeId
           ? !!activeNodeId && n.id === activeNodeId && !selected
           : !!activeLine &&
             matchesNodeLine(n, activeLine) &&
@@ -282,4 +286,4 @@ export function FlowNodesLayer(props: {
       })}
     </div>
   );
-}
+});

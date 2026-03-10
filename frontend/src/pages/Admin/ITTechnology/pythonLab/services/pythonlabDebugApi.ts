@@ -77,39 +77,6 @@ export const pythonlabFlowApi = {
   },
 };
 
-export type PythonLabPseudocodeRuleUsed = { id: string; count: number; description?: string };
-export type PythonLabPseudocodeLossPoint = { code: string; message: string; range?: PythonLabSourceRange };
-export type PythonLabPseudocodeItem = { text: string; range?: PythonLabSourceRange; source?: string };
-export type PythonLabPseudocodeReversibility = { score: number; level: "high" | "medium" | "low"; reasons?: string[] };
-
-export type PythonLabPseudocodeParseResponse = {
-  version: string;
-  parserVersion: string;
-  codeSha256: string;
-  input: { items: PythonLabPseudocodeItem[] };
-  process: { items: PythonLabPseudocodeItem[] };
-  output: { items: PythonLabPseudocodeItem[] };
-  rulesUsed: PythonLabPseudocodeRuleUsed[];
-  lossPoints: PythonLabPseudocodeLossPoint[];
-  reversibility: PythonLabPseudocodeReversibility;
-  diagnostics?: Array<{ level: string; code?: string; message: string; line?: number; col?: number }>;
-  stats?: { parseMs?: number; cacheHit?: boolean };
-};
-
-export type PythonLabPseudocodeParseOptions = {
-  limits?: {
-    maxParseMs?: number;
-  };
-  [k: string]: unknown;
-};
-
-export const pythonlabPseudocodeApi = {
-  parsePseudocode: async (code: string, options?: PythonLabPseudocodeParseOptions): Promise<PythonLabPseudocodeParseResponse> => {
-    const resp = await api.client.post("/debug/pseudocode/parse", { code, options: options ?? {} });
-    return resp.data as PythonLabPseudocodeParseResponse;
-  },
-};
-
 export type PythonLabSyntaxError = {
   line: number;
   col: number;

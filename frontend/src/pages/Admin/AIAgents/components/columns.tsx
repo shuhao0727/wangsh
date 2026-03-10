@@ -82,7 +82,7 @@ export const getAgentColumns = (
     title: "名称",
     dataIndex: "agent_name",
     key: "agent_name",
-    width: 200,
+    width: 280,
     render: (agentName: string, record: AIAgent) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{
@@ -94,16 +94,17 @@ export const getAgentColumns = (
           alignItems: 'center',
           justifyContent: 'center',
           color: '#1890ff',
-          fontSize: 18
+          fontSize: 18,
+          flexShrink: 0
         }}>
           {record.agent_type === 'dify' ? <CloudOutlined /> : <ThunderboltOutlined />}
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: '#2c3e50', marginBottom: 2 }}>
             {agentName || record.name}
           </div>
           {record.model_name && (
-            <div style={{ fontSize: 12, color: "#7f8c8d" }}>
+            <div style={{ fontSize: 12, color: "#7f8c8d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {record.model_name}
             </div>
           )}
@@ -120,7 +121,7 @@ export const getAgentColumns = (
     title: "类型",
     dataIndex: "agent_type",
     key: "agent_type",
-    width: 120,
+    width: 100,
     render: (agentType: string) => {
       const config = getTypeConfig(agentType);
       return (
@@ -131,17 +132,14 @@ export const getAgentColumns = (
     },
   },
   {
-  },
-  {
     title: "描述",
     dataIndex: "description",
     key: "description",
-    width: 260,
+    width: undefined, // Let description take remaining space
     render: (text: string | undefined) => {
       const v = (text || "").trim();
       if (!v) return <span style={{ color: '#bfbfbf' }}>无</span>;
-      const short = v.length > 60 ? v.slice(0, 60) + "…" : v;
-      return <span title={v}>{short}</span>;
+      return <span title={v} style={{ display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>;
     },
   },
   {

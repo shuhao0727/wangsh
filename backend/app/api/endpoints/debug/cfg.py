@@ -3,10 +3,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.deps import require_user, require_admin
-from app.utils.cache import cache
+from app.core.deps import require_user
 from app.api.endpoints.debug.constants import (
-    CACHE_KEY_SESSION_PREFIX,
     VERSION_CFG,
     WORKSPACE_MAIN_PY,
 )
@@ -153,22 +151,6 @@ def _generate_cfg_data(code: str) -> Dict[str, Any]:
         "edges": edges,
         "diagnostics": diagnostics,
     }
-
-
-@router.get("/sessions/{session_id}/cfg")
-async def get_cfg(session_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
-    user_id = int(current_user.get("id") or 0)
-    meta = await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
-    if not meta:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已过期")
-    if int(meta.get("owner_user_id") or 0) != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问该会话")
-
-    code = await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}:code")
-    if not isinstance(code, str):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话代码不存在或已过期")
-
-    return _generate_cfg_data(code)
 
 
 @router.post("/cfg/parse")

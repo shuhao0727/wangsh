@@ -1,5 +1,5 @@
 import abc
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 class SandboxProvider(abc.ABC):
@@ -60,9 +60,20 @@ class SandboxProvider(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    async def attach_tty(self, session_id: str, meta: Dict[str, Any]) -> Tuple[Any, Any]:
+        """
+        Attach to the session's TTY.
+        Returns a pair of (reader, writer) streams or similar object to pump data.
+        """
+        pass
+
 def get_sitecustomize_content() -> str:
     return """import socket
+import sys
+import os
 
+# --- Network Blocking ---
 _real_connect = socket.socket.connect
 
 def _is_loopback(host):

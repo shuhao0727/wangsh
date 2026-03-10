@@ -6,6 +6,7 @@ import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
+import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
 
 // 页面懒加载
 const HomePage = lazy(() => import("./pages/Home"));
@@ -51,8 +52,9 @@ function App() {
   return (
     <Layout className="full-height">
       <Content className="full-height">
-        <Suspense fallback={LoadingIndicator}>
-          <Routes>
+        <GlobalErrorBoundary>
+          <Suspense fallback={LoadingIndicator}>
+            <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/login" element={<LoginPage />} />
 
@@ -107,7 +109,8 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-        </Suspense>
+          </Suspense>
+        </GlobalErrorBoundary>
       </Content>
     </Layout>
   );

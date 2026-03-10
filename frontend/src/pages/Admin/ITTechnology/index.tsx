@@ -27,6 +27,7 @@ const AdminITTechnology: React.FC = () => {
       title: '随机点名',
       description: '班级名单管理与随机抽取工具',
       icon: <ExperimentOutlined />,
+      color: "var(--ws-color-primary)",
       hasManager: true,
     },
     {
@@ -34,6 +35,7 @@ const AdminITTechnology: React.FC = () => {
       title: 'Python 实验室',
       description: '实验模板管理与前台实验台入口',
       icon: <CodeOutlined />,
+      color: "var(--ws-color-info)",
       hasManager: false,
     },
     {
@@ -41,6 +43,7 @@ const AdminITTechnology: React.FC = () => {
       title: '问卷调查',
       description: '在线问卷创建与数据收集分析',
       icon: <FormOutlined />,
+      color: "var(--ws-color-warning)",
       hasManager: false, // 暂未实现
     },
     {
@@ -48,6 +51,7 @@ const AdminITTechnology: React.FC = () => {
       title: '思维导图',
       description: '在线脑图编辑与知识梳理',
       icon: <NodeIndexOutlined />,
+      color: "var(--ws-color-success)",
       hasManager: false, // 暂未实现
     },
   ];
@@ -119,7 +123,7 @@ const AdminITTechnology: React.FC = () => {
               enabled={flags[`${app.key}_enabled`] || false}
               loading={loading[app.key]}
               onToggle={(checked) => handleToggle(app.key, checked)}
-              theme="blue"
+              color={app.color}
               actionLabel={app.hasManager ? "管理" : undefined}
               actionIcon={app.hasManager ? <SettingOutlined /> : undefined}
               onAction={

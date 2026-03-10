@@ -34,6 +34,7 @@ export function TemplatePalette(props: {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  color: "var(--ws-color-text)", // Inherit color
                 }}
               >
                 <ShapeIcon shape={tpl.key} />
@@ -71,6 +72,7 @@ export function TemplatePalette(props: {
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
+                            color: "var(--ws-color-text)", // Inherit color
                           }}
                         >
                           <ShapeIcon shape={tpl.key} />

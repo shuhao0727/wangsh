@@ -1,0 +1,71 @@
+name: PythonLab Owner Concurrency Failure
+description: Report owner-concurrency gate failures with normalized fields
+title: "[pythonlab-owner] "
+labels:
+  - ci
+  - pythonlab
+  - owner-concurrency
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Failure Category
+      options:
+        - param
+        - network
+        - detect
+        - assert
+        - unknown
+    validations:
+      required: true
+  - type: input
+    id: exit_code
+    attributes:
+      label: Exit Code
+      placeholder: "2/3/4/5/10"
+    validations:
+      required: true
+  - type: input
+    id: workflow_run
+    attributes:
+      label: Workflow Run URL
+      placeholder: https://github.com/org/repo/actions/runs/123
+    validations:
+      required: true
+  - type: input
+    id: api_url
+    attributes:
+      label: API URL
+      placeholder: https://your-api.example.com
+    validations:
+      required: true
+  - type: input
+    id: owner_mode
+    attributes:
+      label: OWNER_MODE
+      placeholder: matrix
+    validations:
+      required: true
+  - type: input
+    id: expect_owner_behavior
+    attributes:
+      label: EXPECT_OWNER_BEHAVIOR
+      placeholder: deny/steal/<empty>
+    validations:
+      required: false
+  - type: textarea
+    id: summary
+    attributes:
+      label: Failure Summary
+      description: Paste summary lines from GITHUB_STEP_SUMMARY
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste key log lines related to the failure
+      render: shell
+    validations:
+      required: true

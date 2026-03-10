@@ -21,3 +21,8 @@
   height: 100%;
 }
 
+.pythonlab-session-modal .ant-modal-content {
+  border-radius: var(--ws-radius-lg);
+  overflow: hidden;
+  padding: 0;
+}

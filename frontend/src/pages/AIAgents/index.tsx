@@ -7,6 +7,8 @@ import {
   Modal,
   Form,
   Input,
+  Grid,
+  Drawer,
 } from "antd";
 import {
   RobotOutlined,
@@ -30,9 +32,13 @@ import { aiAgentsApi, agentDataApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
 import { config } from "@services";
 import { logger } from "@services/logger";
+import "./AIAgents.css";
 
 const AIAgentsPage: React.FC = () => {
   const { message } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+
   // 统一认证状态
   const auth = useAuth();
 
@@ -59,7 +65,7 @@ const AIAgentsPage: React.FC = () => {
   const [inputMessage, setInputMessage] = useState("");
 
   // 对话历史可见性
-  const [historyVisible, setHistoryVisible] = useState(true);
+  const [historyVisible, setHistoryVisible] = useState(!isMobile); // Default hidden on mobile
   const [workflowGroups, setWorkflowGroups] = useState<WorkflowGroup[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
@@ -686,6 +692,15 @@ const AIAgentsPage: React.FC = () => {
     setHistoryVisible(!historyVisible);
   };
 
+  // Ensure sidebar is closed when switching to mobile, or open on desktop if desired
+  useEffect(() => {
+    if (isMobile) {
+      setHistoryVisible(false);
+    } else {
+      setHistoryVisible(true);
+    }
+  }, [isMobile]);
+
   const handleStartNewConversation = () => {
     if (!currentAgent) return;
     createNewConversation(currentAgent);
@@ -767,33 +782,47 @@ const AIAgentsPage: React.FC = () => {
   return (
     <div
       className="ai-agents-page"
-      style={{
-        maxWidth: "1600px", // Increased max-width
-        width: "100%",
-        height: "100%",
-        margin: "0 auto",
-        flex: 1,
-        minHeight: 0,
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
     >
       <GroupDiscussionPanel
         isAuthenticated={auth.isAuthenticated}
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
       />
-      <Row gutter={[24, 24]} style={{ flex: 1, minHeight: 0 }}> {/* Ensure flex child can shrink/grow */}
-        {/* 左侧：智能体列表和对话历史 */}
-        {historyVisible && (
-          <Col
-            xs={24}
-            md={6}
-            lg={5}
-            style={{ minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}
-          >
+      <div className="ai-agents-container">
+        {/* Mobile Drawer for Sidebar */}
+        <Drawer
+          title="智能体列表"
+          placement="left"
+          onClose={() => setHistoryVisible(false)}
+          open={isMobile && historyVisible}
+          width={280}
+          styles={{ body: { padding: 0 } }}
+        >
+          <AgentSidebar
+            agents={agents}
+            currentAgent={currentAgent}
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            historyVisible={true}
+            onAgentChange={(id) => {
+              handleAgentChange(id);
+              if (isMobile) setHistoryVisible(false); // Close drawer on selection
+            }}
+            onToggleSidebar={() => setHistoryVisible(false)}
+            onStartNewConversation={() => {
+              handleStartNewConversation();
+              if (isMobile) setHistoryVisible(false);
+            }}
+            onSelectSession={(id) => {
+              handleSelectSession(id);
+              if (isMobile) setHistoryVisible(false);
+            }}
+          />
+        </Drawer>
+
+        {/* Desktop Sidebar Column */}
+        {!isMobile && historyVisible && (
+          <div className="ai-agents-sidebar-col">
             <AgentSidebar
               agents={agents}
               currentAgent={currentAgent}
@@ -805,17 +834,12 @@ const AIAgentsPage: React.FC = () => {
               onStartNewConversation={handleStartNewConversation}
               onSelectSession={handleSelectSession}
             />
-          </Col>
+          </div>
         )}
 
-        {/* 右侧：对话区域 */}
-        <Col
-          xs={24}
-          md={historyVisible ? 18 : 24}
-          lg={historyVisible ? 19 : 24}
-          style={{ minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}
-        >
-          <div style={{ flex: 1, minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}>
+        {/* Chat Area Column */}
+        <div className="ai-agents-chat-col">
+          <div className="ai-agents-chat-shell">
             <ChatArea
               currentAgent={currentAgent}
               messages={messages}
@@ -826,7 +850,7 @@ const AIAgentsPage: React.FC = () => {
               isStudent={auth.isStudent()}
               userDisplayName={auth.getDisplayName() || undefined}
               isStreaming={isStreaming}
-              streamingContent={streamingContent} 
+              streamingContent={streamingContent}
               currentStreamingMessageId={currentStreamingMessageId}
               streamStartTime={streamStartTime}
               onStopStream={handleStopStream}
@@ -835,8 +859,8 @@ const AIAgentsPage: React.FC = () => {
               onToggleSidebar={handleToggleSidebar}
             />
           </div>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       {/* 统一登录模态框 */}
       <Modal

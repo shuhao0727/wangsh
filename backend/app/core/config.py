@@ -312,6 +312,7 @@ class Settings(BaseSettings):
     PYTHONLAB_UNATTACHED_TTL_SECONDS: int = Field(default=300)
     PYTHONLAB_MAX_SESSIONS_PER_USER: int = Field(default=2)
     PYTHONLAB_DEBUGPY_PORT: int = Field(default=5678)
+    PYTHONLAB_DEBUG_WS_OWNER_MODE: str = Field(default="steal")
     PYTHONLAB_ORPHAN_CLEANUP_ENABLED: bool = Field(default=True)
     PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: int = Field(default=300)
     PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: int = Field(default=60)

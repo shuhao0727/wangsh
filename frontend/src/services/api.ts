@@ -81,8 +81,8 @@ const isAuthEndpoint = (url?: string) => {
   return (
     url.includes("/auth/login") ||
     url.includes("/auth/refresh") ||
-    url.includes("/auth/logout") ||
-    url.includes("/auth/me")
+    url.includes("/auth/logout")
+    // url.includes("/auth/me") // /auth/me 需要认证，不应排除
   );
 };
 

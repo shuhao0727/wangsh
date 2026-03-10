@@ -13,6 +13,7 @@ import {
 import { config } from "@services";
 import useAppMeta from "@hooks/useAppMeta";
 import { useNavigate } from "react-router-dom";
+import "./Home.css";
 
 const { Title, Text } = Typography;
 
@@ -32,7 +33,7 @@ const HomePage: React.FC = () => {
       description: "网络附加存储与文件管理",
       url: config.nasUrl,
       icon: <DatabaseOutlined />,
-      color: "var(--ws-color-success)",
+      color: "var(--ws-color-primary)",
     },
   ];
 
@@ -75,41 +76,33 @@ const HomePage: React.FC = () => {
   ];
 
   return (
-    <div className="home-page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="home-page">
       {/* 欢迎横幅 */}
       <div
-        style={{
-          textAlign: "center",
-          padding: "20px 20px 15px",
-          background: "#ffffff",
-          borderRadius: "12px",
-          marginBottom: "40px",
-        }}
+        className="home-banner"
       >
-        <Title level={2} style={{ color: "var(--ws-color-primary)", marginBottom: "8px" }}>
+        <Title level={2} className="home-banner-title">
           <HomeOutlined /> 欢迎使用 WangSh 平台
         </Title>
-        <Text style={{ fontSize: "14px", color: "var(--ws-color-text-secondary)" }}>
+        <Text className="home-banner-subtitle">
           集成了 AI 智能体、信息学竞赛、信息技术和个人程序的现代化平台
         </Text>
       </div>
 
       {/* 外部服务链接卡片 */}
-      <Title level={3} style={{ marginBottom: "24px", color: "var(--ws-color-primary)" }}>
+      <Title level={3} className="home-section-title">
         <LinkOutlined /> 外部服务
       </Title>
-      <Row gutter={[24, 24]} style={{ marginBottom: "40px" }}>
+      <Row gutter={[24, 24]} className="home-link-grid">
         {externalLinks.map((link, index) => (
           <Col xs={24} md={12} key={index}>
             <Card
               hoverable
               style={{
                 borderLeft: `4px solid ${link.color}`,
-                height: "100%",
-                transition: "transform 0.3s, box-shadow 0.3s",
-                cursor: "pointer",
               }}
-              styles={{ body: { padding: "24px" } }}
+              className="home-link-card"
+              styles={{ body: { padding: "var(--ws-space-4)" } }}
               onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-4px)";
@@ -120,18 +113,11 @@ const HomePage: React.FC = () => {
                 e.currentTarget.style.boxShadow = "none";
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "16px",
-                }}
-              >
+              <div className="home-link-card-inner">
                 <div
+                  className="home-link-card-icon"
                   style={{
-                    fontSize: "32px",
                     color: link.color,
-                    flexShrink: 0,
                   }}
                 >
                   {link.icon}
@@ -139,13 +125,13 @@ const HomePage: React.FC = () => {
                 <div style={{ flex: 1 }}>
                   <Title
                     level={4}
-                    style={{ marginBottom: "8px", color: link.color }}
+                    style={{ marginBottom: "var(--ws-space-1)", color: link.color }}
                   >
                     {link.title}
                   </Title>
                   <Text
                     type="secondary"
-                    style={{ display: "block", marginBottom: "16px" }}
+                    style={{ display: "block", marginBottom: "var(--ws-space-3)" }}
                   >
                     {link.description}
                   </Text>
@@ -159,45 +145,45 @@ const HomePage: React.FC = () => {
       <Divider />
 
       {/* 平台功能模块 */}
-      <Title level={3} style={{ marginBottom: "24px", color: "var(--ws-color-primary)" }}>
+      <Title level={3} className="home-section-title">
         <ToolOutlined /> 平台功能
       </Title>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "20px",
-          marginBottom: "40px",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="home-module-grid">
         {platformModules.map((module, index) => (
-          <div
-            key={index}
-            style={{
-              flex: "1 1 calc(20% - 20px)",
-              minWidth: "180px",
-              maxWidth: "220px",
-            }}
-          >
+          <div key={index} className="home-module-grid-item">
             <Card
               hoverable
               style={{
-                textAlign: "center",
                 borderTop: `4px solid ${module.color}`,
-                height: "100%",
-                width: "100%",
-                cursor: "pointer",
-                minHeight: 150,
+                background: "#ffffff",
+                border: "1px solid #f0f0f0",
+                boxShadow: "none",
+                borderRadius: 8,
+                transition: "all 0.3s ease",
               }}
-              styles={{ body: { padding: "20px 12px" } }}
+              className="home-module-card"
+              styles={{ body: { padding: "var(--ws-space-4) var(--ws-space-2)" } }}
               onClick={() => navigate(module.path)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)";
+                e.currentTarget.style.borderColor = "transparent";
+                // Keep border top color visible or let it be handled by CSS? 
+                // Inline style overwrites class, so we need to be careful.
+                // The borderTop is inline, so it stays. border-color transparent might hide it if not specific.
+                // Let's use borderLeft/Right/Bottom transparent specifically if needed, or just let shadow do the work.
+                // Actually, just setting box-shadow is enough for the effect.
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.borderColor = "#f0f0f0";
+              }}
             >
               <div
+                className="home-module-icon"
                 style={{
-                  fontSize: "32px",
                   color: module.color,
-                  marginBottom: "12px",
                 }}
               >
                 {module.icon}
@@ -207,7 +193,7 @@ const HomePage: React.FC = () => {
                 style={{
                   marginBottom: "6px",
                   color: module.color,
-                  fontSize: "16px",
+                  fontSize: "var(--ws-text-md)",
                 }}
               >
                 {module.title}
@@ -217,7 +203,7 @@ const HomePage: React.FC = () => {
                 style={{
                   display: "block",
                   marginBottom: 0,
-                  fontSize: "12px",
+                  fontSize: "var(--ws-text-xs)",
                   lineHeight: "1.4",
                 }}
               >
@@ -229,15 +215,7 @@ const HomePage: React.FC = () => {
       </div>
 
       {/* 底部信息 */}
-      <div
-        style={{
-          textAlign: "center",
-          marginTop: "40px",
-          padding: "24px",
-          borderTop: "1px solid var(--ws-color-border)",
-          color: "var(--ws-color-text-secondary)",
-        }}
-      >
+      <div className="home-footer">
         <Text>WangSh 平台 · 版本 {version} · {envLabel || "本地开发"}</Text>
       </div>
     </div>

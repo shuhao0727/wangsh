@@ -211,14 +211,40 @@ function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: Flow
 }
 
 export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { nodes: (FlowNode & { sourceRange?: SourceRange })[]; edges: FlowEdge[] } {
-  const kindToShape = (kind: string): FlowNodeShape => {
+  const inferShapeByTitle = (title: string): FlowNodeShape | null => {
+    const t = (title || "").trim();
+    const low = t.toLowerCase();
+    if (low.startsWith("print(") || low.includes("input(") || low.startsWith("read(") || low.startsWith("write(")) return "io";
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*input\s*\(/.test(t)) return "io";
+    const rhs = low.replace(/^[a-z_][a-z0-9_]*\s*=\s*/i, "");
+    if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(rhs) && !rhs.startsWith("print(") && !rhs.startsWith("input(")) return "subroutine";
+    if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(low) && !low.startsWith("print(") && !low.startsWith("input(")) return "subroutine";
+    return null;
+  };
+  const kindToShape = (kind: string, title: string): FlowNodeShape => {
     const k = (kind || "").toLowerCase();
     if (k === "module") return "start_end";
     if (k === "if" || k === "elif" || k === "while" || k === "for" || k === "foreach") return "decision";
     if (k === "function") return "start_end";
     if (k === "functionend") return "start_end";
     if (k === "moduleend") return "start_end";
+    const fromTitle = inferShapeByTitle(title);
+    if (fromTitle) return fromTitle;
     return "process";
+  };
+  const kindToSourceRole = (kind: string, title: string): string | undefined => {
+    const k = (kind || "").toLowerCase();
+    if (k === "forinit") return "for_init";
+    if (k === "for") return "for_check";
+    if (k === "forstep") return "for_inc";
+    if (k === "while") return "while_check";
+    if (k === "foreachnext") return "for_in_next";
+    if (k === "foreach") return "for_in_bind";
+    if (k === "augassign") return "aug_assign";
+    if (k === "return") return "return_stmt";
+    const low = (title || "").trim().toLowerCase();
+    if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(low) && !low.startsWith("print(") && !low.startsWith("input(")) return "call_site";
+    return undefined;
   };
 
   const moduleIds = new Set(cfg.nodes.filter((n) => n.kind === "Module").map((n) => n.id));
@@ -229,22 +255,23 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
   const nodes: (FlowNode & { sourceRange?: SourceRange })[] = cfg.nodes
     .filter((n) => !moduleIds.has(n.id))
     .map((n) => {
-    const shape = kindToShape(n.kind);
-    const title = (n.title || "").trim() || n.kind;
-    const tooltip = (n.fullTitle || n.title || "").trim() || undefined;
-    const sourceLine = Number.isFinite(n.range?.startLine) ? n.range.startLine : undefined;
-    return {
-      id: n.id,
-      shape,
-      title,
-      tooltip,
-      x: 0,
-      y: 0,
-      sourceLine,
-      sourceRole: undefined,
-      sourceRange: n.range,
-    };
-  });
+      const title = (n.title || "").trim() || n.kind;
+      const shape = kindToShape(n.kind, title);
+      const tooltip = (n.fullTitle || n.title || "").trim() || undefined;
+      const sourceLine = Number.isFinite(n.range?.startLine) ? n.range.startLine : undefined;
+      const sourceRole = kindToSourceRole(n.kind, title);
+      return {
+        id: n.id,
+        shape,
+        title,
+        tooltip,
+        x: 0,
+        y: 0,
+        sourceLine,
+        sourceRole,
+        sourceRange: n.range,
+      };
+    });
 
   const edges: FlowEdge[] = [];
   for (const e of cfg.edges) {

@@ -4,7 +4,7 @@ import type { CanvasMetric } from "../hooks/useEdgeGeometries";
 import { chooseSide } from "../flow/ports";
 import { nearestTOnPolyline, pointAtT } from "../flow/geometry";
 
-export function FlowEdgesSvg(props: {
+export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
   canvasRef: React.RefObject<HTMLDivElement | null>;
   canvasMetrics: Map<string, CanvasMetric>;
   edges: FlowEdge[];
@@ -274,4 +274,4 @@ export function FlowEdgesSvg(props: {
       })}
     </svg>
   );
-}
+});

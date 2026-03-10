@@ -1,272 +1,549 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 
+export type XtermTerminalHandle = {
+  clear: () => void;
+  ensureNewline: () => void;
+  write: (data: string) => void;
+};
+
 interface XtermTerminalProps {
-  output: string[];
+  wsUrl?: string | null;
   className?: string;
   onClear?: () => void;
+  fontSize?: number;
+  showLineNumbers?: boolean;
 }
 
-const XtermTerminal: React.FC<XtermTerminalProps> = ({ output, className, onClear }) => {
+const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(function XtermTerminal(
+  { wsUrl, className, onClear, fontSize = 14, showLineNumbers },
+  ref
+) {
+  const showLineNumbersOn = showLineNumbers !== false;
+  const [gutterText, setGutterText] = useState("");
+  const [gutterDigits, setGutterDigits] = useState(2);
+  const gutterRafRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const outputLengthRef = useRef(0);
-  const lastElementLengthRef = useRef(0);
-  const firstElementRef = useRef<string | null>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const fitRafRef = useRef<number | null>(null);
+  const fitDebounceRef = useRef<number | null>(null);
+  const fitTimerRef = useRef<number | null>(null);
+  const textTailRef = useRef("");
   const [canInit, setCanInit] = useState(false);
-
-  // Line number state
-  const lineNumberRef = useRef(1);
-  const isLineStartRef = useRef(true);
-
-  // Helper to write with line numbers
-  const writeWithLineNumbers = (term: Terminal, text: string) => {
-    if (!text) return;
-    
-    let result = "";
-    let ptr = 0;
-    
-    while (ptr < text.length) {
-        if (isLineStartRef.current) {
-            const numStr = lineNumberRef.current.toString().padEnd(4, ' ');
-            // Use dim style for line numbers
-            result += `\x1b[38;5;244m${numStr}\x1b[0m `; 
-            isLineStartRef.current = false;
-        }
-        
-        // Find next newline
-        const nextCR = text.indexOf('\r', ptr);
-        const nextLF = text.indexOf('\n', ptr);
-        
-        let nextLineEnd = -1;
-        if (nextCR !== -1 && nextLF !== -1) nextLineEnd = Math.min(nextCR, nextLF);
-        else if (nextCR !== -1) nextLineEnd = nextCR;
-        else if (nextLF !== -1) nextLineEnd = nextLF;
-        
-        if (nextLineEnd === -1) {
-            result += text.slice(ptr);
-            ptr = text.length;
-        } else {
-            let endOfLineSeq = 1;
-            if (text[nextLineEnd] === '\r' && text[nextLineEnd + 1] === '\n') {
-                endOfLineSeq = 2;
-            }
-            
-            result += text.slice(ptr, nextLineEnd + endOfLineSeq);
-            ptr = nextLineEnd + endOfLineSeq;
-            
-            lineNumberRef.current++;
-            isLineStartRef.current = true;
-        }
-    }
-    
-    term.write(result);
+  const afterEnterRef = useRef(false);
+  const termEpochRef = useRef(0);
+  const terminalDisposedRef = useRef(true);
+  const trace = (phase: string, extra?: Record<string, unknown>) => {
+    try {
+      const enabled =
+        Boolean((window as any).__PYTHONLAB_TERMINAL_TRACE__) ||
+        window.localStorage?.getItem("pythonlab:terminal:trace") === "1";
+      if (!enabled) return;
+      console.info("[pythonlab:terminal:xterm]", {
+        phase,
+        epoch: termEpochRef.current,
+        disposed: terminalDisposedRef.current,
+        ts: Date.now(),
+        ...(extra || {}),
+      });
+    } catch {}
   };
 
-  // 1. Setup ResizeObserver to detect when container is ready (visible and has size)
+  const shouldHideLine = (line: string) => {
+    const s = line.trim();
+    if (!s) return false;
+    if (/^debugpy exited rc=0 \(iter=\d+\)$/.test(s)) return true;
+    if (/^\d+\.\d+s - Debugger warning: It seems that frozen modules are being used, which may$/.test(s)) return true;
+    if (/^\d+\.\d+s - make the debugger miss breakpoints\. Please pass -Xfrozen_modules=off$/.test(s)) return true;
+    if (/^\d+\.\d+s - to python to disable frozen modules\.$/.test(s)) return true;
+    if (/^\d+\.\d+s - Note: Debugging will proceed\. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation\.$/.test(s)) return true;
+    return false;
+  };
+
+  const filterTerminalText = (chunk: string) => {
+    if (!chunk) return "";
+    const combined = textTailRef.current + chunk;
+    const parts = combined.split(/\r\n|\n|\r/);
+    textTailRef.current = parts.pop() ?? "";
+    const out: string[] = [];
+    for (const line of parts) {
+      if (!shouldHideLine(line)) out.push(line);
+    }
+    return out.length ? `${out.join("\r\n")}\r\n` : "";
+  };
+
+  const refreshGutter = () => {
+    if (!showLineNumbersOn) return;
+    const term = terminalRef.current as any;
+    if (!term) return;
+    const active = term.buffer?.active;
+    const viewportY = typeof active?.viewportY === "number" ? active.viewportY : 0;
+    const rows = Math.max(9, term.rows || 0);
+    const start = viewportY + 1;
+    const end = start + rows - 1;
+    const digits = Math.max(2, String(end).length);
+    let text = "";
+    for (let i = start; i <= end; i++) {
+      text += String(i).padStart(digits, " ") + "\n";
+    }
+    setGutterDigits(digits);
+    setGutterText(text);
+  };
+
+  const scheduleRefreshGutter = () => {
+    if (!showLineNumbersOn) return;
+    if (gutterRafRef.current != null) window.cancelAnimationFrame(gutterRafRef.current);
+    gutterRafRef.current = window.requestAnimationFrame(() => {
+      gutterRafRef.current = null;
+      refreshGutter();
+    });
+  };
+
+  const safeFit = (expectedEpoch: number) => {
+    try {
+      const container = containerRef.current;
+      const fit = fitAddonRef.current;
+      const termAny = terminalRef.current as any;
+      if (!container || !fit || !termAny) return;
+      if (terminalDisposedRef.current) return;
+      if (expectedEpoch !== termEpochRef.current) return;
+      if (container.clientWidth === 0 || container.clientHeight === 0) return;
+      if (!container.isConnected) return;
+      if (container.offsetParent === null) return;
+      if (!container.ownerDocument?.contains(container)) return;
+      const termElement = termAny?.element as HTMLElement | undefined;
+      if (!termElement || !termElement.isConnected) return;
+      fit.fit();
+      trace("safe_fit_ok", { expectedEpoch });
+    } catch {}
+  };
+
+  const requestFit = () => {
+    if (fitDebounceRef.current != null) {
+      window.clearTimeout(fitDebounceRef.current);
+      fitDebounceRef.current = null;
+    }
+    if (fitRafRef.current != null) window.cancelAnimationFrame(fitRafRef.current);
+    const epoch = termEpochRef.current;
+    fitDebounceRef.current = window.setTimeout(() => {
+      fitDebounceRef.current = null;
+      fitRafRef.current = window.requestAnimationFrame(() => {
+        fitRafRef.current = null;
+        trace("request_fit_fire", { epoch });
+        safeFit(epoch);
+        scheduleRefreshGutter();
+      });
+    }, 24);
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      clear: () => {
+        const t = terminalRef.current;
+        if (!t) return;
+        if (terminalDisposedRef.current) return;
+        if (!(t as any).element || !(t as any).element.isConnected) return;
+        trace("imperative_clear");
+        try {
+          t.write("\x1b[2J\x1b[3J\x1b[H");
+        } catch {}
+        scheduleRefreshGutter();
+      },
+      ensureNewline: () => {
+        const t = terminalRef.current;
+        if (!t) return;
+        if (terminalDisposedRef.current) return;
+        if (!(t as any).element || !(t as any).element.isConnected) return;
+        const cx = (t as any).buffer?.active?.cursorX;
+        if (typeof cx === "number" && cx === 0) return;
+        trace("imperative_newline");
+        try {
+          t.write("\r\n");
+        } catch {}
+        scheduleRefreshGutter();
+      },
+      write: (data: string) => {
+        const t = terminalRef.current;
+        if (!t) return;
+        if (terminalDisposedRef.current) return;
+        if (!(t as any).element || !(t as any).element.isConnected) return;
+        trace("imperative_write", { size: data?.length ?? 0 });
+        try {
+          t.write(data);
+        } catch {}
+        scheduleRefreshGutter();
+      },
+    }),
+    []
+  );
+
+  // 1. Setup ResizeObserver
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Use a simpler resize handling approach
+    let disposed = false;
     const fitTerminal = () => {
         if (!terminalRef.current || !fitAddonRef.current || !containerRef.current) return;
         if (containerRef.current.clientWidth === 0 || containerRef.current.clientHeight === 0) return;
-        
-        try {
-            fitAddonRef.current.fit();
-        } catch (e) {
-            console.warn("Xterm fit failed", e);
-        }
+        requestFit();
     };
-
+    const maybeInit = () => {
+      if (!containerRef.current) return;
+      if (containerRef.current.clientWidth === 0 || containerRef.current.clientHeight === 0) return;
+      if (!disposed) setCanInit(true);
+    };
+    const runResize = () => {
+      maybeInit();
+      fitTerminal();
+    };
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", runResize);
+      runResize();
+      return () => {
+        disposed = true;
+        window.removeEventListener("resize", runResize);
+        if (fitDebounceRef.current != null) {
+          window.clearTimeout(fitDebounceRef.current);
+          fitDebounceRef.current = null;
+        }
+        if (fitRafRef.current != null) {
+          window.cancelAnimationFrame(fitRafRef.current);
+          fitRafRef.current = null;
+        }
+      };
+    }
     const ro = new ResizeObserver(() => {
-        // Debounce slightly or just requestAnimationFrame
-        requestAnimationFrame(fitTerminal);
+      if (fitRafRef.current != null) window.cancelAnimationFrame(fitRafRef.current);
+      fitRafRef.current = window.requestAnimationFrame(() => {
+        fitRafRef.current = null;
+        runResize();
+      });
     });
-
     ro.observe(containerRef.current);
-    
-    // Also fit on init
-    setCanInit(true);
-
+    maybeInit();
     return () => {
+      disposed = true;
+      if (fitDebounceRef.current != null) {
+        window.clearTimeout(fitDebounceRef.current);
+        fitDebounceRef.current = null;
+      }
+      if (fitRafRef.current != null) {
+        window.cancelAnimationFrame(fitRafRef.current);
+        fitRafRef.current = null;
+      }
       ro.disconnect();
     };
   }, []);
 
-  // 2. Initialize Terminal only when container is ready
+  // 2. Initialize Terminal
   useEffect(() => {
     if (!canInit || !containerRef.current || terminalRef.current) return;
+    let disposed = false;
+    let cleanup: (() => void) | null = null;
+    const raf = window.requestAnimationFrame(() => {
+      if (disposed) return;
+      const container = containerRef.current;
+      if (!container || terminalRef.current) return;
+      if (container.clientWidth === 0 || container.clientHeight === 0) return;
+      if (!container.isConnected || container.offsetParent === null) return;
+      if (!container.ownerDocument?.contains(container)) return;
 
-    const term = new Terminal({
-      cursorBlink: true,
-      fontSize: 12,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      theme: {
-        background: "#ffffff",
-        foreground: "#000000",
-        cursor: "#000000",
-        selectionBackground: "rgba(0, 0, 0, 0.3)",
-      },
-      convertEol: true, 
-      disableStdin: true, 
-      allowProposedApi: true,
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: fontSize,
+        lineHeight: 1.35,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, monospace",
+        theme: {
+          background: "#ffffff",
+          foreground: "#1e293b", // Slate 800
+          cursor: "#1e293b", // Slate 800
+          selectionBackground: "rgba(37, 99, 235, 0.2)", // Blue 600 with opacity
+        },
+        convertEol: true,
+        disableStdin: false,
+        allowProposedApi: true,
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      try {
+        term.open(container);
+      } catch (e: any) {
+        trace("terminal_open_error", { message: e?.message || "open_failed" });
+        try { term.dispose(); } catch {}
+        return;
+      }
+
+      term.onKey(() => {});
+      const inputDisposable = term.onData((data) => {
+        const normalized = data === "\b" ? "\u007F" : data;
+        if (data.includes("\r")) afterEnterRef.current = true;
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(normalized);
+        }
+      });
+
+      const scrollDisposable = term.onScroll(() => scheduleRefreshGutter());
+      const renderDisposable = (term as any).onRender ? (term as any).onRender(() => scheduleRefreshGutter()) : null;
+
+      terminalRef.current = term;
+      fitAddonRef.current = fitAddon;
+      termEpochRef.current += 1;
+      terminalDisposedRef.current = false;
+      trace("terminal_init");
+      requestFit();
+
+      cleanup = () => {
+        terminalDisposedRef.current = true;
+        termEpochRef.current += 1;
+        terminalRef.current = null;
+        fitAddonRef.current = null;
+        trace("terminal_cleanup_start");
+        inputDisposable.dispose();
+        scrollDisposable.dispose();
+        try { renderDisposable?.dispose(); } catch {}
+        if (fitRafRef.current != null) {
+          window.cancelAnimationFrame(fitRafRef.current);
+          fitRafRef.current = null;
+        }
+        try { term.dispose(); } catch {}
+        textTailRef.current = "";
+        trace("terminal_cleanup_done");
+      };
     });
-    
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-
-    term.open(containerRef.current);
-    
-    terminalRef.current = term;
-    fitAddonRef.current = fitAddon;
-
-    // Force a fit after a short delay to ensure DOM is settled
-    setTimeout(() => {
-        try {
-            fitAddon.fit();
-        } catch {}
-    }, 50);
-
-    // Initial write
-    if (output.length > 0) {
-         try {
-             // term.write(output.join(""));
-             writeWithLineNumbers(term, output.join(""));
-             outputLengthRef.current = output.length;
-             if (output.length > 0) {
-                lastElementLengthRef.current = output[output.length - 1].length;
-                firstElementRef.current = output[0];
-             }
-         } catch(e) {
-             console.error("Error writing initial output:", e);
-         }
-    }
 
     return () => {
-      try {
-        term.dispose();
-      } catch {}
-      terminalRef.current = null;
-      fitAddonRef.current = null;
+      disposed = true;
+      window.cancelAnimationFrame(raf);
+      cleanup?.();
     };
-  }, [canInit]); // output excluded
+  }, [canInit]);
 
-  // Handle Visibility Change (e.g. Tab switch)
+  // 3. WS Connection
   useEffect(() => {
-      // If we are re-rendered, check if we need to fit again
-      const tid = setTimeout(() => {
-          if (terminalRef.current && fitAddonRef.current && containerRef.current) {
-              if (containerRef.current.clientWidth > 0) {
-                  fitAddonRef.current.fit();
+      if (!wsUrl || !canInit || !terminalRef.current) return;
+      const term = terminalRef.current;
+      let disposed = false;
+
+      const clearTimers = () => {
+          if (reconnectRef.current != null) {
+              window.clearTimeout(reconnectRef.current);
+              reconnectRef.current = null;
+          }
+      };
+
+      const closeCurrent = () => {
+          if (wsRef.current) {
+              const state = wsRef.current.readyState;
+              if (state === WebSocket.OPEN) {
+                try { wsRef.current.close(1000, "reconnect"); } catch {}
               }
+              wsRef.current = null;
           }
-      }, 100);
-      return () => clearTimeout(tid);
-  });
+      };
 
-  // 3. Sync output updates
+      const connect = () => {
+          if (disposed) return;
+          trace("ws_connect");
+          clearTimers();
+          closeCurrent();
+          const ws = new WebSocket(wsUrl);
+          ws.binaryType = "arraybuffer";
+          wsRef.current = ws;
+
+          ws.onopen = () => {
+              reconnectAttemptsRef.current = 0;
+              term.focus();
+              trace("ws_open");
+          };
+
+          ws.onmessage = (ev) => {
+              if (terminalDisposedRef.current) return;
+              const termElement = (term as any)?.element as HTMLElement | undefined;
+              if (!termElement || !termElement.isConnected) return;
+              const data = ev.data;
+              if (typeof data === "string") {
+                  if (data.length < 10 && !textTailRef.current) {
+                      term.write(data);
+                      scheduleRefreshGutter();
+                      return;
+                  }
+
+                  const filtered = filterTerminalText(data);
+                  if (!filtered) return;
+                  if (afterEnterRef.current) {
+                    afterEnterRef.current = false;
+                    const first = filtered[0] || "";
+                    const cx = (term as any).buffer?.active?.cursorX;
+                    if (typeof cx === "number" && cx > 0 && first !== "\r" && first !== "\n") {
+                      try { term.write("\r\n"); } catch {}
+                    }
+                  }
+                  term.write(filtered);
+                  scheduleRefreshGutter();
+              } else {
+                  term.write(new Uint8Array(data));
+                  scheduleRefreshGutter();
+              }
+          };
+
+          ws.onclose = (ev) => {
+              clearTimers();
+              trace("ws_close", { code: ev.code });
+              if (disposed) return;
+              if (terminalDisposedRef.current) return;
+              const termElement = (term as any)?.element as HTMLElement | undefined;
+              if (!termElement || !termElement.isConnected) return;
+              const fatalCodes = new Set([4401, 4403, 4404, 4500]);
+              if (ev.code !== 1000) {
+                  if (fatalCodes.has(ev.code)) {
+                      if (ev.code === 4500) {
+                        term.write("\r\n终端附着失败（Code: 4500），请点击“运行”重建会话。\r\n");
+                      } else if (ev.code === 4401) {
+                        term.write("\r\n登录态失效（Code: 4401），请重新登录后再试。\r\n");
+                      } else if (ev.code === 4403) {
+                        term.write("\r\n无权访问该会话终端（Code: 4403）。\r\n");
+                      } else if (ev.code === 4404) {
+                        term.write("\r\n会话不存在或已结束（Code: 4404）。\r\n");
+                      }
+                      scheduleRefreshGutter();
+                      return;
+                  }
+                  const attempts = reconnectAttemptsRef.current + 1;
+                  reconnectAttemptsRef.current = attempts;
+                  const delay = Math.min(8000, 500 * Math.pow(2, Math.min(attempts - 1, 4)));
+                  if (attempts <= 8) {
+                      term.write(`\r\n终端连接已断开 (Code: ${ev.code})，${Math.round(delay / 1000)}s 后重连...\r\n`);
+                      reconnectRef.current = window.setTimeout(() => connect(), delay);
+                  } else {
+                      term.write(`\r\n终端连接多次失败 (Code: ${ev.code})，请点击运行重试。\r\n`);
+                  }
+              } else {
+                  term.write("\r\n终端已断开\r\n");
+              }
+              scheduleRefreshGutter();
+          };
+
+          ws.onerror = () => {
+              trace("ws_error");
+              if (!disposed) {
+                  if (terminalDisposedRef.current) return;
+                  const termElement = (term as any)?.element as HTMLElement | undefined;
+                  if (!termElement || !termElement.isConnected) return;
+                  term.write("\r\n终端连接错误\r\n");
+                  scheduleRefreshGutter();
+              }
+          };
+      };
+
+      term.clear();
+      scheduleRefreshGutter();
+      connect();
+
+      return () => {
+          disposed = true;
+          clearTimers();
+          if (wsRef.current) {
+              const state = wsRef.current.readyState;
+              wsRef.current.onopen = null;
+              wsRef.current.onmessage = null;
+              wsRef.current.onclose = null;
+              wsRef.current.onerror = null;
+              if (state === WebSocket.OPEN) {
+                try { wsRef.current.close(1000, "cleanup"); } catch {}
+              }
+              wsRef.current = null;
+          }
+          textTailRef.current = "";
+      };
+  }, [wsUrl, canInit, showLineNumbersOn]);
+
   useEffect(() => {
-    const term = terminalRef.current;
-    if (!term || !output) return;
+      return () => {
+          if (reconnectRef.current != null) {
+              window.clearTimeout(reconnectRef.current);
+              reconnectRef.current = null;
+          }
+          if (gutterRafRef.current != null) {
+              window.cancelAnimationFrame(gutterRafRef.current);
+              gutterRafRef.current = null;
+          }
+      }
+  }, []);
 
-    try {
-      // 如果输出被清空（例如重新运行），则清空终端
-      if (output.length === 0 && outputLengthRef.current > 0) {
-        term.clear();
-        // Reset line numbers
-        lineNumberRef.current = 1;
-        isLineStartRef.current = true;
-        
-        outputLengthRef.current = 0;
-        lastElementLengthRef.current = 0;
-        firstElementRef.current = null;
-        return;
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.fontSize = fontSize;
+      if (fitTimerRef.current != null) {
+        window.clearTimeout(fitTimerRef.current);
+        fitTimerRef.current = null;
       }
-  
-      // 检查是否发生截断或头部变化（Shift）
-      const isLengthShrunk = output.length < outputLengthRef.current;
-      const isFirstChanged = output.length > 0 && firstElementRef.current !== null && output[0] !== firstElementRef.current;
-      
-      // 特殊情况：单行追加 (例如 ["hello"] -> ["hello world"])
-      let isSingleElementAppend = false;
-      if (output.length === 1 && outputLengthRef.current === 1 && isFirstChanged) {
-          if (output[0].startsWith(firstElementRef.current!)) {
-              isSingleElementAppend = true;
-          }
-      }
-  
-      // 如果发生截断或非追加式的头部变化，则重置终端
-      if (isLengthShrunk || (isFirstChanged && !isSingleElementAppend)) {
-        term.clear();
-        // Reset line numbers
-        lineNumberRef.current = 1;
-        isLineStartRef.current = true;
-        
-        // term.write(output.join(""));
-        writeWithLineNumbers(term, output.join(""));
-        outputLengthRef.current = output.length;
-        lastElementLengthRef.current = output.length > 0 ? output[output.length - 1].length : 0;
-        firstElementRef.current = output.length > 0 ? output[0] : null;
-        return;
-      }
-  
-      // 处理增量
-      // Case 1: 数组长度没变，但最后一个元素变长了
-      if (output.length === outputLengthRef.current) {
-        const lastIdx = output.length - 1;
-        if (lastIdx >= 0) {
-          const lastStr = output[lastIdx];
-          const prevLen = lastElementLengthRef.current;
-          if (lastStr.length > prevLen) {
-            // term.write(lastStr.slice(prevLen));
-            writeWithLineNumbers(term, lastStr.slice(prevLen));
-            lastElementLengthRef.current = lastStr.length;
-          }
-        }
-        if (output.length > 0) firstElementRef.current = output[0];
-        return;
-      }
-  
-      // Case 2: 数组长度增加了
-      let startIdx = outputLengthRef.current;
-      
-      // 检查之前的最后一个元素是否有追加
-      if (startIdx > 0) {
-        const prevLastIdx = startIdx - 1;
-        const prevLastStr = output[prevLastIdx];
-        const savedLen = lastElementLengthRef.current;
-        if (prevLastStr.length > savedLen) {
-          // term.write(prevLastStr.slice(savedLen));
-          writeWithLineNumbers(term, prevLastStr.slice(savedLen));
-        }
-        lastElementLengthRef.current = prevLastStr.length;
-      }
-  
-      // 写入新元素
-      for (let i = startIdx; i < output.length; i++) {
-        // term.write(output[i]);
-        writeWithLineNumbers(term, output[i]);
-      }
-  
-      outputLengthRef.current = output.length;
-      if (output.length > 0) {
-        lastElementLengthRef.current = output[output.length - 1].length;
-        firstElementRef.current = output[0];
-      } else {
-        lastElementLengthRef.current = 0;
-        firstElementRef.current = null;
-      }
-    } catch (e) {
-      console.error("Error writing to terminal:", e);
+      fitTimerRef.current = window.setTimeout(() => {
+        fitTimerRef.current = null;
+        const container = containerRef.current;
+        if (!terminalRef.current || !fitAddonRef.current || !container) return;
+        if (container.clientWidth === 0 || container.clientHeight === 0) return;
+        requestFit();
+      }, 50);
     }
-  }, [output]);
+  }, [fontSize]);
 
-  return <div ref={containerRef} className={className} style={{ width: "100%", height: "100%", overflow: "hidden", background: "#ffffff" }} />;
-};
+  useEffect(() => {
+    return () => {
+      if (fitTimerRef.current != null) {
+        window.clearTimeout(fitTimerRef.current);
+        fitTimerRef.current = null;
+      }
+      if (fitDebounceRef.current != null) {
+        window.clearTimeout(fitDebounceRef.current);
+        fitDebounceRef.current = null;
+      }
+      if (fitRafRef.current != null) {
+        window.cancelAnimationFrame(fitRafRef.current);
+        fitRafRef.current = null;
+      }
+      if (gutterRafRef.current != null) {
+        window.cancelAnimationFrame(gutterRafRef.current);
+        gutterRafRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      className={className}
+      style={{ height: "100%", width: "100%", overflow: "hidden", display: "flex" }}
+      onClick={() => terminalRef.current?.focus()}
+    >
+      {showLineNumbersOn ? (
+        <div
+          style={{
+            width: "30px",
+            padding: "14px 0 12px 0",
+            background: "#ffffff",
+            color: "#237893",
+            borderRight: "1px solid var(--ws-color-border-secondary)",
+            overflow: "hidden",
+            boxSizing: "border-box",
+            userSelect: "none",
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+          }}
+        >
+          <pre style={{ margin: 0, paddingRight: 2, fontSize, lineHeight: 1.35, textAlign: "right", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", opacity: 0.6 }}>{gutterText}</pre>
+        </div>
+      ) : null}
+      <div ref={containerRef} style={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden", paddingLeft: 12, paddingTop: 12 }} />
+    </div>
+  );
+});
 
 export default XtermTerminal;

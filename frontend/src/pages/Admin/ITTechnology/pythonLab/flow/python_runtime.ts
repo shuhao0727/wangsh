@@ -25,6 +25,8 @@ type Expr =
 
 type Stmt =
   | { kind: "pass" }
+  | { kind: "break" }
+  | { kind: "continue" }
   | { kind: "assign"; name: string; expr: Expr }
   | { kind: "aug_assign"; name: string; op: "+=" | "-="; expr: Expr }
   | { kind: "multi_assign"; names: string[]; exprs: Expr[] }
@@ -41,6 +43,21 @@ export function validatePythonStrict(code: string): StrictValidationResult {
   const warnings: string[] = [...parsed.warnings];
 
   const moduleDefs = new Set<string>();
+  const builtinFuncs = new Set<string>([
+    "print",
+    "input",
+    "int",
+    "float",
+    "str",
+    "bool",
+    "len",
+    "max",
+    "min",
+    "sum",
+    "abs",
+    "round",
+    "range",
+  ]);
   for (const it of (parsed.ir as any as CodeIRBlock).items) {
     if (it.kind === "def") {
       if (moduleDefs.has(it.name)) errors.push(`函数重复定义: ${it.name}`);
@@ -71,6 +88,7 @@ export function validatePythonStrict(code: string): StrictValidationResult {
     };
     walkExpr(expr);
   };
+  const mergeAllowed = (defs: Set<string>) => new Set<string>(Array.from(defs).concat(Array.from(builtinFuncs)));
 
   const walk = (b: CodeIRBlock, inFunc: boolean, topLevelSeenDefs: Set<string>) => {
     for (const it of b.items) {
@@ -80,7 +98,7 @@ export function validatePythonStrict(code: string): StrictValidationResult {
           errors.push(r.error);
         } else {
           if (r.stmt.kind === "return" && !inFunc) errors.push("return 只能出现在函数 def 内");
-          const allowed = inFunc ? moduleDefs : topLevelSeenDefs;
+          const allowed = inFunc ? mergeAllowed(moduleDefs) : mergeAllowed(topLevelSeenDefs);
           if (r.stmt.kind === "assign") checkCalls(r.stmt.expr, allowed);
           if (r.stmt.kind === "aug_assign") checkCalls(r.stmt.expr, allowed);
           if (r.stmt.kind === "multi_assign") for (const e of r.stmt.exprs) checkCalls(e, allowed);
@@ -91,26 +109,26 @@ export function validatePythonStrict(code: string): StrictValidationResult {
       } else if (it.kind === "if") {
         const c = parseExprStrict(it.cond);
         if (!c.ok) errors.push(c.error);
-        else checkCalls(c.expr, inFunc ? moduleDefs : topLevelSeenDefs);
+        else checkCalls(c.expr, inFunc ? mergeAllowed(moduleDefs) : mergeAllowed(topLevelSeenDefs));
         walk(it.then, inFunc, topLevelSeenDefs);
         if (it.else) walk(it.else, inFunc, topLevelSeenDefs);
       } else if (it.kind === "while") {
         const c = parseExprStrict(it.cond);
         if (!c.ok) errors.push(c.error);
-        else checkCalls(c.expr, inFunc ? moduleDefs : topLevelSeenDefs);
+        else checkCalls(c.expr, inFunc ? mergeAllowed(moduleDefs) : mergeAllowed(topLevelSeenDefs));
         walk(it.body, inFunc, topLevelSeenDefs);
       } else if (it.kind === "for_range") {
         const s = parseExprStrict(it.start);
         const e = parseExprStrict(it.end);
         if (!s.ok) errors.push(s.error);
         if (!e.ok) errors.push(e.error);
-        if (s.ok) checkCalls(s.expr, inFunc ? moduleDefs : topLevelSeenDefs);
-        if (e.ok) checkCalls(e.expr, inFunc ? moduleDefs : topLevelSeenDefs);
+        if (s.ok) checkCalls(s.expr, inFunc ? mergeAllowed(moduleDefs) : mergeAllowed(topLevelSeenDefs));
+        if (e.ok) checkCalls(e.expr, inFunc ? mergeAllowed(moduleDefs) : mergeAllowed(topLevelSeenDefs));
         if (it.step) {
           const st = parseExprStrict(it.step);
           if (!st.ok) errors.push(st.error);
-          else if (st.expr.kind !== "num" || typeof st.expr.value !== "number" || !Number.isFinite(st.expr.value) || st.expr.value <= 0) {
-            errors.push("for range 的 step 目前仅支持正数常量");
+          else if (st.expr.kind !== "num" || typeof st.expr.value !== "number" || !Number.isFinite(st.expr.value) || st.expr.value === 0) {
+            errors.push("for range 的 step 目前仅支持非零数值常量");
           }
         }
         walk(it.body, inFunc, topLevelSeenDefs);
@@ -433,6 +451,8 @@ function parseStmtStrict(line: string): { ok: true; stmt: Stmt } | { ok: false; 
   const t = line.trim();
   if (!t.length) return { ok: true, stmt: { kind: "pass" } };
   if (t === "pass") return { ok: true, stmt: { kind: "pass" } };
+  if (t === "break") return { ok: true, stmt: { kind: "break" } };
+  if (t === "continue") return { ok: true, stmt: { kind: "continue" } };
 
   const mReturn = /^return(?:\s+(.+))?\s*$/.exec(t);
   if (mReturn) {
@@ -455,8 +475,6 @@ function parseStmtStrict(line: string): { ok: true; stmt: Stmt } | { ok: false; 
     }
     return { ok: true, stmt: { kind: "print", args } };
   }
-
-  if (t.includes("input(")) return { ok: false, error: "暂不支持 input()" };
 
   const mAug = /^([A-Za-z_][A-Za-z0-9_]*)\s*(\+=|-=)\s*(.+)$/.exec(t);
   if (mAug) {

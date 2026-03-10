@@ -5,7 +5,7 @@ import * as monaco from "monaco-editor";
 // 配置 monaco-editor loader 使用本地 monaco 实例
 loader.config({ monaco });
 
-export function MonacoPythonEditor(props: {
+export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: {
   value: string;
   onChange: (next: string) => void;
   activeLine?: number | null;
@@ -13,8 +13,9 @@ export function MonacoPythonEditor(props: {
   breakpoints?: { line: number; enabled: boolean }[];
   onToggleBreakpoint?: (line: number) => void;
   syntaxErrors?: { line: number; col: number; message: string; endLine?: number | null; endCol?: number | null; source?: string }[];
+  fontSize?: number;
 }) {
-  const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors } = props;
+  const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors, fontSize = 14 } = props;
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const bpDecoIdsRef = useRef<string[]>([]);
@@ -96,10 +97,20 @@ export function MonacoPythonEditor(props: {
     <div className="wsMonacoRoot" style={{ display: "flex", flex: 1, minHeight: 240, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)" }}>
       <style>{`
         .wsMonacoRoot .monaco-editor .margin-view-overlays .glyph-margin {
-          width: 14px !important;
+          width: 6px !important;
         }
         .wsMonacoRoot .monaco-editor .margin-view-overlays .line-numbers {
-          left: 14px !important;
+          left: 6px !important;
+          width: 24px !important;
+          text-align: right !important;
+          padding-right: 2px !important;
+          color: rgba(35, 120, 147, 0.6) !important;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+          transform: translateY(2px) !important;
+        }
+        .wsMonacoRoot .monaco-editor .margin {
+          background-color: #ffffff !important;
+          border-right: 1px solid var(--ws-color-border-secondary) !important;
         }
         .wsMonacoBp {
           width: 100%;
@@ -153,13 +164,13 @@ export function MonacoPythonEditor(props: {
           tabSize: 4,
           insertSpaces: true,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          fontSize: 12,
-          lineHeight: 22,
+          fontSize: fontSize,
+          lineHeight: Math.round(fontSize * 1.5),
           padding: { top: 12, bottom: 12 },
           fixedOverflowWidgets: true,
           renderLineHighlight: "none",
           lineNumbersMinChars: 2,
-          lineDecorationsWidth: 4,
+          lineDecorationsWidth: 0,
           automaticLayout: true,
           quickSuggestions: { other: true, comments: false, strings: false },
           wordBasedSuggestions: "off",
@@ -169,6 +180,11 @@ export function MonacoPythonEditor(props: {
           editorRef.current = editor;
           const model = editor.getModel();
           if (model) monaco.editor.setModelLanguage(model, "python");
+          editor.onKeyDown((e) => {
+            try {
+              e.stopPropagation();
+            } catch {}
+          });
           editor.onMouseDown((e) => {
             const type = e.target.type;
             const isGutter =
@@ -182,4 +198,4 @@ export function MonacoPythonEditor(props: {
       />
     </div>
   );
-}
+});

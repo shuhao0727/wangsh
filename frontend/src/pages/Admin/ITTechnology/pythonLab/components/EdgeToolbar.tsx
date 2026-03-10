@@ -105,6 +105,9 @@ export function EdgeToolbar(props: {
         反向
       </Button>
       <Input
+        id="pythonlab-edge-label-input"
+        name="pythonlab-edge-label-input"
+        aria-label="连线标注"
         size="small"
         style={{ width: 90 }}
         placeholder="标注"

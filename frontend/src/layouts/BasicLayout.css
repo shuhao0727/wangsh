@@ -12,10 +12,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 var(--ws-space-4);
   background: var(--ws-color-surface);
   border-bottom: 1px solid transparent;
-  height: 64px;
+  height: var(--ws-header-height);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -34,7 +34,7 @@
 .logo {
   display: flex;
   align-items: center;
-  margin-right: 40px;
+  margin-right: var(--ws-space-5);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -44,23 +44,27 @@
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
+  height: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
+  min-width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px); /* Prevent shrinking */
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: var(--ws-color-primary);
   color: white;
-  font-size: 16px;
+  font-size: var(--ws-text-lg); /* Slightly larger text inside */
   font-weight: bold;
-  border-radius: var(--ws-radius-sm);
-  margin-right: 12px;
+  border-radius: var(--ws-radius-md); /* Slightly more rounded */
+  margin-right: var(--ws-space-2);
+  line-height: 1; /* Reset line-height to prevent vertical stretching */
+  flex-shrink: 0; /* Prevent flex shrinking */
+  overflow: hidden; /* Ensure content stays inside */
 }
 
 .logo-text {
   margin: 0 !important;
   color: var(--ws-color-primary);
-  font-size: 18px;
+  font-size: var(--ws-text-lg);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -70,7 +74,7 @@
   flex: 1;
   border-bottom: none;
   background: transparent;
-  line-height: 62px;
+  line-height: calc(var(--ws-header-height) - 2px);
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -84,8 +88,8 @@
 }
 
 .horizontal-menu .ant-menu-item {
-  padding: 0 20px;
-  font-size: 15px;
+  padding: 0 var(--ws-space-3);
+  font-size: var(--ws-text-sm);
   font-weight: 500;
   color: #333333; /* Dark Grey for default state */
   transition: all 0.3s ease;
@@ -117,22 +121,22 @@
 }
 
 .horizontal-menu .ant-menu-item .anticon {
-  margin-right: 8px;
-  font-size: 16px;
+  margin-right: var(--ws-space-1);
+  font-size: var(--ws-text-md);
 }
 
 /* 右侧：用户信息 */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--ws-space-3);
 }
 
 .user-info {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: var(--ws-space-1) var(--ws-space-2);
   border-radius: var(--ws-radius-sm);
   transition: all 0.3s;
   border: 1px solid transparent;
@@ -144,7 +148,7 @@
 }
 
 .username {
-  font-size: 14px;
+  font-size: var(--ws-text-sm);
   font-weight: 500;
   color: var(--ws-color-text);
 }
@@ -152,7 +156,7 @@
 /* 主内容区域 */
 .main-content {
   margin: 0;
-  padding: 24px;
+  padding: var(--ws-space-4);
   flex: 1;
   min-height: 0;
   background: transparent;
@@ -169,75 +173,53 @@
 
 @media (max-width: 768px) {
   .top-header {
-    padding: 0 16px;
-    flex-wrap: wrap;
-    height: auto;
-    padding: 12px 16px;
+    padding: 0 var(--ws-space-3);
   }
 
   .header-left {
-    flex-direction: column;
-    align-items: flex-start;
-    width: 100%;
-    margin-bottom: 12px;
+    width: auto;
+    margin-bottom: 0;
   }
 
   .logo {
-    margin-bottom: 12px;
     margin-right: 0;
   }
 
+  /* Hide menu in desktop style if logic fails, though JS handles it */
   .horizontal-menu {
-    width: 100%;
-    min-width: 0;
-    line-height: 40px;
-  }
-
-  .horizontal-menu .ant-menu-item {
-    padding: 0 12px;
-    font-size: 13px;
+    display: none; 
   }
 
   .header-right {
-    width: 100%;
     justify-content: flex-end;
-    padding-top: 12px;
-    border-top: 1px solid var(--ws-color-border);
   }
 
   .main-content {
-    margin: 16px;
-    padding: 16px;
-    min-height: 0;
+    margin: 0;
+    padding: var(--ws-space-3);
+  }
+  
+  .mobile-menu-btn {
+    color: var(--ws-color-text);
+    font-size: 18px;
+    padding: 4px 8px;
+    height: auto;
   }
 }
 
 @media (max-width: 480px) {
-  .horizontal-menu .ant-menu-item {
-    padding: 0 8px;
-    font-size: 12px;
-  }
-
-  .horizontal-menu .ant-menu-item .anticon {
-    margin-right: 4px;
-    font-size: 14px;
-  }
-
-  .user-info {
-    padding: 6px 8px;
-  }
-
-  .username {
-    font-size: 12px;
-  }
-
   .logo-icon {
     width: 28px;
     height: 28px;
-    font-size: 14px;
+    min-width: 28px;
+    font-size: var(--ws-text-sm);
   }
 
   .logo-text {
-    font-size: 16px;
+    font-size: var(--ws-text-md);
+  }
+  
+  .user-info {
+    padding: 4px;
   }
 }

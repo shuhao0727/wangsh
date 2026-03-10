@@ -10,6 +10,7 @@ export type PythonLabDebugLimits = {
 export type PythonLabCreateSessionRequest = {
   title?: string;
   code: string;
+  runtime_mode?: "plain" | "debug";
   python_version?: string;
   requirements?: string[];
   entry_path?: string;
@@ -20,7 +21,6 @@ export type PythonLabCreateSessionResponse = {
   session_id: string;
   status: string;
   ws_url: string;
-  cfg_url: string;
 };
 
 export type PythonLabSessionMeta = {
@@ -32,23 +32,13 @@ export type PythonLabSessionMeta = {
   ttl_seconds: number;
   limits: PythonLabDebugLimits & Record<string, unknown>;
   entry_path: string;
+  runtime_mode?: "plain" | "debug";
   code_sha256: string;
   dap_host?: string | null;
   dap_port?: number | null;
   docker_container_id?: string | null;
   error_code?: string | null;
   error_detail?: string | null;
-};
-
-export type PythonLabSessionListResponse = {
-  items: PythonLabSessionMeta[];
-  total: number;
-};
-
-export type PythonLabCleanupResponse = {
-  ok: boolean;
-  stopped: string[];
-  stopped_count: number;
 };
 
 export const pythonlabSessionApi = {
@@ -60,16 +50,8 @@ export const pythonlabSessionApi = {
     const resp = await api.client.get(`/debug/sessions/${sessionId}`, { silent: true });
     return resp.data as PythonLabSessionMeta;
   },
-  list: async (): Promise<PythonLabSessionListResponse> => {
-    const resp = await api.client.get(`/debug/sessions`, { silent: true });
-    return resp.data as PythonLabSessionListResponse;
-  },
   stop: async (sessionId: string): Promise<{ ok: boolean }> => {
     const resp = await api.client.post(`/debug/sessions/${sessionId}/stop`);
     return resp.data as { ok: boolean };
-  },
-  cleanup: async (): Promise<PythonLabCleanupResponse> => {
-    const resp = await api.client.post(`/debug/sessions/cleanup`);
-    return resp.data as PythonLabCleanupResponse;
   },
 };

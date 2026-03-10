@@ -1,15 +1,16 @@
 import type { FlowEdge, FlowNode } from "./model";
 import type { IRBlock, IRIf, IRNode, IRStmt, IRWhile } from "./ir";
 import type { FlowNodeShape } from "../types";
-import { buildDebugMapFromNodes, type DebugForRangeEntry, type DebugMap } from "./debugMap";
+import { buildDebugMapFromNodes, type DebugForInEntry, type DebugForRangeEntry, type DebugMap, type DebugWhileEntry } from "./debugMap";
 
 type CodeIRBlock = { kind: "block"; items: CodeIRNode[] };
-type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRDef;
+type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRForIn | CodeIRDef;
 type SourceLoc = { line: number };
 type CodeIRStmt = { kind: "stmt"; text: string; loc: SourceLoc };
 type CodeIRIf = { kind: "if"; cond: string; then: CodeIRBlock; else: CodeIRBlock | null; loc: SourceLoc };
 type CodeIRWhile = { kind: "while"; cond: string; body: CodeIRBlock; loc: SourceLoc };
 type CodeIRForRange = { kind: "for_range"; v: string; start: string; end: string; step: string | null; body: CodeIRBlock; loc: SourceLoc };
+type CodeIRForIn = { kind: "for_in"; vars: string[]; iterable: string; isEnumerate: boolean; body: CodeIRBlock; loc: SourceLoc };
 type CodeIRDef = { kind: "def"; name: string; params: string[]; body: CodeIRBlock; loc: SourceLoc };
 
 export type ParsePythonResult =
@@ -95,6 +96,21 @@ const parseForRange = (line: string) => {
   const end = parts.length === 1 ? parts[0] : parts[1];
   const step = parts.length === 3 ? parts[2] : null;
   return { v, start, end, step };
+};
+
+const parseForIn = (line: string) => {
+  const t = line.trim();
+  const m = /^for\s+(.+?)\s+in\s+(.+?)\s*:\s*$/.exec(t);
+  if (!m) return null;
+  let target = m[1].trim();
+  const iterable = m[2].trim();
+  if (!target.length || !iterable.length) return null;
+  if (target.startsWith("(") && target.endsWith(")")) target = target.slice(1, -1).trim();
+  const vars = splitComma(target).map((s) => s.trim()).filter(Boolean);
+  if (!vars.length) return null;
+  if (!vars.every((v) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(v))) return null;
+  const isEnumerate = /^enumerate\s*\(/.test(iterable);
+  return { vars, iterable, isEnumerate };
 };
 
 const parseDef = (line: string) => {
@@ -263,6 +279,15 @@ export function parsePythonToIR(code: string): ParsePythonResult {
         continue;
       }
 
+      const forIn = parseForIn(trimmed);
+      if (forIn) {
+        const body = parseBlock(i + 1, baseIndent + indentStep);
+        if (!body.ok) return { block: { kind: "block", items }, nextIdx: body.nextIdx, ok: false };
+        items.push({ kind: "for_in", vars: forIn.vars, iterable: forIn.iterable, isEnumerate: forIn.isEnumerate, body: body.block, loc });
+        i = body.nextIdx;
+        continue;
+      }
+
       const defH = parseDef(trimmed);
       if (defH) {
         const body = parseBlock(i + 1, baseIndent + indentStep);
@@ -392,6 +417,8 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
   const nodes: FlowNode[] = [...built.main.nodes];
   const edges: FlowEdge[] = [...built.main.edges];
   const forRanges: DebugForRangeEntry[] = [...built.main.debugMap.forRanges];
+  const forIns: DebugForInEntry[] = [...built.main.debugMap.forIns];
+  const whiles: DebugWhileEntry[] = [...built.main.debugMap.whiles];
 
   const remapGraph = (fn: FunctionFlowResult, idx: number) => {
     const prefix = `fn_${fn.name}_${idx}__`;
@@ -415,17 +442,32 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
         incNodeId: idMap.get(x.incNodeId) ?? x.incNodeId,
       }))
       .filter((x) => x.initNodeId.startsWith(prefix) && x.checkNodeId.startsWith(prefix) && x.incNodeId.startsWith(prefix));
-    return { mappedNodes, mappedEdges, mappedForRanges };
+    const mappedForIns = fn.debugMap.forIns
+      .map((x) => ({
+        ...x,
+        nextNodeId: idMap.get(x.nextNodeId) ?? x.nextNodeId,
+        bindNodeId: idMap.get(x.bindNodeId) ?? x.bindNodeId,
+      }))
+      .filter((x) => x.nextNodeId.startsWith(prefix) && x.bindNodeId.startsWith(prefix));
+    const mappedWhiles = fn.debugMap.whiles
+      .map((x) => ({
+        ...x,
+        checkNodeId: idMap.get(x.checkNodeId) ?? x.checkNodeId,
+      }))
+      .filter((x) => x.checkNodeId.startsWith(prefix));
+    return { mappedNodes, mappedEdges, mappedForRanges, mappedForIns, mappedWhiles };
   };
 
   built.functions.forEach((fn, i) => {
-    const { mappedNodes, mappedEdges, mappedForRanges } = remapGraph(fn, i);
+    const { mappedNodes, mappedEdges, mappedForRanges, mappedForIns, mappedWhiles } = remapGraph(fn, i);
     nodes.push(...mappedNodes);
     edges.push(...mappedEdges);
     forRanges.push(...mappedForRanges);
+    forIns.push(...mappedForIns);
+    whiles.push(...mappedWhiles);
   });
 
-  const debugMap = buildDebugMapFromNodes(nodes, forRanges);
+  const debugMap = buildDebugMapFromNodes(nodes, forRanges, forIns, whiles);
   return { nodes, edges, ir: built.main.ir, warnings: built.main.warnings, debugMap };
 }
 
@@ -436,6 +478,8 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
   const forRanges: DebugForRangeEntry[] = [];
+  const forIns: DebugForInEntry[] = [];
+  const whiles: DebugWhileEntry[] = [];
 
   const codeBlockLineRange = (b: CodeIRBlock | null | undefined): { startLine: number; endLine: number } | null => {
     if (!b) return null;
@@ -450,6 +494,8 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
       } else if (x.kind === "while") {
         walkBlock(x.body);
       } else if (x.kind === "for_range") {
+        walkBlock(x.body);
+      } else if (x.kind === "for_in") {
         walkBlock(x.body);
       } else if (x.kind === "def") {
         walkBlock(x.body);
@@ -471,6 +517,13 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   const isReturnStmt = (text: string) => {
     const t = text.trim();
     return t === "return" || t.startsWith("return ");
+  };
+  const inferStmtRole = (text: string) => {
+    const t = text.trim();
+    if (isReturnStmt(t)) return "return_stmt";
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*(\+=|-=|\*=|\/=|\/\/=|%=|\*\*=)\s*/.test(t)) return "aug_assign";
+    if (isSubroutineCall(t)) return "call_site";
+    return undefined;
   };
 
   const emitEdge = (from: string, to: string, label?: string) => {
@@ -571,9 +624,11 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const emitWhile = (it: CodeIRWhile) => {
-    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line };
+    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "while_check" };
     nodes.push(d);
     const bodyRes = emitBlock(it.body);
+    const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
+    whiles.push({ headerLine: it.loc.line, checkNodeId: d.id, bodyLineRange });
     emitEdge(d.id, bodyRes.entry, "是");
     let backEdgeId: string | undefined;
     if (bodyRes.exit) {
@@ -591,6 +646,39 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
       });
     }
     const irWhile: IRWhile = { kind: "while", cond: it.cond, body: bodyRes.ir, decisionId: d.id, backEdgeId };
+    return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id };
+  };
+
+  const emitForIn = (it: CodeIRForIn) => {
+    const cond = `has_next(${it.iterable})`;
+    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_in_next" };
+    nodes.push(d);
+    const bindText = `${it.vars.join(", ")} = next(${it.iterable})`;
+    const bind = emitStmtNode(bindText, it.loc.line, "for_in_bind");
+    const bodyRes = emitBlock(it.body);
+    const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
+    forIns.push({ headerLine: it.loc.line, vars: it.vars, nextNodeId: d.id, bindNodeId: bind.nodeId, bodyLineRange });
+
+    emitEdge(d.id, bind.nodeId, "是");
+    emitEdge(bind.nodeId, bodyRes.entry);
+    let backEdgeId: string | undefined;
+    if (bodyRes.exit) {
+      backEdgeId = nextId("e");
+      edges.push({
+        id: backEdgeId,
+        from: bodyRes.exit,
+        to: d.id,
+        style: "straight",
+        routeMode: "auto",
+        anchor: null,
+        label: "是",
+        fromPort: "left",
+        toPort: "left",
+      });
+    }
+
+    const loopBody: IRBlock = { kind: "block", items: [bind.ir, ...bodyRes.ir.items] };
+    const irWhile: IRWhile = { kind: "while", cond, body: loopBody, decisionId: d.id, backEdgeId };
     return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id };
   };
 
@@ -619,13 +707,14 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
 
   const emitNode = (it: CodeIRNode): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
     if (it.kind === "stmt") {
-      const s = emitStmtNode(it.text, it.loc.line);
+      const s = emitStmtNode(it.text, it.loc.line, inferStmtRole(it.text));
       const terminal = isFunctionFlow && isReturnStmt(it.text);
       return { entry: s.nodeId, exit: terminal ? null : s.nodeId, irItems: [s.ir as IRNode], whileDecisionId: null as string | null };
     }
     if (it.kind === "if") return emitIf(it);
     if (it.kind === "while") return emitWhile(it);
     if (it.kind === "for_range") return emitForRange(it);
+    if (it.kind === "for_in") return emitForIn(it);
     return { entry: null as unknown as string, exit: null as unknown as string | null, irItems: [], whileDecisionId: null as string | null };
   };
 
@@ -672,7 +761,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   emitEdge(startNode.id, body.entry);
   const last = block.items.length ? block.items[block.items.length - 1] : null;
   if (body.exit !== null) {
-    emitEdge(body.exit, endNode.id, last && (last.kind === "while" || last.kind === "for_range") ? "否" : undefined);
+    emitEdge(body.exit, endNode.id, last && (last.kind === "while" || last.kind === "for_range" || last.kind === "for_in") ? "否" : undefined);
     nodes.push(endNode);
   }
 
@@ -681,6 +770,6 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     items: body.ir.items,
   };
 
-  const debugMap = buildDebugMapFromNodes(nodes, forRanges);
+  const debugMap = buildDebugMapFromNodes(nodes, forRanges, forIns, whiles);
   return { nodes, edges, ir, warnings, debugMap };
 }

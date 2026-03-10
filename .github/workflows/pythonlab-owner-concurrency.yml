@@ -1,0 +1,314 @@
+name: pythonlab-owner-concurrency
+
+on:
+  workflow_call:
+    inputs:
+      api_url:
+        required: false
+        type: string
+      owner_mode:
+        required: false
+        type: string
+      expect_owner_behavior:
+        required: false
+        type: string
+      timeout_seconds:
+        required: false
+        type: string
+      dedupe_window:
+        required: false
+        type: string
+      dedupe_dimension:
+        required: false
+        type: string
+    secrets:
+      PYTHONLAB_SMOKE_USERNAME:
+        required: true
+      PYTHONLAB_SMOKE_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: API base url, example https://example.com
+        required: true
+        default: "http://localhost:8000"
+      owner_mode:
+        description: auto/deny/steal/matrix
+        required: true
+        default: "matrix"
+      expect_owner_behavior:
+        description: empty/deny/steal
+        required: false
+        default: ""
+      timeout_seconds:
+        description: ws timeout seconds
+        required: true
+        default: "8"
+      dedupe_window:
+        description: issue dedupe window day/week
+        required: false
+        default: "day"
+      dedupe_dimension:
+        description: issue dedupe dimension category/category_api
+        required: false
+        default: "category"
+  schedule:
+    - cron: "30 2 * * *"
+
+concurrency:
+  group: pythonlab-owner-concurrency-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: owner-concurrency-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests aiohttp
+
+      - name: validate required secrets
+        env:
+          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          if [ -z "${USERNAME}" ] || [ -z "${PASSWORD}" ]; then
+            {
+              echo "## PythonLab Owner Concurrency Smoke"
+              echo "- exit_code: 2"
+              echo "- category: param"
+              echo "- reason: missing required secrets"
+              echo "- required_secrets: PYTHONLAB_SMOKE_USERNAME, PYTHONLAB_SMOKE_PASSWORD"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 2
+          fi
+
+      - name: run owner concurrency smoke
+        id: smoke_run
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
+          OWNER_MODE: ${{ inputs.owner_mode || github.event.inputs.owner_mode || vars.PYTHONLAB_OWNER_MODE || 'matrix' }}
+          EXPECT_OWNER_BEHAVIOR: ${{ inputs.expect_owner_behavior || github.event.inputs.expect_owner_behavior || vars.PYTHONLAB_EXPECT_OWNER_BEHAVIOR || '' }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '8' }}
+          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          set +e
+          python backend/scripts/smoke_pythonlab_ws_owner_concurrency.py
+          code=$?
+          case "$code" in
+            0) category="success" ;;
+            2) category="param" ;;
+            3) category="network" ;;
+            4) category="detect" ;;
+            5) category="assert" ;;
+            10) category="unknown" ;;
+            *) category="unknown" ;;
+          esac
+          {
+            echo "## PythonLab Owner Concurrency Smoke"
+            echo "- exit_code: $code"
+            echo "- category: $category"
+            echo "- owner_mode: ${OWNER_MODE}"
+            echo "- expect_owner_behavior: ${EXPECT_OWNER_BEHAVIOR:-<empty>}"
+            echo "- api_url: ${API_URL}"
+            echo "- event_name: ${{ github.event_name }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "category=$category" >> "$GITHUB_OUTPUT"
+          echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
+          echo "owner_mode=${OWNER_MODE}" >> "$GITHUB_OUTPUT"
+          echo "expect_owner_behavior=${EXPECT_OWNER_BEHAVIOR}" >> "$GITHUB_OUTPUT"
+
+      - name: auto create issue for gate failure
+        id: auto_issue
+        if: ${{ always() && contains(fromJson('["assert","detect"]'), steps.smoke_run.outputs.category) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
+        uses: actions/github-script@v7
+        env:
+          DEDUPE_WINDOW: ${{ inputs.dedupe_window || github.event.inputs.dedupe_window || vars.PYTHONLAB_ISSUE_DEDUPE_WINDOW || 'day' }}
+          DEDUPE_DIMENSION: ${{ inputs.dedupe_dimension || github.event.inputs.dedupe_dimension || vars.PYTHONLAB_ISSUE_DEDUPE_DIMENSION || 'category' }}
+        with:
+          script: |
+            const category = '${{ steps.smoke_run.outputs.category }}'
+            const exitCode = '${{ steps.smoke_run.outputs.exit_code }}'
+            const apiUrl = '${{ steps.smoke_run.outputs.api_url }}'
+            const ownerMode = '${{ steps.smoke_run.outputs.owner_mode }}'
+            const expectBehavior = '${{ steps.smoke_run.outputs.expect_owner_behavior }}'
+            const dedupeWindowRaw = String(process.env.DEDUPE_WINDOW || 'day')
+            const dedupeDimensionRaw = String(process.env.DEDUPE_DIMENSION || 'category')
+            const dedupeWindow = ['day', 'week'].includes(dedupeWindowRaw) ? dedupeWindowRaw : 'day'
+            const dedupeDimension = ['category', 'category_api'].includes(dedupeDimensionRaw) ? dedupeDimensionRaw : 'category'
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const now = new Date()
+            let scopeKey = now.toISOString().slice(0, 10)
+            if (dedupeWindow === 'week') {
+              const temp = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+              const dayNum = temp.getUTCDay() || 7
+              temp.setUTCDate(temp.getUTCDate() + 4 - dayNum)
+              const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1))
+              const weekNo = Math.ceil((((temp - yearStart) / 86400000) + 1) / 7)
+              scopeKey = `${temp.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
+            }
+            const apiKey = (apiUrl || 'na').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'na'
+            const titlePrefix = dedupeDimension === 'category_api'
+              ? `[pythonlab-owner][${category}][${scopeKey}][api:${apiKey}]`
+              : `[pythonlab-owner][${category}][${scopeKey}]`
+            const title = `${titlePrefix} gate failed`
+            const body = [
+              '## PythonLab Owner Concurrency Auto Report',
+              '',
+              `- category: ${category}`,
+              `- exit_code: ${exitCode}`,
+              `- workflow_run: ${runUrl}`,
+              `- api_url: ${apiUrl}`,
+              `- owner_mode: ${ownerMode}`,
+              `- expect_owner_behavior: ${expectBehavior || '<empty>'}`,
+              `- dedupe_window: ${dedupeWindow}`,
+              `- dedupe_dimension: ${dedupeDimension}`,
+              '',
+              'Please use issue template `pythonlab-owner-concurrency-failure.yml` to补充日志与复现信息。'
+            ].join('\n')
+            const existing = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'ci,pythonlab,owner-concurrency',
+                per_page: 100
+              }
+            )
+            const matched = existing.find(i => !i.pull_request && i.title.startsWith(titlePrefix))
+            let createdCount = 0
+            let appendedCount = 0
+            if (matched) {
+              const commentBody = [
+                '## New Failure Occurrence',
+                `- workflow_run: ${runUrl}`,
+                `- category: ${category}`,
+                `- exit_code: ${exitCode}`,
+                `- api_url: ${apiUrl}`,
+                `- owner_mode: ${ownerMode}`,
+                `- expect_owner_behavior: ${expectBehavior || '<empty>'}`,
+                `- dedupe_window: ${dedupeWindow}`,
+                `- dedupe_dimension: ${dedupeDimension}`
+              ].join('\n')
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: matched.number,
+                body: commentBody
+              })
+              appendedCount += 1
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['ci', 'pythonlab', 'owner-concurrency']
+              })
+              createdCount += 1
+            }
+            core.setOutput('created_count', String(createdCount))
+            core.setOutput('appended_count', String(appendedCount))
+
+      - name: auto close resolved gate issues
+        id: auto_close
+        if: ${{ always() && steps.smoke_run.outputs.exit_code == '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
+        uses: actions/github-script@v7
+        env:
+          DEDUPE_WINDOW: ${{ inputs.dedupe_window || github.event.inputs.dedupe_window || vars.PYTHONLAB_ISSUE_DEDUPE_WINDOW || 'day' }}
+          DEDUPE_DIMENSION: ${{ inputs.dedupe_dimension || github.event.inputs.dedupe_dimension || vars.PYTHONLAB_ISSUE_DEDUPE_DIMENSION || 'category' }}
+        with:
+          script: |
+            const apiUrl = '${{ steps.smoke_run.outputs.api_url }}'
+            const dedupeWindowRaw = String(process.env.DEDUPE_WINDOW || 'day')
+            const dedupeDimensionRaw = String(process.env.DEDUPE_DIMENSION || 'category')
+            const dedupeWindow = ['day', 'week'].includes(dedupeWindowRaw) ? dedupeWindowRaw : 'day'
+            const dedupeDimension = ['category', 'category_api'].includes(dedupeDimensionRaw) ? dedupeDimensionRaw : 'category'
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const now = new Date()
+            let scopeKey = now.toISOString().slice(0, 10)
+            if (dedupeWindow === 'week') {
+              const temp = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+              const dayNum = temp.getUTCDay() || 7
+              temp.setUTCDate(temp.getUTCDate() + 4 - dayNum)
+              const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1))
+              const weekNo = Math.ceil((((temp - yearStart) / 86400000) + 1) / 7)
+              scopeKey = `${temp.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
+            }
+            const apiKey = (apiUrl || 'na').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'na'
+            const categories = ['assert', 'detect']
+            const existing = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'ci,pythonlab,owner-concurrency',
+                per_page: 100
+              }
+            )
+            let closedCount = 0
+            let resolvedCommentCount = 0
+            for (const category of categories) {
+              const titlePrefix = dedupeDimension === 'category_api'
+                ? `[pythonlab-owner][${category}][${scopeKey}][api:${apiKey}]`
+                : `[pythonlab-owner][${category}][${scopeKey}]`
+              const matched = existing.find(i => !i.pull_request && i.title.startsWith(titlePrefix))
+              if (!matched) {
+                continue
+              }
+              const commentBody = [
+                '## Resolved by Successful Gate Run',
+                `- workflow_run: ${runUrl}`,
+                `- resolved_category: ${category}`,
+                `- api_url: ${apiUrl}`,
+                `- dedupe_window: ${dedupeWindow}`,
+                `- dedupe_dimension: ${dedupeDimension}`
+              ].join('\n')
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: matched.number,
+                body: commentBody
+              })
+              resolvedCommentCount += 1
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: matched.number,
+                state: 'closed'
+              })
+              closedCount += 1
+            }
+            core.setOutput('closed_count', String(closedCount))
+            core.setOutput('resolved_comment_count', String(resolvedCommentCount))
+
+      - name: write automation stats summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Owner Gate Automation Stats"
+            echo "- issue_created: ${{ steps.auto_issue.outputs.created_count || '0' }}"
+            echo "- issue_appended: ${{ steps.auto_issue.outputs.appended_count || '0' }}"
+            echo "- issue_closed: ${{ steps.auto_close.outputs.closed_count || '0' }}"
+            echo "- resolve_comment_added: ${{ steps.auto_close.outputs.resolved_comment_count || '0' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: fail when smoke failed
+        if: ${{ always() && steps.smoke_run.outputs.exit_code != '0' }}
+        run: exit ${{ steps.smoke_run.outputs.exit_code }}

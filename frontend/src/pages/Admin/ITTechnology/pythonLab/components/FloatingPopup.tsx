@@ -124,9 +124,9 @@ export function FloatingPopup(props: {
         zIndex: 1000,
         borderRadius: 12,
         overflow: "hidden",
-        boxShadow: "none",
+        boxShadow: "var(--ws-shadow-lg)",
         border: "1px solid var(--ws-color-border)",
-        background: "#ffffff",
+        background: "var(--ws-color-surface)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -134,9 +134,9 @@ export function FloatingPopup(props: {
       <div
         onPointerDown={onHeaderPointerDown}
         style={{
-          padding: "6px 8px",
-          borderBottom: "1px solid var(--ws-color-border)",
-          background: "#ffffff",
+          padding: "8px 12px",
+          borderBottom: "1px solid var(--ws-color-border-secondary)",
+          background: "var(--ws-color-surface)",
           cursor: draggable ? "move" : "default",
           userSelect: "none",
           display: "flex",
@@ -146,10 +146,10 @@ export function FloatingPopup(props: {
         }}
       >
         <Space size={8}>
-          <Text style={{ fontWeight: 600, fontSize: 12 }}>{title}</Text>
+          <Text style={{ fontWeight: 600, fontSize: "var(--ws-text-md)" }}>{title}</Text>
         </Space>
         <Space size={8}>
-          <Button size="small" shape="circle" icon={<CloseOutlined />} onPointerDown={(e) => e.stopPropagation()} onClick={onClose} />
+          <Button type="text" size="small" icon={<CloseOutlined />} onPointerDown={(e) => e.stopPropagation()} onClick={onClose} />
         </Space>
       </div>
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflow: scrollable ? "auto" : "hidden" }}>{children}</div>

@@ -1,0 +1,21 @@
+.personal-programs-page {
+  max-width: var(--ws-page-max-width-wide);
+  margin: 0 auto;
+  padding: var(--ws-space-5);
+}
+
+.personal-programs-card {
+  border-radius: var(--ws-radius-lg);
+  border: 1px solid var(--ws-color-border);
+}
+
+.personal-programs-loading {
+  padding: calc(var(--ws-space-5) * 1.2) 0;
+  text-align: center;
+}
+
+@media (max-width: 430px) {
+  .personal-programs-page {
+    padding: var(--ws-space-3);
+  }
+}

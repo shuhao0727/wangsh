@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Button, Spin, Empty, Space, Tag, Typography } from "antd";
+import { Card, Row, Col, Button, Empty, Space, Tag, Typography, Skeleton } from "antd";
 import { ArrowRightOutlined } from "@ant-design/icons";
 import { xbkPublicConfigApi } from "@services";
+import "./PersonalPrograms.css";
 
 const { Text } = Typography;
 
@@ -30,23 +31,23 @@ const PersonalProgramsPage: React.FC = () => {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "32px" }}>
+    <div className="personal-programs-page">
       {loading ? (
-        <Card style={{ borderRadius: 12, border: "1px solid var(--ws-color-border)" }}>
-          <div style={{ padding: "48px 0", textAlign: "center" }}>
-            <Spin />
+        <Card className="personal-programs-card">
+          <div className="personal-programs-loading">
+            <Skeleton active />
           </div>
         </Card>
       ) : xbkEnabled ? (
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} lg={8}>
             <Card
-              style={{ borderRadius: 12, border: "1px solid var(--ws-color-border)" }}
-              styles={{ body: { padding: 18 } }}
+              className="personal-programs-card"
+              styles={{ body: { padding: "var(--ws-space-3)" } }}
             >
               <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                 <Space align="center" style={{ justifyContent: "space-between" }}>
-                  <Text strong style={{ fontSize: 16 }}>
+                  <Text strong style={{ fontSize: "var(--ws-text-md)" }}>
                     校本课（XBK）处理系统
                   </Text>
                   <Tag color="orange">新</Tag>
@@ -68,7 +69,7 @@ const PersonalProgramsPage: React.FC = () => {
           </Col>
         </Row>
       ) : (
-        <Card style={{ borderRadius: 12, border: "1px solid var(--ws-color-border)" }}>
+        <Card className="personal-programs-card">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="暂无公开的个人程序"

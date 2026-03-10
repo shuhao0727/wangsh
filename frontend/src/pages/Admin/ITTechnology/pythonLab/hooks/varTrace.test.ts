@@ -13,5 +13,5 @@ test("diffVarTrace records changes across steps", () => {
   ]);
   expect(r2.lines.join("\n")).toContain("i: 10 -> 9");
   expect(r2.lines.join("\n")).toContain("total: 0 -> 10");
+  expect(r2.changed.sort().join(",")).toBe(["i", "total"].sort().join(","));
 });
-

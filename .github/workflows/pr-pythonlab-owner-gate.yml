@@ -1,0 +1,23 @@
+name: pr-pythonlab-owner-gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/api/endpoints/debug/**"
+      - "backend/scripts/smoke_pythonlab_ws_owner_concurrency.py"
+      - ".github/workflows/pythonlab-owner-concurrency.yml"
+      - ".github/workflows/pr-pythonlab-owner-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  owner-concurrency-pr-gate:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    uses: ./.github/workflows/pythonlab-owner-concurrency.yml
+    with:
+      api_url: ${{ vars.PYTHONLAB_API_URL || '' }}
+      owner_mode: matrix
+      expect_owner_behavior: ${{ vars.PYTHONLAB_EXPECT_OWNER_BEHAVIOR || 'steal' }}
+      timeout_seconds: ${{ vars.PYTHONLAB_TIMEOUT_SECONDS || '8' }}
+    secrets:
+      PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+      PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}

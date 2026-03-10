@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Typography, Card, Tag, Button, Empty, Spin, Pagination, Menu, Input } from "antd";
+import { Typography, Tag, Button, Empty, Spin, Pagination, Menu, Input, Grid, Skeleton } from "antd";
 import {
   CalendarOutlined,
   FolderOutlined,
@@ -11,12 +11,14 @@ import dayjs from "dayjs";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
+import { useDebounce } from "@hooks/useDebounce";
 import type {
   ArticleWithRelations,
   CategoryWithUsage,
 } from "@services";
 import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
+import ArticleItem from "./components/ArticleItem";
 import "./Articles.css"; // 导入样式文件
 
 const { Text } = Typography;
@@ -104,6 +106,8 @@ const cleanAndValidateDataArray = <T,>(
 };
 
 const ArticlesPage: React.FC = () => {
+  const screens = Grid.useBreakpoint();
+  const isCompactViewport = !screens.sm;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -117,6 +121,7 @@ const ArticlesPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(12);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState<string>("");
+  const debouncedKeyword = useDebounce(searchKeyword, 500);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refreshTimerRef = useRef<number | null>(null);
@@ -223,11 +228,22 @@ const ArticlesPage: React.FC = () => {
         // 创建AbortController来取消请求
         abortController = new AbortController();
 
-        const response = await articleApi.listPublicArticles({
-          page: currentPage,
-          size: pageSize,
-          category_id: selectedCategory || undefined,
-        });
+        let response;
+        if (debouncedKeyword.trim()) {
+           // 如果有搜索关键词，使用搜索接口
+           response = await articleApi.searchArticles(
+             debouncedKeyword.trim(),
+             currentPage,
+             pageSize
+           );
+        } else {
+           // 否则使用列表接口
+           response = await articleApi.listPublicArticles({
+             page: currentPage,
+             size: pageSize,
+             category_id: selectedCategory || undefined,
+           });
+        }
 
         // 只有组件仍然挂载时才更新状态
         if (!isMounted) return;
@@ -297,20 +313,16 @@ const ArticlesPage: React.FC = () => {
       }
     };
 
-    // 防抖：避免快速连续触发
-    const timeoutId = setTimeout(() => {
-      fetchArticles();
-    }, 100);
+    fetchArticles();
 
     // 清理函数
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       if (abortController) {
         abortController.abort();
       }
     };
-  }, [currentPage, pageSize, selectedCategory, refreshKey]);
+  }, [currentPage, pageSize, selectedCategory, refreshKey, debouncedKeyword]);
 
   useEffect(() => {
     const unsub = subscribeArticleUpdated(() => {
@@ -397,6 +409,11 @@ const ArticlesPage: React.FC = () => {
     setCurrentPage(1); // 搜索时重置到第一页
   }, []);
 
+  // 当搜索关键词变化时，自动重置页码（可选，或者让useEffect处理）
+  useEffect(() => {
+    if (debouncedKeyword) setCurrentPage(1);
+  }, [debouncedKeyword]);
+
   // 处理搜索输入变化
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -456,72 +473,16 @@ const ArticlesPage: React.FC = () => {
     });
   }, [articles]);
 
-  const displayedArticles = useMemo(() => {
-    const q = searchKeyword.trim().toLowerCase();
-    if (!q) return safeArticles;
-    return safeArticles.filter((a) => {
-      const title = (a.title || "").toLowerCase();
-      const summary = (a.summary || "").toLowerCase();
-      const author = (a.author?.username || "").toLowerCase();
-      const category = (a.category?.name || "").toLowerCase();
-      return (
-        title.includes(q) ||
-        summary.includes(q) ||
-        author.includes(q) ||
-        category.includes(q)
-      );
-    });
-  }, [safeArticles, searchKeyword]);
+  // 移除 displayedArticles，直接使用 safeArticles
+  const displayedArticles = safeArticles;
 
-  const selectedCategoryName = useMemo(() => {
-    if (!selectedCategory) return "";
-    return categories.find((c) => c.id === selectedCategory)?.name || "未知分类";
-  }, [categories, selectedCategory]);
-
-  // 文章卡片组件 - 条状布局版本（添加防御性编程）
-  const renderArticleItem = (article: ArticleWithRelations) => {
-    const articleId = article.id || "unknown";
-    const articleSlug = article.slug || "";
-    const articleTitle = article.title || "无标题";
-    const articleDate = article.created_at
-      ? dayjs(article.created_at).format("YYYY-MM-DD")
-      : "未知日期";
-    const articleSummary = article.summary || "暂无摘要";
-    const categoryName = article.category?.name || "";
-    const authorName = article.author?.username || "未知";
-
-    return (
-      <div
-        key={articleId}
-        onClick={() => articleSlug && navigateToArticle(articleSlug)}
-        className="article-item-row"
-      >
-        <div className="article-card-title">{articleTitle}</div>
-        <div className="article-card-subline">
-          <div className="article-card-meta">
-            <Text type="secondary" style={{ fontSize: "0.8125rem" }}>
-              <CalendarOutlined /> {articleDate}
-            </Text>
-            {categoryName && (
-              <Tag color="blue" icon={<FolderOutlined />} style={{ fontSize: "0.8125rem", margin: 0 }}>
-                {categoryName}
-              </Tag>
-            )}
-            <Text type="secondary" style={{ fontSize: "0.8125rem" }}>
-              作者：{authorName}
-            </Text>
-          </div>
-          <div className="article-card-summary-inline">{articleSummary}</div>
-        </div>
-      </div>
-    );
-  };
+  // 移除 renderArticleItem，改为使用 ArticleItem 组件
 
   return (
     <div className="informatics-page articles-page">
       <div className="articles-split-pane">
         <SplitPanePage
-          leftWidth={320}
+          leftWidth={isCompactViewport ? 280 : 320}
           alignItems="stretch"
           left={
             <div className="articles-left-sticky">
@@ -576,23 +537,24 @@ const ArticlesPage: React.FC = () => {
                 <div className="articles-right-body">
                   <div className="articles-right-scroll">
                     {loading ? (
-                      <div className="loading-container">
-                        <Spin size="large" />
-                        <div style={{ marginTop: 16 }}>加载文章中...</div>
+                      <div className="loading-container" style={{ padding: 24 }}>
+                        <Skeleton active paragraph={{ rows: 4 }} />
+                        <Skeleton active paragraph={{ rows: 4 }} style={{ marginTop: 24 }} />
+                        <Skeleton active paragraph={{ rows: 4 }} style={{ marginTop: 24 }} />
                       </div>
                     ) : displayedArticles.length === 0 ? (
                       <div className="empty-container">
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
                           description={
-                            searchKeyword.trim()
-                              ? "未找到匹配的文章（当前页）"
+                            debouncedKeyword.trim()
+                              ? "未找到匹配的文章"
                               : selectedCategory
                                 ? "该分类下暂无文章"
                                 : "暂无文章"
                           }
                         >
-                          {(selectedCategory || searchKeyword.trim()) && (
+                          {(selectedCategory || debouncedKeyword.trim()) && (
                             <Button
                               type="primary"
                               onClick={() => {
@@ -606,7 +568,15 @@ const ArticlesPage: React.FC = () => {
                         </Empty>
                       </div>
                     ) : (
-                      <div>{displayedArticles.map(renderArticleItem)}</div>
+                      <div>
+                        {displayedArticles.map((article) => (
+                          <ArticleItem
+                            key={article.id}
+                            article={article}
+                            onClick={navigateToArticle}
+                          />
+                        ))}
+                      </div>
                     )}
                   </div>
 
@@ -619,7 +589,8 @@ const ArticlesPage: React.FC = () => {
                         onChange={handlePageChange}
                         hideOnSinglePage={false}
                         showSizeChanger
-                        showQuickJumper
+                        showQuickJumper={!isCompactViewport}
+                        responsive
                         showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`}
                       />
                     </div>

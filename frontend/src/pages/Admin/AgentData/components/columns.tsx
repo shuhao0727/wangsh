@@ -68,7 +68,7 @@ export const getAgentDataColumns = (
   {
     title: "学生信息",
     key: "student_info",
-    width: 180,
+    width: 200,
     fixed: "left" as const,
     render: (_: any, record: AgentUsageData) => {
       const user = record.user;
@@ -77,30 +77,30 @@ export const getAgentDataColumns = (
       return (
         <div>
           <div
-            style={{ display: "flex", alignItems: "center", marginBottom: 4 }}
+            style={{ display: "flex", alignItems: "center", marginBottom: 4, flexWrap: 'wrap', gap: '4px' }}
           >
-            <UserOutlined style={{ marginRight: 4, color: "var(--ws-color-primary)" }} />
-            <Text strong>{user.name}</Text>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginBottom: 2 }}>
-            学号: {user.student_id}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>
-            {user.grade} • {user.class_name}
-          </div>
-          <div style={{ marginTop: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: '0 1 auto' }}>
+              <UserOutlined style={{ marginRight: 4, color: "var(--ws-color-primary)", flexShrink: 0 }} />
+              <Text strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={user.name}>{user.name}</Text>
+            </div>
             <Tag
               color={
                 user.is_active
                   ? userStatusConfig.active.color
                   : userStatusConfig.inactive.color
               }
-              style={{ fontSize: "12px", padding: "0 6px" }}
+              style={{ fontSize: "10px", padding: "0 4px", lineHeight: "16px", height: "18px", margin: 0 }}
             >
               {user.is_active
                 ? userStatusConfig.active.text
                 : userStatusConfig.inactive.text}
             </Tag>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginBottom: 2 }}>
+            学号: {user.student_id}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${user.grade} • ${user.class_name}`}>
+            {user.grade} • {user.class_name}
           </div>
         </div>
       );
@@ -114,7 +114,7 @@ export const getAgentDataColumns = (
   {
     title: "智能体信息",
     key: "agent_info",
-    width: 180,
+    width: 200,
     render: (_: any, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
@@ -129,7 +129,7 @@ export const getAgentDataColumns = (
             style={{ display: "flex", alignItems: "center", marginBottom: 4 }}
           >
             {config.icon}
-            <Text strong style={{ marginLeft: 4 }}>
+            <Text strong style={{ marginLeft: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={agent.agent_name}>
               {agent.agent_name}
             </Text>
           </div>
@@ -139,7 +139,7 @@ export const getAgentDataColumns = (
           >
             {config.text}
           </Tag>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`模型: ${agent.model_name}`}>
             模型: {agent.model_name}
           </div>
         </div>
@@ -158,9 +158,9 @@ export const getAgentDataColumns = (
     width: 250,
     render: (question: string) => (
       <Tooltip title={question}>
-        <div style={{ lineHeight: 1.5 }}>
+        <div style={{ lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
           <MessageOutlined style={{ marginRight: 4, color: "#52c41a" }} />
-          {formatQuestion(question)}
+          {question}
         </div>
       </Tooltip>
     ),
@@ -169,14 +169,11 @@ export const getAgentDataColumns = (
     title: "回答摘要",
     dataIndex: "answer",
     key: "answer_summary",
-    width: 300,
+    width: undefined, // Let it be flexible
     render: (answer: string) => {
-      const summary =
-        answer.length > 60 ? `${answer.substring(0, 60)}...` : answer;
-
       return (
         <Tooltip title={answer}>
-          <div style={{ lineHeight: 1.5, color: "var(--ws-color-text-secondary)" }}>{summary}</div>
+          <div style={{ lineHeight: 1.5, color: "var(--ws-color-text-secondary)", overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{answer}</div>
         </Tooltip>
       );
     },

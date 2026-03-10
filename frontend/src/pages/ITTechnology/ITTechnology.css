@@ -1,0 +1,158 @@
+.it-technology-page {
+  max-width: var(--ws-page-max-width-wide);
+  margin: 0 auto;
+  padding: var(--ws-space-5);
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.it-card {
+  border-radius: var(--ws-radius-lg);
+  border: 1px solid var(--ws-color-border);
+}
+
+.it-technology-loading {
+  padding: calc(var(--ws-space-5) * 1.2) 0;
+  text-align: center;
+}
+
+@media (max-width: 430px) {
+  .it-technology-page {
+    padding: var(--ws-space-3);
+  }
+}
+
+/* Class Selector */
+.it-class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--ws-space-4);
+}
+
+.it-class-card {
+  border-radius: var(--ws-radius-lg);
+  border: 1px solid var(--ws-color-border);
+  transition: all 0.2s;
+  cursor: pointer;
+  background: var(--ws-color-surface);
+  text-align: center;
+}
+
+.it-class-card:hover {
+  border-color: var(--ws-color-primary);
+  box-shadow: var(--ws-shadow-sm);
+}
+
+/* Roll Call Player */
+.it-player-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, #1f1f1f 0%, #000000 100%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.it-player-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+.it-player-info {
+  font-size: 16px;
+  opacity: 0.8;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.it-player-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.it-player-name {
+  color: #fff;
+  margin: 0;
+  font-weight: 700;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+  transition: all 0.1s;
+  font-feature-settings: "tnum";
+}
+
+.it-player-controls {
+  padding-bottom: 80px;
+  display: flex;
+  gap: 24px;
+}
+
+.it-player-btn {
+  height: 64px !important;
+  padding: 0 48px !important;
+  font-size: 20px !important;
+  border-radius: 32px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border: none !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.it-player-btn-start {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+}
+
+.it-player-btn-start:hover {
+  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+  transform: translateY(-2px);
+}
+
+.it-player-btn-stop {
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+}
+
+.it-player-btn-stop:hover {
+  background: linear-gradient(135deg, #ff7875 0%, #ff4d4f 100%);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 576px) {
+  .it-technology-page {
+    padding: var(--ws-space-3);
+  }
+  
+  .it-hero {
+    padding: var(--ws-space-4);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .it-class-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .it-player-btn {
+    height: 56px !important;
+    padding: 0 32px !important;
+    font-size: 18px !important;
+  }
+}

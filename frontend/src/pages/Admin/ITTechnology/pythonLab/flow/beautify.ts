@@ -98,13 +98,13 @@ function themeColors(theme: FlowBeautifyTheme) {
   if (theme === "light") {
     return {
       bg: "#ffffff",
-      text: "#111111",
-      edge: "#595959",
-      nodeBorder: "#595959",
+      text: "#1e293b", // Slate 800
+      edge: "#64748b", // Slate 500
+      nodeBorder: "#64748b", // Slate 500
       nodeFill: "#ffffff",
     };
   }
-  return { bg: "#ffffff", text: "#111111", edge: "#595959", nodeBorder: "#595959", nodeFill: "#ffffff" };
+  return { bg: "#ffffff", text: "#1e293b", edge: "#64748b", nodeBorder: "#64748b", nodeFill: "#ffffff" };
 }
 
 function buildNameMaps(nodes: FlowNode[], reuse?: Map<string, string>) {

@@ -7,6 +7,8 @@
   "license": "MIT",
   "homepage": "/",
   "scripts": {
+    "prestart": "node scripts/copy-pyodide.js",
+    "prebuild": "node scripts/copy-pyodide.js",
     "start": "cross-env PORT=6608 REACT_APP_ENV=development craco start",
     "build": "cross-env REACT_APP_ENV=production craco build",
     "test": "cross-env REACT_APP_ENV=test craco test",
@@ -32,6 +34,7 @@
     "@hpcc-js/wasm": "^2.21.0",
     "monaco-editor": "^0.55.1",
     "pdfjs-dist": "^4.10.38",
+    "pyodide": "0.25.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",

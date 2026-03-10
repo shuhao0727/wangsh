@@ -1,7 +1,7 @@
 .ws-markdown {
   color: var(--ws-color-text);
   line-height: 1.85;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .ws-markdown h1,
@@ -13,35 +13,32 @@
   color: var(--ws-color-text);
   font-weight: 700;
   line-height: 1.35;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
 }
 
 .ws-markdown h1 {
-  font-size: 1.8em;
-  margin: 1.2em 0 0.6em;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--ws-color-border);
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
 }
 
 .ws-markdown h2 {
   font-size: 1.5em;
-  margin: 1em 0 0.5em;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--ws-color-border);
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
 }
 
 .ws-markdown h3 {
   font-size: 1.25em;
-  margin: 0.8em 0 0.4em;
 }
 
 .ws-markdown h4 {
   font-size: 1.1em;
-  margin: 0.7em 0 0.35em;
-  color: var(--ws-color-text-secondary);
 }
 
 .ws-markdown p {
-  margin: 0.85em 0;
+  margin: 1em 0;
 }
 
 .ws-markdown ul,
@@ -51,76 +48,101 @@
 }
 
 .ws-markdown li {
-  margin: 0.45em 0;
+  margin: 0.4em 0;
 }
 
 .ws-markdown blockquote {
-  border-left: 4px solid var(--ws-color-info);
-  margin: 1.2em 0;
-  padding: 0.8em 1.2em;
-  background: var(--ws-color-info-soft);
+  border-left: 4px solid var(--ws-color-primary);
+  margin: 1.5em 0;
+  padding: 1em;
+  background: var(--ws-color-surface-2);
   color: var(--ws-color-text-secondary);
-  border-radius: 0 8px 8px 0;
+  border-radius: 4px;
 }
 
 .ws-markdown a {
   color: var(--ws-color-primary);
   text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
 }
 
 .ws-markdown a:hover {
-  text-decoration: underline;
+  border-bottom-color: var(--ws-color-primary);
 }
 
+/* Code Block Styling - Clean & Modern */
 .ws-markdown pre {
-  background: var(--ws-color-surface-2);
+  background: #f6f8fa; /* GitHub-like light background */
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: auto;
-  margin: 1.2em 0;
+  margin: 1.5em 0;
   border: 1px solid var(--ws-color-border);
+  position: relative;
 }
 
 .ws-markdown pre code {
   background: transparent;
   border: none;
   padding: 0;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 0.95em;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-size: 0.9em;
+  color: #24292f;
+  line-height: 1.5;
 }
 
+/* Inline Code Styling */
 .ws-markdown code {
-  background: var(--ws-color-surface-2);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--ws-color-border);
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 0.95em;
-  color: #c41d7f;
+  background: rgba(175, 184, 193, 0.2);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-size: 0.85em;
+  color: #24292f;
 }
 
+/* Table Styling */
 .ws-markdown table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.2em 0;
-  overflow: auto;
+  margin: 1.5em 0;
+  display: block;
+  overflow-x: auto;
 }
 
 .ws-markdown th,
 .ws-markdown td {
   border: 1px solid var(--ws-color-border);
-  padding: 10px 12px;
-  vertical-align: top;
+  padding: 8px 12px;
 }
 
 .ws-markdown th {
   background: var(--ws-color-surface-2);
   font-weight: 600;
+  text-align: left;
+}
+
+.ws-markdown tr:nth-child(2n) {
+  background-color: #fcfcfc;
 }
 
 .ws-markdown img {
   max-width: 100%;
   border-radius: 8px;
-  margin: 1.2em 0;
+  margin: 1.5em 0;
+  border: 1px solid var(--ws-color-border-secondary);
+  box-shadow: var(--ws-shadow-sm);
 }
 
+/* Optional: Dark mode adjustments if CSS variables support it, 
+   or specific 'terminal' class if added by user content */
+.ws-markdown pre.terminal {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #333;
+}
+
+.ws-markdown pre.terminal code {
+  color: #d4d4d4;
+}

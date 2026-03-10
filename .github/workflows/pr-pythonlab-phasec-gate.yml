@@ -1,0 +1,24 @@
+name: pr-pythonlab-phasec-gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/api/endpoints/debug/**"
+      - "backend/app/core/sandbox/**"
+      - "backend/scripts/smoke_pythonlab_print_visibility_probe.py"
+      - "backend/scripts/soak_pythonlab_phasec.py"
+      - ".github/workflows/pythonlab-phasec-gate.yml"
+      - ".github/workflows/pr-pythonlab-phasec-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  phasec-pr-gate:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    uses: ./.github/workflows/pythonlab-phasec-gate.yml
+    with:
+      api_url: ${{ vars.PYTHONLAB_API_URL || '' }}
+      rounds: ${{ vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
+      timeout_seconds: ${{ vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
+    secrets:
+      PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+      PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}

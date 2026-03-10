@@ -1,9 +1,9 @@
 import type React from "react";
-import type { FlowBeautifyParams, FlowBeautifyResult } from "../../flow/beautify";
-import type { FlowTidyResult } from "../../flow/tidy";
+import type { FlowBeautifyResult } from "../../flow/beautify";
 import type { RunnerState } from "../../hooks/useDapRunner";
-import type { PythonLabFlowDiagnostic, PythonLabPseudocodeParseResponse } from "../../services/pythonlabDebugApi";
-import type { PythonLabRuleSetV1 } from "../../pipeline/rules";
+import type { PythonLabFlowDiagnostic } from "../../services/pythonlabDebugApi";
+import type { PyodideTerminalBridge } from "../../hooks/usePyodideRunner";
+import type { DebugCapabilityMapV1 } from "../../adapters/debugCapabilityMap";
 
 export type RightPanelProps = {
   generated: { python: string };
@@ -14,13 +14,17 @@ export type RightPanelProps = {
   revealLine: number | null;
   variableColumns: any;
   runner: RunnerState;
+  debugCapabilities?: DebugCapabilityMapV1;
   runnerError: string | null;
-  structuredEmphasisLog?: boolean;
-  onToggleStructuredEmphasisLog?: (v: boolean) => void;
+  lastLaunchMode?: "idle" | "run" | "debug";
+  terminalBridge?: PyodideTerminalBridge | null;
   flowDiagnostics?: PythonLabFlowDiagnostic[];
   flowExpandFunctions?: "all" | "top" | "none";
   setFlowExpandFunctions?: (v: "all" | "top" | "none") => void;
-  onRun: () => void;
+  onRebuildFlowFromCode?: () => void | Promise<void>;
+  onRun: (stdinLines?: string[]) => void;
+  onDebug: () => void;
+  onTerminalInput: (text: string) => void;
   onContinue: () => void;
   onPause: () => void;
   onStepOver: () => void;
@@ -37,26 +41,11 @@ export type RightPanelProps = {
   onHistoryBack: () => void;
   onHistoryForward: () => void;
   onHistoryToLatest: () => void;
-  onOpenTerminal: () => void;
-  pipelineMode?: boolean;
-  onTogglePipelineMode?: (v: boolean) => void;
-  pseudocode?: PythonLabPseudocodeParseResponse | null;
-  pseudocodeLoading?: boolean;
-  pseudocodeError?: string | null;
-  tidyResult?: FlowTidyResult | null;
-  onApplyTidy?: () => void;
-  beautifyParams?: FlowBeautifyParams;
-  setBeautifyParams?: (next: FlowBeautifyParams) => void;
   beautifyResult?: FlowBeautifyResult | null;
   beautifyLoading?: boolean;
   beautifyError?: string | null;
   onRefreshBeautify?: () => void;
-  onApplyBeautify?: (mode?: "nodes" | "nodes_edges") => void;
-  canvasRoutingStyle?: "orthogonal" | "direct";
-  setCanvasRoutingStyle?: (v: "orthogonal" | "direct") => void;
-  ruleSet?: PythonLabRuleSetV1;
-  setRuleSet?: (next: PythonLabRuleSetV1) => void;
-  experimentId?: string;
+  onClearPendingOutput?: () => void;
 };
 
 export type ToolButtonStyle = React.CSSProperties;

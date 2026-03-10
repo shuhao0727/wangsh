@@ -1,0 +1,100 @@
+.admin-dashboard-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-dashboard-content {
+  padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.admin-dashboard-section-title {
+  margin-bottom: 16px !important;
+  font-size: 14px !important;
+  color: var(--ws-color-text-secondary) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-dashboard-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.admin-dashboard-overview-grid {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-dashboard-overview-cell {
+  padding: 24px;
+  min-width: 0;
+}
+
+.admin-dashboard-overview-cell--right {
+  border-right: 1px solid #f0f0f0;
+}
+
+.admin-dashboard-overview-cell--bottom {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-status-item__label {
+  font-size: 12px;
+}
+
+.admin-status-item__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-status-item__value-text {
+  font-size: 18px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .admin-dashboard-header {
+    padding: 12px 16px;
+  }
+
+  .admin-dashboard-content {
+    padding: 16px;
+  }
+
+  .admin-dashboard-health-grid {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .admin-dashboard-overview-cell {
+    padding: 16px;
+  }
+
+  .admin-dashboard-overview-cell--right {
+    border-right: none;
+  }
+}

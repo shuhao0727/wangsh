@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { App, Layout, Menu, Typography } from "antd";
+import { App, Layout, Menu, Typography, Drawer, Button, Grid } from "antd";
 import {
   HomeOutlined,
   RobotOutlined,
@@ -8,6 +8,7 @@ import {
   LaptopOutlined,
   AppstoreOutlined,
   FileTextOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 import "./BasicLayout.css";
 import useAuth from "@hooks/useAuth";
@@ -16,11 +17,13 @@ import { logger } from "@services/logger";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
+const { useBreakpoint } = Grid;
 
 const BasicLayout: React.FC = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const location = useLocation();
+  const screens = useBreakpoint();
   const {
     isLoading,
     isAuthenticated,
@@ -30,10 +33,17 @@ const BasicLayout: React.FC = () => {
     isLoggedIn,
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
   const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
   const isAIAgentsPage = /^\/ai-agents(\/|$)/.test(location.pathname);
   const isArticlesListPage = location.pathname === "/articles";
   const isInformaticsPage = /^\/informatics(\/|$)/.test(location.pathname);
+
+  // Check if we are on a mobile screen (md and below)
+  // screens.md is true for >= 768px. So !screens.md is mobile.
+  // Note: screens might be empty on first render, so we default to true (desktop) to avoid flash
+  const isMobile = screens.md === false;
 
   // 调试日志：显示认证状态
   useEffect(() => {
@@ -50,6 +60,11 @@ const BasicLayout: React.FC = () => {
   useEffect(() => {
     logger.debug("BasicLayout - 登录模态框状态:", isLoginModalVisible);
   }, [isLoginModalVisible]);
+
+  // 关闭移动端菜单当路由改变时
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // 导航菜单项 - 按您的需求设置
   const navMenuItems = [
@@ -129,34 +144,65 @@ const BasicLayout: React.FC = () => {
       {/* 顶部导航栏 */}
       <Header className="top-header">
         <div className="header-left">
-          <div className="logo">
+          {/* 移动端菜单按钮 */}
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setMobileMenuOpen(true)}
+              className="mobile-menu-btn"
+              style={{ marginRight: 8 }}
+            />
+          )}
+
+          <div className="logo" onClick={() => navigate("/home")}>
             <div className="logo-icon">W</div>
             <Title level={4} className="logo-text">
               WangSh
             </Title>
           </div>
 
-          {/* 横向导航菜单 */}
-          <Menu
-            mode="horizontal"
-            defaultSelectedKeys={[location.pathname]}
-            selectedKeys={[location.pathname]}
-            items={navMenuItems}
-            onClick={handleMenuClick}
-            className="horizontal-menu"
-          />
+          {/* 桌面端：横向导航菜单 */}
+          {!isMobile && (
+            <Menu
+              mode="horizontal"
+              defaultSelectedKeys={[location.pathname]}
+              selectedKeys={[location.pathname]}
+              items={navMenuItems}
+              onClick={handleMenuClick}
+              className="horizontal-menu"
+            />
+          )}
         </div>
 
         {/* 右侧：用户信息 */}
         <div className="header-right">
           <UserMenu
             mode="avatar"
-            showName={true}
+            showName={!isMobile}
             onMenuClick={handleUserMenuClick}
             style={{ cursor: "pointer" }}
           />
         </div>
       </Header>
+
+      {/* 移动端侧边栏菜单 */}
+      <Drawer
+        title="导航菜单"
+        placement="left"
+        onClose={() => setMobileMenuOpen(false)}
+        open={mobileMenuOpen}
+        size="default"
+        styles={{ body: { padding: 0 } }}
+      >
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={navMenuItems}
+          onClick={handleMenuClick}
+          style={{ border: "none" }}
+        />
+      </Drawer>
 
       {/* 内容区域 */}
       <Content
@@ -164,9 +210,9 @@ const BasicLayout: React.FC = () => {
         style={
           isAIAgentsPage
             ? {
-                padding: 24,
+                padding: "var(--ws-space-4)",
                 margin: 0,
-                height: "calc(100vh - 64px)",
+                height: "calc(100vh - var(--ws-header-height))",
                 minHeight: 0,
                 overflow: "hidden",
                 boxSizing: "border-box",
@@ -179,7 +225,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - 64px)",
+                  height: "calc(100vh - var(--ws-header-height))",
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",
@@ -191,7 +237,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - 64px)",
+                  height: "calc(100vh - var(--ws-header-height))",
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",
@@ -203,7 +249,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - 64px)",
+                  height: "calc(100vh - var(--ws-header-height))",
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",

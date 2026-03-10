@@ -1,5 +1,6 @@
 import asyncio
 import os
+import pty
 import logging
 import shutil
 import json
@@ -120,14 +121,30 @@ class DockerProvider(SandboxProvider):
             return ws_root / f"u{user_id}"
         return ws_root / str(meta.get("session_id"))
 
+    async def _kill_debugpy_in_container(self, container_id: str) -> None:
+        kill_py = (
+            "import os, signal; "
+            "try: "
+            "  for p in os.listdir('/proc'): "
+            "    if p.isdigit() and p != str(os.getpid()): "
+            "      try: "
+            "        with open(f'/proc/{p}/cmdline', 'rb') as f: "
+            "          if b'debugpy' in f.read(): "
+            "            os.kill(int(p), signal.SIGKILL) "
+            "      except: pass "
+            "except: pass"
+        )
+        await _run_async(["docker", "exec", container_id, "python", "-c", kill_py], timeout_s=8)
+
     async def start_session(self, session_id: str, code: str, meta: Dict[str, Any]) -> Dict[str, Any]:
         """
         Start a Docker container for the session (with User-based Reuse Strategy).
         Uses Redis Distributed Lock to handle concurrency.
         """
         name = self._container_name(meta)
+        runtime_mode = str(meta.get("runtime_mode") or "debug").lower()
         
-        async with RedisDistributedLock(name, timeout=30):
+        async with RedisDistributedLock(name, timeout=120):
             ws_path = self._ws_path_for_session(meta)
             
             # 1. Prepare Workspace Files (always overwrite)
@@ -137,30 +154,31 @@ class DockerProvider(SandboxProvider):
             # 2. Check if container exists and is running (Reuse)
             if await self._docker_is_running(name):
                 logger.info(f"Reusing existing container: {name}")
-                # Soft restart: kill debugpy adapter loop to force reload
-                try:
-                    await _run_async(["docker", "exec", name, "pkill", "-f", "debugpy"], timeout_s=5)
-                except Exception:
-                    pass
-                
-                # Resolve port
-                host_port = await self._get_dynamic_port(name)
-                if host_port > 0:
-                    # Wait for readiness (fast check)
+                if runtime_mode == "debug":
                     try:
-                        await self._wait_for_readiness(name, host_port)
-                        return {
-                            "docker_container_id": name, # Use name as ID for easier lookup
-                            "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
-                            "dap_port": host_port,
-                            "workspace_path": str(ws_path)
-                        }
-                    except Exception as e:
-                        logger.warning(f"Reuse failed readiness check: {e}, recreating...")
-                        # Fallthrough to recreate
-                
-                # If port resolution failed or readiness failed, kill and recreate
-                await _run_async(["docker", "rm", "-f", name], timeout_s=30)
+                        await self._kill_debugpy_in_container(name)
+                    except Exception:
+                        pass
+                    host_port = await self._get_dynamic_port(name)
+                    if host_port > 0:
+                        try:
+                            await self._wait_for_readiness(name, host_port, runtime_mode)
+                            return {
+                                "docker_container_id": name,
+                                "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
+                                "dap_port": host_port,
+                                "workspace_path": str(ws_path)
+                            }
+                        except Exception as e:
+                            logger.warning(f"Reuse failed readiness check: {e}, recreating...")
+                    await _run_async(["docker", "rm", "-f", name], timeout_s=30)
+                else:
+                    return {
+                        "docker_container_id": name,
+                        "dap_host": None,
+                        "dap_port": None,
+                        "workspace_path": str(ws_path)
+                    }
 
             # Cleanup stopped/dead container with same name
             try:
@@ -179,21 +197,37 @@ class DockerProvider(SandboxProvider):
             # Resource Limits
             limits = meta.get("limits", {})
             cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
-            # Force 32MB limit per Phase 1 optimization, but respect stricter limits if provided
             mem_mb_limit = int(limits.get("memory_mb") or settings.PYTHONLAB_DEFAULT_MEMORY_MB)
-            mem_mb = min(mem_mb_limit, 32) if mem_mb_limit > 0 else 32
+            mem_mb = mem_mb_limit if mem_mb_limit > 0 else int(settings.PYTHONLAB_DEFAULT_MEMORY_MB)
 
-            # Use tini as entrypoint (defined in Dockerfile), so we just run the loop
-            loop_cmd = (
-                "i=0; "
-                "while true; do "
-                "i=$((i+1)); "
-                f"python -m debugpy.adapter --host 0.0.0.0 --port {self.debugpy_port} --log-stderr; "
-                "rc=$?; "
-                'echo "debugpy.adapter exited rc=$rc (iter=$i)" 1>&2; '
-                "sleep 0.2; "
-                "done"
-            )
+            if runtime_mode == "debug":
+                # Use python to kill debugpy since ps/pkill might be missing
+                kill_py = (
+                    "import os, signal; "
+                    "try: "
+                    " for p in os.listdir('/proc'): "
+                    "  if p.isdigit() and p!=str(os.getpid()): "
+                    "   try: "
+                    "    with open('/proc/%s/cmdline'%p,'rb') as f: "
+                    "     if b'debugpy' in f.read(): os.kill(int(p), signal.SIGKILL) "
+                    "   except: pass "
+                    "except: pass"
+                )
+                loop_cmd = (
+                    f"i=0; "
+                    f"while true; do "
+                    f"i=$((i+1)); "
+                    f"python -c \"{kill_py}\" >/dev/null 2>&1 || true; "
+                    f"sleep 0.25; "
+                    f"env PYDEVD_DISABLE_FILE_VALIDATION=1 PYDEVD_CONNECT_TIMEOUT=15 "
+                    f"python -Xfrozen_modules=off -m debugpy --log-to /tmp/debugpy --listen 0.0.0.0:{self.debugpy_port} --wait-for-client /workspace/main.py; "
+                    f"rc=$?; "
+                    f"echo \"debugpy exited rc=$rc (iter=$i)\" 1>&2; "
+                    f"sleep 0.8; "
+                    f"done"
+                )
+            else:
+                loop_cmd = "exec tail -f /dev/null"
             
             cmd = [
                 "docker", "run", "-d", "-i", "-t",
@@ -211,9 +245,11 @@ class DockerProvider(SandboxProvider):
                 "--log-opt", f"max-file={settings.PYTHONLAB_LOG_MAX_FILE}",
                 "-e", "PYTHONPATH=/workspace",
                 "-e", "PYTHONUNBUFFERED=1",
-                "-p", f"{self.debugpy_port}",
+                "-w", "/workspace",  # Force working directory
                 "-v", f"{str(mount_path)}:/workspace:rw",
             ]
+            if runtime_mode == "debug":
+                cmd.extend(["-p", f"{self.debugpy_port}"])
             
             if self.runtime and self.runtime != "runc":
                 available = await self._get_available_runtimes()
@@ -231,42 +267,51 @@ class DockerProvider(SandboxProvider):
             except Exception as e:
                 raise RuntimeError(f"Docker start exception: {str(e)}")
 
-            # 5. Get Dynamic Port
-            host_port = 0
-            for _ in range(5): 
-                host_port = await self._get_dynamic_port(container_id)
-                if host_port > 0:
-                    break
-                await asyncio.sleep(0.5)
-
-            if host_port <= 0:
-                 rc, out, err = await _run_async(["docker", "logs", "--tail", "50", container_id], timeout_s=5)
-                 logs = (out or "") + (err or "")
-                 try:
-                    await _run_async(["docker", "rm", "-f", container_id], timeout_s=30)
-                 except: pass
-                 raise RuntimeError(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
-
-            # 6. Wait for Readiness
-            await self._wait_for_readiness(container_id, host_port)
-
+            if runtime_mode == "debug":
+                host_port = 0
+                for _ in range(5): 
+                    host_port = await self._get_dynamic_port(container_id)
+                    if host_port > 0:
+                        break
+                    await asyncio.sleep(0.5)
+                if host_port <= 0:
+                    rc, out, err = await _run_async(["docker", "logs", "--tail", "50", container_id], timeout_s=5)
+                    logs = (out or "") + (err or "")
+                    try:
+                        await _run_async(["docker", "rm", "-f", container_id], timeout_s=30)
+                    except:
+                        pass
+                    raise RuntimeError(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
+                await self._wait_for_readiness(container_id, host_port, runtime_mode)
+                return {
+                    "docker_container_id": container_id,
+                    "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
+                    "dap_port": host_port,
+                    "workspace_path": str(ws_path)
+                }
+            await self._wait_for_readiness(container_id, 0, runtime_mode)
             return {
                 "docker_container_id": container_id,
-                "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
-                "dap_port": host_port,
+                "dap_host": None,
+                "dap_port": None,
                 "workspace_path": str(ws_path)
             }
 
     async def stop_session(self, session_id: str, meta: Dict[str, Any]) -> None:
         """Soft stop: kill process but keep container."""
         name = self._container_name(meta)
+        runtime_mode = str(meta.get("runtime_mode") or "debug").lower()
         async with RedisDistributedLock(name, timeout=15):
+            if runtime_mode == "plain":
+                try:
+                    await _run_async(["docker", "rm", "-f", name], timeout_s=30)
+                except Exception:
+                    pass
+                return
             try:
-                # Only kill debugpy, loop will restart it and wait for next connection
-                await _run_async(["docker", "exec", name, "pkill", "-f", "debugpy"], timeout_s=10)
+                await self._kill_debugpy_in_container(name)
             except Exception:
                 pass
-            # Do NOT remove workspace or container
 
     async def terminate_session(self, session_id: str, meta: Dict[str, Any]) -> None:
         """Hard stop: remove container and workspace."""
@@ -305,20 +350,40 @@ class DockerProvider(SandboxProvider):
         name = self._container_name(meta)
         return await self._docker_is_running(name)
 
+    async def attach_tty(self, session_id: str, meta: Dict[str, Any]) -> Tuple[Any, int]:
+        """
+        Attach to the session's TTY using docker attach.
+        Returns a (reader, writer) pair or process object.
+        Actually, we return the process object so caller can access stdin/stdout.
+        """
+        name = self._container_name(meta)
+        if not await self._docker_is_running(name):
+             raise RuntimeError("Container not running")
+        
+        # Use docker attach with a pseudo-tty so docker won't reject non-tty stdin.
+        cmd = ["docker", "attach", name]
+        master_fd, slave_fd = pty.openpty()
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True
+        )
+        os.close(slave_fd)
+        return process, master_fd
+
     def _prepare_workspace_files(self, ws_path: Path, code: str, meta: Dict[str, Any]):
         import json
         ws_path.mkdir(parents=True, exist_ok=True)
+
         (ws_path / "main.py").write_text(code, encoding="utf-8")
         (ws_path / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-        from app.core.sandbox.base import get_sitecustomize_content
-        (ws_path / "sitecustomize.py").write_text(
-            get_sitecustomize_content(), encoding="utf-8"
-        )
+        # No sitecustomize needed for native TTY
         try:
             ws_path.chmod(0o755)
             (ws_path / "main.py").chmod(0o644)
             (ws_path / "meta.json").chmod(0o644)
-            (ws_path / "sitecustomize.py").chmod(0o644)
         except Exception:
             pass
 
@@ -371,16 +436,70 @@ class DockerProvider(SandboxProvider):
         except Exception:
             return False
 
-    async def _wait_for_readiness(self, container_id: str, host_port: int):
-        # logger.info(f"Waiting for debugpy readiness on {container_id}:{host_port}")
-        
-        for _ in range(150): # 30 seconds
+    async def _debugpy_dap_ready(self, host_port: int) -> bool:
+        if host_port <= 0:
+            return False
+        writer: Optional[asyncio.StreamWriter] = None
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", int(host_port)),
+                timeout=1.0,
+            )
+            req = {
+                "seq": 1,
+                "type": "request",
+                "command": "initialize",
+                "arguments": {
+                    "adapterID": "python",
+                    "linesStartAt1": True,
+                    "columnsStartAt1": True,
+                    "pathFormat": "path",
+                },
+            }
+            raw = json.dumps(req, ensure_ascii=False).encode("utf-8")
+            writer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("utf-8"))
+            writer.write(raw)
+            await writer.drain()
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                headers: Dict[str, str] = {}
+                while True:
+                    line = await asyncio.wait_for(reader.readline(), timeout=1.0)
+                    if not line:
+                        raise RuntimeError("dap header eof")
+                    s = line.decode("utf-8", errors="replace").strip()
+                    if s == "":
+                        break
+                    if ":" in s:
+                        k, v = s.split(":", 1)
+                        headers[k.strip().lower()] = v.strip()
+                n = int(headers.get("content-length") or "0")
+                if n <= 0:
+                    raise RuntimeError("dap content-length missing")
+                body = await asyncio.wait_for(reader.readexactly(n), timeout=1.0)
+                msg = json.loads(body.decode("utf-8", errors="replace"))
+                if msg.get("type") == "response" and msg.get("command") == "initialize":
+                    return True
+            return False
+        except Exception:
+            return False
+        finally:
+            if writer is not None:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+
+    async def _wait_for_readiness(self, container_id: str, host_port: int, runtime_mode: str = "debug"):
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
             if not await self._docker_is_running(container_id):
                  raise RuntimeError(f"Container exited prematurely.")
-
-            if await self._debugpy_is_listening(container_id, self.debugpy_port):
+            if runtime_mode != "debug":
                 return
-            
+            listening = await self._debugpy_is_listening(container_id, self.debugpy_port)
+            if listening:
+                return
             await asyncio.sleep(0.2)
-        
         raise RuntimeError(f"debugpy readiness timeout after 30s")

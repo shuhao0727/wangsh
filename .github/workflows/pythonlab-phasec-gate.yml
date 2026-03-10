@@ -1,0 +1,108 @@
+name: pythonlab-phasec-gate
+
+on:
+  workflow_call:
+    inputs:
+      api_url:
+        required: false
+        type: string
+      rounds:
+        required: false
+        type: string
+      timeout_seconds:
+        required: false
+        type: string
+    secrets:
+      PYTHONLAB_SMOKE_USERNAME:
+        required: true
+      PYTHONLAB_SMOKE_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: API base url, example https://example.com
+        required: true
+        default: "http://localhost:8000"
+      rounds:
+        description: soak rounds
+        required: true
+        default: "20"
+      timeout_seconds:
+        description: probe timeout seconds
+        required: true
+        default: "20"
+  schedule:
+    - cron: "10 3 * * *"
+
+concurrency:
+  group: pythonlab-phasec-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  phasec-gate:
+    name: phasec-visibility-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests aiohttp
+
+      - name: validate required secrets
+        env:
+          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          if [ -z "${USERNAME}" ] || [ -z "${PASSWORD}" ]; then
+            echo "missing required secrets: PYTHONLAB_SMOKE_USERNAME/PYTHONLAB_SMOKE_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
+            exit 2
+          fi
+
+      - name: run phase c warmup probe
+        env:
+          API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
+          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          python backend/scripts/smoke_pythonlab_print_visibility_probe.py
+
+      - name: run phase c soak gate
+        id: gate
+        env:
+          API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
+          ROUNDS: ${{ inputs.rounds || github.event.inputs.rounds || vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
+          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          LOG_DIR: /tmp/phasec_soak
+        run: |
+          python backend/scripts/soak_pythonlab_phasec.py
+
+      - name: write summary
+        if: ${{ always() }}
+        env:
+          API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
+          ROUNDS: ${{ inputs.rounds || github.event.inputs.rounds || vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
+        run: |
+          {
+            echo "## PythonLab Phase C Visibility Gate"
+            echo "- api_url: ${API_URL}"
+            echo "- rounds: ${ROUNDS}"
+            echo "- timeout_seconds: ${TIMEOUT_SECONDS}"
+            if [ -f /tmp/phasec_soak/summary.json ]; then
+              echo ""
+              echo '```json'
+              cat /tmp/phasec_soak/summary.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

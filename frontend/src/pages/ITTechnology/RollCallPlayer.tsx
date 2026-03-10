@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Modal, Spin, Typography, message, Space } from 'antd';
+import { Button, Spin, message } from 'antd';
 import { dianmingApi, DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
-import { PlayCircleOutlined, StopOutlined, ReloadOutlined } from '@ant-design/icons';
-
-const { Title } = Typography;
+import { PlayCircleOutlined, StopOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 
 interface Props {
   record: DianmingClass;
@@ -15,7 +13,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
   const [students, setStudents] = useState<DianmingStudent[]>([]);
   const [currentName, setCurrentName] = useState<string>('准备就绪');
   const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -52,11 +50,10 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
       intervalRef.current = null;
     }
     setIsRunning(false);
-    // 最终确定一个名字 (也可以在动画中确定，这里简单起见)
+    // 最终确定一个名字
     if (students.length > 0) {
       const randomIndex = Math.floor(Math.random() * students.length);
       setCurrentName(students[randomIndex].student_name);
-      // 可选：播放音效或高亮
     }
   };
 
@@ -69,72 +66,49 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: '#001529',
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 20, left: 20 }}>
-        <Button onClick={onBack} ghost>
-          返回管理
+    <div className="it-player-container">
+      <div className="it-player-header">
+        <Button onClick={onBack} ghost icon={<ArrowLeftOutlined />}>
+          返回选择
         </Button>
-      </div>
-      
-      <div style={{ position: 'absolute', top: 20, right: 20, fontSize: 16, opacity: 0.8 }}>
-        {record.year} - {record.class_name} ({students.length}人)
+        <div className="it-player-info">
+          {record.year}级 {record.class_name} · 共{students.length}人
+        </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="it-player-main">
         {loading ? (
           <Spin size="large" />
         ) : (
-          <Title
-            level={1}
-            style={{
-              color: '#fff',
-              fontSize: isRunning ? '8vw' : '12vw',
-              margin: 0,
-              fontWeight: 'bold',
-              textShadow: '0 0 20px rgba(255,255,255,0.5)',
-              transition: 'all 0.1s',
-            }}
-          >
-            {currentName}
-          </Title>
+          <div style={{ textAlign: 'center' }}>
+             <h1 
+               className="it-player-name" 
+               style={{ 
+                 fontSize: isRunning ? 'min(15vw, 120px)' : 'min(20vw, 180px)',
+                 opacity: isRunning ? 0.8 : 1
+               }}
+             >
+               {currentName}
+             </h1>
+             {!isRunning && students.length > 0 && currentName !== '点击开始' && (
+               <div style={{ marginTop: 24, fontSize: 24, opacity: 0.6, color: '#40a9ff' }}>
+                 🎉 幸运儿诞生
+               </div>
+             )}
+          </div>
         )}
       </div>
 
-      <div style={{ paddingBottom: 100 }}>
-        <Space size="large">
-          <Button
-            type="primary"
-            shape="round"
-            size="large"
-            icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
-            style={{
-              height: 80,
-              width: 200,
-              fontSize: 24,
-              backgroundColor: isRunning ? '#ff4d4f' : '#1890ff',
-              borderColor: isRunning ? '#ff4d4f' : '#1890ff',
-            }}
-            onClick={toggle}
-            disabled={students.length === 0}
-          >
-            {isRunning ? '停止' : '开始点名'}
-          </Button>
-        </Space>
+      <div className="it-player-controls">
+        <Button
+          type="primary"
+          className={`it-player-btn ${isRunning ? 'it-player-btn-stop' : 'it-player-btn-start'}`}
+          icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
+          onClick={toggle}
+          disabled={students.length === 0}
+        >
+          {isRunning ? '停止' : '开始点名'}
+        </Button>
       </div>
     </div>
   );

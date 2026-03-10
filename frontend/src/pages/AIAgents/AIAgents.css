@@ -1,0 +1,64 @@
+.ai-agents-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--ws-color-bg-layout);
+}
+
+.ai-agents-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  gap: 16px;
+  padding: 0;
+  height: 100%;
+}
+
+/* Sidebar Column */
+.ai-agents-sidebar-col {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--ws-color-surface);
+  border-right: 1px solid var(--ws-color-border);
+}
+
+/* Chat Column */
+.ai-agents-chat-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ai-agents-chat-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--ws-color-surface);
+  border-radius: var(--ws-radius-lg);
+  box-shadow: var(--ws-shadow-sm);
+  overflow: hidden;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .ai-agents-container {
+    gap: 0;
+  }
+
+  .ai-agents-sidebar-col {
+    display: none; /* Hidden by default on mobile, used in Drawer instead */
+  }
+
+  .ai-agents-chat-shell {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

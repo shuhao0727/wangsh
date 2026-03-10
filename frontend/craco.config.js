@@ -38,10 +38,18 @@ module.exports = {
 
   // 可选：如果需要修改其他配置可以在这里添加
   devServer: {
+    client: {
+      overlay: false,
+    },
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
     proxy: {
       '/api': {
         target: process.env.DEV_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
+        ws: true,
       },
     },
   },

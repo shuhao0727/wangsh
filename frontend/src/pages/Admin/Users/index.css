@@ -21,6 +21,10 @@
   width: 110px;
 }
 
+.admin-users-toolbar .ant-btn {
+  min-width: 40px;
+}
+
 .admin-users-table-wrap {
   flex: 1;
   overflow: hidden;
@@ -32,6 +36,10 @@
 @media (max-width: 768px) {
   .admin-users-toolbar {
     padding: 12px;
+  }
+
+  .admin-users-toolbar-divider {
+    display: none;
   }
 
   .admin-users-toolbar .admin-users-search,

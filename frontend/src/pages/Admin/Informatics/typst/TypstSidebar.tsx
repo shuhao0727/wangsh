@@ -201,7 +201,7 @@ export default function TypstSidebar({
                 <Button onClick={onRefreshAssets} disabled={submitting || !noteId}>
                   刷新列表
                 </Button>
-                <input ref={assetInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => onUploadFiles(e.target.files)} />
+                <input id="typst-asset-upload" name="typst-asset-upload" aria-label="上传资源" ref={assetInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => onUploadFiles(e.target.files)} />
               </div>
               <Input value={assetSearch} onChange={(e) => onSetAssetSearch(e.target.value)} placeholder="搜索资源" />
               <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--ws-color-border)", borderRadius: "var(--ws-radius-md)" }}>

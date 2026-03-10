@@ -4,12 +4,12 @@ import type { PortSide } from "./model";
 export const nodeScale = 0.5;
 
 export function shapeColor(shape: FlowNodeShape) {
-  if (shape === "start_end") return "#1677ff";
-  if (shape === "process") return "#13c2c2";
-  if (shape === "subroutine") return "#52c41a";
-  if (shape === "decision") return "#722ed1";
-  if (shape === "io") return "#fa8c16";
-  return "#2f54eb";
+  if (shape === "start_end") return "#2563eb"; // Blue 600
+  if (shape === "process") return "#0891b2"; // Cyan 600
+  if (shape === "subroutine") return "#10b981"; // Emerald 500
+  if (shape === "decision") return "#7c3aed"; // Violet 600
+  if (shape === "io") return "#f59e0b"; // Amber 500
+  return "#3b82f6"; // Blue 500
 }
 
 export function nodeSize(shape: FlowNodeShape) {
