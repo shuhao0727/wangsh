@@ -64,7 +64,7 @@ const AdminPersonalPrograms: React.FC = () => {
             enabled={xbkEnabled}
             loading={loading || saving}
             onToggle={handleToggleXbk}
-            theme="orange"
+            color="var(--ws-color-warning)"
             actionLabel="打开"
             actionIcon={<ArrowRightOutlined />}
             onAction={() => window.open("/xbk", "_blank")}

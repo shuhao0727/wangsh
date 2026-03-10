@@ -74,7 +74,7 @@ const AdminAppCard: React.FC<Props> = ({
         {title}
       </Title>
       
-      <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.3, display: "block", textAlign: "center", marginBottom: 12, maxWidth: "180px", minHeight: "32px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+      <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.3, textAlign: "center", marginBottom: 12, maxWidth: "180px", minHeight: "32px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
         {description}
       </Text>
 
@@ -97,4 +97,3 @@ const AdminAppCard: React.FC<Props> = ({
 };
 
 export default AdminAppCard;
-
