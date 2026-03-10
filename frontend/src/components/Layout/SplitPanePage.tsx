@@ -21,8 +21,13 @@ const SplitPanePage: React.FC<Props> = ({ left, right, leftWidth = 420, gap = 24
       style={{
         display: "grid",
         gridTemplateColumns: isStacked ? "minmax(0, 1fr)" : `${leftWidth}px minmax(0, 1fr)`,
+        gridTemplateRows: "minmax(0, 1fr)",
         gap: isStacked ? 12 : gap,
         alignItems,
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        flex: 1,
         ...style,
       }}
     >

@@ -468,6 +468,7 @@ const InformaticsReaderPage: React.FC = () => {
     <div className="informatics-page">
       <SplitPanePage
         leftWidth={320}
+        alignItems="stretch"
         left={
           <PanelCard bodyPadding={12}>
             {renderLeftContent()}

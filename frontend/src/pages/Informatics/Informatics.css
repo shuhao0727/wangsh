@@ -193,6 +193,12 @@
   padding-bottom: 8px; 
 }
 
+.informatics-mobile-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* Mobile Specific Styles */
 @media (max-width: 768px) {
   .informatics-page {

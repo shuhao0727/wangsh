@@ -212,7 +212,7 @@ const BasicLayout: React.FC = () => {
             ? {
                 padding: "var(--ws-space-4)",
                 margin: 0,
-                height: "calc(100vh - var(--ws-header-height))",
+                flex: 1,
                 minHeight: 0,
                 overflow: "hidden",
                 boxSizing: "border-box",
@@ -225,7 +225,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - var(--ws-header-height))",
+                  flex: 1,
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",
@@ -237,7 +237,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - var(--ws-header-height))",
+                  flex: 1,
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",
@@ -249,7 +249,7 @@ const BasicLayout: React.FC = () => {
               ? {
                   padding: 0,
                   margin: 0,
-                  height: "calc(100vh - var(--ws-header-height))",
+                  flex: 1,
                   minHeight: 0,
                   overflow: "hidden",
                   boxSizing: "border-box",
