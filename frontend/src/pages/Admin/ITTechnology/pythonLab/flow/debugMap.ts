@@ -197,6 +197,22 @@ export function inferDebugEmphasisFromDebugMap(params: {
   const direct = inferAtLine(activeLine, true, activeLine);
   if (direct) return direct;
 
+  const inForInBody = debugMap.forIns.find((meta) => {
+    if (!meta.bodyLineRange) return false;
+    return activeLine >= meta.bodyLineRange.startLine && activeLine <= meta.bodyLineRange.endLine;
+  });
+  if (inForInBody && inForInBody.vars.some((v) => changedVars.has(v))) {
+    return { line: inForInBody.headerLine, role: "for_in_bind" as const, thenRole: "for_in_next" as const };
+  }
+
+  const inForRangeBody = debugMap.forRanges.find((meta) => {
+    if (!meta.bodyLineRange) return false;
+    return activeLine >= meta.bodyLineRange.startLine && activeLine <= meta.bodyLineRange.endLine;
+  });
+  if (inForRangeBody && changedVars.has(inForRangeBody.var)) {
+    return { line: inForRangeBody.headerLine, role: "for_inc" as const, thenRole: "for_check" as const };
+  }
+
   const whileBackEdge = inferWhileBackEdge({
     debugMap,
     activeLine,
@@ -459,8 +475,9 @@ function inferForRangesFromNodes(nodes: FlowNode[]): DebugForRangeEntry[] {
     const check = items.find((n: FlowNode) => n.sourceRole === "for_check") ?? null;
     const inc = items.find((n: FlowNode) => n.sourceRole === "for_inc") ?? null;
     if (!init || !check || !inc) continue;
-    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(String(init.title || "").trim());
-    const v = m?.[1] ?? "";
+    const incVar = roleVarsFromNode(inc, "for_inc")?.[0] ?? "";
+    const initVar = roleVarsFromNode(init, "for_init")?.[0] ?? "";
+    const v = incVar || initVar;
     if (!v) continue;
     out.push({ headerLine, var: v, initNodeId: init.id, checkNodeId: check.id, incNodeId: inc.id });
   }

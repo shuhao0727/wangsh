@@ -63,7 +63,7 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
   for (const n of built.nodes) outs.set(n.id, []);
   for (const e of built.edges) (outs.get(e.from) ?? outs.set(e.from, []).get(e.from)!).push({ to: e.to, label: e.label });
 
-  const decision = built.nodes.find((n) => n.shape === "decision" && n.title.replaceAll(" ", "").includes("i<n"));
+  const decision = built.nodes.find((n) => n.shape === "decision" && (n as any).sourceRole === "for_check");
   expect(decision).toBeTruthy();
   if (!decision) return;
 
@@ -71,8 +71,13 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
   expect(yesEdge).toBeTruthy();
   if (!yesEdge) return;
 
-  const printNodeId = yesEdge.to;
-  expect(nodeById.get(printNodeId)?.title.trim().startsWith("print(")).toBe(true);
+  const bindNodeId = yesEdge.to;
+  expect(nodeById.get(bindNodeId)?.title.trim()).toContain("i = next(_it_i)");
+
+  const bindOut = (outs.get(bindNodeId) || [])[0]?.to;
+  expect(bindOut).toBeTruthy();
+  if (!bindOut) return;
+  expect(nodeById.get(bindOut)?.title.trim().startsWith("print(")).toBe(true);
 
   const targetTitle = "a, b = b, a + b";
   const targetNode = built.nodes.find((n) => n.title.trim() === targetTitle);
@@ -95,6 +100,32 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
     return false;
   };
 
-  expect(bfs(printNodeId, targetNode.id)).toBe(true);
+  expect(bfs(bindOut, targetNode.id)).toBe(true);
   expect(bfs(targetNode.id, decision.id)).toBe(true);
+});
+
+test("buildUnifiedFlowFromPython for-range start/stop/step 变体保持三段式语义", () => {
+  const code = [
+    "for i in range(n):",
+    "  print(i)",
+    "for j in range(1, n):",
+    "  print(j)",
+    "for k in range(1, n, 2):",
+    "  print(k)",
+    "",
+  ].join("\n");
+  const built = buildUnifiedFlowFromPython(code);
+  expect(built).not.toBeNull();
+  if (!built) return;
+
+  const headers = built.debugMap.forRanges.sort((a, b) => a.headerLine - b.headerLine);
+  expect(headers.map((x) => x.var)).toEqual(["i", "j", "k"]);
+
+  const initTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.initNodeId)?.title || "").replaceAll(" ", ""));
+  expect(initTitles[0]).toContain("_seq_i=list(range(0,n));_it_i=iter(_seq_i)");
+  expect(initTitles[1]).toContain("_seq_j=list(range(1,n));_it_j=iter(_seq_j)");
+  expect(initTitles[2]).toContain("_seq_k=list(range(1,n,2));_it_k=iter(_seq_k)");
+
+  const checkTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.checkNodeId)?.title || "").replaceAll(" ", ""));
+  expect(checkTitles).toEqual(["has_next(_it_i)?", "has_next(_it_j)?", "has_next(_it_k)?"]);
 });

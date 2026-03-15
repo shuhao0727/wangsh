@@ -103,8 +103,9 @@ def test_fib_for_has_false_and_end():
     exit_edges = js.get("exitEdges") or []
     assert any(e.get("kind") == "False" for e in exit_edges)
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert any(t == "i = 0" for t in titles)
-    assert any((t or "").startswith("i +=") for t in titles) or any((t or "").startswith("i -=") for t in titles)
+    assert any((t or "").startswith("_seq_i = list(range(0, n)); _it_i = iter(_seq_i)") for t in titles)
+    assert any(t == "i = next(_it_i)" for t in titles)
+    assert any((t or "").startswith("has_next(_it_i)") for t in titles)
 
 
 def test_break_continue_has_false_and_end():
@@ -161,3 +162,25 @@ def test_nested_loops_break_only_inner():
     assert js.get("diagnostics") == []
     assert sum(1 for n in js.get("nodes", []) if n.get("kind") == "For") >= 2
     assert any(e.get("kind") == "Back" for e in js.get("edges", []))
+
+
+def test_for_range_variants_use_consistent_three_stage_titles():
+    code = textwrap.dedent(
+        """
+        for i in range(n):
+            pass
+        for j in range(1, n):
+            pass
+        for k in range(1, n, 2):
+            pass
+        """
+    ).strip()
+    js = _parse(code)
+    assert js.get("diagnostics") == []
+    titles = [n.get("title") for n in js.get("nodes", [])]
+    assert "_seq_i = list(range(0, n)); _it_i = iter(_seq_i)" in titles
+    assert "_seq_j = list(range(1, n)); _it_j = iter(_seq_j)" in titles
+    assert "_seq_k = list(range(1, n, 2)); _it_k = iter(_seq_k)" in titles
+    assert "i = next(_it_i)" in titles
+    assert "j = next(_it_j)" in titles
+    assert "k = next(_it_k)" in titles

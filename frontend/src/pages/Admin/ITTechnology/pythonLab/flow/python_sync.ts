@@ -526,12 +526,21 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     return undefined;
   };
 
+  const isCollectionStmt = (text: string) => {
+    const t = text.trim();
+    if (!t) return false;
+    if (/=\s*\[[^\]]*\]\s*$/.test(t) || /=\s*\{[^}]*\}\s*$/.test(t)) return true;
+    if (/\.\s*(append|extend|insert|pop|remove|clear|sort|reverse|get|setdefault|update|keys|values|items)\s*\(/.test(t)) return true;
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[[^\]]+\]\s*=/.test(t)) return true;
+    return false;
+  };
+
   const emitEdge = (from: string, to: string, label?: string) => {
     edges.push({ id: nextId("e"), from, to, style: "straight", routeMode: "auto", anchor: null, label });
   };
 
   const emitStmtNode = (text: string, sourceLine?: number, sourceRole?: string) => {
-    const shape: FlowNodeShape = isIO(text) ? "io" : isSubroutineCall(text) ? "subroutine" : "process";
+    const shape: FlowNodeShape = isIO(text) ? "io" : isCollectionStmt(text) ? "collection" : isSubroutineCall(text) ? "subroutine" : "process";
     const n: FlowNode = { id: nextId("n"), shape, title: text, x: 0, y: 0, sourceLine, sourceRole };
     nodes.push(n);
     const irStmt: IRStmt = { kind: "stmt", text, nodeId: n.id };
@@ -683,24 +692,35 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const emitForRange = (it: CodeIRForRange) => {
-    const init = emitStmtNode(`${it.v} = ${it.start}`, it.loc.line, "for_init");
     const stepText = it.step ? it.step.trim() : "1";
-    const stepNum = Number(stepText);
-    const isNeg = Number.isFinite(stepNum) ? stepNum < 0 : false;
-    const cond = `${it.v} ${isNeg ? ">" : "<"} ${it.end}`;
+    const rangeExpr = stepText === "1" ? `range(${it.start}, ${it.end})` : `range(${it.start}, ${it.end}, ${stepText})`;
+    const seqName = `_seq_${it.v}`;
+    const iterName = `_it_${it.v}`;
+    const init = emitStmtNode(`${seqName} = list(${rangeExpr}); ${iterName} = iter(${seqName})`, it.loc.line, "for_init");
+    const cond = `has_next(${iterName})`;
     const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_check" };
     nodes.push(d);
+    const bind = emitStmtNode(`${it.v} = next(${iterName})`, it.loc.line, "for_inc");
     const bodyRes = emitBlock(it.body);
-    const inc = emitStmtNode(`${it.v} += ${stepText}`, it.loc.line, "for_inc");
     const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
-    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: init.nodeId, checkNodeId: d.id, incNodeId: inc.nodeId, bodyLineRange });
+    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: init.nodeId, checkNodeId: d.id, incNodeId: bind.nodeId, bodyLineRange });
 
     emitEdge(init.nodeId, d.id);
-    emitEdge(d.id, bodyRes.entry, "是");
-    if (bodyRes.exit) emitEdge(bodyRes.exit, inc.nodeId);
+    emitEdge(d.id, bind.nodeId, "是");
+    emitEdge(bind.nodeId, bodyRes.entry);
     const backEdgeId = nextId("e");
-    edges.push({ id: backEdgeId, from: inc.nodeId, to: d.id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "left", toPort: "left" });
-    const loopBody: IRBlock = { kind: "block", items: [...bodyRes.ir.items, inc.ir] };
+    edges.push({
+      id: backEdgeId,
+      from: bodyRes.exit || bind.nodeId,
+      to: d.id,
+      style: "straight",
+      routeMode: "auto",
+      anchor: null,
+      label: "是",
+      fromPort: "left",
+      toPort: "left",
+    });
+    const loopBody: IRBlock = { kind: "block", items: [bind.ir, ...bodyRes.ir.items] };
     const irWhile: IRWhile = { kind: "while", cond, body: loopBody, decisionId: d.id, backEdgeId };
     return { entry: init.nodeId, exit: d.id, irItems: [init.ir as IRNode, irWhile as IRNode], whileDecisionId: d.id };
   };

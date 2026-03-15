@@ -1,4 +1,4 @@
-import { computeDebugNodeSelection } from "./debugMap";
+import { buildDebugMapFromNodes, computeDebugNodeSelection } from "./debugMap";
 import { buildUnifiedFlowFromPython } from "./python_sync";
 
 test("DebugMap for-range 包含 init/check/inc nodeId 与 bodyLineRange", () => {
@@ -25,6 +25,17 @@ test("DebugMap for-range 包含 init/check/inc nodeId 与 bodyLineRange", () => 
   expect((check as any)?.sourceRole).toBe("for_check");
   expect(inc?.sourceLine).toBe(2);
   expect((inc as any)?.sourceRole).toBe("for_inc");
+});
+
+test("DebugMap 能从三段式节点推断 for-range 变量名", () => {
+  const nodes: any[] = [
+    { id: "n1", shape: "process", title: "_seq_i = list(range(0, n)); _it_i = iter(_seq_i)", x: 0, y: 0, sourceLine: 2, sourceRole: "for_init" },
+    { id: "n2", shape: "decision", title: "has_next(_it_i) ?", x: 0, y: 0, sourceLine: 2, sourceRole: "for_check" },
+    { id: "n3", shape: "process", title: "i = next(_it_i)", x: 0, y: 0, sourceLine: 2, sourceRole: "for_inc" },
+  ];
+  const dm = buildDebugMapFromNodes(nodes);
+  expect(dm.forRanges.length).toBe(1);
+  expect(dm.forRanges[0].var).toBe("i");
 });
 
 test("强调选择：停在 for-range 头部行时选择 checkNodeId", () => {
