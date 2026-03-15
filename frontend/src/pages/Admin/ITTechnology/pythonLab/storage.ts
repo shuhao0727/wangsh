@@ -1,4 +1,5 @@
 import type { PythonLabExperiment } from "./types";
+import { FOR_TEACHING_EXAMPLE_CODE } from "./forTeachingExample";
 
 export const pythonLabStorageKey = "python_lab_experiments";
 
@@ -9,7 +10,7 @@ const defaultExperiments: PythonLabExperiment[] = [
     level: "入门",
     tags: ["assign", "print"],
     scenario: "顺序结构",
-    starterCode: "a = 3\nb = 5\nc = a + b\nprint(c)\n",
+    starterCode: "a = 3\nb = 5\ntotal = a + b\nprint(total)\n",
   },
   {
     id: "loops",
@@ -17,7 +18,25 @@ const defaultExperiments: PythonLabExperiment[] = [
     level: "基础",
     tags: ["for", "range", "sum"],
     scenario: "循环",
-    starterCode: "total = 0\nfor i in range(1, 11):\n    total += i\nprint(total)\n",
+    starterCode: FOR_TEACHING_EXAMPLE_CODE,
+  },
+  {
+    id: "list_basics",
+    title: "列表：遍历与累加",
+    level: "基础",
+    tags: ["list", "for", "append", "sum"],
+    scenario: "数据结构",
+    starterCode:
+      "nums = [1, 2, 3, 4, 5]\ntotal = 0\nfor x in nums:\n    total += x\nprint(total)\n",
+  },
+  {
+    id: "dict_basics",
+    title: "字典：统计词频",
+    level: "基础",
+    tags: ["dict", "for", "get"],
+    scenario: "数据结构",
+    starterCode:
+      "text = \"a b a c b a\"\ncounter = {}\nfor w in text.split():\n    counter[w] = counter.get(w, 0) + 1\nprint(counter)\n",
   },
   {
     id: "nested_if",
@@ -126,7 +145,8 @@ function normalizeExperiment(raw: any, defaultsById: Map<string, PythonLabExperi
       : d?.scenario ?? "循环";
 
   if (!id || !title || !starterCode) return null;
-  return { id, title, level, tags, scenario, starterCode };
+  const enforcedStarterCode = id === "loops" ? FOR_TEACHING_EXAMPLE_CODE : starterCode;
+  return { id, title, level, tags, scenario, starterCode: enforcedStarterCode };
 }
 
 export function loadPythonLabExperiments(): PythonLabExperiment[] {

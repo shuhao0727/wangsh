@@ -1,6 +1,7 @@
 import type { FlowEdge, FlowNode } from "./model";
 import type { PythonLabCfgResponse, PythonLabFlowResponse } from "../services/pythonlabDebugApi";
 import type { FlowNodeShape } from "../types";
+import { normalizeTitleForMapping } from "./titleSemantics";
 
 type SourceRange = {
   startLine: number;
@@ -187,7 +188,7 @@ function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: Flow
 
     const joinId = uniqueId(`__join__${chain[0]}`, usedIds);
     usedIds.add(joinId);
-    nodes.push({ id: joinId, shape: "connector", title: "", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
+    nodes.push({ type: "flow_element", id: joinId, shape: "connector", title: "", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
 
     const joinEdgeId = uniqueId(`${joinId}__to__${mergeId}`, usedIds);
     usedIds.add(joinEdgeId);
@@ -211,11 +212,27 @@ function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: Flow
 }
 
 export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { nodes: (FlowNode & { sourceRange?: SourceRange })[]; edges: FlowEdge[] } {
+  const inferCollectionShape = (title: string): FlowNodeShape | null => {
+    const t = normalizeTitleForMapping(title);
+    if (!t) return null;
+    const low = t.toLowerCase();
+    if (/=\s*\{[^}]*\}\s*$/.test(t)) return "dict_op";
+    if (/=\s*\[[^\]]*\]\s*$/.test(t)) return "list_op";
+    if (/=\s*dict\s*\(/.test(low)) return "dict_op";
+    if (/=\s*list\s*\(/.test(low)) return "list_op";
+    if (/\.\s*(append|extend|insert|remove|clear|sort|reverse)\s*\(/.test(low)) return "list_op";
+    if (/\.\s*(get|setdefault|update|keys|values|items|popitem)\s*\(/.test(low)) return "dict_op";
+    if (/^[a-z_][a-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*=/.test(low)) return "dict_op";
+    if (/^[a-z_][a-z0-9_]*\s*\[[^\]]+\]\s*=/.test(low)) return "list_op";
+    return null;
+  };
   const inferShapeByTitle = (title: string): FlowNodeShape | null => {
-    const t = (title || "").trim();
+    const t = normalizeTitleForMapping(title);
     const low = t.toLowerCase();
     if (low.startsWith("print(") || low.includes("input(") || low.startsWith("read(") || low.startsWith("write(")) return "io";
     if (/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*input\s*\(/.test(t)) return "io";
+    const collectionShape = inferCollectionShape(t);
+    if (collectionShape) return collectionShape;
     const rhs = low.replace(/^[a-z_][a-z0-9_]*\s*=\s*/i, "");
     if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(rhs) && !rhs.startsWith("print(") && !rhs.startsWith("input(")) return "subroutine";
     if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(low) && !low.startsWith("print(") && !low.startsWith("input(")) return "subroutine";
@@ -238,11 +255,13 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
     if (k === "for") return "for_check";
     if (k === "forstep") return "for_inc";
     if (k === "while") return "while_check";
-    if (k === "foreachnext") return "for_in_next";
-    if (k === "foreach") return "for_in_bind";
+    if (k === "foreach") return "for_in_next";
+    if (k === "foreachnext") return "for_in_bind";
     if (k === "augassign") return "aug_assign";
     if (k === "return") return "return_stmt";
-    const low = (title || "").trim().toLowerCase();
+    const normalizedTitle = normalizeTitleForMapping(title);
+    if (inferCollectionShape(normalizedTitle)) return undefined;
+    const low = normalizedTitle.toLowerCase();
     if (/^[a-z_][a-z0-9_]*\s*\(.*\)$/.test(low) && !low.startsWith("print(") && !low.startsWith("input(")) return "call_site";
     return undefined;
   };
@@ -262,6 +281,7 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
       const sourceRole = kindToSourceRole(n.kind, title);
       return {
         id: n.id,
+        type: "flow_element",
         shape,
         title,
         tooltip,
@@ -281,8 +301,8 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
     edges.push({ id: e.id, from: e.from, to: e.to, style: "straight", label });
   }
 
-  nodes.unshift({ id: startId, shape: "start_end", title: "开始", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
-  nodes.push({ id: endId, shape: "start_end", title: "结束", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
+  nodes.unshift({ type: "flow_element", id: startId, shape: "start_end", title: "开始", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
+  nodes.push({ type: "flow_element", id: endId, shape: "start_end", title: "结束", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });
 
   if (entryTarget && !moduleIds.has(entryTarget)) {
     edges.unshift({ id: `${startId}__entry`, from: startId, to: entryTarget, style: "straight" });

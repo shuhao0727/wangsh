@@ -68,6 +68,27 @@ class IRFunction(IRStmt):
 
 
 @dataclass(frozen=True)
+class IRClass(IRStmt):
+    name: str
+    bases: List[str]
+    body: "IRBlock"
+
+
+@dataclass(frozen=True)
+class IRImport(IRStmt):
+    names: List[str]
+    from_module: Optional[str]
+
+
+@dataclass(frozen=True)
+class IRTry(IRStmt):
+    body: "IRBlock"
+    handlers: List[Tuple[str, "IRBlock"]] # (type_name, block)
+    orelse: Optional["IRBlock"]
+    finalbody: Optional["IRBlock"]
+
+
+@dataclass(frozen=True)
 class IRBlock:
     stmts: List[IRStmt]
 
@@ -115,6 +136,7 @@ def build_ir_module(tree: ast.Module) -> IRBlock:
     for s in list(getattr(tree, "body", []) or []):
         if isinstance(s, ast.FunctionDef):
             continue
+        # We process ClassDef inside _build_stmt now
         stmts.append(_build_stmt(s))
     return IRBlock(stmts=stmts)
 
@@ -210,6 +232,36 @@ def _build_stmt(s: ast.stmt) -> IRStmt:
         return IRBreak(node=s)
     if isinstance(s, ast.Continue):
         return IRContinue(node=s)
+
+    if isinstance(s, ast.Try):
+        body = _build_block(list(getattr(s, "body", []) or []))
+        handlers: List[Tuple[str, IRBlock]] = []
+        for h in getattr(s, "handlers", []) or []:
+            typ = _unparse(h.type) if h.type else "Exception"
+            if h.name:
+                typ += f" as {h.name}"
+            handlers.append((typ, _build_block(list(getattr(h, "body", []) or []))))
+        orelse = _build_block(list(getattr(s, "orelse", []) or [])) if s.orelse else None
+        finalbody = _build_block(list(getattr(s, "finalbody", []) or [])) if s.finalbody else None
+        return IRTry(node=s, body=body, handlers=handlers, orelse=orelse, finalbody=finalbody)
+
+    if isinstance(s, ast.ClassDef):
+        name = s.name
+        bases = [_unparse(b) for b in s.bases]
+        body = _build_block(list(getattr(s, "body", []) or []))
+        return IRClass(node=s, name=name, bases=bases, body=body)
+
+    if isinstance(s, (ast.Import, ast.ImportFrom)):
+        names = []
+        from_module = None
+        if isinstance(s, ast.Import):
+            for n in s.names:
+                names.append(n.name if not n.asname else f"{n.name} as {n.asname}")
+        else:
+            from_module = s.module or ""
+            for n in s.names:
+                names.append(n.name if not n.asname else f"{n.name} as {n.asname}")
+        return IRImport(node=s, names=names, from_module=from_module)
 
     kind = type(s).__name__
     text = _unparse(s) or kind

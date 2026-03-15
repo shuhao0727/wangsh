@@ -41,6 +41,33 @@ export function ShapeIcon({ shape }: { shape: FlowNodeShape }) {
       </svg>
     );
   }
+  if (shape === "list_op" || shape === "collection") {
+    return (
+      <svg width="36" height="24" viewBox="0 0 36 24" fill="none">
+        <rect x="3" y="3" width="30" height="18" rx="4" stroke={c} strokeWidth="2" />
+        <path d="M6 7 H30" stroke={c} strokeWidth="2" />
+        <path d="M6 17 H30" stroke={c} strokeWidth="2" />
+      </svg>
+    );
+  }
+  if (shape === "dict_op") {
+    return (
+      <svg width="36" height="24" viewBox="0 0 36 24" fill="none">
+        <rect x="3" y="3" width="30" height="18" rx="4" stroke={c} strokeWidth="2" />
+        <path d="M18 5 V19" stroke={c} strokeWidth="2" />
+        <path d="M6 12 H30" stroke={c} strokeWidth="2" />
+      </svg>
+    );
+  }
+  if (shape === "note") {
+    return (
+      <svg width="36" height="24" viewBox="0 0 36 24" fill="none">
+        <rect x="3" y="3" width="30" height="18" rx="3" fill="#fff9c4" stroke={c} strokeWidth="2" />
+        <path d="M8 9 H28" stroke={c} strokeWidth="2" />
+        <path d="M8 14 H24" stroke={c} strokeWidth="2" />
+      </svg>
+    );
+  }
   return (
     <svg width="36" height="24" viewBox="0 0 36 24" fill="none">
       <circle cx="18" cy="12" r="9" stroke={c} strokeWidth="2" />

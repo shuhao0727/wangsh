@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: Optional[str] = Field(default=None)
     AGENT_API_KEY_ENCRYPTION_KEY: Optional[str] = Field(default=None)
     
+    # ==================== 智能体服务配置 ====================
+    AGENT_API_URL: Optional[str] = Field(default=None)
+    AGENT_API_KEY: Optional[str] = Field(default=None)
+
     # ==================== HTTPX 客户端配置 ====================
     HTTPX_MAX_CONNECTIONS: int = Field(default=100)
     HTTPX_MAX_KEEPALIVE_CONNECTIONS: int = Field(default=20)
@@ -358,6 +362,13 @@ class Settings(BaseSettings):
     TYPST_ASSET_MAX_BYTES: int = Field(default=5 * 1024 * 1024)
     TYPST_ASSET_ALLOWED_EXTS: str = Field(default="png,jpg,jpeg,gif,webp,svg,pdf")
     TYPST_ASSET_UPLOAD_RATE_LIMIT_SECONDS: float = Field(default=1.0)
+    GITHUB_SYNC_ENABLED: bool = Field(default=False)
+    GITHUB_SYNC_INTERVAL_HOURS: int = Field(default=48)
+    GITHUB_SYNC_REPO_OWNER: str = Field(default="shuhao0727")
+    GITHUB_SYNC_REPO_NAME: str = Field(default="2-My-notes")
+    GITHUB_SYNC_REPO_BRANCH: str = Field(default="main")
+    GITHUB_SYNC_TOKEN: str = Field(default="")
+    GITHUB_SYNC_DELETE_MODE: str = Field(default="unpublish")
     HTTP_METRICS_SAMPLE_SIZE: int = Field(default=500)
 
     @model_validator(mode="after")

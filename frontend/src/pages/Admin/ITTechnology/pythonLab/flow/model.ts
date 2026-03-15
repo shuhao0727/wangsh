@@ -1,19 +1,49 @@
-import type { FlowNodeShape } from "../types";
-
 export type PortSide = "top" | "right" | "bottom" | "left";
 
 export type FlowPoint = { x: number; y: number };
 
 export type FlowAttach = FlowPoint;
 
+export type FlowNodeShape =
+  | "start_end"
+  | "process"
+  | "decision"
+  | "io"
+  | "connector"
+  | "subroutine"
+  | "list_op"
+  | "dict_op"
+  | "collection"
+  | "note";
+
+export type FlowNodeType = "flow_element" | "annotation";
+
+export type FlowNodeStyle = {
+  backgroundColor?: string;
+  opacity?: number;
+  dashed?: boolean;
+};
+
+export type FlowNodeArrow = {
+  target: FlowPoint;
+  sourceAnchor?: "center" | "edge"; // Defaults to center/auto
+  headType?: "triangle";
+  rotation?: number; // Rotation in degrees
+};
+
 export type FlowNode = {
   id: string;
+  type: FlowNodeType;
   shape: FlowNodeShape;
   title: string;
   tooltip?: string;
   emphasis?: "critical";
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  style?: FlowNodeStyle;
+  arrow?: FlowNodeArrow;
   sourceLine?: number;
   sourceRole?: string;
   sourceRange?: { startLine: number; startCol: number; endLine: number; endCol: number };
@@ -68,7 +98,27 @@ const toDirOrUndefined = (v: unknown): { ux: number; uy: number } | undefined =>
 const isPortSide = (v: unknown): v is PortSide => v === "top" || v === "right" || v === "bottom" || v === "left";
 
 const isFlowNodeShape = (v: unknown): v is FlowNodeShape =>
-  v === "start_end" || v === "process" || v === "decision" || v === "io" || v === "connector" || v === "subroutine";
+  v === "start_end" ||
+  v === "process" ||
+  v === "decision" ||
+  v === "io" ||
+  v === "connector" ||
+  v === "subroutine" ||
+  v === "list_op" ||
+  v === "dict_op" ||
+  v === "collection" ||
+  v === "note";
+
+const inferCollectionShapeFromTitle = (title: string): FlowNodeShape => {
+  const t = title.trim();
+  const low = t.toLowerCase();
+  if (!t) return "list_op";
+  if (/=\s*\{[^}]*\}\s*$/.test(t)) return "dict_op";
+  if (/\.\s*(get|setdefault|update|items|keys|values)\s*\(/.test(low)) return "dict_op";
+  if (/^[a-z_][a-z0-9_]*\s*\[[^\]]+\]\s*=/.test(low) && low.includes("dict")) return "dict_op";
+  if (/=\s*dict\s*\(/.test(low) || /dict\s*\(/.test(low)) return "dict_op";
+  return "list_op";
+};
 
 const isEdgeStyle = (v: unknown): v is FlowEdge["style"] => v === "straight" || v === "polyline" || v === "bezier";
 
@@ -84,6 +134,7 @@ export function normalizeFlowNode(input: unknown): FlowNode | null {
   const x = toNumberOrNull(input.x);
   const y = toNumberOrNull(input.y);
   if (!id || !isFlowNodeShape(shape) || title === null || x === null || y === null) return null;
+  const normalizedShape: FlowNodeShape = shape === "collection" ? inferCollectionShapeFromTitle(title) : shape;
 
   const tooltip = toStringOrNull(input.tooltip ?? undefined) ?? undefined;
   const emphasis = input.emphasis === "critical" ? "critical" : undefined;
@@ -100,7 +151,50 @@ export function normalizeFlowNode(input: unknown): FlowNode | null {
     return { startLine, startCol, endLine, endCol };
   })();
 
-  return { id, shape, title, tooltip, emphasis, x, y, sourceLine, sourceRole, sourceRange };
+  const type: FlowNodeType = normalizedShape === "note" ? "annotation" : "flow_element";
+  const width = toNumberOrNull(input.width ?? undefined) ?? undefined;
+  const height = toNumberOrNull(input.height ?? undefined) ?? undefined;
+
+  const style = (() => {
+    const s = input.style;
+    if (!isRecord(s)) return undefined;
+    return {
+      backgroundColor: toStringOrNull(s.backgroundColor) ?? undefined,
+      opacity: toNumberOrNull(s.opacity) ?? undefined,
+      dashed: typeof s.dashed === "boolean" ? s.dashed : undefined,
+    };
+  })();
+
+  const arrow = (() => {
+    const a = input.arrow;
+    if (!isRecord(a)) return undefined;
+    const target = toPointOrNull(a.target);
+    if (!target) return undefined;
+    return {
+      target,
+      sourceAnchor: a.sourceAnchor === "edge" ? ("edge" as const) : ("center" as const),
+      headType: a.headType === "triangle" ? ("triangle" as const) : undefined,
+      rotation: toNumberOrNull(a.rotation) ?? undefined,
+    };
+  })();
+
+  return {
+    id,
+    type,
+    shape: normalizedShape,
+    title,
+    tooltip,
+    emphasis,
+    x,
+    y,
+    width,
+    height,
+    style,
+    arrow,
+    sourceLine,
+    sourceRole,
+    sourceRange,
+  };
 }
 
 export function normalizeFlowEdge(input: unknown): FlowEdge | null {
@@ -129,8 +223,8 @@ export function normalizeFlowEdge(input: unknown): FlowEdge | null {
 
   const anchors: FlowEdge["anchors"] = Array.isArray(input.anchors)
     ? input.anchors
-        .map((p) => toPointOrNull(p))
-        .filter((p): p is FlowPoint => !!p)
+      .map((p) => toPointOrNull(p))
+      .filter((p): p is FlowPoint => !!p)
     : undefined;
   const label = toStringOrNull(input.label ?? undefined) ?? undefined;
   const labelPosition = toPointOrNull(input.labelPosition) ?? undefined;

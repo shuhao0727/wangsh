@@ -1,21 +1,10 @@
-import asyncio
-
 from sqlalchemy import select
 
 from app.celery_app import celery
 from app.db.database import AsyncSessionLocal
 from app.models.informatics.typst_note import TypstNote
+from app.tasks._async_runner import run as run_async
 from app.services.informatics.typst_notes import compile_note_pdf
-
-_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _run(coro):
-    global _loop
-    if _loop is None or _loop.is_closed():
-        _loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_loop)
-    return _loop.run_until_complete(coro)
 
 
 async def _compile_note(note_id: int) -> dict:
@@ -34,4 +23,4 @@ async def _compile_note(note_id: int) -> dict:
 
 @celery.task(name="app.tasks.typst_compile.compile_typst_note")
 def compile_typst_note(note_id: int) -> dict:
-    return _run(_compile_note(note_id))
+    return run_async(_compile_note(note_id))

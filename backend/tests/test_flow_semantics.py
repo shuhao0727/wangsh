@@ -1,5 +1,6 @@
 import textwrap
 from app.api.endpoints.debug.flow import _build_flow
+from app.api.endpoints.debug.constants import E_AST_TOO_LARGE, E_SYNTAX
 
 
 def _parse(code: str, options: dict = None):
@@ -103,9 +104,10 @@ def test_fib_for_has_false_and_end():
     exit_edges = js.get("exitEdges") or []
     assert any(e.get("kind") == "False" for e in exit_edges)
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert any((t or "").startswith("_seq_i = list(range(0, n)); _it_i = iter(_seq_i)") for t in titles)
-    assert any(t == "i = next(_it_i)" for t in titles)
-    assert any((t or "").startswith("has_next(_it_i)") for t in titles)
+    assert "seq = list(range(0, n))" in titles
+    assert "it = iter(seq)" in titles
+    assert "i = next(it)" in titles
+    assert "has_next(it)?" in titles
 
 
 def test_break_continue_has_false_and_end():
@@ -178,9 +180,80 @@ def test_for_range_variants_use_consistent_three_stage_titles():
     js = _parse(code)
     assert js.get("diagnostics") == []
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert "_seq_i = list(range(0, n)); _it_i = iter(_seq_i)" in titles
-    assert "_seq_j = list(range(1, n)); _it_j = iter(_seq_j)" in titles
-    assert "_seq_k = list(range(1, n, 2)); _it_k = iter(_seq_k)" in titles
-    assert "i = next(_it_i)" in titles
-    assert "j = next(_it_j)" in titles
-    assert "k = next(_it_k)" in titles
+    assert "for i in range(0, n)" in titles
+    assert "seq = list(range(1, n))" in titles
+    assert "seq = list(range(1, n, 2))" in titles
+    assert "it = iter(seq)" in titles
+    assert "j = next(it)" in titles
+    assert "k = next(it)" in titles
+    assert "has_next(it)?" in titles
+    assert "seq = list(range(0, n))" not in titles
+
+
+def test_if_and_while_titles_are_teaching_oriented():
+    code = textwrap.dedent(
+        """
+        x = 1
+        if x > 0:
+            while x < 3:
+                x += 1
+        """
+    ).strip()
+    js = _parse(code)
+    titles = [n.get("title") for n in js.get("nodes", [])]
+    assert "分支判断：x > 0 是否成立？" in titles
+    assert "循环判断：x < 3 是否成立？" in titles
+
+
+def test_key_action_titles_are_expression_first():
+    code = textwrap.dedent(
+        """
+        total = 0
+        total += 1
+        print(total)
+        name = input("name: ")
+        """
+    ).strip()
+    js = _parse(code)
+    titles = [n.get("title") for n in js.get("nodes", [])]
+    assert "total = 0" in titles
+    assert "total += 1" in titles
+    assert "print(total)" in titles
+    assert any((t or "").startswith("name = input(") for t in titles)
+
+
+def test_for_each_split_threshold_prefers_simple_title():
+    code = textwrap.dedent(
+        """
+        for ch in s:
+            print(ch)
+        for v in sorted(values):
+            print(v)
+            print(v + 1)
+        """
+    ).strip()
+    js = _parse(code)
+    titles = [n.get("title") for n in js.get("nodes", [])]
+    assert "for ch in s" in titles
+    assert "it = iter(sorted(values))" in titles
+    assert "has_next(it)?" in titles
+    assert "v = next(it)" in titles
+
+
+def test_syntax_error_returns_stable_fallback_graph():
+    js = _parse("if True print('x')")
+    diagnostics = js.get("diagnostics") or []
+    assert any(d.get("code") == E_SYNTAX for d in diagnostics)
+    assert js.get("entryNodeId")
+    assert js.get("exitNodeIds") == [js.get("entryNodeId")]
+    assert any(n.get("kind") == "Fallback" for n in js.get("nodes", []))
+    assert any(e.get("kind") == "Entry" for e in js.get("edges", []))
+
+
+def test_ast_too_large_returns_stable_fallback_graph():
+    code = "\n".join([f"x{i} = {i}" for i in range(10)])
+    js = _parse(code, {"limits": {"maxAstNodes": 5}})
+    diagnostics = js.get("diagnostics") or []
+    assert any(d.get("code") == E_AST_TOO_LARGE for d in diagnostics)
+    assert js.get("entryNodeId")
+    assert any(n.get("kind") == "Fallback" for n in js.get("nodes", []))

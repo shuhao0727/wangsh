@@ -72,7 +72,7 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
   if (!yesEdge) return;
 
   const bindNodeId = yesEdge.to;
-  expect(nodeById.get(bindNodeId)?.title.trim()).toContain("i = next(_it_i)");
+  expect(nodeById.get(bindNodeId)?.title.trim()).toContain("i = next(it)");
 
   const bindOut = (outs.get(bindNodeId) || [])[0]?.to;
   expect(bindOut).toBeTruthy();
@@ -122,10 +122,42 @@ test("buildUnifiedFlowFromPython for-range start/stop/step 变体保持三段式
   expect(headers.map((x) => x.var)).toEqual(["i", "j", "k"]);
 
   const initTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.initNodeId)?.title || "").replaceAll(" ", ""));
-  expect(initTitles[0]).toContain("_seq_i=list(range(0,n));_it_i=iter(_seq_i)");
-  expect(initTitles[1]).toContain("_seq_j=list(range(1,n));_it_j=iter(_seq_j)");
-  expect(initTitles[2]).toContain("_seq_k=list(range(1,n,2));_it_k=iter(_seq_k)");
+  expect(initTitles).toEqual(["range(0,n)", "range(1,n)", "range(1,n,2)"]);
+
+  const rangeArgsByVar: Record<string, string> = { i: "0,n", j: "1,n", k: "1,n,2" };
+  const hasIterInitEdge = (v: "i" | "j" | "k") =>
+    built.edges.some((e) => {
+      const from = built.nodes.find((n) => n.id === e.from) ?? null;
+      const to = built.nodes.find((n) => n.id === e.to) ?? null;
+      return from?.title.replaceAll(" ", "") === `range(${rangeArgsByVar[v]})` && to?.title.replaceAll(" ", "") === `itinrange(${rangeArgsByVar[v]})`;
+    });
+  expect(hasIterInitEdge("i")).toBe(true);
+  expect(hasIterInitEdge("j")).toBe(true);
+  expect(hasIterInitEdge("k")).toBe(true);
 
   const checkTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.checkNodeId)?.title || "").replaceAll(" ", ""));
-  expect(checkTitles).toEqual(["has_next(_it_i)?", "has_next(_it_j)?", "has_next(_it_k)?"]);
+  expect(checkTitles).toEqual(["i的值在列表？", "j的值在列表？", "k的值在列表？"]);
+});
+
+test("buildUnifiedFlowFromPython 将列表与字典语句映射为 list_op/dict_op", () => {
+  const code = [
+    "nums = [1, 2, 3]",
+    "nums.append(4)",
+    "counter = {}",
+    "counter['a'] = 1",
+    "counter.get('a', 0)",
+    "",
+  ].join("\n");
+  const built = buildUnifiedFlowFromPython(code);
+  expect(built).not.toBeNull();
+  if (!built) return;
+
+  const byTitle = (x: string) => built.nodes.find((n) => n.title.trim() === x) ?? null;
+  expect(byTitle("nums = [1, 2, 3]")?.shape).toBe("list_op");
+  expect(byTitle("nums.append(4)")?.shape).toBe("list_op");
+  expect(byTitle("counter = {}")?.shape).toBe("dict_op");
+  expect(byTitle("counter['a'] = 1")?.shape).toBe("dict_op");
+  expect(byTitle("counter.get('a', 0)")?.shape).toBe("dict_op");
+  expect(byTitle("nums.append(4)")?.sourceRole).not.toBe("call_site");
+  expect(byTitle("counter.get('a', 0)")?.sourceRole).not.toBe("call_site");
 });

@@ -11,6 +11,8 @@ import { nodeSizeForTitle } from "../flow/ports";
 import { sortFlowGraphStable } from "../flow/determinism";
 import { toErrorMessage } from "../errorMessage";
 import { buildDebugMapFromNodes, type DebugForInEntry, type DebugForRangeEntry } from "../flow/debugMap";
+import { classifyConversionFailure } from "../flow/conversionFailure";
+import { normalizeTitleForSemanticCompare } from "../flow/titleSemantics";
 
 export function usePythonFlowSync(params: {
   starterCode?: string;
@@ -32,6 +34,7 @@ export function usePythonFlowSync(params: {
   setConnectFromId: React.Dispatch<React.SetStateAction<string | null>>;
   setConnectFromPort: React.Dispatch<React.SetStateAction<PortSide | null>>;
   canvasRef: React.RefObject<HTMLDivElement | null>;
+  autoOptimizeCode?: boolean;
 }) {
   const {
     starterCode,
@@ -53,6 +56,7 @@ export function usePythonFlowSync(params: {
     setConnectFromId,
     setConnectFromPort,
     canvasRef,
+    autoOptimizeCode,
   } =
     params;
 
@@ -66,6 +70,10 @@ export function usePythonFlowSync(params: {
   const [debugMapCodeSha, setDebugMapCodeSha] = useState<string | null>(null);
   const [flowRebuildToken, setFlowRebuildToken] = useState(0);
   const pendingRebuildRef = useRef<{ token: number; resolve: () => void; reject: (reason?: unknown) => void } | null>(null);
+  const aiCodeTokenRef = useRef(0);
+  const lastAiSemanticKeyRef = useRef<string | null>(null);
+  const aiFallbackInFlightRef = useRef(false);
+  const aiFallbackRecentRef = useRef<Map<string, number>>(new Map());
 
   const generated = useMemo(() => generatePythonFromFlow(nodes, edges), [nodes, edges]);
   const debugMap = useMemo(() => {
@@ -168,7 +176,7 @@ export function usePythonFlowSync(params: {
     };
     let h = 2166136261 | 0;
     const sorted = sortFlowGraphStable({ nodes, edges });
-    for (const n of sorted.nodes) h = addStr(h, `${n.id}\t${n.shape}\t${n.title}`);
+    for (const n of sorted.nodes) h = addStr(h, `${n.id}\t${n.shape}\t${normalizeTitleForSemanticCompare(n.title)}`);
     for (const e of sorted.edges) h = addStr(h, `${e.id}\t${e.from}\t${e.to}\t${e.label ?? ""}`);
     return String(h >>> 0);
   }, [edges, nodes]);
@@ -237,6 +245,89 @@ export function usePythonFlowSync(params: {
   }, [codeMode, generated.ir, generated.nodeLineMap, generated.python, setNodes]);
 
   useEffect(() => {
+    if (codeMode !== "auto") return;
+    if (!nodes.length) return;
+    if (lastAiSemanticKeyRef.current === semanticKey) return;
+    const localCode = generated.python || "";
+    const localValidation = validatePythonStrict(localCode);
+    const failure = classifyConversionFailure({
+      code: localCode,
+      strictOk: localValidation.ok,
+      strictErrors: localValidation.ok ? [] : localValidation.errors,
+      warnings: generated.warnings,
+    });
+    if (!failure.shouldTriggerAiFallback) {
+      lastAiSemanticKeyRef.current = semanticKey;
+      return;
+    }
+    const dedupeKey = `${semanticKey}:${failure.category}:${failure.signatures.sort().join("|")}`;
+    const now = Date.now();
+    const lastTs = aiFallbackRecentRef.current.get(dedupeKey) ?? 0;
+    if (now - lastTs < 8000) return;
+    aiFallbackRecentRef.current.set(dedupeKey, now);
+    if (aiFallbackInFlightRef.current) return;
+    const token = aiCodeTokenRef.current + 1;
+    aiCodeTokenRef.current = token;
+    const flowPayload = { nodes, edges };
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        aiFallbackInFlightRef.current = true;
+        setFlowDiagnostics((prev) => {
+          const message = `已触发 AI 兜底：${failure.category}`;
+          const has = prev.some((d) => d.code === "W_AI_FALLBACK_TRIGGER" && d.message === message);
+          if (has) return prev;
+          return prev.concat([{ level: "warn", code: "W_AI_FALLBACK_TRIGGER", message, hint: failure.signatures.join(", ") }]);
+        });
+        try {
+          const resp = await pythonlabFlowApi.generateCode(flowPayload, { timeoutMs: 8000, silent: true });
+          if (aiCodeTokenRef.current !== token) return;
+          const aiCode = (resp.code || "").trim();
+          if (!aiCode) {
+            setFlowDiagnostics((prev) => prev.concat([{ level: "warn", code: "W_AI_FALLBACK_EMPTY", message: "AI 兜底返回空结果，已保留本地代码" }]));
+            return;
+          }
+          const aiValid = validatePythonStrict(aiCode);
+          if (!aiValid.ok) {
+            setFlowDiagnostics((prev) =>
+              prev.concat([{ level: "warn", code: "W_AI_FALLBACK_REJECTED", message: "AI 兜底结果未通过语法门禁，已保留本地代码" }])
+            );
+            return;
+          }
+          let nextCode = aiCode;
+          if (autoOptimizeCode) {
+            try {
+              const optimized = await pythonlabFlowApi.optimizeCode(aiCode);
+              const candidate = (optimized?.optimized_code || "").trim();
+              if (candidate) {
+                const candidateValid = validatePythonStrict(candidate);
+                if (candidateValid.ok) {
+                  nextCode = candidate;
+                }
+              }
+            } catch {}
+          }
+          setCode(`${nextCode}\n`);
+          lastAiSemanticKeyRef.current = semanticKey;
+        } catch (e) {
+          const fail = classifyConversionFailure({
+            code: localCode,
+            strictOk: localValidation.ok,
+            strictErrors: localValidation.ok ? [] : localValidation.errors,
+            warnings: generated.warnings,
+            upstreamError: e,
+          });
+          const timeoutMsg = fail.category === "network_timeout" ? "AI 兜底超时或网络失败，已保留本地代码" : "AI 兜底失败，已保留本地代码";
+          const timeoutHint = fail.category === "network_timeout" ? "建议检查网络连接后重试，或稍后再次触发 AI 兜底" : "可继续编辑当前代码，稍后可再次触发 AI 兜底";
+          setFlowDiagnostics((prev) => prev.concat([{ level: "warn", code: "W_AI_FALLBACK_FAILED", message: timeoutMsg, hint: timeoutHint }]));
+        } finally {
+          aiFallbackInFlightRef.current = false;
+        }
+      })();
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [autoOptimizeCode, codeMode, edges, generated.python, generated.warnings, nodes, semanticKey]);
+
+  useEffect(() => {
     if (codeMode !== "manual") return;
     const t = window.setTimeout(() => {
       void (async () => {
@@ -263,11 +354,14 @@ export function usePythonFlowSync(params: {
 
         if (preferBackendCfg) {
           try {
+            // Stage 1: Fast AST Parse
             const parsed = await pythonlabFlowApi.parseFlow(code, {
               expand: { functions: flowExpandFunctions, maxDepth: 8 },
               limits: { maxParseMs: 1500, maxNodes: 2000, maxEdges: 4000 },
             });
             setFlowDiagnostics(parsed.diagnostics || []);
+
+            // Render AST Flow immediately
             const flow = cfgToFlow(parsed);
             setCodeIr(null);
             setDebugForRanges(null);
@@ -275,6 +369,8 @@ export function usePythonFlowSync(params: {
             setDebugMapCodeSha(parsed.codeSha256 || null);
             await applyLayout(flow.nodes, flow.edges);
             settleRebuild(true);
+
+            // Stage 2: AI Optimization (if enabled)
             return;
           } catch (e: unknown) {
             const msg = toErrorMessage(e, "流程图解析失败");
@@ -288,7 +384,11 @@ export function usePythonFlowSync(params: {
         const v = validatePythonStrict(code);
         const built = v.ok ? buildUnifiedFlowFromPython(code) : null;
         if (v.ok && built) {
-          setFlowDiagnostics([]);
+          const localDiagnostics: PythonLabFlowDiagnostic[] = [
+            ...built.warnings.map((message) => ({ level: "warn", code: "W_FLOW_BUILD", message })),
+            ...built.splitDiagnostics.map((d) => ({ level: d.level, code: d.code, message: d.message, range: d.line ? { startLine: d.line, startCol: 1, endLine: d.line, endCol: 1 } : undefined })),
+          ];
+          setFlowDiagnostics(localDiagnostics);
           setCodeIr(built.ir);
           setDebugForRanges(built.debugMap.forRanges);
           setDebugForIns(built.debugMap.forIns);

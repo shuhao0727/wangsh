@@ -75,6 +75,41 @@ export const pythonlabFlowApi = {
     const resp = await api.client.post("/debug/flow/parse", { code, options: options ?? {} });
     return resp.data as PythonLabFlowResponse;
   },
+  generateCode: async (flow: any, options?: { timeoutMs?: number; silent?: boolean }): Promise<{ code?: string; error?: string }> => {
+    const resp = await api.client.post("/debug/flow/generate_code", { flow }, { timeout: options?.timeoutMs, silent: options?.silent });
+    return resp.data;
+  },
+  testAgent: async (
+    config: { api_url: string; api_key: string; prompt_template?: string; model?: string },
+    options?: { timeoutMs?: number; silent?: boolean }
+  ): Promise<{ success: boolean; error?: string }> => {
+    const resp = await api.client.post("/debug/flow/test_agent_connection", config, { timeout: options?.timeoutMs, silent: options?.silent });
+    return resp.data;
+  },
+  getPromptTemplate: async (): Promise<{ content: string }> => {
+    const resp = await api.client.get("/debug/flow/prompt_template");
+    return resp.data;
+  },
+  savePromptTemplate: async (content: string): Promise<{ success: boolean }> => {
+    const resp = await api.client.post("/debug/flow/prompt_template", { content });
+    return resp.data;
+  },
+  chatWithAI: async (messages: Array<{ role: string; content: string }>): Promise<{ message?: string; error?: string }> => {
+    const resp = await api.client.post("/debug/ai/chat", { messages });
+    return resp.data;
+  },
+  optimizeCode: async (code: string): Promise<{ optimized_code: string; log_id: number; rollback_id: string }> => {
+    const resp = await api.client.post("/debug/optimize/code", { code }, { timeout: 60000 });
+    return resp.data;
+  },
+  applyOptimization: async (logId: number): Promise<{ success: boolean }> => {
+    const resp = await api.client.post(`/debug/optimize/apply/${logId}`);
+    return resp.data;
+  },
+  rollbackOptimization: async (logId: number): Promise<{ original_content: string | any; type: string }> => {
+    const resp = await api.client.get(`/debug/optimize/rollback/${logId}`);
+    return resp.data;
+  }
 };
 
 export type PythonLabSyntaxError = {

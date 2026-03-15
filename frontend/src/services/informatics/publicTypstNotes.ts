@@ -5,6 +5,7 @@ export type PublicTypstNoteListItem = {
   title: string;
   summary?: string;
   category_path?: string;
+  source_path?: string;
   updated_at: string;
 };
 

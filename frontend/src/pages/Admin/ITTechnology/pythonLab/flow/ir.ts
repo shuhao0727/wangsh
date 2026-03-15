@@ -1,11 +1,12 @@
 import type { FlowEdge, FlowNode } from "./model";
+import { normalizeTitleForMapping } from "./titleSemantics";
 
 export type IRBlock = { kind: "block"; items: IRNode[] };
 export type IRNode = IRStmt | IRIf | IRWhile | IRFor;
 export type IRStmt = { kind: "stmt"; text: string; nodeId?: string };
 export type IRIf = { kind: "if"; cond: string; then: IRBlock; else: IRBlock | null; decisionId: string; joinId?: string };
 export type IRWhile = { kind: "while"; cond: string; body: IRBlock; decisionId: string; backEdgeId?: string };
-export type IRFor = { kind: "for"; var: string; start: string; end: string; body: IRBlock };
+export type IRFor = { kind: "for"; var: string; body: IRBlock; start?: string; end?: string; iterExpr?: string };
 
 export type GeneratePythonResult = {
   mode: "structured" | "linear" | "empty";
@@ -27,17 +28,29 @@ const isYes = (e: FlowEdge) => {
 
 const normalizeCond = (s: string) => {
   const t = s.trim().replace(/[？?]+$/, "").trim();
-  return t
+  const normalized = t
     .replaceAll("≤", "<=")
     .replaceAll("≥", ">=")
     .replaceAll("≠", "!=")
     .replaceAll("＝", "=")
     .replaceAll("　", " ");
+  if (
+    normalized.includes("的值在列表") ||
+    normalized.includes("对应序列元素") ||
+    normalized.includes("还有下一个元素") ||
+    normalized.includes("还有元素") ||
+    normalized.includes("是否还有元素") ||
+    normalized.includes("未遍历完")
+  ) {
+    return "has_next(it)";
+  }
+  return normalized || "True";
 };
 
 const normalizeStmt = (s: string) => {
-  const t = s.trim();
-  return t.length ? t.replaceAll("＝", "=").replaceAll("　", " ") : "pass";
+  const t = normalizeTitleForMapping(s);
+  if (!t.length) return "pass";
+  return t.replaceAll("＝", "=").replaceAll("　", " ");
 };
 
 const findStartId = (nodes: FlowNode[]) => {
@@ -188,13 +201,20 @@ const emitLinear = (nodes: FlowNode[], edges: FlowEdge[]): GeneratePythonResult 
 
 export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): GeneratePythonResult {
   if (!nodes.length) return { mode: "empty", ir: null, python: "", warnings: [] };
-  const startId = findStartId(nodes);
-  if (!startId) return { mode: "empty", ir: null, python: "", warnings: [] };
 
-  const { nodeById, graphEdges, out, edgesByFrom } = buildAdj(nodes, edges);
+  // Filter out annotation nodes completely
+  const validNodes = nodes.filter((n) => n.type === "flow_element" || (!n.type && n.shape !== "note"));
+  if (!validNodes.length) return { mode: "empty", ir: null, python: "", warnings: ["没有有效的流程节点"] };
+
+  const startId = findStartId(validNodes);
+  if (!startId) return { mode: "empty", ir: null, python: "", warnings: ["未找到开始节点"] };
+
+  // Build adjacency list only from valid nodes
+  const { nodeById, graphEdges, out, edgesByFrom } = buildAdj(validNodes, edges);
   const warnings: string[] = [];
 
-  const parseDefHeader = (title: string) => {
+  try {
+    const parseDefHeader = (title: string) => {
     const t = title.trim();
     const m = /^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$/.exec(t);
     if (!m) return null;
@@ -343,6 +363,110 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
         continue;
       }
       if (cur.kind === "while") {
+        const isIteratorCheck = (cond: string) => {
+          return (
+            cond.includes("的值在列表") ||
+            cond.includes("对应序列元素") ||
+            cond.includes("has_next") ||
+            cond.includes("还有下一个元素") ||
+            cond.includes("还有元素") ||
+            cond.includes("未遍历完")
+          );
+        };
+        if (isIteratorCheck(cur.cond)) {
+          let rangeStmt: IRStmt | null = null;
+          let iterStmt: IRStmt | null = null;
+          for (let j = out.length - 1; j >= 0; j--) {
+            const it = out[j];
+            if (it.kind !== "stmt") break;
+            const normalizedText = normalizeTitleForMapping(it.text);
+            if (/range\s*\([^)]+\)/.test(normalizedText) || normalizedText.includes("range步骤")) {
+              rangeStmt = it;
+            }
+            if (
+              normalizedText.includes("取第一个元素") ||
+              normalizedText.includes("依次遍历") ||
+              /^it\s+in\s+.+$/i.test(normalizedText) ||
+              /^[A-Za-z_][A-Za-z0-9_]*\s+in\s+.+$/i.test(normalizedText)
+            ) {
+              iterStmt = it;
+            }
+          }
+
+          let iterExpr: string | null = null;
+          if (iterStmt) {
+            const normalizedIter = normalizeTitleForMapping(iterStmt.text);
+            const m = /^(?:it|[A-Za-z_][A-Za-z0-9_]*)\s+in\s+(.+)$/i.exec(normalizedIter.trim());
+            if (m?.[1]) iterExpr = m[1].trim();
+            if (!iterExpr) {
+              const oldM = /从(.+)中取第一个元素/.exec(normalizedIter.trim());
+              if (oldM?.[1]) iterExpr = oldM[1].trim();
+            }
+            if (!iterExpr) {
+              const teachM = /^.+?取第一个元素：\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*iter\((.+)\)\s*$/i.exec(iterStmt.text.trim());
+              const normalizedTeach = /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*iter\((.+)\)\s*$/i.exec(normalizedIter.trim());
+              if (teachM?.[1]) iterExpr = teachM[1].trim();
+              else if (normalizedTeach?.[1]) iterExpr = normalizedTeach[1].trim();
+            }
+          }
+          if (!iterExpr && rangeStmt) {
+            const rm = /range\s*\([^)]+\)/.exec(normalizeTitleForMapping(rangeStmt.text));
+            if (rm?.[0]) iterExpr = rm[0];
+          }
+
+          let loopVar = "i";
+          const condVar = /^([A-Za-z_][A-Za-z0-9_]*)的值在列表/.exec(cur.cond.trim());
+          if (condVar?.[1]) loopVar = condVar[1];
+          if (iterStmt) {
+            const normalizedIter = normalizeTitleForMapping(iterStmt.text);
+            const oldVar = /^([A-Za-z_][A-Za-z0-9_]*)取第一个元素/.exec(normalizedIter.trim());
+            if (oldVar?.[1]) loopVar = oldVar[1];
+            const inVar = /^([A-Za-z_][A-Za-z0-9_]*)\s+in\s+.+$/i.exec(normalizedIter.trim());
+            if (inVar?.[1]) loopVar = inVar[1];
+          }
+
+          let bindNodeId: string | undefined;
+          cur.body.items.find((it) => {
+            if (it.kind !== "stmt") return false;
+            const normalizedText = normalizeTitleForMapping(it.text);
+            const m =
+              /^([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.exec(normalizedText.trim()) ||
+              /^.+?：\s*([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.exec(
+                it.text.trim()
+              );
+            if (!m) return false;
+            loopVar = m[1].trim();
+            bindNodeId = it.nodeId;
+            return true;
+          });
+
+          if (iterExpr) {
+            const cleanBodyItems = cur.body.items.filter((it) => {
+              if (it.kind !== "stmt") return true;
+              const s = normalizeTitleForMapping(it.text).trim();
+              if (it.nodeId && bindNodeId && it.nodeId === bindNodeId) return false;
+              if (/=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.test(s)) return false;
+              return !s.includes("获取下一个元素");
+            });
+
+            const idsToRemove = new Set([rangeStmt?.nodeId, iterStmt?.nodeId].filter((x): x is string => !!x));
+            for (let k = out.length - 1; k >= 0; k--) {
+              const it = out[k];
+              if (it.kind === "stmt" && it.nodeId && idsToRemove.has(it.nodeId)) {
+                out.splice(k, 1);
+              }
+            }
+
+            out.push({
+              kind: "for",
+              var: loopVar,
+              iterExpr,
+              body: toFor({ kind: "block", items: cleanBodyItems }, warningsOut)
+            });
+            continue;
+          }
+        }
+
         const condM = /^([A-Za-z_][A-Za-z0-9_]*)\\s*(<=|<|>=|>)\\s*(.+)$/.exec(cur.cond.trim());
         if (!condM) {
           out.push({ ...cur, body: toFor(cur.body, warningsOut) });
@@ -413,16 +537,6 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
           bodyItems.pop();
           const endExclusive = endExclusiveFor(op, endToken);
           const startToken = initToken;
-          const rangeExpr = (() => {
-            if (wantSign === 1) {
-              if (startToken.trim() === "0" && step === 1) return `range(${endExclusive})`;
-              if (step === 1) return `range(${startToken}, ${endExclusive})`;
-              return `range(${startToken}, ${endExclusive}, ${step})`;
-            }
-            const stepText = `-${step}`;
-            if (step === 1) return `range(${startToken}, ${endExclusive}, -1)`;
-            return `range(${startToken}, ${endExclusive}, ${stepText})`;
-          })();
 
           if (initWasImmediatePrev) out.pop();
           out.push({ kind: "for", var: v, start: startToken, end: endExclusive, body: toFor({ kind: "block", items: bodyItems }, warningsOut) });
@@ -448,7 +562,6 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
               const last = bodyItems[bodyItems.length - 1];
               const parsed = last && last.kind === "stmt" ? parseStepDelta(last.text.trim(), v) : null;
               if (parsed) {
-                const step = parsed.delta;
                 const wantSign: 1 | -1 = op === "<" || op === "<=" ? 1 : -1;
                 if (parsed.sign !== wantSign) {
                   warningsOut.push(`for 归纳失败：${v} 的步进方向与条件不一致`);
@@ -520,20 +633,39 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
     .filter((n) => n.shape === "start_end" && !!parseDefHeader(n.title) && n.id !== startId)
     .map((n) => ({ id: n.id, def: parseDefHeader(n.title)! }));
 
+  const sanitizeStmtForEmit = (raw: string) => {
+    const stmtText = (raw || "pass").trim();
+    if (!stmtText) return "pass";
+    if (/^it\s+in\s+.+$/i.test(stmtText)) return "pass";
+    if (/^has_next\s*\(/i.test(stmtText)) return "pass";
+    if (/^[A-Za-z_][A-Za-z0-9_]*的值在列表/.test(stmtText)) return "pass";
+    if (/^[A-Za-z_][A-Za-z0-9_]*对应序列元素/.test(stmtText)) return "pass";
+    if (/^while\s+.+的值在列表[:?：]?\s*$/i.test(stmtText)) return "pass";
+    if (/^while\s+.+对应序列元素[:?：]?\s*$/i.test(stmtText)) return "pass";
+    return stmtText;
+  };
+
   const emitPython = (block: IRBlock, indent: number, startLine: number, nodeLineMap: Record<string, number>): { lines: string[]; nextLine: number } => {
     const pad = (n: number) => " ".repeat(n);
     const outLines: string[] = [];
     let lineNo = startLine;
     for (const it of block.items) {
       if (it.kind === "stmt") {
-        outLines.push(pad(indent) + (it.text || "pass"));
+        const safeStmt = sanitizeStmtForEmit(it.text);
+        outLines.push(pad(indent) + safeStmt);
         if (it.nodeId) nodeLineMap[it.nodeId] = lineNo;
         lineNo += 1;
         continue;
       }
       if (it.kind === "for") {
-        const rangeExpr = it.start.trim() === "0" ? `range(${it.end})` : `range(${it.start}, ${it.end})`;
-        outLines.push(pad(indent) + `for ${it.var} in ${rangeExpr}:`);
+        const rangeExpr = it.iterExpr
+          ? it.iterExpr
+          : (it.end ?? "").includes(",")
+            ? `range(${it.start}, ${it.end})`
+            : (it.start ?? "0").trim() === "0"
+              ? `range(${it.end})`
+              : `range(${it.start}, ${it.end})`;
+        outLines.push(pad(indent) + `for ${it.var} in ${rangeExpr || "[]"}:`);
         lineNo += 1;
         const bodyRes = emitPython(it.body, indent + 2, lineNo, nodeLineMap);
         const bodyLines = bodyRes.lines;
@@ -591,9 +723,13 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
     lineNo += 1;
   }
 
-  const mainRes = emitPython(normalizedTop.block, 0, lineNo, nodeLineMap);
-  const lines = [...funcLines, ...mainRes.lines];
-  const python = lines.length ? lines.join("\n") + "\n" : "pass\n";
-  if (!normalizedTop.block.items.length) warnings.push("未识别到可生成的语句");
-  return { mode: "structured", ir: normalizedTop.block, python, warnings, nodeLineMap };
+    const mainRes = emitPython(normalizedTop.block, 0, lineNo, nodeLineMap);
+    const lines = [...funcLines, ...mainRes.lines];
+    const python = lines.length ? lines.join("\n") + "\n" : "pass\n";
+    if (!normalizedTop.block.items.length) warnings.push("未识别到可生成的语句");
+    return { mode: "structured", ir: normalizedTop.block, python, warnings, nodeLineMap };
+  } catch (e: any) {
+    console.error("Flow conversion error:", e);
+    return { mode: "empty", ir: null, python: "", warnings: ["转换过程发生内部错误", e.message || String(e)] };
+  }
 }

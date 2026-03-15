@@ -5,6 +5,8 @@ import type { PythonLabFlowDiagnostic } from "../../services/pythonlabDebugApi";
 import type { PyodideTerminalBridge } from "../../hooks/usePyodideRunner";
 import type { DebugCapabilityMapV1 } from "../../adapters/debugCapabilityMap";
 
+import type { FlowNode, FlowEdge } from "../../flow/model";
+
 export type RightPanelProps = {
   generated: { python: string };
   code: string;
@@ -14,6 +16,7 @@ export type RightPanelProps = {
   revealLine: number | null;
   variableColumns: any;
   runner: RunnerState;
+  flow?: { nodes: FlowNode[]; edges: FlowEdge[] };
   debugCapabilities?: DebugCapabilityMapV1;
   runnerError: string | null;
   lastLaunchMode?: "idle" | "run" | "debug";
@@ -46,6 +49,9 @@ export type RightPanelProps = {
   beautifyError?: string | null;
   onRefreshBeautify?: () => void;
   onClearPendingOutput?: () => void;
+  autoOptimizeCode?: boolean;
+  setAutoOptimizeCode?: (v: boolean) => void;
+  onOptimizeCode?: () => void;
 };
 
 export type ToolButtonStyle = React.CSSProperties;

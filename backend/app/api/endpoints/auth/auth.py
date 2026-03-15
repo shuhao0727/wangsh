@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_db, get_access_token
 from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token
-from app.core.session_guard import on_successful_login
+from app.core.session_guard import on_successful_login, get_user_session, rotate_user_session, extract_client_ip
 
 router = APIRouter()
 
@@ -219,11 +219,15 @@ async def refresh_access_token(
         "type": "admin" if user_info.get("role_code") in ["admin", "super_admin"] else "student"
     }
     
-    # 从会话守卫读取当前nonce（如未设置则不加入）
+    # 从会话守卫读取当前nonce；若不存在则基于当前请求自举新会话nonce
     try:
-        from app.core.session_guard import get_user_session
-        sess = await get_user_session(int(user_info.get("user_id")))
+        user_id = int(user_info.get("user_id"))
+        sess = await get_user_session(user_id)
         nonce = (sess or {}).get("nonce")
+        if not nonce:
+            client_ip = extract_client_ip(request)
+            sess = await rotate_user_session(user_id, keep_ip=client_ip)
+            nonce = (sess or {}).get("nonce")
     except Exception:
         nonce = None
 

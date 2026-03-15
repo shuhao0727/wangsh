@@ -7,6 +7,7 @@ import {
   Col,
   Divider,
   Input,
+  Switch,
   Tag,
   message,
   Segmented,
@@ -14,6 +15,8 @@ import {
 import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import { AdminCard, AdminPage } from "@components/Admin";
 import { api } from "@services";
+import { featureFlagsApi } from "@/services/system/featureFlags";
+import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import TypstMetricsPanel from "./TypstMetrics";
 
 const { Text } = Typography;
@@ -24,6 +27,8 @@ const AdminSystem: React.FC = () => {
   const [settings, setSettings] = useState<any>(null);
   const [overview, setOverview] = useState<any>(null);
   const [tab, setTab] = useState<"system" | "typst">("system");
+  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
+  const [navToggleLoading, setNavToggleLoading] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +49,19 @@ const AdminSystem: React.FC = () => {
       setOverview(o.data);
     } catch {
       setOverview(null);
+    }
+    try {
+      const flags = await featureFlagsApi.list();
+      const next: Record<string, boolean> = {};
+      for (const item of NAV_VISIBILITY_ITEMS) {
+        const found = flags.find((f) => f.key === item.flagKey);
+        next[item.path] = found?.value?.enabled !== false;
+      }
+      setNavVisibleMap(next);
+    } catch {
+      const next: Record<string, boolean> = {};
+      for (const item of NAV_VISIBILITY_ITEMS) next[item.path] = true;
+      setNavVisibleMap(next);
     }
     setLoading(false);
   }, []);
@@ -89,6 +107,38 @@ const AdminSystem: React.FC = () => {
         <TypstMetricsPanel />
       ) : (
         <Row gutter={[24, 24]}>
+          <Col xs={24}>
+            <AdminCard title="前端导航可见性">
+              <div style={{ display: "flex", gap: 24, rowGap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                {NAV_VISIBILITY_ITEMS.map((item) => (
+                  <div key={item.path}>
+                    <Space size={8}>
+                      <Text>{item.label}</Text>
+                      <Switch
+                        checked={navVisibleMap[item.path] !== false}
+                        loading={!!navToggleLoading[item.path]}
+                        onChange={async (checked) => {
+                          setNavToggleLoading((prev) => ({ ...prev, [item.path]: true }));
+                          try {
+                            await featureFlagsApi.save({
+                              key: item.flagKey,
+                              value: { enabled: checked },
+                            });
+                            setNavVisibleMap((prev) => ({ ...prev, [item.path]: checked }));
+                            message.success(`${item.label}${checked ? "已设为可见" : "已设为隐藏"}`);
+                          } catch (e: any) {
+                            message.error(e?.response?.data?.detail || e?.message || "保存失败");
+                          } finally {
+                            setNavToggleLoading((prev) => ({ ...prev, [item.path]: false }));
+                          }
+                        }}
+                      />
+                    </Space>
+                  </div>
+                ))}
+              </div>
+            </AdminCard>
+          </Col>
           <Col xs={24} lg={12}>
             <AdminCard
               title="基本设置"

@@ -13,13 +13,21 @@ from .core import User, RefreshToken, FeatureFlag
 from .articles import Article, Category, MarkdownStyle
 
 # 智能体模型 (znt_ 前缀)
-from .agents import AIAgent, ZntConversation, GroupDiscussionSession, GroupDiscussionMessage, GroupDiscussionAnalysis
+from .agents import AIAgent, ZntConversation, GroupDiscussionSession, GroupDiscussionMessage, GroupDiscussionAnalysis, OptimizeLog
 
 # 校本课模型 (xbk_ 前缀)
 from .xbk import XbkStudent, XbkCourse, XbkSelection
 
 # 信息学/笔记模型 (inf_ 前缀)
-from .informatics import TypstNote, TypstAsset, TypstStyle, TypstCategory
+from .informatics import (
+    TypstNote,
+    TypstAsset,
+    TypstStyle,
+    TypstCategory,
+    InformaticsGithubSyncSetting,
+    InformaticsGithubSyncSource,
+    InformaticsGithubSyncRun,
+)
 
 # 信息技术模型 (xxjs_ 前缀)
 from .xxjs.dianming import XxjsDianming
@@ -37,6 +45,7 @@ __all__ = [
     "GroupDiscussionSession",
     "GroupDiscussionMessage",
     "GroupDiscussionAnalysis",
+    "OptimizeLog",
     "XbkStudent",
     "XbkCourse",
     "XbkSelection",
@@ -44,5 +53,8 @@ __all__ = [
     "TypstAsset",
     "TypstStyle",
     "TypstCategory",
+    "InformaticsGithubSyncSetting",
+    "InformaticsGithubSyncSource",
+    "InformaticsGithubSyncRun",
     "XxjsDianming",
 ]

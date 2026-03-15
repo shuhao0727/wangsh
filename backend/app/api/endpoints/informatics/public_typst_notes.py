@@ -2,9 +2,11 @@ import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
+from app.models.informatics.github_sync_source import InformaticsGithubSyncSource
 from app.schemas.informatics.typst_note import TypstNotePublicListItem, TypstNotePublicResponse
 from app.services.informatics.typst_notes import compile_note_pdf, get_note, list_published_notes
 
@@ -19,12 +21,26 @@ async def public_list_notes(
     db: AsyncSession = Depends(get_db),
 ):
     notes = await list_published_notes(db=db, skip=skip, limit=limit, search=search)
+    note_ids = [int(n.id) for n in notes if n.id is not None]
+    source_path_map: dict[int, str] = {}
+    if note_ids:
+        src_res = await db.execute(
+            select(InformaticsGithubSyncSource.note_id, InformaticsGithubSyncSource.source_path).where(
+                InformaticsGithubSyncSource.note_id.in_(note_ids),
+                InformaticsGithubSyncSource.is_active.is_(True),
+            )
+        )
+        for row in src_res.all():
+            nid = int(row[0])
+            if nid not in source_path_map:
+                source_path_map[nid] = str(row[1] or "")
     return [
         TypstNotePublicListItem(
             id=n.id,
             title=n.title,
             summary=n.summary or "",
             category_path=n.category_path or "",
+            source_path=source_path_map.get(int(n.id), ""),
             updated_at=n.updated_at,
         )
         for n in notes

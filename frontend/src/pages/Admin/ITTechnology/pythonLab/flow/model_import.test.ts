@@ -71,3 +71,17 @@ test("normalizeFlowImport drops invalid points but keeps edge", () => {
   expect(e.labelPosition).toEqual({ x: 4, y: 5 });
 });
 
+test("normalizeFlowImport migrates legacy collection shape to list_op/dict_op", () => {
+  const input: any = {
+    nodes: [
+      { id: "a", shape: "collection", title: "nums = [1,2,3]", x: 0, y: 0 },
+      { id: "b", shape: "collection", title: "counter = {}", x: 120, y: 0 },
+    ],
+    edges: [],
+  };
+  const out = normalizeFlowImport(input);
+  expect(out).not.toBeNull();
+  if (!out) return;
+  expect(out.nodes.find((n) => n.id === "a")?.shape).toBe("list_op");
+  expect(out.nodes.find((n) => n.id === "b")?.shape).toBe("dict_op");
+});

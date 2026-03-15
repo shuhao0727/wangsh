@@ -84,7 +84,11 @@ export type { TypstMetricsResponse } from "./system/typstMetrics";
 export { typstNotesApi } from "./informatics";
 export { publicTypstNotesApi } from "./informatics";
 export { typstCategoriesApi, typstStylesApi } from "./informatics";
+export { githubSyncApi } from "./informatics";
 export type {
+  GithubSyncRun,
+  GithubSyncSettings,
+  GithubSyncTaskStatus,
   TypstAssetListItem,
   TypstNote,
   TypstNoteListItem,

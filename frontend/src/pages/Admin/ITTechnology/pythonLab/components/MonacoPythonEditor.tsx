@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
+import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
 
 // 配置 monaco-editor loader 使用本地 monaco 实例
 loader.config({ monaco });
@@ -180,10 +181,18 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           editorRef.current = editor;
           const model = editor.getModel();
           if (model) monaco.editor.setModelLanguage(model, "python");
-          editor.onKeyDown((e) => {
-            try {
-              e.stopPropagation();
-            } catch {}
+          editor.onKeyDown((event) => {
+            const browserEvent = event.browserEvent;
+            if (!browserEvent) return;
+            if (
+              shouldStopMonacoEditorKeyPropagation({
+                key: browserEvent.key,
+                isComposing: browserEvent.isComposing,
+                keyCode: browserEvent.keyCode,
+              })
+            ) {
+              browserEvent.stopPropagation();
+            }
           });
           editor.onMouseDown((e) => {
             const type = e.target.type;

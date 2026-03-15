@@ -78,12 +78,19 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
         >
           <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#1677ff" />
         </marker>
+        <marker id="pyLabArrowNote" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#fa8c16" />
+        </marker>
+        <marker id="pyLabArrowNoteSelected" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#d46b08" />
+        </marker>
       </defs>
       {edges.map((e) => {
         const geom = edgeGeometries.cache.get(e.id);
         if (!geom) return null;
         const selected = e.id === selectedEdgeId;
-        const stroke = selected ? "#1677ff" : "#595959";
+        const noteEdge = canvasMetrics.get(e.from)?.shape === "note";
+        const stroke = noteEdge ? (selected ? "#d46b08" : "#fa8c16") : selected ? "#1677ff" : "#595959";
         const strokeWidth = selected ? 2.2 : 1.6;
         const anchors = geom.anchors as { x: number; y: number }[];
         
@@ -182,7 +189,8 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
               strokeWidth={strokeWidth}
               strokeLinejoin="miter"
               strokeLinecap="butt"
-              markerEnd={selected ? "url(#pyLabArrowSelected)" : "url(#pyLabArrow)"}
+              strokeDasharray={noteEdge ? "6 4" : undefined}
+              markerEnd={noteEdge ? (selected ? "url(#pyLabArrowNoteSelected)" : "url(#pyLabArrowNote)") : selected ? "url(#pyLabArrowSelected)" : "url(#pyLabArrow)"}
               opacity={0.95}
               style={{ pointerEvents: "none" }}
             />

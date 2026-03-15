@@ -51,6 +51,17 @@ async def get_current_user(
         )
     
     user = await auth_get_current_user(token, db)
+    effective_token = token
+    if not user and request is not None:
+        cookie_token = (
+            request.cookies.get(settings.ACCESS_TOKEN_COOKIE_NAME)
+            or request.cookies.get("access_token")
+            or request.cookies.get("ws_access_token")
+        )
+        if cookie_token and cookie_token != token:
+            user = await auth_get_current_user(cookie_token, db)
+            if user:
+                effective_token = cookie_token
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,7 +69,7 @@ async def get_current_user(
         )
     # 会话有效性校验（基于nonce，必要时校验IP）
     try:
-        payload = verify_token(token) or {}
+        payload = verify_token(effective_token) or {}
         ok = await verify_request_session(int(user.get("id") or 0), payload, request)
         if not ok:
             raise HTTPException(

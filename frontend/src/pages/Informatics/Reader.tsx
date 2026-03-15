@@ -47,21 +47,22 @@ const InformaticsReaderPage: React.FC = () => {
   const outlineTokenRef = useRef(0);
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [docExpandedKeys, setDocExpandedKeys] = useState<string[]>([]);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
     try {
       const res = await publicTypstNotesApi.list({ limit: 200, search: debouncedSearch.trim() || undefined });
       setItems(res || []);
-      if (!selectedId && res?.length && !isMobile) {
-         setSelectedId(res[0].id);
+      if (res?.length && !isMobile) {
+        setSelectedId((prev) => prev ?? res[0].id);
       }
     } catch (e: any) {
       message.error(e?.response?.data?.detail || e?.message || "加载目录失败");
     } finally {
       setListLoading(false);
     }
-  }, [debouncedSearch, isMobile, selectedId]); 
+  }, [debouncedSearch, isMobile]);
 
   useEffect(() => {
     loadList();
@@ -150,19 +151,35 @@ const InformaticsReaderPage: React.FC = () => {
       return cur;
     };
 
-    for (const it of items) {
+    const sortedItems = [...items].sort((a, b) => {
+      const ac = String(a.category_path || "");
+      const bc = String(b.category_path || "");
+      if (ac !== bc) return ac.localeCompare(bc, "en");
+      const an = String(a.source_path || "").split("/").pop() || String(a.title || "");
+      const bn = String(b.source_path || "").split("/").pop() || String(b.title || "");
+      return an.localeCompare(bn, "en", { numeric: true });
+    });
+
+    for (const it of sortedItems) {
       const cat = (it.category_path || "").trim();
       const catNode = ensureCatNode(cat || "未分类");
       catNode.children = catNode.children || [];
+      const sourceName = String(it.source_path || "").split("/").pop() || "";
+      const sourceStem = sourceName ? sourceName.replace(/\.typ$/i, "") : "";
       catNode.children.push({
         key: `note:${it.id}`,
         isLeaf: true,
         icon: <FileTextOutlined style={{ color: "var(--ws-color-text-tertiary)" }} />,
         title: (
           <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <Text strong style={{ display: "block", fontSize: 13 }} ellipsis={{ tooltip: it.title }}>
-              {it.title}
+            <Text strong style={{ display: "block", fontSize: 13 }} ellipsis={{ tooltip: sourceStem || it.title }}>
+              {sourceStem || it.title}
             </Text>
+            {it.title && sourceStem && it.title !== sourceStem ? (
+              <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.title }}>
+                {it.title}
+              </Text>
+            ) : null}
             {it.summary ? (
               <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.summary }}>
                 {it.summary}
@@ -181,6 +198,14 @@ const InformaticsReaderPage: React.FC = () => {
     sortTree(root);
     return root.children || [];
   }, [items]);
+
+  useEffect(() => {
+    setDocExpandedKeys((prev) => {
+      if (prev.length > 0) return prev;
+      if (!treeData[0]) return prev;
+      return [String(treeData[0].key)];
+    });
+  }, [treeData]);
 
   const outlineTreeData = useMemo<TreeNode[]>(() => {
     const roots: TreeNode[] = [];
@@ -309,16 +334,30 @@ const InformaticsReaderPage: React.FC = () => {
             treeData={treeData as any}
             className="informatics-tree"
             selectedKeys={selectedId ? [`note:${selectedId}`] : []}
+            expandedKeys={docExpandedKeys}
+            onExpand={(keys) => setDocExpandedKeys(keys.map((k) => String(k)))}
             onSelect={(keys) => {
               const k = String(keys?.[0] || "");
               if (k.startsWith("note:")) {
-                setSelectedId(Number(k.slice("note:".length)));
+                const noteId = Number(k.slice("note:".length));
+                setSelectedId(noteId);
+                const current = items.find((x) => x.id === noteId);
+                const cat = String(current?.category_path || "").trim();
+                if (cat) {
+                  const parts = cat.split("/").map((x) => x.trim()).filter(Boolean);
+                  let cur = "";
+                  const keysToOpen: string[] = [];
+                  for (const p of parts) {
+                    cur = cur ? `${cur}/${p}` : p;
+                    keysToOpen.push(`cat:${cur}`);
+                  }
+                  setDocExpandedKeys((prev) => Array.from(new Set([...prev, ...keysToOpen])));
+                }
                 if (isMobile) {
                   setMobileDrawerOpen(false);
                 }
               }
             }}
-            defaultExpandAll
             blockNode
             showIcon
             showLine={{ showLeafIcon: false }}

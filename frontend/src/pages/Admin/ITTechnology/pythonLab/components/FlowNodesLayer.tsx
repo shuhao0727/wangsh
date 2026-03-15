@@ -1,6 +1,6 @@
 import React from "react";
 import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
-import { allowedPortsForShape, fixedPortForStartEnd, nodePortLocal, nodeScale, nodeSizeForTitle, shapeColor, wrapNodeTitle } from "../flow/ports";
+import { allowedPortsForShape, fixedPortForStartEnd, nodePortLocal, nodeSizeForTitle, shapeColor, wrapNodeTitle } from "../flow/ports";
 import { matchesNodeLine } from "../flow/nodeLineMatch";
 
 export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
@@ -23,6 +23,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
   onNodePointerDown: (e: React.PointerEvent, nodeId: string) => void;
   onNodeClick: (e: React.MouseEvent, nodeId: string) => void;
   onPortClick: (nodeId: string, port: PortSide) => void;
+  onUpdateNodeTitle?: (nodeId: string, title: string) => void;
 }) {
   const {
     nodes,
@@ -44,9 +45,29 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
     onNodePointerDown,
     onNodeClick,
     onPortClick,
+    onUpdateNodeTitle,
   } = props;
+  const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null);
+  const [editingText, setEditingText] = React.useState("");
 
   const canUseActiveNodeId = !!activeNodeId && nodes.some((n) => n.id === activeNodeId);
+  const commitNoteEdit = React.useCallback(
+    (nodeId: string, value: string) => {
+      const next = value.trim();
+      if (onUpdateNodeTitle) onUpdateNodeTitle(nodeId, next || "注释");
+      setEditingNodeId(null);
+      setEditingText("");
+    },
+    [onUpdateNodeTitle]
+  );
+
+  React.useEffect(() => {
+    if (!editingNodeId) return;
+    if (!nodes.some((n) => n.id === editingNodeId && n.shape === "note")) {
+      setEditingNodeId(null);
+      setEditingText("");
+    }
+  }, [editingNodeId, nodes]);
 
   const defaultRoleForLine = (line: number): string | null => {
     const roles = new Set<string>();
@@ -87,7 +108,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
           100% { opacity: 0; transform: scale(1.28); box-shadow: 0 0 0 18px rgba(22,119,255,0.0); }
         }
       `}</style>
-      {nodes.map((n) => {
+      {nodes.filter(n => n.type !== "annotation").map((n) => {
         if (n.shape === "connector" && !String(n.title || "").trim()) return null;
         const selected = n.id === selectedNodeId;
         const active = !activeEnabled
@@ -113,6 +134,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
         const showPorts =
           connectMode ||
           (!!selectedEdgeId && !!selectedEdge && (selectedEdge.from === n.id || (!selectedEdge.toEdge && selectedEdge.to === n.id)));
+        const editingNote = n.shape === "note" && editingNodeId === n.id;
         return (
           <div
             key={n.id}
@@ -122,7 +144,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
               top: n.y,
               width: w,
               height: h,
-              cursor: "pointer",
+              cursor: editingNote ? "text" : "pointer",
               userSelect: "none",
               display: "flex",
               alignItems: "center",
@@ -131,12 +153,19 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
               pointerEvents: "auto",
             }}
             onPointerDown={(e) => {
+              if (editingNote) return;
               e.stopPropagation();
               onNodePointerDown(e, n.id);
             }}
             onClick={(e) => {
               e.stopPropagation();
               onNodeClick(e, n.id);
+            }}
+            onDoubleClick={(e) => {
+              if (n.shape !== "note") return;
+              e.stopPropagation();
+              setEditingNodeId(n.id);
+              setEditingText(n.title);
             }}
           >
             {pulse ? (
@@ -216,6 +245,84 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   />
                 </>
               )}
+              {(n.shape === "list_op" || n.shape === "collection") && (
+                <>
+                  <rect
+                    x={pad}
+                    y={pad}
+                    width={w - pad * 2}
+                    height={h - pad * 2}
+                    rx={10}
+                    ry={10}
+                    fill="#fff"
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${pad + 8} ${pad + 8} H ${w - pad - 8}`}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${pad + 8} ${h - pad - 8} H ${w - pad - 8}`}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                </>
+              )}
+              {n.shape === "dict_op" && (
+                <>
+                  <rect
+                    x={pad}
+                    y={pad}
+                    width={w - pad * 2}
+                    height={h - pad * 2}
+                    rx={10}
+                    ry={10}
+                    fill="#fff"
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${w / 2} ${pad + 6} V ${h - pad - 6}`}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${pad + 8} ${h / 2} H ${w - pad - 8}`}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                </>
+              )}
+              {n.shape === "note" && (
+                <>
+                  <ellipse
+                    cx={w / 2}
+                    cy={h * 0.42}
+                    rx={(w - pad * 2) * 0.48}
+                    ry={(h - pad * 2) * 0.32}
+                    fill="#fff9c4"
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${w * 0.58} ${h * 0.64} Q ${w * 0.62} ${h * 0.83} ${w * 0.48} ${h * 0.72} Z`}
+                    fill="#fff9c4"
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                    strokeLinejoin="round"
+                  />
+                </>
+              )}
               {n.shape === "decision" && (
                 <polygon points={diamond} fill="#fff" stroke={borderColor} strokeWidth={strokeWidth} strokeDasharray={dashed ? "6 4" : undefined} />
               )}
@@ -233,22 +340,61 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   strokeDasharray={dashed ? "6 4" : undefined}
                 />
               )}
-              {(() => {
-                const lines = wrapNodeTitle(n.title, n.shape);
-                const lineH = 16;
-                const centerY = h / 2;
-                const topY = centerY - ((lines.length - 1) * lineH) / 2;
-                return (
-                  <text textAnchor="middle" fontSize="12" fontWeight="700" fill="#262626">
-                    {lines.map((t, i) => (
-                      <tspan key={i} x="50%" y={topY + i * lineH} dominantBaseline="middle">
-                        {t}
-                      </tspan>
-                    ))}
-                  </text>
-                );
-              })()}
+              {!editingNote &&
+                (() => {
+                  const lines = wrapNodeTitle(n.title, n.shape);
+                  const lineH = 16;
+                  const centerY = n.shape === "note" ? h * 0.42 : h / 2;
+                  const topY = centerY - ((lines.length - 1) * lineH) / 2;
+                  return (
+                    <text textAnchor="middle" fontSize="12" fontWeight="700" fill="#262626">
+                      {lines.map((t, i) => (
+                        <tspan key={i} x="50%" y={topY + i * lineH} dominantBaseline="middle">
+                          {t}
+                        </tspan>
+                      ))}
+                    </text>
+                  );
+                })()}
             </svg>
+            {editingNote ? (
+              <textarea
+                value={editingText}
+                autoFocus
+                onChange={(e) => setEditingText(e.target.value)}
+                onBlur={() => commitNoteEdit(n.id, editingText)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingNodeId(null);
+                    setEditingText("");
+                    return;
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    commitNoteEdit(n.id, editingText);
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  left: "15%",
+                  top: "19%",
+                  width: "70%",
+                  height: "48%",
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  resize: "none",
+                  textAlign: "center",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#262626",
+                  lineHeight: 1.25,
+                }}
+              />
+            ) : null}
             {showPorts && (
               <svg width={w} height={h} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
                 {ports.map((side) => {

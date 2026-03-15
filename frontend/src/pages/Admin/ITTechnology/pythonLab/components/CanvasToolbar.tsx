@@ -10,6 +10,7 @@ import {
   LinkOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MessageOutlined,
   ReloadOutlined,
   ShrinkOutlined,
   UploadOutlined,
@@ -34,6 +35,7 @@ export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
   canDelete: boolean;
   onDelete: () => void;
   onClear: () => void;
+  onAddNote: () => void;
   onExportFlow?: () => void;
   onImportFlow?: (jsonText: string) => void;
   scale: number;
@@ -56,6 +58,7 @@ export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
     canDelete,
     onDelete,
     onClear,
+    onAddNote,
     onExportFlow,
     onImportFlow,
     scale,
@@ -152,6 +155,9 @@ export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
       </Tooltip>
       <Tooltip title="清空画布">
         <Button type="text" danger icon={<ReloadOutlined />} onClick={onClear} />
+      </Tooltip>
+      <Tooltip title="注释工具">
+        <Button type="text" icon={<MessageOutlined />} onClick={onAddNote} style={toolButtonStyle} />
       </Tooltip>
 
       <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />

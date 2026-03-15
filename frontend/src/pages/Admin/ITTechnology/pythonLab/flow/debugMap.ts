@@ -1,5 +1,6 @@
 import type { FlowNode } from "./model";
 import type { FlowNodeShape } from "../types";
+import { splitNodeTitleForMapping } from "./ports";
 
 export type DebugFocusRole =
   | "for_init"
@@ -71,6 +72,7 @@ export function buildDebugMapFromNodes(
   const forRanges = forRangesInput?.length ? forRangesInput.slice() : inferForRangesFromNodes(nodes);
   const forIns = forInsInput?.length ? forInsInput.slice() : inferForInsFromNodes(nodes);
   const whiles = whileInput?.length ? whileInput.slice() : inferWhileEntriesFromNodes(nodes);
+  const nodeById = new Map(nodes.map((n) => [n.id, n] as const));
 
   const byLineMap = new Map<number, Map<string, DebugMapCandidate>>();
   for (const n of nodes) {
@@ -91,6 +93,38 @@ export function buildDebugMapFromNodes(
     const prev = forLine.get(cand.nodeId);
     if (!prev || cand.priority > prev.priority) forLine.set(cand.nodeId, cand);
     byLineMap.set(line, forLine);
+  }
+
+  const upsertCompensatedCandidate = (line: number, nodeId: string, role: DebugFocusRole, fallbackVars?: string[]) => {
+    const node = nodeById.get(nodeId);
+    if (!node) return;
+    const vars = roleVarsFromNode(node, role) ?? fallbackVars;
+    const cand: DebugMapCandidate = {
+      nodeId,
+      line,
+      role,
+      title: typeof node.title === "string" ? node.title : "",
+      vars,
+      shape: node.shape,
+      priority: candidatePriority(node.shape, role),
+    };
+    const forLine = byLineMap.get(line) ?? new Map<string, DebugMapCandidate>();
+    const prev = forLine.get(nodeId);
+    if (!prev || cand.priority > prev.priority) forLine.set(nodeId, cand);
+    byLineMap.set(line, forLine);
+  };
+
+  for (const meta of forRanges) {
+    upsertCompensatedCandidate(meta.headerLine, meta.initNodeId, "for_init", [meta.var]);
+    upsertCompensatedCandidate(meta.headerLine, meta.incNodeId, "for_inc", [meta.var]);
+    upsertCompensatedCandidate(meta.headerLine, meta.checkNodeId, "for_check");
+  }
+  for (const meta of forIns) {
+    upsertCompensatedCandidate(meta.headerLine, meta.nextNodeId, "for_in_next");
+    upsertCompensatedCandidate(meta.headerLine, meta.bindNodeId, "for_in_bind", meta.vars);
+  }
+  for (const meta of whiles) {
+    upsertCompensatedCandidate(meta.headerLine, meta.checkNodeId, "while_check");
   }
 
   const lines = Array.from(byLineMap.keys()).sort((a, b) => a - b);
@@ -176,7 +210,7 @@ export function inferDebugEmphasisFromDebugMap(params: {
         if (hitChanged) return { line, role: "for_in_bind" as const, thenRole: "for_in_next" as const };
         if (allowBodyTransition && meta.bodyLineRange && prevActiveLine) {
           if (prevActiveLine >= meta.bodyLineRange.startLine && prevActiveLine <= meta.bodyLineRange.endLine) {
-            return { line, role: "for_in_next" as const };
+            return { line, role: "for_in_bind" as const, thenRole: "for_in_next" as const };
           }
         }
       }
@@ -346,27 +380,63 @@ export function computeDebugNodeSelection(params: {
   nextVars: Map<string, { value: string; type: string }>;
 }) {
   const inferred = inferDebugEmphasisFromDebugMap(params);
+  const pickCompensatedNodeId = (line: number, role: DebugFocusRole | null | undefined) => {
+    if (!params.debugMap || !role) return null;
+    const ids = new Set(params.debugMap.allNodeIds);
+    const pickFirst = (arr: string[]) => {
+      const ordered = arr.filter((id) => ids.has(id)).sort((a, b) => a.localeCompare(b));
+      return ordered[0] ?? null;
+    };
+    if (role === "for_init" || role === "for_inc" || role === "for_check") {
+      const metas = params.debugMap.forRanges.filter((x) => x.headerLine === line);
+      if (!metas.length) return null;
+      if (role === "for_init") return pickFirst(metas.map((m) => m.initNodeId));
+      if (role === "for_inc") return pickFirst(metas.map((m) => m.incNodeId));
+      return pickFirst(metas.map((m) => m.checkNodeId));
+    }
+    if (role === "for_in_next" || role === "for_in_bind") {
+      const metas = params.debugMap.forIns.filter((x) => x.headerLine === line);
+      if (!metas.length) return null;
+      if (role === "for_in_next") return pickFirst(metas.map((m) => m.nextNodeId));
+      return pickFirst(metas.map((m) => m.bindNodeId));
+    }
+    if (role === "while_check") {
+      const metas = params.debugMap.whiles.filter((x) => x.headerLine === line);
+      if (!metas.length) return null;
+      return pickFirst(metas.map((m) => m.checkNodeId));
+    }
+    return null;
+  };
+  const primaryCompNodeId = inferred ? pickCompensatedNodeId(inferred.line, inferred.role) : null;
 
-  const primary = selectActiveNodeId({
-    debugMap: params.debugMap,
-    activeLine: params.activeLine,
-    preferredLine: inferred?.line ?? null,
-    preferredRole: inferred?.role ?? null,
-  });
+  const primary =
+    primaryCompNodeId && inferred
+      ? { nodeId: primaryCompNodeId, usedLine: inferred.line, usedRole: inferred.role, reason: "exact_or_role" as const }
+      : selectActiveNodeId({
+        debugMap: params.debugMap,
+        activeLine: params.activeLine,
+        preferredLine: inferred?.line ?? null,
+        preferredRole: inferred?.role ?? null,
+      });
 
   const transitionQueue: string[] = [];
   if (primary.nodeId) transitionQueue.push(primary.nodeId);
 
   let thenNodeId: string | null = null;
   if (inferred?.thenRole) {
-    const thenPicked = selectActiveNodeId({
-      debugMap: params.debugMap,
-      activeLine: params.activeLine,
-      preferredLine: inferred.line,
-      preferredRole: inferred.thenRole,
-    });
-    thenNodeId = thenPicked.nodeId;
-    if (thenNodeId && thenNodeId !== primary.nodeId) transitionQueue.push(thenNodeId);
+    const compensated = pickCompensatedNodeId(inferred.line, inferred.thenRole);
+    if (compensated) {
+      thenNodeId = compensated;
+    } else {
+      const thenPicked = selectActiveNodeId({
+        debugMap: params.debugMap,
+        activeLine: params.activeLine,
+        preferredLine: inferred.line,
+        preferredRole: inferred.thenRole,
+      });
+      thenNodeId = thenPicked.nodeId;
+    }
+    if (thenNodeId && !transitionQueue.includes(thenNodeId)) transitionQueue.push(thenNodeId);
   }
 
   const prevDepth = typeof params.prevStackDepth === "number" ? params.prevStackDepth : null;
@@ -526,22 +596,34 @@ function inferWhileEntriesFromNodes(nodes: FlowNode[]): DebugWhileEntry[] {
 function roleVarsFromNode(node: FlowNode, role: string | null): string[] | undefined {
   if (!role) return undefined;
   const title = String((node as any).title ?? "").trim();
+  const parts = splitNodeTitleForMapping(title);
+  const primary = (parts[0] ?? title).trim();
   const takeIdents = (src: string) =>
     src
       .split(",")
       .map((s) => s.trim())
       .filter((s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s));
 
-  if (role === "for_init" || role === "for_inc") {
-    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+=)\s*/.exec(title);
+  if (role === "for_init") {
+    const seqInit = /^_seq_([A-Za-z_][A-Za-z0-9_]*)\s*=\s*list\s*\(\s*range\s*\(/.exec(primary);
+    if (seqInit?.[1]) return [seqInit[1]];
+    const iterInit = /^_it_([A-Za-z_][A-Za-z0-9_]*)\s*=\s*iter\s*\(\s*_seq_\1\s*\)\s*$/.exec(primary);
+    if (iterInit?.[1]) return [iterInit[1]];
+    const teachIter = /^it\s+in\s+range\s*\(/i.exec(primary);
+    if (teachIter) return undefined;
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+=)\s*/.exec(primary);
+    return m?.[1] ? [m[1]] : undefined;
+  }
+  if (role === "for_inc") {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\+=)\s*/.exec(primary);
     return m?.[1] ? [m[1]] : undefined;
   }
   if (role === "aug_assign") {
-    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(\+=|-=|\*=|\/=|\/\/=|%=|\*\*=)\s*/.exec(title);
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(\+=|-=|\*=|\/=|\/\/=|%=|\*\*=)\s*/.exec(primary);
     return m?.[1] ? [m[1]] : undefined;
   }
   if (role === "for_in_bind") {
-    const m = /^([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=/.exec(title);
+    const m = /^([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=/.exec(primary);
     if (m?.[1]) return takeIdents(m[1]);
     return undefined;
   }

@@ -91,6 +91,9 @@ function dotNodeShape(n: FlowNode): { shape: string; style?: string; peripheries
   if (n.shape === "io") return { shape: "parallelogram" };
   if (n.shape === "connector") return { shape: "circle" };
   if (n.shape === "subroutine") return { shape: "box", style: "rounded", peripheries: 2 };
+  if (n.shape === "list_op" || n.shape === "collection") return { shape: "box", style: "rounded,diagonals" };
+  if (n.shape === "dict_op") return { shape: "box", style: "rounded,dashed" };
+  if (n.shape === "note") return { shape: "note" };
   return { shape: "box" };
 }
 
@@ -144,13 +147,75 @@ function buildDotInternal(params: {
     const gv = nameById.get(n.id);
     if (!gv) continue;
     const s = dotNodeShape(n);
-    const label = escapeDotLabel((n.title || "").trim()) || n.id;
+    let label = escapeDotLabel((n.title || "").trim()) || n.id;
+    const attrs: string[] = [];
+
+    // Enhanced HTML Label for Lists and Dicts
+    if (n.shape === "list_op" || n.shape === "dict_op") {
+      // Try to parse the content if it looks like a literal definition
+      // e.g. "L = [1, 2, 3]" or "D = {'a': 1}"
+      const text = (n.title || "").trim();
+      const listMatch = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[(.*)\]\s*$/.exec(text);
+      const dictMatch = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{(.*)\}\s*$/.exec(text);
+
+      if (listMatch) {
+        const varName = listMatch[1];
+        const content = listMatch[2];
+        const items = content.split(",").map(x => x.trim()).filter(x => x);
+        if (items.length > 0) {
+          // Build HTML Table
+          let cells = "";
+          items.forEach((val, idx) => {
+            cells += `<TD PORT="f${idx}">${val}</TD>`;
+          });
+          let indices = "";
+          items.forEach((_, idx) => {
+            indices += `<TD>${idx}</TD>`;
+          });
+          label = `<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+             <TR><TD COLSPAN="${items.length}"><B>${varName}</B></TD></TR>
+             <TR>${indices}</TR>
+             <TR>${cells}</TR>
+           </TABLE>>`;
+          attrs.push(`shape=plain`); // HTML labels usually work best with shape=plain or none
+        }
+      } else if (dictMatch) {
+        const varName = dictMatch[1];
+        const content = dictMatch[2];
+        // Simple comma split (fragile for nested, but okay for basic teaching)
+        const items = content.split(",").map(x => x.trim()).filter(x => x);
+        if (items.length > 0) {
+          let rows = "";
+          items.forEach(item => {
+            const parts = item.split(":").map(x => x.trim());
+            if (parts.length === 2) {
+              rows += `<TR><TD>${parts[0]}</TD><TD>${parts[1]}</TD></TR>`;
+            }
+          });
+          if (rows) {
+            label = `<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+                   <TR><TD COLSPAN="2"><B>${varName}</B></TD></TR>
+                   ${rows}
+                 </TABLE>>`;
+            attrs.push(`shape=plain`);
+          }
+        }
+      }
+    }
+
+    if (!attrs.some(a => a.startsWith("shape="))) {
+      attrs.push(`shape=${s.shape}`);
+    }
+
+    if (!label.startsWith("<<")) {
+      attrs.push(`label="${label}"`);
+    } else {
+      attrs.push(`label=${label}`);
+    }
+
     const size = nodeSizeForTitle(n.shape, n.title);
     const wIn = clampFinite(size.w / 72, 0.4, 6);
     const hIn = clampFinite(size.h / 72, 0.25, 4);
-    const attrs: string[] = [];
-    attrs.push(`label="${label}"`);
-    attrs.push(`shape=${s.shape}`);
     if (s.style) attrs.push(`style="${s.style},filled"`);
     else attrs.push(`style="filled"`);
     if (typeof s.peripheries === "number") attrs.push(`peripheries=${s.peripheries}`);
@@ -356,7 +421,7 @@ export function applyPlainLayoutToCanvas(
     const outY = snapToGrid ? snap(y) : fmt(y);
     return { ...(n as any), x: outX, y: outY };
   });
-  
+
   // Create a map for quick node lookup by ID
   const nodeMap = new Map(nextNodes.map(n => [n.id, n]));
   const attachFromAbsPoint = (node: FlowNode, abs: { x: number; y: number }) => {
@@ -396,9 +461,9 @@ export function applyPlainLayoutToCanvas(
 
     const labelPosition = chosen.labelPosIn && (e.label || "").trim()
       ? {
-          x: fmt(chosen.labelPosIn.xIn * pxPerIn),
-          y: fmt((parsed.heightIn - chosen.labelPosIn.yIn) * pxPerIn),
-        }
+        x: fmt(chosen.labelPosIn.xIn * pxPerIn),
+        y: fmt((parsed.heightIn - chosen.labelPosIn.yIn) * pxPerIn),
+      }
       : undefined;
 
     if (poly.length <= 2) {

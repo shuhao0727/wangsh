@@ -2,6 +2,8 @@ import hashlib
 import asyncio
 import json
 import os
+import posixpath
+import re
 import shutil
 import subprocess
 import tempfile
@@ -168,11 +170,50 @@ def _write_project_files(tmpdir: str, entry_path: str, files: dict, assets: List
     if style_text and style_text.strip():
         files["style/my_style.typ"] = style_text
 
+    def _normalize_source(source: str, entry: str) -> str:
+        s = source or ""
+        entry_dir = posixpath.dirname(entry or "main.typ") or "."
+        style_rel = posixpath.relpath("style/my_style.typ", entry_dir)
+        style_line = f'#import "{style_rel}":my_style'
+        s = re.sub(r'#import\s+["\'][^"\']*style/my_style\.typ["\']\s*:\s*my_style', style_line, s)
+        if not re.search(r'#import\s+["\'][^"\']*style/my_style\.typ["\']\s*:\s*my_style', s):
+            s = style_line + "\n" + s
+
+        base = entry_dir
+
+        def _replace_image_ref(m: re.Match) -> str:
+            q = m.group(1)
+            ref = m.group(2)
+            if "://" in ref:
+                return m.group(0)
+            if ref.startswith("image/"):
+                rel = posixpath.relpath(ref, base)
+                return f'image({q}{rel}{q}'
+            joined = posixpath.normpath(posixpath.join(base, ref))
+            while joined.startswith("../"):
+                joined = joined[3:]
+            if joined.startswith("image/"):
+                rel = posixpath.relpath(joined, base)
+                return f'image({q}{rel}{q}'
+            return m.group(0)
+
+        s = re.sub(r'image\(\s*(["\'])([^"\']+)\1', _replace_image_ref, s)
+        lines = s.splitlines()
+        first_h1 = -1
+        for i, ln in enumerate(lines):
+            if re.match(r"^\s*=\s+.+$", ln):
+                first_h1 = i
+                break
+        if first_h1 >= 0 and re.match(r"^\s*=\s*第[\d一二三四五六七八九十百千]+章", lines[first_h1]):
+            has_h2 = any(re.match(r"^\s*==\s+.+$", ln) for ln in lines[first_h1 + 1 :])
+            if has_h2:
+                lines.pop(first_h1)
+                s = "\n".join(lines)
+        return s
+
     try:
         if ep in files:
-            s = files.get(ep) or ""
-            if 'import "style/my_style.typ"' not in s and "import 'style/my_style.typ'" not in s:
-                files[ep] = '#import "style/my_style.typ":my_style\n' + s
+            files[ep] = _normalize_source(files.get(ep) or "", ep)
     except Exception:
         pass
 
@@ -339,7 +380,16 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
                 raise
 
         rel = pdf_rel_path(note.id or 0, h)
+        old_rel = note.compiled_pdf_path
         await asyncio.to_thread(write_pdf_bytes, settings.TYPST_PDF_STORAGE_DIR, rel, pdf_bytes)
+
+        if old_rel and old_rel != rel:
+            try:
+                old_abs = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, old_rel)
+                if os.path.exists(old_abs):
+                    os.remove(old_abs)
+            except Exception:
+                pass
 
         note.compiled_hash = h
         note.compiled_pdf_path = rel

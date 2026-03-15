@@ -22,7 +22,17 @@ export interface PythonLabExperiment {
   starterCode: string;
 }
 
-export type FlowNodeShape = "start_end" | "process" | "decision" | "io" | "connector" | "subroutine";
+export type FlowNodeShape =
+  | "start_end"
+  | "process"
+  | "decision"
+  | "io"
+  | "connector"
+  | "subroutine"
+  | "list_op"
+  | "dict_op"
+  | "collection"
+  | "note";
 
 export interface FlowNodeTemplate {
   key: FlowNodeShape;

@@ -88,7 +88,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.2.0}
+      - APP_VERSION=${APP_VERSION:-1.3.0}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - AUTH_TRUST_X_FORWARDED_FOR=${AUTH_TRUST_X_FORWARDED_FOR:-true}
       - AUTH_IP_HEADER_ORDER=${AUTH_IP_HEADER_ORDER:-X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr}
@@ -145,7 +145,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.2.0}
+      - APP_VERSION=${APP_VERSION:-1.3.0}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -187,7 +187,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.2.0}
+      - APP_VERSION=${APP_VERSION:-1.3.0}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -235,7 +235,7 @@ services:
     environment:
       - REACT_APP_API_URL=${REACT_APP_API_URL}
       - REACT_APP_ENV=${REACT_APP_ENV}
-      - REACT_APP_VERSION=${REACT_APP_VERSION:-1.2.0}
+      - REACT_APP_VERSION=${REACT_APP_VERSION:-1.3.0}
       # 开发模式热加载
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true

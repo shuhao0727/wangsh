@@ -31,6 +31,7 @@ from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
 from app.services.articles.markdown_style_examples import ensure_style_examples
 from app.services.articles.article_examples import ensure_article_examples
+from app.services.informatics.github_sync import get_or_create_sync_settings
 
 
 @asynccontextmanager
@@ -88,10 +89,19 @@ async def lifespan(app: FastAPI):
         interval = int(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS", 300) or 300)
 
         async def loop():
+            last_sync_ts = 0.0
             while True:
                 try:
                     celery_app.send_task("app.tasks.pythonlab.cleanup_orphans")
                     celery_app.send_task("app.tasks.pythonlab.cleanup_stale_sessions")
+                    async with AsyncSessionLocal() as db:
+                        cfg = await get_or_create_sync_settings(db)
+                        enabled = bool(cfg.enabled)
+                        sync_interval = max(1, int(cfg.interval_hours or 48))
+                    now_ts = asyncio.get_event_loop().time()
+                    if enabled and now_ts - last_sync_ts >= sync_interval * 3600:
+                        celery_app.send_task("app.tasks.informatics_sync.sync_informatics_from_github")
+                        last_sync_ts = now_ts
                 except Exception:
                     pass
                 await asyncio.sleep(max(30, interval))

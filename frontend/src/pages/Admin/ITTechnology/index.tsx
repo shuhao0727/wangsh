@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
+import AgentConfigModal from "./components/AgentConfigModal";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 
 const { Title } = Typography;
@@ -18,6 +19,7 @@ type ViewState = 'dashboard' | 'dianming-manager';
 
 const AdminITTechnology: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
+  const [agentConfigVisible, setAgentConfigVisible] = useState(false);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
@@ -36,7 +38,8 @@ const AdminITTechnology: React.FC = () => {
       description: '实验模板管理与前台实验台入口',
       icon: <CodeOutlined />,
       color: "var(--ws-color-info)",
-      hasManager: false,
+      hasManager: true,
+      managerLabel: "管理智能体",
     },
     {
       key: 'it_survey',
@@ -124,12 +127,13 @@ const AdminITTechnology: React.FC = () => {
               loading={loading[app.key]}
               onToggle={(checked) => handleToggle(app.key, checked)}
               color={app.color}
-              actionLabel={app.hasManager ? "管理" : undefined}
+              actionLabel={(app as any).managerLabel || (app.hasManager ? "管理" : undefined)}
               actionIcon={app.hasManager ? <SettingOutlined /> : undefined}
               onAction={
                 app.hasManager
                   ? () => {
                       if (app.key === "it_dianming") setView("dianming-manager");
+                      if (app.key === "it_python_lab") setAgentConfigVisible(true);
                     }
                   : undefined
               }
@@ -137,6 +141,7 @@ const AdminITTechnology: React.FC = () => {
           </Col>
         ))}
       </Row>
+      <AgentConfigModal visible={agentConfigVisible} onClose={() => setAgentConfigVisible(false)} />
     </AdminPage>
   );
 };

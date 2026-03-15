@@ -1,20 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Card, Grid, Input, Layout, Space, Tag, Typography } from "antd";
-import type { PythonLabExperiment } from "./types";
+import type { FlowNodeTemplate, PythonLabExperiment } from "./types";
 import { normalizeFlowImport, type FlowEdge, type FlowNode, type PortSide } from "./flow/model";
 import { calculateFitView, calculateFitViewCenter } from "./flow/viewUtils";
 import { pointAtT } from "./flow/geometry";
-import { nodeSizeForTitle } from "./flow/ports";
+import { chooseSide, nodeSizeForTitle } from "./flow/ports";
 import { clampBetween } from "./flow/math";
 import { RightPanel } from "./components/RightPanel";
 import { FloatingPopup } from "./components/FloatingPopup";
 import { useEdgeGeometries } from "./hooks/useEdgeGeometries";
 import { FlowEdgesSvg } from "./components/FlowEdgesSvg";
+import { FlowAnnotationsSvg } from "./components/FlowAnnotationsSvg";
 import { FlowNodesLayer } from "./components/FlowNodesLayer";
 import { EdgeToolbar } from "./components/EdgeToolbar";
 import { TemplatePalette } from "./components/TemplatePalette";
 import { advancedTemplates, basicTemplates } from "./templates";
 import { useFlowCanvasInteractions } from "./hooks/useFlowCanvasInteractions";
+import { useAnnotationInteractions } from "./hooks/useAnnotationInteractions";
 import { CanvasToolbar } from "./components/CanvasToolbar";
 import { usePythonFlowSync } from "./hooks/usePythonFlowSync";
 import { usePythonLabActions } from "./hooks/usePythonLabActions";
@@ -33,6 +35,9 @@ import { resolveFlowActivation, toDebugPauseEvent } from "./adapters/debugEventB
 import { normalizeDebugSessionView } from "./adapters/debugSessionBridge";
 import { applyDapNegotiatedCapabilities } from "./adapters/debugCapabilityMap";
 import { pythonlabSessionApi } from "./services/pythonlabSessionApi";
+import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
+import { OptimizationDialog } from "./components/OptimizationDialog";
+import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabDebugApi";
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -54,6 +59,7 @@ const PythonLabStudio: React.FC<{
   const screens = Grid.useBreakpoint();
   const isCompactViewport = !screens.sm;
   const { message } = App.useApp();
+  const prewarmOnceRef = useRef(false);
 
   useEffect(() => {
     console.log("PythonLabStudio mounted - HMR Check");
@@ -65,6 +71,7 @@ const PythonLabStudio: React.FC<{
   const [beautifyLoading, setBeautifyLoading] = useState(false);
   const [beautifyError, setBeautifyError] = useState<string | null>(null);
   const [beautifyRefreshToken, setBeautifyRefreshToken] = useState(0);
+  const [autoOptimizeCode, setAutoOptimizeCode] = useState(true);
   const [canvasRoutingStyle] = useState<"orthogonal" | "direct">(() => {
     try {
       return localStorage.getItem("python_lab_canvas_routing_style") === "direct" ? "direct" : "orthogonal";
@@ -83,6 +90,64 @@ const PythonLabStudio: React.FC<{
   const [canvasBusy, setCanvasBusy] = useState(false);
   const [autoLayout, setAutoLayout] = useState(false);
 
+  // Optimization State
+  const [optimizationVisible, setOptimizationVisible] = useState(false);
+  const [originalContent, setOriginalContent] = useState<any>(null);
+  const [optimizedContent, setOptimizedContent] = useState<any>(null);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
+  const [optimizationFeedback, setOptimizationFeedback] = useState("");
+  const [optimizationLogId, setOptimizationLogId] = useState<number | null>(null);
+
+  const handleOptimizeCode = async () => {
+    setOriginalContent(code);
+    setOptimizedContent("");
+    setOptimizationFeedback("");
+    setOptimizationLoading(true);
+    setOptimizationVisible(true);
+    try {
+      const res = await pythonlabFlowApi.optimizeCode(code);
+      setOptimizedContent(res.optimized_code);
+      setOptimizationLogId(res.log_id);
+    } catch (e: any) {
+      message.error(e.message || "优化请求失败");
+      setOptimizationVisible(false);
+    } finally {
+      setOptimizationLoading(false);
+    }
+  };
+
+  const handleApplyOptimization = async () => {
+    const nextCode = typeof optimizedContent === "string" ? optimizedContent : "";
+    if (!nextCode.trim()) {
+      message.error("优化结果为空，无法应用");
+      return;
+    }
+    try {
+      const syntax = await pythonlabSyntaxApi.checkSyntax(nextCode);
+      if (!syntax.ok) {
+        message.error("优化后的代码未通过语法校验，已拒绝应用");
+        return;
+      }
+    } catch {}
+    setCodeMode("manual");
+    setCode(nextCode.endsWith("\n") ? nextCode : `${nextCode}\n`);
+    try {
+      await rebuildFlowFromCode();
+    } catch {}
+    message.success("代码优化已应用");
+
+    if (optimizationLogId) {
+      try {
+        await pythonlabFlowApi.applyOptimization(optimizationLogId);
+      } catch {}
+    }
+    setOptimizationVisible(false);
+  };
+
+  const handleRegenerateOptimization = async () => {
+    await handleOptimizeCode();
+  };
+
   const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
   const canFrontendDebug = useMemo(() => {
     try {
@@ -91,6 +156,52 @@ const PythonLabStudio: React.FC<{
       return false;
     }
   }, []);
+
+  useEffect(() => {
+    if (prewarmOnceRef.current) return;
+    prewarmOnceRef.current = true;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (document.hidden) return;
+          const plan = decidePythonLabLaunchPlan({
+            enabledBreakpointCount: 1,
+            pythonlabRuntime,
+            canFrontendDebug,
+            needsStdin: false,
+          });
+          if (plan.runnerKind !== "dap") return;
+          const key = "pythonlab_debug_prewarm_at";
+          const now = Date.now();
+          const last = Number(localStorage.getItem(key) || "0");
+          if (now - last < 10 * 60 * 1000) return;
+          localStorage.setItem(key, String(now));
+          const created = await pythonlabSessionApi.create({
+            title: "pythonlab_prewarm",
+            code: "print('warmup')\n",
+            runtime_mode: "plain",
+            entry_path: "main.py",
+            requirements: [],
+            limits: { cpu_ms: 15000, wall_ms: 20000, memory_mb: 64 },
+          });
+          const sid = created.session_id;
+          for (let i = 0; i < 20; i++) {
+            if (cancelled) break;
+            await new Promise((r) => setTimeout(r, 400));
+            const meta = await pythonlabSessionApi.get(sid);
+            if (meta.status === "READY" || meta.status === "FAILED" || meta.status === "TERMINATED") break;
+          }
+          await pythonlabSessionApi.stop(sid).catch(() => {});
+        } catch {
+        }
+      })();
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [canFrontendDebug, pythonlabRuntime]);
 
   const arrangeLayoutRef = useRef<null | (() => Promise<void>)>(null);
 
@@ -170,8 +281,9 @@ const PythonLabStudio: React.FC<{
         stack.includes("Content.handleSelection") ||
         msg.includes("Content.isSelection") ||
         msg.includes("Content.handleSelection");
-      const isLikelySelectionNoise = normalizedMessage.includes("range 0") || normalizedMessage.includes("selection");
-      return isIndexSize && isGetRangeAt && (isLikelyExternal || isLikelySelectionNoise);
+      // Broaden suppression for any IndexSizeError in Selection context, even if origin is unclear
+      const isLikelySelectionNoise = normalizedMessage.includes("range 0") || normalizedMessage.includes("selection") || isIndexSize;
+      return isIndexSize && (isGetRangeAt || isLikelySelectionNoise);
     };
     const onError = (event: ErrorEvent) => {
       const msg = String(event.message || "");
@@ -247,6 +359,7 @@ const PythonLabStudio: React.FC<{
     setConnectFromId,
     setConnectFromPort,
     canvasRef,
+    autoOptimizeCode,
   });
 
   const {
@@ -347,13 +460,16 @@ const PythonLabStudio: React.FC<{
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
-      if ((e as any).isComposing || (e as any).keyCode === 229) return;
-      const target = e.target as HTMLElement | null;
-      if (target?.closest?.(".monaco-editor")) return;
-      const active = document.activeElement as HTMLElement | null;
-      if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT" || active.isContentEditable)) return;
-      if (!selectedEdgeId && !selectedNodeId) return;
+      const shouldHandle = shouldHandleCanvasDeleteShortcut({
+        key: e.key,
+        isComposing: e.isComposing,
+        keyCode: e.keyCode,
+        defaultPrevented: e.defaultPrevented,
+        target: e.target,
+        activeElement: document.activeElement,
+        hasSelection: !!selectedEdgeId || !!selectedNodeId,
+      });
+      if (!shouldHandle) return;
       e.preventDefault();
       removeSelected();
     };
@@ -472,36 +588,11 @@ const PythonLabStudio: React.FC<{
     setFollowMode(true);
     setNodeInspectorOpen(false);
 
-    if (experiment?.id === "seq_basic") {
-      const demo = peekDemoFlow("seq_basic");
-      setCanvasBusy(true);
-      setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
-      void (async () => {
-        try {
-          const sorted = sortFlowGraphStable({ nodes: demo.nodes, edges: demo.edges });
-          const resp = await computeBeautify(sorted.nodes, sorted.edges, ruleSet.beautify.params, ruleSet.beautify.thresholds, {
-            snapToGrid: !ruleSet.beautify.alignMode,
-          });
-          setNodes(resp.layout.nodes);
-          setEdges(resp.layout.edges);
-          setSelectedNodeId(null);
-          setSelectedEdgeId(null);
-          setConnectFromId(null);
-          setConnectFromPort(null);
-          setVariables([]);
-          requestAnimationFrame(() => fitViewToCenter(resp.layout.nodes, resp.layout.edges));
-        } catch {
-          setFlowAuto({ nodes: demo.nodes, edges: demo.edges, resetSelection: true, resetConnect: true, resetVariables: true });
-          requestAnimationFrame(() => fitViewToCenter(demo.nodes, demo.edges));
-        } finally {
-          setCanvasBusy(false);
-        }
-      })();
-    } else if (typeof experiment?.starterCode === "string") {
+    if (typeof experiment?.starterCode === "string") {
       setCodeMode("manual");
       setCode(experiment.starterCode);
     }
-  }, [dapApi, experiment?.id, experiment?.starterCode, fitViewToCenter, peekDemoFlow, pyApi, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
+  }, [dapApi, experiment?.id, experiment?.starterCode, pyApi, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
 
   const onRun = useCallback(
     (_stdinLines: string[] = []) => {
@@ -719,7 +810,9 @@ const PythonLabStudio: React.FC<{
     const byRole = !byId.length && line && focusRole ? nodes.filter((n: any) => matchesLine(n) && n.sourceRole === focusRole) : [];
     const targets = byId.length ? byId : byRole.length ? byRole : line ? nodes.filter((n: any) => matchesLine(n)) : [];
     if (!targets.length) return;
-    const target = targets.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id))[0];
+    const target = targets
+      .slice()
+      .sort((a, b) => a.y - b.y || a.x - b.x || String(a.id ?? "").localeCompare(String(b.id ?? "")))[0];
     const rect = canvasRef.current.getBoundingClientRect();
     const margin = 40;
     const s = nodeSizeForTitle(target.shape, target.title);
@@ -779,9 +872,19 @@ const PythonLabStudio: React.FC<{
       onSemanticEdit: ensureAuto,
     });
 
+  const { onResizeStart, onArrowTargetDragStart, onArrowRotateStart, interacting: annotationInteracting } = useAnnotationInteractions({
+    canvasRef,
+    scale,
+    offsetX,
+    offsetY,
+    nodes,
+    setNodes: setNodesAuto,
+    onSemanticEdit: ensureAuto,
+  });
+
   useEffect(() => {
-    setInteractionFlag(interacting);
-  }, [interacting]);
+    setInteractionFlag(interacting || annotationInteracting);
+  }, [interacting, annotationInteracting]);
 
   const { canvasMetrics, edgeGeometries } = useEdgeGeometries(nodes, edges, canvasRoutingStyle, interacting);
   useEffect(() => {
@@ -879,6 +982,76 @@ const PythonLabStudio: React.FC<{
     reverseEdge(selectedEdgeId);
   };
 
+  const handleAddNote = useCallback(() => {
+    const noteTemplate = { key: "note", title: "注释", description: "对话椭圆注释框，可自由输入文字" } as FlowNodeTemplate;
+    if (!selectedNodeId) {
+      addNode(noteTemplate);
+      return;
+    }
+    const target = nodes.find((n) => n.id === selectedNodeId);
+    if (!target) {
+      addNode(noteTemplate);
+      return;
+    }
+
+    ensureAuto();
+    const noteSize = nodeSizeForTitle("note", "注释内容");
+    const targetSize = nodeSizeForTitle(target.shape, target.title);
+    const targetCx = target.x + targetSize.w / 2;
+    const targetCy = target.y + targetSize.h / 2;
+    const gap = 48;
+    const candidateOffsets = [
+      { dx: targetSize.w / 2 + noteSize.w / 2 + gap, dy: 0 },
+      { dx: -(targetSize.w / 2 + noteSize.w / 2 + gap), dy: 0 },
+      { dx: 0, dy: -(targetSize.h / 2 + noteSize.h / 2 + gap) },
+      { dx: 0, dy: targetSize.h / 2 + noteSize.h / 2 + gap },
+    ];
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const minX = rect ? (24 - offsetX) / scale : -Infinity;
+    const maxX = rect ? (rect.width - noteSize.w - 24 - offsetX) / scale : Infinity;
+    const minY = rect ? (24 - offsetY) / scale : -Infinity;
+    const maxY = rect ? (rect.height - noteSize.h - 24 - offsetY) / scale : Infinity;
+    let noteX = target.x + candidateOffsets[0].dx;
+    let noteY = target.y + candidateOffsets[0].dy;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const candidate of candidateOffsets) {
+      const rawX = target.x + candidate.dx;
+      const rawY = target.y + candidate.dy;
+      const clampedX = clampBetween(rawX, minX, maxX);
+      const clampedY = clampBetween(rawY, minY, maxY);
+      const movePenalty = Math.abs(rawX - clampedX) + Math.abs(rawY - clampedY);
+      const centerX = clampedX + noteSize.w / 2;
+      const centerY = clampedY + noteSize.h / 2;
+      const distance = Math.hypot(centerX - targetCx, centerY - targetCy);
+      const score = movePenalty * 4 + Math.abs(distance - (targetSize.w / 2 + noteSize.w / 2 + gap));
+      if (score < bestScore) {
+        bestScore = score;
+        noteX = clampedX;
+        noteY = clampedY;
+      }
+    }
+
+    const noteId = nextId("node");
+    const noteNode: FlowNode = {
+      id: noteId,
+      type: "annotation",
+      shape: "note",
+      title: "注释内容",
+      x: Math.round(noteX),
+      y: Math.round(noteY),
+      style: { backgroundColor: "#FFF9C4", opacity: 1, dashed: true },
+      arrow: {
+        target: { x: targetCx, y: targetCy },
+        sourceAnchor: "center",
+        headType: "triangle",
+        rotation: 0
+      }
+    };
+    setNodes((prev) => [...prev, noteNode]);
+    setSelectedNodeId(noteId);
+    setSelectedEdgeId(null);
+  }, [addNode, ensureAuto, nodes, offsetX, offsetY, scale, selectedNodeId]);
+
   return (
     <div style={{ height: "calc(100vh - 130px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <Layout style={{ background: "transparent", height: "100%", flexDirection: isCompactViewport ? "column" : "row" }}>
@@ -971,6 +1144,7 @@ const PythonLabStudio: React.FC<{
                   canDelete={!!selectedNodeId || !!selectedEdgeId}
                   onDelete={removeSelected}
                   onClear={clearAll}
+                  onAddNote={handleAddNote}
                   onExportFlow={exportFlow}
                   onImportFlow={importFlow}
                   scale={scale}
@@ -1043,6 +1217,20 @@ const PythonLabStudio: React.FC<{
                 onTargetPointerDown={onTargetPointerDown}
                 onAnchorPointerDown={onAnchorPointerDown}
               />
+              <FlowAnnotationsSvg
+                nodes={nodes}
+                scale={scale}
+                offsetX={offsetX}
+                offsetY={offsetY}
+                selectedNodeId={selectedNodeId}
+                onNodePointerDown={onNodePointerDown}
+                onNodeClick={handleNodeClick}
+                onNodeDoubleClick={handleNodeClick}
+                onResizeStart={onResizeStart}
+                onArrowTargetDragStart={onArrowTargetDragStart}
+                onArrowRotateStart={onArrowRotateStart}
+                onUpdateNodeTitle={updateNodeTitle}
+              />
               {selectedEdge && (
                 <EdgeToolbar
                   canvasRef={canvasRef}
@@ -1105,6 +1293,7 @@ const PythonLabStudio: React.FC<{
                 onNodePointerDown={onNodePointerDown}
                 onNodeClick={handleNodeClick}
                 onPortClick={onPortClick}
+                onUpdateNodeTitle={updateNodeTitle}
               />
             </div>
           </Card>
@@ -1124,6 +1313,7 @@ const PythonLabStudio: React.FC<{
             revealLine={revealLine}
             variableColumns={variableColumns}
             runner={runnerView}
+            flow={{ nodes, edges }}
             debugCapabilities={resolvedDebugCapabilities}
             runnerError={runnerError}
             lastLaunchMode={lastLaunchMode}
@@ -1160,9 +1350,25 @@ const PythonLabStudio: React.FC<{
             beautifyError={beautifyError}
             onRefreshBeautify={() => setBeautifyRefreshToken((t) => t + 1)}
             onClearPendingOutput={() => activeApi?.clearPendingOutput?.()}
+            autoOptimizeCode={autoOptimizeCode}
+            setAutoOptimizeCode={setAutoOptimizeCode}
+            onOptimizeCode={handleOptimizeCode}
           />
         </Sider>
       </Layout>
+
+      <OptimizationDialog
+        visible={optimizationVisible}
+        type="code"
+        originalContent={originalContent}
+        optimizedContent={optimizedContent}
+        loading={optimizationLoading}
+        onApply={handleApplyOptimization}
+        onDiscard={() => setOptimizationVisible(false)}
+        onRegenerate={handleRegenerateOptimization}
+        feedback={optimizationFeedback}
+        setFeedback={setOptimizationFeedback}
+      />
 
       <FloatingPopup
         open={!!selectedNode && nodeInspectorOpen}

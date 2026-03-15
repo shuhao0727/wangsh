@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card, Typography, Row, Col, Divider } from "antd";
 import {
   HomeOutlined,
@@ -13,6 +13,8 @@ import {
 import { config } from "@services";
 import useAppMeta from "@hooks/useAppMeta";
 import { useNavigate } from "react-router-dom";
+import { featureFlagsApi } from "@/services/system/featureFlags";
+import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import "./Home.css";
 
 const { Title, Text } = Typography;
@@ -20,6 +22,7 @@ const { Title, Text } = Typography;
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { version, envLabel } = useAppMeta();
+  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
   const externalLinks = [
     {
       title: "Dify AI 平台",
@@ -39,6 +42,7 @@ const HomePage: React.FC = () => {
 
   const platformModules = [
     {
+      id: "ai-agents",
       title: "AI 智能体",
       description: "智能对话与文档分析",
       icon: <RocketOutlined />,
@@ -46,6 +50,7 @@ const HomePage: React.FC = () => {
       path: "/ai-agents",
     },
     {
+      id: "informatics",
       title: "信息学竞赛",
       description: "算法题库与竞赛指导",
       icon: <BookOutlined />,
@@ -53,6 +58,7 @@ const HomePage: React.FC = () => {
       path: "/informatics",
     },
     {
+      id: "it-technology",
       title: "信息技术",
       description: "编程技术与系统架构",
       icon: <ToolOutlined />,
@@ -60,6 +66,7 @@ const HomePage: React.FC = () => {
       path: "/it-technology",
     },
     {
+      id: "personal-programs",
       title: "个人程序",
       description: "实用工具与小应用",
       icon: <CloudOutlined />,
@@ -67,6 +74,7 @@ const HomePage: React.FC = () => {
       path: "/personal-programs",
     },
     {
+      id: "articles",
       title: "文章",
       description: "技术博客与学习笔记",
       icon: <FileTextOutlined />,
@@ -74,6 +82,36 @@ const HomePage: React.FC = () => {
       path: "/articles",
     },
   ];
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const pairs = await Promise.all(
+        NAV_VISIBILITY_ITEMS.filter((it) => it.showOnHome).map(async (it) => {
+          try {
+            const res = await featureFlagsApi.getPublic(it.flagKey);
+            return [it.path, res?.value?.enabled !== false] as const;
+          } catch {
+            return [it.path, true] as const;
+          }
+        }),
+      );
+      if (!mounted) return;
+      const next: Record<string, boolean> = {};
+      for (const [path, visible] of pairs) {
+        next[path] = visible;
+      }
+      setNavVisibleMap(next);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const visibleModules = useMemo(
+    () => platformModules.filter((module) => navVisibleMap[module.path] !== false),
+    [platformModules, navVisibleMap],
+  );
 
   return (
     <div className="home-page">
@@ -149,7 +187,7 @@ const HomePage: React.FC = () => {
         <ToolOutlined /> 平台功能
       </Title>
       <div className="home-module-grid">
-        {platformModules.map((module, index) => (
+        {visibleModules.map((module, index) => (
           <div key={index} className="home-module-grid-item">
             <Card
               hoverable

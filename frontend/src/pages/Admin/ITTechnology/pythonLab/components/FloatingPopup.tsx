@@ -6,7 +6,7 @@ const { Text } = Typography;
 
 export function FloatingPopup(props: {
   open: boolean;
-  title: string;
+  title: React.ReactNode;
   anchorRect?: DOMRect | null;
   initialSize?: { w: number; h: number };
   draggable?: boolean;
@@ -22,6 +22,16 @@ export function FloatingPopup(props: {
 
   const [size, setSize] = useState(() => ({ w: initialSize?.w ?? 520, h: initialSize?.h ?? 360 }));
   const [pos, setPos] = useState({ x: padding, y: padding });
+  const sizeRef = useRef(size);
+  const posRef = useRef(pos);
+
+  useEffect(() => {
+    sizeRef.current = size;
+  }, [size]);
+
+  useEffect(() => {
+    posRef.current = pos;
+  }, [pos]);
 
   const clampSize = useCallback((w: number, h: number) => {
     const maxW = Math.max(minW, window.innerWidth - padding * 2);
@@ -32,14 +42,15 @@ export function FloatingPopup(props: {
   }, []);
 
   const clampPos = useCallback(
-    (x: number, y: number) => {
-      const maxX = Math.max(padding, window.innerWidth - size.w - padding);
-      const maxY = Math.max(padding, window.innerHeight - size.h - padding);
+    (x: number, y: number, nextSize?: { w: number; h: number }) => {
+      const currentSize = nextSize ?? sizeRef.current;
+      const maxX = Math.max(padding, window.innerWidth - currentSize.w - padding);
+      const maxY = Math.max(padding, window.innerHeight - currentSize.h - padding);
       const nx = Math.max(padding, Math.min(maxX, x));
       const ny = Math.max(padding, Math.min(maxY, y));
       return { x: nx, y: ny };
     },
-    [size.h, size.w]
+    []
   );
 
   const anchorKey = useMemo(() => {
@@ -70,11 +81,14 @@ export function FloatingPopup(props: {
 
   const onHeaderPointerDown = (e: React.PointerEvent) => {
     if (!draggable) return;
+    if (e.button !== 0) return;
     e.preventDefault();
+    const target = e.currentTarget as HTMLElement & { setPointerCapture?: (pointerId: number) => void };
+    if (typeof target.setPointerCapture === "function") target.setPointerCapture(e.pointerId);
     const startX = e.clientX;
     const startY = e.clientY;
-    const baseX = pos.x;
-    const baseY = pos.y;
+    const baseX = posRef.current.x;
+    const baseY = posRef.current.y;
 
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
@@ -91,17 +105,22 @@ export function FloatingPopup(props: {
 
   const onResizePointerDown = (e: React.PointerEvent) => {
     if (!resizable) return;
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    const target = e.currentTarget as HTMLElement & { setPointerCapture?: (pointerId: number) => void };
+    if (typeof target.setPointerCapture === "function") target.setPointerCapture(e.pointerId);
     const startX = e.clientX;
     const startY = e.clientY;
-    const baseW = size.w;
-    const baseH = size.h;
+    const baseW = sizeRef.current.w;
+    const baseH = sizeRef.current.h;
 
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
-      setSize(clampSize(baseW + dx, baseH + dy));
+      const nextSize = clampSize(baseW + dx, baseH + dy);
+      setSize(nextSize);
+      setPos((p) => clampPos(p.x, p.y, nextSize));
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -115,6 +134,7 @@ export function FloatingPopup(props: {
 
   return (
     <div
+      data-testid="floating-popup"
       style={{
         position: "fixed",
         left: pos.x,
@@ -132,6 +152,7 @@ export function FloatingPopup(props: {
       }}
     >
       <div
+        data-testid="floating-popup-header"
         onPointerDown={onHeaderPointerDown}
         style={{
           padding: "8px 12px",
@@ -139,6 +160,7 @@ export function FloatingPopup(props: {
           background: "var(--ws-color-surface)",
           cursor: draggable ? "move" : "default",
           userSelect: "none",
+          touchAction: "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -155,6 +177,7 @@ export function FloatingPopup(props: {
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
       {resizable ? (
         <div
+          data-testid="floating-popup-resize-handle"
           onPointerDown={onResizePointerDown}
           style={{
             position: "absolute",
@@ -163,6 +186,7 @@ export function FloatingPopup(props: {
             width: 16,
             height: 16,
             cursor: "nwse-resize",
+            touchAction: "none",
             background:
               "linear-gradient(135deg, transparent 0 55%, rgba(0,0,0,0.16) 55% 62%, transparent 62% 70%, rgba(0,0,0,0.16) 70% 77%, transparent 77% 85%, rgba(0,0,0,0.16) 85% 92%, transparent 92% 100%)",
             borderBottomRightRadius: 12,

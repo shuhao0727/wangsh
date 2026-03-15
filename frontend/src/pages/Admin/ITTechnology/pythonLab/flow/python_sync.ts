@@ -2,6 +2,7 @@ import type { FlowEdge, FlowNode } from "./model";
 import type { IRBlock, IRIf, IRNode, IRStmt, IRWhile } from "./ir";
 import type { FlowNodeShape } from "../types";
 import { buildDebugMapFromNodes, type DebugForInEntry, type DebugForRangeEntry, type DebugMap, type DebugWhileEntry } from "./debugMap";
+import { splitNodeTitleSemantically } from "./ports";
 
 type CodeIRBlock = { kind: "block"; items: CodeIRNode[] };
 type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRForIn | CodeIRDef;
@@ -357,8 +358,9 @@ export function parsePythonToIR(code: string): ParsePythonResult {
   return { ok: true, ir: top.block, warnings };
 }
 
-type BuildResult = { nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; warnings: string[]; debugMap: DebugMap };
-export type FunctionFlowResult = { name: string; params: string[]; nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; debugMap: DebugMap };
+export type FlowSplitDiagnostic = { level: "info" | "warn"; code: string; message: string; line?: number };
+type BuildResult = { nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; warnings: string[]; debugMap: DebugMap; splitDiagnostics: FlowSplitDiagnostic[] };
+export type FunctionFlowResult = { name: string; params: string[]; nodes: FlowNode[]; edges: FlowEdge[]; ir: IRBlock; debugMap: DebugMap; splitDiagnostics: FlowSplitDiagnostic[] };
 export type BuildFlowsResult = { main: BuildResult; functions: FunctionFlowResult[] };
 export type BuildUnifiedFlowResult = BuildResult;
 
@@ -380,6 +382,23 @@ const isSubroutineCall = (stmt: string) => {
   if (t.startsWith("if ") || t.startsWith("while ") || t.startsWith("for ") || t.startsWith("def ")) return false;
   const noAssign = t.replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, "");
   return /^[A-Za-z_][A-Za-z0-9_]*\s*\(.*\)\s*$/.test(noAssign);
+};
+
+const inferCollectionShape = (stmt: string): FlowNodeShape | null => {
+  const t = stmt.trim();
+  if (!t) return null;
+  const low = t.toLowerCase();
+  if (t.startsWith("return ") || t === "return") return null;
+  if (t.startsWith("if ") || t.startsWith("while ") || t.startsWith("for ") || t.startsWith("def ")) return null;
+  if (/=\s*\{[^}]*\}\s*$/.test(t)) return "dict_op";
+  if (/=\s*\[[^\]]*\]\s*$/.test(t)) return "list_op";
+  if (/=\s*dict\s*\(/.test(low)) return "dict_op";
+  if (/=\s*list\s*\(/.test(low)) return "list_op";
+  if (/\.\s*(append|extend|insert|remove|clear|sort|reverse)\s*\(/.test(low)) return "list_op";
+  if (/\.\s*(get|setdefault|update|keys|values|items|popitem)\s*\(/.test(low)) return "dict_op";
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*=/.test(t)) return "dict_op";
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[[^\]]+\]\s*=/.test(t)) return "list_op";
+  return null;
 };
 
 export function buildFlowFromPython(code: string): BuildResult | null {
@@ -406,7 +425,7 @@ export function buildFlowsFromPython(code: string): BuildFlowsResult | null {
   const functions: FunctionFlowResult[] = defs.map((d) => {
     const title = `def ${d.name}(${d.params.join(", ")})`;
     const f = buildFlowFromCodeIR(d.body, [], { startTitle: title, endTitle: "结束" });
-    return { name: d.name, params: d.params, nodes: f.nodes, edges: f.edges, ir: f.ir, debugMap: f.debugMap };
+    return { name: d.name, params: d.params, nodes: f.nodes, edges: f.edges, ir: f.ir, debugMap: f.debugMap, splitDiagnostics: f.splitDiagnostics };
   });
   return { main, functions };
 }
@@ -419,6 +438,7 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
   const forRanges: DebugForRangeEntry[] = [...built.main.debugMap.forRanges];
   const forIns: DebugForInEntry[] = [...built.main.debugMap.forIns];
   const whiles: DebugWhileEntry[] = [...built.main.debugMap.whiles];
+  const splitDiagnostics: FlowSplitDiagnostic[] = [...built.main.splitDiagnostics];
 
   const remapGraph = (fn: FunctionFlowResult, idx: number) => {
     const prefix = `fn_${fn.name}_${idx}__`;
@@ -465,10 +485,11 @@ export function buildUnifiedFlowFromPython(code: string): BuildUnifiedFlowResult
     forRanges.push(...mappedForRanges);
     forIns.push(...mappedForIns);
     whiles.push(...mappedWhiles);
+    splitDiagnostics.push(...fn.splitDiagnostics);
   });
 
   const debugMap = buildDebugMapFromNodes(nodes, forRanges, forIns, whiles);
-  return { nodes, edges, ir: built.main.ir, warnings: built.main.warnings, debugMap };
+  return { nodes, edges, ir: built.main.ir, warnings: built.main.warnings, debugMap, splitDiagnostics };
 }
 
 function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { startTitle: string; endTitle: string }): BuildResult {
@@ -480,6 +501,8 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   const forRanges: DebugForRangeEntry[] = [];
   const forIns: DebugForInEntry[] = [];
   const whiles: DebugWhileEntry[] = [];
+  const splitDiagnostics: FlowSplitDiagnostic[] = [];
+  const splitDiagnosticSeen = new Set<string>();
 
   const codeBlockLineRange = (b: CodeIRBlock | null | undefined): { startLine: number; endLine: number } | null => {
     if (!b) return null;
@@ -509,10 +532,10 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     return { startLine: min, endLine: max };
   };
 
-  const startNode: FlowNode = { id: nextId("start"), shape: "start_end", title: titles.startTitle, x: 0, y: 0 };
+  const startNode: FlowNode = { type: "flow_element", id: nextId("start"), shape: "start_end", title: titles.startTitle, x: 0, y: 0 };
   nodes.push(startNode);
 
-  const endNode: FlowNode = { id: nextId("end"), shape: "start_end", title: titles.endTitle, x: 0, y: 0 };
+  const endNode: FlowNode = { type: "flow_element", id: nextId("end"), shape: "start_end", title: titles.endTitle, x: 0, y: 0 };
   const isFunctionFlow = titles.startTitle.trim().toLowerCase().startsWith("def ");
   const isReturnStmt = (text: string) => {
     const t = text.trim();
@@ -522,17 +545,9 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     const t = text.trim();
     if (isReturnStmt(t)) return "return_stmt";
     if (/^[A-Za-z_][A-Za-z0-9_]*\s*(\+=|-=|\*=|\/=|\/\/=|%=|\*\*=)\s*/.test(t)) return "aug_assign";
+    if (inferCollectionShape(t)) return undefined;
     if (isSubroutineCall(t)) return "call_site";
     return undefined;
-  };
-
-  const isCollectionStmt = (text: string) => {
-    const t = text.trim();
-    if (!t) return false;
-    if (/=\s*\[[^\]]*\]\s*$/.test(t) || /=\s*\{[^}]*\}\s*$/.test(t)) return true;
-    if (/\.\s*(append|extend|insert|pop|remove|clear|sort|reverse|get|setdefault|update|keys|values|items)\s*\(/.test(t)) return true;
-    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[[^\]]+\]\s*=/.test(t)) return true;
-    return false;
   };
 
   const emitEdge = (from: string, to: string, label?: string) => {
@@ -540,8 +555,18 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const emitStmtNode = (text: string, sourceLine?: number, sourceRole?: string) => {
-    const shape: FlowNodeShape = isIO(text) ? "io" : isCollectionStmt(text) ? "collection" : isSubroutineCall(text) ? "subroutine" : "process";
-    const n: FlowNode = { id: nextId("n"), shape, title: text, x: 0, y: 0, sourceLine, sourceRole };
+    const collectionShape = inferCollectionShape(text);
+    const shape: FlowNodeShape = isIO(text) ? "io" : collectionShape ?? (isSubroutineCall(text) ? "subroutine" : "process");
+    const split = splitNodeTitleSemantically(text, shape);
+    if (sourceLine && split.diagnostics.length) {
+      for (const d of split.diagnostics) {
+        const key = `${sourceLine}:${d.code}:${d.message}`;
+        if (splitDiagnosticSeen.has(key)) continue;
+        splitDiagnosticSeen.add(key);
+        splitDiagnostics.push({ level: d.level, code: d.code, message: d.message, line: sourceLine });
+      }
+    }
+    const n: FlowNode = { type: "flow_element", id: nextId("n"), shape, title: text, x: 0, y: 0, sourceLine, sourceRole };
     nodes.push(n);
     const irStmt: IRStmt = { kind: "stmt", text, nodeId: n.id };
     return { nodeId: n.id, ir: irStmt };
@@ -554,7 +579,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const emitIf = (it: CodeIRIf, parentJoinId?: string): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
-    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line };
+    const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line };
     nodes.push(d);
 
     // If we are part of an elif chain (parentJoinId provided), we reuse the parent's join node.
@@ -563,7 +588,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
 
     // Only create the join node if it's new (not passed from parent)
     if (!parentJoinId) {
-      const join: FlowNode = { id: joinId, shape: "connector", title: "", x: 0, y: 0 };
+      const join: FlowNode = { type: "flow_element", id: joinId, shape: "connector", title: "", x: 0, y: 0 };
       nodes.push(join);
     }
 
@@ -633,7 +658,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const emitWhile = (it: CodeIRWhile) => {
-    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "while_check" };
+    const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "while_check" };
     nodes.push(d);
     const bodyRes = emitBlock(it.body);
     const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
@@ -660,7 +685,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
 
   const emitForIn = (it: CodeIRForIn) => {
     const cond = `has_next(${it.iterable})`;
-    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_in_next" };
+    const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_in_next" };
     nodes.push(d);
     const bindText = `${it.vars.join(", ")} = next(${it.iterable})`;
     const bind = emitStmtNode(bindText, it.loc.line, "for_in_bind");
@@ -694,18 +719,27 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   const emitForRange = (it: CodeIRForRange) => {
     const stepText = it.step ? it.step.trim() : "1";
     const rangeExpr = stepText === "1" ? `range(${it.start}, ${it.end})` : `range(${it.start}, ${it.end}, ${stepText})`;
-    const seqName = `_seq_${it.v}`;
-    const iterName = `_it_${it.v}`;
-    const init = emitStmtNode(`${seqName} = list(${rangeExpr}); ${iterName} = iter(${seqName})`, it.loc.line, "for_init");
-    const cond = `has_next(${iterName})`;
-    const d: FlowNode = { id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_check" };
+    const buildSeq = emitStmtNode(`${rangeExpr}`, it.loc.line, "for_init");
+    const buildIter = emitStmtNode(`it in ${rangeExpr}`, it.loc.line, "for_init");
+    const cond = `has_next(it)`;
+    const d: FlowNode = {
+      type: "flow_element",
+      id: nextId("dec"),
+      shape: "decision",
+      title: `${it.v}的值在列表？`,
+      x: 0,
+      y: 0,
+      sourceLine: it.loc.line,
+      sourceRole: "for_check",
+    };
     nodes.push(d);
-    const bind = emitStmtNode(`${it.v} = next(${iterName})`, it.loc.line, "for_inc");
+    const bind = emitStmtNode(`${it.v} = next(it)`, it.loc.line, "for_inc");
     const bodyRes = emitBlock(it.body);
     const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
-    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: init.nodeId, checkNodeId: d.id, incNodeId: bind.nodeId, bodyLineRange });
+    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: buildSeq.nodeId, checkNodeId: d.id, incNodeId: bind.nodeId, bodyLineRange });
 
-    emitEdge(init.nodeId, d.id);
+    emitEdge(buildSeq.nodeId, buildIter.nodeId);
+    emitEdge(buildIter.nodeId, d.id);
     emitEdge(d.id, bind.nodeId, "是");
     emitEdge(bind.nodeId, bodyRes.entry);
     const backEdgeId = nextId("e");
@@ -722,7 +756,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     });
     const loopBody: IRBlock = { kind: "block", items: [bind.ir, ...bodyRes.ir.items] };
     const irWhile: IRWhile = { kind: "while", cond, body: loopBody, decisionId: d.id, backEdgeId };
-    return { entry: init.nodeId, exit: d.id, irItems: [init.ir as IRNode, irWhile as IRNode], whileDecisionId: d.id };
+    return { entry: buildSeq.nodeId, exit: d.id, irItems: [buildSeq.ir as IRNode, buildIter.ir as IRNode, irWhile as IRNode], whileDecisionId: d.id };
   };
 
   const emitNode = (it: CodeIRNode): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
@@ -791,5 +825,5 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   };
 
   const debugMap = buildDebugMapFromNodes(nodes, forRanges, forIns, whiles);
-  return { nodes, edges, ir, warnings, debugMap };
+  return { nodes, edges, ir, warnings, debugMap, splitDiagnostics };
 }

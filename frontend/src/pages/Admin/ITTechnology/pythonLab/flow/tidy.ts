@@ -297,11 +297,11 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
     })();
     if (!startId && allowInsert) {
       startId = nextId("__start");
-      ns.unshift({ id: startId, shape: "start_end", title: "开始", x: bounds.minX, y: bounds.minY - 120 });
+      ns.unshift({ type: "flow_element", id: startId, shape: "start_end", title: "开始", x: bounds.minX, y: bounds.minY - 120 });
     }
     if (!endId && allowInsert) {
       endId = nextId("__end");
-      ns.push({ id: endId, shape: "start_end", title: "结束", x: bounds.minX, y: bounds.maxY + 120 });
+      ns.push({ type: "flow_element", id: endId, shape: "start_end", title: "结束", x: bounds.minX, y: bounds.maxY + 120 });
     }
     if ((!start || !end) && allowInsert && startId && endId) {
       log.push({ ruleId: "R_TIDY_START_END", description: "补齐统一入口出口", affectedNodeIds: [startId, endId] });
@@ -383,7 +383,7 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
     };
     const rewriteToJoin = (mergeId: string, branchEntries: string[], union: Set<string>) => {
       const joinId = nextId("__join");
-      ns.push({ id: joinId, shape: "connector", title: "", x: nodeById.get(mergeId)?.x ?? 0, y: (nodeById.get(mergeId)?.y ?? 0) - 80 });
+      ns.push({ type: "flow_element", id: joinId, shape: "connector", title: "", x: nodeById.get(mergeId)?.x ?? 0, y: (nodeById.get(mergeId)?.y ?? 0) - 80 });
       es.push({ id: nextId(`${joinId}__to__${mergeId}`), from: joinId, to: mergeId, style: "straight" });
       const rewritable = es.filter((e) => !e.toEdge && e.to === mergeId && (union.has(e.from) || branchEntries.includes(e.from)));
       if (rewritable.length < 2) return null;

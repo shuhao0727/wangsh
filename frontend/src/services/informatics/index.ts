@@ -6,3 +6,6 @@ export type { PublicTypstNote, PublicTypstNoteListItem } from "./publicTypstNote
 
 export { typstCategoriesApi, typstStylesApi } from "./typstMeta";
 export type { TypstCategoryListItem, TypstStyleListItem, TypstStyleResponse } from "./typstMeta";
+
+export { githubSyncApi } from "./githubSync";
+export type { GithubSyncRun, GithubSyncSettings, GithubSyncTaskStatus } from "./githubSync";

@@ -15,7 +15,9 @@ import {
   EyeOutlined,
   PlusOutlined,
   MinusOutlined,
-  RollbackOutlined
+  RollbackOutlined,
+  RobotOutlined,
+  ThunderboltOutlined
 } from "@ant-design/icons";
 import { validatePythonLite } from "../../flow/python_sync";
 import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabDebugApi";
@@ -23,6 +25,7 @@ import { MonacoPythonEditor } from "../MonacoPythonEditor";
 import XtermTerminal from "../XtermTerminal";
 import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
+// import { AIAssistantModal } from "../AIAssistantModal";
 import type { RightPanelTabKey } from "../rightPanelTabPolicy";
 import type { RightPanelProps } from "./types";
 import { DebugTab } from "./DebugTab";
@@ -44,6 +47,7 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
     revealLine,
     variableColumns,
     runner,
+    flow,
     debugCapabilities,
     runnerError,
     lastLaunchMode,
@@ -65,10 +69,15 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
     beautifyError,
     onRefreshBeautify,
     onClearPendingOutput,
+    autoOptimizeCode,
+    setAutoOptimizeCode,
+    onOptimizeCode,
   } = props;
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  // const [aiOpen, setAiOpen] = useState(false);
+  // const [aiAnchorRect, setAiAnchorRect] = useState<DOMRect | null>(null);
   const [activeTab, setActiveTab] = useState<RightPanelTabKey>("terminal");
   const [rebuildError, setRebuildError] = useState<string | null>(null);
 
@@ -311,6 +320,9 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
                 onClick={() => setEditorFontSize(s => Math.min(32, s + 1))} 
               />
             </Space>
+            <Tooltip title="立即优化代码">
+               <Button type="text" icon={<ThunderboltOutlined />} size="small" onClick={onOptimizeCode} />
+            </Tooltip>
             <Tooltip title="放大编辑器">
               <Button type="text" icon={<ExpandOutlined />} size="small" onClick={() => setEditorOpen(true)} />
             </Tooltip>
@@ -572,6 +584,15 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
           />
         </div>
       </FloatingPopup>
+      {/* <AIAssistantModal
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        code={code}
+        flow={flow}
+        anchorRect={aiAnchorRect}
+        autoOptimizeCode={autoOptimizeCode}
+        setAutoOptimizeCode={setAutoOptimizeCode}
+      /> */}
     </div>
   );
 });

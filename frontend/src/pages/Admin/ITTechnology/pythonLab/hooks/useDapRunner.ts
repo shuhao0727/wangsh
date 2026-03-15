@@ -513,16 +513,26 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         });
 
         if (selection.transitionQueue.length >= 2) {
-          const nextNodeId = selection.transitionQueue[1];
-          const thenRole = selection.inferred?.thenRole ?? null;
-          emphasisTimerRef.current = setTimeout(() => {
-            if (emphasisSeqRef.current !== mySeq) return;
-            if (stateRef.current.status !== "paused") return;
-            dispatch({
-              type: "SET_ACTIVE_EMPHASIS",
-              payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: thenRole, activeNodeId: nextNodeId },
-            });
-          }, 220);
+          const queue = selection.transitionQueue.slice(1);
+          const MIN_STEP_DURATION = 500;
+          
+          const playNext = (idx: number) => {
+            if (idx >= queue.length) return;
+            const nextNodeId = queue[idx];
+            const thenRole = idx === 0 ? (selection.inferred?.thenRole ?? null) : null;
+            
+            emphasisTimerRef.current = setTimeout(() => {
+              if (emphasisSeqRef.current !== mySeq) return;
+              if (stateRef.current.status !== "paused") return;
+              dispatch({
+                type: "SET_ACTIVE_EMPHASIS",
+                payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: thenRole, activeNodeId: nextNodeId },
+              });
+              playNext(idx + 1);
+            }, MIN_STEP_DURATION);
+          };
+          
+          playNext(0);
         }
 
         prevVarsRef.current = diff.next;
@@ -633,7 +643,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("请求响应超时，请检查网络或后端服务状态")), 5000)
+        setTimeout(() => reject(new Error("请求响应超时，请检查网络或后端服务状态")), 12000)
       );
 
       const session = await Promise.race([createPromise, timeoutPromise]);
@@ -642,7 +652,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       traceLifecycle("session_created", { mode, sessionId: session.session_id });
 
       // 2. Wait for Ready (Adaptive Polling)
-      const maxWaitMs = 15000;
+      const maxWaitMs = 45000;
       const startTime = Date.now();
       let waited = 0;
       let readyMeta: any = null;
@@ -665,7 +675,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
         // Adaptive interval: 200ms for first 3s, then 500ms, then 1000ms
         const elapsed = Date.now() - startTime;
-        const nextPoll = elapsed < 3000 ? 200 : elapsed < 10000 ? 500 : 1000;
+        const nextPoll = elapsed < 5000 ? 150 : elapsed < 15000 ? 350 : 700;
         await new Promise((r) => setTimeout(r, nextPoll));
         waited += nextPoll; // Approx
       }
@@ -893,7 +903,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         linesStartAt1: true,
         columnsStartAt1: true,
         pathFormat: "path"
-      }, 15000, 1);
+      }, 20000, 2);
       const initCaps = (initializeResp as any)?.body || null;
       dispatch({
         type: "SET_DAP_CAPABILITIES",
@@ -920,7 +930,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
           }
         ],
         justMyCode: true
-      }, 15000, 0);
+      }, 20000, 1);
       traceLifecycle("dap_attach_ok");
 
       await Promise.race([

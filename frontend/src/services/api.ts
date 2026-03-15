@@ -263,6 +263,14 @@ const createApiClient = (): AxiosInstance => {
           }
           await refreshPromise;
           logger.debug("✅ API: 会话刷新成功，重试原始请求");
+          
+          // 更新原始请求的 Token Header
+          const newToken = getStoredAccessToken() || getCookieToken();
+          if (newToken) {
+            originalRequest.headers = originalRequest.headers ?? {};
+            (originalRequest.headers as any).Authorization = `Bearer ${newToken}`;
+          }
+          
           return instance(originalRequest);
         } catch (_refreshError) {
           const detail =

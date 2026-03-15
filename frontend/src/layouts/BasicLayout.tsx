@@ -14,6 +14,8 @@ import "./BasicLayout.css";
 import useAuth from "@hooks/useAuth";
 import { LoginForm, UserMenu } from "@components/Auth";
 import { logger } from "@services/logger";
+import { featureFlagsApi } from "@/services/system/featureFlags";
+import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -34,6 +36,7 @@ const BasicLayout: React.FC = () => {
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
   
   const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
   const isAIAgentsPage = /^\/ai-agents(\/|$)/.test(location.pathname);
@@ -65,6 +68,31 @@ const BasicLayout: React.FC = () => {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const pairs = await Promise.all(
+        NAV_VISIBILITY_ITEMS.map(async (it) => {
+          try {
+            const res = await featureFlagsApi.getPublic(it.flagKey);
+            return [it.path, res?.value?.enabled !== false] as const;
+          } catch {
+            return [it.path, true] as const;
+          }
+        }),
+      );
+      if (!mounted) return;
+      const next: Record<string, boolean> = {};
+      for (const [path, visible] of pairs) {
+        next[path] = visible;
+      }
+      setNavVisibleMap(next);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // 导航菜单项 - 按您的需求设置
   const navMenuItems = [
@@ -98,7 +126,7 @@ const BasicLayout: React.FC = () => {
       icon: <FileTextOutlined />,
       label: "文章",
     },
-  ];
+  ].filter((it) => navVisibleMap[it.key] !== false);
 
   // 处理菜单点击
   const handleMenuClick = ({ key }: { key: string }) => {

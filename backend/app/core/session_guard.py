@@ -125,10 +125,14 @@ async def on_successful_login(user_id: int, request: Request) -> Tuple[str, str]
 
 async def verify_request_session(user_id: int, token_payload: Dict[str, Any], request: Optional[Request] = None) -> bool:
     """验证请求中的令牌是否与当前有效会话匹配（nonce匹配，必要时IP匹配）"""
+    token_nonce = str(token_payload.get("sn", ""))
     stored = await get_user_session(user_id)
     if not stored:
-        return False
-    token_nonce = str(token_payload.get("sn", ""))
+        if not token_nonce:
+            return False
+        ip = extract_client_ip(request) if request is not None else ""
+        await set_user_session(user_id, {"nonce": token_nonce, "ip": ip, "updated_at": _now_iso()})
+        return True
     if not token_nonce or token_nonce != str(stored.get("nonce", "")):
         return False
     if settings.AUTH_ENFORCE_SAME_IP_PER_REQUEST and request is not None:
@@ -136,4 +140,3 @@ async def verify_request_session(user_id: int, token_payload: Dict[str, Any], re
         if ip and stored.get("ip"):
             return ip == stored.get("ip")
     return True
-

@@ -123,10 +123,25 @@ check_command() {
 }
 
 check_docker_daemon() {
-    if ! docker info > /dev/null 2>&1; then
-        print_error "Docker 守护进程未运行，请先启动 Docker Desktop"
-        exit 1
+    if docker info > /dev/null 2>&1; then
+        return 0
     fi
+
+    local max_attempts=40
+    local attempt=1
+
+    if docker desktop --help > /dev/null 2>&1; then
+        docker desktop start > /dev/null 2>&1 || true
+    fi
+
+    while ! docker info > /dev/null 2>&1; do
+        if [ "${attempt}" -ge "${max_attempts}" ]; then
+            print_error "Docker 守护进程未就绪，请先启动 Docker（Docker Desktop / dockerd）"
+            exit 1
+        fi
+        sleep 2
+        ((attempt++))
+    done
 }
 
 # 函数：检查端口是否被占用
@@ -348,7 +363,7 @@ stop_existing_docker_containers() {
 
     local any_running=0
     for n in "${names[@]}"; do
-        if docker ps --format "{{.Names}}" | grep -qx "${n}"; then
+        if docker ps -a --format "{{.Names}}" | grep -qx "${n}"; then
             any_running=1
             break
         fi

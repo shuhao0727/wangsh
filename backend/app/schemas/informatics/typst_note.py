@@ -62,6 +62,7 @@ class TypstNotePublicListItem(BaseModel):
     title: str
     summary: str = ""
     category_path: str = ""
+    source_path: str = ""
     updated_at: datetime
 
 

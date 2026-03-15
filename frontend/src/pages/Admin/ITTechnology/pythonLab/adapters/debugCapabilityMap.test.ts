@@ -72,10 +72,10 @@ test("resolveDebugControlMatrix enables stepping controls only when paused", () 
   expect(paused.stepBack).toBe(false);
 });
 
-test("resolveDebugControlMatrix disables run/debug while running", () => {
+test("resolveDebugControlMatrix keeps run enabled while running and disables debug", () => {
   const cap = createDebugCapabilityMapV1("mature_web_embed");
   const running = resolveDebugControlMatrix("running", cap);
-  expect(running.run).toBe(false);
+  expect(running.run).toBe(true);
   expect(running.debug).toBe(false);
   expect(running.pause).toBe(true);
   expect(running.continue).toBe(false);
@@ -99,8 +99,8 @@ test("control matrix state evolution stays stable across lifecycle statuses", ()
   const running = resolveDebugControlMatrix("running", cap);
   const paused = resolveDebugControlMatrix("paused", cap);
   expect(idle).toEqual({ run: true, debug: true, pause: false, continue: false, stepOver: false, stepInto: false, stepOut: false, stepBack: false, reset: true });
-  expect(starting).toEqual({ run: false, debug: false, pause: false, continue: false, stepOver: false, stepInto: false, stepOut: false, stepBack: false, reset: true });
-  expect(running).toEqual({ run: false, debug: false, pause: true, continue: false, stepOver: false, stepInto: false, stepOut: false, stepBack: false, reset: true });
+  expect(starting).toEqual({ run: true, debug: false, pause: false, continue: false, stepOver: false, stepInto: false, stepOut: false, stepBack: false, reset: true });
+  expect(running).toEqual({ run: true, debug: false, pause: true, continue: false, stepOver: false, stepInto: false, stepOut: false, stepBack: false, reset: true });
   expect(paused).toEqual({ run: true, debug: true, pause: false, continue: true, stepOver: true, stepInto: true, stepOut: true, stepBack: true, reset: true });
   expect(diffDebugControlMatrix(starting, running)).toEqual([{ key: "pause", from: false, to: true }]);
 });
