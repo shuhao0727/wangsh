@@ -2,7 +2,7 @@
 FastAPI 依赖注入工具 - 权限控制和用户认证
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from app.services.auth import get_current_user as auth_get_current_user
 from app.services.auth import get_current_user_or_student
 from app.services.auth import verify_token
 from app.core.session_guard import verify_request_session
+from app.schemas.user_info import UserInfo
 
 # OAuth2 配置
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -33,8 +34,8 @@ async def get_access_token(
 async def get_current_user(
     token: Optional[str] = Depends(get_access_token),
     db: AsyncSession = Depends(get_db),
-    request: Request = None
-) -> Dict[str, Any]:
+    request: Request = None  # type: ignore[assignment]
+) -> UserInfo:
     """
     获取当前认证用户（必须有有效的认证令牌）
     
@@ -81,13 +82,13 @@ async def get_current_user(
     except Exception:
         # 降级为允许通过，避免硬失败（可按需开启严格模式）
         pass
-    return user
+    return cast(UserInfo, user)
 
 
 async def get_current_user_or_none(
     token: Optional[str] = Depends(get_access_token),
     db: AsyncSession = Depends(get_db)
-) -> Optional[Dict[str, Any]]:
+) -> Optional[UserInfo]:
     """
     获取当前认证用户（如果存在）
     
@@ -98,12 +99,12 @@ async def get_current_user_or_none(
         return None
     
     user = await auth_get_current_user(token, db)
-    return user
+    return cast(UserInfo, user) if user else None
 
 
 async def require_super_admin(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-) -> Dict[str, Any]:
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
     """
     要求用户必须是超级管理员
     
@@ -122,8 +123,8 @@ async def require_super_admin(
 
 
 async def require_admin(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-) -> Dict[str, Any]:
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
     """
     要求用户必须是管理员（包括超级管理员）
     
@@ -142,8 +143,8 @@ async def require_admin(
 
 
 async def require_student(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-) -> Dict[str, Any]:
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
     """
     要求用户必须是学生
     
@@ -162,8 +163,8 @@ async def require_student(
 
 
 async def require_user(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-) -> Dict[str, Any]:
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
     """
     要求用户必须是已认证用户（任何角色）
     
@@ -176,9 +177,10 @@ async def require_user(
 async def get_current_user_for_znt(
     db: AsyncSession = Depends(get_db),
     token: Optional[str] = Depends(get_access_token)
-) -> Dict[str, Any]:
+) -> Optional[UserInfo]:
     """
     为znt_users API提供的兼容性用户获取函数
-    如果没有提供token，返回一个模拟的管理员用户
+    无token时返回None
     """
-    return await get_current_user_or_student(token, db)
+    result = await get_current_user_or_student(token, db)
+    return cast(UserInfo, result) if result else None

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -7,7 +8,7 @@ import "katex/dist/katex.min.css"; // Import KaTeX CSS
 import { Card, Avatar, Button, Space, Tag, Tooltip, Flex, Typography, Input, Spin, Collapse } from "antd";
 import { HistoryOutlined, SendOutlined, UserOutlined, ClockCircleOutlined, BranchesOutlined, SettingOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import type { ChatAreaProps, Message, WorkflowGroup } from "./types";
+import type { ChatAreaProps, Message, WorkflowGroup, Agent } from "./types";
 import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
@@ -28,47 +29,47 @@ const ThinkingBubble = () => (
 );
 
 // Markdown components definition (stable reference)
-const markdownComponents: any = {
-  p: ({ children }: any) => (
+const markdownComponents: Components = {
+  p: ({ children }) => (
     <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
   ),
-  h1: ({ children }: any) => (
+  h1: ({ children }) => (
     <div style={{ fontSize: 16, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
       {children}
     </div>
   ),
-  h2: ({ children }: any) => (
+  h2: ({ children }) => (
     <div style={{ fontSize: 14, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
       {children}
     </div>
   ),
-  h3: ({ children }: any) => (
+  h3: ({ children }) => (
     <div style={{ fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
       {children}
     </div>
   ),
-  ul: ({ children }: any) => (
+  ul: ({ children }) => (
     <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
       {children}
     </ul>
   ),
-  ol: ({ children }: any) => (
+  ol: ({ children }) => (
     <ol style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
       {children}
     </ol>
   ),
-  li: ({ children }: any) => (
+  li: ({ children }) => (
     <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
       {children}
     </li>
   ),
-  code: ({ children }: any) => (
+  code: ({ children }) => (
     <code>{children}</code>
   ),
-  pre: ({ children }: any) => (
+  pre: ({ children }) => (
     <pre>{children}</pre>
   ),
-  a: ({ children, href }: any) => (
+  a: ({ children, href }) => (
     <a
       href={href}
       target="_blank"
@@ -84,7 +85,7 @@ const markdownComponents: any = {
 // Memoized MessageBubble component
 const MessageBubble = React.memo<{
   message: Message;
-  currentAgent: any;
+  currentAgent: Agent | null;
   workflowGroups?: WorkflowGroup[];
   userDisplayName?: string;
   isThinking?: boolean;
@@ -131,7 +132,7 @@ const MessageBubble = React.memo<{
             ? "#52c41a"
             : type === "error"
               ? "#ff4d4f"
-              : currentAgent.color;
+              : currentAgent?.color;
     const icon =
       type === "start"
         ? <BranchesOutlined />
@@ -141,7 +142,7 @@ const MessageBubble = React.memo<{
             ? <CheckCircleOutlined />
             : type === "error"
               ? <CloseCircleOutlined />
-              : currentAgent.icon;
+              : currentAgent?.icon;
     const label =
       type === "start"
         ? "工作流启动"
@@ -254,11 +255,11 @@ const MessageBubble = React.memo<{
       <div className={`message-content-wrapper ${isUser ? 'user' : 'agent'}`}>
         <Avatar
           size={32}
-          icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent.icon)}
+          icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent?.icon)}
           style={{
             backgroundColor: isUser
               ? "#1890ff"
-              : (wf ? wf.color : currentAgent.color),
+              : (wf ? wf.color : currentAgent?.color),
             flexShrink: 0,
           }}
         />
@@ -268,10 +269,10 @@ const MessageBubble = React.memo<{
               strong
               style={{
                 fontSize: "12px",
-                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent.color),
+                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent?.color),
               }}
             >
-              {isUser ? displayName : (wf ? wf.label : currentAgent.name)}
+              {isUser ? displayName : (wf ? wf.label : currentAgent?.name)}
             </Text>
             <Text
               style={{
@@ -338,7 +339,7 @@ const MessageBubble = React.memo<{
             <>
               {!isUser && renderWorkflowGroups()}
               {isThinking ? (
-                <div style={{ padding: '8px 4px', color: currentAgent.color }}>
+                <div style={{ padding: '8px 4px', color: currentAgent?.color }}>
                   <ThinkingBubble />
                 </div>
               ) : (isUser || message.content) ? (
@@ -437,7 +438,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 获取当前智能体的消息
   // 使用 String() 转换以兼容数字/字符串类型的 ID
   const currentAgentMessages = messages.filter(
-    (msg) => String(msg.agentId) === String(currentAgent.id),
+    (msg) => String(msg.agentId) === String(currentAgent?.id),
   );
   const isWorkflowMessage = (msg: Message) =>
     msg.sender !== "user" &&
@@ -505,23 +506,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           )}
           <Avatar
             size={32}
-            icon={currentAgent.icon}
-            style={{ backgroundColor: currentAgent.color }}
+            icon={currentAgent?.icon}
+            style={{ backgroundColor: currentAgent?.color }}
           />
           <Space size="small" align="center" style={{ marginLeft: 4 }}>
-            <Text strong style={{ fontSize: 15, color: currentAgent.color }}>
-              {currentAgent.name}
+            <Text strong style={{ fontSize: 15, color: currentAgent?.color }}>
+              {currentAgent?.name}
             </Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {currentAgent.description}
+              {currentAgent?.description}
             </Text>
           </Space>
           <Tag 
-            color={currentAgent.status === "online" ? "success" : "default"} 
+            color={currentAgent?.status === "online" ? "success" : "default"} 
             style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px' }}
             variant="filled"
           >
-            {currentAgent.status === "online" ? "在线" : "离线"}
+            {currentAgent?.status === "online" ? "在线" : "离线"}
           </Tag>
         </Space>
         <Space>
@@ -569,7 +570,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 content: streamingContent || "",
                 sender: 'agent',
                 timestamp: new Date().toISOString(),
-                agentId: currentAgent.id
+                agentId: currentAgent?.id
               }}
               currentAgent={currentAgent}
               workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
@@ -586,7 +587,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             id="message-input"
             value={inputMessage}
             onChange={(e) => onInputChange(e.target.value)}
-            placeholder={`向${currentAgent.name}发送消息...`}
+            placeholder={`向${currentAgent?.name}发送消息...`}
             autoSize={{ minRows: 2, maxRows: 6 }}
             onKeyDown={handleKeyPress}
             style={{ width: "100%" }}

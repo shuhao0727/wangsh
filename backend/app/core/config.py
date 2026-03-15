@@ -305,8 +305,15 @@ class Settings(BaseSettings):
     
     # Redis连接优化配置
     REDIS_CONNECT_TIMEOUT: int = Field(default=5)               # 连接超时秒数
+    REDIS_MAX_CONNECTIONS: int = Field(default=50)              # 连接池最大连接数
     STUDENT_SESSION_TTL: int = Field(default=7200)              # 学生会话有效期（秒）2小时
     REDIS_DB_CACHE: int = Field(default=0)                      # 缓存数据库索引
+
+    # Redis Sentinel 高可用配置（生产环境启用）
+    REDIS_SENTINEL_ENABLED: bool = Field(default=False)
+    REDIS_SENTINEL_MASTER: str = Field(default="mymaster")
+    # 逗号分隔的 sentinel 地址，格式: host1:port1,host2:port2
+    REDIS_SENTINEL_HOSTS: str = Field(default="")
 
     # ==================== PythonLab 调试（V2：Docker + debugpy + Redis） ====================
     DAP_HOST_IP: Optional[str] = Field(default=None)

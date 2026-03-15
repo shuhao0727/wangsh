@@ -1,6 +1,6 @@
 import ipaddress
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 from fastapi import Request
 
@@ -19,7 +19,7 @@ def _key_ip(ip: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _split_header(v: str) -> list[str]:

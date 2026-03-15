@@ -3,16 +3,12 @@
 简化的认证功能
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import or_
 
 from app.core.config import settings
-
-# 密码哈希上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -24,18 +20,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """生成密码哈希"""
-    return pwd_context.hash(password)
+    from app.utils.security import get_password_hash as utils_get_password_hash
+    return utils_get_password_hash(password)
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """创建访问令牌"""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -317,7 +314,7 @@ async def create_refresh_token(db, user_id: int) -> str:
     token = secrets.token_urlsafe(64)
     
     # 计算过期时间（默认30天）
-    expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     
     # 创建刷新令牌记录
     refresh_token = RefreshToken(
@@ -351,7 +348,7 @@ async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
     query = select(RefreshToken).where(
         and_(
             RefreshToken.token == token,
-            RefreshToken.expires_at > datetime.utcnow(),
+            RefreshToken.expires_at > datetime.now(timezone.utc),
             RefreshToken.is_revoked == False
         )
     )
@@ -450,7 +447,7 @@ async def cleanup_expired_refresh_tokens(db) -> int:
     
     # 删除已过期或已撤销的令牌
     stmt = delete(RefreshToken).where(
-        (RefreshToken.expires_at <= datetime.utcnow()) |
+        (RefreshToken.expires_at <= datetime.now(timezone.utc)) |
         (RefreshToken.is_revoked == True)
     )
     

@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.config import settings
-from app.core.sandbox.base import SandboxProvider
+from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
 from app.utils.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class RedisDistributedLock:
                     return 0
                 end
                 """
-                await client.eval(script, 1, self.lock_key, self.identifier)
+                await client.eval(script, 1, self.lock_key, self.identifier)  # type: ignore[misc]
             except Exception as e:
                 logger.error(f"Error releasing lock {self.lock_key}: {e}")
             finally:
@@ -237,12 +237,14 @@ class DockerProvider(SandboxProvider):
                 "--user", "1000:1000",
                 "--pids-limit", str(settings.PYTHONLAB_CONTAINER_PIDS_LIMIT),
                 "--memory", f"{mem_mb}m",
-                "--memory-swap", "-1",
+                "--memory-swap", f"{mem_mb}m",
                 "--cpu-period", "100000",
                 "--cpu-quota", str(cpu_quota),
                 "--log-driver", "json-file",
                 "--log-opt", f"max-size={settings.PYTHONLAB_LOG_MAX_SIZE}",
                 "--log-opt", f"max-file={settings.PYTHONLAB_LOG_MAX_FILE}",
+                # Limit /tmp writes to 50MB tmpfs to prevent disk-fill attacks
+                "--tmpfs", "/tmp:rw,noexec,nosuid,size=50m",
                 "-e", "PYTHONPATH=/workspace",
                 "-e", "PYTHONUNBUFFERED=1",
                 "-w", "/workspace",  # Force working directory
@@ -250,6 +252,9 @@ class DockerProvider(SandboxProvider):
             ]
             if runtime_mode == "debug":
                 cmd.extend(["-p", f"{self.debugpy_port}"])
+            else:
+                # Plain mode: fully isolate network to prevent student code from accessing external services
+                cmd.extend(["--network", "none"])
             
             if self.runtime and self.runtime != "runc":
                 available = await self._get_available_runtimes()
@@ -262,10 +267,12 @@ class DockerProvider(SandboxProvider):
             try:
                 rc, out, err = await _run_async(cmd, timeout_s=60)
                 if rc != 0:
-                    raise RuntimeError(f"Docker start failed: {(err or out or '').strip()[:1000]}")
+                    logger.error(f"Docker start failed: {(err or out or '').strip()[:1000]}")
+                    raise RuntimeError("运行环境启动失败，请稍后重试。如持续失败请联系老师。")
                 container_id = (out or "").strip()
             except Exception as e:
-                raise RuntimeError(f"Docker start exception: {str(e)}")
+                logger.error(f"Docker start exception: {e}")
+                raise RuntimeError("运行环境启动异常，请稍后重试。")
 
             if runtime_mode == "debug":
                 host_port = 0
@@ -281,7 +288,8 @@ class DockerProvider(SandboxProvider):
                         await _run_async(["docker", "rm", "-f", container_id], timeout_s=30)
                     except:
                         pass
-                    raise RuntimeError(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
+                    logger.error(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
+                    raise RuntimeError("调试端口分配失败，请重试运行。")
                 await self._wait_for_readiness(container_id, host_port, runtime_mode)
                 return {
                     "docker_container_id": container_id,
@@ -379,7 +387,8 @@ class DockerProvider(SandboxProvider):
 
         (ws_path / "main.py").write_text(code, encoding="utf-8")
         (ws_path / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-        # No sitecustomize needed for native TTY
+        # Inject sitecustomize.py to block network access at Python level (defense-in-depth)
+        (ws_path / "sitecustomize.py").write_text(get_sitecustomize_content(), encoding="utf-8")
         try:
             ws_path.chmod(0o755)
             (ws_path / "main.py").chmod(0o644)
@@ -495,11 +504,16 @@ class DockerProvider(SandboxProvider):
         deadline = time.monotonic() + 30.0
         while time.monotonic() < deadline:
             if not await self._docker_is_running(container_id):
-                 raise RuntimeError(f"Container exited prematurely.")
+                 raise RuntimeError("运行环境异常退出，请重试。如持续失败请联系老师。")
             if runtime_mode != "debug":
                 return
             listening = await self._debugpy_is_listening(container_id, self.debugpy_port)
             if listening:
                 return
             await asyncio.sleep(0.2)
-        raise RuntimeError(f"debugpy readiness timeout after 30s")
+        # Timeout: cleanup the container to avoid orphans
+        try:
+            await _run_async(["docker", "rm", "-f", container_id], timeout_s=10)
+        except Exception:
+            pass
+        raise RuntimeError("调试服务启动超时，请重试运行。如持续失败请联系老师检查服务状态。")

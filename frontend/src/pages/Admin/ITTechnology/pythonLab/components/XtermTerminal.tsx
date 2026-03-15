@@ -1,7 +1,12 @@
 import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import "xterm/css/xterm.css";
+import type { Terminal } from "xterm";
+import type { FitAddon } from "xterm-addon-fit";
+
+type TerminalInternal = Terminal & {
+  element?: HTMLElement;
+  buffer?: { active?: { cursorX?: number } };
+  onRender?: (callback: () => void) => { dispose: () => void } | null;
+};
 
 export type XtermTerminalHandle = {
   clear: () => void;
@@ -26,7 +31,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const [gutterDigits, setGutterDigits] = useState(2);
   const gutterRafRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
+  const terminalRef = useRef<TerminalInternal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<number | null>(null);
@@ -42,7 +47,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const trace = (phase: string, extra?: Record<string, unknown>) => {
     try {
       const enabled =
-        Boolean((window as any).__PYTHONLAB_TERMINAL_TRACE__) ||
+        Boolean((window as unknown as { __PYTHONLAB_TERMINAL_TRACE__?: boolean }).__PYTHONLAB_TERMINAL_TRACE__) ||
         window.localStorage?.getItem("pythonlab:terminal:trace") === "1";
       if (!enabled) return;
       console.info("[pythonlab:terminal:xterm]", {
@@ -80,7 +85,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
   const refreshGutter = () => {
     if (!showLineNumbersOn) return;
-    const term = terminalRef.current as any;
+    const term = terminalRef.current;
     if (!term) return;
     const active = term.buffer?.active;
     const viewportY = typeof active?.viewportY === "number" ? active.viewportY : 0;
@@ -109,7 +114,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     try {
       const container = containerRef.current;
       const fit = fitAddonRef.current;
-      const termAny = terminalRef.current as any;
+      const termAny = terminalRef.current;
       if (!container || !fit || !termAny) return;
       if (terminalDisposedRef.current) return;
       if (expectedEpoch !== termEpochRef.current) return;
@@ -149,7 +154,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         const t = terminalRef.current;
         if (!t) return;
         if (terminalDisposedRef.current) return;
-        if (!(t as any).element || !(t as any).element.isConnected) return;
+        if (!t.element || !t.element.isConnected) return;
         trace("imperative_clear");
         try {
           t.write("\x1b[2J\x1b[3J\x1b[H");
@@ -160,8 +165,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         const t = terminalRef.current;
         if (!t) return;
         if (terminalDisposedRef.current) return;
-        if (!(t as any).element || !(t as any).element.isConnected) return;
-        const cx = (t as any).buffer?.active?.cursorX;
+        if (!t.element || !t.element.isConnected) return;
+        const cx = t.buffer?.active?.cursorX;
         if (typeof cx === "number" && cx === 0) return;
         trace("imperative_newline");
         try {
@@ -173,7 +178,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         const t = terminalRef.current;
         if (!t) return;
         if (terminalDisposedRef.current) return;
-        if (!(t as any).element || !(t as any).element.isConnected) return;
+        if (!t.element || !t.element.isConnected) return;
         trace("imperative_write", { size: data?.length ?? 0 });
         try {
           t.write(data);
@@ -254,27 +259,36 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       if (!container.isConnected || container.offsetParent === null) return;
       if (!container.ownerDocument?.contains(container)) return;
 
-      const term = new Terminal({
-        cursorBlink: true,
-        fontSize: fontSize,
-        lineHeight: 1.35,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, monospace",
-        theme: {
-          background: "#ffffff",
-          foreground: "#1e293b", // Slate 800
-          cursor: "#1e293b", // Slate 800
-          selectionBackground: "rgba(37, 99, 235, 0.2)", // Blue 600 with opacity
-        },
-        convertEol: true,
-        disableStdin: false,
-        allowProposedApi: true,
-      });
+      Promise.all([
+        import(/* webpackChunkName: "xterm" */ "xterm"),
+        import(/* webpackChunkName: "xterm" */ "xterm-addon-fit"),
+        import(/* webpackChunkName: "xterm" */ "xterm/css/xterm.css"),
+      ]).then(([{ Terminal }, { FitAddon }]) => {
+        if (disposed) return;
+        if (!containerRef.current || terminalRef.current) return;
+        const container = containerRef.current;
+
+        const term = new Terminal({
+          cursorBlink: true,
+          fontSize: fontSize,
+          lineHeight: 1.35,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, monospace",
+          theme: {
+            background: "#ffffff",
+            foreground: "#1e293b",
+            cursor: "#1e293b",
+            selectionBackground: "rgba(37, 99, 235, 0.2)",
+          },
+          convertEol: true,
+          disableStdin: false,
+          allowProposedApi: true,
+        });
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
       try {
         term.open(container);
-      } catch (e: any) {
+      } catch (e: unknown) {
         trace("terminal_open_error", { message: e?.message || "open_failed" });
         try { term.dispose(); } catch {}
         return;
@@ -290,7 +304,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       });
 
       const scrollDisposable = term.onScroll(() => scheduleRefreshGutter());
-      const renderDisposable = (term as any).onRender ? (term as any).onRender(() => scheduleRefreshGutter()) : null;
+      const renderDisposable = term.onRender ? term.onRender(() => scheduleRefreshGutter()) : null;
 
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
@@ -316,7 +330,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         textTailRef.current = "";
         trace("terminal_cleanup_done");
       };
-    });
+    }); // close .then()
+    }); // close requestAnimationFrame
 
     return () => {
       disposed = true;
@@ -365,7 +380,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
           ws.onmessage = (ev) => {
               if (terminalDisposedRef.current) return;
-              const termElement = (term as any)?.element as HTMLElement | undefined;
+              const termElement = term?.element;
               if (!termElement || !termElement.isConnected) return;
               const data = ev.data;
               if (typeof data === "string") {
@@ -380,7 +395,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
                   if (afterEnterRef.current) {
                     afterEnterRef.current = false;
                     const first = filtered[0] || "";
-                    const cx = (term as any).buffer?.active?.cursorX;
+                    const cx = term.buffer?.active?.cursorX;
                     if (typeof cx === "number" && cx > 0 && first !== "\r" && first !== "\n") {
                       try { term.write("\r\n"); } catch {}
                     }
@@ -398,7 +413,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
               trace("ws_close", { code: ev.code });
               if (disposed) return;
               if (terminalDisposedRef.current) return;
-              const termElement = (term as any)?.element as HTMLElement | undefined;
+              const termElement = term?.element;
               if (!termElement || !termElement.isConnected) return;
               const fatalCodes = new Set([4401, 4403, 4404, 4500]);
               if (ev.code !== 1000) {
@@ -434,7 +449,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
               trace("ws_error");
               if (!disposed) {
                   if (terminalDisposedRef.current) return;
-                  const termElement = (term as any)?.element as HTMLElement | undefined;
+                  const termElement = term?.element;
                   if (!termElement || !termElement.isConnected) return;
                   term.write("\r\n终端连接错误\r\n");
                   scheduleRefreshGutter();

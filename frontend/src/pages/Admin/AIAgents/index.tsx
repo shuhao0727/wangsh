@@ -247,13 +247,14 @@ const AdminAIAgents: React.FC = () => {
           try {
             const response = await aiAgentsApi.testAgent(id, testMessage);
             if (response.success) {
+              const testData = response.data as { message?: string; response_time?: number };
               Modal.success({
                 title: "测试成功",
                 content: (
                   <div>
-                    <p>{response.data.message}</p>
-                    {response.data.response_time && (
-                      <p>响应时间: {response.data.response_time.toFixed(2)}ms</p>
+                    <p>{testData.message}</p>
+                    {testData.response_time && (
+                      <p>响应时间: {testData.response_time.toFixed(2)}ms</p>
                     )}
                   </div>
                 ),

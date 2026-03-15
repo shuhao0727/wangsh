@@ -18,61 +18,82 @@ import type {
 import { api } from "../../api";
 import { logger } from "../../logger";
 
+// 从 unknown 错误中提取 message 和 response.data
+interface ApiErrorShape {
+  message?: string;
+  response?: { data?: { detail?: unknown; message?: unknown } };
+}
+const asApiError = (e: unknown): ApiErrorShape =>
+  (e && typeof e === "object" ? e : {}) as ApiErrorShape;
+
 // API路径常量
 const AI_AGENTS_BASE_PATH = "/ai-agents/";
 const MODEL_DISCOVERY_BASE_PATH = "/model-discovery";
 
-const toDetailMessage = (detail: any): string | undefined => {
+const toDetailMessage = (detail: unknown): string | undefined => {
   if (!detail) return undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
     const parts = detail
-      .map((d) => {
+      .map((d: unknown) => {
         if (!d) return "";
         if (typeof d === "string") return d;
-        const loc = Array.isArray(d.loc) ? d.loc.join(".") : "";
-        const msg = d.msg || d.message || "";
+        const obj = d as Record<string, unknown>;
+        const loc = Array.isArray(obj.loc) ? (obj.loc as (string | number)[]).join(".") : "";
+        const msg = String(obj.msg || obj.message || "");
         return [loc, msg].filter(Boolean).join(": ");
       })
       .filter(Boolean);
     return parts.join("；") || undefined;
   }
   if (typeof detail === "object") {
-    return detail.msg || detail.message || JSON.stringify(detail);
+    const obj = detail as Record<string, unknown>;
+    return String(obj.msg || obj.message || JSON.stringify(detail));
   }
   return String(detail);
 };
 
+// 后端返回的原始 agent 数据结构
+type AgentRaw = Record<string, unknown>;
+
+// 辅助：安全取字符串
+const str = (v: unknown, fallback = ""): string =>
+  typeof v === "string" ? v : fallback;
+const bool = (v: unknown, fallback = false): boolean =>
+  typeof v === "boolean" ? v : fallback;
+const num = (v: unknown, fallback = 0): number =>
+  typeof v === "number" ? v : fallback;
+
 // 格式化API响应，添加前端兼容字段
-const formatAgentResponse = (agent: any): AIAgent => {
+const formatAgentResponse = (agent: AgentRaw): AIAgent => {
   return {
-    id: agent.id,
-    name: agent.name,
-    agent_name: agent.agent_name || agent.name, // 兼容字段
-    agent_type: agent.agent_type,
-    description: agent.description || "",
-    api_endpoint: agent.api_endpoint,
-    api_key: agent.api_key || undefined,
-    has_api_key: agent.has_api_key,
-    api_key_last4: agent.api_key_last4,
-    is_active: agent.is_active,
-    status: agent.status || agent.is_active, // 兼容字段
-    is_deleted: agent.is_deleted || false,
-    created_at: agent.created_at,
-    deleted_at: agent.deleted_at,
-    model_name: agent.model_name || undefined, // 可选字段
+    id: num(agent.id),
+    name: str(agent.name),
+    agent_name: str(agent.agent_name) || str(agent.name),
+    agent_type: str(agent.agent_type) as AIAgent["agent_type"],
+    description: str(agent.description),
+    api_endpoint: str(agent.api_endpoint),
+    api_key: typeof agent.api_key === "string" ? agent.api_key : undefined,
+    has_api_key: bool(agent.has_api_key),
+    api_key_last4: typeof agent.api_key_last4 === "string" ? agent.api_key_last4 : undefined,
+    is_active: bool(agent.is_active),
+    status: bool(agent.status) || bool(agent.is_active),
+    is_deleted: bool(agent.is_deleted),
+    created_at: str(agent.created_at),
+    deleted_at: typeof agent.deleted_at === "string" ? agent.deleted_at : undefined,
+    model_name: typeof agent.model_name === "string" ? agent.model_name : undefined,
   };
 };
 
 // 格式化分页响应
-const formatPaginatedResponse = (response: any): PaginatedResponse<AIAgent> => {
-  const items = response.items.map(formatAgentResponse);
+const formatPaginatedResponse = (response: AgentRaw): PaginatedResponse<AIAgent> => {
+  const items = (Array.isArray(response.items) ? response.items as AgentRaw[] : []).map(formatAgentResponse);
   return {
     items,
-    total: response.total,
-    page: response.page,
-    page_size: response.page_size,
-    total_pages: response.total_pages,
+    total: num(response.total),
+    page: num(response.page, 1),
+    page_size: num(response.page_size, 20),
+    total_pages: num(response.total_pages),
   };
 };
 
@@ -97,11 +118,11 @@ const aiAgentsApi = {
       const response = await api.get(AI_AGENTS_BASE_PATH, { params: queryParams });
       
       return {
-        data: formatPaginatedResponse(response.data),
+        data: formatPaginatedResponse(response.data as unknown as AgentRaw),
         success: true,
         message: "获取智能体列表成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取智能体列表失败:", error);
       return {
         data: {
@@ -112,7 +133,7 @@ const aiAgentsApi = {
           total_pages: 0,
         },
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取智能体列表失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "获取智能体列表失败",
       };
     }
   },
@@ -124,8 +145,8 @@ const aiAgentsApi = {
       
       // 后端直接返回AIAgentResponse[]数组
       const responseData = response.data;
-      const agents = Array.isArray(responseData) 
-        ? (responseData as any[]).map(formatAgentResponse)
+      const agents = Array.isArray(responseData)
+        ? (responseData as AgentRaw[]).map(formatAgentResponse)
         : [];
       
       return {
@@ -133,12 +154,12 @@ const aiAgentsApi = {
         success: true,
         message: "获取启用智能体列表成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取启用智能体列表失败:", error);
       return {
         data: [],
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取启用智能体列表失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "获取启用智能体列表失败",
       };
     }
   },
@@ -149,11 +170,11 @@ const aiAgentsApi = {
       const response = await api.get(`${AI_AGENTS_BASE_PATH}${id}`);
       
       return {
-        data: formatAgentResponse(response.data),
+        data: formatAgentResponse(response.data as unknown as AgentRaw),
         success: true,
         message: "获取智能体详情成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`获取智能体详情失败 ID=${id}:`, error);
       return {
         data: {
@@ -167,7 +188,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取智能体详情失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "获取智能体详情失败",
       };
     }
   },
@@ -189,11 +210,11 @@ const aiAgentsApi = {
       const response = await api.post(AI_AGENTS_BASE_PATH, requestData);
       
       return {
-        data: formatAgentResponse(response.data),
+        data: formatAgentResponse(response.data as unknown as AgentRaw),
         success: true,
         message: "创建智能体成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("创建智能体失败:", error);
       return {
         data: {
@@ -209,7 +230,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "创建智能体失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "创建智能体失败",
       };
     }
   },
@@ -233,11 +254,11 @@ const aiAgentsApi = {
       const response = await api.put(url, data);
       
       return {
-        data: formatAgentResponse(response.data),
+        data: formatAgentResponse(response.data as unknown as AgentRaw),
         success: true,
         message: "更新智能体成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`更新智能体失败 ID=${id}:`, error);
       return {
         data: {
@@ -253,7 +274,7 @@ const aiAgentsApi = {
           created_at: new Date().toISOString(),
         } as AIAgent,
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "更新智能体信息失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "更新智能体信息失败",
       };
     }
   },
@@ -268,12 +289,12 @@ const aiAgentsApi = {
         success: true,
         message: "删除智能体成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`删除智能体失败 ID=${id}:`, error);
       return {
         data: false,
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "删除智能体失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "删除智能体失败",
       };
     }
   },
@@ -282,7 +303,7 @@ const aiAgentsApi = {
   testAgent: async (
     agentId: number,
     testMessage: string,
-  ): Promise<BaseResponse<any>> => {
+  ): Promise<BaseResponse<Record<string, unknown>>> => {
     try {
       const response = await api.post(
         `${AI_AGENTS_BASE_PATH}test`,
@@ -294,21 +315,21 @@ const aiAgentsApi = {
       );
       
       return {
-        data: response.data,
+        data: response.data as unknown as Record<string, unknown>,
         success: true,
         message: "智能体测试成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`测试智能体失败 ID=${agentId}:`, error);
       return {
         data: {
           success: false,
-          message: toDetailMessage(error.response?.data?.detail) || error.message || "智能体测试失败",
+          message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "智能体测试失败",
           response_time: null,
           timestamp: new Date().toISOString(),
         },
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "智能体测试失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "智能体测试失败",
       };
     }
   },
@@ -319,16 +340,16 @@ const aiAgentsApi = {
         admin_password: adminPassword,
       });
       return {
-        data: String((response.data as any)?.api_key || ""),
+        data: String((response.data as unknown as Record<string, unknown>)?.api_key || ""),
         success: true,
         message: "获取API密钥成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`获取API密钥失败 ID=${agentId}:`, error);
       return {
         data: "",
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取API密钥失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "获取API密钥失败",
       };
     }
   },
@@ -343,7 +364,7 @@ const aiAgentsApi = {
         success: true,
         message: "获取智能体统计数据成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取智能体统计数据失败:", error);
       return {
         data: {
@@ -357,13 +378,13 @@ const aiAgentsApi = {
           api_errors: 0,
         },
         success: false,
-        message: toDetailMessage(error.response?.data?.detail) || error.message || "获取统计数据失败",
+        message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "获取统计数据失败",
       };
     }
   },
 
   // 批量导入智能体（暂时不支持）
-  importAgents: async (_file: File): Promise<BaseResponse<any>> => {
+  importAgents: async (_file: File): Promise<BaseResponse<Record<string, unknown>>> => {
     return {
       data: {
         success: false,
@@ -392,14 +413,14 @@ const aiAgentsApi = {
     try {
       const response = await api.post(`${MODEL_DISCOVERY_BASE_PATH}/discover`, request);
       return response.data as unknown as ModelDiscoveryResponse;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("发现模型失败:", error);
       return {
         success: false,
         provider: "custom" as AIServiceProvider,
         models: [],
         total_count: 0,
-        error_message: toDetailMessage(error.response?.data?.detail) || error.message || "发现模型失败",
+        error_message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "发现模型失败",
         response_time_ms: 0,
       };
     }
@@ -410,14 +431,14 @@ const aiAgentsApi = {
     try {
       const response = await api.post(`${MODEL_DISCOVERY_BASE_PATH}/discover/${agentId}`);
       return response.data as unknown as ModelDiscoveryResponse;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("发现模型失败:", error);
       return {
         success: false,
         provider: "custom" as AIServiceProvider,
         models: [],
         total_count: 0,
-        error_message: toDetailMessage(error.response?.data?.detail) || error.message || "发现模型失败",
+        error_message: toDetailMessage(asApiError(error).response?.data?.detail) || asApiError(error).message || "发现模型失败",
         response_time_ms: 0,
       };
     }
@@ -429,7 +450,7 @@ const aiAgentsApi = {
       const params = provider ? { provider } : {};
       const response = await api.get(`${MODEL_DISCOVERY_BASE_PATH}/preset-models`, { params });
       return response.data as unknown as AIModelInfo[];
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取预设模型失败:", error);
       return [];
     }
@@ -442,7 +463,7 @@ const aiAgentsApi = {
         params: { api_endpoint: apiEndpoint },
       });
       return response.data as unknown as ProviderDetectionResult;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("检测服务商失败:", error);
       return {
         provider: "custom" as AIServiceProvider,
@@ -458,7 +479,7 @@ const aiAgentsApi = {
     try {
       const response = await api.get(`${MODEL_DISCOVERY_BASE_PATH}/supported-providers`);
       return response.data as unknown as SupportedProvidersResponse;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取支持的服务商列表失败:", error);
       return {
         providers: [],

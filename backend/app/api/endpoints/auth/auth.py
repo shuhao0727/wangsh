@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.deps import get_db, get_access_token
 from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token
 from app.core.session_guard import on_successful_login, get_user_session, rotate_user_session, extract_client_ip
+from app.utils.rate_limit import rate_limiter
 
 router = APIRouter()
 
@@ -29,6 +30,10 @@ async def login_for_access_token(
     """
     数据库驱动的登录端点 - 从数据库验证用户
     """
+    # 速率限制：同一 IP 每 2 秒最多 1 次登录请求
+    client_ip = extract_client_ip(request)
+    await rate_limiter.check(f"login:{client_ip}", interval_seconds=2)
+
     # 从数据库验证用户
     user = await authenticate_user_auto(db, username, password)
     
@@ -191,6 +196,10 @@ async def refresh_access_token(
     
     令牌轮换：生成新的刷新令牌，撤销旧的刷新令牌
     """
+    # 速率限制：同一 IP 每 5 秒最多 1 次刷新请求
+    client_ip = extract_client_ip(request)
+    await rate_limiter.check(f"refresh:{client_ip}", interval_seconds=5)
+
     rt = refresh_token or request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME) or request.cookies.get("refresh_token")
     if not rt:
         raise HTTPException(

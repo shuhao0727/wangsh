@@ -2,11 +2,14 @@ import type { FlowEdge, FlowNode } from "./model";
 import { normalizeTitleForMapping } from "./titleSemantics";
 
 export type IRBlock = { kind: "block"; items: IRNode[] };
-export type IRNode = IRStmt | IRIf | IRWhile | IRFor;
+export type IRNode = IRStmt | IRIf | IRWhile | IRFor | IRBreak | IRContinue | IRReturn;
 export type IRStmt = { kind: "stmt"; text: string; nodeId?: string };
-export type IRIf = { kind: "if"; cond: string; then: IRBlock; else: IRBlock | null; decisionId: string; joinId?: string };
+export type IRIf = { kind: "if"; cond: string; then: IRBlock; else: IRBlock | null; elif?: Array<{ cond: string; body: IRBlock; decisionId: string }>; decisionId: string; joinId?: string };
 export type IRWhile = { kind: "while"; cond: string; body: IRBlock; decisionId: string; backEdgeId?: string };
 export type IRFor = { kind: "for"; var: string; body: IRBlock; start?: string; end?: string; iterExpr?: string };
+export type IRBreak = { kind: "break"; nodeId?: string };
+export type IRContinue = { kind: "continue"; nodeId?: string };
+export type IRReturn = { kind: "return"; value?: string; nodeId?: string };
 
 export type GeneratePythonResult = {
   mode: "structured" | "linear" | "empty";
@@ -344,12 +347,12 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
       const t = endToken.trim();
       if (op === "<") return t;
       if (op === "<=") {
-        if (/^\\d+$/.test(t)) return String(Number(t) + 1);
+        if (/^\d+$/.test(t)) return String(Number(t) + 1);
         return `(${t} + 1)`;
       }
       if (op === ">") return t;
       if (op === ">=") {
-        if (/^\\d+$/.test(t)) return String(Number(t) - 1);
+        if (/^\d+$/.test(t)) return String(Number(t) - 1);
         return `(${t} - 1)`;
       }
       return t;
@@ -467,7 +470,7 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
           }
         }
 
-        const condM = /^([A-Za-z_][A-Za-z0-9_]*)\\s*(<=|<|>=|>)\\s*(.+)$/.exec(cur.cond.trim());
+        const condM = /^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|<|>=|>)\s*(.+)$/.exec(cur.cond.trim());
         if (!condM) {
           out.push({ ...cur, body: toFor(cur.body, warningsOut) });
           continue;
@@ -614,13 +617,17 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
         ensureForWarnings(it.body, warningsOut);
         continue;
       }
+      if (it.kind === "break" || it.kind === "continue" || it.kind === "return") {
+        continue;
+      }
+      // it is now narrowed to IRWhile
       const m = condRe.exec(it.cond.trim());
       if (!m) {
         ensureForWarnings(it.body, warningsOut);
         continue;
       }
       const v = m[1];
-      const hasStepLike = it.body.items.some((x) => x.kind === "stmt" && parseStepLike(x.text.trim(), v));
+      const hasStepLike = it.body.items.some((x: IRNode) => x.kind === "stmt" && parseStepLike(x.text.trim(), v));
       if (hasStepLike && !lastInit.has(v)) {
         warningsOut.push(`for 归纳失败：缺少 ${v} 的循环前初始化（如 ${v}=0）`);
       }
@@ -681,6 +688,17 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
         const thenLines = thenRes.lines;
         outLines.push(...(thenLines.length ? thenLines : [pad(indent + 2) + "pass"]));
         lineNo = thenRes.nextLine + (thenLines.length ? 0 : 1);
+        if (it.elif) {
+          for (const ei of it.elif) {
+            outLines.push(pad(indent) + `elif ${ei.cond}:`);
+            nodeLineMap[ei.decisionId] = lineNo;
+            lineNo += 1;
+            const elifRes = emitPython(ei.body, indent + 2, lineNo, nodeLineMap);
+            const elifLines = elifRes.lines;
+            outLines.push(...(elifLines.length ? elifLines : [pad(indent + 2) + "pass"]));
+            lineNo = elifRes.nextLine + (elifLines.length ? 0 : 1);
+          }
+        }
         if (it.else && it.else.items.length) {
           outLines.push(pad(indent) + "else:");
           lineNo += 1;
@@ -691,6 +709,26 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
         }
         continue;
       }
+      if (it.kind === "break") {
+        outLines.push(pad(indent) + "break");
+        if (it.nodeId) nodeLineMap[it.nodeId] = lineNo;
+        lineNo += 1;
+        continue;
+      }
+      if (it.kind === "continue") {
+        outLines.push(pad(indent) + "continue");
+        if (it.nodeId) nodeLineMap[it.nodeId] = lineNo;
+        lineNo += 1;
+        continue;
+      }
+      if (it.kind === "return") {
+        const retExpr = it.value ? ` ${it.value}` : "";
+        outLines.push(pad(indent) + `return${retExpr}`);
+        if (it.nodeId) nodeLineMap[it.nodeId] = lineNo;
+        lineNo += 1;
+        continue;
+      }
+      // it.kind === "while"
       outLines.push(pad(indent) + `while ${it.cond}:`);
       nodeLineMap[it.decisionId] = lineNo;
       lineNo += 1;

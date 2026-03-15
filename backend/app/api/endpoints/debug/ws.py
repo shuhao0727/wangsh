@@ -207,7 +207,15 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
                     if left:
                         await websocket.send_text(left)
                     rc_match = re.search(r"\d+", right)
-                    await mark_plain_terminated(int(rc_match.group(0)) if rc_match else None)
+                    exit_code = int(rc_match.group(0)) if rc_match else None
+                    await mark_plain_terminated(exit_code)
+                    # Show friendly exit message to student
+                    if exit_code == 0:
+                        await websocket.send_text("\r\n\033[32m程序运行结束（退出码: 0）\033[0m\r\n")
+                    elif exit_code is not None:
+                        await websocket.send_text(f"\r\n\033[31m程序运行结束（退出码: {exit_code}）\033[0m\r\n")
+                    else:
+                        await websocket.send_text("\r\n程序运行结束\r\n")
                     rest = right.split("\n", 1)
                     if len(rest) > 1 and rest[1]:
                         await websocket.send_text(rest[1])
@@ -226,18 +234,21 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
     except Exception as e:
         logger.error(f"Terminal WS loop error: {e}")
     finally:
-        # If WS closes, do we kill the process?
-        # No, docker attach is just a client.
-        # But we should kill the attach subprocess.
-        if process:
-            try:
-                if process.returncode is None:
-                    process.terminate()
-            except:
-                pass
+        # Close PTY fd first to unblock any pending os.read(), then kill the
+        # attach subprocess.  Reversing this order can leave the fd dangling
+        # if the process is already gone (ProcessLookupError).
         if pty_fd is not None:
             try:
                 os.close(pty_fd)
+            except Exception:
+                pass
+            pty_fd = None
+        if process:
+            try:
+                if process.returncode is None:
+                    process.kill()  # Use kill() not terminate() for immediate cleanup
+            except ProcessLookupError:
+                pass
             except Exception:
                 pass
         logger.info("terminal ws closed: session_id={}", session_id)
@@ -320,7 +331,8 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         _ws_log("ws_dap_port_invalid", dap_port=port)
         await websocket.close(code=4410)
         return
-    limits = meta.get("limits") if isinstance(meta.get("limits"), dict) else {}
+    _raw_limits = meta.get("limits")
+    limits: Dict[str, Any] = _raw_limits if isinstance(_raw_limits, dict) else {}
     max_stdout_kb = int(limits.get("max_stdout_kb") or WS_MAX_STDOUT_KB)
     max_output_bytes = max(16 * 1024, max_stdout_kb * 1024)
     max_dap_msg_bytes = int(limits.get("max_dap_msg_bytes") or WS_MAX_DAP_MSG_BYTES)
@@ -626,9 +638,11 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         if msg.get("type") != "request":
             return True
         cmd = str(msg.get("command") or "")
-        args = msg.get("arguments") if isinstance(msg.get("arguments"), dict) else {}
+        _raw_args = msg.get("arguments")
+        args: Dict[str, Any] = _raw_args if isinstance(_raw_args, dict) else {}
         if cmd == "setBreakpoints":
-            src = args.get("source") if isinstance(args.get("source"), dict) else {}
+            _raw_src = args.get("source")
+            src: Dict[str, Any] = _raw_src if isinstance(_raw_src, dict) else {}
             if not _is_valid_source_path(src.get("path")):
                 await _send_error_response(msg, f"source.path 仅允许 {WORKSPACE_MAIN_PY}")
                 return False
@@ -708,6 +722,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                 buffer_event.set()
             else:
                 await _ensure_conn()
+                assert writer is not None  # guaranteed by _ensure_conn
                 await _write_dap_message(writer, msg)
                 _ws_log(
                     "ws_forward_direct",
@@ -719,6 +734,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         nonlocal output_bytes, output_truncated, buffer_active, buffer_sent_idx, reader, writer, terminated_event_forwarded
         while True:
             await _ensure_conn()
+            assert reader is not None  # guaranteed by _ensure_conn
             try:
                 msg = await _read_dap_message(reader)
             except EOFError:
@@ -740,12 +756,12 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                     return
                 raise
             if msg.get("type") == "event" and msg.get("event") == "output":
-                body = msg.get("body") if isinstance(msg.get("body"), dict) else {}
+                body = msg.get("body") if isinstance(msg.get("body"), dict) else {}  # type: ignore[union-attr]
                 if isinstance(body, dict):
                     body["_meta"] = _msg_meta("dap")
-                if str(body.get("category") or "") == "telemetry":
+                if isinstance(body, dict) and str(body.get("category") or "") == "telemetry":
                     continue
-                out = body.get("output")
+                out = body.get("output") if isinstance(body, dict) else None
                 if isinstance(out, str):
                     if launch_requested and not terminated_seen:
                         for ln in out.splitlines():
@@ -841,6 +857,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
             if not buffer:
                 continue
             await _ensure_conn()
+            assert writer is not None  # guaranteed by _ensure_conn
             while buffer_sent_idx < len(buffer):
                 try:
                     buffered = buffer[buffer_sent_idx]
@@ -901,7 +918,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                 return 0
             end
             """
-            await redis_client.eval(script, 1, ws_owner_key, ws_owner_value)
+            await redis_client.eval(script, 1, ws_owner_key, ws_owner_value)  # type: ignore[misc]
         except Exception:
             pass
         try:

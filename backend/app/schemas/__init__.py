@@ -9,6 +9,7 @@
 
 from .core import *
 from .articles import *
+from .user_info import UserInfo, RefreshTokenUserInfo
 
 # 导出所有Schema类型
 __all__ = [
@@ -48,5 +49,9 @@ __all__ = [
     "CategoryList",
     "AuthorInfo",
     "CategoryInfo",
-    "TagInfo"
+    "TagInfo",
+    
+    # 认证链路类型
+    "UserInfo",
+    "RefreshTokenUserInfo",
 ]

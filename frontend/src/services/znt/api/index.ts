@@ -12,6 +12,18 @@ import type {
   SearchFilterParams,
 } from "../types";
 
+interface ApiErrorShape {
+  message?: string;
+  response?: { data?: { detail?: unknown } };
+}
+const asApiError = (e: unknown): ApiErrorShape =>
+  (e && typeof e === "object" ? e : {}) as ApiErrorShape;
+const errMsg = (e: unknown, fallback: string): string => {
+  const err = asApiError(e);
+  const detail = err.response?.data?.detail;
+  return (typeof detail === "string" ? detail : err.message) || fallback;
+};
+
 const AGENT_USAGE_BASE_PATH = "/ai-agents/usage";
 const AGENT_CONVERSATIONS_BASE_PATH = "/ai-agents/conversations";
 
@@ -22,7 +34,7 @@ const agentDataApi = {
     params?: SearchFilterParams,
   ): Promise<BaseResponse<PaginatedResponse<AgentUsageData>>> => {
     try {
-      const queryParams: Record<string, any> = {};
+      const queryParams: Record<string, unknown> = {};
       if (params?.keyword) queryParams.keyword = params.keyword;
       if (params?.agent_name) queryParams.agent_name = params.agent_name;
       if (params?.student_name) queryParams.student_name = params.student_name;
@@ -43,7 +55,7 @@ const agentDataApi = {
         success: true,
         message: "获取智能体使用数据成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取智能体使用数据失败:", error);
       return {
         data: {
@@ -55,9 +67,7 @@ const agentDataApi = {
         },
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取智能体使用数据失败",
+          errMsg(error, "获取智能体使用数据失败"),
       };
     }
   },
@@ -83,19 +93,17 @@ const agentDataApi = {
         params: { agent_id: params.agent_id, limit: params.limit ?? 5 },
       });
       return {
-        data: response.data as any,
+        data: response.data as unknown as never[],
         success: true,
         message: "获取会话列表成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取会话列表失败:", error);
       return {
         data: [],
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取会话列表失败",
+          errMsg(error, "获取会话列表失败"),
       };
     }
   },
@@ -121,19 +129,17 @@ const agentDataApi = {
         `${AGENT_CONVERSATIONS_BASE_PATH}/${encodeURIComponent(sessionId)}`,
       );
       return {
-        data: response.data as any,
+        data: response.data as unknown as never[],
         success: true,
         message: "获取会话消息成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取会话消息失败:", error);
       return {
         data: [],
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取会话消息失败",
+          errMsg(error, "获取会话消息失败"),
       };
     }
   },
@@ -159,19 +165,17 @@ const agentDataApi = {
         `/ai-agents/admin/conversations/${encodeURIComponent(sessionId)}`,
       );
       return {
-        data: response.data as any,
+        data: response.data as unknown as never[],
         success: true,
         message: "获取会话消息成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取会话消息失败:", error);
       return {
         data: [],
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取会话消息失败",
+          errMsg(error, "获取会话消息失败"),
       };
     }
   },
@@ -181,7 +185,7 @@ const agentDataApi = {
     params?: SearchFilterParams,
   ): Promise<BaseResponse<StatisticsData>> => {
     try {
-      const queryParams: Record<string, any> = {};
+      const queryParams: Record<string, unknown> = {};
       if (params?.keyword) queryParams.keyword = params.keyword;
       if (params?.agent_name) queryParams.agent_name = params.agent_name;
       if (params?.student_name) queryParams.student_name = params.student_name;
@@ -200,7 +204,7 @@ const agentDataApi = {
         success: true,
         message: "获取统计数据成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取统计数据失败:", error);
       return {
         data: {
@@ -214,9 +218,7 @@ const agentDataApi = {
         },
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取统计数据失败",
+          errMsg(error, "获取统计数据失败"),
       };
     }
   },
@@ -237,7 +239,7 @@ const agentDataApi = {
         success: true,
         message: "写入使用数据成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("写入使用数据失败:", error);
       return {
         data: {
@@ -252,9 +254,7 @@ const agentDataApi = {
         },
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "写入使用数据失败",
+          errMsg(error, "写入使用数据失败"),
       };
     }
   },
@@ -280,19 +280,17 @@ const agentDataApi = {
         params,
       });
       return {
-        data: response.data as any,
+        data: response.data as unknown as never[],
         success: true,
         message: "获取热点问题成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取热点问题失败:", error);
       return {
         data: [],
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取热点问题失败",
+          errMsg(error, "获取热点问题失败"),
       };
     }
   },
@@ -328,19 +326,17 @@ const agentDataApi = {
         params,
       });
       return {
-        data: response.data as any,
+        data: response.data as unknown as never[],
         success: true,
         message: "获取学生提问链条成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取学生提问链条失败:", error);
       return {
         data: [],
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "获取学生提问链条失败",
+          errMsg(error, "获取学生提问链条失败"),
       };
     }
   },
@@ -357,15 +353,13 @@ const agentDataApi = {
         success: true,
         message: "导出成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("导出会话失败:", error);
       return {
         data: new Blob([""], { type: "application/octet-stream" }),
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "导出失败",
+          errMsg(error, "导出失败"),
       };
     }
   },
@@ -387,15 +381,13 @@ const agentDataApi = {
         success: true,
         message: "导出成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("导出热点问题失败:", error);
       return {
         data: new Blob([""], { type: "application/octet-stream" }),
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "导出失败",
+          errMsg(error, "导出失败"),
       };
     }
   },
@@ -419,15 +411,13 @@ const agentDataApi = {
         success: true,
         message: "导出成功",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("导出学生提问链条失败:", error);
       return {
         data: new Blob([""], { type: "application/octet-stream" }),
         success: false,
         message:
-          error.response?.data?.detail ||
-          error.message ||
-          "导出失败",
+          errMsg(error, "导出失败"),
       };
     }
   },

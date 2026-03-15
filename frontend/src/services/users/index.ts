@@ -4,6 +4,7 @@
  */
 
 import { api } from "../api";
+import type { AxiosRequestConfig } from "axios";
 
 // 用户数据类型（与后端 UserResponse 匹配）
 export interface User {
@@ -97,7 +98,7 @@ export const userApi = {
       role_code?: string;
       is_active?: boolean;
     },
-    config?: any,
+    config?: AxiosRequestConfig,
   ) => {
     try {
       // 构建查询参数
@@ -125,7 +126,7 @@ export const userApi = {
    * 获取用户详情（需要管理员权限）
    * @param userId 用户ID
    */
-  getUserById: async (userId: number, config?: any) => {
+  getUserById: async (userId: number, config?: AxiosRequestConfig) => {
     try {
       const response = await api.client.get<User>(`/users/${userId}`, config);
       return response.data;
@@ -139,7 +140,7 @@ export const userApi = {
    * 创建新用户（需要管理员权限）
    * @param userData 用户数据
    */
-  createUser: async (userData: UserCreateRequest, config?: any) => {
+  createUser: async (userData: UserCreateRequest, config?: AxiosRequestConfig) => {
     try {
       const response = await api.client.post<User>("/users/", userData, config);
       return response.data;
@@ -157,7 +158,7 @@ export const userApi = {
   updateUser: async (
     userId: number,
     userData: UserUpdateRequest,
-    config?: any,
+    config?: AxiosRequestConfig,
   ) => {
     try {
       const response = await api.client.put<User>(
@@ -176,7 +177,7 @@ export const userApi = {
    * 删除用户（软删除，需要管理员权限）
    * @param userId 用户ID
    */
-  deleteUser: async (userId: number, config?: any) => {
+  deleteUser: async (userId: number, config?: AxiosRequestConfig) => {
     try {
       const response = await api.client.delete(`/users/${userId}`, config);
       return response.data;
@@ -190,7 +191,7 @@ export const userApi = {
    * 批量删除用户（软删除，需要管理员权限）
    * @param userIds 用户ID列表
    */
-  batchDeleteUsers: async (userIds: number[], config?: any) => {
+  batchDeleteUsers: async (userIds: number[], config?: AxiosRequestConfig) => {
     try {
       const response = await api.client.post<BatchDeleteResponse>(
         "/users/batch-delete",
@@ -209,7 +210,7 @@ export const userApi = {
    */
   downloadImportTemplate: async (
     format: "xlsx" | "csv" = "xlsx",
-    config?: any,
+    config?: AxiosRequestConfig,
   ) => {
     try {
       const response = await api.client.get<Blob>(
@@ -230,7 +231,7 @@ export const userApi = {
    * 批量导入用户（CSV / XLSX 格式，需要管理员权限）
    * @param file 导入文件
    */
-  importUsers: async (file: File, config?: any) => {
+  importUsers: async (file: File, config?: AxiosRequestConfig) => {
     try {
       const formData = new FormData();
       formData.append("file", file);

@@ -41,10 +41,18 @@ export type PythonLabSessionMeta = {
   error_detail?: string | null;
 };
 
+// Session recovery: persist last session ID in sessionStorage for browser refresh recovery
+const SESSION_STORAGE_KEY = "pythonlab:last_session_id";
+
 export const pythonlabSessionApi = {
   create: async (payload: PythonLabCreateSessionRequest): Promise<PythonLabCreateSessionResponse> => {
     const resp = await api.client.post("/debug/sessions", payload);
-    return resp.data as PythonLabCreateSessionResponse;
+    const data = resp.data as PythonLabCreateSessionResponse;
+    // Persist session ID for recovery after browser refresh
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
+    } catch {}
+    return data;
   },
   get: async (sessionId: string): Promise<PythonLabSessionMeta> => {
     const resp = await api.client.get(`/debug/sessions/${sessionId}`, { silent: true });
@@ -52,6 +60,36 @@ export const pythonlabSessionApi = {
   },
   stop: async (sessionId: string): Promise<{ ok: boolean }> => {
     const resp = await api.client.post(`/debug/sessions/${sessionId}/stop`);
+    // Clear persisted session on stop
+    try {
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored === sessionId) sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {}
     return resp.data as { ok: boolean };
+  },
+  list: async (): Promise<{ items: PythonLabSessionMeta[]; total: number }> => {
+    const resp = await api.client.get("/debug/sessions", { silent: true });
+    return resp.data as { items: PythonLabSessionMeta[]; total: number };
+  },
+  /**
+   * Try to recover a session after browser refresh.
+   * Returns the session meta if it's still active, null otherwise.
+   */
+  tryRecover: async (): Promise<PythonLabSessionMeta | null> => {
+    try {
+      const storedId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (!storedId) return null;
+      const meta = await pythonlabSessionApi.get(storedId);
+      const activeStatuses = new Set(["READY", "ATTACHED", "RUNNING", "STOPPED", "PENDING", "STARTING"]);
+      if (activeStatuses.has(meta.status)) {
+        return meta;
+      }
+      // Session is dead, clean up
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    } catch {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
   },
 };

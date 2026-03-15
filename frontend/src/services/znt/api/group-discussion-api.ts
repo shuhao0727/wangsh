@@ -1,6 +1,19 @@
+import type { AxiosRequestConfig } from "axios";
 import { api } from "../../api";
 import { logger } from "../../logger";
 import type { BaseResponse } from "../types";
+
+interface ApiErrorShape {
+  message?: string;
+  response?: { data?: { detail?: unknown }; status?: number };
+}
+const asApiError = (e: unknown): ApiErrorShape =>
+  (e && typeof e === "object" ? e : {}) as ApiErrorShape;
+const errMsg = (e: unknown, fallback: string): string => {
+  const err = asApiError(e);
+  const detail = err.response?.data?.detail;
+  return (typeof detail === "string" ? detail : err.message) || fallback;
+};
 
 const BASE_PATH = "/ai-agents/group-discussion";
 
@@ -113,14 +126,14 @@ export const groupDiscussionApi = {
   getPublicConfig: async (): Promise<BaseResponse<GroupDiscussionPublicConfig>> => {
     try {
       const response = await api.get(`${BASE_PATH}/public-config`);
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionPublicConfig };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组讨论配置失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { enabled: false, join_lock_seconds: 180, rate_limit_seconds: 5 },
       };
     }
@@ -131,14 +144,14 @@ export const groupDiscussionApi = {
   }): Promise<BaseResponse<GroupDiscussionPublicConfig>> => {
     try {
       const response = await api.put(`${BASE_PATH}/public-config`, { enabled: params.enabled });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "设置成功", data: data as GroupDiscussionPublicConfig };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("设置小组讨论配置失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "设置失败",
+        message: errMsg(error, "设置失败"),
         data: { enabled: params.enabled, join_lock_seconds: 180, rate_limit_seconds: 5 },
       };
     }
@@ -155,14 +168,14 @@ export const groupDiscussionApi = {
         class_name: params.className,
         group_name: params.groupName,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "加入成功", data: data as GroupDiscussionJoinResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("加入小组讨论失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "加入失败",
+        message: errMsg(error, "加入失败"),
         data: {
           session_id: 0,
           session_date: "",
@@ -191,14 +204,14 @@ export const groupDiscussionApi = {
           limit: params?.limit ?? 50,
         },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionGroupListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取讨论组列表失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [] },
       };
     }
@@ -212,14 +225,14 @@ export const groupDiscussionApi = {
       const response = await api.put(`${BASE_PATH}/session/${params.sessionId}/name`, {
         group_name: params.groupName,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "设置成功", data: data as GroupDiscussionJoinResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("设置组名失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "设置失败",
+        message: errMsg(error, "设置失败"),
         data: {
           session_id: params.sessionId,
           session_date: "",
@@ -246,14 +259,14 @@ export const groupDiscussionApi = {
           limit: params.limit ?? 50,
         },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionMessageListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组讨论消息失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [], next_after_id: params.afterId ?? 0 },
       };
     }
@@ -268,14 +281,14 @@ export const groupDiscussionApi = {
         session_id: params.sessionId,
         content: params.content,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "发送成功", data: data as GroupDiscussionMessage };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("发送小组讨论消息失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "发送失败",
+        message: errMsg(error, "发送失败"),
         data: {
           id: 0,
           session_id: params.sessionId,
@@ -300,11 +313,11 @@ export const groupDiscussionApi = {
         minutes: params.minutes,
       });
       return { success: true, message: "禁言成功", data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("禁言失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "禁言失败",
+        message: errMsg(error, "禁言失败"),
         data: false,
       };
     }
@@ -320,11 +333,11 @@ export const groupDiscussionApi = {
         user_id: params.userId,
       });
       return { success: true, message: "解除禁言成功", data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("解除禁言失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "解除禁言失败",
+        message: errMsg(error, "解除禁言失败"),
         data: false,
       };
     }
@@ -340,11 +353,11 @@ export const groupDiscussionApi = {
         user_id: params.userId,
       });
       return { success: true, message: "添加成员成功", data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("添加成员失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "添加成员失败",
+        message: errMsg(error, "添加成员失败"),
         data: false,
       };
     }
@@ -360,11 +373,11 @@ export const groupDiscussionApi = {
         user_id: params.userId,
       });
       return { success: true, message: "移除成员成功", data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("移除成员失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "移除成员失败",
+        message: errMsg(error, "移除成员失败"),
         data: false,
       };
     }
@@ -393,14 +406,14 @@ export const groupDiscussionApi = {
           size: params.size ?? 20,
         },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionAdminSessionListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组讨论会话失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [], total: 0, page: 1, page_size: params.size ?? 20, total_pages: 0 },
       };
     }
@@ -410,11 +423,11 @@ export const groupDiscussionApi = {
     try {
       await api.delete(`${BASE_PATH}/admin/sessions/${params.sessionId}`);
       return { success: true, message: "删除成功", data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("删除小组讨论会话失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "删除失败",
+        message: errMsg(error, "删除失败"),
         data: false,
       };
     }
@@ -425,14 +438,14 @@ export const groupDiscussionApi = {
       const response = await api.post(`${BASE_PATH}/admin/sessions/batch-delete`, {
         session_ids: params.sessionIds,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const deleted = Number(raw?.deleted || 0);
       return { success: true, message: "删除成功", data: deleted };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("批量删除小组讨论会话失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "删除失败",
+        message: errMsg(error, "删除失败"),
         data: 0,
       };
     }
@@ -447,14 +460,14 @@ export const groupDiscussionApi = {
       const response = await api.get(`${BASE_PATH}/admin/messages`, {
         params: { session_id: params.sessionId, page: params.page ?? 1, size: params.size ?? 100 },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionAdminMessageListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组讨论消息（管理端）失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [], total: 0, page: 1, page_size: params.size ?? 100, total_pages: 0 },
       };
     }
@@ -473,14 +486,14 @@ export const groupDiscussionApi = {
         analysis_type: params.analysisType ?? "summary",
         prompt: params.prompt,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("分析小组讨论失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "分析失败",
+        message: errMsg(error, "分析失败"),
         data: { analysis_id: 0, result_text: "", created_at: new Date().toISOString() },
       };
     }
@@ -497,14 +510,14 @@ export const groupDiscussionApi = {
           limit: params.limit ?? 20,
         },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionAdminAnalysisListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组讨论分析历史失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [] },
       };
     }
@@ -517,14 +530,14 @@ export const groupDiscussionApi = {
       const response = await api.get(`${BASE_PATH}/admin/members`, {
         params: { session_id: params.sessionId },
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as GroupDiscussionAdminMemberListResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("获取小组成员失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: { items: [] },
       };
     }
@@ -534,18 +547,18 @@ export const groupDiscussionApi = {
     try {
       const response = await api.get(
         `${BASE_PATH}/admin/classes`,
-        ({ params: { date: params?.date }, silent: true } as any),
+        ({ params: { date: params?.date }, silent: true } as AxiosRequestConfig & { silent?: boolean }),
       );
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "获取成功", data: data as string[] };
-    } catch (error: any) {
-      if (error?.response?.status !== 401) {
+    } catch (error: unknown) {
+      if (asApiError(error).response?.status !== 401) {
         logger.error("获取班级列表失败:", error);
       }
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "获取失败",
+        message: errMsg(error, "获取失败"),
         data: [],
       };
     }
@@ -568,14 +581,14 @@ export const groupDiscussionApi = {
         prompt: params.prompt,
         use_cache: params.useCache ?? true,
       });
-      const raw: any = response.data as any;
+      const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("对比分析失败:", error);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "分析失败",
+        message: errMsg(error, "分析失败"),
         data: { analysis_id: 0, result_text: "", created_at: "" },
       };
     }

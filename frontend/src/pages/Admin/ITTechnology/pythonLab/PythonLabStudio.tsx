@@ -23,6 +23,7 @@ import { usePythonLabActions } from "./hooks/usePythonLabActions";
 import { useArrangeLayout } from "./hooks/useArrangeLayout";
 import { useConnectMode } from "./hooks/useConnectMode";
 import { useDapRunner } from "./hooks/useDapRunner";
+import type { DapCapabilities } from "./hooks/useDapRunner";
 import { usePyodideRunner } from "./hooks/usePyodideRunner";
 import { computeBeautify, type FlowBeautifyResult } from "./flow/beautify";
 import { sortFlowGraphStable } from "./flow/determinism";
@@ -92,8 +93,8 @@ const PythonLabStudio: React.FC<{
 
   // Optimization State
   const [optimizationVisible, setOptimizationVisible] = useState(false);
-  const [originalContent, setOriginalContent] = useState<any>(null);
-  const [optimizedContent, setOptimizedContent] = useState<any>(null);
+  const [originalContent, setOriginalContent] = useState<string | null>(null);
+  const [optimizedContent, setOptimizedContent] = useState<string | null>(null);
   const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [optimizationFeedback, setOptimizationFeedback] = useState("");
   const [optimizationLogId, setOptimizationLogId] = useState<number | null>(null);
@@ -108,8 +109,8 @@ const PythonLabStudio: React.FC<{
       const res = await pythonlabFlowApi.optimizeCode(code);
       setOptimizedContent(res.optimized_code);
       setOptimizationLogId(res.log_id);
-    } catch (e: any) {
-      message.error(e.message || "优化请求失败");
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "优化请求失败");
       setOptimizationVisible(false);
     } finally {
       setOptimizationLoading(false);
@@ -151,7 +152,7 @@ const PythonLabStudio: React.FC<{
   const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
   const canFrontendDebug = useMemo(() => {
     try {
-      return typeof window !== "undefined" && (window as any).crossOriginIsolated === true && typeof SharedArrayBuffer !== "undefined";
+      return typeof window !== "undefined" && window.crossOriginIsolated === true && typeof SharedArrayBuffer !== "undefined";
     } catch {
       return false;
     }
@@ -287,9 +288,9 @@ const PythonLabStudio: React.FC<{
     };
     const onError = (event: ErrorEvent) => {
       const msg = String(event.message || "");
-      const name = (event.error as any)?.name ? String((event.error as any).name) : "";
-      const stack = (event.error as any)?.stack ? String((event.error as any).stack) : "";
-      const file = (event as any)?.filename ? String((event as any).filename) : "";
+      const name = (event.error as Error)?.name ? String((event.error as Error).name) : "";
+      const stack = (event.error as Error)?.stack ? String((event.error as Error).stack) : "";
+      const file = event?.filename ? String(event.filename) : "";
       if (shouldSuppressSelectionNoise(msg, name, stack, file)) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
@@ -298,15 +299,16 @@ const PythonLabStudio: React.FC<{
         event.preventDefault();
         event.stopImmediatePropagation();
         event.stopPropagation();
-        (event as any).returnValue = true;
+        (event as ErrorEvent & { returnValue?: boolean }).returnValue = true;
         return true;
       }
     };
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const reason: any = (event as any)?.reason;
-      const msg = reason ? String(reason?.message || reason) : "";
-      const name = reason?.name ? String(reason.name) : "";
-      const stack = reason?.stack ? String(reason.stack) : "";
+      const reason: unknown = event?.reason;
+      const reasonErr = reason as { message?: unknown; name?: unknown; stack?: unknown } | null;
+      const msg = reasonErr ? String(reasonErr.message || reason) : "";
+      const name = reasonErr?.name ? String(reasonErr.name) : "";
+      const stack = reasonErr?.stack ? String(reasonErr.stack) : "";
       if (shouldSuppressSelectionNoise(msg, name, stack, "")) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
@@ -410,7 +412,7 @@ const PythonLabStudio: React.FC<{
   };
 
   const importFlow = (jsonText: string) => {
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(jsonText);
     } catch {
@@ -490,8 +492,8 @@ const PythonLabStudio: React.FC<{
       setBreakpoints((prev) => {
         const next = updater(prev);
         const sorted = next.slice().sort((a, b) => a.line - b.line);
-        (pyApi as any).setBreakpoints?.(sorted);
-        (dapApi as any).setBreakpoints?.(sorted);
+        (pyApi as ReturnType<typeof usePyodideRunner>).setBreakpoints?.(sorted);
+        (dapApi as ReturnType<typeof useDapRunner>).setBreakpoints?.(sorted);
         return sorted;
       });
     },
@@ -500,10 +502,11 @@ const PythonLabStudio: React.FC<{
 
   const enabledBreakpointCount = useMemo(() => breakpoints.filter((b) => b.enabled).length, [breakpoints]);
 
-  const activeApi = activeRunnerKind === "pyodide" ? (pyApi as any) : (dapApi as any);
+  type RunnerApi = ReturnType<typeof useDapRunner> | ReturnType<typeof usePyodideRunner>;
+  const activeApi: RunnerApi = activeRunnerKind === "pyodide" ? pyApi : dapApi;
   const runnerError = (activeApi?.error as string | null) ?? null;
   const runner = useMemo(() => {
-    const base = (activeApi?.state as any) ?? {};
+    const base = (activeApi?.state as RunnerState) ?? {};
     const baseWarnings = Array.isArray(base?.warnings) ? base.warnings : [];
     const warnings: string[] = [];
     if (lastDebugFallback) warnings.push(lastDebugFallback);
@@ -571,13 +574,13 @@ const PythonLabStudio: React.FC<{
     if (resetTokenRef.current === token) return;
     resetTokenRef.current = token;
 
-    (dapApi as any).reset?.();
-    (pyApi as any).reset?.();
-    (dapApi as any).clearOutput?.();
-    (pyApi as any).clearOutput?.();
+    dapApi.reset?.();
+    pyApi.reset?.();
+    dapApi.clearOutput?.();
+    pyApi.clearOutput?.();
     updateBreakpoints(() => []);
-    (dapApi as any).setWatchExprs?.([]);
-    (pyApi as any).setWatchExprs?.([]);
+    dapApi.setWatchExprs?.([]);
+    pyApi.setWatchExprs?.([]);
     setActiveRunnerKind("pyodide");
     setLastLaunchMode("idle");
     setLastDebugFallback(null);
@@ -628,18 +631,18 @@ const PythonLabStudio: React.FC<{
       // Clean logic: just call the runner. The runner handles tokens and status updates.
       if (plan.runnerKind === "dap") {
         setActiveRunnerKind("dap");
-        (pyApi as any).reset?.();
-        const run = (dapApi as any).runPlain;
+        pyApi.reset?.();
+        const run = dapApi.runPlain;
         if (typeof run !== "function") {
           message.error("运行器未就绪，请刷新页面后重试");
           return;
         }
         // No need for extra Promise wrapper, but catching is good practice
-        Promise.resolve(run()).catch((e: any) => {
+        Promise.resolve(run()).catch((e: unknown) => {
           // If the runner threw a "starting" error (idempotency), we can ignore or show info.
           // But we expect runner to throw specific errors.
           // If it's the "start in flight" error, we can suppress or show info.
-          const msg = e?.message || "启动运行失败";
+          const msg = e instanceof Error ? e.message : "启动运行失败";
           if (msg.includes("会话正在启动中")) {
              // If we just triggered a restart, this might happen if user spam clicks
              message.info(msg);
@@ -649,19 +652,19 @@ const PythonLabStudio: React.FC<{
         });
         return;
       }
-      
+
       setActiveRunnerKind("pyodide");
-      const dapStatus = (dapApi as any)?.state?.status;
+      const dapStatus = dapApi?.state?.status;
       if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
-        Promise.resolve((dapApi as any).stopDebug?.()).catch(() => {});
+        Promise.resolve(dapApi.stopDebug?.()).catch(() => {});
       }
-      const run = (pyApi as any).runPlain;
+      const run = pyApi.runPlain;
       if (typeof run !== "function") {
         message.error("前端运行器未就绪，请刷新页面后重试");
         return;
       }
-      Promise.resolve(run()).catch((e: any) => {
-          const msg = e?.message || "启动运行失败";
+      Promise.resolve(run()).catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : "启动运行失败";
           if (msg.includes("会话正在启动中")) {
              message.info(msg);
           } else {
@@ -694,9 +697,9 @@ const PythonLabStudio: React.FC<{
 
     // Force DAP for debug
     setActiveRunnerKind("dap");
-    (pyApi as any).reset?.();
-    Promise.resolve((dapApi as any).startDebug?.()).catch((e: any) => {
-      message.error(e?.message || "启动调试失败");
+    pyApi.reset?.();
+    Promise.resolve(dapApi.startDebug?.()).catch((e: unknown) => {
+      message.error(e instanceof Error ? e.message : "启动调试失败");
     });
   }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, dapApi, pyApi, runner.status, message]);
 
@@ -716,8 +719,8 @@ const PythonLabStudio: React.FC<{
     activeApi?.stepOut?.();
   }, [activeApi]);
   const onReset = useCallback(() => {
-    (dapApi as any).reset?.();
-    (pyApi as any).reset?.();
+    dapApi.reset?.();
+    pyApi.reset?.();
     setLastLaunchMode("idle");
     setLastDebugFallback(null);
   }, [dapApi, pyApi]);
@@ -738,7 +741,7 @@ const PythonLabStudio: React.FC<{
   );
   const dapNegotiatedCapabilities = useMemo(() => {
     if (activeRunnerKind !== "dap") return null;
-    return ((dapApi as any)?.state?.dapCapabilities ?? null) as any;
+    return (dapApi?.state?.dapCapabilities ?? null) as DapCapabilities | null;
   }, [activeRunnerKind, dapApi]);
   const resolvedDebugCapabilities = useMemo(
     () => applyDapNegotiatedCapabilities(debugFrontendAdapter.capabilities, dapNegotiatedCapabilities),
@@ -798,7 +801,7 @@ const PythonLabStudio: React.FC<{
     const line = lineStr ? Number(lineStr) : null;
     const focusRole = roleRaw || null;
     if (!nodeId && !line) return;
-    const matchesLine = (n: any) => {
+    const matchesLine = (n: FlowNode) => {
       if (!line) return false;
       const r = n?.sourceRange;
       if (r && Number.isFinite(r.startLine) && Number.isFinite(r.endLine)) {
@@ -806,9 +809,9 @@ const PythonLabStudio: React.FC<{
       }
       return n.sourceLine === line;
     };
-    const byId = nodeId ? nodes.filter((n: any) => n.id === nodeId) : [];
-    const byRole = !byId.length && line && focusRole ? nodes.filter((n: any) => matchesLine(n) && n.sourceRole === focusRole) : [];
-    const targets = byId.length ? byId : byRole.length ? byRole : line ? nodes.filter((n: any) => matchesLine(n)) : [];
+    const byId = nodeId ? nodes.filter((n: FlowNode) => n.id === nodeId) : [];
+    const byRole = !byId.length && line && focusRole ? nodes.filter((n: FlowNode) => matchesLine(n) && n.sourceRole === focusRole) : [];
+    const targets = byId.length ? byId : byRole.length ? byRole : line ? nodes.filter((n: FlowNode) => matchesLine(n)) : [];
     if (!targets.length) return;
     const target = targets
       .slice()
@@ -888,10 +891,10 @@ const PythonLabStudio: React.FC<{
 
   const { canvasMetrics, edgeGeometries } = useEdgeGeometries(nodes, edges, canvasRoutingStyle, interacting);
   useEffect(() => {
-    canvasMetricsRef.current = canvasMetrics as any;
+    canvasMetricsRef.current = canvasMetrics as unknown as typeof canvasMetricsRef.current;
   }, [canvasMetrics]);
   useEffect(() => {
-    edgeGeometryCacheRef.current = edgeGeometries.cache as any;
+    edgeGeometryCacheRef.current = edgeGeometries.cache as unknown as typeof edgeGeometryCacheRef.current;
   }, [edgeGeometries.cache]);
 
   const { arrangeLayout } = useArrangeLayout({
@@ -1317,7 +1320,7 @@ const PythonLabStudio: React.FC<{
             debugCapabilities={resolvedDebugCapabilities}
             runnerError={runnerError}
             lastLaunchMode={lastLaunchMode}
-            terminalBridge={activeRunnerKind === "pyodide" ? (pyApi as any).terminal : null}
+            terminalBridge={activeRunnerKind === "pyodide" ? pyApi.terminal : null}
             flowDiagnostics={flowDiagnostics}
             flowExpandFunctions={flowExpandFunctions}
             setFlowExpandFunctions={setFlowExpandFunctions}

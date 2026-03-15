@@ -1,4 +1,6 @@
 import json
+import asyncio
+import threading
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
@@ -22,6 +24,30 @@ from app.api.endpoints.debug.constants import (
     SESSION_STATUS_STOPPED,
 )
 
+# ---------------------------------------------------------------------------
+# Shared event loop for Celery tasks — avoids creating/destroying a loop per
+# task invocation which is expensive (Redis reconnects, etc.)
+# ---------------------------------------------------------------------------
+_loop_lock = threading.Lock()
+_shared_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _get_loop() -> asyncio.AbstractEventLoop:
+    global _shared_loop
+    if _shared_loop is not None and not _shared_loop.is_closed():
+        return _shared_loop
+    with _loop_lock:
+        if _shared_loop is not None and not _shared_loop.is_closed():
+            return _shared_loop
+        _shared_loop = asyncio.new_event_loop()
+        return _shared_loop
+
+
+def _run_async(coro):
+    """Run an async coroutine on the shared event loop (thread-safe)."""
+    loop = _get_loop()
+    return loop.run_until_complete(coro)
+
 
 async def _get_session_meta(session_id: str) -> Optional[Dict[str, Any]]:
     return await cache.get(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}")
@@ -34,8 +60,6 @@ async def _set_session_meta(session_id: str, meta: Dict[str, Any]) -> None:
 
 @celery_app.task(name="app.tasks.pythonlab.start_session")
 def start_session(session_id: str):
-    import asyncio
-
     async def run():
         meta = await _get_session_meta(session_id)
         if not meta:
@@ -69,13 +93,11 @@ def start_session(session_id: str):
             
         await _set_session_meta(session_id, meta)
 
-    asyncio.run(run())
+    _run_async(run())
 
 
 @celery_app.task(name="app.tasks.pythonlab.cleanup_orphans")
 def cleanup_orphans():
-    import asyncio
-
     async def run():
         provider = get_sandbox_provider()
         try:
@@ -95,7 +117,7 @@ def cleanup_orphans():
                     user_id = int(sid[1:])
                     # Check if user has any active sessions
                     user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
-                    count = await client.scard(user_sessions_key)
+                    count = await client.scard(user_sessions_key)  # type: ignore[misc]
                     if count > 0:
                         continue # Keep container alive
                     
@@ -118,13 +140,11 @@ def cleanup_orphans():
             except Exception:
                 pass
 
-    asyncio.run(run())
+    _run_async(run())
 
 
 @celery_app.task(name="app.tasks.pythonlab.cleanup_stale_sessions")
 def cleanup_stale_sessions():
-    import asyncio
-
     async def run():
         client = await cache.get_client()
         now = datetime.now(timezone.utc)
@@ -183,13 +203,11 @@ def cleanup_stale_sessions():
             if cursor == 0:
                 break
 
-    asyncio.run(run())
+    _run_async(run())
 
 
 @celery_app.task(name="app.tasks.pythonlab.stop_session")
 def stop_session(session_id: str, force: bool = False):
-    import asyncio
-
     async def run():
         meta = await _get_session_meta(session_id)
         provider = get_sandbox_provider()
@@ -214,11 +232,11 @@ def stop_session(session_id: str, force: bool = False):
                     # The set tracks "Sessions the user sees in UI".
                     # If we remove it, UI won't show it.
                     # So yes, remove it.
-                    await client.srem(f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner}:sessions", session_id)
+                    await client.srem(f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner}:sessions", session_id)  # type: ignore[misc]
             except Exception:
                 pass
 
             meta["status"] = SESSION_STATUS_TERMINATED
             await _set_session_meta(session_id, meta)
             
-    asyncio.run(run())
+    _run_async(run())

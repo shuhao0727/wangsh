@@ -3,7 +3,7 @@
  * 基于配置的统一 API 调用封装
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { config } from "./config";
 import { logger } from "./logger";
 
@@ -87,11 +87,25 @@ const isAuthEndpoint = (url?: string) => {
 };
 
 // API 响应接口
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   code: number;
   data: T;
   message: string;
   timestamp: string;
+}
+
+// 扩展 Error，附加 axios 相关字段
+interface ApiError extends Error {
+  response?: {
+    data: unknown;
+    status: number;
+    statusText: string;
+    headers: unknown;
+    config: InternalAxiosRequestConfig;
+  };
+  config?: InternalAxiosRequestConfig;
+  request?: unknown;
+  userMessage?: string;
 }
 
 // 验证错误接口（用于422错误响应）
@@ -100,8 +114,8 @@ export interface ValidationErrorResponse {
     type: string;
     loc: (string | number)[];
     msg: string;
-    input: any;
-    ctx?: Record<string, any>;
+    input: unknown;
+    ctx?: Record<string, unknown>;
   }>;
 }
 
@@ -123,12 +137,12 @@ const createApiClient = (): AxiosInstance => {
       const token = getStoredAccessToken() || getCookieToken();
       if (token && !isAuthEndpoint(requestConfig.url)) {
         requestConfig.headers = requestConfig.headers ?? {};
-        (requestConfig.headers as any).Authorization = `Bearer ${token}`;
+        requestConfig.headers.Authorization = `Bearer ${token}`;
       }
       if (typeof FormData !== "undefined" && requestConfig.data instanceof FormData) {
         requestConfig.headers = requestConfig.headers ?? {};
-        delete (requestConfig.headers as any)["Content-Type"];
-        delete (requestConfig.headers as any)["content-type"];
+        delete requestConfig.headers["Content-Type"];
+        delete requestConfig.headers["content-type"];
       }
       if (config.features.debug) {
         logger.debug("🚀 API 请求:", {
@@ -190,17 +204,16 @@ const createApiClient = (): AxiosInstance => {
 
           // 创建错误对象
           const error = new Error(message || "请求数据验证失败");
-          (error as any).response = {
+          (error as ApiError).response = {
             data: data,
             status: 422,
             statusText: "Unprocessable Content",
             headers: response.headers,
             config: response.config,
           };
-          (error as any).config = response.config;
-          (error as any).request = response.request;
-          // 附加自定义消息字段供前端组件使用
-          (error as any).userMessage = message;
+          (error as ApiError).config = response.config;
+          (error as ApiError).request = response.request;
+          (error as ApiError).userMessage = message;
           return Promise.reject(error);
         }
       }
@@ -232,10 +245,9 @@ const createApiClient = (): AxiosInstance => {
           if (!refreshPromise) {
             const storedRefreshToken = getStoredRefreshToken();
             refreshPromise = (async () => {
-              const applyTokens = (resp: any) => {
-                const raw: any = resp?.data;
-                const data: any =
-                  raw && typeof raw === "object" && "data" in raw ? (raw as any).data : raw;
+              const applyTokens = (resp: AxiosResponse) => {
+                const raw = resp?.data as Record<string, unknown> | null;
+                const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as Record<string, string> | null;
                 if (data?.access_token || data?.refresh_token) {
                   authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
                 }
@@ -248,8 +260,8 @@ const createApiClient = (): AxiosInstance => {
                 );
                 applyTokens(resp);
                 return;
-              } catch (e: any) {
-                const status = e?.response?.status;
+              } catch (e: unknown) {
+                const status = (e as ApiError)?.response?.status;
                 if (status === 401 && storedRefreshToken) {
                   const resp2 = await instance.post("/auth/refresh", {});
                   applyTokens(resp2);
@@ -268,15 +280,17 @@ const createApiClient = (): AxiosInstance => {
           const newToken = getStoredAccessToken() || getCookieToken();
           if (newToken) {
             originalRequest.headers = originalRequest.headers ?? {};
-            (originalRequest.headers as any).Authorization = `Bearer ${newToken}`;
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
           }
           
           return instance(originalRequest);
         } catch (_refreshError) {
+          const err = _refreshError as ApiError;
           const detail =
-            (_refreshError as any)?.response?.data?.detail ||
-            (_refreshError as any)?.response?.data?.message ||
-            (_refreshError as any)?.message;
+            err?.response?.data && typeof err.response.data === "object"
+              ? (err.response.data as Record<string, unknown>)?.detail ||
+                (err.response.data as Record<string, unknown>)?.message
+              : err?.message;
           logger.debug("⚠️ API: 会话刷新失败", detail);
           authTokenStorage.clear();
           return Promise.reject(error);
@@ -307,7 +321,7 @@ const createApiClient = (): AxiosInstance => {
         } catch {
           loggedData = error.response.data;
         }
-        const silent = !!(error.config as any)?.silent;
+        const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;
         if (!silent) {
           logger.error("❌ API 错误响应:", {
             url: error.config.url,
@@ -317,11 +331,11 @@ const createApiClient = (): AxiosInstance => {
         }
       } else if (error.request) {
         // 请求发送但无响应
-        const silent = !!(error.config as any)?.silent;
+        const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;
         if (!silent) logger.error("❌ 网络错误，无响应:", error.request);
       } else {
         // 请求配置错误
-        const silent = !!(error.config as any)?.silent;
+        const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;
         if (!silent) logger.error("❌ 请求配置错误:", error.message);
       }
 
@@ -338,39 +352,39 @@ const apiClient = createApiClient();
 // 导出常用的 HTTP 方法
 export const api = {
   // GET 请求
-  get: <T = any>(
+  get: <T = unknown>(
     url: string,
     config?: AxiosRequestConfig,
   ): Promise<AxiosResponse<ApiResponse<T>>> =>
     apiClient.get<ApiResponse<T>>(url, config),
 
   // POST 请求
-  post: <T = any>(
+  post: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<AxiosResponse<ApiResponse<T>>> =>
     apiClient.post<ApiResponse<T>>(url, data, config),
 
   // PUT 请求
-  put: <T = any>(
+  put: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<AxiosResponse<ApiResponse<T>>> =>
     apiClient.put<ApiResponse<T>>(url, data, config),
 
   // DELETE 请求
-  delete: <T = any>(
+  delete: <T = unknown>(
     url: string,
     config?: AxiosRequestConfig,
   ): Promise<AxiosResponse<ApiResponse<T>>> =>
     apiClient.delete<ApiResponse<T>>(url, config),
 
   // PATCH 请求
-  patch: <T = any>(
+  patch: <T = unknown>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<AxiosResponse<ApiResponse<T>>> =>
     apiClient.patch<ApiResponse<T>>(url, data, config),
@@ -404,7 +418,7 @@ export const authApi = {
         },
       })
       .then((resp) => {
-        const data: any = resp?.data;
+        const data = resp?.data as Record<string, string> | null;
         if (data?.access_token || data?.refresh_token) {
           authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
         }
@@ -413,7 +427,7 @@ export const authApi = {
   },
 
   // 注册
-  register: (userData: any) => api.client.post("/auth/register", userData),
+  register: (userData: Record<string, unknown>) => api.client.post("/auth/register", userData),
 
   // 获取用户信息 - 后端返回直接用户对象，没有包装
   getCurrentUser: (config?: AxiosRequestConfig) => api.client.get("/auth/me", config),

@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Editor, { loader } from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
+import type * as MonacoType from "monaco-editor";
 import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
 
-// 配置 monaco-editor loader 使用本地 monaco 实例
-loader.config({ monaco });
+// 异步加载 monaco 实例，避免将整个 monaco-editor 打入主 chunk
+let monacoInstance: typeof MonacoType | null = null;
+loader.init().then((m) => {
+  monacoInstance = m as unknown as typeof MonacoType;
+});
 
 export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: {
   value: string;
@@ -18,7 +21,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
 }) {
   const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors, fontSize = 14 } = props;
 
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const bpDecoIdsRef = useRef<string[]>([]);
   const activeDecoIdsRef = useRef<string[]>([]);
   const lastRevealLineRef = useRef<number | null>(null);
@@ -30,11 +33,11 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
     const editor = editorRef.current;
     if (!editor) return;
 
-    const next: monaco.editor.IModelDeltaDecoration[] = [];
+    const next: MonacoType.editor.IModelDeltaDecoration[] = [];
     for (const [line, enabled] of Array.from(bpMap.entries())) {
       if (!Number.isFinite(line) || line < 1) continue;
       next.push({
-        range: new monaco.Range(line, 1, line, 1),
+        range: new (monacoInstance as typeof MonacoType).Range(line, 1, line, 1),
         options: {
           isWholeLine: false,
           glyphMarginClassName: enabled ? "wsMonacoBp" : "wsMonacoBpDisabled",
@@ -48,10 +51,10 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
     const editor = editorRef.current;
     if (!editor) return;
 
-    const next: monaco.editor.IModelDeltaDecoration[] = [];
+    const next: MonacoType.editor.IModelDeltaDecoration[] = [];
     if (activeLine && Number.isFinite(activeLine) && activeLine >= 1) {
       next.push({
-        range: new monaco.Range(activeLine, 1, activeLine, 1),
+        range: new (monacoInstance as typeof MonacoType).Range(activeLine, 1, activeLine, 1),
         options: {
           isWholeLine: true,
           className: "wsMonacoActiveLine",
@@ -76,12 +79,12 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
         endLineNumber: err.endLine || err.line,
         endColumn: (err.endCol || err.col) + 1,
         message: err.message,
-        severity: monaco.MarkerSeverity.Error,
+        severity: monacoInstance!.MarkerSeverity.Error,
         source: err.source || "syntax"
       }));
-      monaco.editor.setModelMarkers(model, "owner", markers);
+      monacoInstance!.editor.setModelMarkers(model, "owner", markers);
     } else {
-      monaco.editor.setModelMarkers(model, "owner", []);
+      monacoInstance!.editor.setModelMarkers(model, "owner", []);
     }
   }, [syntaxErrors]);
 
@@ -180,7 +183,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
         onMount={(editor) => {
           editorRef.current = editor;
           const model = editor.getModel();
-          if (model) monaco.editor.setModelLanguage(model, "python");
+          if (model) monacoInstance!.editor.setModelLanguage(model, "python");
           editor.onKeyDown((event) => {
             const browserEvent = event.browserEvent;
             if (!browserEvent) return;
@@ -197,7 +200,8 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           editor.onMouseDown((e) => {
             const type = e.target.type;
             const isGutter =
-              type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
+              type === monacoInstance!.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+              type === monacoInstance!.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
             if (!isGutter) return;
             const line = e.target.position?.lineNumber;
             if (!line) return;

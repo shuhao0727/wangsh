@@ -62,15 +62,15 @@ async def lifespan(app: FastAPI):
                     db.add(TypstStyle(key="my_style", title="my_style", content=content, sort_order=0))
                     await db.commit()
         except Exception:
-            pass
+            logger.exception("初始化 TypstStyle 失败")
         try:
             await ensure_style_examples(db)
         except Exception:
-            pass
+            logger.exception("初始化 style examples 失败")
         try:
             await ensure_article_examples(db)
         except Exception:
-            pass
+            logger.exception("初始化 article examples 失败")
     
     # 初始化缓存
     try:
@@ -96,14 +96,15 @@ async def lifespan(app: FastAPI):
                     celery_app.send_task("app.tasks.pythonlab.cleanup_stale_sessions")
                     async with AsyncSessionLocal() as db:
                         cfg = await get_or_create_sync_settings(db)
-                        enabled = bool(cfg.enabled)
-                        sync_interval = max(1, int(cfg.interval_hours or 48))
+                        enabled = bool(cfg.enabled)  # type: ignore[arg-type]
+                        _hours: int = getattr(cfg, "interval_hours", None) or 48  # type: ignore[assignment]
+                        sync_interval = max(1, _hours)
                     now_ts = asyncio.get_event_loop().time()
                     if enabled and now_ts - last_sync_ts >= sync_interval * 3600:
                         celery_app.send_task("app.tasks.informatics_sync.sync_informatics_from_github")
                         last_sync_ts = now_ts
                 except Exception:
-                    pass
+                    logger.exception("定时清理/同步任务执行异常")
                 await asyncio.sleep(max(30, interval))
 
         cleanup_task = asyncio.create_task(loop())
@@ -155,25 +156,7 @@ async def _ensure_dev_schema(conn):
             )
         )
     except Exception:
-        pass
-
-
-@asynccontextmanager
-async def lifespan_wrapper(app: FastAPI):
-    async with lifespan(app):
-        yield
-
-
-# 创建 FastAPI 应用实例
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description="WangSh 项目后端 API 服务",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
-    lifespan=lifespan_wrapper,
-)
+        logger.warning("_ensure_dev_schema 执行失败（表可能尚未创建），跳过")
 
 
 async def create_super_admin():
@@ -370,7 +353,7 @@ async def health_check() -> Dict[str, Any]:
     redis_status = "healthy"
     try:
         client = await cache.get_client()
-        pong = await client.ping()
+        pong = await client.ping()  # type: ignore[misc]
         if pong is not True and pong != "PONG":
             redis_status = "unhealthy"
     except Exception:

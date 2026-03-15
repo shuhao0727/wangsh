@@ -1,4 +1,8 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.db.database import Base
@@ -7,16 +11,16 @@ from app.db.database import Base
 class InformaticsGithubSyncRun(Base):
     __tablename__ = "inf_github_sync_runs"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    trigger_type = Column(String(20), nullable=False, default="manual")
-    status = Column(String(20), nullable=False, default="running")
-    repo_owner = Column(String(100), nullable=False, default="")
-    repo_name = Column(String(200), nullable=False, default="")
-    branch = Column(String(100), nullable=False, default="main")
-    created_count = Column(Integer, nullable=False, default=0)
-    updated_count = Column(Integer, nullable=False, default=0)
-    deleted_count = Column(Integer, nullable=False, default=0)
-    skipped_count = Column(Integer, nullable=False, default=0)
-    error_summary = Column(Text, nullable=True)
-    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    finished_at = Column(DateTime(timezone=True), nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    trigger_type: Mapped[str] = mapped_column(String(20), default="manual")
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    repo_owner: Mapped[str] = mapped_column(String(100), default="")
+    repo_name: Mapped[str] = mapped_column(String(200), default="")
+    branch: Mapped[str] = mapped_column(String(100), default="main")
+    created_count: Mapped[int] = mapped_column(default=0)
+    updated_count: Mapped[int] = mapped_column(default=0)
+    deleted_count: Mapped[int] = mapped_column(default=0)
+    skipped_count: Mapped[int] = mapped_column(default=0)
+    error_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)

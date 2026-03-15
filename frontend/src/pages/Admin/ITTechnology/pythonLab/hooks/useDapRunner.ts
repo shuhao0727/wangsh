@@ -42,6 +42,47 @@ export interface DapCapabilities {
   supportsConfigurationDoneRequest?: boolean;
 }
 
+// DAP protocol message types
+interface DapMessage {
+  type: "request" | "response" | "event";
+  seq?: number;
+  request_seq?: number;
+  success?: boolean;
+  message?: string;
+  command?: string;
+  event?: string;
+  body?: Record<string, unknown>;
+  arguments?: Record<string, unknown>;
+}
+
+type DapEventHandler = (msg: DapMessage) => void;
+type DapCloseHandler = (ev: CloseEvent) => void;
+
+interface DapStackFrame {
+  id: number;
+  name: string;
+  line: number;
+  source?: { path?: string };
+}
+
+interface DapScope {
+  name: string;
+  variablesReference: number;
+}
+
+interface DapVariable {
+  name: string;
+  value: string;
+  type?: string;
+}
+
+// Snapshot for history
+export interface SnapshotEntry {
+  step: number;
+  activeLine: number | null;
+  variables: Variable[];
+}
+
 export interface InternalRunnerState {
   status: RunnerStatus;
   trace: string[]; // For variable trace log
@@ -58,7 +99,7 @@ export interface InternalRunnerState {
   breakpointReport: DapBreakpointReport;
   error: string | null;
   steps: number;
-  history: any[]; // Keep simple for now
+  history: SnapshotEntry[]; // Keep simple for now
   historyIndex: number;
   activeFocusRole: string | null;
   startTime: number | null; // 添加开始时间
@@ -210,17 +251,16 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
 class DapClient {
   private ws: WebSocket | null = null;
   private seq = 1;
-  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
-  private handlers: Record<string, (msg: any) => void> = {};
+  private pending = new Map<number, { resolve: (v: DapMessage) => void; reject: (e: Error) => void }>();
+  private eventHandlers: Record<string, DapEventHandler> = {};
+  private closeHandler: DapCloseHandler | null = null;
 
   connect(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(url);
       this.ws.onopen = () => resolve();
       this.ws.onerror = () => reject(new Error("WebSocket connection failed"));
-      this.ws.onclose = (ev) => {
-        this.emit("close", ev);
-      };
+      this.ws.onclose = (ev) => { if (this.closeHandler) this.closeHandler(ev); };
       this.ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
   }
@@ -235,37 +275,43 @@ class DapClient {
     this.pending.clear();
   }
 
-  on(event: string, handler: (msg: any) => void) {
-    this.handlers[event] = handler;
+  on(event: "close", handler: DapCloseHandler): void;
+  on(event: string, handler: DapEventHandler): void;
+  on(event: string, handler: DapEventHandler | DapCloseHandler) {
+    if (event === "close") {
+      this.closeHandler = handler as DapCloseHandler;
+    } else {
+      this.eventHandlers[event] = handler as DapEventHandler;
+    }
   }
 
-  emit(event: string, msg: any) {
-    if (this.handlers[event]) this.handlers[event](msg);
+  emit(event: string, msg: DapMessage) {
+    if (this.eventHandlers[event]) this.eventHandlers[event](msg);
   }
 
-  private handleMessage(data: any) {
+  private handleMessage(data: unknown) {
     try {
-      const msg = JSON.parse(String(data));
+      const msg = JSON.parse(String(data)) as DapMessage;
       if (msg.type === "response") {
-        const p = this.pending.get(msg.request_seq);
+        const p = this.pending.get(msg.request_seq!);
         if (p) {
-          this.pending.delete(msg.request_seq);
+          this.pending.delete(msg.request_seq!);
           if (msg.success) p.resolve(msg);
           else p.reject(new Error(msg.message || "Request failed"));
         }
       } else if (msg.type === "event") {
-        this.emit(msg.event, msg);
+        this.emit(msg.event!, msg);
       }
     } catch (e) {
       console.error("Failed to parse DAP message", e);
     }
   }
 
-  request(command: string, args: any = {}, timeout = 5000): Promise<any> {
+  request(command: string, args: Record<string, unknown> = {}, timeout = 5000): Promise<DapMessage> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("Not connected"));
     const seq = this.seq++;
     this.pending.set(seq, { resolve: () => { }, reject: () => { } }); // Placeholder
-    const promise = new Promise((resolve, reject) => {
+    const promise = new Promise<DapMessage>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(seq);
         reject(new Error(`Timeout: ${command}`));
@@ -327,7 +373,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   }, [debugMap]);
   const shouldTraceLifecycle = useCallback(() => {
     try {
-      const globalFlag = Boolean((window as any).__PYTHONLAB_DAP_TRACE__);
+      const globalFlag = Boolean((window as unknown as Record<string, unknown>).__PYTHONLAB_DAP_TRACE__);
       const storageFlag = window.localStorage?.getItem("pythonlab:dap:trace") === "1";
       return globalFlag || storageFlag;
     } catch {
@@ -427,7 +473,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       const fetchSeq = ++stackFetchSeqRef.current;
       const stackResp = await clientRef.current.request("stackTrace", { threadId, startFrame: 0, levels: 20 });
       if (fetchSeq !== stackFetchSeqRef.current) return;
-      const frames = stackResp.body?.stackFrames || [];
+      const frames = (stackResp.body?.stackFrames || []) as DapStackFrame[];
       if (frames.length === 0) return;
 
       const isUserMainPath = (p: string) => {
@@ -435,7 +481,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         return path.endsWith("/workspace/main.py") || path.endsWith("/main.py") || path.endsWith("main.py");
       };
       const primaryFrameIndex = (() => {
-        const idx = frames.findIndex((f: any) => isUserMainPath(String(f?.source?.path || "")));
+        const idx = frames.findIndex((f) => isUserMainPath(String(f?.source?.path || "")));
         return idx >= 0 ? idx : 0;
       })();
       const orderedFrames = primaryFrameIndex <= 0
@@ -443,7 +489,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         : [frames[primaryFrameIndex], ...frames.slice(0, primaryFrameIndex), ...frames.slice(primaryFrameIndex + 1)];
 
       const topFrame = orderedFrames[0];
-      const mappedFrames: Frame[] = orderedFrames.map((f: any) => ({
+      const mappedFrames: Frame[] = orderedFrames.map((f) => ({
         id: f.id,
         name: f.name,
         line: f.line,
@@ -458,15 +504,15 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       // Fetch variables for top frame
       const scopesResp = await clientRef.current.request("scopes", { frameId: topFrame.id });
       if (fetchSeq !== stackFetchSeqRef.current) return;
-      const scopes = scopesResp.body?.scopes || [];
-      const localScope = scopes.find((s: any) => s.name === "Locals") || scopes[0];
+      const scopes = (scopesResp.body?.scopes || []) as DapScope[];
+      const localScope = scopes.find((s) => s.name === "Locals") || scopes[0];
 
       if (localScope) {
         const varsResp = await clientRef.current.request("variables", { variablesReference: localScope.variablesReference });
         if (fetchSeq !== stackFetchSeqRef.current) return;
-        const vars = (varsResp.body?.variables || [])
-          .filter((v: any) => !v.name.startsWith("__") && !v.name.includes("special variables") && !v.name.includes("function variables"))
-          .map((v: any) => ({
+        const vars = ((varsResp.body?.variables || []) as DapVariable[])
+          .filter((v) => !v.name.startsWith("__") && !v.name.includes("special variables") && !v.name.includes("function variables"))
+          .map((v) => ({
             name: v.name,
             value: v.value,
             type: v.type || "unknown"
@@ -546,9 +592,9 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         for (const expr of stateRef.current.watchExprs) {
           try {
             const resp = await clientRef.current.request("evaluate", { expression: expr, frameId: topFrame.id, context: "watch" });
-            watchResults.push({ expr, ok: true, value: resp.body.result, type: resp.body.type });
-          } catch (e: any) {
-            watchResults.push({ expr, ok: false, error: e.message || "Error" });
+            watchResults.push({ expr, ok: true, value: String(resp.body?.result ?? ""), type: String(resp.body?.type ?? "") });
+          } catch (e: unknown) {
+            watchResults.push({ expr, ok: false, error: (e instanceof Error ? e.message : String(e)) || "Error" });
           }
         }
         dispatch({ type: "SET_WATCH_RESULTS", payload: watchResults });
@@ -655,23 +701,24 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       const maxWaitMs = 45000;
       const startTime = Date.now();
       let waited = 0;
-      let readyMeta: any = null;
+      let readyMeta: Record<string, unknown> | null = null;
 
       while (waited < maxWaitMs) {
         if (startTokenRef.current !== myToken) return;
-        let meta: any;
+        let meta: Record<string, unknown>;
         try {
-          meta = await pythonlabSessionApi.get(session.session_id);
-        } catch (e: any) {
-          if (e?.response?.status === 404) throw new Error("会话不存在/已被清理：可点右侧“会话”查看后重试");
+          meta = await pythonlabSessionApi.get(session.session_id) as Record<string, unknown>;
+        } catch (e: unknown) {
+          const err = e as { response?: { status?: number } };
+          if (err?.response?.status === 404) throw new Error("会话不存在/已被清理，可点右侧会话查看后重试");
           throw e;
         }
-        if (meta.status === "READY") {
+        if (String(meta.status) === "READY") {
           readyMeta = meta;
           traceLifecycle("session_ready", { mode, sessionId: session.session_id });
           break;
         }
-        if (meta.status === "FAILED") throw new Error(meta.error_detail || "Session failed to start");
+        if (String(meta.status) === "FAILED") throw new Error(String(meta.error_detail || "Session failed to start"));
 
         // Adaptive interval: 200ms for first 3s, then 500ms, then 1000ms
         const elapsed = Date.now() - startTime;
@@ -683,7 +730,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       dispatch({ type: "SET_SESSION_ID", payload: session.session_id });
 
       const sourceMismatch = detectSourceMismatch({
-        sessionCodeSha: readyMeta?.code_sha256,
+        sessionCodeSha: String(readyMeta?.code_sha256 ?? ""),
         debugMapCodeSha: debugMapRef.current?.codeSha256,
       });
       if (sourceMismatch.mismatch) {
@@ -745,7 +792,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       if (!token) {
         try {
           const r = await authApi.refreshToken(undefined);
-          const data: any = r?.data;
+          const data = r?.data as Record<string, string> | null;
           if (data?.access_token || data?.refresh_token) {
             authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
             token = String(data?.access_token || "");
@@ -816,7 +863,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         // Exception info is printed to TTY by Python traceback
         dispatch({ type: "SET_STATUS", payload: "paused" });
         dispatch({ type: "INCREMENT_STEPS" });
-        fetchStack(msg.body?.threadId || 1);
+        fetchStack(Number(msg.body?.threadId) || 1);
       });
 
       client.on("continued", (msg) => {
@@ -880,12 +927,12 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
       await client.connect(url);
       traceLifecycle("ws_connected", { sessionId: session.session_id });
-      const requestWithRetry = async (command: string, args: any, timeout: number, retry = 1) => {
-        let lastErr: any = null;
+      const requestWithRetry = async (command: string, args: Record<string, unknown>, timeout: number, retry = 1) => {
+        let lastErr: unknown = null;
         for (let i = 0; i <= retry; i++) {
           try {
             return await client.request(command, args, timeout);
-          } catch (err: any) {
+          } catch (err: unknown) {
             lastErr = err;
             if (i >= retry) break;
             await new Promise((r) => setTimeout(r, 300));
@@ -904,7 +951,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         columnsStartAt1: true,
         pathFormat: "path"
       }, 20000, 2);
-      const initCaps = (initializeResp as any)?.body || null;
+      const initCaps = (initializeResp as DapMessage)?.body || null;
       dispatch({
         type: "SET_DAP_CAPABILITIES",
         payload: initCaps
@@ -943,10 +990,10 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
       dispatch({ type: "SET_STATUS", payload: "running" });
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (startTokenRef.current === myToken) {
         startInFlightRef.current = false;
-        const msg = e?.message || "启动失败";
+        const msg = (e instanceof Error ? e.message : String(e)) || "启动失败";
         dispatch({ type: "SET_ERROR", payload: msg });
         dispatch({ type: "SET_STATUS", payload: "error" });
         throw e; // Re-throw to let UI handle it
@@ -1022,9 +1069,9 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       if (!frameId) throw new Error("No active frame");
 
       const resp = await clientRef.current.request("evaluate", { expression: expr, frameId, context: "repl" });
-      return { ok: true, value: resp.body.result, type: resp.body.type };
-    } catch (e: any) {
-      return { ok: false, error: e.message };
+      return { ok: true, value: String(resp.body?.result ?? ""), type: String(resp.body?.type ?? "") };
+    } catch (e: unknown) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }, []);
 
@@ -1078,12 +1125,12 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       try {
         const frameId = stateRef.current.frames[0].id;
         const resp = await clientRef.current.request("evaluate", { expression: expr, frameId, context: "watch" });
-        const result: WatchResult = { expr, ok: true, value: resp.body.result, type: resp.body.type };
+        const result: WatchResult = { expr, ok: true, value: String(resp.body?.result ?? ""), type: String(resp.body?.type ?? "") };
 
         // Merge with existing results (dedupe by expr)
         dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), result] });
-      } catch (e: any) {
-        dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), { expr, ok: false, error: e.message || "Error" }] });
+      } catch (e: unknown) {
+        dispatch({ type: "SET_WATCH_RESULTS", payload: [...stateRef.current.watchResults.filter(r => r.expr !== expr), { expr, ok: false, error: (e instanceof Error ? e.message : String(e)) || "Error" }] });
       }
     }
   }, []);

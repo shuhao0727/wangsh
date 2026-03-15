@@ -18,7 +18,7 @@ from app.models.informatics.github_sync_setting import InformaticsGithubSyncSett
 from app.models.informatics.github_sync_source import InformaticsGithubSyncSource
 from app.models.informatics.typst_note import TypstNote
 from app.services.informatics.typst_notes import compile_note_pdf, create_note, list_assets, update_note, upsert_asset
-from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4
+from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4, try_decrypt_api_key
 from app.utils.cache import cache
 from app.utils.typst_asset_validation import normalize_asset_path
 from app.utils.typst_pdf_storage import abs_pdf_path
@@ -51,7 +51,11 @@ def _masked_token(encrypted: Optional[str]) -> str:
     if not encrypted:
         return ""
     try:
-        return f"********{last4(decrypt_api_key(encrypted))}"
+        from app.utils.agent_secrets import try_decrypt_api_key
+        plain = try_decrypt_api_key(encrypted)
+        if plain:
+            return f"********{last4(plain)}"
+        return "********(密钥未配置)"
     except Exception:
         return "********"
 
@@ -140,7 +144,10 @@ async def get_or_create_sync_settings(db: AsyncSession) -> InformaticsGithubSync
     )
     token = (getattr(settings, "GITHUB_SYNC_TOKEN", "") or "").strip()
     if token:
-        item.token_encrypted = encrypt_api_key(token)
+        try:
+            item.token_encrypted = encrypt_api_key(token)
+        except RuntimeError:
+            item.token_encrypted = None
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -276,9 +283,13 @@ async def run_github_sync(
     progress_hook: Optional[Callable[[dict], None]] = None,
 ) -> InformaticsGithubSyncRun:
     setting = await get_or_create_sync_settings(db)
-    if not setting.token_encrypted:
-        raise RuntimeError("尚未配置 GitHub Token")
-    token = decrypt_api_key(setting.token_encrypted)
+    token: Optional[str] = None
+    if setting.token_encrypted:
+        token = try_decrypt_api_key(setting.token_encrypted)
+    if not token:
+        token = (getattr(settings, "GITHUB_SYNC_TOKEN", "") or "").strip() or None
+    if not token:
+        raise RuntimeError("尚未配置可用的 GitHub Token（缺少加密密钥或Token）")
     owner, repo, branch = setting.repo_owner, setting.repo_name, setting.branch or "main"
     lock_key = f"inf:github-sync:{owner}:{repo}:{branch}"
     if not await _acquire_lock(lock_key):

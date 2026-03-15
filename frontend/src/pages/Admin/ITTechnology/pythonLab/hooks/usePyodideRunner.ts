@@ -75,7 +75,7 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
     case "SET_SELECTED_FRAME":
       return { ...state, selectedFrameIndex: action.payload };
     case "UPDATE_BREAKPOINTS":
-      return { ...state, breakpoints: action.payload(state.breakpoints as any) as any };
+      return { ...state, breakpoints: action.payload(state.breakpoints) };
     case "UPDATE_WATCH_EXPRS":
       return { ...state, watchExprs: action.payload };
     case "SET_WATCH_RESULTS":
@@ -141,7 +141,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
     try {
       const enabled =
         process.env.NODE_ENV !== "production" ||
-        Boolean((window as any).__PYTHONLAB_PYODIDE_TRACE__) ||
+        Boolean((window as unknown as { __PYTHONLAB_PYODIDE_TRACE__?: boolean }).__PYTHONLAB_PYODIDE_TRACE__) ||
         window.localStorage?.getItem("pythonlab:pyodide:trace") === "1";
       if (!enabled) return;
       console.info("[pythonlab:pyodide]", { phase, status: stateRef.current.status, ts: Date.now(), ...(extra || {}) });
@@ -232,7 +232,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
     } catch { }
   }, []);
 
-  const pendingEvalResolveRef = useRef<((msg: any) => void) | null>(null);
+  const pendingEvalResolveRef = useRef<((msg: { ok: boolean; value?: unknown; valueType?: unknown; error?: string }) => void) | null>(null);
 
   const resolveReadyWaiters = useCallback((ready: WorkerReady) => {
     const waiters = readyWaitersRef.current.splice(0);
@@ -271,7 +271,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
     const len = Math.min(text.length, EVAL_MAX_CODE_UNITS);
     for (let i = 0; i < len; i++) buf[i] = text.charCodeAt(i);
     Atomics.store(ctrl, 5, len);
-    const p = new Promise<any>((resolve) => {
+    const p = new Promise<{ ok: boolean; value?: unknown; valueType?: unknown; error?: string }>((resolve) => {
       pendingEvalResolveRef.current = resolve;
     });
     Atomics.store(ctrl, 1, 4);
@@ -292,7 +292,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         const r = await evaluate(expr);
         if (r.ok) results.push({ expr, ok: true, value: r.value, type: r.type });
         else results.push({ expr, ok: false, error: r.error || "Error" });
-      } catch (e: any) {
+      } catch (e: unknown) {
         results.push({ expr, ok: false, error: e?.message || "Error" });
       }
     }
@@ -328,7 +328,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
     inputText16Ref.current = sab ? new Uint16Array(sab, CTRL_HEADER_I32_LEN * 4, INPUT_MAX_CODE_UNITS) : null;
     evalText16Ref.current = sab ? new Uint16Array(sab, CTRL_HEADER_I32_LEN * 4 + INPUT_MAX_CODE_UNITS * 2, EVAL_MAX_CODE_UNITS) : null;
 
-    w.onmessage = async (ev: MessageEvent<any>) => {
+    w.onmessage = async (ev: MessageEvent<unknown>) => {
       const msg = ev.data || {};
       if (msg.type === "ready") {
         readyRef.current = msg as WorkerReady;
@@ -424,12 +424,12 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
       }
       if (startTokenRef.current !== myToken) return;
       setStatus("running");
-      breakpointsRef.current = (stateRef.current.breakpoints as any) || [];
-      workerRef.current!.postMessage({ type: "run", code, breakpoints: breakpointsRef.current as any });
-    } catch (e: any) {
-      trace("start_debug_error", { error: e?.message || "启动失败" });
+      breakpointsRef.current = stateRef.current.breakpoints || [];
+      workerRef.current!.postMessage({ type: "run", code, breakpoints: breakpointsRef.current });
+    } catch (e: unknown) {
+      trace("start_debug_error", { error: e instanceof Error ? e.message : "启动失败" });
       if (startTokenRef.current === myToken) {
-        dispatch({ type: "SET_ERROR", payload: e.message || "启动失败" });
+        dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "启动失败" });
         setStatus("error");
         throw e;
       }
@@ -464,10 +464,10 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
       if (startTokenRef.current !== myToken) return;
       setStatus("running");
       workerRef.current!.postMessage({ type: "run", code, breakpoints: [] });
-    } catch (e: any) {
-      trace("run_plain_error", { error: e?.message || "启动失败" });
+    } catch (e: unknown) {
+      trace("run_plain_error", { error: e instanceof Error ? e.message : "启动失败" });
       if (startTokenRef.current === myToken) {
-        dispatch({ type: "SET_ERROR", payload: e.message || "启动失败" });
+        dispatch({ type: "SET_ERROR", payload: e instanceof Error ? e.message : "启动失败" });
         setStatus("error");
         throw e;
       }
@@ -546,8 +546,8 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
           if (idx >= 0) next.splice(idx, 1);
           else next.push({ line, enabled: true });
           next.sort((a, b) => a.line - b.line);
-          updateBreakpointsToWorker(next as any);
-          return next as any;
+          updateBreakpointsToWorker(next);
+          return next;
         },
       });
     },
@@ -560,8 +560,8 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         type: "UPDATE_BREAKPOINTS",
         payload: (prev) => {
           const next = prev.map((b) => (b.line === line ? { ...b, enabled } : b));
-          updateBreakpointsToWorker(next as any);
-          return next as any;
+          updateBreakpointsToWorker(next);
+          return next;
         },
       });
     },
@@ -574,8 +574,8 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         type: "UPDATE_BREAKPOINTS",
         payload: (prev) => {
           const next = prev.map((b) => (b.line === line ? { ...b, condition: condition || undefined } : b));
-          updateBreakpointsToWorker(next as any);
-          return next as any;
+          updateBreakpointsToWorker(next);
+          return next;
         },
       });
     },
@@ -588,8 +588,8 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         type: "UPDATE_BREAKPOINTS",
         payload: (prev) => {
           const next = prev.map((b) => (b.line === line ? { ...b, hitCount: typeof hitCount === "number" ? hitCount : undefined } : b));
-          updateBreakpointsToWorker(next as any);
-          return next as any;
+          updateBreakpointsToWorker(next);
+          return next;
         },
       });
     },

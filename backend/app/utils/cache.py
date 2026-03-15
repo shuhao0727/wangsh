@@ -36,27 +36,53 @@ class RedisCache:
         pass
     
     async def initialize(self) -> None:
-        """初始化Redis连接"""
+        """初始化Redis连接（支持连接池和 Sentinel 高可用模式）"""
         if self._initialized and self._client:
             return
-            
+
         try:
             self._loop = asyncio.get_running_loop()
-            self._client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB_CACHE,  # 使用配置的Redis数据库索引
-                decode_responses=True,  # 自动解码返回的字符串
-                socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
-                socket_keepalive=True,
-                retry_on_timeout=True
-            )
-            
+
+            if settings.REDIS_SENTINEL_ENABLED and settings.REDIS_SENTINEL_HOSTS:
+                # Sentinel 模式：解析 sentinel 地址列表
+                sentinel_hosts = []
+                for item in settings.REDIS_SENTINEL_HOSTS.split(","):
+                    item = item.strip()
+                    if ":" in item:
+                        h, p = item.rsplit(":", 1)
+                        sentinel_hosts.append((h.strip(), int(p.strip())))
+                    else:
+                        sentinel_hosts.append((item, 26379))
+
+                sentinel = redis.Sentinel(
+                    sentinel_hosts,
+                    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
+                    socket_keepalive=True,
+                )
+                self._client = sentinel.master_for(
+                    settings.REDIS_SENTINEL_MASTER,
+                    db=settings.REDIS_DB_CACHE,
+                    decode_responses=True,
+                )
+                logger.info(f"Redis Sentinel 模式初始化成功，master={settings.REDIS_SENTINEL_MASTER}")
+            else:
+                # 单机模式：使用连接池
+                pool = redis.ConnectionPool(
+                    host=settings.REDIS_HOST,
+                    port=settings.REDIS_PORT,
+                    db=settings.REDIS_DB_CACHE,
+                    decode_responses=True,
+                    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
+                    socket_keepalive=True,
+                    max_connections=settings.REDIS_MAX_CONNECTIONS,
+                )
+                self._client = redis.Redis(connection_pool=pool)
+                logger.info(f"Redis 单机模式初始化成功，max_connections={settings.REDIS_MAX_CONNECTIONS}")
+
             # 测试连接
             await self._client.ping()
             self._initialized = True
-            logger.info("Redis缓存客户端初始化成功")
-            
+
         except Exception as e:
             logger.error(f"Redis缓存客户端初始化失败: {e}")
             raise

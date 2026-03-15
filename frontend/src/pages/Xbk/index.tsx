@@ -67,7 +67,7 @@ const cnLen = (value: unknown) => {
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const calcColumnWidth = (
-  rows: any[],
+  rows: Array<Record<string, unknown>>,
   key: string,
   title: string,
   min: number,
@@ -143,7 +143,7 @@ const XbkPage: React.FC = () => {
   
   const [editKind, setEditKind] = useState<"students" | "courses" | "selections">("students");
   const [editMode, setEditMode] = useState<"create" | "edit">("create");
-  const [editRecord, setEditRecord] = useState<any>(null);
+  const [editRecord, setEditRecord] = useState<XbkStudentRow | XbkCourseRow | XbkSelectionRow | null>(null);
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const [tableScrollY, setTableScrollY] = useState<number>(360);
@@ -162,10 +162,10 @@ const XbkPage: React.FC = () => {
     setFilters({ year: 2026, term: "上学期", grade: undefined, class_name: undefined, search_text: "" });
   };
 
-  const getErrorMsg = (e: any, defaultMsg: string) => {
-    const detail = e?.response?.data?.detail;
+  const getErrorMsg = (e: unknown, defaultMsg: string) => {
+    const detail = (e as { response?: { data?: { detail?: Array<{ msg: string }> } } })?.response?.data?.detail;
     if (Array.isArray(detail)) {
-      return detail.map((err: any) => err.msg).join("; ");
+      return detail.map((err) => err.msg).join("; ");
     }
     if (typeof detail === "object") {
       return JSON.stringify(detail);
@@ -265,7 +265,7 @@ const XbkPage: React.FC = () => {
       });
       setSelections(res.items);
       setSelectionsTotal(res.total);
-    } catch (e: any) {
+    } catch (e: unknown) {
       message.error(getErrorMsg(e, "加载数据失败"));
       setStudents([]);
       setCourses([]);
@@ -374,7 +374,7 @@ const XbkPage: React.FC = () => {
   }, [filteredSuspendedAll, suspendedPage, suspendedPageSize]);
 
   const unselectedColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
-    const rows = pagedUnselected as any[];
+    const rows = pagedUnselected as Array<Record<string, unknown>>;
     return [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -397,7 +397,7 @@ const XbkPage: React.FC = () => {
   }, [pagedUnselected]);
 
   const suspendedColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
-    const rows = pagedSuspended as any[];
+    const rows = pagedSuspended as Array<Record<string, unknown>>;
     return [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -423,7 +423,7 @@ const XbkPage: React.FC = () => {
     (async () => {
       setExportingCurrent(true);
       try {
-        const scope = activeTab as any;
+        const scope = activeTab as DataTabKey;
         const blob = await xbkDataApi.exportCurrentTable({
           scope,
           year: filters.year,
@@ -443,7 +443,7 @@ const XbkPage: React.FC = () => {
         a.remove();
         window.URL.revokeObjectURL(url);
         message.success("导出成功");
-      } catch (e: any) {
+      } catch (e: unknown) {
         message.error(getErrorMsg(e, "导出失败（需要管理员登录）"));
       } finally {
         setExportingCurrent(false);
@@ -474,7 +474,7 @@ const XbkPage: React.FC = () => {
   );
 
   const openEditModal = useCallback(
-    (kind: "students" | "courses" | "selections", record: any) => {
+    (kind: "students" | "courses" | "selections", record: XbkStudentRow | XbkCourseRow | XbkSelectionRow) => {
       setEditKind(kind);
       setEditMode("edit");
       setEditRecord(record);
@@ -491,7 +491,7 @@ const XbkPage: React.FC = () => {
         else await xbkDataApi.deleteSelection(id);
         await Promise.all([loadMeta(), loadSummary(), loadData()]);
         message.success("删除成功");
-      } catch (e: any) {
+      } catch (e: unknown) {
         message.error(getErrorMsg(e, "删除失败（需要管理员登录）"));
       }
     },
@@ -499,7 +499,7 @@ const XbkPage: React.FC = () => {
   );
 
   const courseResultColumns = useMemo<ColumnsType<XbkCourseResultRow>>(() => {
-    const rows = courseResults as any[];
+    const rows = courseResults as Array<Record<string, unknown>>;
     return [
       {
         title: "年份",
@@ -568,7 +568,7 @@ const XbkPage: React.FC = () => {
   }, [courseResults]);
 
   const studentColumns = useMemo<ColumnsType<XbkStudentRow>>(() => {
-    const rows = students as any[];
+    const rows = students as Array<Record<string, unknown>>;
     const cols: ColumnsType<XbkStudentRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -594,7 +594,7 @@ const XbkPage: React.FC = () => {
         key: "actions",
         width: 140,
         fixed: "right",
-        render: (_: any, record: XbkStudentRow) => (
+        render: (_: unknown, record: XbkStudentRow) => (
           <Space size={8}>
             <Button size="small" onClick={() => openEditModal("students", record)}>
               编辑
@@ -612,7 +612,7 @@ const XbkPage: React.FC = () => {
   }, [students, canEdit, handleDeleteRow, openEditModal]);
 
   const courseColumns = useMemo<ColumnsType<XbkCourseRow>>(() => {
-    const rows = courses as any[];
+    const rows = courses as Array<Record<string, unknown>>;
     const cols: ColumnsType<XbkCourseRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -657,7 +657,7 @@ const XbkPage: React.FC = () => {
         key: "actions",
         width: 140,
         fixed: "right",
-        render: (_: any, record: XbkCourseRow) => (
+        render: (_: unknown, record: XbkCourseRow) => (
           <Space size={8}>
             <Button size="small" onClick={() => openEditModal("courses", record)}>
               编辑
@@ -675,7 +675,7 @@ const XbkPage: React.FC = () => {
   }, [courses, canEdit, handleDeleteRow, openEditModal]);
 
   const selectionColumns = useMemo<ColumnsType<XbkSelectionRow>>(() => {
-    const rows = selections as any[];
+    const rows = selections as Array<Record<string, unknown>>;
     const cols: ColumnsType<XbkSelectionRow> = [
       { title: "年份", dataIndex: "year", width: calcColumnWidth(rows, "year", "年份", 70, 90) },
       { title: "学期", dataIndex: "term", width: calcColumnWidth(rows, "term", "学期", 80, 110) },
@@ -690,7 +690,7 @@ const XbkPage: React.FC = () => {
         key: "actions",
         width: 140,
         fixed: "right",
-        render: (_: any, record: XbkSelectionRow) => (
+        render: (_: unknown, record: XbkSelectionRow) => (
           <Space size={8}>
             <Button size="small" onClick={() => openEditModal("selections", record)}>
               编辑
