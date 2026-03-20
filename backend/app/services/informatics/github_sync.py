@@ -129,7 +129,11 @@ def _normalize_imported_typst_content(content: str, source_path: str) -> str:
 
 
 async def get_or_create_sync_settings(db: AsyncSession) -> InformaticsGithubSyncSetting:
-    res = await db.execute(select(InformaticsGithubSyncSetting).order_by(InformaticsGithubSyncSetting.id.asc()))
+    res = await db.execute(
+        select(InformaticsGithubSyncSetting)
+        .order_by(InformaticsGithubSyncSetting.id.asc())
+        .limit(1)
+    )
     item = res.scalar_one_or_none()
     if item:
         return item
