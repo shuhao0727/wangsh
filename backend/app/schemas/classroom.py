@@ -20,6 +20,8 @@ class ActivityCreate(BaseModel):
     correct_answer: Optional[str] = None
     allow_multiple: bool = False
     time_limit: int = Field(60, ge=0, description="秒, 0=无限制")
+    analysis_agent_id: Optional[int] = None
+    analysis_prompt: Optional[str] = None
 
 
 class ActivityUpdate(BaseModel):
@@ -28,6 +30,13 @@ class ActivityUpdate(BaseModel):
     correct_answer: Optional[str] = None
     allow_multiple: Optional[bool] = None
     time_limit: Optional[int] = Field(None, ge=0)
+    analysis_agent_id: Optional[int] = None
+    analysis_prompt: Optional[str] = None
+
+
+class ActivityEndRequest(BaseModel):
+    analysis_agent_id: Optional[int] = None
+    analysis_prompt: Optional[str] = None
 
 
 class ActivityResponse(BaseModel):
@@ -45,6 +54,13 @@ class ActivityResponse(BaseModel):
     created_at: datetime
     response_count: int = 0
     remaining_seconds: Optional[int] = None
+    analysis_agent_id: Optional[int] = None
+    analysis_prompt: Optional[str] = None
+    analysis_status: Optional[str] = None
+    analysis_result: Optional[str] = None
+    analysis_context: Optional[dict] = None
+    analysis_error: Optional[str] = None
+    analysis_updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -29,6 +29,13 @@ export interface Activity {
   remaining_seconds?: number | null;
   my_answer?: string | null;
   stats?: ActivityStats | null;
+  analysis_agent_id?: number | null;
+  analysis_prompt?: string | null;
+  analysis_status?: string | null;
+  analysis_result?: string | null;
+  analysis_context?: Record<string, any> | null;
+  analysis_error?: string | null;
+  analysis_updated_at?: string | null;
 }
 
 export interface ActivityStats {
@@ -74,6 +81,18 @@ export interface ActivityCreateRequest {
   correct_answer?: string;
   allow_multiple?: boolean;
   time_limit?: number;
+  analysis_agent_id?: number;
+  analysis_prompt?: string;
+}
+
+export interface ActivityEndRequest {
+  analysis_agent_id?: number;
+  analysis_prompt?: string;
+}
+
+export interface ActiveAgentOption {
+  id: number;
+  name: string;
 }
 
 // ─── API ───
@@ -103,13 +122,21 @@ export const classroomApi = {
     const resp = await api.post(`${ADMIN_BASE}/${id}/start`);
     return resp.data as any;
   },
-  end: async (id: number): Promise<Activity> => {
-    const resp = await api.post(`${ADMIN_BASE}/${id}/end`);
+  end: async (id: number, data?: ActivityEndRequest): Promise<Activity> => {
+    const resp = await api.post(`${ADMIN_BASE}/${id}/end`, data || {});
     return resp.data as any;
   },
   getStatistics: async (id: number): Promise<ActivityStats> => {
     const resp = await api.get(`${ADMIN_BASE}/${id}/statistics`);
     return resp.data as any;
+  },
+  getActiveAgents: async (): Promise<ActiveAgentOption[]> => {
+    const resp = await api.get("/ai-agents/active");
+    const rows = Array.isArray(resp.data) ? resp.data : [];
+    return rows.map((row: any) => ({
+      id: Number(row?.id || 0),
+      name: String(row?.name || row?.agent_name || `智能体${row?.id ?? ""}`),
+    })).filter((row: ActiveAgentOption) => Number.isFinite(row.id) && row.id > 0);
   },
 
   // 学生端

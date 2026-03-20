@@ -6,10 +6,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 
-from sqlalchemy import select, func, delete, update
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
+from app.models.agents import AIAgent
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ def unsubscribe(channel: str, sub_id: str):
 # ─── CRUD ───
 
 async def create_activity(db: AsyncSession, data: dict, user_id: int) -> ClassroomActivity:
+    analysis_prompt = _normalize_prompt(data.get("analysis_prompt"))
+    analysis_status = "pending" if data["activity_type"] == "fill_blank" else "not_applicable"
     activity = ClassroomActivity(
         activity_type=data["activity_type"],
         title=data["title"],
@@ -50,6 +53,9 @@ async def create_activity(db: AsyncSession, data: dict, user_id: int) -> Classro
         correct_answer=data.get("correct_answer"),
         allow_multiple=data.get("allow_multiple", False),
         time_limit=data.get("time_limit", 60),
+        analysis_agent_id=data.get("analysis_agent_id"),
+        analysis_prompt=analysis_prompt,
+        analysis_status=analysis_status,
         status="draft",
         created_by=user_id,
     )
@@ -61,8 +67,8 @@ async def create_activity(db: AsyncSession, data: dict, user_id: int) -> Classro
 
 async def update_activity(db: AsyncSession, activity_id: int, data: dict) -> ClassroomActivity:
     activity = await _get_activity(db, activity_id)
-    if activity.status != "draft":
-        raise ValueError("只能编辑草稿状态的活动")
+    if activity.status == "active":
+        raise ValueError("进行中的活动不可编辑")
     for k, v in data.items():
         if v is not None:
             if k == "options" and v is not None:
@@ -82,6 +88,7 @@ async def delete_activity(db: AsyncSession, activity_id: int):
 
 
 async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, status: Optional[str] = None):
+    await _auto_end_overdue_activities(db)
     q = select(ClassroomActivity).order_by(ClassroomActivity.id.desc())
     count_q = select(func.count(ClassroomActivity.id))
     if status:
@@ -105,7 +112,9 @@ async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, s
 
 
 async def get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
-    return await _get_activity(db, activity_id)
+    activity = await _get_activity(db, activity_id)
+    await _ensure_activity_not_overdue(db, activity)
+    return activity
 
 
 async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
@@ -120,8 +129,7 @@ async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivit
     active_rows = (await db.execute(active_q)).scalars().all()
     now = datetime.now(timezone.utc)
     for a in active_rows:
-        a.status = "ended"
-        a.ended_at = now
+        await end_activity(db, a.id)
     activity.status = "active"
     activity.started_at = now
     await db.commit()
@@ -131,10 +139,19 @@ async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivit
     return activity
 
 
-async def end_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
+async def end_activity(
+    db: AsyncSession,
+    activity_id: int,
+    analysis_agent_id: Optional[int] = None,
+    analysis_prompt: Optional[str] = None,
+) -> ClassroomActivity:
     activity = await _get_activity(db, activity_id)
     if activity.status != "active":
         raise ValueError("只能结束进行中的活动")
+    if analysis_agent_id is not None:
+        activity.analysis_agent_id = analysis_agent_id
+    if analysis_prompt is not None:
+        activity.analysis_prompt = _normalize_prompt(analysis_prompt)
     activity.status = "ended"
     activity.ended_at = datetime.now(timezone.utc)
     # 自动判分
@@ -148,23 +165,16 @@ async def end_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
     await db.refresh(activity)
     _publish("student", {"type": "activity_ended", "activity_id": activity.id})
     _publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
+    await _run_auto_analysis_for_ended_activity(db, activity.id)
+    await db.refresh(activity)
     return activity
 
 
 async def check_and_auto_end(db: AsyncSession, activity_id: int) -> bool:
-    activity = (await db.execute(
-        select(ClassroomActivity).where(ClassroomActivity.id == activity_id)
-    )).scalar_one_or_none()
-    if not activity or activity.status != "active":
+    activity = (await db.execute(select(ClassroomActivity).where(ClassroomActivity.id == activity_id))).scalar_one_or_none()
+    if not activity:
         return False
-    if activity.time_limit <= 0 or not activity.started_at:
-        return False
-    now = datetime.now(timezone.utc)
-    elapsed = (now - activity.started_at).total_seconds()
-    if elapsed >= activity.time_limit:
-        await end_activity(db, activity_id)
-        return True
-    return False
+    return await _ensure_activity_not_overdue(db, activity)
 
 # PLACEHOLDER_SUBMIT_AND_STATS
 
@@ -265,7 +275,32 @@ async def get_statistics(db: AsyncSession, activity_id: int) -> dict:
     }
 
 
+async def analyze_fill_blank_stats(db: AsyncSession, activity_id: int, agent_id: Optional[int] = None) -> dict:
+    activity = await _get_activity(db, activity_id)
+    if activity.activity_type != "fill_blank":
+        raise ValueError("仅填空活动支持分析")
+    if activity.status != "ended":
+        raise ValueError("活动结束后才可查看分析")
+    if agent_id is not None:
+        activity.analysis_agent_id = agent_id
+        await db.commit()
+        await _run_auto_analysis_for_ended_activity(db, activity.id)
+        await db.refresh(activity)
+    context = activity.analysis_context or {}
+    risk_slots = context.get("risk_slots") or []
+    return {
+        "activity_id": activity.id,
+        "agent_id": activity.analysis_agent_id,
+        "analysis": activity.analysis_result or "",
+        "analysis_context": context,
+        "weakest_slot": risk_slots[0] if risk_slots else None,
+        "analysis_status": activity.analysis_status,
+        "analysis_error": activity.analysis_error,
+    }
+
+
 async def get_active_activities(db: AsyncSession) -> List[ClassroomActivity]:
+    await _auto_end_overdue_activities(db)
     rows = (await db.execute(
         select(ClassroomActivity).where(ClassroomActivity.status == "active")
         .order_by(ClassroomActivity.started_at.desc())
@@ -288,6 +323,127 @@ def calc_remaining(activity: ClassroomActivity) -> Optional[int]:
     elapsed = (datetime.now(timezone.utc) - activity.started_at).total_seconds()
     remaining = max(0, int(activity.time_limit - elapsed))
     return remaining
+
+
+async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: int) -> None:
+    activity = await _get_activity(db, activity_id)
+    if activity.activity_type != "fill_blank":
+        if activity.analysis_status != "not_applicable":
+            activity.analysis_status = "not_applicable"
+            activity.analysis_updated_at = datetime.now(timezone.utc)
+            await db.commit()
+        return
+    stats = await get_statistics(db, activity_id)
+    context = _build_analysis_context(activity, stats)
+    if stats.get("total_responses", 0) <= 0 or not context.get("risk_slots"):
+        activity.analysis_status = "skipped"
+        activity.analysis_result = "暂无可分析作答数据，已跳过自动分析。"
+        activity.analysis_context = context
+        activity.analysis_error = None
+        activity.analysis_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+    chosen_agent_id = activity.analysis_agent_id or await _pick_default_active_agent(db)
+    if not chosen_agent_id:
+        activity.analysis_status = "failed"
+        activity.analysis_result = None
+        activity.analysis_context = context
+        activity.analysis_error = "未找到可用智能体，请先配置并启用AI智能体。"
+        activity.analysis_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+    activity.analysis_agent_id = int(chosen_agent_id)
+    activity.analysis_status = "running"
+    activity.analysis_error = None
+    activity.analysis_updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    prompt = _build_analysis_prompt(context, activity.analysis_prompt)
+    from app.services.agents.chat_blocking import run_agent_chat_blocking
+    try:
+        analysis_text = await run_agent_chat_blocking(
+            db,
+            agent_id=int(chosen_agent_id),
+            message=prompt,
+        )
+        activity.analysis_status = "success"
+        activity.analysis_result = analysis_text
+        activity.analysis_context = context
+        activity.analysis_error = None
+        activity.analysis_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception as exc:
+        logger.exception("课堂互动自动分析失败: activity_id=%s", activity_id)
+        activity.analysis_status = "failed"
+        activity.analysis_result = None
+        activity.analysis_context = context
+        activity.analysis_error = str(exc)
+        activity.analysis_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+
+async def _pick_default_active_agent(db: AsyncSession) -> Optional[int]:
+    row = await db.execute(
+        select(AIAgent.id)
+        .where(AIAgent.is_active == True, AIAgent.is_deleted == False)
+        .order_by(AIAgent.id.asc())
+        .limit(1)
+    )
+    return row.scalar_one_or_none()
+
+
+def _build_analysis_prompt(context: dict, custom_prompt: Optional[str]) -> str:
+    custom = _normalize_prompt(custom_prompt)
+    extra = f"\n教师补充要求：{custom}\n" if custom else ""
+    return (
+        "你是教学诊断助手。请基于以下填空题统计数据，输出Markdown分析，要求："
+        "1）先给出总体结论；2）逐空位指出易错点与错误模式；3）给出3条可执行教学建议；"
+        "4）最后输出一个```json```代码块，字段包含risk_slots、common_mistakes、teaching_actions。"
+        f"{extra}"
+        f"\n统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
+    )
+
+
+def _build_analysis_context(activity: ClassroomActivity, stats: dict) -> dict:
+    risk_slots = []
+    for slot in sorted(stats.get("blank_slot_stats") or [], key=lambda x: x.get("correct_rate") or 0):
+        risk_slots.append(
+            {
+                "slot_index": slot.get("slot_index"),
+                "correct_answer": slot.get("correct_answer"),
+                "correct_rate": slot.get("correct_rate"),
+                "total_count": slot.get("total_count"),
+                "top_wrong_answers": (slot.get("top_wrong_answers") or [])[:5],
+            }
+        )
+    return {
+        "activity_id": activity.id,
+        "title": activity.title,
+        "total_responses": stats.get("total_responses"),
+        "overall_correct_rate": stats.get("correct_rate"),
+        "risk_slots": risk_slots,
+        "common_mistakes": (stats.get("top_wrong_answers") or [])[:10],
+        "blank_slot_stats": stats.get("blank_slot_stats") or [],
+    }
+
+
+async def _auto_end_overdue_activities(db: AsyncSession) -> None:
+    rows = (await db.execute(
+        select(ClassroomActivity).where(ClassroomActivity.status == "active")
+    )).scalars().all()
+    for activity in rows:
+        await _ensure_activity_not_overdue(db, activity)
+
+
+async def _ensure_activity_not_overdue(db: AsyncSession, activity: ClassroomActivity) -> bool:
+    if activity.status != "active":
+        return False
+    if activity.time_limit <= 0 or not activity.started_at:
+        return False
+    elapsed = (datetime.now(timezone.utc) - activity.started_at).total_seconds()
+    if elapsed < activity.time_limit:
+        return False
+    await end_activity(db, activity.id)
+    return True
 
 
 # ─── helpers ───
@@ -336,3 +492,8 @@ def _parse_blank_answers(value: str) -> Optional[List[str]]:
         keys = sorted(parsed.keys(), key=lambda k: int(k) if str(k).isdigit() else str(k))
         return [str(parsed[k]).strip() for k in keys]
     return None
+
+
+def _normalize_prompt(value: Optional[str]) -> Optional[str]:
+    text = (value or "").strip()
+    return text if text else None

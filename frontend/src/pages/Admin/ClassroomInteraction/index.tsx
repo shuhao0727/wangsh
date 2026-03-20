@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Table, Button, Tag, Badge, Space, Modal, Form, Input, InputNumber,
-  Select, Switch, Popconfirm, message, Drawer, Progress, Segmented,
+  Table,
+  Button,
+  Tag,
+  Badge,
+  Space,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Switch,
+  Popconfirm,
+  message,
+  Drawer,
+  Progress,
+  Segmented,
+  Pagination,
+  Alert,
 } from "antd";
 import {
   PlusOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined,
   BarChartOutlined, EditOutlined, ReloadOutlined,
 } from "@ant-design/icons";
-import { AdminPage } from "@components/Admin";
-import { classroomApi, Activity, ActivityCreateRequest, ActivityStats, OptionItem } from "@services/classroom";
+import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { classroomApi, Activity, ActivityCreateRequest, ActivityStats, OptionItem, ActiveAgentOption } from "@services/classroom";
 
 const parseBlankAnswers = (raw?: string | null): string[] => {
   const text = String(raw || "").trim();
@@ -39,10 +55,15 @@ const formatCorrectAnswer = (raw?: string | null): string => {
   return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
 };
 
+const parseErrorMessage = (error: any): string => {
+  return String(error?.response?.data?.detail || error?.message || "操作失败");
+};
+
 const AdminClassroomInteractionPage: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -50,34 +71,69 @@ const AdminClassroomInteractionPage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerActivity, setDrawerActivity] = useState<Activity | null>(null);
   const [drawerStats, setDrawerStats] = useState<ActivityStats | null>(null);
+  const [activeAgents, setActiveAgents] = useState<ActiveAgentOption[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<number | undefined>(undefined);
+  const [analysisPrompt, setAnalysisPrompt] = useState("");
   const [form] = Form.useForm();
   const [activityType, setActivityType] = useState<"vote" | "fill_blank">("vote");
   const statsTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
-  const PAGE_SIZE = 15;
-
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await classroomApi.list({ skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, status: statusFilter });
+      const resp = await classroomApi.list({ skip: (page - 1) * pageSize, limit: pageSize, status: statusFilter });
       setActivities(resp.items);
       setTotal(resp.total);
-    } catch (e: any) { message.error(e.message || "加载失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
     setLoading(false);
-  }, [page, statusFilter]);
+  }, [page, pageSize, statusFilter]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
-  // PLACEHOLDER_HANDLERS
+  const fetchActiveAgents = useCallback(async () => {
+    setLoadingAgents(true);
+    try {
+      const rows = await classroomApi.getActiveAgents();
+      setActiveAgents(rows);
+      setSelectedAgentId((prev) => {
+        if (rows.length === 0) return undefined;
+        if (prev == null) return rows[0].id;
+        if (!rows.some((row) => row.id === prev)) return rows[0].id;
+        return prev;
+      });
+    } catch (e: any) {
+      setActiveAgents([]);
+      setSelectedAgentId(undefined);
+      message.error(parseErrorMessage(e));
+    } finally {
+      setLoadingAgents(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveAgents();
+  }, [fetchActiveAgents]);
+
+  const buildAnalysisConfig = () => {
+    const prompt = analysisPrompt.trim();
+    return {
+      analysis_agent_id: selectedAgentId,
+      analysis_prompt: prompt || undefined,
+    };
+  };
 
   const handleCreate = async (values: any) => {
     try {
+      const analysisConfig = buildAnalysisConfig();
       const data: ActivityCreateRequest = {
         activity_type: activityType,
         title: values.title,
         time_limit: values.time_limit || 60,
         correct_answer: activityType === "fill_blank" ? toFillBlankPayload(values) : (values.correct_answer || undefined),
         allow_multiple: values.allow_multiple || false,
+        analysis_agent_id: analysisConfig.analysis_agent_id,
+        analysis_prompt: analysisConfig.analysis_prompt,
       };
       if (activityType === "vote" && values.options) {
         data.options = values.options.filter((o: any) => o?.text);
@@ -91,7 +147,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
       }
       setModalOpen(false);
       fetchList();
-    } catch (e: any) { message.error(e.message || "操作失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
   const handleStart = async (id: number) => {
@@ -99,16 +155,16 @@ const AdminClassroomInteractionPage: React.FC = () => {
       await classroomApi.start(id);
       message.success("活动已开始");
       fetchList();
-    } catch (e: any) { message.error(e.message || "开始失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
   const handleEnd = async (id: number) => {
     try {
-      await classroomApi.end(id);
+      await classroomApi.end(id, buildAnalysisConfig());
       message.success("活动已结束");
       fetchList();
       if (drawerActivity?.id === id) refreshDrawer(id);
-    } catch (e: any) { message.error(e.message || "结束失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
   const handleDelete = async (id: number) => {
@@ -116,7 +172,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
       await classroomApi.remove(id);
       message.success("已删除");
       fetchList();
-    } catch (e: any) { message.error(e.message || "删除失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
   const refreshDrawer = async (id: number) => {
@@ -124,7 +180,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
       const detail = await classroomApi.getDetail(id);
       setDrawerActivity(detail);
       setDrawerStats(detail.stats || null);
-    } catch (e: any) { message.error(e.message || "加载详情失败"); }
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
   const openDrawer = (record: Activity) => {
@@ -144,12 +200,56 @@ const AdminClassroomInteractionPage: React.FC = () => {
 
   useEffect(() => () => { if (statsTimerRef.current) clearInterval(statsTimerRef.current); }, []);
 
+  const analysisContext = drawerActivity?.analysis_context || {};
+  const riskSlots = Array.isArray(analysisContext.risk_slots) ? analysisContext.risk_slots : [];
+  const commonMistakes = Array.isArray(analysisContext.common_mistakes) ? analysisContext.common_mistakes : [];
+  const analysisStatusMap: Record<string, { color: string; text: string }> = {
+    pending: { color: "default", text: "待分析" },
+    running: { color: "blue", text: "分析中" },
+    success: { color: "success", text: "分析成功" },
+    failed: { color: "red", text: "分析失败" },
+    skipped: { color: "warning", text: "已跳过" },
+    not_applicable: { color: "default", text: "不适用" },
+  };
+  const analysisStatus = analysisStatusMap[String(drawerActivity?.analysis_status || "pending")] || analysisStatusMap.pending;
+
   return (
     <AdminPage scrollable={false}>
-      <div style={{ padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: 24, gap: 12 }}>
+        <div style={{ border: "1px solid #f0f0f0", borderRadius: 10, padding: 12, background: "#fafafa" }}>
+          <Space size={12} wrap style={{ width: "100%" }}>
+            <Select
+              value={selectedAgentId}
+              onChange={setSelectedAgentId}
+              placeholder={activeAgents.length > 0 ? "选择用于自动分析的智能体" : "暂无可用智能体"}
+              style={{ width: 280 }}
+              options={activeAgents.map((agent) => ({ label: agent.name, value: agent.id }))}
+              loading={loadingAgents}
+              disabled={loadingAgents || activeAgents.length === 0}
+            />
+            <Input
+              placeholder={activeAgents.length > 0 ? "可选：补充分析提示词（用于活动结束自动分析）" : "请先在智能体管理中启用至少一个智能体"}
+              value={analysisPrompt}
+              onChange={(e) => setAnalysisPrompt(e.target.value)}
+              maxLength={500}
+              style={{ flex: 1, minWidth: 260 }}
+              disabled={activeAgents.length === 0}
+            />
+            <Button icon={<ReloadOutlined />} onClick={fetchActiveAgents} loading={loadingAgents}>刷新智能体</Button>
+          </Space>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Space>
-            <Select value={statusFilter} onChange={setStatusFilter} allowClear placeholder="状态筛选" style={{ width: 120 }}>
+            <Select
+              value={statusFilter}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
+              allowClear
+              placeholder="状态筛选"
+              style={{ width: 120 }}
+            >
               <Select.Option value="draft">草稿</Select.Option>
               <Select.Option value="active">进行中</Select.Option>
               <Select.Option value="ended">已结束</Select.Option>
@@ -160,71 +260,97 @@ const AdminClassroomInteractionPage: React.FC = () => {
             创建活动
           </Button>
         </div>
-
-{/* TABLE */}
-        <Table
-          dataSource={activities}
-          rowKey="id"
-          loading={loading}
-          pagination={{ current: page, pageSize: PAGE_SIZE, total, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
-          size="middle"
-          columns={[
-            { title: "ID", dataIndex: "id", width: 60 },
-            { title: "标题", dataIndex: "title", ellipsis: true },
-            {
-              title: "类型", dataIndex: "activity_type", width: 80,
-              render: (t: string) => <Tag color={t === "vote" ? "blue" : "green"}>{t === "vote" ? "投票" : "填空"}</Tag>,
-            },
-            {
-              title: "状态", dataIndex: "status", width: 90,
-              render: (s: string) => {
-                const map: Record<string, { status: any; text: string }> = {
-                  draft: { status: "default", text: "草稿" },
-                  active: { status: "processing", text: "进行中" },
-                  ended: { status: "success", text: "已结束" },
-                };
-                const m = map[s] || { status: "default", text: s };
-                return <Badge status={m.status} text={m.text} />;
-              },
-            },
-            { title: "时限", dataIndex: "time_limit", width: 70, render: (v: number) => v > 0 ? `${v}s` : "无" },
-            { title: "参与", dataIndex: "response_count", width: 60 },
-            {
-              title: "操作", width: 220,
-              render: (_: any, record: Activity) => (
-                <Space size="small">
-                  {record.status === "draft" && (
-                    <>
-                      <Popconfirm title="确认开始？" onConfirm={() => handleStart(record.id)}>
-                        <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
-                      </Popconfirm>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => {
-                        setEditingId(record.id);
-                        setActivityType(record.activity_type as any);
-                        form.setFieldsValue({
-                          ...record,
-                          blank_answers: record.activity_type === "fill_blank" ? parseBlankAnswers(record.correct_answer) : undefined,
-                        });
-                        setModalOpen(true);
-                      }}>编辑</Button>
-                      <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-                        <Button size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </>
-                  )}
-                  {record.status === "active" && (
-                    <Popconfirm title="确认结束？" onConfirm={() => handleEnd(record.id)}>
-                      <Button size="small" danger icon={<StopOutlined />}>结束</Button>
-                    </Popconfirm>
-                  )}
-                  <Button size="small" icon={<BarChartOutlined />} onClick={() => openDrawer(record)}>详情</Button>
-                </Space>
-              ),
-            },
-          ]}
-        />
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <AdminTablePanel
+            loading={loading}
+            isEmpty={!loading && activities.length === 0}
+            emptyDescription="暂无课堂互动活动"
+            pagination={(
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={total}
+                onChange={(nextPage, nextPageSize) => {
+                  if (nextPageSize && nextPageSize !== pageSize) {
+                    setPageSize(nextPageSize);
+                    setPage(1);
+                    return;
+                  }
+                  setPage(nextPage);
+                }}
+                showSizeChanger
+                showTotal={(t) => `共 ${t} 条`}
+              />
+            )}
+          >
+            <Table
+              dataSource={activities}
+              rowKey="id"
+              loading={loading}
+              pagination={false}
+              size="middle"
+              columns={[
+                { title: "ID", dataIndex: "id", width: 60 },
+                { title: "标题", dataIndex: "title", ellipsis: true },
+                {
+                  title: "类型", dataIndex: "activity_type", width: 80,
+                  render: (t: string) => <Tag color={t === "vote" ? "blue" : "green"}>{t === "vote" ? "投票" : "填空"}</Tag>,
+                },
+                {
+                  title: "状态", dataIndex: "status", width: 90,
+                  render: (s: string) => {
+                    const map: Record<string, { status: any; text: string }> = {
+                      draft: { status: "default", text: "草稿" },
+                      active: { status: "processing", text: "进行中" },
+                      ended: { status: "success", text: "已结束" },
+                    };
+                    const m = map[s] || { status: "default", text: s };
+                    return <Badge status={m.status} text={m.text} />;
+                  },
+                },
+                { title: "时限", dataIndex: "time_limit", width: 70, render: (v: number) => v > 0 ? `${v}s` : "无" },
+                { title: "参与", dataIndex: "response_count", width: 60 },
+                {
+                  title: "操作", width: 220,
+                  render: (_: any, record: Activity) => (
+                    <Space size="small">
+                      {record.status !== "active" && (
+                        <>
+                          <Button size="small" icon={<EditOutlined />} onClick={() => {
+                            setEditingId(record.id);
+                            setActivityType(record.activity_type as any);
+                            form.setFieldsValue({
+                              ...record,
+                              blank_answers: record.activity_type === "fill_blank" ? parseBlankAnswers(record.correct_answer) : undefined,
+                            });
+                            setModalOpen(true);
+                          }}>编辑</Button>
+                          {record.status === "draft" && (
+                            <>
+                              <Popconfirm title="确认开始？" onConfirm={() => handleStart(record.id)}>
+                                <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
+                              </Popconfirm>
+                              <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+                                <Button size="small" danger icon={<DeleteOutlined />} />
+                              </Popconfirm>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {record.status === "active" && (
+                        <Popconfirm title="确认结束？" onConfirm={() => handleEnd(record.id)}>
+                          <Button size="small" danger icon={<StopOutlined />}>结束</Button>
+                        </Popconfirm>
+                      )}
+                      <Button size="small" icon={<BarChartOutlined />} onClick={() => openDrawer(record)}>详情</Button>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </AdminTablePanel>
+        </div>
       </div>
-{/* MODAL */}
       <Modal
         title={editingId ? "编辑活动" : "创建活动"}
         open={modalOpen}
@@ -307,8 +433,6 @@ const AdminClassroomInteractionPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-
-{/* DRAWER */}
       <Drawer
         title={drawerActivity?.title || "活动详情"}
         open={drawerOpen}
@@ -350,12 +474,16 @@ const AdminClassroomInteractionPage: React.FC = () => {
                     })}
                   </div>
                 )}
-                {drawerActivity.activity_type === "fill_blank" && drawerStats.correct_rate != null && (
+                {drawerActivity.activity_type === "fill_blank" && (
                   <div>
-                    <div style={{ textAlign: "center", padding: 20 }}>
-                      <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
-                      <div style={{ marginTop: 8, color: "#999" }}>整体正确率</div>
-                    </div>
+                    {drawerStats.correct_rate != null ? (
+                      <div style={{ textAlign: "center", padding: 20 }}>
+                        <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
+                        <div style={{ marginTop: 8, color: "#999" }}>整体正确率</div>
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: 8, color: "#999", fontSize: 12 }}>当前暂无作答数据，可先发起活动并收集作答后再看统计。</div>
+                    )}
                     {Array.isArray(drawerStats.blank_slot_stats) && drawerStats.blank_slot_stats.length > 0 && (
                       <div style={{ marginTop: 4 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>空位明细</div>
@@ -380,6 +508,50 @@ const AdminClassroomInteractionPage: React.FC = () => {
                     {Array.isArray(drawerStats.top_wrong_answers) && drawerStats.top_wrong_answers.length > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
                         错误最多答案：{drawerStats.top_wrong_answers.slice(0, 5).map((x) => `${x.answer}(${x.count})`).join("、")}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Tag color={analysisStatus.color}>{analysisStatus.text}</Tag>
+                      {drawerActivity.analysis_updated_at && <span style={{ color: "#999", fontSize: 12 }}>更新时间：{new Date(drawerActivity.analysis_updated_at).toLocaleString()}</span>}
+                    </div>
+                    {drawerActivity.analysis_status === "failed" && (
+                      <div style={{ marginTop: 10 }}>
+                        <Alert
+                          type="error"
+                          showIcon
+                          message="自动分析失败"
+                          description={`失败原因：${drawerActivity.analysis_error || "未知错误"}。可调整顶部AI配置后结束新活动重试。`}
+                        />
+                      </div>
+                    )}
+                    {drawerActivity.analysis_status === "skipped" && (
+                      <div style={{ marginTop: 10 }}>
+                        <Alert type="warning" showIcon message="自动分析已跳过" description="当前活动作答数据不足，系统未执行智能体分析。" />
+                      </div>
+                    )}
+                    {drawerActivity.analysis_status === "running" && (
+                      <div style={{ marginTop: 10 }}>
+                        <Alert type="info" showIcon message="自动分析进行中" description="请稍后刷新详情查看分析结论。" />
+                      </div>
+                    )}
+                    {drawerActivity.analysis_status === "success" && drawerActivity.analysis_result && (
+                      <div style={{ marginTop: 10, border: "1px solid #f0f0f0", borderRadius: 8, padding: 10, background: "#fafafa" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>AI分析结论</div>
+                        <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12, color: "#333" }}>{drawerActivity.analysis_result}</pre>
+                        {(riskSlots.length > 0 || commonMistakes.length > 0) && (
+                          <div style={{ marginTop: 10, borderTop: "1px dashed #e5e5e5", paddingTop: 10 }}>
+                            {riskSlots.length > 0 && (
+                              <div style={{ marginBottom: 6, fontSize: 12, color: "#555" }}>
+                                关键风险空位：{riskSlots.slice(0, 3).map((slot) => `空位${slot.slot_index}(${slot.correct_rate ?? 0}%)`).join("、")}
+                              </div>
+                            )}
+                            {commonMistakes.length > 0 && (
+                              <div style={{ fontSize: 12, color: "#555" }}>
+                                高频错答摘要：{commonMistakes.slice(0, 5).map((item) => `${item.answer}(${item.count})`).join("、")}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
