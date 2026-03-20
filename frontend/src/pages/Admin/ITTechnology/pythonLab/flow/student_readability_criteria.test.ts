@@ -7,20 +7,18 @@ test("学生可读性判据：for-range 具备低跳跃分步结构", () => {
   if (!built) return;
 
   const byTitle = (t: string) => built.nodes.find((n) => n.title.replaceAll(" ", "") === t.replaceAll(" ", ""));
-  const initNode = byTitle("range(1,10)");
-  const iterNode = byTitle("itinrange(1,10)");
-  const checkNode = built.nodes.find((n) => n.shape === "decision" && n.title.replaceAll(" ", "") === "i的值在列表？");
-  const bindNode = byTitle("i=next(it)");
+  const initNode = byTitle("i=1");
+  const checkNode = built.nodes.find((n) => n.shape === "decision" && n.title.replaceAll(" ", "").includes("i∈[1,10)"));
+  const incNode = byTitle("i+=1");
   expect(initNode).toBeTruthy();
-  expect(iterNode).toBeTruthy();
   expect(checkNode).toBeTruthy();
-  expect(bindNode).toBeTruthy();
+  expect(incNode).toBeTruthy();
 
   const hasEdge = (from?: string, to?: string, label?: string) =>
     built.edges.some((e) => e.from === from && e.to === to && (label ? (e.label ?? "").trim() === label : true));
-  expect(hasEdge(initNode?.id, iterNode?.id)).toBe(true);
-  expect(hasEdge(iterNode?.id, checkNode?.id)).toBe(true);
-  expect(hasEdge(checkNode?.id, bindNode?.id, "是")).toBe(true);
+  expect(hasEdge(initNode?.id, checkNode?.id)).toBe(true);
+  expect(built.edges.some((e) => e.from === checkNode?.id && (e.label ?? "").trim() === "是")).toBe(true);
+  expect(hasEdge(incNode?.id, checkNode?.id)).toBe(true);
   expect(built.edges.some((e) => e.from === checkNode?.id && (e.label ?? "").trim() === "否")).toBe(true);
 });
 

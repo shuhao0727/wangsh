@@ -91,7 +91,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
     >
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <div>
-          <div style={{ marginBottom: 8 }}>导出类型</div>
+          <div className="ws-modal-label">导出类型</div>
           <Select value={exportType} style={{ width: "100%" }} onChange={setExportType}>
             <Option value="course-selection">学生选课表</Option>
             <Option value="teacher-distribution">教师分发表</Option>
@@ -100,7 +100,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
         </div>
         
         <div>
-          <div style={{ marginBottom: 8 }}>学年 (如 2025-2026)</div>
+          <div className="ws-modal-label">学年 (如 2025-2026)</div>
           <Space>
             <InputNumber
               placeholder="起"
@@ -124,7 +124,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
           </Space>
         </div>
 
-        <div style={{ color: "var(--ws-color-text-secondary)", fontSize: "var(--ws-text-sm)" }}>
+        <div className="ws-modal-hint">
           <p>• 将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}{filters.class_name ? ` · ${filters.class_name}` : ""}</p>
           <p>• 学期将按当前筛选的学期写入导出文件标题。</p>
         </div>

@@ -567,6 +567,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         style={{ top: 20 }}
         footer={null}
         destroyOnHidden
+        styles={{ body: { padding: 24 } }}
         {...modalProps}
       >
         <div className="category-manage-modal">
@@ -638,7 +639,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
           {selectedRowKeys.length > 0 && (
             <Card
               size="small"
-              style={{ marginBottom: "16px", background: "#e6f7ff" }}
+              style={{ marginBottom: "16px", background: "rgba(14, 165, 233, 0.06)" }}
             >
               <div
                 style={{
@@ -693,10 +694,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     total={total}
                     onChange={handlePageChange}
                     showSizeChanger
-                    showQuickJumper
-                    showTotal={(total, range) =>
-                      `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                    }
+                    showTotal={(total: number) => `共 ${total} 条`}
                   />
                 </div>
               </>
@@ -713,6 +711,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         footer={null}
         onCancel={handleEditFormCancel}
         destroyOnHidden
+        styles={{ body: { padding: 24 } }}
       >
         <CategoryEditForm
           category={editingCategory}

@@ -235,6 +235,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        if not settings.DEBUG:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' blob: wss:; "
+                "worker-src 'self' blob:; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "frame-ancestors 'none'; "
+                "form-action 'self'",
+            )
+        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
         return response
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -302,22 +321,24 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
                 pass
 
 # 配置 CORS
+_cors_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+_cors_headers = ["Content-Type", "Authorization", "X-Request-ID"]
 if settings.DEBUG:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
         allow_origin_regex=r"^https?://((localhost|127\.0\.0\.1)|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[0-1])(\.\d{1,3}){2})(:\d+)?$",
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=_cors_methods,
+        allow_headers=_cors_headers,
     )
 elif settings.CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=_cors_methods,
+        allow_headers=_cors_headers,
     )
 
 app.add_middleware(SecurityHeadersMiddleware)

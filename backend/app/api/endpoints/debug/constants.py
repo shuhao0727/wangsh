@@ -4,7 +4,7 @@ from typing import Final
 PARSER_VERSION_PSEUDO: Final[str] = "v1_ast"
 API_VERSION_PSEUDO: Final[str] = "pseudocode_v1"
 
-PARSER_VERSION_FLOW: Final[str] = "v7_ir"
+PARSER_VERSION_FLOW: Final[str] = "v8_ir"
 API_VERSION_FLOW: Final[str] = "flow_ast_v1"
 
 VERSION_CFG: Final[str] = "v1"

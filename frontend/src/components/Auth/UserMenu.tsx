@@ -144,13 +144,13 @@ const UserMenu: React.FC<UserMenuProps> = ({
     const role = auth.getUserRole();
     switch (role) {
       case "super_admin":
-        return "#ff4d4f"; // 红色
+        return "#EF4444"; // 红色
       case "admin":
-        return "#1890ff"; // 蓝色
+        return "#0EA5E9"; // 蓝色
       case "student":
-        return "#52c41a"; // 绿色
+        return "#10B981"; // 绿色
       default:
-        return "#722ed1"; // 紫色
+        return "#6366F1"; // 紫色
     }
   };
 
@@ -199,7 +199,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
         <Avatar
           size="default"
           icon={<UserOutlined />}
-          style={{ backgroundColor: "#d9d9d9", marginRight: showName ? 8 : 0 }}
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.08)", marginRight: showName ? 8 : 0 }}
         />
         {showName && <Text>未登录</Text>}
       </div>

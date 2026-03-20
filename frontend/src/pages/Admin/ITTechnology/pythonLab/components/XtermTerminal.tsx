@@ -1,4 +1,5 @@
 import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
+import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
 
@@ -50,7 +51,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         Boolean((window as unknown as { __PYTHONLAB_TERMINAL_TRACE__?: boolean }).__PYTHONLAB_TERMINAL_TRACE__) ||
         window.localStorage?.getItem("pythonlab:terminal:trace") === "1";
       if (!enabled) return;
-      console.info("[pythonlab:terminal:xterm]", {
+      logger.info("[pythonlab:terminal:xterm]", {
         phase,
         epoch: termEpochRef.current,
         disposed: terminalDisposedRef.current,
@@ -262,6 +263,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       Promise.all([
         import(/* webpackChunkName: "xterm" */ "xterm"),
         import(/* webpackChunkName: "xterm" */ "xterm-addon-fit"),
+        // @ts-ignore
         import(/* webpackChunkName: "xterm" */ "xterm/css/xterm.css"),
       ]).then(([{ Terminal }, { FitAddon }]) => {
         if (disposed) return;
@@ -288,8 +290,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       term.loadAddon(fitAddon);
       try {
         term.open(container);
-      } catch (e: unknown) {
-        trace("terminal_open_error", { message: e?.message || "open_failed" });
+      } catch (e: any) {
         try { term.dispose(); } catch {}
         return;
       }

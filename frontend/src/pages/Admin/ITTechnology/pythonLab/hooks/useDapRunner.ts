@@ -6,6 +6,7 @@ import { computeDebugNodeSelection, type DebugMap } from "../flow/debugMap";
 import { extractInputPrompts, promptAndInlineInputs } from "./inputInline";
 import { summarizeDapBreakpointReport, type DapBreakpointReport } from "./dapBreakpointReport";
 import { detectSourceMismatch } from "./sourceSync";
+import { logger } from "@services/logger";
 
 // --- Types ---
 
@@ -163,7 +164,7 @@ type Action =
   | { type: "UPDATE_WATCH_EXPRS"; payload: string[] }
   | { type: "SET_WATCH_RESULTS"; payload: WatchResult[] }
   | { type: "INCREMENT_STEPS" }
-  | { type: "RESET_SESSION" }
+  | { type: "RESET_SESSION"; payload?: { preserveOutput?: boolean } }
   | { type: "UPDATE_ELAPSED_TIME"; payload: number }
   | { type: "SET_START_TIME"; payload: number | null }
   | { type: "SET_SESSION_ID"; payload: string | null }
@@ -226,7 +227,7 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
         startTime: null,
         elapsedTime: 0,
         sessionId: null,
-        pendingOutput: [],
+        pendingOutput: action.payload?.preserveOutput ? state.pendingOutput : [],
         dapCapabilities: null,
       };
     case "UPDATE_ELAPSED_TIME":
@@ -303,7 +304,7 @@ class DapClient {
         this.emit(msg.event!, msg);
       }
     } catch (e) {
-      console.error("Failed to parse DAP message", e);
+      logger.error("Failed to parse DAP message", e);
     }
   }
 
@@ -363,6 +364,8 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   const clientConnIdRef = useRef<string | null>(null);
   const sourceMismatchRef = useRef(false);
   const sourceMismatchMessageRef = useRef<string | null>(null);
+  const stepsRef = useRef(0);
+  const elapsedRef = useRef(0);
 
   // Sync state to ref for callbacks if needed, but try to avoid it.
   const stateRef = useRef(state);
@@ -383,7 +386,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
   const traceLifecycle = useCallback((phase: string, extra?: Record<string, unknown>) => {
     if (!shouldTraceLifecycle()) return;
     try {
-      console.info("[pythonlab:dap]", {
+      logger.info("[pythonlab:dap]", {
         phase,
         token: startTokenRef.current,
         epoch: lifecycleEpochRef.current,
@@ -499,7 +502,6 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
       dispatch({ type: "SET_FRAMES", payload: mappedFrames });
       dispatch({ type: "SET_ACTIVE_LINE", payload: topFrame.line });
-      dispatch({ type: "SET_ACTIVE_EMPHASIS", payload: { activeFlowLine: topFrame.line, activeFocusRole: null, activeNodeId: null } });
 
       // Fetch variables for top frame
       const scopesResp = await clientRef.current.request("scopes", { frameId: topFrame.id });
@@ -520,7 +522,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         dispatch({ type: "SET_VARIABLES", payload: vars });
 
         const prevVars = prevVarsRef.current;
-        const stepNo = (stateRef.current.steps || 0) + 1;
+        const stepNo = stepsRef.current;
         const diff = diffVarTrace(stepNo, prevVars, vars);
         dispatch({ type: "SET_CHANGED_VARS", payload: diff.changed });
         if (diff.lines.length) dispatch({ type: "APPEND_TRACE_LINES", payload: diff.lines });
@@ -550,43 +552,45 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
           prevVarsRef.current = diff.next;
           prevActiveLineRef.current = topFrame.line ?? null;
           prevStackDepthRef.current = mappedFrames.length;
-          return;
+        } else {
+
+          dispatch({
+            type: "SET_ACTIVE_EMPHASIS",
+            payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: selection.activeFocusRole, activeNodeId: selection.activeNodeId },
+          });
+
+          if (selection.transitionQueue.length >= 2) {
+            const queue = selection.transitionQueue.slice(1);
+            const MIN_STEP_DURATION = 500;
+
+            const playNext = (idx: number) => {
+              if (idx >= queue.length) {
+                emphasisTimerRef.current = null;
+                return;
+              }
+              const nextNodeId = queue[idx];
+              const thenRole = idx === 0 ? (selection.inferred?.thenRole ?? null) : null;
+
+              const tid = setTimeout(() => {
+                if (emphasisSeqRef.current !== mySeq) return;
+                if (stateRef.current.status !== "paused") return;
+                dispatch({
+                  type: "SET_ACTIVE_EMPHASIS",
+                  payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: thenRole, activeNodeId: nextNodeId },
+                });
+                playNext(idx + 1);
+              }, MIN_STEP_DURATION);
+              emphasisTimerRef.current = tid;
+            };
+
+            playNext(0);
+          }
+
+          prevVarsRef.current = diff.next;
+          prevActiveLineRef.current = topFrame.line ?? null;
+          prevStackDepthRef.current = mappedFrames.length;
         }
-
-        dispatch({
-          type: "SET_ACTIVE_EMPHASIS",
-          payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: selection.activeFocusRole, activeNodeId: selection.activeNodeId },
-        });
-
-        if (selection.transitionQueue.length >= 2) {
-          const queue = selection.transitionQueue.slice(1);
-          const MIN_STEP_DURATION = 500;
-          
-          const playNext = (idx: number) => {
-            if (idx >= queue.length) return;
-            const nextNodeId = queue[idx];
-            const thenRole = idx === 0 ? (selection.inferred?.thenRole ?? null) : null;
-            
-            emphasisTimerRef.current = setTimeout(() => {
-              if (emphasisSeqRef.current !== mySeq) return;
-              if (stateRef.current.status !== "paused") return;
-              dispatch({
-                type: "SET_ACTIVE_EMPHASIS",
-                payload: { activeFlowLine: selection.activeFlowLine, activeFocusRole: thenRole, activeNodeId: nextNodeId },
-              });
-              playNext(idx + 1);
-            }, MIN_STEP_DURATION);
-          };
-          
-          playNext(0);
-        }
-
-        prevVarsRef.current = diff.next;
-        prevActiveLineRef.current = topFrame.line ?? null;
-        prevStackDepthRef.current = mappedFrames.length;
       }
-
-      // Process Watch Expressions
       if (stateRef.current.watchExprs.length > 0) {
         const watchResults: WatchResult[] = [];
         for (const expr of stateRef.current.watchExprs) {
@@ -600,7 +604,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         dispatch({ type: "SET_WATCH_RESULTS", payload: watchResults });
       }
     } catch (e) {
-      console.error("Fetch stack failed", e);
+      logger.error("Fetch stack failed", e);
     }
   }, []);
 
@@ -645,6 +649,8 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
     // Immediate status update
     dispatch({ type: "RESET_SESSION" });
+    stepsRef.current = 0;
+    elapsedRef.current = 0;
     dispatch({ type: "SET_STATUS", payload: "starting" });
     dispatch({ type: "SET_START_TIME", payload: Date.now() });
     dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 });
@@ -698,7 +704,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       traceLifecycle("session_created", { mode, sessionId: session.session_id });
 
       // 2. Wait for Ready (Adaptive Polling)
-      const maxWaitMs = 45000;
+      const maxWaitMs = 75000;
       const startTime = Date.now();
       let waited = 0;
       let readyMeta: Record<string, unknown> | null = null;
@@ -771,7 +777,8 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
               if (stateRef.current.startTime) {
                 const now = Date.now();
                 const elapsed = (now - stateRef.current.startTime) / 1000;
-                dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+                elapsedRef.current += elapsed;
+          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: elapsedRef.current });
                 dispatch({ type: "SET_START_TIME", payload: null });
               }
               dispatch({ type: "SET_STATUS", payload: "stopped" });
@@ -857,13 +864,17 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         if (stateRef.current.startTime) {
           const now = Date.now();
           const elapsed = (now - stateRef.current.startTime) / 1000;
-          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+          elapsedRef.current += elapsed;
+          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: elapsedRef.current });
           dispatch({ type: "SET_START_TIME", payload: null });
         }
         // Exception info is printed to TTY by Python traceback
         dispatch({ type: "SET_STATUS", payload: "paused" });
         dispatch({ type: "INCREMENT_STEPS" });
-        fetchStack(Number(msg.body?.threadId) || 1);
+        stepsRef.current += 1;
+        fetchStack(Number(msg.body?.threadId) || 1).catch((e) => {
+          logger.error("fetchStack failed in stopped handler", e);
+        });
       });
 
       client.on("continued", (msg) => {
@@ -885,7 +896,8 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         if (stateRef.current.startTime) {
           const now = Date.now();
           const elapsed = (now - stateRef.current.startTime) / 1000;
-          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: stateRef.current.elapsedTime + elapsed });
+          elapsedRef.current += elapsed;
+          dispatch({ type: "UPDATE_ELAPSED_TIME", payload: elapsedRef.current });
           dispatch({ type: "SET_START_TIME", payload: null });
         }
         cleanup({ preserveSession: true });
@@ -897,7 +909,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         try {
           await configureSessionOnce();
         } catch (e) {
-          console.error("Failed to configure DAP", e);
+          logger.error("Failed to configure DAP", e);
         }
       });
 
@@ -970,6 +982,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
         name: "Remote",
         type: "python",
         request: "attach",
+        redirectOutput: true,
         pathMappings: [
           {
             localRoot: "/workspace",
@@ -1022,7 +1035,7 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
       } catch { }
     }
     sessionIdRef.current = null;
-    dispatch({ type: "RESET_SESSION" });
+    dispatch({ type: "RESET_SESSION", payload: { preserveOutput: true } });
     dispatch({ type: "SET_SESSION_ID", payload: null });
     dispatch({ type: "SET_START_TIME", payload: null });
     dispatch({ type: "UPDATE_ELAPSED_TIME", payload: 0 });

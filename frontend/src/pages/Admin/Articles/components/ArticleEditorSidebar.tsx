@@ -32,7 +32,7 @@ export default function ArticleEditorSidebar({
   return (
     <>
       <Card title="基本信息" size="small" className="article-edit-basic-card">
-        <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Form.Item
             label={<span style={{ fontWeight: 500 }}>文章标题</span>}
             name="title"
@@ -79,7 +79,7 @@ export default function ArticleEditorSidebar({
       </Card>
 
       <Card size="small" title="写作面板" className="article-edit-side-card" styles={{ body: { padding: 12 } }}>
-        <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
             <Text type="secondary">模式</Text>
             <Tag color={isCreateMode ? "blue" : "green"}>{isCreateMode ? "新建" : "编辑"}</Tag>
@@ -102,7 +102,7 @@ export default function ArticleEditorSidebar({
       </Card>
 
       <Card size="small" title="样式" className="article-edit-side-card" styles={{ body: { padding: 12 } }}>
-        <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Form.Item name="style_key" style={{ marginBottom: 0 }}>
             <Select
               placeholder="选择 CSS 样式方案"

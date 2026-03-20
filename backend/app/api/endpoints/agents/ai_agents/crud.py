@@ -41,6 +41,30 @@ def _api_key_last4(agent) -> Optional[str]:
     return last4(legacy)
 
 
+def _format_agent_response(agent) -> AIAgentResponse:
+    """统一的 agent → AIAgentResponse 转换"""
+    api_key_last = _api_key_last4(agent)
+    has_key = bool(getattr(agent, "has_api_key", False) or api_key_last)
+    return AIAgentResponse(**{
+        "id": agent.id,
+        "name": agent.name,
+        "agent_name": agent.name,
+        "agent_type": agent.agent_type,
+        "description": agent.description,
+        "model_name": agent.model_name,
+        "system_prompt": getattr(agent, "system_prompt", None),
+        "api_endpoint": agent.api_endpoint,
+        "api_key": None,
+        "has_api_key": has_key,
+        "api_key_last4": api_key_last,
+        "is_active": agent.is_active,
+        "status": agent.is_active,
+        "is_deleted": agent.is_deleted,
+        "created_at": agent.created_at,
+        "deleted_at": agent.deleted_at,
+    })
+
+
 @router.get("/", response_model=AIAgentListResponse)
 async def read_agents(
     db: AsyncSession = Depends(get_db),
@@ -64,26 +88,7 @@ async def read_agents(
 
         agent_responses = []
         for agent in agents:
-            api_key_last = _api_key_last4(agent)
-            has_api_key = bool(getattr(agent, "has_api_key", False) or api_key_last)
-            agent_dict = {
-                "id": agent.id,
-                "name": agent.name,
-                "agent_name": agent.name,
-                "agent_type": agent.agent_type,
-                "description": agent.description,
-                "model_name": agent.model_name,
-                "api_endpoint": agent.api_endpoint,
-                "api_key": None,
-                "has_api_key": has_api_key,
-                "api_key_last4": api_key_last,
-                "is_active": agent.is_active,
-                "status": agent.is_active,
-                "is_deleted": agent.is_deleted,
-                "created_at": agent.created_at,
-                "deleted_at": agent.deleted_at,
-            }
-            agent_responses.append(AIAgentResponse(**agent_dict))
+            agent_responses.append(_format_agent_response(agent))
 
         total = len(agents)
         page = (skip // limit) + 1 if limit > 0 else 1
@@ -112,26 +117,7 @@ async def read_active_agents(
 
         agent_responses = []
         for agent in agents:
-            api_key_last = _api_key_last4(agent)
-            has_api_key = bool(getattr(agent, "has_api_key", False) or api_key_last)
-            agent_dict = {
-                "id": agent.id,
-                "name": agent.name,
-                "agent_name": agent.name,
-                "agent_type": agent.agent_type,
-                "description": agent.description,
-                "model_name": agent.model_name,
-                "api_endpoint": agent.api_endpoint,
-                "api_key": None,
-                "has_api_key": has_api_key,
-                "api_key_last4": api_key_last,
-                "is_active": agent.is_active,
-                "status": agent.is_active,
-                "is_deleted": agent.is_deleted,
-                "created_at": agent.created_at,
-                "deleted_at": agent.deleted_at,
-            }
-            agent_responses.append(AIAgentResponse(**agent_dict))
+            agent_responses.append(_format_agent_response(agent))
 
         return agent_responses
     except Exception as e:
@@ -167,25 +153,7 @@ async def read_agent(
                 detail=f"智能体ID {agent_id} 不存在",
             )
 
-        agent_dict = {
-            "id": agent.id,
-            "name": agent.name,
-            "agent_name": agent.name,
-            "agent_type": agent.agent_type,
-            "description": agent.description,
-            "model_name": agent.model_name,
-            "api_endpoint": agent.api_endpoint,
-            "api_key": None,
-            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
-            "api_key_last4": _api_key_last4(agent),
-            "is_active": agent.is_active,
-            "status": agent.is_active,
-            "is_deleted": agent.is_deleted,
-            "created_at": agent.created_at,
-            "deleted_at": agent.deleted_at,
-        }
-
-        return AIAgentResponse(**agent_dict)
+        return _format_agent_response(agent)
     except HTTPException:
         raise
     except Exception as e:
@@ -203,25 +171,7 @@ async def create_new_agent(
     try:
         agent = await create_agent(db, agent_in=agent_in)
 
-        agent_dict = {
-            "id": agent.id,
-            "name": agent.name,
-            "agent_name": agent.name,
-            "agent_type": agent.agent_type,
-            "description": agent.description,
-            "model_name": agent.model_name,
-            "api_endpoint": agent.api_endpoint,
-            "api_key": None,
-            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
-            "api_key_last4": _api_key_last4(agent),
-            "is_active": agent.is_active,
-            "status": agent.is_active,
-            "is_deleted": agent.is_deleted,
-            "created_at": agent.created_at,
-            "deleted_at": agent.deleted_at,
-        }
-
-        return AIAgentResponse(**agent_dict)
+        return _format_agent_response(agent)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -248,25 +198,7 @@ async def update_existing_agent(
                 detail=f"智能体ID {agent_id} 不存在",
             )
 
-        agent_dict = {
-            "id": agent.id,
-            "name": agent.name,
-            "agent_name": agent.name,
-            "agent_type": agent.agent_type,
-            "description": agent.description,
-            "model_name": agent.model_name,
-            "api_endpoint": agent.api_endpoint,
-            "api_key": None,
-            "has_api_key": bool(getattr(agent, "has_api_key", False) or _api_key_last4(agent)),
-            "api_key_last4": _api_key_last4(agent),
-            "is_active": agent.is_active,
-            "status": agent.is_active,
-            "is_deleted": agent.is_deleted,
-            "created_at": agent.created_at,
-            "deleted_at": agent.deleted_at,
-        }
-
-        return AIAgentResponse(**agent_dict)
+        return _format_agent_response(agent)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -275,6 +207,8 @@ async def update_existing_agent(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"更新智能体失败: {str(e)}",

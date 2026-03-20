@@ -1,172 +1,75 @@
+"""流式对话 — 使用 Provider 策略模式"""
+
 import asyncio
 import json
-import httpx
 from typing import AsyncGenerator, Optional, Dict, Any
 
+STREAM_TIMEOUT_SECONDS = 120
+
 from app.services.agents.ai_agent import get_agent
-from app.services.agents.providers import detect_flags, chat_completions_endpoint
+from app.services.agents.providers import get_provider, provider_error_message, extract_provider_detail, resolve_credentials, build_messages
+from app.services.agents.providers.dify_provider import DifyProvider
+from app.services.agents.providers.circuit_breaker import breaker
 from app.core.config import settings
-from app.utils.agent_secrets import try_decrypt_api_key
 from app.core.http_client import get_http_client
 
-def _provider_error_message(status_code: int) -> str:
-    if status_code == 401 or status_code == 403:
-        return "上游服务鉴权失败（请检查 API Key 是否正确、是否有权限访问该模型）"
-    if status_code == 404:
-        return "上游服务接口或模型不存在（请检查 API Endpoint 与模型名）"
-    if status_code == 429:
-        return "上游服务返回 429（限流/额度不足）。请稍后重试，或更换 API Key/提升额度"
-    if status_code == 402:
-        return "上游服务余额不足或需要付费（请检查账号额度/账单）"
-    if 500 <= status_code <= 599:
-        return "上游服务异常（5xx）。请稍后重试"
-    return "上游服务请求失败"
 
-
-def _extract_provider_detail(body_text: str) -> str:
-    t = (body_text or "").strip()
-    if not t:
-        return ""
-    try:
-        data = json.loads(t)
-        if isinstance(data, dict):
-            err = data.get("error")
-            if isinstance(err, dict):
-                msg = err.get("message") or err.get("error") or err.get("type")
-                if msg:
-                    return str(msg)[:500]
-            if isinstance(err, str) and err.strip():
-                return err.strip()[:500]
-            msg = data.get("message")
-            if isinstance(msg, str) and msg.strip():
-                return msg.strip()[:500]
-    except Exception:
-        pass
-    return t[:500]
-
-async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None) -> AsyncGenerator[bytes, None]:
+async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None, *, history: Optional[list] = None) -> AsyncGenerator[bytes, None]:
     agent = await get_agent(db, agent_id)
     if not agent:
         yield b"event: error\ndata: {\"error\":\"invalid_agent\"}\n\n"
         return
 
-    api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
-    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
-    if agent.agent_type != "dify":
-        if not api_endpoint:
-            api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
-        if not api_key:
-            api_key = settings.OPENROUTER_API_KEY
-    if not api_endpoint or not api_key:
-        yield b"event: error\ndata: {\"error\":\"invalid_agent\"}\n\n"
+    api_endpoint, api_key = resolve_credentials(agent)
+    if not api_endpoint:
+        err = {"error": "missing_endpoint", "message": "该智能体未配置API地址，请在管理后台设置"}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
         return
-    is_dify = agent.agent_type == "dify"
+    if not api_key:
+        err = {"error": "missing_api_key", "message": "该智能体未配置API密钥，请在管理后台设置"}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        return
 
-    # 基础请求头构建：后续根据服务商类型微调
-    flags = detect_flags(api_endpoint)
-    is_anthropic = flags.get("is_anthropic", False)
+    provider = get_provider(agent.agent_type, api_endpoint, api_key)
+    provider_name = type(provider).__name__
+    chat_messages = build_messages(agent, message, history)
+    model = agent.model_name or ""
 
-    headers: Dict[str, str] = {}
-    if api_key:
-        if is_dify:
-            headers["Authorization"] = f"Bearer {api_key}"
-        elif is_anthropic:
-            headers["x-api-key"] = api_key
-        else:
-            headers["Authorization"] = f"Bearer {api_key}"
+    # 熔断检查
+    if breaker.is_open(provider_name):
+        err = {"error": "circuit_open", "message": "该服务暂时不可用（连续失败过多），请稍后重试"}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        return
 
-    if is_dify:
-        candidates = []
-        base = api_endpoint
-        if "/chat/" in base:
-            candidates.append(base)
-        else:
-            if base.endswith("/v1"):
-                candidates.extend([f"{base}/chat-messages"])
-            else:
-                candidates.extend([f"{base}/v1/chat-messages", f"{base}/chat-messages"])
-        payload_primary = {
-            "query": message,
-            "user": user or "stream_user",
-            "response_mode": "streaming",
-            "inputs": inputs or {},
-        }
-        payload_fallback = {
-            "query": message,
-            "user": user or "stream_user",
-            "inputs": inputs or {},
-        }
-        
+    # Dify: 特殊处理（多候选 URL + SSE 透传）
+    if isinstance(provider, DifyProvider):
+        async for chunk in _stream_dify(provider, chat_messages, model, user, inputs):
+            yield chunk
+        return
+
+    # 非 Dify: 通用 OpenAI/Anthropic 流式
+    if not model:
+        err = {"error": "model_not_configured", "message": "智能体未配置模型名称"}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        return
+
+    headers = provider.build_headers()
+    payload = provider.build_stream_payload(chat_messages, model)
+    chat_url = provider.chat_url()
+
+    try:
         client = get_http_client()
-        last_error = None
-        for url in candidates:
-            try:
-                try_payload = payload_primary if "/chat-messages" in url else payload_fallback
-                # 使用全局客户端发起流式请求
-                async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
-                    if resp.status_code != 200:
-                        last_error = f"status_{resp.status_code}"
-                        continue
-                    
-                    buffer = ""
-                    async for chunk in resp.aiter_bytes():
-                        if not chunk:
-                            continue
-                        buffer += chunk.decode("utf-8", errors="ignore")
-                        # 处理可能粘包的情况，按 \n\n 分割 SSE 消息
-                        while "\n\n" in buffer:
-                            part, buffer = buffer.split("\n\n", 1)
-                            if part:
-                                yield (part + "\n\n").encode("utf-8")
-                    
-                    if buffer.strip():
-                        yield (buffer.strip() + "\n\n").encode("utf-8")
-                    return
-            except Exception as e:
-                last_error = str(e)
-                continue
-        
-        # 如果所有候选URL都失败，尝试非流式请求作为最后手段
-        try:
-            url = candidates[0]
-            r = await client.post(url, headers=headers, json=payload_fallback)
-            data = r.text
-            yield (f"data: {data}\n\n").encode("utf-8")
-            return
-        except Exception:
-            yield b"event: error\ndata: {\"error\":\"stream_failed\"}\n\n"
-            return
-
-    # 非 Dify 智能体：根据服务商类型实现通用流式对话
-    else:
-        if not agent.model_name:
-            err = {"error": "model_not_configured", "message": "智能体未配置模型名称"}
-            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(
-                "utf-8"
-            )
-            return
-
-        chat_url = chat_completions_endpoint(api_endpoint, flags)
-
-        payload: Dict[str, Any] = {
-            "model": agent.model_name,
-            "messages": [{"role": "user", "content": message}],
-            "stream": True,
-        }
-
-        try:
-            client = get_http_client()
-            # 简化重试逻辑，利用全局连接池
+        async with asyncio.timeout(STREAM_TIMEOUT_SECONDS):
             async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
                 if resp.status_code != 200:
+                    breaker.record_failure(provider_name)
                     body_bytes = await resp.aread()
                     body_text = body_bytes.decode("utf-8", errors="ignore")
                     status_code = int(resp.status_code)
-                    
-                    detail = _extract_provider_detail(body_text)
+                    detail = extract_provider_detail(body_text)
                     err = {
                         "error": f"provider_status_{status_code}",
-                        "message": _provider_error_message(status_code),
+                        "message": provider_error_message(status_code),
                         "provider_status": status_code,
                         "detail": detail[:500],
                     }
@@ -174,53 +77,75 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
                     return
 
                 final_text = ""
-
                 async for raw_line in resp.aiter_lines():
                     if not raw_line:
                         continue
                     line = raw_line.strip()
-                    if not line.startswith("data:"):
-                        continue
-                    
-                    # 移除 data: 前缀
-                    data_str = line[5:].strip()
-                    if not data_str:
-                        continue
-                    if data_str == "[DONE]":
+                    if provider.is_stream_done(line):
                         break
-
-                    try:
-                        obj = json.loads(data_str)
-                    except Exception:
-                        continue
-
-                    choices = obj.get("choices") or []
-                    if not choices:
-                        continue
-                    choice0 = choices[0] or {}
-                    delta = choice0.get("delta") or choice0.get("message") or {}
-                    content = delta.get("content") or ""
-                    
-                    # 部分模型可能返回 None content
+                    content = provider.parse_stream_line(line)
                     if not content:
                         continue
-
-                    final_text += str(content)
-                    chunk = {"answer": str(content)}
-                    yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode(
-                        "utf-8"
-                    )
+                    final_text += content
+                    chunk = {"answer": content}
+                    yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
 
                 if final_text:
+                    breaker.record_success(provider_name)
                     end_payload = {"answer": final_text}
-                    yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode(
-                        "utf-8"
-                    )
+                    yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
                 return
 
+    except asyncio.TimeoutError:
+        breaker.record_failure(provider_name)
+        err = {"error": "stream_timeout", "message": f"请求超时（{STREAM_TIMEOUT_SECONDS}秒），请稍后重试"}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        return
+    except Exception as e:
+        breaker.record_failure(provider_name)
+        err = {"error": "stream_failed", "detail": str(e)}
+        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        return
+
+
+async def _stream_dify(provider: DifyProvider, messages, model, user, inputs) -> AsyncGenerator[bytes, None]:
+    """Dify 流式：多候选 URL + SSE 透传"""
+    headers = provider.build_headers()
+    payload_primary = provider.build_stream_payload(messages, model)
+    if user:
+        payload_primary["user"] = user
+    if inputs:
+        payload_primary["inputs"] = inputs
+    payload_fallback = dict(payload_primary)
+    payload_fallback.pop("response_mode", None)
+
+    candidates = provider.candidate_urls()
+    client = get_http_client()
+    last_error = None
+
+    for url in candidates:
+        try:
+            try_payload = payload_primary if "/chat-messages" in url else payload_fallback
+            async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
+                if resp.status_code != 200:
+                    last_error = f"status_{resp.status_code}"
+                    continue
+                buffer = ""
+                async for chunk in resp.aiter_bytes():
+                    if not chunk:
+                        continue
+                    buffer += chunk.decode("utf-8", errors="ignore")
+                    while "\n\n" in buffer:
+                        part, buffer = buffer.split("\n\n", 1)
+                        if part:
+                            yield (part + "\n\n").encode("utf-8")
+                if buffer.strip():
+                    yield (buffer.strip() + "\n\n").encode("utf-8")
+                return
         except Exception as e:
-            err = {"error": "stream_failed", "detail": str(e)}
-            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode(
-                "utf-8"
-            )
-            return
+            last_error = str(e)
+            continue
+
+    # 所有候选 URL 失败，返回错误
+    err = {"error": "dify_all_candidates_failed", "message": f"Dify 所有候选地址均失败: {last_error}"}
+    yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")

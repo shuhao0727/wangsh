@@ -10,7 +10,44 @@
 
 .it-card {
   border-radius: var(--ws-radius-lg);
-  border: 1px solid var(--ws-color-border);
+  border: none;
+  background: var(--ws-color-surface-2);
+}
+
+.it-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.it-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.it-card-title {
+  font-size: var(--ws-text-md);
+}
+
+.it-empty-col {
+  text-align: center;
+  padding: 50px 0;
+}
+
+.it-class-selector-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.it-class-selector-content {
+  background: var(--ws-color-surface);
+  padding: var(--ws-space-4);
+  border-radius: var(--ws-radius-lg);
+  flex: 1;
 }
 
 .it-technology-loading {
@@ -33,16 +70,15 @@
 
 .it-class-card {
   border-radius: var(--ws-radius-lg);
-  border: 1px solid var(--ws-color-border);
-  transition: all 0.2s;
+  border: none;
+  transition: var(--ws-transition-fast);
   cursor: pointer;
-  background: var(--ws-color-surface);
+  background: var(--ws-color-surface-2);
   text-align: center;
 }
 
 .it-class-card:hover {
-  border-color: var(--ws-color-primary);
-  box-shadow: var(--ws-shadow-sm);
+  background: var(--ws-color-hover-bg);
 }
 
 /* Roll Call Player */
@@ -118,20 +154,20 @@
 }
 
 .it-player-btn-start {
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  background: linear-gradient(135deg, var(--ws-color-primary) 0%, var(--ws-color-primary-active) 100%);
 }
 
 .it-player-btn-start:hover {
-  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+  background: linear-gradient(135deg, var(--ws-color-primary-hover) 0%, var(--ws-color-primary) 100%);
   transform: translateY(-2px);
 }
 
 .it-player-btn-stop {
-  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  background: linear-gradient(135deg, var(--ws-color-error) 0%, var(--ws-color-error-dark) 100%);
 }
 
 .it-player-btn-stop:hover {
-  background: linear-gradient(135deg, #ff7875 0%, #ff4d4f 100%);
+  background: linear-gradient(135deg, var(--ws-color-error-light) 0%, var(--ws-color-error) 100%);
   transform: translateY(-2px);
 }
 

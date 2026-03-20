@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Space, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Space, Popconfirm, Pagination } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { AdminTablePanel } from '@/components/Admin';
 import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
 
-interface Props {
-}
-
-const DianmingManager: React.FC<Props> = () => {
+const DianmingManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DianmingClass[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -115,10 +113,8 @@ const DianmingManager: React.FC<Props> = () => {
       align: 'center' as const,
       render: (_: any, record: DianmingClass) => (
         <Space>
-          <Button 
-            type="primary" 
-            ghost 
-            icon={<EditOutlined />} 
+          <Button
+            icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
@@ -137,14 +133,11 @@ const DianmingManager: React.FC<Props> = () => {
   ];
 
   return (
-    <div style={{ padding: 24, background: '#fff' }}>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-        <Space>
-          <span style={{ fontSize: 18, fontWeight: 'bold' }}>班级点名数据管理</span>
-        </Space>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
           onClick={() => {
             setEditingRecord(null);
             form.resetFields();
@@ -155,13 +148,30 @@ const DianmingManager: React.FC<Props> = () => {
         </Button>
       </div>
 
-      <Table
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <AdminTablePanel
         loading={loading}
-        dataSource={data}
-        columns={columns}
-        size="middle"
-        rowKey={(record) => `${record.year}-${record.class_name}`}
-      />
+        isEmpty={data.length === 0}
+        emptyDescription="暂无班级数据"
+        pagination={
+          <Pagination
+            pageSize={10}
+            showSizeChanger
+            showTotal={(total) => `共 ${total} 条`}
+            total={data.length}
+          />
+        }
+      >
+        <Table
+          loading={loading}
+          dataSource={data}
+          columns={columns}
+          size="middle"
+          rowKey={(record) => `${record.year}-${record.class_name}`}
+          pagination={false}
+        />
+      </AdminTablePanel>
+      </div>
 
       <Modal
         title={editingRecord ? "编辑班级名单" : "新建/导入班级"}
@@ -173,6 +183,8 @@ const DianmingManager: React.FC<Props> = () => {
         }}
         onOk={() => form.submit()}
         width={600}
+        styles={{ body: { padding: 24 } }}
+        destroyOnHidden
       >
         <Form form={form} onFinish={handleImport} layout="vertical">
           <Form.Item
@@ -180,14 +192,14 @@ const DianmingManager: React.FC<Props> = () => {
             label="年份/届别"
             rules={[{ required: true, message: '请输入年份，如 2024级' }]}
           >
-            <Input placeholder="例如：2024级" disabled={!!editingRecord} />
+            <Input placeholder="例如：2024级" />
           </Form.Item>
           <Form.Item
             name="class_name"
             label="班级名称"
             rules={[{ required: true, message: '请输入班级名称' }]}
           >
-            <Input placeholder="例如：软件工程1班" disabled={!!editingRecord} />
+            <Input placeholder="例如：软件工程1班" />
           </Form.Item>
           <Form.Item
             name="names_text"

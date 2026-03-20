@@ -52,13 +52,15 @@ const InformaticsReaderPage: React.FC = () => {
   const loadList = useCallback(async () => {
     setListLoading(true);
     try {
-      const res = await publicTypstNotesApi.list({ limit: 200, search: debouncedSearch.trim() || undefined });
+      const res = await publicTypstNotesApi.list({ limit: 100, search: debouncedSearch.trim() || undefined });
       setItems(res || []);
       if (res?.length && !isMobile) {
         setSelectedId((prev) => prev ?? res[0].id);
       }
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "加载目录失败");
+      const detail = e?.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : (e?.message || "加载目录失败");
+      message.error(msg);
     } finally {
       setListLoading(false);
     }
@@ -121,6 +123,8 @@ const InformaticsReaderPage: React.FC = () => {
   }, []);
 
   const treeData = useMemo<TreeNode[]>(() => {
+    const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+    const getNodeSortKey = (key: string) => key.replace(/^cat:/, "").replace(/^note:/, "");
     const root: TreeNode = { title: "root", key: "root", children: [] };
     const catMap = new Map<string, TreeNode>();
     catMap.set("", root);
@@ -154,10 +158,10 @@ const InformaticsReaderPage: React.FC = () => {
     const sortedItems = [...items].sort((a, b) => {
       const ac = String(a.category_path || "");
       const bc = String(b.category_path || "");
-      if (ac !== bc) return ac.localeCompare(bc, "en");
+      if (ac !== bc) return collator.compare(ac, bc);
       const an = String(a.source_path || "").split("/").pop() || String(a.title || "");
       const bn = String(b.source_path || "").split("/").pop() || String(b.title || "");
-      return an.localeCompare(bn, "en", { numeric: true });
+      return collator.compare(an, bn);
     });
 
     for (const it of sortedItems) {
@@ -192,7 +196,15 @@ const InformaticsReaderPage: React.FC = () => {
 
     const sortTree = (node: TreeNode) => {
       if (!node.children) return;
-      node.children.sort((a, b) => String(a.key).localeCompare(String(b.key), "zh-CN"));
+      node.children.sort((a, b) => {
+        const aKey = String(a.key);
+        const bKey = String(b.key);
+        const aIsCat = aKey.startsWith("cat:");
+        const bIsCat = bKey.startsWith("cat:");
+        if (aIsCat !== bIsCat) return aIsCat ? -1 : 1;
+        if (!aIsCat && !bIsCat) return 0;
+        return collator.compare(getNodeSortKey(aKey), getNodeSortKey(bKey));
+      });
       node.children.forEach(sortTree);
     };
     sortTree(root);
@@ -516,7 +528,7 @@ const InformaticsReaderPage: React.FC = () => {
         right={
           <PanelCard
             title={
-              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "#2c3e50" }}>
+              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "var(--ws-color-text)" }}>
                 {selectedId ? items.find((x) => x.id === selectedId)?.title || "内容" : "内容"}
               </Title>
             }

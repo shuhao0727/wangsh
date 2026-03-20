@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { logger } from "@services/logger";
 import { computeDebugNodeSelection, type DebugMap } from "../flow/debugMap";
 import type { Frame, InternalRunnerState, RunnerState, RunnerStatus, Variable, WatchResult } from "./useDapRunner";
 
@@ -144,7 +145,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         Boolean((window as unknown as { __PYTHONLAB_PYODIDE_TRACE__?: boolean }).__PYTHONLAB_PYODIDE_TRACE__) ||
         window.localStorage?.getItem("pythonlab:pyodide:trace") === "1";
       if (!enabled) return;
-      console.info("[pythonlab:pyodide]", { phase, status: stateRef.current.status, ts: Date.now(), ...(extra || {}) });
+      logger.info("[pythonlab:pyodide]", { phase, status: stateRef.current.status, ts: Date.now(), ...(extra || {}) });
     } catch {}
   }, []);
 
@@ -292,8 +293,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         const r = await evaluate(expr);
         if (r.ok) results.push({ expr, ok: true, value: r.value, type: r.type });
         else results.push({ expr, ok: false, error: r.error || "Error" });
-      } catch (e: unknown) {
-        results.push({ expr, ok: false, error: e?.message || "Error" });
+      } catch (e: any) {
       }
     }
     dispatch({ type: "SET_WATCH_RESULTS", payload: results });
@@ -329,7 +329,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
     evalText16Ref.current = sab ? new Uint16Array(sab, CTRL_HEADER_I32_LEN * 4 + INPUT_MAX_CODE_UNITS * 2, EVAL_MAX_CODE_UNITS) : null;
 
     w.onmessage = async (ev: MessageEvent<unknown>) => {
-      const msg = ev.data || {};
+      const msg: any = ev.data || {};
       if (msg.type === "ready") {
         readyRef.current = msg as WorkerReady;
         resolveReadyWaiters(readyRef.current);

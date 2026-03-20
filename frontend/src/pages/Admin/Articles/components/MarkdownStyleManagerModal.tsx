@@ -86,7 +86,7 @@ export default function MarkdownStyleManagerModal({
   }, [open, styleEditingKey]);
 
   return (
-    <Modal title="管理 CSS 样式方案" open={open} width={960} footer={null} onCancel={onClose}>
+    <Modal title="管理 CSS 样式方案" open={open} width={960} footer={null} onCancel={onClose} styles={{ body: { padding: 24 } }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 10, marginBottom: 12 }}>
         <Input value={newStyleKey} onChange={(e) => setNewStyleKey(e.target.value)} placeholder="key（如：my_style）" />
         <Input value={newStyleTitle} onChange={(e) => setNewStyleTitle(e.target.value)} placeholder="标题（可选）" />
@@ -202,9 +202,9 @@ export default function MarkdownStyleManagerModal({
                 />
                 <div
                   style={{
-                    border: "1px solid var(--ws-color-border)",
+                    border: "1px solid rgba(0,0,0,0.04)",
                     borderRadius: 8,
-                    background: "var(--ws-color-surface)",
+                    background: "#FAFAFA",
                     overflow: "auto",
                     padding: 12,
                   }}

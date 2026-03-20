@@ -21,6 +21,8 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+    task_soft_time_limit=300,   # 5 分钟软超时
+    task_time_limit=600,        # 10 分钟硬超时
     include=["app.tasks.typst_compile", "app.tasks.pythonlab", "app.tasks.informatics_sync"],
     beat_schedule={
         # 每 5 分钟清理孤儿容器（无对应 Redis 会话的 Docker 容器）

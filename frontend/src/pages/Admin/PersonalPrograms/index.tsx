@@ -48,14 +48,8 @@ const AdminPersonalPrograms: React.FC = () => {
   };
 
   return (
-    <AdminPage padding={16}>
-      <div style={{ marginBottom: 12 }}>
-        <Title level={4} style={{ margin: 0, color: "#2c3e50" }}>
-          个人程序管理
-        </Title>
-      </div>
-
-      <Row gutter={[24, 24]}>
+    <AdminPage padding={24}>
+      <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} md={8} lg={6}>
           <AdminAppCard
             title="校本课 (XBK)"

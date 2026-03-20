@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { Button, Card, Empty, Input, Modal, Space, Spin, Typography, message } from "antd";
 import { DeleteOutlined, DownloadOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { typstNotesApi } from "@services";
@@ -43,7 +44,7 @@ const TypstNotesPanel: React.FC = () => {
   const loadList = async () => {
     setListLoading(true);
     try {
-      const res = await typstNotesApi.list({ limit: 200, search: search.trim() || undefined });
+      const res = await typstNotesApi.list({ limit: 100, search: search.trim() || undefined });
       setItems(res || []);
       if (!selectedId && res?.length) setSelectedId(res[0].id);
     } catch (e: any) {
@@ -232,7 +233,7 @@ const TypstNotesPanel: React.FC = () => {
               </Button>
             </Space>
           }
-          style={{ borderRadius: 10 }}
+          style={{ borderRadius: 10, border: "none" }}
           styles={{ body: { padding: 12 } }}
         >
           <Input.Search
@@ -261,9 +262,9 @@ const TypstNotesPanel: React.FC = () => {
                     borderRadius: 10,
                     border:
                       it.id === selectedId
-                        ? "1px solid var(--ws-color-info)"
-                        : "1px solid var(--ws-color-border)",
-                    background: it.id === selectedId ? "#e6f4ff" : "#fff",
+                        ? "1px solid #0EA5E9"
+                        : "1px solid rgba(0,0,0,0.08)",
+                    background: it.id === selectedId ? "rgba(14, 165, 233, 0.08)" : "#FFFFFF",
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
@@ -307,7 +308,7 @@ const TypstNotesPanel: React.FC = () => {
               </Button>
             </Space>
           }
-          style={{ borderRadius: 10 }}
+          style={{ borderRadius: 10, border: "none" }}
           styles={{ body: { padding: 12 } }}
         >
           {noteLoading ? (
@@ -337,7 +338,7 @@ const TypstNotesPanel: React.FC = () => {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-                <Card size="small" title="编辑" style={{ borderRadius: 10 }} styles={{ body: { padding: 10 } }}>
+                <Card size="small" title="编辑" style={{ borderRadius: 10, border: "none" }} styles={{ body: { padding: 10 } }}>
                   <TextArea
                     value={content}
                     onChange={(e) => {
@@ -349,13 +350,13 @@ const TypstNotesPanel: React.FC = () => {
                   />
                 </Card>
 
-                <Card size="small" title="实时预览（WASM）" style={{ borderRadius: 10 }} styles={{ body: { padding: 10 } }}>
+                <Card size="small" title="实时预览（WASM）" style={{ borderRadius: 10, border: "none" }} styles={{ body: { padding: 10 } }}>
                   <div
                     style={{
                       minHeight: 420,
                       borderRadius: 10,
-                      border: "1px solid var(--ws-color-border)",
-                      background: "var(--ws-color-surface)",
+                      border: "1px solid rgba(0,0,0,0.04)",
+                      background: "#FAFAFA",
                       overflow: "auto",
                       padding: 10,
                     }}
@@ -365,7 +366,7 @@ const TypstNotesPanel: React.FC = () => {
                         <Spin />
                       </div>
                     ) : svg ? (
-                      <div dangerouslySetInnerHTML={{ __html: svg }} />
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true }, ADD_TAGS: ["use"] }) }} />
                     ) : (
                       <Text type="secondary">暂无预览（可能是 Typst 语法错误或初始化中）</Text>
                     )}

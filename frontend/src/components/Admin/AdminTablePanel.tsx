@@ -56,11 +56,12 @@ const AdminTablePanel: React.FC<Props> = ({
       </div>
       
       {pagination ? (
-        <div style={{ 
-          padding: "12px 24px", 
-          borderTop: "none", // Remove divider
-          textAlign: "left",
-          background: "#fff"
+        <div style={{
+          padding: "12px 24px",
+          borderTop: "1px solid rgba(0,0,0,0.04)",
+          display: "flex",
+          justifyContent: "flex-end",
+          background: "transparent"
         }}>
           {pagination}
         </div>

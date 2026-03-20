@@ -2,7 +2,7 @@
 认证相关模型定义 - 使用 sys_ 前缀
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.sql import expression
 from app.db.database import Base
 
@@ -12,7 +12,7 @@ class RefreshToken(Base):
     __tablename__ = "sys_refresh_tokens"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, index=True, nullable=False, comment="用户ID")
+    user_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), index=True, nullable=False, comment="用户ID")
     token = Column(String(500), unique=True, nullable=False, comment="刷新令牌")
     expires_at = Column(DateTime(timezone=True), nullable=False, comment="过期时间")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment="创建时间")

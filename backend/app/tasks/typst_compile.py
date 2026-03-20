@@ -21,6 +21,12 @@ async def _compile_note(note_id: int) -> dict:
         }
 
 
-@celery.task(name="app.tasks.typst_compile.compile_typst_note")
+@celery.task(
+    name="app.tasks.typst_compile.compile_typst_note",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=60,
+)
 def compile_typst_note(note_id: int) -> dict:
     return run_async(_compile_note(note_id))

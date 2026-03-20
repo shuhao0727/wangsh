@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message, Tag, Radio, InputNumber, Switch } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Spin, Table, Tabs, Typography, message, Tag, Radio, InputNumber, Switch } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
@@ -64,6 +64,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [sessionModalTab, setSessionModalTab] = useState<string>("messages");
 
   const [agents, setAgents] = useState<AIAgent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [analysisForm] = Form.useForm();
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>("");
@@ -81,10 +82,12 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
   const [compareVisible, setCompareVisible] = useState(false);
   const [compareForm] = Form.useForm();
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareResult, setCompareResult] = useState<string>("");
-  const [compareLastAnalysisId, setCompareLastAnalysisId] = useState<number | null>(null);
-  const [compareUseCache, setCompareUseCache] = useState(true);
+  const [compareState, setCompareState] = useState<{
+    loading: boolean;
+    result: string;
+    lastAnalysisId: number | null;
+    useCache: boolean;
+  }>({ loading: false, result: "", lastAnalysisId: null, useCache: true });
 
   const [addMemberVisible, setAddMemberVisible] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
@@ -92,11 +95,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [addMemberLoading, setAddMemberLoading] = useState(false);
 
-  const [muteModalVisible, setMuteModalVisible] = useState(false);
-  const [muteTargetMember, setMuteTargetMember] = useState<GroupDiscussionMember | null>(null);
-  const [muteDurationType, setMuteDurationType] = useState<"10m" | "1h" | "24h" | "custom">("10m");
-  const [muteCustomMinutes, setMuteCustomMinutes] = useState<number>(10);
-  const [muteLoading, setMuteLoading] = useState(false);
+  const [muteState, setMuteState] = useState<{
+    visible: boolean;
+    target: GroupDiscussionMember | null;
+    durationType: "10m" | "1h" | "24h" | "custom";
+    customMinutes: number;
+    loading: boolean;
+  }>({ visible: false, target: null, durationType: "10m", customMinutes: 10, loading: false });
 
   const loadAgents = useCallback(async () => {
     const res = await aiAgentsApi.getAgents({ limit: 200 });
@@ -366,7 +371,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       return;
     }
     try {
-      setCompareLoading(true);
+      setCompareState((s) => ({ ...s, loading: true }));
       const values = await compareForm.validateFields();
       const res = await groupDiscussionApi.adminCompareAnalyze({
         sessionIds: selectedSessionIds,
@@ -374,22 +379,25 @@ const GroupDiscussionAdminTab: React.FC = () => {
         bucketSeconds: values.bucket_seconds,
         analysisType: values.analysis_type,
         prompt: values.prompt || undefined,
-        useCache: compareUseCache,
+        useCache: compareState.useCache,
       });
       if (!res.success) {
         message.error(res.message || "对比分析失败");
         return;
       }
-      setCompareResult(res.data.result_text || "");
       const nextId = Number(res.data.analysis_id || 0);
-      if (compareUseCache && compareLastAnalysisId && nextId === compareLastAnalysisId) {
+      if (compareState.useCache && compareState.lastAnalysisId && nextId === compareState.lastAnalysisId) {
         message.success("对比分析完成（命中缓存）");
       } else {
         message.success("对比分析完成");
       }
-      if (Number.isFinite(nextId) && nextId > 0) setCompareLastAnalysisId(nextId);
+      setCompareState((s) => ({
+        ...s,
+        result: res.data.result_text || "",
+        lastAnalysisId: Number.isFinite(nextId) && nextId > 0 ? nextId : s.lastAnalysisId,
+      }));
     } finally {
-      setCompareLoading(false);
+      setCompareState((s) => ({ ...s, loading: false }));
     }
   };
 
@@ -452,10 +460,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
   };
 
   const handleMuteClick = (member: GroupDiscussionMember) => {
-    setMuteTargetMember(member);
-    setMuteDurationType("10m");
-    setMuteCustomMinutes(10);
-    setMuteModalVisible(true);
+    setMuteState({ visible: true, target: member, durationType: "10m", customMinutes: 10, loading: false });
   };
 
   const handleUnmuteClick = async (member: GroupDiscussionMember) => {
@@ -477,23 +482,23 @@ const GroupDiscussionAdminTab: React.FC = () => {
   };
 
   const handleConfirmMute = async () => {
-    if (!currentSession || !muteTargetMember) return;
-    setMuteLoading(true);
+    if (!currentSession || !muteState.target) return;
+    setMuteState((s) => ({ ...s, loading: true }));
     try {
       let minutes = 10;
-      if (muteDurationType === "10m") minutes = 10;
-      else if (muteDurationType === "1h") minutes = 60;
-      else if (muteDurationType === "24h") minutes = 1440;
-      else if (muteDurationType === "custom") minutes = muteCustomMinutes;
+      if (muteState.durationType === "10m") minutes = 10;
+      else if (muteState.durationType === "1h") minutes = 60;
+      else if (muteState.durationType === "24h") minutes = 1440;
+      else if (muteState.durationType === "custom") minutes = muteState.customMinutes;
 
       const res = await groupDiscussionApi.adminMuteUser({
         sessionId: currentSession.id,
-        userId: muteTargetMember.user_id,
+        userId: muteState.target.user_id,
         minutes,
       });
       if (res.success) {
         message.success("禁言成功");
-        setMuteModalVisible(false);
+        setMuteState((s) => ({ ...s, visible: false }));
         loadMembers();
       } else {
         message.error(res.message || "禁言失败");
@@ -501,7 +506,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
     } catch (e) {
       message.error("禁言失败");
     } finally {
-      setMuteLoading(false);
+      setMuteState((s) => ({ ...s, loading: false }));
     }
   };
 
@@ -512,7 +517,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
     : "小组讨论";
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }}>
       <AdminCard
         size="small"
         style={{ marginBottom: 16 }}
@@ -572,20 +577,44 @@ const GroupDiscussionAdminTab: React.FC = () => {
           >
             查询
           </Button>
+          <Select
+            style={{ width: 180 }}
+            placeholder="选择分析智能体"
+            value={selectedAgentId}
+            onChange={setSelectedAgentId}
+            allowClear
+            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+          />
           <Button
             disabled={selectedSessionIds.length < 2}
             onClick={() => {
-              setCompareResult("");
-              setCompareLastAnalysisId(null);
+              setCompareState((s) => ({ ...s, result: "", lastAnalysisId: null }));
               compareForm.resetFields();
               compareForm.setFieldsValue({
                 bucket_seconds: 180,
                 analysis_type: "learning_compare",
+                agent_id: selectedAgentId || undefined,
               });
               setCompareVisible(true);
             }}
           >
             横向对比分析（{selectedSessionIds.length}）
+          </Button>
+          <Button
+            type="default"
+            disabled={selectedSessionIds.length === 0}
+            onClick={() => {
+              setCompareState((s) => ({ ...s, result: "", lastAnalysisId: null }));
+              compareForm.resetFields();
+              compareForm.setFieldsValue({
+                bucket_seconds: 180,
+                analysis_type: "cross_system",
+                agent_id: selectedAgentId || undefined,
+              });
+              setCompareVisible(true);
+            }}
+          >
+            跨系统分析（{selectedSessionIds.length}）
           </Button>
           <Popconfirm
             title={`确认删除所选 ${selectedSessionIds.length} 个会话吗？`}
@@ -606,7 +635,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           >
             清空选择
           </Button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #d9d9d9', padding: '4px 12px', borderRadius: 6, background: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(0, 0, 0, 0.08)', padding: '4px 12px', borderRadius: 6, background: '#FFFFFF' }}>
             <Text>学生端弹窗：</Text>
             <Switch
               checked={frontendVisible}
@@ -634,10 +663,24 @@ const GroupDiscussionAdminTab: React.FC = () => {
         </Space>
       </AdminCard>
 
+      <div style={{ flex: 1, minHeight: 0 }}>
       <AdminTablePanel
         loading={loading}
         isEmpty={!loading && sessions.length === 0}
         emptyDescription="暂无数据"
+        pagination={
+          <Pagination
+            current={page}
+            pageSize={pageSize}
+            total={total}
+            showSizeChanger
+            showTotal={(total) => `共 ${total} 条`}
+            onChange={(p: number, s: number) => {
+              setPage(p);
+              setPageSize(s);
+            }}
+          />
+        }
       >
         <Table
           rowKey="id"
@@ -648,19 +691,11 @@ const GroupDiscussionAdminTab: React.FC = () => {
             selectedRowKeys: selectedSessionIds,
             onChange: (keys) => setSelectedSessionIds(keys.map((k) => Number(k)).filter((n) => Number.isFinite(n))),
           }}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (p: number, s: number) => {
-              setPage(p);
-              setPageSize(s);
-            },
-          }}
+          pagination={false}
           scroll={{ x: 980 }}
         />
       </AdminTablePanel>
+      </div>
 
       <Modal
         title={sessionTitle}
@@ -787,11 +822,23 @@ const GroupDiscussionAdminTab: React.FC = () => {
                         {
                           title: "操作",
                           key: "actions",
-                          width: 180,
+                          width: 260,
                           render: (_, r) => {
                             const isMuted = r.muted_until && dayjs(r.muted_until).isAfter(dayjs());
                             return (
                               <Space size={4}>
+                                <Button size="small" onClick={async () => {
+                                  if (!selectedAgentId) { message.warning("请先在上方选择分析智能体"); return; }
+                                  if (!currentSession) return;
+                                  message.loading({ content: "正在生成学习画像...", key: "profile", duration: 0 });
+                                  const res = await groupDiscussionApi.adminStudentProfile({ sessionId: currentSession.id, userId: r.user_id, agentId: selectedAgentId });
+                                  message.destroy("profile");
+                                  if (res.success) {
+                                    Modal.info({ title: `${r.full_name || r.username || "学生"} 学习画像`, width: 760, content: <pre style={{ whiteSpace: "pre-wrap", maxHeight: 500, overflow: "auto", fontSize: 13 }}>{res.data.result_text}</pre> });
+                                  } else { message.error(res.message || "学习画像生成失败"); }
+                                }}>
+                                  画像
+                                </Button>
                                 {isMuted ? (
                                   <Button size="small" onClick={() => handleUnmuteClick(r)}>
                                     解除禁言
@@ -968,113 +1015,109 @@ const GroupDiscussionAdminTab: React.FC = () => {
       </Modal>
 
       <Modal
-        title={`横向对比分析（${selectedSessionIds.length}个会话）`}
+        title={`深度分析（${selectedSessionIds.length}个会话）`}
         open={compareVisible}
         onCancel={() => setCompareVisible(false)}
-        onOk={handleCompareAnalyze}
-        confirmLoading={compareLoading}
-        okText="开始对比分析"
+        onOk={async () => {
+          const values = await compareForm.validateFields();
+          const analysisType = values.analysis_type;
+          if (analysisType === "cross_system") {
+            setCompareState((s) => ({ ...s, loading: true, result: "" }));
+            try {
+              const res = await groupDiscussionApi.adminCrossSystemAnalyze({
+                sessionIds: selectedSessionIds,
+                agentId: values.agent_id,
+                ...(values.prompt ? {} : {}),
+              });
+              if (!res.success) { message.error(res.message || "跨系统分析失败"); return; }
+              setCompareState((s) => ({ ...s, result: res.data.result_text }));
+              message.success("跨系统分析完成");
+            } catch { message.error("跨系统分析失败"); }
+            finally { setCompareState((s) => ({ ...s, loading: false })); }
+          } else {
+            await handleCompareAnalyze();
+          }
+        }}
+        confirmLoading={compareState.loading}
+        okText="开始分析"
         width={980}
       >
-        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-          <Card
-            size="small"
-            styles={{
-              body: {
-                background: "#ffffff",
-              },
-            }}
-          >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Card size="small" styles={{ body: { background: "#ffffff" } }}>
             <Form form={compareForm} layout="vertical">
               <Space wrap style={{ width: "100%" }}>
-                <Form.Item
-                  name="agent_id"
-                  label="使用智能体"
-                  rules={[{ required: true, message: "请选择智能体" }]}
-                  style={{ minWidth: 320 }}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={(agents || []).map((a) => ({
-                      value: a.id,
-                      label: `${a.agent_name || a.name}（${a.agent_type}）`,
-                    }))}
-                  />
+                <Form.Item name="agent_id" label="使用智能体" rules={[{ required: true, message: "请选择智能体" }]} style={{ minWidth: 320 }}>
+                  <Select showSearch optionFilterProp="label" options={(agents || []).map((a) => ({ value: a.id, label: `${a.agent_name || a.name}（${a.agent_type}）` }))} />
                 </Form.Item>
                 <Form.Item name="bucket_seconds" label="时间桶" style={{ width: 160 }}>
-                  <Select
-                    options={[
-                      { value: 180, label: "3分钟" },
-                      { value: 300, label: "5分钟" },
-                      { value: 600, label: "10分钟" },
-                    ]}
-                  />
+                  <Select options={[{ value: 180, label: "3分钟" }, { value: 300, label: "5分钟" }, { value: 600, label: "10分钟" }]} />
                 </Form.Item>
-                <Form.Item name="analysis_type" label="对比类型" style={{ width: 220 }}>
-                  <Select
-                    options={[
-                      { value: "learning_compare", label: "同时间段主题对比" },
-                    ]}
-                  />
+                <Form.Item name="analysis_type" label="分析类型" style={{ width: 240 }}>
+                  <Select options={[
+                    { value: "learning_compare", label: "横向对比分析" },
+                    { value: "cross_system", label: "跨系统关联分析" },
+                  ]} />
                 </Form.Item>
               </Space>
               <Space wrap style={{ marginBottom: 8 }}>
-                <Button
-                  size="small"
-                  type={compareUseCache ? "primary" : "default"}
-                  onClick={() => setCompareUseCache((v) => !v)}
-                >
-                  {compareUseCache ? "使用缓存：开" : "使用缓存：关"}
+                <Button size="small" type={compareState.useCache ? "primary" : "default"} onClick={() => setCompareState((s) => ({ ...s, useCache: !s.useCache }))}>
+                  {compareState.useCache ? "使用缓存：开" : "使用缓存：关"}
                 </Button>
               </Space>
-              <Space wrap style={{ marginBottom: 8 }}>
-                <Button
-                  size="small"
-                  onClick={() =>
-                    compareForm.setFieldsValue({
-                      prompt:
-                        "请按时间桶汇总各组讨论的学习主题，并横向对比：共性、差异、代表性问题链条、结论演进。最后给出总体建议。",
-                    })
-                  }
-                >
-                  对比模板
-                </Button>
-              </Space>
-              <Form.Item name="prompt" label="自定义Prompt（可选）">
-                <Input.TextArea rows={5} placeholder="留空则使用默认模板" />
+              <div style={{ marginBottom: 8 }}>
+                <Text type="secondary" style={{ fontSize: 12, marginBottom: 6, display: "block" }}>预设 Prompt 模板（点击填入）：</Text>
+                <Space wrap size={6}>
+                  <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请按时间桶汇总各组讨论的学习主题，横向对比共性与差异，梳理代表性问题链条，给出教学建议。" })}>横向对比</Button>
+                  <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请对比小组讨论热点话题与AI智能体提问热门问题，分析话题关联性、学生学习路径、共性知识盲点和AI依赖度，给出教学调整建议。" })}>跨系统关联</Button>
+                  <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请重点分析各组讨论中暴露的知识薄弱点和认知误区，按严重程度排序，给出针对性的教学补救方案。" })}>知识盲点诊断</Button>
+                  <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请评估各组的讨论质量（深度、参与度、问题解决率），排名并说明理由，推荐2-3个值得全班分享的优秀讨论片段。" })}>讨论质量评估</Button>
+                  <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "" })}>清空</Button>
+                </Space>
+              </div>
+              <Form.Item name="prompt" label="自定义 Prompt（可选，留空使用默认模板）">
+                <Input.TextArea rows={4} placeholder="输入你的分析指令..." />
               </Form.Item>
             </Form>
           </Card>
 
-          <Card title="对比分析结果" size="small" styles={{ body: { overflowX: "auto" } }}>
-            {compareResult ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{compareResult}</ReactMarkdown>
+          {compareState.loading && (
+            <Card size="small">
+              <div style={{ textAlign: "center", padding: "16px 0" }}>
+                <Spin />
+                <div style={{ marginTop: 8 }}>
+                  <Text type="secondary">正在调用智能体分析，请耐心等待（可能需要 30-120 秒）...</Text>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card title="分析结果" size="small" styles={{ body: { overflowX: "auto" } }}>
+            {compareState.result ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{compareState.result}</ReactMarkdown>
             ) : (
-              <Text type="secondary">暂无结果</Text>
+              <Text type="secondary">{compareState.loading ? "分析中..." : "暂无结果，请点击「开始分析」"}</Text>
             )}
           </Card>
         </Space>
       </Modal>
 
       <Modal
-        title={`禁言成员：${muteTargetMember?.full_name || muteTargetMember?.username}`}
-        open={muteModalVisible}
-        onCancel={() => setMuteModalVisible(false)}
+        title={`禁言成员：${muteState.target?.full_name || muteState.target?.username}`}
+        open={muteState.visible}
+        onCancel={() => setMuteState((s) => ({ ...s, visible: false }))}
         onOk={handleConfirmMute}
-        confirmLoading={muteLoading}
+        confirmLoading={muteState.loading}
         width={400}
       >
         <div style={{ padding: "20px 0" }}>
           <Text style={{ display: "block", marginBottom: 12 }}>请选择禁言时长：</Text>
           <Radio.Group
             onChange={(e) => {
-              setMuteDurationType(e.target.value);
-              if (e.target.value === "10m") setMuteCustomMinutes(10);
-              if (e.target.value === "1h") setMuteCustomMinutes(60);
-              if (e.target.value === "24h") setMuteCustomMinutes(1440);
+              const v = e.target.value;
+              const mins = v === "10m" ? 10 : v === "1h" ? 60 : v === "24h" ? 1440 : muteState.customMinutes;
+              setMuteState((s) => ({ ...s, durationType: v, customMinutes: mins }));
             }}
-            value={muteDurationType}
+            value={muteState.durationType}
           >
             <Space orientation="vertical">
               <Radio value="10m">10分钟</Radio>
@@ -1082,12 +1125,12 @@ const GroupDiscussionAdminTab: React.FC = () => {
               <Radio value="24h">24小时</Radio>
               <Radio value="custom">
                 自定义时长
-                {muteDurationType === "custom" ? (
+                {muteState.durationType === "custom" ? (
                   <InputNumber
                     style={{ width: 100, marginLeft: 10 }}
                     min={1}
-                    value={muteCustomMinutes}
-                    onChange={(v) => setMuteCustomMinutes(v || 1)}
+                    value={muteState.customMinutes}
+                    onChange={(v) => setMuteState((s) => ({ ...s, customMinutes: v || 1 }))}
                     addonAfter="分钟"
                   />
                 ) : null}

@@ -138,39 +138,39 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
       styles={{ body: { maxHeight: '75vh', overflow: 'auto' } }}
     >
       {loading ? (
-        <div style={{ padding: "56px 0", textAlign: "center" }}>
+        <div className="ws-modal-loading">
           <Spin />
         </div>
       ) : (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-          <div style={{ color: "var(--ws-color-text-secondary)", fontSize: "var(--ws-text-sm)" }}>
+          <div className="ws-modal-filter-info">
             当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
             {filters.class_name ? ` · ${filters.class_name}` : ""}
           </div>
 
           <Row gutter={[16, 16]}>
             <Col xs={24} md={6}>
-              <Card size="small" bordered={false} style={{ background: "var(--ws-color-surface-hover)" }}>
+              <Card size="small" bordered={false} className="ws-stat-card">
                 <Statistic title="学生数" value={summary?.students ?? 0} />
               </Card>
             </Col>
             <Col xs={24} md={6}>
-              <Card size="small" bordered={false} style={{ background: "var(--ws-color-surface-hover)" }}>
+              <Card size="small" bordered={false} className="ws-stat-card">
                 <Statistic title="课程数" value={summary?.courses ?? 0} />
               </Card>
             </Col>
             <Col xs={24} md={6}>
-              <Card size="small" bordered={false} style={{ background: "var(--ws-color-surface-hover)" }}>
+              <Card size="small" bordered={false} className="ws-stat-card">
                 <Statistic title="选课条目" value={summary?.selections ?? 0} />
               </Card>
             </Col>
             <Col xs={24} md={3}>
-              <Card size="small" bordered={false} style={{ background: "var(--ws-color-surface-hover)" }}>
-                <Statistic title="未选课" value={summary?.unselected_count ?? 0} valueStyle={{ color: '#faad14' }} />
+              <Card size="small" bordered={false} className="ws-stat-card">
+                <Statistic title="未选课" value={summary?.unselected_count ?? 0} valueStyle={{ color: 'var(--ws-color-warning)' }} />
               </Card>
             </Col>
             <Col xs={24} md={3}>
-              <Card size="small" bordered={false} style={{ background: "var(--ws-color-surface-hover)" }}>
+              <Card size="small" bordered={false} className="ws-stat-card">
                 <Statistic title="休学/其他" value={summary?.suspended_count ?? 0} valueStyle={{ color: 'var(--ws-color-text-tertiary)' }} />
               </Card>
             </Col>
@@ -186,7 +186,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 children: (
                   <Row gutter={[24, 24]}>
                     <Col xs={24} md={12}>
-                      <Text strong style={{ display: 'block', marginBottom: 12 }}>课程统计（按课程代码）</Text>
+                      <Text strong className="ws-section-title">课程统计（按课程代码）</Text>
                       <Table
                         rowKey="course_code"
                         size="small"
@@ -194,11 +194,10 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                         dataSource={courseStats}
                         pagination={false}
                         scroll={{ y: 420 }}
-                        bordered
                       />
                     </Col>
                     <Col xs={24} md={12}>
-                      <Text strong style={{ display: 'block', marginBottom: 12 }}>班级统计</Text>
+                      <Text strong className="ws-section-title">班级统计</Text>
                       <Table
                         rowKey="class_name"
                         size="small"
@@ -206,7 +205,6 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                         dataSource={classStats}
                         pagination={false}
                         scroll={{ y: 420 }}
-                        bordered
                       />
                     </Col>
                   </Row>
@@ -231,7 +229,6 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                       dataSource={filteredCourseStats}
                       pagination={false}
                       scroll={{ y: 520 }}
-                      bordered
                     />
                   </Space>
                 ),
@@ -247,7 +244,6 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                     dataSource={classStats}
                     pagination={false}
                     scroll={{ y: 560 }}
-                    bordered
                   />
                 ),
               },
@@ -270,7 +266,6 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                       dataSource={filteredNoSelection}
                       pagination={false}
                       scroll={{ y: 520 }}
-                      bordered
                     />
                   </Space>
                 ),

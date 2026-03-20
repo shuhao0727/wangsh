@@ -3,7 +3,7 @@
 # ============================================
 
 ARG NODE_IMAGE=docker.io/library/node:20-alpine
-ARG CADDY_IMAGE=docker.io/library/caddy:2-alpine
+ARG CADDY_IMAGE=docker.io/library/caddy:2.8.4-alpine
 FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /app

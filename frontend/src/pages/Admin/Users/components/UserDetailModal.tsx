@@ -113,6 +113,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
         </Button>,
       ]}
       width={600}
+      styles={{ body: { padding: 24 } }}
     >
       {renderUserDetail()}
     </Modal>

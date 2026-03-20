@@ -137,7 +137,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           width: 4px;
           height: 4px;
           border-radius: 999px;
-          background: #ff4d4f;
+          background: #EF4444;
           box-shadow: 0 2px 6px rgba(255,77,79,0.25);
         }
         .wsMonacoBpDisabled::before {

@@ -77,7 +77,7 @@ export function buildDebugMapFromNodes(
   const byLineMap = new Map<number, Map<string, DebugMapCandidate>>();
   for (const n of nodes) {
     const line = typeof n.sourceLine === "number" && Number.isFinite(n.sourceLine) ? n.sourceLine : null;
-    if (!line) continue;
+    if (line === null) continue;
     const role = typeof n.sourceRole === "string" && n.sourceRole.trim() ? n.sourceRole : null;
     const vars = roleVarsFromNode(n, role);
     const cand: DebugMapCandidate = {
@@ -222,7 +222,7 @@ export function inferDebugEmphasisFromDebugMap(params: {
     const whileCheck = byLine?.find((c) => c.role === "while_check") ?? null;
     if (whileCheck) return { line, role: "while_check" as const };
 
-    const aug = byLine?.find((c) => c.role === "aug_assign" && (c.vars?.some((v) => changedVars.has(v)) ?? changedVars.size > 0)) ?? null;
+    const aug = byLine?.find((c) => c.role === "aug_assign" && c.vars?.some((v) => changedVars.has(v))) ?? null;
     if (aug) return { line, role: "aug_assign" as const };
 
     return null;
@@ -258,7 +258,7 @@ export function inferDebugEmphasisFromDebugMap(params: {
   const hasDirectMappedNode = !!(activeLine && debugMap.byLine[activeLine]?.length);
   if (hasDirectMappedNode) return null;
 
-  const offsets = [-1, 1, -2, 2];
+  const offsets = [-1, 1, -2, 2, -3, 3, -4, 4];
   for (const d of offsets) {
     const near = inferAtLine(activeLine + d, true, activeLine);
     if (near) return near;
@@ -266,7 +266,7 @@ export function inferDebugEmphasisFromDebugMap(params: {
 
   if (prevActiveLine && prevActiveLine !== activeLine) {
     const shifted = inferAtLine(prevActiveLine, false, prevActiveLine);
-    if (shifted && shifted.role !== "for_check") return shifted;
+    if (shifted && shifted.role !== "for_check" && shifted.role !== "for_in_next") return shifted;
   }
 
   if (activeLine && prevActiveLine && activeLine !== prevActiveLine) {
@@ -291,7 +291,7 @@ function inferWhileBackEdge(params: {
   nextVars: Map<string, { value: string; type: string }>;
 }): DebugEmphasis | null {
   const { debugMap, activeLine, prevActiveLine, nextVars } = params;
-  if (!prevActiveLine || activeLine <= prevActiveLine) return null;
+  if (prevActiveLine === null || prevActiveLine === undefined || activeLine < prevActiveLine) return null;
   for (const meta of debugMap.whiles) {
     const range = meta.bodyLineRange;
     if (!range) continue;
@@ -309,17 +309,55 @@ function inferWhileBackEdge(params: {
 function evalWhileCondition(title: string | undefined, vars: Map<string, { value: string; type: string }>) {
   const raw = String(title ?? "").trim();
   if (!raw) return null;
-  const cond = raw.endsWith("?") ? raw.slice(0, -1).trim() : raw;
+  let cond = raw.endsWith("?") ? raw.slice(0, -1).trim() : raw;
+  // 剥离教学前缀 "循环：" / "循环判断："
+  cond = cond.replace(/^(?:循环判断|循环)：\s*/, "");
+
+  // not var
+  const notM = /^not\s+([A-Za-z_][A-Za-z0-9_]*)$/.exec(cond);
+  if (notM) {
+    const v = vars.get(notM[1]);
+    if (!v) return null;
+    const val = v.value.trim().toLowerCase();
+    return val === "false" || val === "0" || val === "none" || val === "" || val === "[]" || val === "{}";
+  }
+
+  // len(var) op val
+  const lenM = /^len\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*(<=|>=|==|!=|<|>)\s*(-?\d+(?:\.\d+)?)$/.exec(cond);
+  if (lenM) {
+    const v = vars.get(lenM[1]);
+    if (!v) return null;
+    const valStr = v.value.trim();
+    // 尝试从字符串表示推断长度
+    let len: number | null = null;
+    if (valStr.startsWith("[") && valStr.endsWith("]")) {
+      len = valStr === "[]" ? 0 : valStr.split(",").length;
+    } else if (valStr.startsWith("{") && valStr.endsWith("}")) {
+      len = valStr === "{}" ? 0 : valStr.split(",").length;
+    } else if ((valStr.startsWith("'") && valStr.endsWith("'")) || (valStr.startsWith('"') && valStr.endsWith('"'))) {
+      len = valStr.length - 2;
+    }
+    if (len == null) return null;
+    const right = Number(lenM[3]);
+    if (!Number.isFinite(right)) return null;
+    return evalCompare(len, lenM[2], right);
+  }
+
+  // var op var/literal (原有逻辑)
   const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|==|!=|<|>)\s*([A-Za-z_][A-Za-z0-9_]*|-?\d+(?:\.\d+)?)$/.exec(cond);
   if (!m) return null;
   const left = readNumericValue(m[1], vars);
   const right = readNumericValue(m[3], vars);
   if (left == null || right == null) return null;
-  if (m[2] === "<") return left < right;
-  if (m[2] === "<=") return left <= right;
-  if (m[2] === ">") return left > right;
-  if (m[2] === ">=") return left >= right;
-  if (m[2] === "==") return left === right;
+  return evalCompare(left, m[2], right);
+}
+
+function evalCompare(left: number, op: string, right: number): boolean {
+  if (op === "<") return left < right;
+  if (op === "<=") return left <= right;
+  if (op === ">") return left > right;
+  if (op === ">=") return left >= right;
+  if (op === "==") return left === right;
   return left !== right;
 }
 

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     COOKIE_DOMAIN: Optional[str] = Field(default=None)
     
     # ==================== 调试配置 ====================
-    DEBUG: bool = Field(default=True)
+    DEBUG: bool = Field(default=False)
     LOG_LEVEL: str = Field(default="INFO")
     
     # ==================== CORS 配置 ====================
@@ -387,6 +387,9 @@ class Settings(BaseSettings):
         if "DB_POOL_TIMEOUT_SECONDS" not in self.model_fields_set:
             self.DB_POOL_TIMEOUT_SECONDS = 15 if self.DEBUG else 30
         self.COOKIE_SAMESITE = (self.COOKIE_SAMESITE or "lax").lower()
+        # 生产环境强制启用 COOKIE_SECURE
+        if not self.DEBUG and "COOKIE_SECURE" not in self.model_fields_set:
+            self.COOKIE_SECURE = True
 
         if self.DEBUG:
             if not (self.TYPST_PDF_STORAGE_DIR or "").strip() or str(self.TYPST_PDF_STORAGE_DIR).startswith("/app/"):

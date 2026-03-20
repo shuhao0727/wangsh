@@ -84,7 +84,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
   const renderChat = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ flex: 1, overflowY: "auto", padding: 12, borderBottom: "1px solid #f0f0f0" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 12, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
         {messages.length === 0 && (
             <div style={{ textAlign: "center", marginTop: 40, color: "#999" }}>
                 <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
@@ -100,7 +100,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                   maxWidth: "85%",
                   padding: "8px 12px",
                   borderRadius: 8,
-                  background: item.role === "user" ? "#1677ff" : "#f5f5f5",
+                  background: item.role === "user" ? "#0EA5E9" : "#FAFAFA",
                   color: item.role === "user" ? "#fff" : "#333",
                 }}
               >
@@ -154,7 +154,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         {/* Header / Toolbar */}
         <div style={{ 
             padding: "8px 12px", 
-            borderBottom: "1px solid #f0f0f0", 
+            borderBottom: "1px solid rgba(0,0,0,0.04)",
             display: "flex", 
             justifyContent: "space-between",
             alignItems: "center",
@@ -162,7 +162,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         }}>
             <Space size={16}>
                 <Space size={4}>
-                    <CodeOutlined style={{ color: autoOptimizeCode ? "#1677ff" : "#999" }} />
+                    <CodeOutlined style={{ color: autoOptimizeCode ? "#0EA5E9" : "#999" }} />
                     <span style={{ fontSize: 12 }}>自动优化代码</span>
                     <Switch size="small" checked={autoOptimizeCode} onChange={handleAutoOptimizeCodeChange} />
                 </Space>

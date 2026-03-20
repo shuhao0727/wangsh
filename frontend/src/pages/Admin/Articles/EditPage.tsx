@@ -9,6 +9,7 @@ import {
 import ArticleEditForm from "./EditForm";
 import { articleApi, categoryApi } from "@services";
 import type { ArticleWithRelations } from "@services";
+import { logger } from "@services/logger";
 import "./EditPage.css";
 
 const { Title } = Typography;
@@ -31,7 +32,7 @@ const ArticleEditPage: React.FC = () => {
       const response = await articleApi.getArticle(articleId);
       setArticle(response.data);
     } catch (error) {
-      console.error("加载文章失败:", error);
+      logger.error("加载文章失败:", error);
       message.error("加载文章失败");
       navigate("/admin/articles");
     } finally {
@@ -49,7 +50,7 @@ const ArticleEditPage: React.FC = () => {
       const categoriesData = response.data?.categories || [];
       setCategories(categoriesData);
     } catch (error) {
-      console.error("加载分类列表失败:", error);
+      logger.error("加载分类列表失败:", error);
       message.warning("加载分类列表失败，可能无法选择分类");
     }
   };

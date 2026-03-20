@@ -5,6 +5,7 @@
 
 import { api } from "../api";
 import type { AxiosRequestConfig } from "axios";
+import { logger } from "../logger";
 
 // 用户数据类型（与后端 UserResponse 匹配）
 export interface User {
@@ -117,7 +118,7 @@ export const userApi = {
       // 后端直接返回 UserListResponse，而不是包装在 ApiResponse 中
       return response.data;
     } catch (error) {
-      console.error("获取用户列表失败:", error);
+      logger.error("获取用户列表失败:", error);
       throw error;
     }
   },
@@ -131,7 +132,7 @@ export const userApi = {
       const response = await api.client.get<User>(`/users/${userId}`, config);
       return response.data;
     } catch (error) {
-      console.error(`获取用户详情失败 (ID: ${userId}):`, error);
+      logger.error(`获取用户详情失败 (ID: ${userId}):`, error);
       throw error;
     }
   },
@@ -145,7 +146,7 @@ export const userApi = {
       const response = await api.client.post<User>("/users/", userData, config);
       return response.data;
     } catch (error) {
-      console.error("创建用户失败:", error);
+      logger.error("创建用户失败:", error);
       throw error;
     }
   },
@@ -168,7 +169,7 @@ export const userApi = {
       );
       return response.data;
     } catch (error) {
-      console.error(`更新用户失败 (ID: ${userId}):`, error);
+      logger.error(`更新用户失败 (ID: ${userId}):`, error);
       throw error;
     }
   },
@@ -182,7 +183,7 @@ export const userApi = {
       const response = await api.client.delete(`/users/${userId}`, config);
       return response.data;
     } catch (error) {
-      console.error(`删除用户失败 (ID: ${userId}):`, error);
+      logger.error(`删除用户失败 (ID: ${userId}):`, error);
       throw error;
     }
   },
@@ -200,7 +201,7 @@ export const userApi = {
       );
       return response.data;
     } catch (error) {
-      console.error("批量删除用户失败:", error);
+      logger.error("批量删除用户失败:", error);
       throw error;
     }
   },
@@ -222,7 +223,7 @@ export const userApi = {
       );
       return response.data;
     } catch (error) {
-      console.error("下载导入模板失败:", error);
+      logger.error("下载导入模板失败:", error);
       throw error;
     }
   },
@@ -249,7 +250,7 @@ export const userApi = {
       );
       return response.data;
     } catch (error) {
-      console.error("导入用户失败:", error);
+      logger.error("导入用户失败:", error);
       throw error;
     }
   },

@@ -7,10 +7,10 @@ type Props = {
   scrollable?: boolean;
 };
 
-const AdminPage: React.FC<Props> = ({ 
-  children, 
-  maxWidth, 
-  padding = 32,
+const AdminPage: React.FC<Props> = ({
+  children,
+  maxWidth,
+  padding = 24,
   scrollable = true,
 }) => {
   return (

@@ -1,5 +1,6 @@
 import type { FlowEdge, FlowNode } from "./model";
 import { normalizeTitleForMapping } from "./titleSemantics";
+import { logger } from "@services/logger";
 
 export type IRBlock = { kind: "block"; items: IRNode[] };
 export type IRNode = IRStmt | IRIf | IRWhile | IRFor | IRBreak | IRContinue | IRReturn;
@@ -30,7 +31,7 @@ const isYes = (e: FlowEdge) => {
 };
 
 const normalizeCond = (s: string) => {
-  const t = s.trim().replace(/[？?]+$/, "").trim();
+  let t = s.trim().replace(/[？?]+$/, "").trim();
   const normalized = t
     .replaceAll("≤", "<=")
     .replaceAll("≥", ">=")
@@ -42,10 +43,14 @@ const normalizeCond = (s: string) => {
     normalized.includes("对应序列元素") ||
     normalized.includes("还有下一个元素") ||
     normalized.includes("还有元素") ||
-    normalized.includes("是否还有元素") ||
-    normalized.includes("未遍历完")
+    normalized.includes("是否还有元素")
   ) {
     return "has_next(it)";
+  }
+  // "students 未遍历完" → "has_next(students)" 保留可迭代对象名
+  const untraversedM = /^(.+?)\s*未遍历完$/.exec(normalized);
+  if (untraversedM) {
+    return `has_next(${untraversedM[1].trim()})`;
   }
   return normalized || "True";
 };
@@ -373,7 +378,9 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
             cond.includes("has_next") ||
             cond.includes("还有下一个元素") ||
             cond.includes("还有元素") ||
-            cond.includes("未遍历完")
+            cond.includes("未遍历完") ||
+            cond.includes("在 range(") ||
+            /∈\s*[\[\(]/.test(cond)
           );
         };
         if (isIteratorCheck(cur.cond)) {
@@ -416,6 +423,13 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
             const rm = /range\s*\([^)]+\)/.exec(normalizeTitleForMapping(rangeStmt.text));
             if (rm?.[0]) iterExpr = rm[0];
           }
+          // 从 has_next(iterable) 条件中提取可迭代对象名
+          if (!iterExpr) {
+            const hasNextM = /^has_next\((.+)\)$/.exec(cur.cond.trim());
+            if (hasNextM && hasNextM[1].trim() !== "it") {
+              iterExpr = hasNextM[1].trim();
+            }
+          }
 
           let loopVar = "i";
           const condVar = /^([A-Za-z_][A-Za-z0-9_]*)的值在列表/.exec(cur.cond.trim());
@@ -436,7 +450,8 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
               /^([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.exec(normalizedText.trim()) ||
               /^.+?：\s*([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.exec(
                 it.text.trim()
-              );
+              ) ||
+              /^([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*当前元素\s*$/.exec(normalizedText.trim());
             if (!m) return false;
             loopVar = m[1].trim();
             bindNodeId = it.nodeId;
@@ -449,6 +464,7 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
               const s = normalizeTitleForMapping(it.text).trim();
               if (it.nodeId && bindNodeId && it.nodeId === bindNodeId) return false;
               if (/=\s*next\((?:it|_it_[A-Za-z_][A-Za-z0-9_]*)\)\s*$/.test(s)) return false;
+              if (/=\s*当前元素\s*$/.test(s)) return false;
               return !s.includes("获取下一个元素");
             });
 
@@ -468,6 +484,51 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
             });
             continue;
           }
+        }
+
+        // 混合风格：条件为 "v 在 range(...) 中" 时直接提取 range 参数
+        const rangeCondM = /^([A-Za-z_][A-Za-z0-9_]*)\s*在\s*range\(([^)]+)\)\s*中/.exec(cur.cond.trim());
+        // 区间风格：条件为 "v ∈ [start, end)" 或 "v ∈ (end, start]"，可选 ", 步长=X"
+        const intervalCondM = !rangeCondM && /^([A-Za-z_][A-Za-z0-9_]*)\s*∈\s*([[\(])([^,]+),\s*([^\])\,]*)([)\]])(?:\s*,\s*步长=([^\s]+))?\s*$/.exec(cur.cond.trim());
+        if (rangeCondM || intervalCondM) {
+          const v = rangeCondM ? rangeCondM[1] : (intervalCondM as RegExpExecArray)[1];
+          let iterExpr: string;
+          if (rangeCondM) {
+            iterExpr = `range(${rangeCondM[2]})`;
+          } else {
+            const im = intervalCondM as RegExpExecArray;
+            const leftBracket = im[2];
+            const a = im[3].trim();
+            const b = im[4].trim();
+            const rightBracket = im[5];
+            const stepAnno = im[6]?.trim();
+            if (leftBracket === "(" && rightBracket === "]") {
+              // 负 step: (end, start] → range(start, end, step)
+              iterExpr = stepAnno ? `range(${b}, ${a}, ${stepAnno})` : `range(${b}, ${a}, -1)`;
+            } else {
+              iterExpr = stepAnno ? `range(${a}, ${b}, ${stepAnno})` : `range(${a}, ${b})`;
+            }
+          }
+          // 查找前面的 init 语句
+          let initWasImmediatePrev = false;
+          for (let j = out.length - 1; j >= 0; j--) {
+            const it = out[j];
+            if (it.kind !== "stmt") break;
+            const m = initRe.exec(it.text.trim());
+            if (m && m[1] === v) {
+              initWasImmediatePrev = j === out.length - 1;
+              break;
+            }
+          }
+          // 去掉循环体末尾的递增语句
+          const bodyItems = cur.body.items.slice();
+          const last = bodyItems[bodyItems.length - 1];
+          if (last && last.kind === "stmt" && parseStepDelta(last.text.trim(), v)) {
+            bodyItems.pop();
+          }
+          if (initWasImmediatePrev) out.pop();
+          out.push({ kind: "for", var: v, iterExpr, body: toFor({ kind: "block", items: bodyItems }, warningsOut) });
+          continue;
         }
 
         const condM = /^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|<|>=|>)\s*(.+)$/.exec(cur.cond.trim());
@@ -577,6 +638,35 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
                 }
               }
             }
+            // 混合风格：条件为 "v 在 range(...) 中"
+            const mRangeCond = new RegExp(`^${v}\\s*在\\s*range\\(([^)]+)\\)\\s*中`).exec(next.cond.trim());
+            // 区间风格：条件为 "v ∈ [start, end)" 或 "v ∈ (end, start]"，可选 ", 步长=X"
+            const mIntervalCond = !mRangeCond && new RegExp(`^${v}\\s*∈\\s*([\\[\\(])([^,]+),\\s*([^\\]\\)\\,]*)([)\\]])(?:\\s*,\\s*步长=([^\\s]+))?\\s*$`).exec(next.cond.trim());
+            if (mRangeCond || mIntervalCond) {
+              const bodyItems = next.body.items.slice();
+              const last = bodyItems[bodyItems.length - 1];
+              if (last && last.kind === "stmt" && parseStepDelta(last.text.trim(), v)) {
+                bodyItems.pop();
+              }
+              let iterExpr: string;
+              if (mRangeCond) {
+                iterExpr = `range(${mRangeCond[1]})`;
+              } else {
+                const mic = mIntervalCond as RegExpExecArray;
+                const leftB = mic[1];
+                const a = mic[2].trim();
+                const b = mic[3].trim();
+                const stepAnno = mic[5]?.trim();
+                if (leftB === "(") {
+                  iterExpr = stepAnno ? `range(${b}, ${a}, ${stepAnno})` : `range(${b}, ${a}, -1)`;
+                } else {
+                  iterExpr = stepAnno ? `range(${a}, ${b}, ${stepAnno})` : `range(${a}, ${b})`;
+                }
+              }
+              out.push({ kind: "for", var: v, iterExpr, body: toFor({ kind: "block", items: bodyItems }, warningsOut) });
+              i += 1;
+              continue;
+            }
           }
         }
       }
@@ -649,6 +739,8 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
     if (/^[A-Za-z_][A-Za-z0-9_]*对应序列元素/.test(stmtText)) return "pass";
     if (/^while\s+.+的值在列表[:?：]?\s*$/i.test(stmtText)) return "pass";
     if (/^while\s+.+对应序列元素[:?：]?\s*$/i.test(stmtText)) return "pass";
+    if (/未遍历完/.test(stmtText)) return "pass";
+    if (/=\s*当前元素\s*$/.test(stmtText)) return "pass";
     return stmtText;
   };
 
@@ -767,7 +859,7 @@ export function generatePythonFromFlow(nodes: FlowNode[], edges: FlowEdge[]): Ge
     if (!normalizedTop.block.items.length) warnings.push("未识别到可生成的语句");
     return { mode: "structured", ir: normalizedTop.block, python, warnings, nodeLineMap };
   } catch (e: any) {
-    console.error("Flow conversion error:", e);
+    logger.error("Flow conversion error:", e);
     return { mode: "empty", ir: null, python: "", warnings: ["转换过程发生内部错误", e.message || String(e)] };
   }
 }

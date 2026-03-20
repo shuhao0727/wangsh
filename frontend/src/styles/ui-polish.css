@@ -1,11 +1,13 @@
-html {
-  background: #f5f5f5;
+/* ============================================
+ * UI Polish — 全局组件微调
+ * 风格：无阴影、无边框、无缝融合
+ * ============================================ */
+
+html, body {
+  background: #FFFFFF;
 }
 
-body {
-  background: #f5f5f5;
-}
-
+/* Admin 页面容器 */
 .ws-admin-page {
   padding: 24px;
 }
@@ -16,32 +18,224 @@ body {
   }
 }
 
+@media (max-width: 430px) {
+  .ws-admin-page {
+    padding: 12px;
+  }
+}
+
 .ws-page-card {
   margin-bottom: 16px;
 }
 
-.ant-card,
-.ant-card-hoverable {
+/* 卡片 — 无阴影无边框，干净融合 */
+.ant-card {
+  border: none !important;
   box-shadow: none !important;
+  background: transparent !important;
+  border-radius: var(--ws-radius-lg) !important;
 }
 
 .ant-card-hoverable:hover {
   box-shadow: none !important;
+  border: none !important;
 }
 
+/* 表格 — 干净表头 */
 .ant-table-wrapper .ant-table-thead > tr > th {
   font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--ws-color-text-secondary);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04) !important;
 }
 
 .ant-table-wrapper .ant-table-tbody > tr > td {
   vertical-align: middle;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03) !important;
 }
 
+/* 按钮 */
 .ant-btn:focus-visible {
-  outline: none;
+  outline: 2px solid var(--ws-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.ant-btn:active {
+  transform: scale(0.97);
 }
 
 .ant-btn-primary > span,
 .ant-btn-primary .anticon {
   color: inherit;
+}
+
+/* 主色按钮 — 纯色，无渐变 */
+.ant-btn-primary:not(:disabled) {
+  background: var(--ws-color-primary);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  background: var(--ws-color-primary-hover);
+  border-color: transparent;
+}
+
+/* 全局动画 */
+@keyframes ws-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ws-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ws-animate-in {
+  animation: ws-fade-in-up 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Tag */
+.ant-tag {
+  border-radius: 6px;
+  font-weight: 500;
+  border: none;
+}
+
+/* 输入框 focus */
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: var(--ws-color-primary) !important;
+  box-shadow: 0 0 0 2px var(--ws-color-focus-ring) !important;
+}
+
+.ant-select-focused .ant-select-selector {
+  border-color: var(--ws-color-primary) !important;
+  box-shadow: 0 0 0 2px var(--ws-color-focus-ring) !important;
+}
+
+/* Divider — 极淡 */
+.ant-divider {
+  border-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Modal — 统一圆角、无边框、干净间距 */
+.ant-modal .ant-modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  padding: 0;
+}
+
+.ant-modal .ant-modal-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  padding: 20px 24px;
+  margin: 0;
+  border-radius: 12px 12px 0 0;
+}
+
+.ant-modal .ant-modal-body {
+  padding: 24px;
+}
+
+.ant-modal .ant-modal-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  padding: 16px 24px;
+  margin: 0;
+}
+
+/* Modal 内部工具类 */
+.ws-modal-loading {
+  padding: 56px 0;
+  text-align: center;
+}
+
+.ws-modal-hint {
+  color: var(--ws-color-text-secondary);
+  font-size: var(--ws-text-sm);
+}
+
+.ws-modal-label {
+  margin-bottom: 8px;
+  color: var(--ws-color-text);
+}
+
+.ws-modal-filter-info {
+  color: var(--ws-color-text-secondary);
+  font-size: var(--ws-text-sm);
+}
+
+/* 分析弹窗统计卡片 */
+.ws-stat-card {
+  background: var(--ws-color-surface-2);
+  border-radius: var(--ws-radius-md);
+  border: none;
+}
+
+.ws-section-title {
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* 表格 — 无边框模式 */
+.ws-table-borderless .ant-table {
+  border: none;
+}
+
+.ws-table-borderless .ant-table-container {
+  border: none;
+}
+
+/* 分页 — 全局统一：右对齐、间距一致 */
+.ant-table-pagination.ant-pagination {
+  justify-content: flex-end !important;
+  padding: 12px 0 4px !important;
+  margin: 0 !important;
+}
+
+.ant-pagination {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.ant-pagination .ant-pagination-total-text {
+  margin-right: auto;
+  color: var(--ws-color-text-secondary);
+  font-size: 13px;
+}
+
+/* 576px 小屏适配 — 管理后台表格 */
+@media (max-width: 576px) {
+  .ws-admin-page {
+    padding: 10px;
+  }
+
+  .ws-admin-page .ant-table-thead > tr > th,
+  .ws-admin-page .ant-table-tbody > tr > td {
+    padding: 8px 6px !important;
+    font-size: 12px;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  .ant-modal .ant-modal-body {
+    padding: 16px;
+  }
+
+  .ant-modal .ant-modal-header {
+    padding: 14px 16px;
+  }
 }

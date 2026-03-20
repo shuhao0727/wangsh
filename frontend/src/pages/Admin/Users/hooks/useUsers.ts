@@ -12,6 +12,7 @@ import {
   UserUpdateRequest,
   UserListResponse,
 } from "@services";
+import { logger } from "@services/logger";
 import { UsersState, UserActions, SearchParams } from "../types";
 
 /**
@@ -75,7 +76,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         limit: response.limit,
       }));
     } catch (error) {
-      console.error("加载用户列表失败:", error);
+      logger.error("加载用户列表失败:", error);
       message.error("加载用户列表失败");
       setState((prev) => ({ ...prev, loading: false }));
     }
@@ -153,7 +154,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
         message.success("用户删除成功");
       } catch (error) {
-        console.error("删除用户失败:", error);
+        logger.error("删除用户失败:", error);
         message.error("删除用户失败");
         setState((prev) => ({ ...prev, loading: false }));
       }
@@ -204,7 +205,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         }));
         await loadUsers();
       } catch (error: any) {
-        console.error("保存用户信息失败:", error);
+        logger.error("保存用户信息失败:", error);
 
         // 显示具体的错误信息
         if (error.response?.data?.detail) {
@@ -257,7 +258,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
       message.success(`成功删除 ${state.selectedRowKeys.length} 个用户`);
     } catch (error) {
-      console.error("批量删除失败:", error);
+      logger.error("批量删除失败:", error);
       message.error("批量删除失败");
       setState((prev) => ({ ...prev, loading: false }));
     }
@@ -279,7 +280,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
       message.success(`模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`);
     } catch (error) {
-      console.error("下载模板失败:", error);
+      logger.error("下载模板失败:", error);
       message.error("下载模板失败");
     } finally {
       setState((prev) => ({ ...prev, loading: false }));
@@ -305,7 +306,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
             // 可以在这里添加错误详情显示逻辑
             if (result.errors.length > 0) {
-              console.warn("导入错误详情:", result.errors);
+              logger.warn("导入错误详情:", result.errors);
               // 可以在这里将错误详情存储到状态中，以便在UI中显示
             }
           } else {
@@ -319,7 +320,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         await loadUsers(); // 重新加载用户列表
         return false; // 阻止默认上传行为
       } catch (error: any) {
-        console.error("文件上传失败:", error);
+        logger.error("文件上传失败:", error);
 
         // 显示具体的错误信息
         if (error.response?.data?.detail) {

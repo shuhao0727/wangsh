@@ -22,39 +22,28 @@ test("for 教学示例在代码与流程图间保持一致", () => {
   expect(built).not.toBeNull();
   if (!built) return;
 
-  expect(built.nodes.some((n) => n.title.replaceAll(" ", "") === "range(1,10)")).toBe(true);
-  expect(built.nodes.some((n) => n.title.replaceAll(" ", "") === "itinrange(1,10)")).toBe(true);
-  const seqNode = built.nodes.find((n) => n.title.replaceAll(" ", "") === "range(1,10)") ?? null;
-  const iterNode = built.nodes.find((n) => n.title.replaceAll(" ", "") === "itinrange(1,10)") ?? null;
-  expect(seqNode).toBeTruthy();
-  expect(iterNode).toBeTruthy();
-  expect(built.edges.some((e) => e.from === seqNode?.id && e.to === iterNode?.id)).toBe(true);
-  expect(built.nodes.some((n) => n.shape === "decision" && n.title.replaceAll(" ", "") === "i的值在列表？")).toBe(true);
-  expect(built.nodes.some((n) => n.title.replaceAll(" ", "") === "i=next(it)")).toBe(true);
+  // 新区间表示法: i ∈ [1, 10)
+  const decisionNode = built.nodes.find((n) => n.shape === "decision" && n.title.includes("∈"));
+  expect(decisionNode).toBeTruthy();
+  expect(decisionNode!.title).toMatch(/i\s*∈\s*\[1,\s*10\)/);
+
   expect(built.debugMap.forRanges.length).toBe(1);
   expect(built.debugMap.forRanges[0].var).toBe("i");
   expect(built.debugMap.forRanges[0].headerLine).toBe(2);
 
   const generated = generatePythonFromFlow(built.nodes as any, built.edges as any);
-  expect(generated.python.replaceAll(" ", "").includes("range(1,11)")).toBe(false);
+  expect(generated.python).toContain("for i in range(1, 10):");
+  expect(generated.python).toContain("total += i");
 });
 
-test("for 教学示例标题含说明性文本时不引入伪差异", () => {
+test("for 教学示例反转回 Python 不引入伪差异", () => {
   const built = buildUnifiedFlowFromPython(FOR_TEACHING_EXAMPLE_CODE);
   expect(built).not.toBeNull();
   if (!built) return;
-  const decoratedNodes = built.nodes.map((n) => {
-    const noSpace = n.title.replaceAll(" ", "");
-    if (noSpace === "range(1,10)") return { ...n, title: "range步骤：_seq_i = list(range(1, 10))（循环开始）" };
-    if (noSpace === "itinrange(1,10)") return { ...n, title: "i取第一个元素：_it_i = iter(_seq_i)" };
-    if (noSpace === "i=next(it)") return { ...n, title: "i获取下一个元素：i = next(_it_i)（获取下一个元素）" };
-    return n;
-  });
-  const generated = generatePythonFromFlow(decoratedNodes as any, built.edges as any);
+  const generated = generatePythonFromFlow(built.nodes as any, built.edges as any);
   expect(generated.python).toContain("for i in range(1, 10):");
   expect(generated.python).toContain("total += i");
-  expect(generated.python.includes("循环开始")).toBe(false);
-  expect(generated.python.includes("获取下一个元素")).toBe(false);
+  expect(generated.python.includes("∈")).toBe(false);
 });
 
 test("教学示例覆盖课堂核心场景并保持由浅入深", () => {

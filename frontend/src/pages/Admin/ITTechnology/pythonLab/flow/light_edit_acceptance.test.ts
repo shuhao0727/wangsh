@@ -10,8 +10,9 @@ test("示例图轻改后仍可生成可通过语法校验的代码", () => {
 
   const editedNodes = built.nodes.map((n) => {
     const title = String(n.title || "");
-    if (title.includes("range(1, 10)")) {
-      return { ...n, title: title.replace("range(1, 10)", "range(1, 12)") };
+    // 区间风格：条件节点为 "i ∈ [1, 10)?"，改为 "i ∈ [1, 12)?"
+    if (title.includes("[1, 10)")) {
+      return { ...n, title: title.replace("[1, 10)", "[1, 12)") };
     }
     return n;
   });

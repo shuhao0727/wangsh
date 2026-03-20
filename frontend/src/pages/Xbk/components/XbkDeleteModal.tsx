@@ -69,7 +69,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
         />
         
         <div>
-          <div style={{ marginBottom: 8 }}>删除范围</div>
+          <div className="ws-modal-label">删除范围</div>
           <Select value={deleteType} style={{ width: "100%" }} onChange={setDeleteType}>
             <Option value="all">全部</Option>
             <Option value="students">学生名单</Option>
@@ -78,7 +78,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
           </Select>
         </div>
 
-        <div style={{ color: "var(--ws-color-text-secondary)", fontSize: "var(--ws-text-sm)" }}>
+        <div className="ws-modal-hint">
           将按当前筛选条件删除数据：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
         </div>
       </Space>

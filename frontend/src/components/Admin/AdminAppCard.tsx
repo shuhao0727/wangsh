@@ -26,33 +26,21 @@ const AdminAppCard: React.FC<Props> = ({
   actionLabel,
   actionIcon,
   onAction,
-  color = "var(--ws-color-primary)", // Default to primary
+  color = "var(--ws-color-primary)",
 }) => {
   return (
     <Card
       hoverable
       style={{
-        borderRadius: 8,
-        border: "1px solid #f0f0f0", // Subtle border for definition
-        borderTop: `4px solid ${color}`, // Top decorative line
-        boxShadow: "none", // Default to no shadow
+        borderRadius: "var(--ws-radius-lg)",
+        border: "none",
+        boxShadow: "none",
         height: "100%",
-        transition: "all 0.3s ease",
-        background: "#ffffff", // Explicit white background
+        transition: "all 0.2s ease",
+        background: "var(--ws-color-surface-2)",
       }}
       styles={{
         body: { padding: "16px 12px 12px 12px", display: "flex", flexDirection: "column", alignItems: "center", height: "100%" },
-      }}
-      // Add hover effect via JS or separate CSS class if needed, or rely on Antd hoverable
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-4px)";
-        e.currentTarget.style.boxShadow = "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)"; // Subtle hover shadow
-        e.currentTarget.style.borderColor = "transparent"; // Remove side/bottom borders on hover
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "none";
-        e.currentTarget.style.borderColor = "#f0f0f0"; // Restore border color
       }}
     >
       <div
@@ -69,8 +57,8 @@ const AdminAppCard: React.FC<Props> = ({
       >
         {icon}
       </div>
-      
-      <Title level={4} style={{ marginBottom: 4, color: color, fontSize: 15, fontWeight: 600, textAlign: "center" }}>
+
+      <Title level={4} style={{ marginBottom: 4, color: "var(--ws-color-text)", fontSize: 15, fontWeight: 600, textAlign: "center" }}>
         {title}
       </Title>
       
@@ -78,7 +66,7 @@ const AdminAppCard: React.FC<Props> = ({
         {description}
       </Text>
 
-      <div style={{ width: "100%", marginTop: "auto", borderTop: "1px solid #f0f0f0", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ width: "100%", marginTop: "auto", borderTop: "1px solid rgba(0,0,0,0.04)", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Switch size="small" checked={enabled} loading={loading} onChange={onToggle} />
           <Text type="secondary" style={{ fontSize: 12 }}>

@@ -160,3 +160,16 @@ class GroupDiscussionAdminMemberListResponse(BaseModel):
 
 class GroupDiscussionAdminDeleteSessionsRequest(BaseModel):
     session_ids: List[int] = Field(..., min_length=1, description="要删除的会话ID列表")
+
+
+class GroupDiscussionStudentProfileRequest(BaseModel):
+    session_id: int
+    user_id: int
+    agent_id: int
+
+
+class GroupDiscussionCrossSystemRequest(BaseModel):
+    session_ids: List[int] = Field(..., min_length=1, description="要分析的会话ID列表")
+    agent_id: int
+    date: Optional[str] = Field(None, description="可选：指定日期 YYYY-MM-DD")
+    class_name: Optional[str] = Field(None, description="可选：指定班级")

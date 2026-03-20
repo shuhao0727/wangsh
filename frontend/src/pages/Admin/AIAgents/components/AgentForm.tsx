@@ -1,37 +1,19 @@
 /**
- * AI智能体表单组件 - 简化模拟数据版
+ * AI智能体表单组件
  */
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Form,
-  Input,
-  Select,
-  Switch,
-  Button,
-  Row,
-  Col,
-  Space,
-  Modal,
-  Spin,
-  Alert,
-  Tooltip,
+  Form, Input, Select, Switch, Button, Space, Modal, Spin, Alert, Tooltip,
 } from "antd";
 import {
-  ThunderboltOutlined,
-  CloudOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LoadingOutlined,
-  PlayCircleOutlined,
+  ThunderboltOutlined, CloudOutlined, CheckCircleOutlined,
+  CloseCircleOutlined, LoadingOutlined, PlayCircleOutlined, EyeOutlined,
 } from "@ant-design/icons";
 
 import { aiAgentsApi } from "@/services/znt/api";
 import type { AgentFormValues, AIAgent, AIModelInfo, ModelDiscoveryResponse } from "@/services/znt/types";
 import { logger } from "@services/logger";
 
-const { Option } = Select;
-
-// 智能体类型选项（简化为两类：通用和Dify自定义）
 const AgentTypeOptions = [
   { value: "general", label: "通用智能体", icon: <ThunderboltOutlined /> },
   { value: "dify", label: "Dify智能体", icon: <CloudOutlined /> },
@@ -44,12 +26,7 @@ interface AgentFormProps {
   onCancel: () => void;
 }
 
-const AgentForm: React.FC<AgentFormProps> = ({
-  visible,
-  editingAgent,
-  onSubmit,
-  onCancel,
-}) => {
+const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, onCancel }) => {
   const [form] = Form.useForm();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -60,42 +37,28 @@ const AgentForm: React.FC<AgentFormProps> = ({
   const [revealVisible, setRevealVisible] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
-  // 检查是否可以测试
+
   const checkCanTest = useCallback(() => {
     const url = form.getFieldValue("api_endpoint");
     const apiKey = form.getFieldValue("api_key");
     const name = form.getFieldValue("name");
-    const clearApiKey = form.getFieldValue("clear_api_key");
-
-    const canTest = editingAgent?.id
-      ? Boolean(name && url && (!clearApiKey ? true : Boolean(apiKey)))
-      : Boolean(name && url && apiKey);
-    setCanTest(canTest);
+    setCanTest(editingAgent?.id ? Boolean(name && url) : Boolean(name && url && apiKey));
   }, [editingAgent?.id, form]);
 
-  // 初始化表单值
   useEffect(() => {
     if (editingAgent) {
-      const formValues = {
+      form.setFieldsValue({
         name: editingAgent.name || editingAgent.agent_name,
         agent_type: editingAgent.agent_type,
         model_name: editingAgent.model_name,
         description: editingAgent.description,
         api_endpoint: editingAgent.api_endpoint,
         api_key: "",
-        clear_api_key: false,
         is_active: editingAgent.is_active,
-      };
-      form.setFieldsValue(formValues);
+      });
     } else {
       form.resetFields();
-      form.setFieldsValue({
-        agent_type: "general",
-        model_name: "",
-        description: "",
-        is_active: true,
-        clear_api_key: false,
-      });
+      form.setFieldsValue({ agent_type: "general", is_active: true });
     }
     setTestResult(null);
     checkCanTest();
@@ -108,15 +71,11 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (typeof cleaned.api_key === "string" && cleaned.api_key.trim() === "") {
         delete cleaned.api_key;
       }
+      delete cleaned.clear_api_key;
       onSubmit(cleaned);
     } catch (error) {
       logger.warn("表单验证失败:", error);
     }
-  };
-
-  const openRevealModal = () => {
-    setAdminPassword("");
-    setRevealVisible(true);
   };
 
   const handleRevealApiKey = async () => {
@@ -125,45 +84,28 @@ const AgentForm: React.FC<AgentFormProps> = ({
       setRevealLoading(true);
       const resp = await aiAgentsApi.revealApiKey(editingAgent.id, adminPassword);
       if (!resp.success || !resp.data) {
-        Modal.error({
-          title: "获取API密钥失败",
-          content: resp.message || "获取API密钥失败（可能为401未授权或404未配置）",
-        });
+        Modal.error({ title: "获取失败", content: resp.message || "获取API密钥失败" });
         return;
       }
-      // 回填到表单，便于后续复制或更新
       form.setFieldValue("api_key", resp.data);
-      // 弹窗显示明文并支持复制
+      setRevealVisible(false);
       Modal.success({
-        title: "API密钥已获取",
+        title: "API密钥",
         content: (
-          <div>
-            <div style={{ marginBottom: 8 }}>以下为该智能体的API密钥：</div>
-            <div style={{ fontFamily: 'monospace', background: '#fafafa', padding: 8, borderRadius: 4 }}>
-              <span style={{ marginRight: 8 }}>密钥：</span>
-              <span>{resp.data}</span>
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <Input value={resp.data} readOnly addonAfter={<Button onClick={() => navigator.clipboard.writeText(resp.data)}>复制</Button>} />
-            </div>
+          <div style={{ fontFamily: "monospace", background: "#F8FAFC", padding: 12, borderRadius: 8, wordBreak: "break-all" }}>
+            {resp.data}
           </div>
         ),
       });
-      setRevealVisible(false);
     } catch (error: any) {
-      Modal.error({
-        title: "获取API密钥失败",
-        content: error?.message || "请求失败（网络或权限错误）",
-      });
+      Modal.error({ title: "获取失败", content: error?.message || "请求失败" });
     } finally {
       setRevealLoading(false);
     }
   };
 
-  // 测试智能体连接并发现可用模型
   const handleTest = async () => {
     if (!canTest) return;
-
     try {
       setTesting(true);
       setDiscoveringModels(true);
@@ -171,441 +113,162 @@ const AgentForm: React.FC<AgentFormProps> = ({
       setAvailableModels([]);
       setModelDiscoveryResult(null);
 
-      // 获取表单中的API配置
       const apiEndpoint = form.getFieldValue("api_endpoint");
       const apiKey = form.getFieldValue("api_key");
-      
-      if (!apiEndpoint) {
-        throw new Error("API端点不能为空");
+      if (!apiEndpoint) throw new Error("API端点不能为空");
+
+      // 如果有新 key，先保存再测试
+      if (editingAgent?.id && apiKey?.trim()) {
+        try { await aiAgentsApi.updateAgent(editingAgent.id, { api_key: apiKey.trim() }); } catch (e) { logger.warn("自动保存API密钥失败:", e); }
       }
 
-      // 先测试智能体连接（如果有ID）
       let testResult = null;
       if (editingAgent?.id) {
-        try {
-          testResult = await aiAgentsApi.testAgent(
-            editingAgent.id,
-            "测试API连接"
-          );
-        } catch (error) {
-          logger.warn("智能体测试失败，继续尝试模型发现:", error);
-        }
+        try { testResult = await aiAgentsApi.testAgent(editingAgent.id, "测试API连接"); } catch (error) { logger.warn("智能体测试失败:", error); }
       }
 
-      if (editingAgent?.id && !apiKey) {
-        // 使用已保存的API密钥（不回填明文）发现可用模型列表
-        try {
-          // 调用新的后端接口，通过agent_id发现模型
-          const discoveryResult = await aiAgentsApi.discoverModelsByAgentId(editingAgent.id);
-          
-          setModelDiscoveryResult(discoveryResult);
-          
-          if (discoveryResult.success) {
-             // 更新可用模型列表
-            setAvailableModels(discoveryResult.models);
-            
-            // 如果只有一个模型，自动选择它
-            if (discoveryResult.models.length === 1) {
-              form.setFieldValue("model_name", discoveryResult.models[0].id);
-            }
-            
-            setTestResult(
-              testResult || {
-                success: true,
-                message: `连接测试成功！发现 ${discoveryResult.total_count} 个可用模型。`,
-                timestamp: new Date().toISOString(),
-                response_time: discoveryResult.response_time_ms,
-                provider: discoveryResult.provider,
-                model_count: discoveryResult.total_count,
-              }
-            );
-          } else {
-            // 如果模型发现失败，但连接测试成功，显示混合消息
-            if (testResult && testResult.success) {
-              setTestResult({
-                ...testResult,
-                success: true, // 保持成功状态，但在消息中说明
-                message: `连接测试成功，但模型发现失败: ${discoveryResult.error_message || "无法获取模型列表"}`,
-              });
-            } else {
-              setTestResult({
-                success: false,
-                message: `测试失败: ${discoveryResult.error_message || "无法获取模型列表"}`,
-                timestamp: new Date().toISOString(),
-              });
-            }
-          }
-        } catch (error) {
-           logger.warn("通过AgentID发现模型失败:", error);
-           
-           if (testResult && testResult.success) {
-             setTestResult({
-               ...testResult,
-               success: true,
-               message: "连接测试成功，但无法获取模型列表",
-             });
-           } else {
-             setTestResult({
-              success: false,
-              message: "测试失败：无法获取模型列表",
-              timestamp: new Date().toISOString(),
-            });
-           }
+      // 模型发现
+      const useAgentId = editingAgent?.id && !apiKey;
+      try {
+        const discoveryResult = useAgentId
+          ? await aiAgentsApi.discoverModelsByAgentId(editingAgent!.id)
+          : await aiAgentsApi.discoverModels({ api_endpoint: apiEndpoint, api_key: apiKey });
+        setModelDiscoveryResult(discoveryResult);
+        if (discoveryResult.success) {
+          setAvailableModels(discoveryResult.models);
+          if (discoveryResult.models.length === 1) form.setFieldValue("model_name", discoveryResult.models[0].id);
+          setTestResult(testResult || { success: true, message: `发现 ${discoveryResult.total_count} 个可用模型`, timestamp: new Date().toISOString(), response_time: discoveryResult.response_time_ms, provider: discoveryResult.provider, model_count: discoveryResult.total_count });
+        } else {
+          setTestResult(testResult?.success
+            ? { ...testResult, message: `连接成功，但模型发现失败: ${discoveryResult.error_message || "未知"}` }
+            : { success: false, message: `测试失败: ${discoveryResult.error_message || "未知"}`, timestamp: new Date().toISOString() });
         }
-        
-        setDiscoveringModels(false);
-        return;
-      }
-
-      if (!apiKey) {
-        throw new Error("API密钥不能为空");
-      }
-
-      // 调用模型发现API获取可用模型
-      const discoveryResult = await aiAgentsApi.discoverModels({
-        api_endpoint: apiEndpoint,
-        api_key: apiKey,
-      });
-
-      setModelDiscoveryResult(discoveryResult);
-
-      if (discoveryResult.success) {
-        // 更新可用模型列表
-        setAvailableModels(discoveryResult.models);
-        
-        // 如果只有一个模型，自动选择它
-        if (discoveryResult.models.length === 1) {
-          form.setFieldValue("model_name", discoveryResult.models[0].id);
-        }
-        
-        // 设置测试结果
-        setTestResult({
-          success: true,
-          message: `连接测试成功！发现 ${discoveryResult.total_count} 个可用模型。服务商：${discoveryResult.provider}，检测方法：${discoveryResult.detection_method}`,
-          timestamp: new Date().toISOString(),
-          response_time: discoveryResult.response_time_ms,
-          provider: discoveryResult.provider,
-          model_count: discoveryResult.total_count,
-        });
-      } else {
-        // 模型发现失败，但连接可能仍然可用
-        setTestResult({
-          success: false,
-          message: `模型发现失败: ${discoveryResult.error_message || "未知错误"}`,
-          timestamp: new Date().toISOString(),
-        });
+      } catch (error) {
+        logger.warn("模型发现失败:", error);
+        setTestResult(testResult?.success
+          ? { ...testResult, message: "连接成功，但无法获取模型列表" }
+          : { success: false, message: "测试失败：无法获取模型列表", timestamp: new Date().toISOString() });
       }
     } catch (error) {
       logger.error("测试失败:", error);
-      setTestResult({
-        success: false,
-        message: `测试异常: ${error instanceof Error ? error.message : "未知错误"}`,
-        timestamp: new Date().toISOString(),
-      });
+      setTestResult({ success: false, message: `测试异常: ${error instanceof Error ? error.message : "未知错误"}`, timestamp: new Date().toISOString() });
     } finally {
       setTesting(false);
       setDiscoveringModels(false);
     }
   };
 
-  // 重置测试结果
-  const resetTestResult = () => {
-    setTestResult(null);
-  };
-
-  const handleTypeChange = (value: string) => {
-    setTestResult(null);
-    setTimeout(checkCanTest, 100);
-  };
-
-  // 表单字段变化时检查是否可以测试
+  const resetTestResult = () => setTestResult(null);
   const handleFormChange = useCallback(() => {
     checkCanTest();
-    if (testResult || availableModels.length > 0 || modelDiscoveryResult) {
-      setTestResult(null);
-      setAvailableModels([]);
-      setModelDiscoveryResult(null);
-    }
+    if (testResult || availableModels.length > 0 || modelDiscoveryResult) { setTestResult(null); setAvailableModels([]); setModelDiscoveryResult(null); }
   }, [availableModels, checkCanTest, modelDiscoveryResult, testResult]);
+
+  /* ── label helper ── */
+  const fieldLabel = (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>;
 
   return (
     <Modal
       title={editingAgent ? "编辑智能体" : "添加智能体"}
-      open={visible}
-      onOk={handleSubmit}
-      onCancel={onCancel}
-      okText={editingAgent ? "保存" : "添加"}
-      cancelText="取消"
-      width={700}
+      open={visible} onOk={handleSubmit} onCancel={onCancel}
+      okText={editingAgent ? "保存" : "添加"} cancelText="取消"
+      width={640}
       footer={[
-        <Button key="cancel" onClick={onCancel}>
-          取消
-        </Button>,
-        <Tooltip
-          key="test"
-          title={canTest ? "测试智能体连接" : "请先填写必要字段"}
-        >
-          <Button
-            key="test"
-            onClick={handleTest}
-            disabled={!canTest || testing}
-            icon={<PlayCircleOutlined />}
-            loading={testing}
-          >
-            测试连接
-          </Button>
+        <Button key="cancel" onClick={onCancel}>取消</Button>,
+        <Tooltip key="test" title={canTest ? "测试连接并发现模型" : "请先填写名称和API地址"}>
+          <Button onClick={handleTest} disabled={!canTest || testing} icon={<PlayCircleOutlined />} loading={testing}>测试连接</Button>
         </Tooltip>,
-        <Button
-          key="submit"
-          type="primary"
-          onClick={handleSubmit}
-          disabled={testing}
-        >
-          {editingAgent ? "保存" : "添加"}
-        </Button>,
+        <Button key="submit" type="primary" onClick={handleSubmit} disabled={testing}>{editingAgent ? "保存" : "添加"}</Button>,
       ]}
     >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={{
-          agent_type: "general",
-          is_active: true,
-        }}
-        onFieldsChange={handleFormChange}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              label="智能体名称"
-              name="name"
-              rules={[{ required: true, message: "请输入智能体名称" }]}
-            >
-              <Input placeholder="例如：模拟智能体" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              label="智能体类型"
-              name="agent_type"
-              rules={[{ required: true, message: "请选择智能体类型" }]}
-            >
-              <Select onChange={handleTypeChange}>
-                {AgentTypeOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    <Space>
-                      {option.icon}
-                      {option.label}
-                    </Space>
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
+      <Form form={form} layout="vertical" initialValues={{ agent_type: "general", is_active: true }} onFieldsChange={handleFormChange}>
+        {/* 第一行：名称 + 类型 + 启用 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 16, alignItems: "start" }}>
+          <Form.Item label={fieldLabel("名称")} name="name" rules={[{ required: true, message: "请输入名称" }]} style={{ marginBottom: 16 }}>
+            <Input placeholder="如：MiniMax" />
+          </Form.Item>
+          <Form.Item label={fieldLabel("类型")} name="agent_type" rules={[{ required: true }]} style={{ marginBottom: 16 }}>
+            <Select onChange={() => { resetTestResult(); setTimeout(checkCanTest, 100); }}>
+              {AgentTypeOptions.map(o => <Select.Option key={o.value} value={o.value}><Space>{o.icon}{o.label}</Space></Select.Option>)}
+            </Select>
+          </Form.Item>
+          <Form.Item label={fieldLabel("状态")} name="is_active" valuePropName="checked" style={{ marginBottom: 16 }}>
+            <Switch checkedChildren="启用" unCheckedChildren="停用" onChange={resetTestResult} />
+          </Form.Item>
+        </div>
 
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item 
-              label="模型名称" 
-              name="model_name"
-              normalize={(value) => Array.isArray(value) ? (value[0] ?? "") : value}
-              getValueProps={(value) => ({ value: value ? [value] : [] })}
-              extra={
-                discoveringModels ? "正在发现可用模型..." :
-                modelDiscoveryResult?.success ? `发现 ${availableModels.length} 个模型` :
-                modelDiscoveryResult ? `发现失败: ${modelDiscoveryResult.error_message}` :
-                "点击'测试连接'获取可用模型列表"
-              }
-            >
-              <Select 
-                mode="tags"
-                placeholder={
-                  discoveringModels 
-                    ? "正在发现可用模型..." 
-                    : availableModels.length > 0
-                    ? "请选择模型"
-                    : "点击'测试连接'获取模型列表"
-                }
-                allowClear
-                showSearch
-                disabled={discoveringModels}
-                loading={discoveringModels}
-                status={modelDiscoveryResult?.success === false ? 'error' : undefined}
-                suffix={
-                  discoveringModels 
-                    ? <LoadingOutlined spin /> 
-                    : modelDiscoveryResult?.success === false 
-                    ? <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-                    : undefined
-                }
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()) ||
-                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                options={
-                  discoveringModels 
-                    ? [] 
-                    : availableModels.length > 0
-                    ? availableModels.map(model => ({
-                        value: model.id,
-                        label: model.id,
-                        description: model.description || '',
-                      }))
-                    : []
-                }
-                optionRender={(option: any) => {
-                  const description = option.description || option.data?.description;
-                  const label = option.label || option.data?.label;
-                  return (
-                    <div>
-                      <div>{label}</div>
-                      {description && (
-                        <div style={{ fontSize: '12px', color: 'var(--ws-color-text-secondary)' }}>
-                          {description}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item label="描述" name="description">
-              <Input.TextArea placeholder="请输入智能体描述（可选）" rows={2} />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              label="API地址"
-              name="api_endpoint"
-              rules={[
-                { required: true, message: "请输入API地址" },
-                {
-                  validator: async (_: any, value: string) => {
-                    if (!value) return Promise.resolve();
-                    try {
-                      new URL(value);
-                      return Promise.resolve();
-                    } catch (e) {
-                      return Promise.reject(new Error("请输入有效的URL地址"));
-                    }
-                  }
-                },
-              ]}
-            >
-              <Input placeholder="例如：https://api.example.com/v1" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              label="API密钥"
-              name="api_key"
-              rules={[
-                { min: 8, message: "API密钥长度至少8位" },
-              ]}
-            >
-              <Input.Password
-                placeholder={
-                  editingAgent?.id && editingAgent?.has_api_key
-                    ? `已保存（末尾 ****${editingAgent.api_key_last4 || ""}）`
-                    : "请输入API密钥"
-                }
-                onFocus={resetTestResult}
-              />
-            </Form.Item>
-            {editingAgent?.id && (
-              <Space size={8}>
-                <Button
-                  size="small"
-                  onClick={openRevealModal}
-                  disabled={!editingAgent?.has_api_key}
-                >
-                  显示
+        {/* 第二行：API 地址 + 密钥 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <Form.Item label={fieldLabel("API 地址")} name="api_endpoint" rules={[{ required: true, message: "请输入API地址" },
+            { validator: async (_: any, v: string) => { if (!v) return; try { new URL(v); } catch { throw new Error("请输入有效的URL"); } } }]}
+            style={{ marginBottom: 16 }}>
+            <Input placeholder="https://api.siliconflow.cn/v1" />
+          </Form.Item>
+          <Form.Item label={
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {fieldLabel("API 密钥")}
+              {editingAgent?.id && editingAgent?.has_api_key && (
+                <Button type="link" size="small" icon={<EyeOutlined />} style={{ padding: 0, height: "auto", fontSize: 12 }}
+                  onClick={() => { setAdminPassword(""); setRevealVisible(true); }}>
+                  查看
                 </Button>
-                <Form.Item name="clear_api_key" valuePropName="checked" noStyle>
-                  <Switch checkedChildren="清除密钥" unCheckedChildren="保留密钥" />
-                </Form.Item>
-              </Space>
-            )}
-          </Col>
-        </Row>
-
-        {/* 测试结果显示 */}
-        {testResult && (
-          <Form.Item label="测试结果">
-            <Alert
-              title={
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  {testResult.success ? (
-                    <CheckCircleOutlined
-                      style={{ color: "#52c41a", marginRight: 8 }}
-                    />
-                  ) : (
-                    <CloseCircleOutlined
-                      style={{ color: "#ff4d4f", marginRight: 8 }}
-                    />
-                  )}
-                  <span>{testResult.message || testResult.data?.message}</span>
-                </div>
-              }
-              type={testResult.success ? "success" : "error"}
-              description={
-                <div style={{ marginTop: 8 }}>
-                  {testResult.response_time && (
-                    <div>响应时间: {testResult.response_time}ms</div>
-                  )}
-                  <div
-                    style={{ marginTop: 4, fontSize: "12px", color: "var(--ws-color-text-secondary)" }}
-                  >
-                    测试时间:{" "}
-                    {new Date(
-                      testResult.timestamp || Date.now(),
-                    ).toLocaleString()}
-                  </div>
-                </div>
-              }
-              showIcon={false}
-              style={{ marginBottom: 16 }}
-            />
+              )}
+            </span>
+          } name="api_key" rules={[{ min: 8, message: "至少8位" }]} style={{ marginBottom: 16 }}>
+            <Input.Password placeholder={editingAgent?.has_api_key ? `已保存（****${editingAgent.api_key_last4 || ""})` : "请输入API密钥"} onFocus={resetTestResult} />
           </Form.Item>
-        )}
+        </div>
 
-        {testing && (
-          <Form.Item label="测试状态">
-            <div style={{ textAlign: "center", padding: "20px" }}>
-              <Spin size="large">
-                <div style={{ marginTop: "16px" }}>正在测试智能体连接...</div>
-              </Spin>
-            </div>
-          </Form.Item>
-        )}
-
-        <Form.Item label="启用状态" name="is_active" valuePropName="checked">
-          <Switch
-            checkedChildren="启用"
-            unCheckedChildren="停用"
-            onChange={resetTestResult}
-          />
+        {/* 模型选择 */}
+        <Form.Item label={fieldLabel("模型")} name="model_name" style={{ marginBottom: 16 }}
+          normalize={(v) => Array.isArray(v) ? (v[0] ?? "") : v}
+          getValueProps={(v) => ({ value: v ? [v] : [] })}
+          extra={discoveringModels ? "正在发现可用模型..." : modelDiscoveryResult?.success ? `发现 ${availableModels.length} 个模型` : modelDiscoveryResult ? `发现失败: ${modelDiscoveryResult.error_message}` : "点击「测试连接」获取可用模型"}>
+          <Select mode="tags" allowClear showSearch disabled={discoveringModels} loading={discoveringModels}
+            placeholder={discoveringModels ? "正在发现..." : availableModels.length > 0 ? "请选择模型" : "测试连接后选择"}
+            status={modelDiscoveryResult?.success === false ? "error" : undefined}
+            suffix={discoveringModels ? <LoadingOutlined spin /> : modelDiscoveryResult?.success === false ? <CloseCircleOutlined style={{ color: "#EF4444" }} /> : undefined}
+            filterOption={(input, option) => (option?.label ?? "").toLowerCase().includes(input.toLowerCase()) || (option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
+            options={availableModels.map(m => ({ value: m.id, label: m.id, description: m.description || "" }))}
+            optionRender={(option: any) => (<div><div>{option.label || option.data?.label}</div>{(option.description || option.data?.description) && <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>{option.description || option.data?.description}</div>}</div>)} />
         </Form.Item>
+
+        {/* 描述 */}
+        <Form.Item label={fieldLabel("描述")} name="description" style={{ marginBottom: 16 }}>
+          <Input.TextArea placeholder="可选" rows={2} />
+        </Form.Item>
+
+        {/* System Prompt */}
+        <Form.Item label={fieldLabel("系统提示词")} name="system_prompt" style={{ marginBottom: 16 }}>
+          <Input.TextArea placeholder="设置智能体的角色和行为约束（可选）" rows={3} maxLength={8000} showCount />
+        </Form.Item>
+
+        {/* 测试结果 */}
+        {testing && (
+          <div style={{ textAlign: "center", padding: 20 }}>
+            <Spin><div style={{ marginTop: 16 }}>正在测试连接...</div></Spin>
+          </div>
+        )}
+        {testResult && !testing && (
+          <Alert
+            type={testResult.success ? "success" : "error"} showIcon
+            message={testResult.message || testResult.data?.message}
+            description={
+              <Space direction="vertical" size={2} style={{ marginTop: 4 }}>
+                {testResult.response_time && <span>响应时间: {testResult.response_time}ms</span>}
+                {testResult.provider && <span>服务商: {testResult.provider}</span>}
+                {testResult.model_count != null && <span>可用模型: {testResult.model_count} 个</span>}
+              </Space>
+            }
+            style={{ marginBottom: 0 }}
+          />
+        )}
       </Form>
-      <Modal
-        title="验证管理员密码"
-        open={revealVisible}
-        onOk={handleRevealApiKey}
-        onCancel={() => setRevealVisible(false)}
-        okText="确认"
-        cancelText="取消"
-      >
-        <Input.Password
-          value={adminPassword}
-          onChange={(e) => setAdminPassword(e.target.value)}
-          placeholder="请输入管理员密码"
-        />
+
+      {/* 查看密钥弹窗 */}
+      <Modal title="验证管理员密码" open={revealVisible} onOk={handleRevealApiKey} onCancel={() => setRevealVisible(false)}
+        okText="确认" cancelText="取消" confirmLoading={revealLoading}>
+        <Input.Password value={adminPassword} onChange={e => setAdminPassword(e.target.value)} placeholder="请输入管理员密码" />
       </Modal>
     </Modal>
   );

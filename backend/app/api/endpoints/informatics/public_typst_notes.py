@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/public/informatics/typst-notes")
 @router.get("", response_model=List[TypstNotePublicListItem])
 async def public_list_notes(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):

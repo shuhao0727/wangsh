@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, func, cast, Integer, case, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loguru import logger
@@ -37,6 +37,27 @@ def _sha256_bytes_hex(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
+def _title_natural_order():
+    """按标题中的数字前缀自然排序，如 1.1, 1.2, ..., 1.10, 2.1"""
+    # 提取主序号（标题开头的第一个数字）
+    major = cast(
+        func.coalesce(
+            func.nullif(func.substring(TypstNote.title, r'^(\d+)'), ''),
+            '999999'
+        ),
+        Integer,
+    )
+    # 提取子序号（主序号后面 . 跟的数字）
+    minor = cast(
+        func.coalesce(
+            func.nullif(func.substring(TypstNote.title, r'^\d+\.(\d+)'), ''),
+            '0'
+        ),
+        Integer,
+    )
+    return [major, minor, TypstNote.title]
+
+
 async def list_notes(
     db: AsyncSession,
     skip: int = 0,
@@ -47,7 +68,7 @@ async def list_notes(
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(TypstNote.title.ilike(like))
-    stmt = stmt.order_by(TypstNote.updated_at.desc()).offset(skip).limit(limit)
+    stmt = stmt.order_by(*_title_natural_order()).offset(skip).limit(limit)
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
@@ -65,7 +86,7 @@ async def list_published_notes(
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(TypstNote.title.ilike(like))
-    stmt = stmt.order_by(TypstNote.updated_at.desc()).offset(skip).limit(limit)
+    stmt = stmt.order_by(*_title_natural_order()).offset(skip).limit(limit)
     res = await db.execute(stmt)
     return list(res.scalars().all())
 

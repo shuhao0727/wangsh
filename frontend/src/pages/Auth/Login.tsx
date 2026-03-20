@@ -55,16 +55,17 @@ const LoginPage: React.FC = () => {
         alignItems: "center",
         justifyContent: "center",
         padding: 24,
-        background: "linear-gradient(180deg, var(--ws-color-surface-2) 0%, var(--ws-color-surface) 260px)",
+        background: "#FFFFFF",
       }}
     >
       <Card
         style={{
           width: 420,
           borderRadius: "var(--ws-radius-lg)",
-          border: "1px solid var(--ws-color-border)",
+          border: "none",
+          background: "var(--ws-color-surface-2)",
         }}
-        styles={{ body: { padding: 24 } }}
+        styles={{ body: { padding: 32 } }}
       >
         <div style={{ marginBottom: 16 }}>
           <Title level={3} style={{ margin: 0 }}>

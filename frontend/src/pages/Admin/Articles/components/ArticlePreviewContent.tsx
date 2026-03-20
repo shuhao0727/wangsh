@@ -1,4 +1,5 @@
 import React from "react";
+import DOMPurify from "dompurify";
 import { Typography } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
@@ -43,7 +44,7 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
 
   return (
     <div className="ws-markdown" data-article-scope={scopeId} style={{ flex: 1, minHeight: 0 }}>
-      {scopedCss ? <style dangerouslySetInnerHTML={{ __html: scopedCss }} /> : null}
+      {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );

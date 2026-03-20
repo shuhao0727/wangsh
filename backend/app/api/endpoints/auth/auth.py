@@ -287,30 +287,23 @@ async def verify_token(
     token: str = Depends(get_access_token)
 ) -> Dict[str, Any]:
     """
-    验证令牌有效性 - 简化实现，始终返回有效
+    验证令牌有效性
     """
-    # 尝试解码令牌
+    if not token:
+        return {"valid": False, "reason": "未提供认证令牌"}
+
     try:
-        if token:
-            payload = jwt.decode(
-                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-            )
-            return {
-                "valid": True,
-                "user_id": payload.get("sub", "mock_user"),
-                "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat(),
-                "issued_at": datetime.fromtimestamp(payload.get("iat", 0)).isoformat(),
-            }
-    except (JWTError, Exception):
-        pass
-    
-    # 如果令牌无效或未提供，返回模拟验证结果
-    return {
-        "valid": True,
-        "user_id": "mock_user",
-        "expires_at": (datetime.now() + timedelta(days=7)).isoformat(),
-        "issued_at": datetime.now().isoformat(),
-    }
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        return {
+            "valid": True,
+            "user_id": payload.get("sub"),
+            "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat(),
+            "issued_at": datetime.fromtimestamp(payload.get("iat", 0)).isoformat(),
+        }
+    except JWTError:
+        return {"valid": False, "reason": "令牌无效或已过期"}
 
 
 @router.get("/health")

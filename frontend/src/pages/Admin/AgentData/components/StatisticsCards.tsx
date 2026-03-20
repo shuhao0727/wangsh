@@ -1,17 +1,15 @@
 /**
- * 统计卡片组件
- * 展示智能体使用数据的核心统计信息
+ * 统计卡片 — 紧凑横排，每个卡片：图标 + 标签 + 数值
  */
 
 import React from "react";
-import { Card, Row, Col, Typography } from "antd";
+import { Typography } from "antd";
 import {
   BarChartOutlined,
   UserOutlined,
   RobotOutlined,
   ClockCircleOutlined,
 } from "@ant-design/icons";
-
 import type { StatisticsData } from "@services/znt/types";
 
 const { Text } = Typography;
@@ -20,136 +18,64 @@ interface StatisticsCardsProps {
   data: StatisticsData;
 }
 
-const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
-  const { total_usage, active_students, active_agents, avg_response_time } =
-    data;
+const items = [
+  { key: "total_usage", label: "总使用量", field: "total_usage", icon: <BarChartOutlined />, color: "#0EA5E9", bg: "rgba(14, 165, 233, 0.06)" },
+  { key: "active_students", label: "活跃学生", field: "active_students", icon: <UserOutlined />, color: "#10B981", bg: "rgba(16, 185, 129, 0.06)" },
+  { key: "active_agents", label: "活跃智能体", field: "active_agents", icon: <RobotOutlined />, color: "#6366F1", bg: "rgba(99, 102, 241, 0.06)" },
+  { key: "avg_response_time", label: "平均响应", field: "avg_response_time", icon: <ClockCircleOutlined />, color: "#F59E0B", bg: "rgba(245, 158, 11, 0.06)" },
+] as const;
 
-  // 安全获取数值，如果undefined则返回0
-  const safeTotalUsage = total_usage ?? 0;
-  const safeActiveStudents = active_students ?? 0;
-  const safeActiveAgents = active_agents ?? 0;
-  const safeAvgResponseTime = avg_response_time ?? 0;
-
-  // 格式化响应时间
-  const formatResponseTime = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
-  };
-
-  const items = [
-    {
-      key: "total_usage",
-      label: "总使用量",
-      value: safeTotalUsage,
-      color: "#1890ff",
-      bg: "#e6f7ff",
-      icon: <BarChartOutlined style={{ fontSize: 14, color: "#1890ff" }} />,
-    },
-    {
-      key: "active_students",
-      label: "活跃学生",
-      value: safeActiveStudents,
-      color: "#52c41a",
-      bg: "#f6ffed",
-      icon: <UserOutlined style={{ fontSize: 14, color: "#52c41a" }} />,
-    },
-    {
-      key: "active_agents",
-      label: "活跃智能体",
-      value: safeActiveAgents,
-      color: "#722ed1",
-      bg: "#f9f0ff",
-      icon: <RobotOutlined style={{ fontSize: 14, color: "#722ed1" }} />,
-    },
-    {
-      key: "avg_response_time",
-      label: "平均响应时间",
-      value: formatResponseTime(safeAvgResponseTime),
-      color: "#fa8c16",
-      bg: "#fff7e6",
-      icon: <ClockCircleOutlined style={{ fontSize: 14, color: "#fa8c16" }} />,
-    },
-  ];
-
-  return (
-    <div className="statistics-cards" style={{ marginBottom: "24px" }}>
-      <Row gutter={[24, 24]}>
-        {items.map((item) => (
-          <Col key={item.key} xs={24} sm={12} md={8} lg={6}>
-            <Card
-              style={{
-                borderLeft: `4px solid ${item.color}`,
-                background: "#ffffff",
-                height: 40,
-                display: "flex",
-                alignItems: "center",
-              }}
-              styles={{ body: { padding: 8, width: "100%" } }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  gap: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    minWidth: 0,
-                    flex: 1,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: "50%",
-                      background: item.bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-                  <Text
-                    type="secondary"
-                    style={{
-                      fontSize: 12,
-                      lineHeight: "16px",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {item.label}
-                  </Text>
-                </div>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    lineHeight: "22px",
-                    fontWeight: 600,
-                    color: item.color,
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {item.value}
-                </Text>
-              </div>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-    </div>
-  );
+const formatValue = (field: string, value: number) => {
+  if (field === "avg_response_time") {
+    if (!value) return "-";
+    return value < 1000 ? `${value}ms` : `${(value / 1000).toFixed(1)}s`;
+  }
+  return value ?? 0;
 };
+
+const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => (
+  <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+    {items.map((item) => (
+      <div
+        key={item.key}
+        style={{
+          flex: "1 1 0",
+          minWidth: 160,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 14px",
+          background: "#FAFAFA",
+          borderRadius: 10,
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: item.bg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: item.color,
+            fontSize: 16,
+            flexShrink: 0,
+          }}
+        >
+          {item.icon}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <Text type="secondary" style={{ fontSize: 12, display: "block", lineHeight: "16px" }}>
+            {item.label}
+          </Text>
+          <Text style={{ fontSize: 18, fontWeight: 600, color: item.color, lineHeight: "24px" }}>
+            {formatValue(item.field, (data as any)[item.field])}
+          </Text>
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 export default StatisticsCards;

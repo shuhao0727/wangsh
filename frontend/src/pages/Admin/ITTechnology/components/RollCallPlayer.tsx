@@ -126,8 +126,8 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
               height: 80,
               width: 200,
               fontSize: 24,
-              backgroundColor: isRunning ? '#ff4d4f' : '#1890ff',
-              borderColor: isRunning ? '#ff4d4f' : '#1890ff',
+              backgroundColor: isRunning ? '#EF4444' : '#0EA5E9',
+              borderColor: isRunning ? '#EF4444' : '#0EA5E9',
             }}
             onClick={toggle}
             disabled={students.length === 0}

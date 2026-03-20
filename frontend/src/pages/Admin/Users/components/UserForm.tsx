@@ -11,6 +11,7 @@ import {
   statusOptions,
   studyYearOptions,
 } from "../data";
+import { logger } from "@services/logger";
 
 const { Option } = Select;
 
@@ -41,7 +42,7 @@ const UserForm: React.FC<UserFormProps> = ({
       const values = await form.validateFields();
       onSubmit(values);
     } catch (error) {
-      console.error("表单验证失败:", error);
+      logger.error("表单验证失败:", error);
     }
   };
 
@@ -54,6 +55,7 @@ const UserForm: React.FC<UserFormProps> = ({
       okText={editingUser ? "保存" : "添加"}
       cancelText="取消"
       width={600}
+      styles={{ body: { padding: 24 } }}
     >
       <Form
         form={form}

@@ -34,6 +34,7 @@ x-common-with-pythonlab-env: &common-with-pythonlab-env
   PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
   PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
   PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
+  PYTHONLAB_READINESS_TIMEOUT_SECONDS: ${PYTHONLAB_READINESS_TIMEOUT_SECONDS:-30}
   PYTHONLAB_DEFAULT_MEMORY_MB: "32"
   PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
   PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
@@ -74,6 +75,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '1.0'
 
   redis:
     image: redis:7-alpine
@@ -98,6 +100,7 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: '0.5'
 
   backend:
     platform: linux/amd64
@@ -142,6 +145,7 @@ services:
     command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
+      - uploads_data:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     extra_hosts:
@@ -150,6 +154,7 @@ services:
       resources:
         limits:
           memory: 1024M
+          cpus: '2.0'
 
   typst-worker:
     platform: linux/amd64
@@ -179,6 +184,11 @@ services:
       TYPST_PDF_STORAGE_DIR: "/app/data/typst_pdfs"
       TYPST_STORE_PDF_IN_DB: "false"
     command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "celery -A app.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - wangsh-network
     volumes:
@@ -187,6 +197,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '1.0'
 
   pythonlab-worker:
     platform: linux/amd64
@@ -213,6 +224,11 @@ services:
       PYTHONPATH: "/app"
     user: "0:0"
     command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "celery -A app.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - wangsh-network
     volumes:
@@ -222,6 +238,7 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '1.0'
 
   pythonlab-sandbox:
     platform: linux/amd64
@@ -266,10 +283,16 @@ services:
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
     networks:
       - wangsh-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 256M
+          cpus: '0.5'
 
   gateway:
     platform: linux/amd64
@@ -297,10 +320,16 @@ services:
       - backend
     networks:
       - wangsh-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 256M
+          cpus: '0.5'
 
 networks:
   wangsh-network:
@@ -313,3 +342,4 @@ volumes:
   postgres_data:
   redis_data:
   typst_pdfs:
+  uploads_data:

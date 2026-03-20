@@ -20,6 +20,11 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
     return Array.from({ length: n }, (_, i) => i + 1);
   }, [value]);
 
+  const gutterWidth = useMemo(() => {
+    const digits = String(lines.length).length;
+    return Math.max(32, digits * 8 + 20);
+  }, [lines.length]);
+
   useEffect(() => {
     const ta: HTMLTextAreaElement | null = textareaRef.current?.resizableTextArea?.textArea || null;
     if (!ta) return;
@@ -34,7 +39,7 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
 
   return (
     <div className="md-ln-wrap">
-      <div className="md-ln-gutter" ref={gutterRef}>
+      <div className="md-ln-gutter" ref={gutterRef} style={{ width: gutterWidth, flex: `0 0 ${gutterWidth}px` }}>
         {lines.map((n) => (
           <div key={n} className="md-ln">
             {n}
@@ -52,9 +57,9 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
           style={{
             height: "100%",
             resize: "none",
-            fontFamily: '"Consolas", "Monaco", "Courier New", monospace',
-            fontSize: "14px",
-            lineHeight: 1.7,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 14,
+            lineHeight: "24px",
           }}
         />
       </div>

@@ -82,6 +82,7 @@ const formatAgentResponse = (agent: AgentRaw): AIAgent => {
     created_at: str(agent.created_at),
     deleted_at: typeof agent.deleted_at === "string" ? agent.deleted_at : undefined,
     model_name: typeof agent.model_name === "string" ? agent.model_name : undefined,
+    system_prompt: typeof agent.system_prompt === "string" ? agent.system_prompt : undefined,
   };
 };
 
@@ -202,12 +203,17 @@ const aiAgentsApi = {
         description: data.description,
         agent_type: data.agent_type,
         model_name: data.model_name,
+        system_prompt: data.system_prompt,
         api_endpoint: data.api_endpoint,
         api_key: data.api_key,
         is_active: data.is_active,
       };
 
-      const response = await api.post(AI_AGENTS_BASE_PATH, requestData);
+      // 过滤掉 undefined 和空字符串的可选字段
+      const cleanData = Object.fromEntries(
+        Object.entries(requestData).filter(([_, v]) => v !== undefined && v !== "")
+      );
+      const response = await api.post(AI_AGENTS_BASE_PATH, cleanData);
       
       return {
         data: formatAgentResponse(response.data as unknown as AgentRaw),
@@ -251,7 +257,16 @@ const aiAgentsApi = {
       // FastAPI 对于 PUT /ai-agents/2 和 /ai-agents/2/ 处理方式可能不同
       // 之前的测试表明 PUT /ai-agents/2 是 OK 的，PUT /ai-agents/2/ 会 307
       
-      const response = await api.put(url, data);
+      // 过滤掉 undefined、空字符串和空数组的字段，避免后端验证失败
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => {
+          if (v === undefined || v === null) return false;
+          if (v === "") return false;
+          if (Array.isArray(v) && v.length === 0) return false;
+          return true;
+        })
+      );
+      const response = await api.put(url, cleanData);
       
       return {
         data: formatAgentResponse(response.data as unknown as AgentRaw),

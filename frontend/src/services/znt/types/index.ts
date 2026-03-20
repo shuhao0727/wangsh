@@ -8,6 +8,7 @@ export interface AIAgent {
   agent_name?: string; // 兼容旧代码
   agent_type: string;
   model_name?: string; // 模型名称
+  system_prompt?: string; // 系统提示词
   description?: string;
   api_endpoint?: string;
   api_key?: string;
@@ -33,6 +34,7 @@ export interface AgentFormValues {
   name: string;
   agent_type: AgentType;
   model_name?: string;
+  system_prompt?: string;
   description?: string;
   api_endpoint?: string;
   api_key?: string;

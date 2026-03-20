@@ -58,6 +58,8 @@ function bfsDistances(start: string, out: Map<string, string[]>, maxNodes: numbe
 }
 
 function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: FlowEdge[] }): { nodes: FlowLikeNode[]; edges: FlowEdge[] } {
+  // 直接返回，不插入 connector 汇合点 — 分支直连汇合节点即可
+  return input;
   const nodes = input.nodes.slice();
   const edges = input.edges.slice();
   const nodeById = new Map(nodes.map((n) => [n.id, n] as const));
@@ -205,7 +207,7 @@ function normalizeDecisionChainJoins(input: { nodes: FlowLikeNode[]; edges: Flow
     if (chain.length < 1) continue;
     const mergeId = findMergeForChain(chain);
     if (!mergeId) continue;
-    rewriteEdgesToJoin(chain, mergeId);
+    rewriteEdgesToJoin(chain, mergeId as string);
   }
 
   return { nodes, edges };
@@ -220,10 +222,12 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
     if (/=\s*\[[^\]]*\]\s*$/.test(t)) return "list_op";
     if (/=\s*dict\s*\(/.test(low)) return "dict_op";
     if (/=\s*list\s*\(/.test(low)) return "list_op";
-    if (/\.\s*(append|extend|insert|remove|clear|sort|reverse)\s*\(/.test(low)) return "list_op";
+    if (/\.\s*(append|extend|insert|remove|clear|sort|reverse|pop)\s*\(/.test(low)) return "list_op";
     if (/\.\s*(get|setdefault|update|keys|values|items|popitem)\s*\(/.test(low)) return "dict_op";
     if (/^[a-z_][a-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*=/.test(low)) return "dict_op";
     if (/^[a-z_][a-z0-9_]*\s*\[[^\]]+\]\s*=/.test(low)) return "list_op";
+    if (/^[a-z_][a-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*$/.test(low)) return "dict_op";
+    if (/\.\s*(split|strip|lstrip|rstrip|upper|lower|replace|join|find|rfind|startswith|endswith|format|count|index|title|capitalize|swapcase|center|ljust|rjust|zfill|encode|decode)\s*\(/.test(low)) return "str_op";
     return null;
   };
   const inferShapeByTitle = (title: string): FlowNodeShape | null => {
@@ -245,6 +249,11 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
     if (k === "function") return "start_end";
     if (k === "functionend") return "start_end";
     if (k === "moduleend") return "start_end";
+    if (k === "break" || k === "continue" || k === "return") return "jump";
+    if (k === "list_op") return "list_op";
+    if (k === "dict_op") return "dict_op";
+    if (k === "str_op") return "str_op";
+    if (k === "output" || k === "input") return "io";
     const fromTitle = inferShapeByTitle(title);
     if (fromTitle) return fromTitle;
     return "process";
@@ -298,7 +307,8 @@ export function cfgToFlow(cfg: PythonLabCfgResponse | PythonLabFlowResponse): { 
     if (e.kind === "Entry" && moduleIds.has(e.from)) continue;
     if (moduleIds.has(e.from) || moduleIds.has(e.to)) continue;
     const label = e.kind === "True" ? "是" : e.kind === "False" ? "否" : e.label;
-    edges.push({ id: e.id, from: e.from, to: e.to, style: "straight", label });
+    const isBack = e.kind === "Back";
+    edges.push({ id: e.id, from: e.from, to: e.to, style: "straight", label, fromPort: isBack ? "left" : undefined, toPort: isBack ? "left" : undefined });
   }
 
   nodes.unshift({ type: "flow_element", id: startId, shape: "start_end", title: "开始", x: 0, y: 0, sourceLine: undefined, sourceRole: undefined });

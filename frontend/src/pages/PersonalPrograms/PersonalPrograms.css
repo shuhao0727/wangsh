@@ -6,7 +6,25 @@
 
 .personal-programs-card {
   border-radius: var(--ws-radius-lg);
-  border: 1px solid var(--ws-color-border);
+  border: none;
+  background: var(--ws-color-surface-2);
+}
+
+.personal-programs-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.personal-programs-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.personal-programs-card-title {
+  font-size: var(--ws-text-md);
 }
 
 .personal-programs-loading {
@@ -14,8 +32,18 @@
   text-align: center;
 }
 
-@media (max-width: 430px) {
+@media (max-width: 768px) {
+  .personal-programs-page {
+    padding: var(--ws-space-4);
+  }
+}
+
+@media (max-width: 576px) {
   .personal-programs-page {
     padding: var(--ws-space-3);
+  }
+
+  .personal-programs-card-title {
+    font-size: var(--ws-text-sm);
   }
 }

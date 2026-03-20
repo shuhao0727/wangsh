@@ -5,6 +5,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Pagination,
   Popconfirm,
   Progress,
   Select,
@@ -17,7 +18,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
-import { AdminCard, AdminPage } from "@components/Admin";
+import { AdminCard, AdminPage, AdminTablePanel } from "@components/Admin";
 import { githubSyncApi, typstCategoriesApi, typstNotesApi } from "@services";
 import type {
   GithubSyncRun,
@@ -29,6 +30,14 @@ import type {
 
 const { Text } = Typography;
 const { Search } = Input;
+
+/** 安全提取错误信息（防止 FastAPI 422 返回对象数组导致 React 崩溃） */
+const extractErrorMsg = (e: any, fallback = "操作失败"): string => {
+  const detail = e?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((d: any) => d?.msg || JSON.stringify(d)).join("; ");
+  return e?.message || fallback;
+};
 
 const AdminInformatics: React.FC = () => {
   const [form] = Form.useForm();
@@ -67,7 +76,7 @@ const AdminInformatics: React.FC = () => {
         });
       }
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "加载 GitHub 同步配置失败");
+      message.error(extractErrorMsg(e, "加载 GitHub 同步配置失败"));
     } finally {
       setSyncLoading(false);
     }
@@ -76,7 +85,7 @@ const AdminInformatics: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await typstNotesApi.list({ limit: 200 });
+      const res = await typstNotesApi.list({ limit: 100 });
       setItems(res || []);
       try {
         const cats = await typstCategoriesApi.list();
@@ -85,7 +94,7 @@ const AdminInformatics: React.FC = () => {
         setCategories([]);
       }
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "加载 Typst 笔记失败");
+      message.error(extractErrorMsg(e, "加载 Typst 笔记失败"));
     } finally {
       setLoading(false);
     }
@@ -243,7 +252,7 @@ const AdminInformatics: React.FC = () => {
               } catch (e: any) {
                 // 回滚
                 setItems((list) => list.map((it) => (it.id === r.id ? { ...it, published: prev } : it)));
-                message.error(e?.response?.data?.detail || e?.message || "切换发布状态失败");
+                message.error(extractErrorMsg(e, "切换发布状态失败"));
               } finally {
                 setPublishingIds((s) => {
                   const next = new Set(s);
@@ -295,7 +304,7 @@ const AdminInformatics: React.FC = () => {
                 message.success("已删除");
                 await load();
               } catch (e: any) {
-                message.error(e?.response?.data?.detail || e?.message || "删除失败");
+                message.error(extractErrorMsg(e, "删除失败"));
               }
             }}
           >
@@ -308,7 +317,7 @@ const AdminInformatics: React.FC = () => {
 
   return (
     <AdminPage>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, gap: 12, flexWrap: "wrap" }}>
         <Space>
           <Select
             value={categoryFilter || undefined}
@@ -339,15 +348,30 @@ const AdminInformatics: React.FC = () => {
         </Space>
       </div>
 
-      <AdminCard styles={{ body: { padding: 0 } }}>
-        <Table
-          rowKey="id"
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <AdminTablePanel
           loading={loading}
-          columns={columns}
-          dataSource={displayedItems}
-          pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50] }}
-        />
-      </AdminCard>
+          isEmpty={displayedItems.length === 0}
+          emptyDescription="暂无笔记数据"
+          pagination={
+            <Pagination
+              pageSize={10}
+              showSizeChanger
+              pageSizeOptions={[10, 20, 50]}
+              showTotal={(total) => `共 ${total} 条`}
+              total={displayedItems.length}
+            />
+          }
+        >
+          <Table
+            rowKey="id"
+            loading={loading}
+            columns={columns}
+            dataSource={displayedItems}
+            pagination={false}
+          />
+        </AdminTablePanel>
+      </div>
 
       <Modal
         title="GitHub 同步配置"
@@ -355,7 +379,7 @@ const AdminInformatics: React.FC = () => {
         width={760}
         onCancel={() => setSyncModalOpen(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" initialValues={{ enabled: false, interval_hours: 48, delete_mode: "unpublish" }}>
           <Form.Item name="repo_url" label="GitHub 仓库地址" rules={[{ required: true, message: "请输入仓库地址" }]}>
@@ -411,7 +435,7 @@ const AdminInformatics: React.FC = () => {
                   setSyncSettings(saved);
                   message.success("配置已保存");
                 } catch (e: any) {
-                  message.error(e?.response?.data?.detail || e?.message || "保存失败");
+                  message.error(extractErrorMsg(e, "保存失败"));
                 } finally {
                   setSyncSaving(false);
                 }
@@ -435,7 +459,7 @@ const AdminInformatics: React.FC = () => {
                   });
                   message.success("连接成功");
                 } catch (e: any) {
-                  message.error(e?.response?.data?.detail || e?.message || "连接失败");
+                  message.error(extractErrorMsg(e, "连接失败"));
                 }
               }}
             >
@@ -446,6 +470,7 @@ const AdminInformatics: React.FC = () => {
               icon={<SyncOutlined />}
               onClick={async () => {
                 setSyncTriggering(true);
+                setSyncTaskStatus({ task_id: "__local__", state: "PROGRESS", ready: false, successful: false, progress_percent: 10, progress_done: 0, progress_total: 1, progress_phase: "sync", progress_current: "正在同步...", created_paths: [], updated_paths: [], deleted_paths: [], compiled_note_ids: [], compile_failed: [] });
                 try {
                   const run = await githubSyncApi.trigger(false);
                   setLastRun(run);
@@ -453,12 +478,19 @@ const AdminInformatics: React.FC = () => {
                   if (taskId) {
                     setSyncTaskId(taskId);
                     setSyncTaskStatus(null);
+                  } else {
+                    // 同步执行完成，直接显示结果
+                    setSyncTaskStatus({ task_id: "__local__", state: "SUCCESS", ready: true, successful: run.status === "success", progress_percent: 100, progress_done: 1, progress_total: 1, progress_phase: "done", progress_current: "", created_paths: [], updated_paths: [], deleted_paths: [], compiled_note_ids: [], compile_failed: [] });
+                    Modal.success({
+                      title: "同步完成",
+                      content: `新增 ${run.created_count}，更新 ${run.updated_count}，删除 ${run.deleted_count}，跳过 ${run.skipped_count}`,
+                    });
                   }
-                  message.success("已触发同步");
                   await load();
-                  await loadSync();
+                  await loadSync(false);
                 } catch (e: any) {
-                  message.error(e?.response?.data?.detail || e?.message || "触发同步失败");
+                  setSyncTaskStatus(null);
+                  message.error(extractErrorMsg(e, "触发同步失败"));
                 } finally {
                   setSyncTriggering(false);
                 }
@@ -471,6 +503,7 @@ const AdminInformatics: React.FC = () => {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 setSyncRecompileTriggering(true);
+                setSyncTaskStatus({ task_id: "__local__", state: "PROGRESS", ready: false, successful: false, progress_percent: 10, progress_done: 0, progress_total: 1, progress_phase: "recompile", progress_current: "正在重新编译...", created_paths: [], updated_paths: [], deleted_paths: [], compiled_note_ids: [], compile_failed: [] });
                 try {
                   const run = await githubSyncApi.trigger(false, true);
                   setLastRun(run);
@@ -478,11 +511,17 @@ const AdminInformatics: React.FC = () => {
                   if (taskId) {
                     setSyncTaskId(taskId);
                     setSyncTaskStatus(null);
+                  } else {
+                    setSyncTaskStatus({ task_id: "__local__", state: "SUCCESS", ready: true, successful: run.status === "success", progress_percent: 100, progress_done: 1, progress_total: 1, progress_phase: "done", progress_current: "", created_paths: [], updated_paths: [], deleted_paths: [], compiled_note_ids: [], compile_failed: [] });
+                    Modal.success({
+                      title: "重新编译完成",
+                      content: `新增 ${run.created_count}，更新 ${run.updated_count}，删除 ${run.deleted_count}，跳过 ${run.skipped_count}`,
+                    });
                   }
-                  message.success("已触发全部重新编译");
-                  await loadSync();
+                  await loadSync(false);
                 } catch (e: any) {
-                  message.error(e?.response?.data?.detail || e?.message || "触发全部重新编译失败");
+                  setSyncTaskStatus(null);
+                  message.error(extractErrorMsg(e, "触发全部重新编译失败"));
                 } finally {
                   setSyncRecompileTriggering(false);
                 }
@@ -492,7 +531,7 @@ const AdminInformatics: React.FC = () => {
             </Button>
           </Space>
 
-          <div style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 12 }}>
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 12 }}>
             <Text strong>最近同步状态</Text>
             <div style={{ marginTop: 8 }}>
               <Text type="secondary">运行状态：</Text>

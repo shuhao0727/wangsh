@@ -11,6 +11,7 @@ import {
   message,
   Switch,
   Dropdown,
+  Pagination,
 } from "antd";
 import {
   PlusOutlined,
@@ -30,7 +31,7 @@ import type {
   ArticleWithRelations,
   ArticleFilterParams,
 } from "@services";
-import { AdminCard, AdminPage } from "@components/Admin";
+import { AdminCard, AdminPage, AdminTablePanel } from "@components/Admin";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
 import "./AdminArticles.css";
@@ -483,7 +484,7 @@ const AdminArticles: React.FC = () => {
 
   return (
     <AdminPage>
-      <div className="ws-responsive-toolbar" style={{ marginBottom: 12 }}>
+      <div className="ws-responsive-toolbar" style={{ marginBottom: 16 }}>
         <Space wrap className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
           <Select
             value={categoryFilter}
@@ -531,25 +532,35 @@ const AdminArticles: React.FC = () => {
         </Space>
       </div>
 
-      <AdminCard styles={{ body: { padding: 0 } }}>
-        <Table
-          rowKey="id"
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <AdminTablePanel
           loading={loading}
-          columns={getArticleColumns(handleEdit, handleDelete, handleTogglePublish, handleView)}
-          dataSource={displayedArticles}
-          rowSelection={rowSelection}
-          scroll={{ x: 1300 }}
-          size="middle"
-          pagination={{
-            current: currentPage,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: [10, 20, 50],
-            onChange: handlePageChange,
-          }}
-        />
-      </AdminCard>
+          isEmpty={displayedArticles.length === 0}
+          emptyDescription="暂无文章数据"
+          pagination={
+            <Pagination
+              current={currentPage}
+              pageSize={pageSize}
+              total={total}
+              onChange={handlePageChange}
+              showSizeChanger
+              pageSizeOptions={[10, 20, 50]}
+              showTotal={(total) => `共 ${total} 条`}
+            />
+          }
+        >
+          <Table
+            rowKey="id"
+            loading={loading}
+            columns={getArticleColumns(handleEdit, handleDelete, handleTogglePublish, handleView)}
+            dataSource={displayedArticles}
+            rowSelection={rowSelection}
+            scroll={{ x: 1300 }}
+            size="middle"
+            pagination={false}
+          />
+        </AdminTablePanel>
+      </div>
 
       {/* 分类管理弹窗 */}
       <CategoryManageModal

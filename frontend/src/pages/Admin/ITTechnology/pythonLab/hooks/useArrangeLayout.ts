@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { logger } from "@services/logger";
 import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
 import type { IRBlock } from "../flow/ir";
 import { nodeSizeForTitle } from "../flow/ports";
@@ -139,7 +140,7 @@ export function useArrangeLayout(params: {
         setConnectFromPort(null);
 
     } catch (error) {
-        console.error("Auto layout failed:", error);
+        logger.error("Auto layout failed:", error);
         // Optional: Show toast error here
     }
 

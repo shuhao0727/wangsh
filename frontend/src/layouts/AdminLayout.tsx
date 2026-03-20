@@ -27,6 +27,8 @@ import {
   HomeOutlined,
   MonitorOutlined,
   TeamOutlined,
+  FormOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import "./AdminLayout.css";
 import useAuth from "@hooks/useAuth";
@@ -45,7 +47,7 @@ const AdminLayout: React.FC = () => {
   const { version, envLabel } = useAppMeta();
   
   // Directly use default values as we wrap with ConfigProvider in App
-  const colorBgContainer = "#ffffff";
+  const colorBgContainer = "#FFFFFF";
 
   // Manage menu items
   const adminMenuItems = [
@@ -78,6 +80,16 @@ const AdminLayout: React.FC = () => {
           key: "/admin/group-discussion",
           icon: <TeamOutlined />,
           label: "小组讨论",
+        },
+        {
+          key: "/admin/assessment",
+          icon: <FormOutlined />,
+          label: "自主检测",
+        },
+        {
+          key: "/admin/classroom-interaction",
+          icon: <ThunderboltOutlined />,
+          label: "课堂互动",
         },
       ],
     },
@@ -120,22 +132,27 @@ const AdminLayout: React.FC = () => {
     if (path === "/admin" || path === "/admin/") {
       return ["/admin/dashboard"];
     }
+    // Assessment sub-pages map to correct menu keys
+    if (path.startsWith("/admin/assessment")) {
+      return ["/admin/assessment"];
+    }
     return [path];
   };
 
   // Get current open keys (for nested menus)
   const getOpenKeys = () => {
     const path = location.pathname;
-    // If current path is agent related, open agents menu
+    const keys: string[] = [];
     if (
       path.startsWith("/admin/ai-agents") ||
       path.startsWith("/admin/users") ||
       path.startsWith("/admin/agent-data") ||
-      path.startsWith("/admin/group-discussion")
+      path.startsWith("/admin/group-discussion") ||
+      path.startsWith("/admin/assessment")
     ) {
-      return ["/admin/agents"];
+      keys.push("/admin/agents");
     }
-    return [];
+    return keys;
   };
 
   // Flatten menu items for title lookup
@@ -315,13 +332,10 @@ const AdminLayout: React.FC = () => {
         {/* Sidebar Header */}
         <div className="admin-sidebar-header" style={{ padding: "24px 16px" }}>
           <div className="admin-logo" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="admin-logo-icon" style={{ 
-              width: 32, height: 32, background: "#3498db", borderRadius: 6, 
-              color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" 
-            }}>WS</div>
+            <div className="admin-logo-icon">WS</div>
             {!collapsed && (
               <div className="admin-logo-text">
-                <Title level={5} style={{ margin: 0, color: "#2c3e50", fontSize: 16, fontWeight: 600 }}>
+                <Title level={5} style={{ margin: 0, color: "var(--ws-color-text)", fontSize: 16, fontWeight: 600 }}>
                   管理后台
                 </Title>
               </div>
@@ -336,7 +350,7 @@ const AdminLayout: React.FC = () => {
           <Avatar
             size={collapsed ? "default" : "large"}
             icon={<UserOutlined />}
-            style={{ backgroundColor: "#3498db" }}
+            style={{ backgroundColor: "var(--ws-color-primary)" }}
           />
           {!collapsed && (
             <div className="admin-user-details">
@@ -388,7 +402,7 @@ const AdminLayout: React.FC = () => {
           marginLeft: collapsed ? 80 : 240,
           transition: "margin-left 0.2s",
           minHeight: "100vh",
-          background: "#ffffff", // Ensure white background
+          background: "#FFFFFF",
         }}
       >
         {/* Header */}
@@ -446,7 +460,7 @@ const AdminLayout: React.FC = () => {
                     <Avatar
                       size="default"
                       icon={<UserOutlined />}
-                      style={{ marginRight: 8, backgroundColor: "#3498db" }}
+                      style={{ marginRight: 8, backgroundColor: "var(--ws-color-primary)" }}
                     />
                     <Text strong>{auth.user?.username || "管理员"}</Text>
                   </div>

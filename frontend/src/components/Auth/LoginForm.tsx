@@ -2,6 +2,7 @@ import React from "react";
 import { Modal, Form, Input, Button, message } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import useAuth from "@hooks/useAuth";
+import { logger } from "@services/logger";
 
 interface LoginFormProps {
   /** 是否可见 */
@@ -60,7 +61,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         message.error(result.error || "登录失败");
       }
     } catch (error) {
-      console.error("登录过程中发生错误:", error);
+      logger.error("登录过程中发生错误:", error);
       message.error("登录过程中发生错误");
     }
   };

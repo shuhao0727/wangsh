@@ -1,49 +1,16 @@
+"""阻塞式对话 — 使用 Provider 策略模式"""
+
 import asyncio
 import json
 from typing import Any, Dict, Optional
 
-import httpx
-
 from app.services.agents.ai_agent import get_agent
-from app.services.agents.providers import detect_flags, chat_completions_endpoint
+from app.services.agents.providers import get_provider, provider_error_message, extract_provider_detail, resolve_credentials, build_messages
+from app.services.agents.providers.dify_provider import DifyProvider
+from app.services.agents.providers.circuit_breaker import breaker
 from app.core.config import settings
-from app.utils.agent_secrets import try_decrypt_api_key
 
-
-def _provider_error_message(status_code: int) -> str:
-    if status_code == 401 or status_code == 403:
-        return "上游服务鉴权失败（请检查 API Key 是否正确、是否有权限访问该模型）"
-    if status_code == 404:
-        return "上游服务接口或模型不存在（请检查 API Endpoint 与模型名）"
-    if status_code == 429:
-        return "上游服务返回 429（限流/额度不足）。请稍后重试，或更换 API Key/提升额度"
-    if status_code == 402:
-        return "上游服务余额不足或需要付费（请检查账号额度/账单）"
-    if 500 <= status_code <= 599:
-        return "上游服务异常（5xx）。请稍后重试"
-    return "上游服务请求失败"
-
-
-def _extract_provider_detail(body_text: str) -> str:
-    t = (body_text or "").strip()
-    if not t:
-        return ""
-    try:
-        data = json.loads(t)
-        if isinstance(data, dict):
-            err = data.get("error")
-            if isinstance(err, dict):
-                msg = err.get("message") or err.get("error") or err.get("type")
-                if msg:
-                    return str(msg)[:500]
-            if isinstance(err, str) and err.strip():
-                return err.strip()[:500]
-            msg = data.get("message")
-            if isinstance(msg, str) and msg.strip():
-                return msg.strip()[:500]
-    except Exception:
-        pass
-    return t[:500]
+import httpx
 
 
 async def run_agent_chat_blocking(
@@ -53,92 +20,47 @@ async def run_agent_chat_blocking(
     message: str,
     user: Optional[str] = None,
     inputs: Optional[Dict[str, Any]] = None,
+    history: Optional[list] = None,
 ) -> str:
     agent = await get_agent(db, agent_id)
     if not agent:
         raise ValueError("invalid_agent")
 
-    api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
-    api_key = try_decrypt_api_key(getattr(agent, "api_key_encrypted", None)) or getattr(agent, "api_key", None)
-    if agent.agent_type != "dify":
-        if not api_endpoint:
-            api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
-        if not api_key:
-            api_key = settings.OPENROUTER_API_KEY
+    api_endpoint, api_key = resolve_credentials(agent)
+
+    # Debug stub 模式
     allow_stub = bool(settings.DEBUG) or str(getattr(settings, "REACT_APP_ENV", "") or "").lower() not in {
-        "production",
-        "prod",
+        "production", "prod",
     }
     if allow_stub and (
         not api_endpoint or not api_key or (agent.agent_type != "dify" and not agent.model_name)
     ):
         msg = (message or "").strip()
         return f"debug_stub: {msg[:800]}"
+
     if not api_endpoint or not api_key:
         raise ValueError("invalid_agent")
-    is_dify = agent.agent_type == "dify"
-    flags = detect_flags(api_endpoint)
-    is_anthropic = flags.get("is_anthropic", False)
 
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        if is_dify:
-            headers["Authorization"] = f"Bearer {api_key}"
-        elif is_anthropic:
-            headers["x-api-key"] = api_key
-        else:
-            headers["Authorization"] = f"Bearer {api_key}"
+    provider = get_provider(agent.agent_type, api_endpoint, api_key)
+    provider_name = type(provider).__name__
+    chat_messages = build_messages(agent, message, history)
+    model = agent.model_name or ""
 
-    if is_dify:
-        candidates = []
-        base = api_endpoint
-        if "/chat/" in base:
-            candidates.append(base)
-        else:
-            if base.endswith("/v1"):
-                candidates.extend([f"{base}/chat-messages"])
-            else:
-                candidates.extend([f"{base}/v1/chat-messages", f"{base}/chat-messages"])
+    # 熔断检查
+    if breaker.is_open(provider_name):
+        raise ValueError("circuit_open: 该服务暂时不可用（连续失败过多），请稍后重试")
 
-        payload = {
-            "query": message,
-            "user": user or "discussion_user",
-            "response_mode": "blocking",
-            "inputs": inputs or {},
-        }
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            last_err = None
-            for url in candidates:
-                try:
-                    resp = await client.post(url, headers=headers, json=payload)
-                    if resp.status_code != 200:
-                        last_err = f"status_{resp.status_code}"
-                        continue
-                    data = resp.json()
-                    if isinstance(data, dict):
-                        if isinstance(data.get("answer"), str) and data["answer"].strip():
-                            return data["answer"].strip()
-                        nested = data.get("data")
-                        if isinstance(nested, dict) and isinstance(nested.get("answer"), str) and nested["answer"].strip():
-                            return nested["answer"].strip()
-                        if isinstance(data.get("message"), str) and data["message"].strip():
-                            return data["message"].strip()
-                    return json.dumps(data, ensure_ascii=False)[:4000]
-                except Exception as e:
-                    last_err = str(e)
-                    continue
-        raise ValueError(last_err or "dify_failed")
+    # Dify 阻塞式
+    if isinstance(provider, DifyProvider):
+        return await _blocking_dify(provider, chat_messages, model, user, inputs)
 
-    if not agent.model_name:
+    # 非 Dify
+    if not model:
         raise ValueError("model_not_configured")
 
-    chat_url = chat_completions_endpoint(api_endpoint, flags)
-
-    payload = {
-        "model": agent.model_name,
-        "messages": [{"role": "user", "content": message}],
-        "stream": False,
-    }
+    headers = provider.build_headers()
+    payload = provider.build_blocking_payload(chat_messages, model)
+    chat_url = provider.chat_url()
 
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
         resp = None
@@ -147,27 +69,42 @@ async def run_agent_chat_blocking(
             if resp.status_code == 200:
                 break
             if resp.status_code in (429, 502, 503, 504) and attempt < 2:
-                await asyncio.sleep(1.5 * (2**attempt))
+                await asyncio.sleep(1.5 * (2 ** attempt))
                 continue
             break
 
         if not resp or resp.status_code != 200:
+            breaker.record_failure(provider_name)
             status_code = int(resp.status_code) if resp else 0
-            msg = _provider_error_message(status_code)
-            detail = _extract_provider_detail(resp.text if resp else "")
+            msg = provider_error_message(status_code)
+            detail = extract_provider_detail(resp.text if resp else "")
             suffix = f" - {detail}" if detail else ""
             raise ValueError(f"provider_status_{status_code}: {msg}{suffix}")
-        data = resp.json()
-        try:
-            choices = data.get("choices") or []
-            if choices:
-                msg = choices[0].get("message") or {}
-                content = msg.get("content")
-                if isinstance(content, str) and content.strip():
-                    return content.strip()
-                text = choices[0].get("text")
-                if isinstance(text, str) and text.strip():
-                    return text.strip()
-        except Exception:
-            pass
-        return json.dumps(data, ensure_ascii=False)[:4000]
+
+        breaker.record_success(provider_name)
+        return provider.parse_blocking_response(resp.json())
+
+
+async def _blocking_dify(provider: DifyProvider, messages, model, user, inputs) -> str:
+    """Dify 阻塞式：多候选 URL"""
+    headers = provider.build_headers()
+    payload = provider.build_blocking_payload(messages, model)
+    if user:
+        payload["user"] = user
+    if inputs:
+        payload["inputs"] = inputs
+
+    candidates = provider.candidate_urls()
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        last_err = None
+        for url in candidates:
+            try:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code != 200:
+                    last_err = f"status_{resp.status_code}"
+                    continue
+                return provider.parse_blocking_response(resp.json())
+            except Exception as e:
+                last_err = str(e)
+                continue
+    raise ValueError(last_err or "dify_failed")

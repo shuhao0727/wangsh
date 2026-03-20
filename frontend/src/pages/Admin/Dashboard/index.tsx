@@ -52,10 +52,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <AdminPage>
       <div className="admin-dashboard-header">
-        <Space orientation="vertical" size={0}>
-          <Title level={4} style={{ margin: 0 }}>状态概览</Title>
-          <Text type="secondary" style={{ fontSize: 12 }}>实时监控系统运行状态与核心指标</Text>
-        </Space>
+        <Text type="secondary" style={{ fontSize: 13 }}>实时监控系统运行状态与核心指标</Text>
         <Button type="text" icon={<SyncOutlined spin={loading} />} onClick={loadAll}>
           刷新
         </Button>

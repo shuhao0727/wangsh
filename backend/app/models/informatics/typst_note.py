@@ -19,7 +19,7 @@ class TypstNote(Base):
     toc = Column(JSONB, nullable=False, default=list)
     content_typst = Column(Text, nullable=False, default="")
 
-    created_by_id = Column(Integer, ForeignKey("sys_users.id"), nullable=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     compiled_hash = Column(String(64), nullable=True)
     compiled_pdf = Column(LargeBinary, nullable=True)

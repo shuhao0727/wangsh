@@ -93,14 +93,14 @@ export const getAgentColumns = (
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#1890ff',
+          color: '#0EA5E9',
           fontSize: 18,
           flexShrink: 0
         }}>
           {record.agent_type === 'dify' ? <CloudOutlined /> : <ThunderboltOutlined />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: '#2c3e50', marginBottom: 2 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ws-color-text)', marginBottom: 2 }}>
             {agentName || record.name}
           </div>
           {record.model_name && (
@@ -208,7 +208,7 @@ export const getAgentColumns = (
           <Button
             type="text"
             size="small"
-            icon={<ThunderboltOutlined style={{ color: '#fa8c16' }} />}
+            icon={<ThunderboltOutlined style={{ color: '#F59E0B' }} />}
             onClick={() => handleTestAgent(record.id, record.name)}
           />
         </Tooltip>

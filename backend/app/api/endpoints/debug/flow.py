@@ -179,7 +179,7 @@ def _teaching_condition_title(prefix: str, expr: Optional[str], fallback_expr: s
     cond = str(expr or "").strip()
     if not cond or cond.lower() == "cond":
         cond = fallback_expr
-    return f"{prefix}：{cond} 是否成立？"
+    return f"{cond}?"
 
 
 def _teaching_action_title(kind: str, text: Optional[str]) -> str:
@@ -225,17 +225,6 @@ def _expr_complexity_score(expr: Optional[str]) -> int:
         score += 1
     return score
 
-
-def _for_range_requires_split(stmt: IRForRange) -> bool:
-    score = 1
-    score += _expr_complexity_score(stmt.stop)
-    if str(stmt.start).strip() != "0":
-        score += 1
-    if str(stmt.step).strip() != "1":
-        score += 1
-    if len(stmt.body.stmts) > 1:
-        score += 1
-    return score >= COMPLEX_SPLIT_THRESHOLD
 
 
 def _for_each_requires_split(stmt: IRForEach) -> bool:
@@ -299,7 +288,7 @@ def _mark_synthetic(ctx: "_BuildCtx", nid: Optional[str]) -> None:
         return
     for n in ctx.nodes:
         if n.get("id") == nid:
-            n.pop("range", None)
+            n["synthetic"] = True
             n.pop("fullTitle", None)
             return
 
@@ -451,7 +440,12 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
                 kind = "dict_op"
             elif method_name == "pop":
                 # ambiguous, default to list_op for now or generic process
-                kind = "list_op" 
+                kind = "list_op"
+            elif method_name in {"split", "strip", "lstrip", "rstrip", "upper", "lower",
+                                  "replace", "join", "find", "rfind", "startswith", "endswith",
+                                  "format", "count", "index", "title", "capitalize", "swapcase",
+                                  "center", "ljust", "rjust", "zfill", "encode", "decode"}:
+                kind = "str_op"
 
         # Check for print() -> Output (Re-apply existing logic with kind override check)
         if isinstance(stmt.node, ast.Expr) and isinstance(stmt.node.value, ast.Call):
@@ -460,7 +454,7 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
                 kind = "Output"
             elif isinstance(call.func, ast.Name) and call.func.id == "input":
                 kind = "Input"
-            elif isinstance(call.func, ast.Name) and kind not in ("list_op", "dict_op"):
+            elif isinstance(call.func, ast.Name) and kind not in ("list_op", "dict_op", "str_op"):
                 kind = "Subprocess"
         
         if isinstance(stmt.node, ast.Assign) and isinstance(stmt.node.value, ast.Call):
@@ -495,7 +489,7 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
         return nid, []
 
     if isinstance(stmt, IRIf):
-        head_id = ctx.add_node(_make_node(ctx.code, "If", stmt.node, parent_id, title=_teaching_condition_title("分支判断", stmt.cond, "条件表达式")))
+        head_id = ctx.add_node(_make_node(ctx.code, "If", stmt.node, parent_id, title=_teaching_condition_title("判断", stmt.cond, "条件表达式")))
         if not head_id:
             return None, []
         then_entry, then_pend = _lower_block(ctx, stmt.then_block, parent_id, loop_header_stack)
@@ -506,7 +500,7 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
 
         cur_false_from = head_id
         for (cond, blk, elif_node) in stmt.elifs:
-            elif_id = ctx.add_node(_make_node(ctx.code, "Elif", elif_node, parent_id, title=_teaching_condition_title("否则如果", cond, "条件表达式")))
+            elif_id = ctx.add_node(_make_node(ctx.code, "Elif", elif_node, parent_id, title=_teaching_condition_title("否则判断", cond, "条件表达式")))
             if not elif_id:
                 break
             ctx.add_edge(make_edge("False", cur_false_from, elif_id, "否"))
@@ -531,7 +525,7 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
         return head_id, pend
 
     if isinstance(stmt, IRWhile):
-        loop_id = ctx.add_node(_make_node(ctx.code, "While", stmt.node, parent_id, title=_teaching_condition_title("循环判断", stmt.cond, "循环条件")))
+        loop_id = ctx.add_node(_make_node(ctx.code, "While", stmt.node, parent_id, title=_teaching_condition_title("循环", stmt.cond, "循环条件")))
         if not loop_id:
             return None, []
         loop_header_stack.append(loop_id)
@@ -557,114 +551,70 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
             iter_expr = f"range({stmt.start}, {stmt.stop})"
         else:
             iter_expr = f"range({stmt.start}, {stmt.stop}, {stmt.step})"
-        if not _for_range_requires_split(stmt):
-            loop_id = ctx.add_node(_make_node(ctx.code, "For", stmt.node, parent_id, title=f"for {stmt.var} in {iter_expr}"))
-            if not loop_id:
-                return None, []
-            loop_header_stack.append(loop_id)
-            body_entry, body_pend = _lower_block(ctx, stmt.body, parent_id, loop_header_stack)
-            loop_header_stack.pop()
-            if body_entry:
-                ctx.add_edge(make_edge("True", loop_id, body_entry, "是"))
-            pend_map = _split_pend(body_pend)
-            for (from_id, _k, _label) in (pend_map.get("Next") or []):
-                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
-            for (from_id, _k, _label) in (pend_map.get("Continue") or []):
-                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
-            out: List[Tuple[str, str, Optional[str]]] = []
-            for (from_id, _k, _label) in (pend_map.get("Break") or []):
-                out.append(_pend(from_id, "Next", "跳出"))
-            for (from_id, _k, _label) in (pend_map.get("Return") or []):
-                out.append(_pend(from_id, "Return", None))
-            out.append(_pend(loop_id, "False", None))
-            return loop_id, out
-        seq_var = "seq"
-        iter_var = "it"
-        seq_id = ctx.add_node(
-            _make_node(
-                ctx.code,
-                "ForInit",
-                stmt.node,
-                parent_id,
-                title=f"{seq_var} = list({iter_expr})",
-            )
-        )
+        # 区间风格：所有 range 都拆分为 初始化 → 条件(区间) → 循环体 → 递增
+        step_text = str(stmt.step).strip()
+        step_num = int(step_text) if step_text.lstrip("-").isdigit() else None
+        is_neg = step_num is not None and step_num < 0
+        step_annotation = "" if step_text in ("1", "-1") else f", 步长={step_text}"
+        init_title = f"{stmt.var} = {stmt.start}"
+        if is_neg:
+            cond_title = f"{stmt.var} ∈ ({stmt.stop}, {stmt.start}]{step_annotation}?"
+        else:
+            cond_title = f"{stmt.var} ∈ [{stmt.start}, {stmt.stop}){step_annotation}?"
+        if step_text == "1":
+            inc_title = f"{stmt.var} += 1"
+        elif step_text == "-1":
+            inc_title = f"{stmt.var} -= 1"
+        elif step_num is not None and step_num < 0:
+            inc_title = f"{stmt.var} -= {abs(step_num)}"
+        else:
+            inc_title = f"{stmt.var} += {step_text}"
         init_id = ctx.add_node(
-            _make_node(
-                ctx.code,
-                "ForInit",
-                stmt.node,
-                parent_id,
-                title=f"{iter_var} = iter({seq_var})",
-            )
+            _make_node(ctx.code, "ForInit", stmt.node, parent_id, title=init_title)
         )
-        cond_title = f"has_next({iter_var})?"
         loop_id = ctx.add_node(_make_node(ctx.code, "For", stmt.node, parent_id, title=cond_title))
-        step_id = ctx.add_node(_make_node(ctx.code, "ForStep", stmt.node, parent_id, title=f"{stmt.var} = next({iter_var})"))
-        _mark_synthetic(ctx, seq_id)
         _mark_synthetic(ctx, init_id)
-        _mark_synthetic(ctx, step_id)
         if not loop_id:
             return None, []
-        if seq_id and init_id:
-            ctx.add_edge(make_edge("Next", seq_id, init_id))
         if init_id:
             ctx.add_edge(make_edge("Next", init_id, loop_id))
         loop_header_stack.append(loop_id)
         body_entry, body_pend = _lower_block(ctx, stmt.body, parent_id, loop_header_stack)
         loop_header_stack.pop()
-        if step_id:
-            ctx.add_edge(make_edge("True", loop_id, step_id, "是"))
-            if body_entry:
-                ctx.add_edge(make_edge("Next", step_id, body_entry))
-        elif body_entry:
+        inc_id = ctx.add_node(
+            _make_node(ctx.code, "ForStep", stmt.node, parent_id, title=inc_title)
+        )
+        _mark_synthetic(ctx, inc_id)
+        if body_entry:
             ctx.add_edge(make_edge("True", loop_id, body_entry, "是"))
         pend_map = _split_pend(body_pend)
         for (from_id, _k, _label) in (pend_map.get("Next") or []):
-            ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
+            if inc_id:
+                ctx.add_edge(make_edge("Next", from_id, inc_id))
+            else:
+                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
         for (from_id, _k, _label) in (pend_map.get("Continue") or []):
-            ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
+            if inc_id:
+                ctx.add_edge(make_edge("Next", from_id, inc_id))
+            else:
+                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
+        if inc_id:
+            ctx.add_edge(make_edge("Back", inc_id, loop_id, "回边"))
         out: List[Tuple[str, str, Optional[str]]] = []
         for (from_id, _k, _label) in (pend_map.get("Break") or []):
             out.append(_pend(from_id, "Next", "跳出"))
         for (from_id, _k, _label) in (pend_map.get("Return") or []):
             out.append(_pend(from_id, "Return", None))
         out.append(_pend(loop_id, "False", None))
-        return (seq_id or init_id or loop_id), out
+        return (init_id or loop_id), out
 
     if isinstance(stmt, IRForEach):
-        if not _for_each_requires_split(stmt):
-            loop_id = ctx.add_node(_make_node(ctx.code, "ForEach", stmt.node, parent_id, title=f"for {stmt.var} in {stmt.iter_expr}"))
-            if not loop_id:
-                return None, []
-            loop_header_stack.append(loop_id)
-            body_entry, body_pend = _lower_block(ctx, stmt.body, parent_id, loop_header_stack)
-            loop_header_stack.pop()
-            if body_entry:
-                ctx.add_edge(make_edge("True", loop_id, body_entry, "是"))
-            pend_map = _split_pend(body_pend)
-            for (from_id, _k, _label) in (pend_map.get("Next") or []):
-                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
-            for (from_id, _k, _label) in (pend_map.get("Continue") or []):
-                ctx.add_edge(make_edge("Back", from_id, loop_id, "回边"))
-            out: List[Tuple[str, str, Optional[str]]] = []
-            for (from_id, _k, _label) in (pend_map.get("Break") or []):
-                out.append(_pend(from_id, "Next", "跳出"))
-            for (from_id, _k, _label) in (pend_map.get("Return") or []):
-                out.append(_pend(from_id, "Return", None))
-            out.append(_pend(loop_id, "False", None))
-            return loop_id, out
-        iter_var = "it"
-        init_id = ctx.add_node(_make_node(ctx.code, "ForEachInit", stmt.node, parent_id, title=f"{iter_var} = iter({stmt.iter_expr})"))
-        cond_title = f"has_next({iter_var})?"
+        cond_title = f"{stmt.iter_expr} 未遍历完?"
         loop_id = ctx.add_node(_make_node(ctx.code, "ForEach", stmt.node, parent_id, title=cond_title))
-        next_id = ctx.add_node(_make_node(ctx.code, "ForEachNext", stmt.node, parent_id, title=f"{stmt.var} = next({iter_var})"))
-        _mark_synthetic(ctx, init_id)
+        next_id = ctx.add_node(_make_node(ctx.code, "ForEachNext", stmt.node, parent_id, title=f"{stmt.var} = 当前元素"))
         _mark_synthetic(ctx, next_id)
         if not loop_id:
             return None, []
-        if init_id:
-            ctx.add_edge(make_edge("Next", init_id, loop_id))
         if next_id:
             ctx.add_edge(make_edge("True", loop_id, next_id, "是"))
         loop_header_stack.append(loop_id)
@@ -683,7 +633,7 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
         for (from_id, _k, _label) in (pend_map.get("Return") or []):
             out.append(_pend(from_id, "Return", None))
         out.append(_pend(loop_id, "False", None))
-        return (init_id or loop_id), out
+        return loop_id, out
 
     if isinstance(stmt, IRTry):
         head_id = ctx.add_node(_make_node(ctx.code, "Try", stmt.node, parent_id, title="尝试执行"))

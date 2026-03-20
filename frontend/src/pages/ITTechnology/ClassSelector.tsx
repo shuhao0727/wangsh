@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Spin, Empty, Typography, Skeleton } from 'antd';
 import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
+import { logger } from '@/services/logger';
 import { TeamOutlined } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
@@ -20,7 +21,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
         const res = await dianmingApi.listClasses();
         setClasses(res);
       } catch (error) {
-        console.error(error);
+        logger.error(error);
       } finally {
         setLoading(false);
       }

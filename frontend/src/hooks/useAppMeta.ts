@@ -17,8 +17,14 @@ const normalizeVersion = (v?: string | null): string => {
   return s;
 };
 
+const asOptionalString = (v: unknown): string | undefined => {
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  return undefined;
+};
+
 const readEnvLabel = (): string => {
-  const envStr = String((config as Record<string, unknown>)?.env || "").trim();
+  const envStr = String((config as unknown as { env?: string })?.env || "").trim();
   if (!envStr) return "本地开发";
   if (envStr === "development") return "本地开发";
   if (envStr === "production") return "生产环境";
@@ -37,11 +43,11 @@ const fetchMeta = async (): Promise<AppMeta> => {
   // 尝试 1)：system/overview
   try {
     const resp = await api.get<Record<string, unknown>>("/system/overview");
-    const data = resp?.data as Record<string, unknown> | undefined;
+    const data = resp?.data as unknown as Record<string, unknown> | undefined;
     // 兼容返回结构：可能是 { data: {...} } 或直接 {...}
     const nested = data?.data as Record<string, unknown> | undefined;
     const ver = data?.version || nested?.version;
-    version = normalizeVersion(ver);
+    version = normalizeVersion(asOptionalString(ver));
     if (version !== "–") {
       logger.debug?.("AppMeta: overview.version 命中", { version });
     }
@@ -64,10 +70,10 @@ const fetchMeta = async (): Promise<AppMeta> => {
   if (!version || version === "–") {
     try {
       const resp = await api.get<Record<string, unknown>>("/system/settings");
-      const data = resp?.data as Record<string, unknown> | undefined;
+      const data = resp?.data as unknown as Record<string, unknown> | undefined;
       const project = data?.project as Record<string, unknown> | undefined;
       const ver = project?.version || data?.VERSION;
-      version = normalizeVersion(ver);
+      version = normalizeVersion(asOptionalString(ver));
       if (version !== "–") {
         logger.debug?.("AppMeta: settings.VERSION 命中", { version });
       }

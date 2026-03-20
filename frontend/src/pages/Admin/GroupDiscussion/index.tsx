@@ -4,7 +4,7 @@ import { AdminPage } from "@components/Admin";
 
 const AdminGroupDiscussionPage: React.FC = () => {
   return (
-    <AdminPage>
+    <AdminPage scrollable={false}>
       <GroupDiscussionAdminTab />
     </AdminPage>
   );

@@ -135,7 +135,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                 rx={12}
                 ry={12}
                 fill={bgColor}
-                stroke="#d9d9d9"
+                stroke="rgba(0, 0, 0, 0.08)"
                 strokeWidth={2}
                 strokeDasharray={dashed ? "6 4" : undefined}
                 style={{ filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }}
@@ -182,7 +182,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                              width: "100%",
                              height: "100%",
                              border: "none",
-                             outline: "2px solid #1677ff",
+                             outline: "2px solid #0EA5E9",
                              borderRadius: "12px",
                              background: bgColor,
                              resize: "none",
@@ -230,7 +230,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                                 width={8}
                                 height={8}
                                 fill="#fff"
-                                stroke="#1677ff"
+                                stroke="#0EA5E9"
                                 style={{ cursor }}
                                 onPointerDown={(e) => onResizeStart?.(e, n.id, handle)}
                             />
@@ -300,7 +300,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                                          cx={end.x}
                                          cy={end.y}
                                          r={6}
-                                         fill="#1677ff"
+                                         fill="#0EA5E9"
                                          style={{ cursor: "move" }}
                                          onPointerDown={(e) => onArrowTargetDragStart?.(e, n.id)}
                                      />

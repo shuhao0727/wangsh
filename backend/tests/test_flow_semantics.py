@@ -104,10 +104,9 @@ def test_fib_for_has_false_and_end():
     exit_edges = js.get("exitEdges") or []
     assert any(e.get("kind") == "False" for e in exit_edges)
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert "seq = list(range(0, n))" in titles
-    assert "it = iter(seq)" in titles
-    assert "i = next(it)" in titles
-    assert "has_next(it)?" in titles
+    assert "i = 0" in titles
+    assert "i ∈ [0, n)?" in titles
+    assert "i += 1" in titles
 
 
 def test_break_continue_has_false_and_end():
@@ -180,14 +179,15 @@ def test_for_range_variants_use_consistent_three_stage_titles():
     js = _parse(code)
     assert js.get("diagnostics") == []
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert "for i in range(0, n)" in titles
-    assert "seq = list(range(1, n))" in titles
-    assert "seq = list(range(1, n, 2))" in titles
-    assert "it = iter(seq)" in titles
-    assert "j = next(it)" in titles
-    assert "k = next(it)" in titles
-    assert "has_next(it)?" in titles
-    assert "seq = list(range(0, n))" not in titles
+    assert "i = 0" in titles
+    assert "i ∈ [0, n)?" in titles
+    assert "i += 1" in titles
+    assert "j = 1" in titles
+    assert "j ∈ [1, n)?" in titles
+    assert "j += 1" in titles
+    assert "k = 1" in titles
+    assert "k ∈ [1, n), 步长=2?" in titles
+    assert "k += 2" in titles
 
 
 def test_if_and_while_titles_are_teaching_oriented():
@@ -201,8 +201,8 @@ def test_if_and_while_titles_are_teaching_oriented():
     ).strip()
     js = _parse(code)
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert "分支判断：x > 0 是否成立？" in titles
-    assert "循环判断：x < 3 是否成立？" in titles
+    assert "x > 0?" in titles
+    assert "x < 3?" in titles
 
 
 def test_key_action_titles_are_expression_first():
@@ -234,10 +234,10 @@ def test_for_each_split_threshold_prefers_simple_title():
     ).strip()
     js = _parse(code)
     titles = [n.get("title") for n in js.get("nodes", [])]
-    assert "for ch in s" in titles
-    assert "it = iter(sorted(values))" in titles
-    assert "has_next(it)?" in titles
-    assert "v = next(it)" in titles
+    assert "s 未遍历完?" in titles
+    assert "ch = 当前元素" in titles
+    assert "sorted(values) 未遍历完?" in titles
+    assert "v = 当前元素" in titles
 
 
 def test_syntax_error_returns_stable_fallback_graph():

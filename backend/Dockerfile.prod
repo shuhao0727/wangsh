@@ -78,7 +78,9 @@ CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --worker
 
 FROM runtime_base AS pythonlab_worker_runtime
 
-USER root
+# pythonlab worker 需要访问 Docker socket，使用 appuser 并加入 docker 组
+RUN groupadd -f docker && usermod -aG docker appuser
+USER appuser
 
 FROM runtime_base AS typst_worker_runtime
 

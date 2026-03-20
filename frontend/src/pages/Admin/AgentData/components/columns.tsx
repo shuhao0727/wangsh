@@ -159,7 +159,7 @@ export const getAgentDataColumns = (
     render: (question: string) => (
       <Tooltip title={question}>
         <div style={{ lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-          <MessageOutlined style={{ marginRight: 4, color: "#52c41a" }} />
+          <MessageOutlined style={{ marginRight: 4, color: "#10B981" }} />
           {question}
         </div>
       </Tooltip>
@@ -185,7 +185,7 @@ export const getAgentDataColumns = (
     width: 120,
     render: (responseTime?: number) => (
       <div style={{ display: "flex", alignItems: "center" }}>
-        <ClockCircleOutlined style={{ marginRight: 4, color: "#fa8c16" }} />
+        <ClockCircleOutlined style={{ marginRight: 4, color: "#F59E0B" }} />
         {formatResponseTime(responseTime)}
       </div>
     ),
@@ -199,7 +199,7 @@ export const getAgentDataColumns = (
     width: 150,
     render: (date: string) => (
       <div style={{ display: "flex", alignItems: "center" }}>
-        <CalendarOutlined style={{ marginRight: 4, color: "#1890ff" }} />
+        <CalendarOutlined style={{ marginRight: 4, color: "#0EA5E9" }} />
         {dayjs(date).format("MM-DD HH:mm")}
       </div>
     ),

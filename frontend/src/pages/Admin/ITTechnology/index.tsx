@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Typography, Row, Col, Button, message, Breadcrumb } from "antd";
-import { 
-  ExperimentOutlined, 
-  FormOutlined, 
-  NodeIndexOutlined, 
+import { Row, Col, Button, message } from "antd";
+import {
+  ExperimentOutlined,
+  FormOutlined,
+  NodeIndexOutlined,
   CodeOutlined,
-  SettingOutlined, 
-  HomeOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
 import AgentConfigModal from "./components/AgentConfigModal";
 import { featureFlagsApi } from "@/services/system/featureFlags";
-
-const { Title } = Typography;
+import { logger } from "@services/logger";
 
 type ViewState = 'dashboard' | 'dianming-manager';
 
@@ -68,7 +66,7 @@ const AdminITTechnology: React.FC = () => {
       });
       setFlags(newFlags);
     } catch (error) {
-      console.error("Failed to fetch feature flags", error);
+      logger.error("Failed to fetch feature flags", error);
     }
   };
 
@@ -94,29 +92,22 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'dianming-manager') {
     return (
-      <AdminPage padding={16}>
-        <Breadcrumb style={{ marginBottom: 16 }}>
-          <Breadcrumb.Item>
-            <Button type="link" onClick={() => setView('dashboard')} style={{ padding: 0 }}>
-              <HomeOutlined /> IT应用管理
-            </Button>
-          </Breadcrumb.Item>
-          <Breadcrumb.Item>随机点名管理</Breadcrumb.Item>
-        </Breadcrumb>
-        <DianmingManager />
+      <AdminPage padding={24} scrollable={false}>
+        <div style={{ marginBottom: 16, flexShrink: 0 }}>
+          <Button type="link" onClick={() => setView('dashboard')} style={{ padding: 0, color: 'var(--ws-color-text-secondary)' }}>
+            ← 返回 IT 应用管理
+          </Button>
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <DianmingManager />
+        </div>
       </AdminPage>
     );
   }
 
   return (
-    <AdminPage padding={16}>
-      <div style={{ marginBottom: 12 }}>
-        <Title level={4} style={{ margin: 0, color: "#2c3e50" }}>
-          IT 应用管理
-        </Title>
-      </div>
-
-      <Row gutter={[24, 24]}>
+    <AdminPage padding={24}>
+      <Row gutter={[16, 16]}>
         {appConfigs.map(app => (
           <Col xs={24} sm={12} md={8} lg={6} key={app.key}>
             <AdminAppCard

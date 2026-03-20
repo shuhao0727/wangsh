@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { Button, Space, Typography } from "antd";
 import { ExpandOutlined } from "@ant-design/icons";
 import type { FlowBeautifyResult } from "../../flow/beautify";
@@ -69,7 +70,7 @@ export function PipelineTab(props: {
           </div>
         ) : beautifyResult ? (
           <div style={{ border: "1px solid var(--ws-color-border-secondary)", borderRadius: 8, padding: 8, background: "var(--ws-color-surface)", overflow: "auto", maxHeight: 540 }}>
-            <div dangerouslySetInnerHTML={{ __html: beautifyResult.svg }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(beautifyResult.svg, { USE_PROFILES: { svg: true }, ADD_TAGS: ["use"] }) }} />
           </div>
         ) : (
           <Text type="secondary">暂无 Graphviz 数据（请先在画布上构建流程）</Text>
@@ -132,7 +133,7 @@ export function PipelineTab(props: {
             }}
           >
             {beautifyResult ? (
-              <div style={{ transform: `scale(${viewerScale})`, transformOrigin: "0 0" }} dangerouslySetInnerHTML={{ __html: beautifyResult.svg }} />
+              <div style={{ transform: `scale(${viewerScale})`, transformOrigin: "0 0" }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(beautifyResult.svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_TAGS: ["use"] }) }} />
             ) : (
               <Text type="secondary">暂无 Graphviz 数据（请先在画布上构建流程）</Text>
             )}

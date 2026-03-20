@@ -60,7 +60,7 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
     <Card
       title={
         <Space size={8}>
-          <EditOutlined style={{ color: "#fa541c" }} />
+          <EditOutlined style={{ color: "#0EA5E9" }} />
           <span style={{ color: "var(--ws-color-text)", fontWeight: 600 }}>编辑</span>
         </Space>
       }

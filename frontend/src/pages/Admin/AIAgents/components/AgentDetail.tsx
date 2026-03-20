@@ -68,6 +68,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         </Button>,
       ]}
       width={600}
+      styles={{ body: { padding: 24 } }}
     >
       <div>
         <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -110,7 +111,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
             <Col span={24}>
               <Text strong>API地址：</Text>
               <div style={{ marginTop: 4 }}>
-                <LinkOutlined style={{ marginRight: 4, color: "#1890ff" }} />
+                <LinkOutlined style={{ marginRight: 4, color: "#0EA5E9" }} />
                 <Text copyable>{agent.api_endpoint}</Text>
               </div>
             </Col>
@@ -121,7 +122,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
           <Col span={24}>
             <Text strong>API密钥：</Text>
             <div style={{ marginTop: 4 }}>
-              <KeyOutlined style={{ marginRight: 4, color: "#faad14" }} />
+              <KeyOutlined style={{ marginRight: 4, color: "#F59E0B" }} />
               <Tag color={agent.has_api_key ? "orange" : "default"}>{formatApiKey(agent)}</Tag>
               <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
                 （部分隐藏）

@@ -29,7 +29,7 @@ test("generatePythonFromFlow converts while to for with variable end", () => {
     { id: "a", shape: "process", title: "a = 0", x: 0, y: 0 },
     { id: "b", shape: "process", title: "b = 1", x: 0, y: 0 },
     { id: "i0", shape: "process", title: "i = 0", x: 0, y: 0 },
-    { id: "cond", shape: "decision", title: "i < n ?", x: 0, y: 0 },
+    { id: "cond", shape: "decision", title: "i ∈ [0, n)?", x: 0, y: 0 },
     { id: "out", shape: "io", title: "print(a)", x: 0, y: 0 },
     { id: "step1", shape: "process", title: "a, b = b, a + b", x: 0, y: 0 },
     { id: "step2", shape: "process", title: "i += 1", x: 0, y: 0 },
@@ -48,7 +48,7 @@ test("generatePythonFromFlow converts while to for with variable end", () => {
     { id: "e10", from: "cond", to: "end", style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
   ];
   const g = generatePythonFromFlow(nodes, edges);
-  expect(g.python.includes("for i in range(n):")).toBe(true);
+  expect(g.python.includes("for i in range(0, n):")).toBe(true);
   expect(g.python.includes("while")).toBe(false);
 });
 
@@ -71,18 +71,18 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
   expect(yesEdge).toBeTruthy();
   if (!yesEdge) return;
 
-  const bindNodeId = yesEdge.to;
-  expect(nodeById.get(bindNodeId)?.title.trim()).toContain("i = next(it)");
-
-  const bindOut = (outs.get(bindNodeId) || [])[0]?.to;
-  expect(bindOut).toBeTruthy();
-  if (!bindOut) return;
-  expect(nodeById.get(bindOut)?.title.trim().startsWith("print(")).toBe(true);
+  // 教科书风格：条件→是→循环体第一条语句(print)
+  const firstBodyId = yesEdge.to;
+  expect(nodeById.get(firstBodyId)?.title.trim().startsWith("print(")).toBe(true);
 
   const targetTitle = "a, b = b, a + b";
   const targetNode = built.nodes.find((n) => n.title.trim() === targetTitle);
   expect(targetNode).toBeTruthy();
   if (!targetNode) return;
+
+  // 递增节点 i += 1 应存在
+  const incNode = built.nodes.find((n) => (n as any).sourceRole === "for_inc");
+  expect(incNode).toBeTruthy();
 
   const bfs = (start: string, goal: string) => {
     const q: string[] = [start];
@@ -100,7 +100,7 @@ test("buildUnifiedFlowFromPython keeps for-range body statements inside loop", (
     return false;
   };
 
-  expect(bfs(bindOut, targetNode.id)).toBe(true);
+  expect(bfs(firstBodyId, targetNode.id)).toBe(true);
   expect(bfs(targetNode.id, decision.id)).toBe(true);
 });
 
@@ -122,21 +122,20 @@ test("buildUnifiedFlowFromPython for-range start/stop/step 变体保持三段式
   expect(headers.map((x) => x.var)).toEqual(["i", "j", "k"]);
 
   const initTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.initNodeId)?.title || "").replaceAll(" ", ""));
-  expect(initTitles).toEqual(["range(0,n)", "range(1,n)", "range(1,n,2)"]);
+  expect(initTitles).toEqual(["i=0", "j=1", "k=1"]);
 
-  const rangeArgsByVar: Record<string, string> = { i: "0,n", j: "1,n", k: "1,n,2" };
-  const hasIterInitEdge = (v: "i" | "j" | "k") =>
-    built.edges.some((e) => {
-      const from = built.nodes.find((n) => n.id === e.from) ?? null;
-      const to = built.nodes.find((n) => n.id === e.to) ?? null;
-      return from?.title.replaceAll(" ", "") === `range(${rangeArgsByVar[v]})` && to?.title.replaceAll(" ", "") === `itinrange(${rangeArgsByVar[v]})`;
-    });
-  expect(hasIterInitEdge("i")).toBe(true);
-  expect(hasIterInitEdge("j")).toBe(true);
-  expect(hasIterInitEdge("k")).toBe(true);
+  // 教科书风格：init → check 直连
+  const hasInitToCheckEdge = (v: "i" | "j" | "k") => {
+    const h = headers.find((x) => x.var === v);
+    if (!h) return false;
+    return built.edges.some((e) => e.from === h.initNodeId && e.to === h.checkNodeId);
+  };
+  expect(hasInitToCheckEdge("i")).toBe(true);
+  expect(hasInitToCheckEdge("j")).toBe(true);
+  expect(hasInitToCheckEdge("k")).toBe(true);
 
   const checkTitles = headers.map((meta) => (built.nodes.find((n) => n.id === meta.checkNodeId)?.title || "").replaceAll(" ", ""));
-  expect(checkTitles).toEqual(["i的值在列表？", "j的值在列表？", "k的值在列表？"]);
+  expect(checkTitles).toEqual(["i∈[0,n)", "j∈[1,n)", "k∈[1,n),步长=2"]);
 });
 
 test("buildUnifiedFlowFromPython 将列表与字典语句映射为 list_op/dict_op", () => {
@@ -160,4 +159,62 @@ test("buildUnifiedFlowFromPython 将列表与字典语句映射为 list_op/dict_
   expect(byTitle("counter.get('a', 0)")?.shape).toBe("dict_op");
   expect(byTitle("nums.append(4)")?.sourceRole).not.toBe("call_site");
   expect(byTitle("counter.get('a', 0)")?.sourceRole).not.toBe("call_site");
+});
+
+test("buildUnifiedFlowFromPython pop() → list_op, 独立字典下标 → dict_op", () => {
+  const code = [
+    "nums = [1, 2, 3]",
+    "nums.pop()",
+    "nums.pop(0)",
+    "d = {'a': 1}",
+    "d['a']",
+    "",
+  ].join("\n");
+  const built = buildUnifiedFlowFromPython(code);
+  expect(built).not.toBeNull();
+  if (!built) return;
+
+  const byTitle = (x: string) => built.nodes.find((n) => n.title.trim() === x) ?? null;
+  expect(byTitle("nums.pop()")?.shape).toBe("list_op");
+  expect(byTitle("nums.pop(0)")?.shape).toBe("list_op");
+  expect(byTitle("d['a']")?.shape).toBe("dict_op");
+});
+
+test("buildUnifiedFlowFromPython 字符串操作映射为 str_op", () => {
+  const code = [
+    "s = 'hello world'",
+    "words = s.split(' ')",
+    "s.upper()",
+    "s.replace('hello', 'hi')",
+    "",
+  ].join("\n");
+  const built = buildUnifiedFlowFromPython(code);
+  expect(built).not.toBeNull();
+  if (!built) return;
+
+  const byTitle = (x: string) => built.nodes.find((n) => n.title.trim() === x) ?? null;
+  expect(byTitle("words = s.split(' ')")?.shape).toBe("str_op");
+  expect(byTitle("s.upper()")?.shape).toBe("str_op");
+  expect(byTitle("s.replace('hello', 'hi')")?.shape).toBe("str_op");
+});
+
+test("buildUnifiedFlowFromPython break/continue/return 映射为 jump", () => {
+  const code = [
+    "def foo(x):",
+    "  for i in range(10):",
+    "    if i == x:",
+    "      return i",
+    "    if i == 5:",
+    "      break",
+    "  return -1",
+    "",
+  ].join("\n");
+  const built = buildUnifiedFlowFromPython(code);
+  expect(built).not.toBeNull();
+  if (!built) return;
+
+  const jumpNodes = built.nodes.filter((n) => n.shape === "jump");
+  expect(jumpNodes.length).toBeGreaterThanOrEqual(2);
+  expect(jumpNodes.some((n) => n.title.trim() === "break")).toBe(true);
+  expect(jumpNodes.some((n) => n.title.trim().startsWith("return"))).toBe(true);
 });

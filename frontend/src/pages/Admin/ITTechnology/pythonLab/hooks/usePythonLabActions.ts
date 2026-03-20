@@ -3,14 +3,8 @@ import type { FlowEdge, FlowNode, PortSide } from "../flow/model";
 import type { FlowNodeTemplate } from "../types";
 import { nodeSize } from "../flow/ports";
 import { normalizeTitleForEditInput } from "../flow/titleSemantics";
-import { FOR_TEACHING_EXAMPLE_CODE, FOR_TEACHING_EXAMPLE_DESCRIPTION } from "../forTeachingExample";
-
-type VariableRow = {
-  key: string;
-  name: string;
-  value: string;
-  type: string;
-};
+import { FOR_TEACHING_EXAMPLE_DESCRIPTION } from "../forTeachingExample";
+import type { VariableRow } from "../stores/UIStore";
 
 export function usePythonLabActions(params: {
   canvasRef: React.RefObject<HTMLDivElement | null>;
@@ -225,245 +219,33 @@ export function usePythonLabActions(params: {
     []
   );
 
+  const demoCodes: Record<string, string> = {
+    seq_basic:
+      "a = 3\nb = 5\nc = a + b\nprint(c)\n",
+    if_basic:
+      "x = 5\nif x > 0:\n    print('positive')\n",
+    if_else_basic:
+      "x = 7\nif x % 2 == 0:\n    msg = 'even'\nelse:\n    msg = 'odd'\nprint(msg)\n",
+    if_elif_else:
+      "score = 85\nif score >= 90:\n    grade = 'A'\nelif score >= 60:\n    grade = 'B'\nelse:\n    grade = 'C'\nprint(grade)\n",
+    for_sum_1_10:
+      "total = 0\nfor i in range(1, 10):\n    total += i\nprint(total)\n",
+    list_iter_sum:
+      "nums = [1, 2, 3, 4, 5]\ntotal = 0\nfor x in nums:\n    total += x\nprint(total)\n",
+    dict_word_count:
+      "text = \"a b a c b a\"\ncounter = {}\nfor w in text.split():\n    counter[w] = counter.get(w, 0) + 1\nprint(counter)\n",
+    while_sum_1_10:
+      "total = 0\ni = 1\nwhile i <= 10:\n    total += i\n    i += 1\nprint(total)\n",
+    func_sum_1_100:
+      "def sum_n(n):\n    total = 0\n    for i in range(1, n + 1):\n        total += i\n    return total\n\nans = sum_n(100)\nprint(ans)\n",
+    fib_iter:
+      "n = 10\na = 0\nb = 1\nfor i in range(n):\n    print(a)\n    a, b = b, a + b\n",
+  };
+
   const getDemo = (key: string): { nodes: FlowNode[]; edges: FlowEdge[]; code?: string; codeMode?: "auto" | "manual" } => {
     const k = key || "seq_basic";
-    const id = (name: string) => `demo_${k}_${name}`;
-
-    if (k === "seq_basic") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("a"), shape: "process", title: "a = 3", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("b"), shape: "process", title: "b = 5", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("c"), shape: "process", title: "c = a + b", x: 320, y: 360, sourceLine: 3 },
-        { type: "flow_element", id: id("out"), shape: "io", title: "print(c)", x: 320, y: 460, sourceLine: 4 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 320, y: 560 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e4"), from: nodes[3].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e5"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-      return { nodes, edges };
-    }
-
-    if (k === "list_iter_sum") {
-      return {
-        nodes: [],
-        edges: [],
-        code: "nums = [1, 2, 3, 4, 5]\ntotal = 0\nfor x in nums:\n    total += x\nprint(total)\n",
-        codeMode: "manual",
-      };
-    }
-
-    if (k === "dict_word_count") {
-      return {
-        nodes: [],
-        edges: [],
-        code: "text = \"a b a c b a\"\ncounter = {}\nfor w in text.split():\n    counter[w] = counter.get(w, 0) + 1\nprint(counter)\n",
-        codeMode: "manual",
-      };
-    }
-
-    if (k === "if_basic") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("x"), shape: "process", title: "x = 5", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("cond"), shape: "decision", title: "x > 0 ?", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("pos"), shape: "io", title: "print('positive')", x: 320, y: 380, sourceLine: 3 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 320, y: 500 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e4"), from: nodes[3].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e5"), from: nodes[2].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-      ];
-      return { nodes, edges };
-    }
-
-    if (k === "if_else_basic") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("x"), shape: "process", title: "x = 7", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("cond"), shape: "decision", title: "x % 2 == 0 ?", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("even"), shape: "process", title: "msg = 'even'", x: 320, y: 380, sourceLine: 3 },
-        { type: "flow_element", id: id("odd"), shape: "process", title: "msg = 'odd'", x: 680, y: 260, sourceLine: 5 },
-        { type: "flow_element", id: id("out"), shape: "io", title: "print(msg)", x: 320, y: 500, sourceLine: 6 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 320, y: 600 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e4"), from: nodes[2].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-        { id: id("e5"), from: nodes[3].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e6"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e7"), from: nodes[5].id, to: nodes[6].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-      return { nodes, edges };
-    }
-
-    if (k === "if_elif_else") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("score"), shape: "process", title: "score = 85", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("cond1"), shape: "decision", title: "score >= 90 ?", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("gradeA"), shape: "process", title: "grade = 'A'", x: 320, y: 380, sourceLine: 3 },
-        { type: "flow_element", id: id("cond2"), shape: "decision", title: "score >= 60 ?", x: 600, y: 260, sourceLine: 4 },
-        { type: "flow_element", id: id("gradeB"), shape: "process", title: "grade = 'B'", x: 600, y: 380, sourceLine: 5 },
-        { type: "flow_element", id: id("gradeC"), shape: "process", title: "grade = 'C'", x: 880, y: 260, sourceLine: 7 },
-        { type: "flow_element", id: id("out"), shape: "io", title: "print(grade)", x: 320, y: 500, sourceLine: 8 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 320, y: 600 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e4"), from: nodes[2].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-        { id: id("e5"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e6"), from: nodes[4].id, to: nodes[6].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-        { id: id("e7"), from: nodes[3].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e8"), from: nodes[5].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e9"), from: nodes[6].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e10"), from: nodes[7].id, to: nodes[8].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-      return { nodes, edges };
-    }
-
-    if (k === "while_sum_1_10") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("total0"), shape: "process", title: "total = 0", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("i1"), shape: "process", title: "i = 1", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("cond"), shape: "decision", title: "i <= 10 ?", x: 320, y: 360, sourceLine: 3 },
-        { type: "flow_element", id: id("add"), shape: "process", title: "total += i", x: 320, y: 480, sourceLine: 4 },
-        { type: "flow_element", id: id("inc"), shape: "process", title: "i += 1", x: 320, y: 580, sourceLine: 5 },
-        { type: "flow_element", id: id("out"), shape: "io", title: "print(total)", x: 680, y: 360, sourceLine: 6 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 680, y: 460 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e4"), from: nodes[3].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e5"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e6"), from: nodes[5].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "left", toPort: "left" },
-        { id: id("e7"), from: nodes[3].id, to: nodes[6].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-        { id: id("e8"), from: nodes[6].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-      const code =
-        "total = 0\n" +
-        "i = 1\n" +
-        "while i <= 10:\n" +
-        "  total += i\n" +
-        "  i += 1\n" +
-        "print(total)\n";
-      return { nodes, edges, code, codeMode: "manual" };
-    }
-
-    if (k === "for_sum_1_10") {
-      return { nodes: [], edges: [], code: FOR_TEACHING_EXAMPLE_CODE, codeMode: "manual" };
-    }
-
-    if (k === "fib_iter") {
-      const nodes: FlowNode[] = [
-        { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-        { type: "flow_element", id: id("n"), shape: "process", title: "n = 10", x: 320, y: 160, sourceLine: 1 },
-        { type: "flow_element", id: id("a0"), shape: "process", title: "a = 0", x: 320, y: 260, sourceLine: 2 },
-        { type: "flow_element", id: id("b1"), shape: "process", title: "b = 1", x: 320, y: 360, sourceLine: 3 },
-        { type: "flow_element", id: id("i0"), shape: "process", title: "i = 0", x: 320, y: 460, sourceLine: 4 },
-        { type: "flow_element", id: id("cond"), shape: "decision", title: "i < n ?", x: 320, y: 560, sourceLine: 5 },
-        { type: "flow_element", id: id("out"), shape: "io", title: "print(a)", x: 320, y: 680, sourceLine: 6 },
-        { type: "flow_element", id: id("step1"), shape: "process", title: "a, b = b, a + b", x: 320, y: 780, sourceLine: 7 },
-        { type: "flow_element", id: id("step2"), shape: "process", title: "i += 1", x: 320, y: 880, sourceLine: 8 },
-        { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 680, y: 560 },
-      ];
-      const edges: FlowEdge[] = [
-        { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e4"), from: nodes[3].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e5"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e6"), from: nodes[5].id, to: nodes[6].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("e7"), from: nodes[6].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e8"), from: nodes[7].id, to: nodes[8].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("e9"), from: nodes[8].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "left", toPort: "left" },
-        { id: id("e10"), from: nodes[5].id, to: nodes[9].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-      ];
-      return { nodes, edges };
-    }
-
-    if (k === "func_sum_1_100") {
-      const fnNodes: FlowNode[] = [
-        { type: "flow_element", id: id("fn_start"), shape: "start_end", title: "sum_n(n)", x: 260, y: 60, sourceLine: 1 },
-        { type: "flow_element", id: id("fn_total0"), shape: "process", title: "total = 0", x: 260, y: 160, sourceLine: 2 },
-        { type: "flow_element", id: id("fn_i1"), shape: "process", title: "i = 1", x: 260, y: 260, sourceLine: 3, sourceRole: "for_init" },
-        { type: "flow_element", id: id("fn_cond"), shape: "decision", title: "i <= n ?", x: 260, y: 360, sourceLine: 3, sourceRole: "for_check" },
-        { type: "flow_element", id: id("fn_add"), shape: "process", title: "total += i", x: 260, y: 480, sourceLine: 4 },
-        { type: "flow_element", id: id("fn_inc"), shape: "process", title: "i += 1", x: 260, y: 580, sourceLine: 3, sourceRole: "for_inc" },
-        { type: "flow_element", id: id("fn_ret"), shape: "process", title: "return total", x: 600, y: 360, sourceLine: 5 },
-        { type: "flow_element", id: id("fn_end"), shape: "start_end", title: "返回", x: 600, y: 460 },
-      ];
-      const fnEdges: FlowEdge[] = [
-        { id: id("fe1"), from: fnNodes[0].id, to: fnNodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("fe2"), from: fnNodes[1].id, to: fnNodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("fe3"), from: fnNodes[2].id, to: fnNodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("fe4"), from: fnNodes[3].id, to: fnNodes[4].id, style: "straight", routeMode: "auto", anchor: null, label: "是", fromPort: "bottom" },
-        { id: id("fe5"), from: fnNodes[4].id, to: fnNodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("fe6"), from: fnNodes[5].id, to: fnNodes[3].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "left", toPort: "left" },
-        { id: id("fe7"), from: fnNodes[3].id, to: fnNodes[6].id, style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
-        { id: id("fe8"), from: fnNodes[6].id, to: fnNodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-
-      const mainNodes: FlowNode[] = [
-        { type: "flow_element", id: id("main_start"), shape: "start_end", title: "开始", x: 260, y: 760 },
-        { type: "flow_element", id: id("main_call"), shape: "subroutine", title: "ans = sum_n(100)", x: 260, y: 860, sourceLine: 7 },
-        { type: "flow_element", id: id("main_out"), shape: "io", title: "print(ans)", x: 260, y: 980, sourceLine: 8 },
-        { type: "flow_element", id: id("main_end"), shape: "start_end", title: "结束", x: 260, y: 1080 },
-      ];
-      const mainEdges: FlowEdge[] = [
-        { id: id("me1"), from: mainNodes[0].id, to: mainNodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("me2"), from: mainNodes[1].id, to: mainNodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-        { id: id("me3"), from: mainNodes[2].id, to: mainNodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-      ];
-
-      const code =
-        "def sum_n(n):\n" +
-        "  total = 0\n" +
-        "  for i in range(1, n + 1):\n" +
-        "    total += i\n" +
-        "  return total\n" +
-        "\n" +
-        "ans = sum_n(100)\n" +
-        "print(ans)\n";
-
-      return { nodes: [...fnNodes, ...mainNodes], edges: [...fnEdges, ...mainEdges], code, codeMode: "manual" };
-    }
-
-    const nodes: FlowNode[] = [
-      { type: "flow_element", id: id("start"), shape: "start_end", title: "开始", x: 320, y: 60 },
-      { type: "flow_element", id: id("total0"), shape: "process", title: "total = 0", x: 320, y: 160 },
-      { type: "flow_element", id: id("i10"), shape: "process", title: "i = 10", x: 320, y: 260 },
-      { type: "flow_element", id: id("decision"), shape: "decision", title: "i >= 1 ?", x: 320, y: 360 },
-      { type: "flow_element", id: id("add"), shape: "process", title: "total += i", x: 320, y: 480 },
-      { type: "flow_element", id: id("dec"), shape: "process", title: "i -= 1", x: 320, y: 580 },
-      { type: "flow_element", id: id("print"), shape: "io", title: "print(total)", x: 680, y: 360 },
-      { type: "flow_element", id: id("end"), shape: "start_end", title: "结束", x: 680, y: 460 },
-    ];
-    const edges: FlowEdge[] = [
-      { id: id("e1"), from: nodes[0].id, to: nodes[1].id, style: "straight", routeMode: "auto", anchor: null },
-      { id: id("e2"), from: nodes[1].id, to: nodes[2].id, style: "straight", routeMode: "auto", anchor: null },
-      { id: id("e3"), from: nodes[2].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null },
-      { id: id("e4"), from: nodes[3].id, to: nodes[4].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "bottom", label: "是" },
-      { id: id("e5"), from: nodes[4].id, to: nodes[5].id, style: "straight", routeMode: "auto", anchor: null },
-      { id: id("e6"), from: nodes[5].id, to: nodes[3].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "left", toPort: "left" },
-      { id: id("e7"), from: nodes[3].id, to: nodes[6].id, style: "straight", routeMode: "auto", anchor: null, fromPort: "right", label: "否" },
-      { id: id("e8"), from: nodes[6].id, to: nodes[7].id, style: "straight", routeMode: "auto", anchor: null },
-    ];
-    return { nodes, edges };
+    const code = demoCodes[k] ?? demoCodes.seq_basic;
+    return { nodes: [], edges: [], code, codeMode: "manual" };
   };
 
   const peekDemoFlow = (key?: string) => {
@@ -489,15 +271,6 @@ export function usePythonLabActions(params: {
     setVariables((prev) => [...prev, row].slice(-12));
   };
 
-  const variableColumns = useMemo(
-    () => [
-      { title: "变量", dataIndex: "name", key: "name", width: 120 },
-      { title: "值", dataIndex: "value", key: "value" },
-      { title: "类型", dataIndex: "type", key: "type", width: 120 },
-    ],
-    []
-  );
-
   return {
     ensureAuto,
     setNodesAuto,
@@ -517,6 +290,5 @@ export function usePythonLabActions(params: {
     peekDemoFlow,
     demoOptions,
     mockStep,
-    variableColumns,
   };
 }

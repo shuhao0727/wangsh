@@ -65,7 +65,7 @@ const TypstNoteEditorInner: React.FC<{
   const [categoryPath, setCategoryPath] = useState(note?.category_path || "");
   const [published, setPublished] = useState(Boolean(note?.published));
   const [styleKey, setStyleKey] = useState(note?.style_key || "my_style");
-  const [content, setContent] = useState((note?.files && (note.files as Record<string, unknown>)["main.typ"]) || note?.content_typst || "");
+  const [content, setContent] = useState<string>(String((note?.files && (note.files as Record<string, unknown>)["main.typ"]) || note?.content_typst || ""));
   const [assetPrefix, setAssetPrefix] = useState<string>("images");
   const [assets, setAssets] = useState<TypstAssetListItem[]>([]);
   const [styleOptions, setStyleOptions] = useState<string[]>(["my_style"]);
@@ -218,7 +218,7 @@ const TypstNoteEditorInner: React.FC<{
         return "预览失败";
       }
     }
-    return String(e?.message || "预览失败");
+    return String((e as { message?: string })?.message || "预览失败");
   }, []);
 
   const renderServerPreview = useCallback(async (token: number): Promise<{ ok: boolean; rateLimited: boolean }> => {
@@ -232,7 +232,7 @@ const TypstNoteEditorInner: React.FC<{
       }
 
       const ep = "main.typ";
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(content || "") };
+      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
 
       await typstNotesApi.update(note.id, {
         title: title.trim() || "未命名",
@@ -251,7 +251,7 @@ const TypstNoteEditorInner: React.FC<{
       const data = new Uint8Array(await blob.arrayBuffer());
       setPreviewPdfData(data);
       return { ok: true, rateLimited: false };
-    } catch (e: unknown) {
+    } catch (e: any) {
       if (previewTokenRef.current !== token || renderTokenRef.current !== renderToken) return { ok: false, rateLimited: false };
       const status = Number(e?.response?.status);
       if (status === 429) {
@@ -402,7 +402,7 @@ const TypstNoteEditorInner: React.FC<{
     setSubmitting(true);
     try {
       const previewVisible = viewMode !== "edit";
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(content || "") };
+      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
       if (isCreateMode) {
         const created = await typstNotesApi.create({
           title: t,
@@ -435,8 +435,8 @@ const TypstNoteEditorInner: React.FC<{
       message.success("保存成功");
       if (previewVisible) queuePreviewRefresh(note.id);
       return updated;
-    } catch (e: unknown) {
-      message.error(e?.response?.data?.detail || e?.message || "保存失败");
+    } catch (e: any) {
+      message.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
       return null;
     } finally {
       setSubmitting(false);
@@ -445,7 +445,7 @@ const TypstNoteEditorInner: React.FC<{
 
   const ensureSavedThen = async <T,>(fn: (id: number) => Promise<T>) => {
     if (!note?.id && isCreateMode) {
-      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(content || "") };
+      const nextFiles: Record<string, string> = { "main.typ": ensureDefaultStyleImport(String(content) || "") };
       const created = await typstNotesApi.create({
         title: title.trim() || "未命名",
         summary: summary || "",
@@ -478,7 +478,7 @@ const TypstNoteEditorInner: React.FC<{
       });
       await refreshAssetsCache(id);
       message.success("资源上传成功");
-    } catch (e: unknown) {
+    } catch (e: any) {
       message.error(e?.message || "上传失败");
     } finally {
       setSubmitting(false);
@@ -505,7 +505,7 @@ const TypstNoteEditorInner: React.FC<{
   const renderEditor = () => (
     <LineNumberedTextArea
       textareaRef={editorRef}
-      value={content}
+      value={content as any}
       onChange={(v) => setContent(v)}
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -522,7 +522,7 @@ const TypstNoteEditorInner: React.FC<{
     if (!text) return;
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^=+\\s*${escapeRegex(text)}\\s*$`);
-    const lines = (content || "").split("\n");
+    const lines = (String(content) || "").split("\n");
     let offset = 0;
     let foundAt = -1;
     for (const line of lines) {
@@ -543,7 +543,7 @@ const TypstNoteEditorInner: React.FC<{
         offset += line.length + 1;
       }
     }
-    const ta: HTMLTextAreaElement | null = editorRef.current?.resizableTextArea?.textArea || null;
+    const ta: HTMLTextAreaElement | null = (editorRef.current as any)?.resizableTextArea?.textArea || null;
     if (!ta) return;
     if (foundAt >= 0) {
       ta.focus();
@@ -620,8 +620,9 @@ const TypstNoteEditorInner: React.FC<{
                 const s = await typstStylesApi.get(styleKey || "my_style");
                 setStyleEditing(s);
                 setStylesManageOpen(true);
-              } catch (e: unknown) {
-                message.error(e?.response?.data?.detail || e?.message || "加载样式失败");
+              } catch (e: any) {
+                const d = e?.response?.data?.detail;
+                message.error(typeof d === "string" ? d : (e?.message || "加载样式失败"));
               }
             }}
             onOpenCategoryManage={() => setCategoryManageOpen(true)}
@@ -632,8 +633,9 @@ const TypstNoteEditorInner: React.FC<{
                 await typstCategoriesApi.create({ path: v });
                 await refreshCategories();
                 message.success("已添加分类");
-              } catch (e: unknown) {
-                message.error(e?.response?.data?.detail || e?.message || "添加失败");
+              } catch (e: any) {
+                const d = e?.response?.data?.detail;
+                message.error(typeof d === "string" ? d : (e?.message || "添加失败"));
               }
             }}
             onSetAutoPreview={setAutoPreview}
@@ -689,7 +691,7 @@ const TypstNoteEditorInner: React.FC<{
           </Row>
         </Card>
 
-        <Card size="small" className="typst-editor-card" style={{ position: "sticky", bottom: 0, zIndex: 100, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
+        <Card size="small" className="typst-editor-card typst-editor-footer">
           <Row align="middle" justify="space-between">
             <Col>
               <Button onClick={onBack}>返回列表</Button>
@@ -718,6 +720,7 @@ const TypstNoteEditorInner: React.FC<{
         title="管理分类"
         width={760}
         footer={null}
+        styles={{ body: { padding: 24 } }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
           <Button icon={<ReloadOutlined />} onClick={refreshCategories}>
@@ -737,7 +740,7 @@ const TypstNoteEditorInner: React.FC<{
                   await refreshCategories();
                   setNewCategoryPath("");
                   setCategoryDrafts([...(await typstCategoriesApi.list())]);
-                } catch (e: unknown) {
+                } catch (e: any) {
                   message.error(e?.response?.data?.detail || e?.message || "添加失败");
                 }
               }}
@@ -779,8 +782,8 @@ const TypstNoteEditorInner: React.FC<{
                     await typstCategoriesApi.update(c.id, { path: c.path.trim(), sort_order: c.sort_order });
                     message.success("已保存");
                     await refreshCategories();
-                  } catch (e: unknown) {
-                    message.error(e?.response?.data?.detail || e?.message || "保存失败");
+                  } catch (e: any) {
+                    message.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
                   }
                 }}
               >
@@ -795,7 +798,7 @@ const TypstNoteEditorInner: React.FC<{
                     message.success("已删除");
                     await refreshCategories();
                     setCategoryDrafts((prev) => prev.filter((x) => x.id !== c.id));
-                  } catch (e: unknown) {
+                  } catch (e: any) {
                     message.error(e?.response?.data?.detail || e?.message || "删除失败");
                   }
                 }}
@@ -812,6 +815,7 @@ const TypstNoteEditorInner: React.FC<{
         title="编辑样式"
         width={980}
         footer={null}
+        styles={{ body: { padding: 24 } }}
       >
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
           <Select
@@ -824,7 +828,7 @@ const TypstNoteEditorInner: React.FC<{
                 const s = await typstStylesApi.get(k);
                 setStyleEditing(s);
                 setStyleDraft({ ...s });
-              } catch (e: unknown) {
+              } catch (e: any) {
                 message.error(e?.response?.data?.detail || e?.message || "加载失败");
               }
             }}
@@ -852,7 +856,7 @@ const TypstNoteEditorInner: React.FC<{
                 await refreshStyles();
                 setStylesVersion((v) => v + 1);
                 message.success("已从资源重置");
-              } catch (e: unknown) {
+              } catch (e: any) {
                 message.error(e?.response?.data?.detail || e?.message || "重置失败");
               }
             }}
@@ -878,8 +882,7 @@ const TypstNoteEditorInner: React.FC<{
                 setStyleOptions((keys && keys.length ? keys : ["my_style"]).filter(Boolean));
                 setStylesVersion((v) => v + 1);
                 message.success("已保存");
-              } catch (e: unknown) {
-                message.error(e?.response?.data?.detail || e?.message || "保存失败");
+              } catch (e: any) {
               }
             }}
           >

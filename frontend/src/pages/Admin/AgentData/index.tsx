@@ -1,24 +1,21 @@
 /**
- * 智能体数据统计页面 - 学生使用智能体情况统计
- * 重构版：手动 Tab 切换，彻底解决布局和滚动条问题
+ * 智能体数据页面
+ * 布局：统计卡片 → Tab 导航 → 内容面板（flex 撑满，分页固定底部）
  */
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Tabs, message } from "antd";
+import { Typography, Tabs } from "antd";
 
-// 导入组件
 import StatisticsCards from "./components/StatisticsCards";
 import UsageRecordPanel from "./components/UsageRecordPanel";
-import {
-  HotQuestionsPanel,
-  StudentQuestionChainsPanel,
-} from "./components/AnalysisPanel";
+import { HotQuestionsPanel, StudentQuestionChainsPanel } from "./components/AnalysisPanel";
 
-// 导入类型和API
 import type { StatisticsData } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
 import { AdminPage } from "@components/Admin";
+
+const { Title } = Typography;
 
 type TabKey = "usage" | "hot" | "chains";
 
@@ -30,43 +27,26 @@ const normalizeTab = (tab: string | null): TabKey => {
 
 const AdminAgentData: React.FC = () => {
   const [urlSearchParams, setUrlSearchParams] = useSearchParams();
-  const [activeTabKey, setActiveTabKey] = useState<TabKey>(
-    normalizeTab(urlSearchParams.get("tab")),
-  );
+  const [activeTabKey, setActiveTabKey] = useState<TabKey>(normalizeTab(urlSearchParams.get("tab")));
   const [statistics, setStatistics] = useState<StatisticsData>({
-    total_usage: 0,
-    active_students: 0,
-    active_agents: 0,
-    avg_response_time: 0,
-    today_usage: 0,
-    week_usage: 0,
-    month_usage: 0,
+    total_usage: 0, active_students: 0, active_agents: 0,
+    avg_response_time: 0, today_usage: 0, week_usage: 0, month_usage: 0,
   });
 
   const loadStatistics = useCallback(async () => {
     try {
       const res = await agentDataApi.getStatistics({ page: 1, page_size: 20 });
-      if (res.success) {
-        setStatistics(res.data);
-        return;
-      }
-      message.error(res.message || "加载统计信息失败");
-    } catch {
-      message.error("加载统计信息失败");
-    }
+      if (res.success) setStatistics(res.data);
+    } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => {
-    loadStatistics();
-  }, [loadStatistics]);
+  useEffect(() => { loadStatistics(); }, [loadStatistics]);
 
   useEffect(() => {
-    const tab = urlSearchParams.get("tab");
-    const next = normalizeTab(tab);
+    const next = normalizeTab(urlSearchParams.get("tab"));
     if (next !== activeTabKey) setActiveTabKey(next);
   }, [urlSearchParams, activeTabKey]);
 
-  // Tab 切换处理
   const handleTabChange = (key: string) => {
     const next = normalizeTab(key);
     setActiveTabKey(next);
@@ -76,17 +56,15 @@ const AdminAgentData: React.FC = () => {
   };
 
   return (
-    <AdminPage padding={16} scrollable={false}>
-      {/* 使用 Flex 列布局，高度占满 */}
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        
-        {/* 顶部统计卡片 - 固定高度 */}
+    <AdminPage padding={24} scrollable={false}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, gap: 0 }}>
+        {/* 统计卡片 */}
         <div style={{ flex: "none" }}>
           <StatisticsCards data={statistics} />
         </div>
 
-        {/* Tab 导航栏 - 固定高度 */}
-        <div style={{ flex: "none", marginBottom: 16 }}>
+        {/* Tab 导航 */}
+        <div style={{ flex: "none" }}>
           <Tabs
             activeKey={activeTabKey}
             onChange={handleTabChange}
@@ -95,12 +73,12 @@ const AdminAgentData: React.FC = () => {
               { key: "hot", label: "热点问题" },
               { key: "chains", label: "学生提问链条" },
             ]}
-            // 关键：不使用 Tabs 的 children 渲染内容，仅作为导航
+            style={{ marginBottom: 0 }}
           />
         </div>
 
-        {/* 内容区域 - 占据剩余空间，严格限制溢出 */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {/* 内容面板 — 占满剩余空间 */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {activeTabKey === "usage" && <UsageRecordPanel />}
           {activeTabKey === "hot" && <HotQuestionsPanel />}
           {activeTabKey === "chains" && <StudentQuestionChainsPanel />}

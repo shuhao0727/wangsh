@@ -37,6 +37,11 @@ const AdminArticleEditorPage = lazy(() => import("./pages/Admin/Articles/EditorP
 const AdminArticleLegacyEditRedirect = lazy(() => import("./pages/Admin/Articles/LegacyEditRedirect"));
 const AdminTypstEditorPage = lazy(() => import("./pages/Admin/Informatics/EditorPage"));
 const AdminSystemPage = lazy(() => import("./pages/Admin/System"));
+const AdminAssessmentPage = lazy(() => import("./pages/Admin/Assessment"));
+const AdminAssessmentEditorPage = lazy(() => import("./pages/Admin/Assessment/EditorPage"));
+const AdminAssessmentQuestionsPage = lazy(() => import("./pages/Admin/Assessment/QuestionsPage"));
+const AdminAssessmentStatisticsPage = lazy(() => import("./pages/Admin/Assessment/StatisticsPage"));
+const AdminClassroomInteractionPage = lazy(() => import("./pages/Admin/ClassroomInteraction"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
 
 const { Content } = Layout;
@@ -89,6 +94,10 @@ function App() {
               <Route path="/admin/it-technology" element={<AdminITTechnologyPage />} />
               <Route path="/admin/personal-programs" element={<AdminPersonalProgramsPage />} />
               <Route path="/admin/articles" element={<AdminArticlesPage />} />
+              <Route path="/admin/assessment" element={<AdminAssessmentPage />} />
+              <Route path="/admin/assessment/:id/questions" element={<AdminAssessmentQuestionsPage />} />
+              <Route path="/admin/assessment/:id/statistics" element={<AdminAssessmentStatisticsPage />} />
+              <Route path="/admin/classroom-interaction" element={<AdminClassroomInteractionPage />} />
               <Route path="/admin/system" element={<AdminSystemPage />} />
             </Route>
 
@@ -105,6 +114,8 @@ function App() {
               <Route path="/admin/articles/edit/:id" element={<AdminArticleLegacyEditRedirect />} />
               <Route path="/admin/informatics/editor/new" element={<AdminTypstEditorPage />} />
               <Route path="/admin/informatics/editor/:id" element={<AdminTypstEditorPage />} />
+              <Route path="/admin/assessment/editor/new" element={<AdminAssessmentEditorPage />} />
+              <Route path="/admin/assessment/editor/:id" element={<AdminAssessmentEditorPage />} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

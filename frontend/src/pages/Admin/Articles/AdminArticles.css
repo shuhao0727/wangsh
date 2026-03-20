@@ -1,19 +1,17 @@
 .admin-articles-page {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 20px 28px;
+  padding: 24px;
 }
 
 .admin-articles-toolbar {
   margin-bottom: 16px;
   border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
 }
 
 .admin-articles-filter {
   margin-bottom: 16px;
   border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
 }
 
 @media (max-width: 768px) {

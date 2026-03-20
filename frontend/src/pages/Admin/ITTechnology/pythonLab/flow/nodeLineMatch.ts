@@ -1,10 +1,9 @@
 import type { FlowNode } from "./model";
 
 export function matchesNodeLine(n: FlowNode, line: number) {
-  const r = (n as any).sourceRange as { startLine: number; endLine: number } | undefined;
+  const r = n.sourceRange;
   if (r && Number.isFinite(r.startLine) && Number.isFinite(r.endLine)) {
-    if (line >= r.startLine && line <= r.endLine) return true;
+    return line >= r.startLine && line <= r.endLine;
   }
   return n.sourceLine === line;
 }
-

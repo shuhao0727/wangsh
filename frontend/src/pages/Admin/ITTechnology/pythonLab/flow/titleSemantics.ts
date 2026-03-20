@@ -43,7 +43,7 @@ export function normalizeTitleForMapping(title: string) {
 
 export function normalizeTitleForSemanticCompare(title: string) {
   const mapped = normalizeTitleForMapping(title).normalize("NFKC");
-  return mapped.replace(/\s+/g, "").replace(/[？?]+$/g, "?");
+  return mapped.replace(/\s+/g, "").replace(/[？?]+$/g, "");
 }
 
 export function isSemanticallySameTitle(a: string, b: string) {

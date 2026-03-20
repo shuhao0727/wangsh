@@ -15,6 +15,8 @@ export function shapeColor(shape: FlowNodeShape) {
   if (shape === "subroutine") return "#10b981"; // Emerald 500
   if (shape === "list_op" || shape === "collection") return "#0ea5a4"; // Teal 500
   if (shape === "dict_op") return "#14b8a6"; // Teal 400
+  if (shape === "str_op") return "#8b5cf6"; // Violet 500
+  if (shape === "jump") return "#ef4444"; // Red 500
   if (shape === "note") return "#d4b106";
   if (shape === "decision") return "#7c3aed"; // Violet 600
   if (shape === "io") return "#f59e0b"; // Amber 500
@@ -25,13 +27,13 @@ export function nodeSize(shape: FlowNodeShape) {
   if (shape === "decision") return { w: Math.round(220 * nodeScale), h: Math.round(140 * nodeScale) };
   if (shape === "connector") return { w: Math.round(110 * nodeScale), h: Math.round(110 * nodeScale) };
   if (shape === "subroutine") return { w: Math.round(260 * nodeScale), h: Math.round(90 * nodeScale) };
-  if (shape === "list_op" || shape === "dict_op" || shape === "collection") return { w: Math.round(260 * nodeScale), h: Math.round(90 * nodeScale) };
+  if (shape === "list_op" || shape === "dict_op" || shape === "str_op" || shape === "collection") return { w: Math.round(260 * nodeScale), h: Math.round(90 * nodeScale) };
   if (shape === "note") return { w: Math.round(320 * nodeScale), h: Math.round(120 * nodeScale) };
   return { w: Math.round(240 * nodeScale), h: Math.round(90 * nodeScale) };
 }
 
 const maxCharsByShape = (shape: FlowNodeShape) => {
-  const baseMax = shape === "decision" ? 18 : shape === "subroutine" || shape === "list_op" || shape === "dict_op" || shape === "collection" ? 24 : shape === "note" ? 28 : 26;
+  const baseMax = shape === "decision" ? 18 : shape === "subroutine" || shape === "list_op" || shape === "dict_op" || shape === "str_op" || shape === "collection" ? 24 : shape === "note" ? 28 : 26;
   return Math.max(12, Math.min(40, baseMax));
 };
 

@@ -19,6 +19,8 @@ from app.api.endpoints.informatics.typst_categories import router as typst_categ
 from app.api.endpoints.xbk import router as xbk_router
 from app.api.endpoints.xxjs import router as xxjs_router
 from app.api.endpoints.debug import router as debug_router
+from app.api.endpoints.assessment import router as assessment_router
+from app.api.endpoints.classroom import router as classroom_router
 
 api_router = APIRouter()
 
@@ -40,3 +42,5 @@ api_router.include_router(public_typst_style_router, tags=["public-informatics"]
 api_router.include_router(xbk_router, tags=["xbk"], prefix="/xbk")
 api_router.include_router(xxjs_router, tags=["xxjs"], prefix="/xxjs")
 api_router.include_router(debug_router, tags=["debug"], prefix="/debug")
+api_router.include_router(assessment_router, tags=["assessment"], prefix="/assessment")
+api_router.include_router(classroom_router, tags=["classroom"], prefix="/classroom")

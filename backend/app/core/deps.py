@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any, cast
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from loguru import logger
 
 from app.db.database import get_db
 from app.core.config import settings
@@ -79,9 +80,12 @@ async def get_current_user(
             )
     except HTTPException:
         raise
-    except Exception:
-        # 降级为允许通过，避免硬失败（可按需开启严格模式）
-        pass
+    except Exception as e:
+        logger.error("会话验证异常: {}", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="会话验证失败，请重新登录",
+        )
     return cast(UserInfo, user)
 
 

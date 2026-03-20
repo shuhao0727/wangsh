@@ -2,7 +2,7 @@ import os
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,7 +67,7 @@ def _to_response(n) -> TypstNoteResponse:
 @router.get("", response_model=List[TypstNoteListItem])
 async def api_list_notes(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),

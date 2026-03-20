@@ -138,7 +138,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
             <Option value="courses">选课目录</Option>
             <Option value="selections">选课结果</Option>
           </Select>
-          <span style={{ marginLeft: 16 }}>所属年级:</span>
+          <span>所属年级:</span>
           <Select
             value={selectedGrade}
             style={{ width: 100 }}
@@ -149,7 +149,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
             <Option value="高一">高一</Option>
             <Option value="高二">高二</Option>
           </Select>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate} style={{ marginLeft: 8 }}>
+          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
             下载模板
           </Button>
         </Space>
@@ -224,8 +224,8 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
           />
         )}
 
-        <div style={{ color: "var(--ws-color-text-secondary)", fontSize: "var(--ws-text-sm)" }}>
-          <p>• 会优先使用你当前筛选的 年份/学期/年级 作为默认值（Excel里也可包含“年份/学期/年级”列）。</p>
+        <div className="ws-modal-hint">
+          <p>• 会优先使用你当前筛选的 年份/学期/年级 作为默认值（Excel里也可包含"年份/学期/年级"列）。</p>
           <p>• 字段要求：学生名单（年份、学期、年级、班级、学号、姓名、性别）｜选课目录（年份、学期、年级、课程代码、课程名称、课程负责人、限报人数、上课地点）｜选课结果（年份、学期、年级、学号、姓名、课程代码）</p>
         </div>
       </Space>

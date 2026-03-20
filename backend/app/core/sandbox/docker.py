@@ -90,6 +90,7 @@ class DockerProvider(SandboxProvider):
         self.runtime = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", "runc")
         self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
+        self.readiness_timeout = float(getattr(settings, "PYTHONLAB_READINESS_TIMEOUT_SECONDS", 30) or 30)
         self._available_runtimes = None
 
     async def _get_available_runtimes(self) -> List[str]:
@@ -286,7 +287,7 @@ class DockerProvider(SandboxProvider):
                     logs = (out or "") + (err or "")
                     try:
                         await _run_async(["docker", "rm", "-f", container_id], timeout_s=30)
-                    except:
+                    except Exception:
                         pass
                     logger.error(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
                     raise RuntimeError("调试端口分配失败，请重试运行。")
@@ -371,13 +372,18 @@ class DockerProvider(SandboxProvider):
         # Use docker attach with a pseudo-tty so docker won't reject non-tty stdin.
         cmd = ["docker", "attach", name]
         master_fd, slave_fd = pty.openpty()
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            close_fds=True
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True
+            )
+        except Exception:
+            os.close(master_fd)
+            os.close(slave_fd)
+            raise
         os.close(slave_fd)
         return process, master_fd
 
@@ -501,7 +507,7 @@ class DockerProvider(SandboxProvider):
                     pass
 
     async def _wait_for_readiness(self, container_id: str, host_port: int, runtime_mode: str = "debug"):
-        deadline = time.monotonic() + 30.0
+        deadline = time.monotonic() + self.readiness_timeout
         while time.monotonic() < deadline:
             if not await self._docker_is_running(container_id):
                  raise RuntimeError("运行环境异常退出，请重试。如持续失败请联系老师。")

@@ -6,11 +6,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Card,
   Row,
   Col,
   Statistic,
-  Divider,
   Tabs,
   Button,
   Table,
@@ -32,6 +30,7 @@ import {
   SyncOutlined,
 } from "@ant-design/icons";
 import useAuth from "@hooks/useAuth";
+import { logger } from "@services/logger";
 
 // 用户数据接口
 interface UserData {
@@ -112,7 +111,7 @@ const AdminPage: React.FC = () => {
 
       setLoading(false);
     } catch (error) {
-      console.error("加载用户数据失败:", error);
+      logger.error("加载用户数据失败:", error);
       setLoading(false);
     }
   }, []);
@@ -210,7 +209,7 @@ const AdminPage: React.FC = () => {
   return (
     <div
       className="admin-page"
-      style={{ maxWidth: "1400px", margin: "0 auto", padding: "20px" }}
+      style={{ maxWidth: "1400px", margin: "0 auto", padding: 24, background: "#FFFFFF" }}
     >
       {/* 权限警告 */}
       {!auth.isSuperAdmin() && (
@@ -224,52 +223,51 @@ const AdminPage: React.FC = () => {
       )}
 
       {/* 系统概览统计卡片 */}
-      <Row gutter={[24, 24]} style={{ marginBottom: "32px" }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <Card>
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
             <Statistic
               title="总用户数"
               value={stats.totalUsers}
               prefix={<UserOutlined />}
-              valueStyle={{ color: "#1890ff" }}
+              valueStyle={{ color: "#0EA5E9" }}
             />
-          </Card>
+          </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <Card>
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
             <Statistic
               title="活跃用户"
               value={stats.activeUsers}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#52c41a" }}
+              valueStyle={{ color: "#10B981" }}
             />
-          </Card>
+          </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <Card>
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
             <Statistic
               title="管理员数量"
               value={stats.superAdmins}
               prefix={<SafetyOutlined />}
-              valueStyle={{ color: "#722ed1" }}
+              valueStyle={{ color: "#6366F1" }}
             />
-          </Card>
+          </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <Card>
+          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
             <Statistic
               title="数据库大小"
               value={stats.databaseSize}
               prefix={<DatabaseOutlined />}
-              valueStyle={{ color: "#fa8c16" }}
+              valueStyle={{ color: "#F59E0B" }}
             />
-          </Card>
+          </div>
         </Col>
       </Row>
 
-      <Divider />
-
       {/* 管理功能标签页 */}
+      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", paddingTop: 24 }}>
       <Tabs
         defaultActiveKey="users"
         size="large"
@@ -283,22 +281,21 @@ const AdminPage: React.FC = () => {
               </span>
             ),
             children: (
-              <Card
-                title="用户列表"
-                extra={
+              <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>用户列表</span>
                   <Button type="primary" icon={<UserOutlined />}>
                     添加用户
                   </Button>
-                }
-              >
+                </div>
                 <Table
                   columns={userColumns}
                   dataSource={users}
                   rowKey="id"
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }}
                   scroll={{ x: 800 }}
                 />
-              </Card>
+              </div>
             ),
           },
           {
@@ -310,10 +307,11 @@ const AdminPage: React.FC = () => {
               </span>
             ),
             children: (
-              <Row gutter={[24, 24]}>
+              <Row gutter={[16, 16]}>
                 <Col xs={24} lg={12}>
-                  <Card title="API 统计">
-                    <Descriptions column={1} bordered>
+                  <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>API 统计</div>
+                    <Descriptions column={1}>
                       <Descriptions.Item label="总请求数">
                         <Tag color="blue">{stats.apiRequests}</Tag>
                       </Descriptions.Item>
@@ -328,11 +326,12 @@ const AdminPage: React.FC = () => {
                         </Tag>
                       </Descriptions.Item>
                     </Descriptions>
-                  </Card>
+                  </div>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <Card title="API 配置">
-                    <Descriptions column={1} bordered>
+                  <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>API 配置</div>
+                    <Descriptions column={1}>
                       <Descriptions.Item label="JWT 有效期">
                         8天 (11520分钟)
                       </Descriptions.Item>
@@ -353,7 +352,7 @@ const AdminPage: React.FC = () => {
                         </Tag>
                       </Descriptions.Item>
                     </Descriptions>
-                  </Card>
+                  </div>
                 </Col>
               </Row>
             ),
@@ -367,8 +366,9 @@ const AdminPage: React.FC = () => {
               </span>
             ),
             children: (
-              <Card title="系统配置">
-                <Descriptions title="环境配置" bordered column={2}>
+              <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>系统配置</div>
+                <Descriptions title="环境配置" column={2}>
                   <Descriptions.Item label="后端服务">
                     <Tag color="blue">{window.location.origin}{"/api/v1"}</Tag>
                   </Descriptions.Item>
@@ -392,37 +392,40 @@ const AdminPage: React.FC = () => {
                     </Button>
                   </Descriptions.Item>
                 </Descriptions>
-              </Card>
+              </div>
             ),
           },
         ]}
       />
+      </div>
 
       {/* 管理员信息 */}
-      <Divider />
-      <Card title="当前管理员信息">
-        <Descriptions bordered>
-          <Descriptions.Item label="用户名">
-            {auth.user?.username}
-          </Descriptions.Item>
-          <Descriptions.Item label="全名">
-            {auth.user?.full_name || "未设置"}
-          </Descriptions.Item>
-          <Descriptions.Item label="权限级别" span={2}>
-            <Tag icon={<SafetyOutlined />} color="purple">
-              超级管理员
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="账户创建时间">
-            {auth.user?.created_at
-              ? new Date(auth.user.created_at).toLocaleString("zh-CN")
-              : "未知"}
-          </Descriptions.Item>
-          <Descriptions.Item label="最后登录" span={3}>
-            刚刚
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", marginTop: 24, paddingTop: 24 }}>
+        <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>当前管理员信息</div>
+          <Descriptions>
+            <Descriptions.Item label="用户名">
+              {auth.user?.username}
+            </Descriptions.Item>
+            <Descriptions.Item label="全名">
+              {auth.user?.full_name || "未设置"}
+            </Descriptions.Item>
+            <Descriptions.Item label="权限级别" span={2}>
+              <Tag icon={<SafetyOutlined />} color="purple">
+                超级管理员
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="账户创建时间">
+              {auth.user?.created_at
+                ? new Date(auth.user.created_at).toLocaleString("zh-CN")
+                : "未知"}
+            </Descriptions.Item>
+            <Descriptions.Item label="最后登录" span={3}>
+              刚刚
+            </Descriptions.Item>
+          </Descriptions>
+        </div>
+      </div>
 
     </div>
   );

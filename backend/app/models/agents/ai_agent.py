@@ -29,6 +29,9 @@ class AIAgent(Base):
     
     # 模型名称
     model_name = Column(String(100), comment="模型名称，如：deepseek-chat, gpt-4, 深度思考等")
+
+    # System Prompt（智能体人设/角色设定）
+    system_prompt = Column(Text, nullable=True, comment="系统提示词（智能体人设/角色设定）")
     
     # API配置
     api_endpoint = Column(String(500), comment="API端点URL")
@@ -54,9 +57,9 @@ class ZntConversation(Base):
     __table_args__ = {"comment": "对话记录表"}
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("sys_users.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True, index=True)
     user_name = Column(String(100), nullable=True)
-    agent_id = Column(Integer, ForeignKey("znt_agents.id"), nullable=True, index=True)
+    agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True, index=True)
     agent_name = Column(String(200), nullable=True)
     session_id = Column(String(100), nullable=True, index=True)
     message_type = Column(String(20), nullable=False)

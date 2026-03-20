@@ -1,31 +1,24 @@
 import React, { useState, useEffect } from "react";
 import {
   Typography,
-  Card,
   Space,
   Button,
   Row,
   Col,
-  Divider,
   Table,
   Tag,
   Input,
   Form,
   Modal,
   Popconfirm,
-  Tooltip,
   message,
-  Spin,
   Empty,
   Pagination,
   Dropdown,
-  Menu,
-  Switch,
   InputNumber,
   Select,
 } from "antd";
 import {
-  FolderOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -34,10 +27,7 @@ import {
   MoreOutlined,
   ReloadOutlined,
   FilterOutlined,
-  ExportOutlined,
-  ImportOutlined,
   FileTextOutlined,
-  SortAscendingOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -45,8 +35,9 @@ import { categoryApi } from "@services";
 import type {
   CategoryWithUsage,
   CategoryFilterParams,
-  CategoryResponse,
 } from "@services";
+import { logger } from "@services/logger";
+import { AdminCard, AdminPage } from "@components/Admin";
 
 const { Text } = Typography;
 const { Search } = Input;
@@ -208,7 +199,7 @@ const CategoryEditForm: React.FC<{
 
       onSave();
     } catch (error: any) {
-      console.error("保存分类失败:", error);
+      logger.error("保存分类失败:", error);
       message.error(
         error.response?.data?.detail || "保存分类失败，请检查表单数据",
       );
@@ -283,14 +274,15 @@ const CategoryEditForm: React.FC<{
         />
       </Form.Item>
 
-      <Divider />
-      <div style={{ textAlign: "right" }}>
-        <Space>
-          <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" htmlType="submit" loading={submitting}>
-            {isCreateMode ? "创建分类" : "保存修改"}
-          </Button>
-        </Space>
+      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", marginTop: 16, paddingTop: 16 }}>
+        <div style={{ textAlign: "right" }}>
+          <Space>
+            <Button onClick={onCancel}>取消</Button>
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              {isCreateMode ? "创建分类" : "保存修改"}
+            </Button>
+          </Space>
+        </div>
       </div>
     </Form>
   );
@@ -350,7 +342,7 @@ const AdminCategories: React.FC = () => {
       setTotal(listData?.total || 0);
       setSelectedRowKeys([]);
     } catch (error) {
-      console.error("加载分类列表失败:", error);
+      logger.error("加载分类列表失败:", error);
       message.error("加载分类列表失败");
     } finally {
       setLoading(false);
@@ -431,7 +423,7 @@ const AdminCategories: React.FC = () => {
       message.success("分类删除成功");
       loadCategories();
     } catch (error: any) {
-      console.error("删除分类失败:", error);
+      logger.error("删除分类失败:", error);
       const errorMsg = error.response?.data?.detail || "删除分类失败";
       message.error(errorMsg);
     }
@@ -476,7 +468,7 @@ const AdminCategories: React.FC = () => {
       message.success(`成功删除 ${selectedRowKeys.length} 个分类`);
       loadCategories();
     } catch (error) {
-      console.error("批量删除失败:", error);
+      logger.error("批量删除失败:", error);
       message.error("批量删除失败");
     } finally {
       setLoading(false);
@@ -531,96 +523,64 @@ const AdminCategories: React.FC = () => {
   };
 
   return (
-    <div className="admin-categories">
-      {/* 标题和操作栏 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          marginBottom: "24px",
-        }}
-      >
-        {selectedRowKeys.length > 0 && (
-          <Dropdown menu={batchMenu}>
-            <Button icon={<MoreOutlined />}>
-              批量操作 ({selectedRowKeys.length})
-            </Button>
-          </Dropdown>
-        )}
-      </div>
-
+    <AdminPage>
       {/* 搜索和操作栏 */}
-      <Card
-        size="small"
-        style={{ marginBottom: "16px" }}
-        styles={{ body: { padding: "16px" } }}
-      >
-        <Row gutter={16} align="middle">
-          <Col flex="1">
-            <Search
-              placeholder="搜索分类名称或slug..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="middle"
-              onSearch={handleSearch}
-              style={{ maxWidth: "300px" }}
-            />
-          </Col>
-          <Col>
-            <Space>
-              <Button
-                icon={<FilterOutlined />}
-                onClick={() => setFilterVisible(!filterVisible)}
-                type={filterVisible ? "primary" : "default"}
-              >
-                筛选
+      <div className="ws-responsive-toolbar" style={{ marginBottom: 16 }}>
+        <Space wrap className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
+          <Search
+            placeholder="搜索分类名称或slug..."
+            allowClear
+            enterButton={<SearchOutlined />}
+            size="middle"
+            onSearch={handleSearch}
+            style={{ maxWidth: 300 }}
+          />
+        </Space>
+        <Space wrap className="ws-responsive-toolbar__group">
+          {selectedRowKeys.length > 0 && (
+            <Dropdown menu={batchMenu}>
+              <Button icon={<MoreOutlined />}>
+                批量操作 ({selectedRowKeys.length})
               </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => loadCategories()}
-              >
-                刷新
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAddCategory}
-              >
-                新增分类
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+            </Dropdown>
+          )}
+          <Button
+            icon={<FilterOutlined />}
+            onClick={() => setFilterVisible(!filterVisible)}
+            type={filterVisible ? "primary" : "default"}
+          >
+            筛选
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => loadCategories()}
+          >
+            刷新
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleAddCategory}
+          >
+            新增分类
+          </Button>
+        </Space>
+      </div>
 
       {/* 筛选表单 */}
       {filterVisible && (
-        <Card
-          title="高级筛选"
-          size="small"
-          style={{ marginBottom: "16px" }}
-          extra={
-            <Button
-              type="link"
-              size="small"
-              onClick={() => setFilterVisible(false)}
-            >
-              收起
-            </Button>
-          }
-        >
+        <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 16, marginBottom: 16 }}>
           {renderFilterForm()}
-        </Card>
+        </div>
       )}
 
       {/* 分类表格 */}
-      <Card
+      <AdminCard
         title={
           <div style={{ display: "flex", alignItems: "center" }}>
             <span>分类列表</span>
             {selectedRowKeys.length > 0 && (
-              <Tag color="blue" style={{ marginLeft: "8px" }}>
+              <Tag color="blue" style={{ marginLeft: 8 }}>
                 已选择 {selectedRowKeys.length} 项
               </Tag>
             )}
@@ -628,24 +588,26 @@ const AdminCategories: React.FC = () => {
         }
         extra={
           <Text type="secondary">
-            共 {total} 个分类，当前显示第 {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, total)} 条
+            共 {total} 个分类
           </Text>
         }
+        styles={{ body: { padding: 0 } }}
       >
         {loading ? (
-          <div style={{ textAlign: "center", padding: "40px" }}>
-            <Spin size="large" />
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="加载中..." />
           </div>
         ) : categories.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无分类数据"
-          >
-            <Button type="primary" onClick={handleAddCategory}>
-              添加第一个分类
-            </Button>
-          </Empty>
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="暂无分类数据"
+            >
+              <Button type="primary" onClick={handleAddCategory}>
+                添加第一个分类
+              </Button>
+            </Empty>
+          </div>
         ) : (
           <>
             <Table
@@ -661,22 +623,19 @@ const AdminCategories: React.FC = () => {
               scroll={{ x: 1000 }}
               size="middle"
             />
-            <div style={{ marginTop: "24px", textAlign: "center" }}>
+            <div style={{ padding: "12px 24px" }}>
               <Pagination
                 current={currentPage}
                 pageSize={pageSize}
                 total={total}
                 onChange={handlePageChange}
                 showSizeChanger
-                showQuickJumper
-                showTotal={(total, range) =>
-                  `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                }
+                showTotal={(total: number) => `共 ${total} 条`}
               />
             </div>
           </>
         )}
-      </Card>
+      </AdminCard>
 
       {/* 编辑模态框 */}
       <Modal
@@ -694,7 +653,7 @@ const AdminCategories: React.FC = () => {
           onCancel={handleEditFormCancel}
         />
       </Modal>
-    </div>
+    </AdminPage>
   );
 };
 

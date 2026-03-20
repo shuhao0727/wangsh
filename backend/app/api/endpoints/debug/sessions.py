@@ -75,8 +75,6 @@ async def _cleanup_and_count_active_sessions(user_id: int) -> int:
             continue
         if st in ACTIVE_STATUSES:
             active += 1
-        else:
-            active += 1
     return active
 
 

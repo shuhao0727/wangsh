@@ -54,6 +54,25 @@ module.exports = {
     },
   },
 
+  jest: {
+    configure: (jestConfig) => {
+      jestConfig.moduleNameMapper = {
+        ...jestConfig.moduleNameMapper,
+        "^@services/(.*)$": "<rootDir>/src/services/$1",
+        "^@services$": "<rootDir>/src/services/index",
+        "^@components/(.*)$": "<rootDir>/src/components/$1",
+        "^@pages/(.*)$": "<rootDir>/src/pages/$1",
+        "^@layouts/(.*)$": "<rootDir>/src/layouts/$1",
+        "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+        "^@hooks/(.*)$": "<rootDir>/src/hooks/$1",
+        "^@assets/(.*)$": "<rootDir>/src/assets/$1",
+        "^@styles/(.*)$": "<rootDir>/src/styles/$1",
+        "^@/(.*)$": "<rootDir>/src/$1",
+      };
+      return jestConfig;
+    },
+  },
+
   plugins: [
     // 可以添加插件
   ],

@@ -62,12 +62,6 @@ const AdminUsers: React.FC = () => {
         className="admin-users-toolbar ws-responsive-toolbar"
       >
         <div className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
-          <div className="admin-users-title">
-             <UserOutlined style={{ fontSize: 18, color: "var(--ws-color-primary)" }} />
-             <span>用户管理</span>
-          </div>
-          <Divider orientation="vertical" className="admin-users-toolbar-divider" style={{ height: 24, margin: 0 }} />
-          
           <Space size={8} wrap>
             <Search
               placeholder="搜索用户..."
@@ -184,7 +178,6 @@ const AdminUsers: React.FC = () => {
                 total={state.total}
                 onChange={actions.handlePageChange}
                 showSizeChanger
-                showQuickJumper
                 size="small"
                 showTotal={(total) => `共 ${total} 条`}
               />
@@ -201,7 +194,6 @@ const AdminUsers: React.FC = () => {
             size="middle"
             loading={state.loading}
             bordered={false}
-            style={{ borderTop: "none" }}
           />
         </AdminTablePanel>
       </div>

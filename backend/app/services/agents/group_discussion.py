@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, exists, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +17,8 @@ from app.models.agents.group_discussion import (
     GroupDiscussionMessage,
     GroupDiscussionSession,
 )
+from app.models.agents.ai_agent import ZntConversation
+from app.models.core.user import User
 from app.services.agents.chat_blocking import run_agent_chat_blocking
 from app.utils.cache import cache
 
@@ -170,6 +173,20 @@ async def get_or_create_today_session(
             await db.refresh(row)
 
     # 5. 处理成员变更
+    # 先检查目标 session 中是否已有该用户（防止唯一约束冲突）
+    existing_in_target = (
+        await db.execute(
+            select(GroupDiscussionMember).where(
+                GroupDiscussionMember.session_id == row.id,
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing_in_target:
+        # 用户已在目标组中，直接返回
+        return row
+
     if last_member:
         prev_session = (
             await db.execute(
@@ -177,12 +194,17 @@ async def get_or_create_today_session(
             )
         ).scalar_one_or_none()
         if prev_session and prev_session.session_date == today:
-            db.delete(last_member)
+            await db.delete(last_member)
+            await db.flush()
 
-    new_mem = GroupDiscussionMember(session_id=row.id, user_id=user_id)
-    db.add(new_mem)
-    await db.commit()
-    
+    try:
+        new_mem = GroupDiscussionMember(session_id=row.id, user_id=user_id)
+        db.add(new_mem)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        # 并发请求已插入，忽略冲突
+
     return row
 
 
@@ -638,33 +660,82 @@ async def admin_list_messages(
 
 
 def _default_prompt(session: GroupDiscussionSession, analysis_type: str, content: str) -> str:
-    if analysis_type == "learning_topics":
-        task = "请提炼本次讨论的学习主题（按重要性排序），并给出每个主题的要点与代表性问题。"
-    elif analysis_type == "question_chain":
-        task = "请梳理本次讨论的“问题链条”：从最初问题到追问、分歧、验证与结论，按步骤列出。"
-    elif analysis_type == "timeline":
-        task = "请按时间线总结本次讨论：按3分钟为桶概括每段时间的主要内容、关键问题与结论变化。"
-    else:
-        task = "请对讨论内容做结构化总结：学习主题、关键观点、问题链条、待解决问题、下一步建议。"
-    return (
-        f"你是班级小组讨论记录分析助手。\n"
+    ctx = (
+        f"你是一位经验丰富的教学分析助手，擅长从学生讨论中发现深层学习问题。\n"
         f"讨论日期：{session.session_date}\n"
         f"班级：{getattr(session, 'class_name', '')}\n"
         f"组号：{session.group_no}\n\n"
-        f"{task}\n\n"
-        f"讨论记录如下（按时间顺序）：\n{content}\n"
     )
+    if analysis_type == "learning_topics":
+        task = (
+            "请深入分析本次讨论的学习主题，输出 Markdown 格式：\n\n"
+            "## 一、学习主题（按重要性排序）\n"
+            "每个主题请标注：\n"
+            "- 讨论深度：浅层提及 / 深入探讨 / 有争议\n"
+            "- 核心要点与代表性发言\n"
+            "- 学生暴露的认知误区或概念混淆（如有）\n\n"
+            "## 二、知识薄弱点\n"
+            "从讨论中识别学生理解不到位的知识点，说明判断依据。\n\n"
+            "## 三、教学建议\n"
+            "针对发现的薄弱点，给教师 3 条具体的补充讲解建议。\n"
+        )
+    elif analysis_type == "question_chain":
+        task = (
+            "请深入梳理本次讨论的问题链条，输出 Markdown 格式：\n\n"
+            "## 一、问题链条\n"
+            "按步骤列出：初始问题 → 追问 → 分歧 → 验证 → 结论。\n"
+            "每个问题请标注认知层次（记忆/理解/应用/分析/评价/创造）。\n\n"
+            "## 二、断裂点\n"
+            "识别问题链中断、话题跳转、无人回应的问题，分析可能原因。\n\n"
+            "## 三、解答状态\n"
+            "标注哪些问题得到了有效解答，哪些仍悬而未决，未解决的问题给出建议的解答方向。\n"
+        )
+    elif analysis_type == "timeline":
+        task = (
+            "请按时间线深入分析本次讨论，输出 Markdown 格式：\n\n"
+            "## 一、时间线总结\n"
+            "按 3 分钟为桶，每段标注：\n"
+            "- 主要内容与关键问题\n"
+            "- 讨论质量评估（活跃度高/中/低、深度浅/中/深、是否偏题）\n\n"
+            "## 二、关键转折点\n"
+            "识别话题转换、突破性理解、争议爆发等关键时刻，说明其教学意义。\n\n"
+            "## 三、时间利用效率\n"
+            "评估整体时间分配是否合理，哪些阶段效率高/低，给出优化建议。\n"
+        )
+    else:
+        task = (
+            "请对本次讨论做深度结构化分析，输出 Markdown 格式：\n\n"
+            "## 一、学习主题与关键观点\n"
+            "提炼核心主题，列出关键观点和代表性发言。\n\n"
+            "## 二、学生参与度评估\n"
+            "评估每位学生的参与情况：发言次数、有效发言比例、角色（主导者/跟随者/沉默者）。\n\n"
+            "## 三、问题链条与待解决问题\n"
+            "梳理讨论中的问题演进，标注已解决和未解决的问题。\n\n"
+            "## 四、小组协作质量\n"
+            "给出协作质量评分（1-10）及理由，分析互动模式。\n\n"
+            "## 五、改进建议\n"
+            "- 给学生的 3 条建议\n"
+            "- 给教师的 3 条建议\n"
+        )
+    return f"{ctx}{task}\n讨论记录如下（按时间顺序）：\n{content}\n"
 
 
 def _default_compare_prompt(*, bucket_seconds: int, content: str) -> str:
     return (
-        "你是学习讨论对比分析助手。\n"
-        f"请基于下面按时间桶（每{bucket_seconds}秒）汇总的多组讨论记录，输出：\n"
-        "1) 每个时间桶的主要学习主题（1-3条）\n"
-        "2) 每个时间桶的代表性问题链条（问题→追问→验证/结论）\n"
-        "3) 不同小组在同一时间桶的差异点/共性（条目化）\n"
-        "4) 最终给出整体结论：各组主要在讨论什么、讨论进展如何、下一步建议。\n\n"
-        "请用 Markdown 输出，使用清晰的小标题与列表。\n\n"
+        "你是一位教学数据分析专家，擅长横向对比多个小组的讨论质量。\n"
+        f"请基于下面按时间桶（每{bucket_seconds}秒）汇总的多组讨论记录，输出 Markdown 格式：\n\n"
+        "## 一、各时间段主题对比\n"
+        "每个时间桶的主要学习主题（1-3条），标注各组的讨论侧重点差异。\n\n"
+        "## 二、问题链条对比\n"
+        "各组的代表性问题链条（问题→追问→验证/结论），对比深度和完整度。\n\n"
+        "## 三、讨论质量排名\n"
+        "从讨论深度、参与度、问题解决率三个维度对各组排名，给出理由。\n\n"
+        "## 四、共性薄弱知识点\n"
+        "多个小组都暴露出的共性问题或知识盲点，这些是教师需要重点关注的。\n\n"
+        "## 五、优秀讨论片段\n"
+        "推荐 2-3 个值得全班分享的优秀讨论片段，说明其价值。\n\n"
+        "## 六、教学建议\n"
+        "基于以上对比分析，给教师 3 条具体的教学调整建议。\n\n"
         f"{content}\n"
     )
 
@@ -949,3 +1020,208 @@ async def list_classes(db: AsyncSession, *, date: Optional[date] = None) -> List
         stmt = stmt.where(GroupDiscussionSession.session_date == date)
     rows = await db.execute(stmt)
     return [r for r in rows.scalars().all() if r]
+
+
+def _student_profile_prompt(
+    name: str, session_date: str, class_name: str,
+    discussion_lines: List[str], agent_lines: List[str],
+) -> str:
+    disc_text = "\n".join(discussion_lines) if discussion_lines else "（无发言记录）"
+    agent_text = "\n".join(agent_lines) if agent_lines else "（无 AI 提问记录）"
+    return (
+        "你是一位专业的学生学习行为分析助手。\n"
+        f"以下是学生「{name}」在 {session_date}（{class_name}）的学习数据。\n\n"
+        f"【小组讨论发言】（{len(discussion_lines)} 条）\n{disc_text}\n\n"
+        f"【AI 智能体提问记录】（{len(agent_lines)} 条）\n{agent_text}\n\n"
+        "请输出 Markdown 格式的学生学习画像：\n\n"
+        "## 一、学习参与度\n"
+        "发言频率、主动性、是否积极回应他人、在小组中的角色（引导者/跟随者/质疑者/沉默者）。\n\n"
+        "## 二、知识掌握情况\n"
+        "从发言和 AI 提问中推断其对哪些知识点掌握较好、哪些较差，给出具体证据。\n\n"
+        "## 三、思维特征\n"
+        "提问方式分析（直接要答案 vs 尝试理解原理）、思维深度、是否有批判性思考。\n\n"
+        "## 四、知识盲点\n"
+        "在讨论中暴露的误解 + 向 AI 反复追问的知识点，这些是该学生最需要补强的。\n\n"
+        "## 五、学习建议\n"
+        "针对该学生的 3 条具体、可操作的学习建议。\n"
+    )
+
+
+async def admin_student_profile_analysis(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user_id: int,
+    agent_id: int,
+    admin_user: Dict[str, Any],
+) -> GroupDiscussionAnalysis:
+    session = (
+        await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id == session_id))
+    ).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="讨论组不存在")
+
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    user_name = (user.full_name if user else None) or f"用户{user_id}"
+
+    # 该学生在本 session 的发言
+    msgs = (
+        await db.execute(
+            select(GroupDiscussionMessage)
+            .where(GroupDiscussionMessage.session_id == session_id, GroupDiscussionMessage.user_id == user_id)
+            .order_by(GroupDiscussionMessage.id.asc()).limit(200)
+        )
+    ).scalars().all()
+    disc_lines = [f"[{m.created_at}] {m.content}" for m in msgs]
+
+    # 该学生同一天的 AI 智能体对话
+    day_start = datetime.combine(session.session_date, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+    convs = (
+        await db.execute(
+            select(ZntConversation)
+            .where(
+                ZntConversation.user_id == user_id,
+                ZntConversation.message_type == "question",
+                ZntConversation.created_at >= day_start,
+                ZntConversation.created_at < day_end,
+            )
+            .order_by(ZntConversation.created_at.asc()).limit(100)
+        )
+    ).scalars().all()
+    agent_lines = [f"[{c.created_at}] → {c.agent_name or '智能体'}: {c.content}" for c in convs]
+
+    prompt_text = _student_profile_prompt(
+        user_name, str(session.session_date), str(session.class_name),
+        disc_lines, agent_lines,
+    )
+    try:
+        result_text = await run_agent_chat_blocking(db, agent_id=agent_id, message=prompt_text, user="admin")
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith("provider_status_429"):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"分析失败: {msg}")
+        result_text = f"fallback_student_profile\nerror={msg}\nuser_id={user_id}"
+
+    analysis = GroupDiscussionAnalysis(
+        session_id=session_id,
+        agent_id=agent_id,
+        created_by_admin_user_id=int(admin_user["id"]),
+        analysis_type="student_profile",
+        prompt=prompt_text,
+        result_text=result_text,
+    )
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+    return analysis
+
+
+def _cross_system_prompt(discussion_summary: str, agent_questions: str) -> str:
+    return (
+        "你是一位教学数据分析专家。以下是同一班级学生在同一时间段的两类学习数据。\n\n"
+        f"【小组讨论记录摘要】\n{discussion_summary}\n\n"
+        f"【AI 智能体提问记录】\n{agent_questions}\n\n"
+        "请输出 Markdown 格式的跨系统关联分析：\n\n"
+        "## 一、话题关联\n"
+        "小组讨论的热点话题与 AI 提问的热门问题是否一致？哪些话题只在讨论中出现？哪些只在 AI 提问中出现？\n\n"
+        "## 二、学习路径\n"
+        "学生是先讨论再问 AI，还是先问 AI 再回到讨论？这反映了什么学习模式？\n\n"
+        "## 三、共性知识盲点\n"
+        "两个渠道都反复出现的问题/概念，说明是班级共性薄弱点，列出具体知识点。\n\n"
+        "## 四、AI 依赖度分析\n"
+        "哪些学生过度依赖 AI（讨论中沉默但频繁问 AI）？哪些学生善于利用两个渠道互补？\n\n"
+        "## 五、教学建议\n"
+        "基于以上分析，给教师 3 条具体的教学调整建议。\n"
+    )
+
+
+async def admin_cross_system_analysis(
+    db: AsyncSession,
+    *,
+    session_ids: List[int],
+    agent_id: int,
+    admin_user: Dict[str, Any],
+    target_date: Optional[str] = None,
+    class_name: Optional[str] = None,
+) -> GroupDiscussionAnalysis:
+    ids = sorted({int(i) for i in (session_ids or []) if int(i) > 0})
+    if not ids:
+        raise HTTPException(status_code=422, detail="请选择要分析的会话")
+
+    sessions = (
+        await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id.in_(ids)))
+    ).scalars().all()
+    if not sessions:
+        raise HTTPException(status_code=404, detail="未找到会话")
+
+    # 小组讨论消息
+    msgs = (
+        await db.execute(
+            select(GroupDiscussionMessage)
+            .where(GroupDiscussionMessage.session_id.in_(ids))
+            .order_by(GroupDiscussionMessage.created_at.asc())
+            .limit(1000)
+        )
+    ).scalars().all()
+
+    session_label = {int(s.id): f"{s.class_name} {s.group_no}组" for s in sessions}
+    disc_lines = []
+    for m in msgs:
+        label = session_label.get(int(m.session_id), "")
+        disc_lines.append(f"[{m.created_at}] {label} {m.user_display_name}: {m.content}")
+    disc_summary = "\n".join(disc_lines[:500]) if disc_lines else "（无讨论记录）"
+
+    # 确定日期范围和班级
+    dates = sorted({s.session_date for s in sessions})
+    day_start = datetime.combine(dates[0], datetime.min.time())
+    day_end = datetime.combine(dates[-1], datetime.min.time()) + timedelta(days=1)
+
+    # 收集参与讨论的学生 user_id
+    member_rows = (
+        await db.execute(
+            select(GroupDiscussionMember.user_id).where(GroupDiscussionMember.session_id.in_(ids)).distinct()
+        )
+    ).scalars().all()
+    member_user_ids = [int(uid) for uid in member_rows if uid]
+
+    # 查询这些学生同期的 AI 对话
+    conv_stmt = (
+        select(ZntConversation)
+        .where(
+            ZntConversation.message_type == "question",
+            ZntConversation.created_at >= day_start,
+            ZntConversation.created_at < day_end,
+        )
+        .order_by(ZntConversation.created_at.asc())
+        .limit(500)
+    )
+    if member_user_ids:
+        conv_stmt = conv_stmt.where(ZntConversation.user_id.in_(member_user_ids))
+
+    convs = (await db.execute(conv_stmt)).scalars().all()
+    agent_lines = [f"[{c.created_at}] {c.user_name or '学生'} → {c.agent_name or '智能体'}: {c.content}" for c in convs]
+    agent_text = "\n".join(agent_lines[:500]) if agent_lines else "（无 AI 提问记录）"
+
+    prompt_text = _cross_system_prompt(disc_summary, agent_text)
+    try:
+        result_text = await run_agent_chat_blocking(db, agent_id=agent_id, message=prompt_text, user="admin")
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith("provider_status_429"):
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"分析失败: {msg}")
+        result_text = f"fallback_cross_system\nerror={msg}\nsessions={json.dumps(ids)}"
+
+    analysis = GroupDiscussionAnalysis(
+        session_id=int(ids[0]),
+        agent_id=agent_id,
+        created_by_admin_user_id=int(admin_user["id"]),
+        analysis_type="cross_system",
+        prompt=prompt_text,
+        result_text=result_text,
+        compare_session_ids=json.dumps(ids, ensure_ascii=False),
+    )
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+    return analysis

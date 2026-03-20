@@ -1,14 +1,21 @@
-/* AdminLayout 样式 */
+/* AdminLayout 样式 - 无缝融合版 */
 
 .admin-layout {
   min-height: 100vh;
-  background: var(--ws-color-bg);
+  background: #FFFFFF;
 }
 
-/* 左侧边栏头部 */
+/* 侧边栏 — 干净无边框 */
+.admin-layout .ant-layout-sider {
+  background: #FFFFFF !important;
+  border-right: none !important;
+  box-shadow: none !important;
+}
+
+/* 侧边栏头部 */
 .admin-sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid transparent;
+  padding: 20px 16px;
+  border-bottom: none;
 }
 
 .admin-logo {
@@ -18,16 +25,16 @@
 }
 
 .admin-logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: var(--ws-color-primary);
-  border-radius: 6px;
+  border-radius: var(--ws-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
@@ -42,7 +49,14 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid transparent;
+  border-bottom: none;
+  margin: 0 8px;
+  border-radius: var(--ws-radius-md);
+  transition: var(--ws-transition-base);
+}
+
+.admin-user-info:hover {
+  background: var(--ws-color-hover-bg);
 }
 
 .admin-user-details {
@@ -52,7 +66,7 @@
   overflow: hidden;
 }
 
-/* 左侧边栏底部 */
+/* 侧边栏底部 */
 .admin-sidebar-footer {
   position: absolute;
   bottom: 16px;
@@ -61,10 +75,27 @@
   text-align: center;
   padding: 12px 8px;
   background: transparent;
-  border-top: 1px solid transparent;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-/* 头部样式 */
+/* 头部 — 干净无缝 */
+.admin-layout .ant-layout-header {
+  background: #FFFFFF !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+/* 头部底部极淡分隔线 */
+.admin-layout .ant-layout-header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .admin-header-left {
   display: flex;
   align-items: center;
@@ -77,7 +108,58 @@
   min-width: 0;
 }
 
-/* 响应式设计 */
+/* 菜单样式 — pill 形 active */
+.admin-layout .ant-menu {
+  border-right: 0;
+  background: transparent;
+  padding: 0 8px;
+}
+
+.admin-layout .ant-menu-item {
+  margin: 2px 4px !important;
+  border-radius: var(--ws-radius-md) !important;
+  width: auto !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  transition: var(--ws-transition-base);
+}
+
+.admin-layout .ant-menu-item-selected {
+  background: var(--ws-color-primary-soft) !important;
+  color: var(--ws-color-primary) !important;
+  font-weight: 600;
+}
+
+.admin-layout .ant-menu-item:not(.ant-menu-item-selected):hover {
+  background-color: var(--ws-color-hover-bg) !important;
+  color: var(--ws-color-text);
+}
+
+.admin-layout .ant-menu-submenu-title {
+  margin: 2px 4px !important;
+  border-radius: var(--ws-radius-md) !important;
+  height: 40px !important;
+  line-height: 40px !important;
+}
+
+/* 折叠动画 */
+.ant-layout-sider-collapsed .admin-logo-text,
+.ant-layout-sider-collapsed .admin-user-details {
+  display: none;
+}
+
+/* 侧边栏右侧极淡分隔线 */
+.admin-layout .ant-layout-sider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 响应式 */
 @media (max-width: 768px) {
   .admin-layout .ant-layout-sider {
     position: fixed !important;
@@ -134,43 +216,4 @@
     left: 0;
     width: 44px !important;
   }
-}
-
-/* 动画效果 */
-.ant-layout-sider-collapsed .admin-logo-text,
-.ant-layout-sider-collapsed .admin-user-details {
-  display: none;
-}
-
-/* 管理菜单样式 */
-.admin-layout .ant-menu {
-  border-right: 0;
-  background: transparent;
-}
-
-.admin-layout .ant-menu-item {
-  margin: 4px 12px !important;
-  border-radius: 6px;
-  width: auto !important;
-}
-
-.admin-layout .ant-menu-item-selected {
-  background-color: var(--ws-color-primary-soft) !important;
-  color: var(--ws-color-primary) !important;
-  font-weight: 500;
-}
-
-.admin-layout .ant-menu-item:not(.ant-menu-item-selected):hover {
-  background-color: var(--ws-color-hover-bg) !important;
-  color: var(--ws-color-text);
-}
-
-.admin-layout .ant-layout-sider {
-  background: #ffffff !important;
-  border-right: 1px solid transparent;
-}
-
-.admin-layout .ant-layout-header {
-  background: #ffffff !important;
-  border-bottom: 1px solid transparent;
 }

@@ -23,6 +23,7 @@ class AIAgentBase(BaseModel):
     model_name: Optional[str] = Field(None, max_length=100, description="模型名称（如：deepseek-chat, gpt-4, 深度思考等）")
     api_endpoint: Optional[AnyHttpUrl] = Field(None, description="API端点URL")
     api_key: Optional[str] = Field(None, max_length=200, description="API密钥")
+    system_prompt: Optional[str] = Field(None, max_length=8000, description="系统提示词（智能体人设/角色设定）")
     is_active: bool = Field(True, description="是否启用")
     
     @validator("name")
@@ -46,6 +47,7 @@ class AIAgentUpdate(BaseModel):
     model_name: Optional[str] = Field(None, max_length=100, description="模型名称")
     api_endpoint: Optional[AnyHttpUrl] = Field(None, description="API端点URL")
     api_key: Optional[str] = Field(None, max_length=200, description="API密钥")
+    system_prompt: Optional[str] = Field(None, max_length=8000, description="系统提示词（智能体人设/角色设定）")
     clear_api_key: Optional[bool] = Field(False, description="是否清除已保存的API密钥")
     is_active: Optional[bool] = Field(None, description="是否启用")
 
@@ -56,6 +58,13 @@ class AIAgentUpdate(BaseModel):
             if not v.strip():
                 raise ValueError("智能体名称不能为空")
             return v.strip()
+        return v
+
+    @validator("model_name", pre=True)
+    def coerce_model_name(cls, v):
+        """兼容前端 tags 模式可能传入数组"""
+        if isinstance(v, list):
+            return v[0] if v else None
         return v
 
 
@@ -78,6 +87,7 @@ class AIAgentResponse(AIAgentInDB):
     agent_name: Optional[str] = Field(None, description="智能体名称别名（前端兼容字段）")
     description: Optional[str] = Field(None, description="描述")
     model_name: Optional[str] = Field(None, description="模型名称（前端兼容字段）")
+    system_prompt: Optional[str] = Field(None, description="系统提示词")
     
     class Config:
         from_attributes = True
@@ -98,9 +108,16 @@ class AgentTestRequest(BaseModel):
     agent_id: int = Field(..., description="智能体ID")
     test_message: str = Field(..., min_length=1, max_length=1000, description="测试消息")
 
+class ChatMessage(BaseModel):
+    """对话历史中的单条消息"""
+    role: Literal["user", "assistant", "system"] = Field(..., description="消息角色")
+    content: str = Field(..., min_length=1, max_length=16000, description="消息内容")
+
+
 class AgentChatRequest(BaseModel):
     agent_id: int = Field(..., description="智能体ID")
-    message: str = Field(..., min_length=1, max_length=4000, description="对话消息")
+    message: str = Field(..., min_length=1, max_length=4000, description="当前对话消息")
+    messages: Optional[List[ChatMessage]] = Field(None, description="对话历史（多轮上下文）")
     user: Optional[str] = Field(None, description="用户标识")
     inputs: Optional[Dict[str, Any]] = Field(default_factory=dict, description="附加输入")
 

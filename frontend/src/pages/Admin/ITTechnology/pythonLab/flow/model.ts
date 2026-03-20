@@ -13,6 +13,8 @@ export type FlowNodeShape =
   | "subroutine"
   | "list_op"
   | "dict_op"
+  | "str_op"
+  | "jump"
   | "collection"
   | "note";
 
@@ -106,6 +108,8 @@ const isFlowNodeShape = (v: unknown): v is FlowNodeShape =>
   v === "subroutine" ||
   v === "list_op" ||
   v === "dict_op" ||
+  v === "str_op" ||
+  v === "jump" ||
   v === "collection" ||
   v === "note";
 
@@ -114,7 +118,8 @@ const inferCollectionShapeFromTitle = (title: string): FlowNodeShape => {
   const low = t.toLowerCase();
   if (!t) return "list_op";
   if (/=\s*\{[^}]*\}\s*$/.test(t)) return "dict_op";
-  if (/\.\s*(get|setdefault|update|items|keys|values)\s*\(/.test(low)) return "dict_op";
+  if (/\.\s*(get|setdefault|update|items|keys|values|popitem)\s*\(/.test(low)) return "dict_op";
+  if (/\.\s*(append|extend|insert|remove|clear|sort|reverse|pop)\s*\(/.test(low)) return "list_op";
   if (/^[a-z_][a-z0-9_]*\s*\[[^\]]+\]\s*=/.test(low) && low.includes("dict")) return "dict_op";
   if (/=\s*dict\s*\(/.test(low) || /dict\s*\(/.test(low)) return "dict_op";
   return "list_op";

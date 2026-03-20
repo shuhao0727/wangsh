@@ -19,6 +19,13 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
     return Array.from({ length: n }, (_, i) => i + 1);
   }, [value]);
 
+  // 根据最大行号位数动态计算 gutter 宽度
+  const gutterWidth = useMemo(() => {
+    const digits = String(lines.length).length;
+    // 每个数字约 8px（13px monospace），加左右 padding
+    return Math.max(32, digits * 8 + 20);
+  }, [lines.length]);
+
   useEffect(() => {
     const ta: HTMLTextAreaElement | null = textareaRef?.current?.resizableTextArea?.textArea || null;
     if (!ta) return;
@@ -33,7 +40,7 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
 
   return (
     <div className="typst-ln-wrap">
-      <div className="typst-ln-gutter" ref={gutterRef}>
+      <div className="typst-ln-gutter" ref={gutterRef} style={{ width: gutterWidth, flex: `0 0 ${gutterWidth}px` }}>
         {lines.map((n) => (
           <div key={n} className="typst-ln">
             {n}
@@ -51,6 +58,8 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
             height: "100%",
             resize: "none",
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 13,
+            lineHeight: "22px",
           }}
         />
       </div>

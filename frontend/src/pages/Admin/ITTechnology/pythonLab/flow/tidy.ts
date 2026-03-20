@@ -565,7 +565,7 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
   const tidyStats = computeStats(ns, es, startId, endId);
   const tidyEdges: FlowEdge[] = es.map((e) => {
     if (e.toEdge) return e;
-    return { ...e, style: "straight", routeMode: "auto", routeShape: undefined, anchor: null, anchors: undefined };
+    return { ...e, style: "straight", routeMode: "auto", routeShape: undefined, anchor: null, anchors: undefined, fromPort: e.fromPort, toPort: e.toPort };
   });
 
   return {

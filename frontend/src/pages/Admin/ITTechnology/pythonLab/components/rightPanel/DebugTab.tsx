@@ -43,7 +43,7 @@ export function DebugTab(props: {
                 const name = String(r?.name ?? v ?? "");
                 const changed = changedSet.has(name);
                 const content = typeof baseRender === "function" ? baseRender(v, r, idx) : name;
-                return changed ? <span style={{ fontWeight: 700, color: "#1677ff" }}>{content}</span> : content;
+                return changed ? <span style={{ fontWeight: 700, color: "#0EA5E9" }}>{content}</span> : content;
               },
             };
           })

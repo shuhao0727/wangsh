@@ -11,6 +11,7 @@ from .ai_agent import (
     AIAgentListResponse,
     AgentTestRequest,
     AgentChatRequest,
+    ChatMessage,
     AgentTestResponse,
     AgentRevealKeyRequest,
     AgentRevealKeyResponse,
@@ -60,6 +61,8 @@ from .group_discussion import (
     GroupDiscussionMemberOut,
     GroupDiscussionAdminMemberListResponse,
     GroupDiscussionAdminDeleteSessionsRequest,
+    GroupDiscussionStudentProfileRequest,
+    GroupDiscussionCrossSystemRequest,
 )
 
 __all__ = [
@@ -71,6 +74,7 @@ __all__ = [
     "AIAgentListResponse",
     "AgentTestRequest",
     "AgentChatRequest",
+    "ChatMessage",
     "AgentTestResponse",
     "AgentRevealKeyRequest",
     "AgentRevealKeyResponse",
@@ -115,4 +119,6 @@ __all__ = [
     "GroupDiscussionMemberOut",
     "GroupDiscussionAdminMemberListResponse",
     "GroupDiscussionAdminDeleteSessionsRequest",
+    "GroupDiscussionStudentProfileRequest",
+    "GroupDiscussionCrossSystemRequest",
 ]

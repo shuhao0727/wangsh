@@ -31,6 +31,8 @@ export type FlowNodeShape =
   | "subroutine"
   | "list_op"
   | "dict_op"
+  | "str_op"
+  | "jump"
   | "collection"
   | "note";
 

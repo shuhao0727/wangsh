@@ -5,14 +5,13 @@ import {
   Button,
   Row,
   Col,
-  Divider,
   Input,
   Switch,
   Tag,
   message,
   Segmented,
 } from "antd";
-import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ReloadOutlined } from "@ant-design/icons";
 import { AdminCard, AdminPage } from "@components/Admin";
 import { api } from "@services";
 import { featureFlagsApi } from "@/services/system/featureFlags";
@@ -20,6 +19,13 @@ import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import TypstMetricsPanel from "./TypstMetrics";
 
 const { Text } = Typography;
+
+const InfoRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+    <Text type="secondary">{label}</Text>
+    <span>{value}</span>
+  </div>
+);
 
 const AdminSystem: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -29,27 +35,13 @@ const AdminSystem: React.FC = () => {
   const [tab, setTab] = useState<"system" | "typst">("system");
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
   const [navToggleLoading, setNavToggleLoading] = useState<Record<string, boolean>>({});
+/* PLACEHOLDER_SYS_1 */
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const h = await api.get("/health");
-      setHealth(h.data);
-    } catch {
-      setHealth(null);
-    }
-    try {
-      const s = await api.get("/system/settings");
-      setSettings(s.data);
-    } catch {
-      setSettings(null);
-    }
-    try {
-      const o = await api.get("/system/overview");
-      setOverview(o.data);
-    } catch {
-      setOverview(null);
-    }
+    try { setHealth((await api.get("/health")).data); } catch { setHealth(null); }
+    try { setSettings((await api.get("/system/settings")).data); } catch { setSettings(null); }
+    try { setOverview((await api.get("/system/overview")).data); } catch { setOverview(null); }
     try {
       const flags = await featureFlagsApi.list();
       const next: Record<string, boolean> = {};
@@ -66,204 +58,110 @@ const AdminSystem: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+
+  const handleNavToggle = async (item: typeof NAV_VISIBILITY_ITEMS[number], checked: boolean) => {
+    setNavToggleLoading((prev) => ({ ...prev, [item.path]: true }));
+    try {
+      await featureFlagsApi.save({ key: item.flagKey, value: { enabled: checked } });
+      setNavVisibleMap((prev) => ({ ...prev, [item.path]: checked }));
+      message.success(`${item.label}${checked ? "已设为可见" : "已设为隐藏"}`);
+    } catch (e: any) {
+      const d = e?.response?.data?.detail;
+      message.error(typeof d === "string" ? d : (e?.message || "保存失败"));
+    } finally {
+      setNavToggleLoading((prev) => ({ ...prev, [item.path]: false }));
+    }
+  };
 
   return (
     <AdminPage>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          marginBottom: "24px",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 16 }}>
         <Space>
-          <Segmented
-            value={tab}
-            options={[
-              { label: "系统", value: "system" },
-              { label: "Typst", value: "typst" },
-            ]}
-            onChange={(v) => setTab(v as any)}
-          />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>
-            刷新
-          </Button>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            disabled
-            onClick={() => message.info("当前为只读配置展示，后续可扩展为可编辑配置")}
-          >
-            保存设置
-          </Button>
+          <Segmented value={tab} options={[{ label: "系统", value: "system" }, { label: "Typst", value: "typst" }]} onChange={(v) => setTab(v as any)} />
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
         </Space>
       </div>
 
       {tab === "typst" ? (
         <TypstMetricsPanel />
       ) : (
-        <Row gutter={[24, 24]}>
+        <Row gutter={[16, 16]}>
           <Col xs={24}>
             <AdminCard title="前端导航可见性">
               <div style={{ display: "flex", gap: 24, rowGap: 12, flexWrap: "wrap", alignItems: "center" }}>
                 {NAV_VISIBILITY_ITEMS.map((item) => (
-                  <div key={item.path}>
-                    <Space size={8}>
-                      <Text>{item.label}</Text>
-                      <Switch
-                        checked={navVisibleMap[item.path] !== false}
-                        loading={!!navToggleLoading[item.path]}
-                        onChange={async (checked) => {
-                          setNavToggleLoading((prev) => ({ ...prev, [item.path]: true }));
-                          try {
-                            await featureFlagsApi.save({
-                              key: item.flagKey,
-                              value: { enabled: checked },
-                            });
-                            setNavVisibleMap((prev) => ({ ...prev, [item.path]: checked }));
-                            message.success(`${item.label}${checked ? "已设为可见" : "已设为隐藏"}`);
-                          } catch (e: any) {
-                            message.error(e?.response?.data?.detail || e?.message || "保存失败");
-                          } finally {
-                            setNavToggleLoading((prev) => ({ ...prev, [item.path]: false }));
-                          }
-                        }}
-                      />
-                    </Space>
-                  </div>
+                  <Space key={item.path} size={8}>
+                    <Text>{item.label}</Text>
+                    <Switch
+                      checked={navVisibleMap[item.path] !== false}
+                      loading={!!navToggleLoading[item.path]}
+                      onChange={(checked) => handleNavToggle(item, checked)}
+                    />
+                  </Space>
                 ))}
               </div>
             </AdminCard>
           </Col>
+
           <Col xs={24} lg={12}>
-            <AdminCard
-              title="基本设置"
-            >
-              <Space orientation="vertical" style={{ width: "100%" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text>服务状态</Text>
-                  {health?.status ? (
-                    <Tag color={health.status === "healthy" ? "green" : health.status === "degraded" ? "orange" : "red"}>
-                      {health.status}
-                    </Tag>
-                  ) : (
-                    <Tag>-</Tag>
-                  )}
-                </div>
-                <Divider />
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text>后端版本</Text>
-                  <Text type="secondary">{health?.system?.version || "-"}</Text>
-                </div>
-                <Divider />
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text>运行环境</Text>
-                  <Text type="secondary">{health?.system?.environment || "-"}</Text>
-                </div>
-              </Space>
+            <AdminCard title="基本设置">
+              <InfoRow label="服务状态" value={
+                health?.status
+                  ? <Tag color={health.status === "healthy" ? "green" : health.status === "degraded" ? "orange" : "red"}>{health.status}</Tag>
+                  : <Tag>-</Tag>
+              } />
+              <InfoRow label="后端版本" value={<Text type="secondary">{health?.system?.version || "-"}</Text>} />
+              <InfoRow label="运行环境" value={<Text type="secondary">{health?.system?.environment || "-"}</Text>} />
             </AdminCard>
           </Col>
+
           <Col xs={24} lg={12}>
             <AdminCard title="安全设置">
-              <Space orientation="vertical" style={{ width: "100%" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div>
-                  <Text strong>JWT 过期时间</Text>
-                  <Input value={settings?.security?.jwt_expire_minutes ?? ""} addonAfter="分钟" readOnly />
+                  <Text type="secondary" style={{ fontSize: 12 }}>JWT 过期时间</Text>
+                  <Space.Compact style={{ width: "100%" }}>
+                    <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly style={{ flex: 1 }} />
+                    <Button disabled>分钟</Button>
+                  </Space.Compact>
                 </div>
-                <Divider />
                 <div>
-                  <Text strong>算法</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>算法</Text>
                   <Input value={settings?.security?.algorithm ?? ""} readOnly />
                 </div>
-                <Divider />
                 <div>
-                  <Text strong>Auto Create Tables</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Auto Create Tables</Text>
                   <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly />
                 </div>
-              </Space>
+              </div>
             </AdminCard>
           </Col>
+
           <Col xs={24}>
             <AdminCard title="观测指标">
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={12}>
-                  <Space orientation="vertical" style={{ width: "100%" }}>
-                    <Text strong>HTTP</Text>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">总请求</Text>
-                      <Text>{overview?.observability?.http?.total ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">4xx</Text>
-                      <Text>{overview?.observability?.http?.["4xx"] ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">5xx</Text>
-                      <Text>{overview?.observability?.http?.["5xx"] ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">In-flight</Text>
-                      <Text>{overview?.observability?.http?.inflight ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">p95(ms)</Text>
-                      <Text>{overview?.observability?.http?.dur_ms?.p95 ?? "-"}</Text>
-                    </div>
-                  </Space>
+                  <Text strong style={{ display: "block", marginBottom: 8 }}>HTTP</Text>
+                  <InfoRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
+                  <InfoRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
+                  <InfoRow label="5xx" value={overview?.observability?.http?.["5xx"] ?? "-"} />
+                  <InfoRow label="In-flight" value={overview?.observability?.http?.inflight ?? "-"} />
+                  <InfoRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
                 </Col>
                 <Col xs={24} md={12}>
-                  <Space orientation="vertical" style={{ width: "100%" }}>
-                    <Text strong>DB Pool</Text>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">pool_size</Text>
-                      <Text>{overview?.observability?.db?.pool_size ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">checked_in</Text>
-                      <Text>{overview?.observability?.db?.checked_in ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">checked_out</Text>
-                      <Text>{overview?.observability?.db?.checked_out ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">overflow</Text>
-                      <Text>{overview?.observability?.db?.overflow ?? "-"}</Text>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <Text type="secondary">capacity</Text>
-                      <Text>{overview?.observability?.db?.capacity_total ?? "-"}</Text>
-                    </div>
-                  </Space>
+                  <Text strong style={{ display: "block", marginBottom: 8 }}>DB Pool</Text>
+                  <InfoRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
+                  <InfoRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />
+                  <InfoRow label="checked_out" value={overview?.observability?.db?.checked_out ?? "-"} />
+                  <InfoRow label="overflow" value={overview?.observability?.db?.overflow ?? "-"} />
+                  <InfoRow label="capacity" value={overview?.observability?.db?.capacity_total ?? "-"} />
                 </Col>
               </Row>
             </AdminCard>
           </Col>
         </Row>
       )}
-
     </AdminPage>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { logger } from "@services/logger";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
@@ -32,7 +33,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           Boolean((window as any).__PYTHONLAB_TERMINAL_TRACE__) ||
           window.localStorage?.getItem("pythonlab:terminal:trace") === "1";
         if (!enabled) return;
-        console.info("[pythonlab:terminal:pyodide]", {
+        logger.info("[pythonlab:terminal:pyodide]", {
           phase,
           epoch: termEpochRef.current,
           disposed: terminalDisposedRef.current,

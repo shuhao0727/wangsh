@@ -421,6 +421,24 @@ start_docker_infrastructure() {
         print_info "PostgreSQL容器已在运行"
     fi
 
+    print_info "确认PostgreSQL可接受连接..."
+    local pg_ready_attempt=1
+    local pg_ready_max=30
+    while true; do
+        if docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" -i wangsh-postgres \
+            psql -U "${POSTGRES_USER:-admin}" -d "${POSTGRES_DB:-wangsh_db}" -c "SELECT 1;" > /dev/null 2>&1; then
+            break
+        fi
+        if [ ${pg_ready_attempt} -ge ${pg_ready_max} ]; then
+            print_error "PostgreSQL连接超时（容器已运行但数据库仍未就绪）"
+            exit 1
+        fi
+        print_info "等待PostgreSQL接受连接... (${pg_ready_attempt}/${pg_ready_max})"
+        sleep 2
+        ((pg_ready_attempt++))
+    done
+    print_success "PostgreSQL连接就绪"
+
     local db_migration_sql="${PROJECT_ROOT}/backend/db/migrations/20260216_local_dev_schema.sql"
     if [ -f "${db_migration_sql}" ]; then
         print_info "执行本地开发数据库迁移..."
@@ -476,6 +494,21 @@ start_docker_infrastructure() {
     fi
 
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+        # Ensure arm64 sandbox image exists for Apple Silicon dev machines
+        local sandbox_image="${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}"
+        if ! docker image inspect "${sandbox_image}" > /dev/null 2>&1; then
+            print_info "构建 PythonLab sandbox 镜像 (${sandbox_image})..."
+            local sandbox_dir="${PROJECT_ROOT}/backend/docker/pythonlab-sandbox"
+            if [ -d "${sandbox_dir}" ]; then
+                docker build --platform linux/arm64 \
+                    -t "${sandbox_image}" \
+                    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
+                    "${sandbox_dir}"
+                print_success "Sandbox 镜像构建完成: ${sandbox_image}"
+            else
+                print_warning "未找到 sandbox Dockerfile: ${sandbox_dir}，跳过构建"
+            fi
+        fi
         print_info "启动PythonLab Worker容器..."
         cd "${PROJECT_ROOT}"
         if [ -f ".env.dev" ]; then

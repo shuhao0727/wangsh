@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import DOMPurify from "dompurify";
 import {
   Typography,
   Button,
@@ -28,6 +29,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { articleApi } from "@services";
 import type { ArticleWithRelations } from "@services";
+import { logger } from "@services/logger";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import { toScopedCss } from "@utils/scopedCss";
 import SplitPanePage from "@components/Layout/SplitPanePage";
@@ -136,7 +138,7 @@ const ArticleDetailPage: React.FC = () => {
           setArticle(articleData);
         }
       } catch (err: any) {
-        console.error("获取文章详情失败:", err);
+        logger.error("获取文章详情失败:", err);
         if (isMounted) {
           setError(
             err.response?.data?.detail || "获取文章详情失败，请稍后重试",
@@ -369,7 +371,7 @@ const ArticleDetailPage: React.FC = () => {
       <div style={{ minHeight: 400 }}>
         {article.content ? (
           <div className="article-content ws-markdown" data-article-scope={scopeId}>
-            {scopedCss ? <style dangerouslySetInnerHTML={{ __html: scopedCss }} /> : null}
+            {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{

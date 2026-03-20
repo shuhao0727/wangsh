@@ -6,37 +6,42 @@
   overflow: hidden;
 }
 
+/* 聊天头部 */
 .chat-header {
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--ws-color-border);
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
-  background: var(--ws-color-surface);
+  background: #FFFFFF;
+  min-height: 56px;
 }
 
+/* 消息列表 — 微灰背景区分 */
 .chat-message-list {
   flex: 1;
   padding: 20px 24px;
   overflow-y: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  background: #fafafa;
+  background: #FAFAFA;
   min-height: 0;
   scroll-behavior: smooth;
 }
 
+/* 输入区域 */
 .chat-input-area {
-  padding: 12px 24px;
-  border-top: 1px solid var(--ws-color-border);
+  padding: 12px 20px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
-  background: var(--ws-color-surface);
+  background: #FFFFFF;
 }
 
+/* 消息气泡容器 */
 .message-bubble-container {
   display: flex;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .message-bubble-container.user {
@@ -48,38 +53,40 @@
 }
 
 .message-content-wrapper {
-  max-width: 85%;
+  max-width: 80%;
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
 .message-content-wrapper.user {
   flex-direction: row-reverse;
 }
 
+/* 聊天气泡 — 用户蓝底，AI 白底 */
 .message-bubble {
-  padding: 14px 18px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 12px 16px;
+  box-shadow: none;
   font-size: 14px;
   line-height: 1.6;
 }
 
 .message-bubble.user {
-  background: #e6f7ff;
+  background: rgba(14, 165, 233, 0.1);
   color: var(--ws-color-text);
-  border-radius: 18px 18px 6px 18px;
-  border: 1px solid #bae7ff;
+  border-radius: 16px 16px 4px 16px;
+  border: none;
 }
 
 .message-bubble.agent {
-  background: #ffffff;
+  background: #FFFFFF;
   color: var(--ws-color-text);
-  border-radius: 18px 18px 18px 6px;
-  border: 1px solid #f0f0f0;
+  border-radius: 16px 16px 16px 4px;
+  border: none;
 }
 
+/* Markdown 内容 */
 .markdown-body p {
-  margin-bottom: 0.8em;
+  margin-bottom: 0.6em;
 }
 
 .markdown-body p:last-child {
@@ -87,24 +94,26 @@
 }
 
 .markdown-body pre {
-  background: var(--ws-color-surface-2);
-  padding: 12px;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.03);
+  padding: 12px 14px;
+  border-radius: 8px;
   overflow-x: auto;
   margin: 8px 0;
+  border: none;
+  font-size: 13px;
 }
 
 .markdown-body code {
-  background: rgba(0, 0, 0, 0.06);
-  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 1px 5px;
   border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
 }
 
-/* Thinking Bubble Animation */
+/* Thinking 动画 */
 @keyframes jump {
-  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
   50% { transform: translateY(-4px); opacity: 1; }
 }
 
@@ -112,18 +121,42 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--ws-color-text-tertiary);
+  font-size: 13px;
 }
 
 .thinking-dots {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .thinking-dot {
-  width: 6px;
-  height: 6px;
-  background: currentColor;
+  width: 5px;
+  height: 5px;
+  background: var(--ws-color-primary);
   border-radius: 50%;
   animation: jump 1s infinite;
+}
+
+/* 移动端 */
+@media (max-width: 768px) {
+  .chat-message-list {
+    padding: 12px;
+  }
+  .chat-input-area {
+    padding: 10px 12px 14px;
+  }
+  .chat-header {
+    padding: 10px 12px;
+    min-height: 48px;
+  }
+  .message-content-wrapper {
+    max-width: 92%;
+    gap: 8px;
+  }
+  .message-bubble {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
 }

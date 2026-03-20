@@ -485,7 +485,7 @@ export const groupDiscussionApi = {
         agent_id: params.agentId,
         analysis_type: params.analysisType ?? "summary",
         prompt: params.prompt,
-      });
+      }, { timeout: 180000 });
       const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
@@ -580,7 +580,7 @@ export const groupDiscussionApi = {
         analysis_type: params.analysisType,
         prompt: params.prompt,
         use_cache: params.useCache ?? true,
-      });
+      }, { timeout: 180000 });
       const raw = response.data as unknown as Record<string, unknown>;
       const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
       return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
@@ -591,6 +591,48 @@ export const groupDiscussionApi = {
         message: errMsg(error, "分析失败"),
         data: { analysis_id: 0, result_text: "", created_at: "" },
       };
+    }
+  },
+
+  adminStudentProfile: async (params: {
+    sessionId: number;
+    userId: number;
+    agentId: number;
+  }): Promise<BaseResponse<GroupDiscussionAdminAnalyzeResponse>> => {
+    try {
+      const response = await api.post(`${BASE_PATH}/admin/student-profile`, {
+        session_id: params.sessionId,
+        user_id: params.userId,
+        agent_id: params.agentId,
+      }, { timeout: 180000 });
+      const raw = response.data as unknown as Record<string, unknown>;
+      const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
+      return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
+    } catch (error: unknown) {
+      logger.error("学生画像分析失败:", error);
+      return { success: false, message: errMsg(error, "学生画像分析失败"), data: { analysis_id: 0, result_text: "", created_at: "" } };
+    }
+  },
+
+  adminCrossSystemAnalyze: async (params: {
+    sessionIds: number[];
+    agentId: number;
+    date?: string;
+    className?: string;
+  }): Promise<BaseResponse<GroupDiscussionAdminAnalyzeResponse>> => {
+    try {
+      const response = await api.post(`${BASE_PATH}/admin/cross-system-analyze`, {
+        session_ids: params.sessionIds,
+        agent_id: params.agentId,
+        date: params.date,
+        class_name: params.className,
+      }, { timeout: 180000 });
+      const raw = response.data as unknown as Record<string, unknown>;
+      const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as unknown;
+      return { success: true, message: "分析成功", data: data as GroupDiscussionAdminAnalyzeResponse };
+    } catch (error: unknown) {
+      logger.error("跨系统分析失败:", error);
+      return { success: false, message: errMsg(error, "跨系统分析失败"), data: { analysis_id: 0, result_text: "", created_at: "" } };
     }
   },
 };

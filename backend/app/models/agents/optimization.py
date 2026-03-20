@@ -19,7 +19,7 @@ class OptimizeLog(Base):
     updated_at = None
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("sys_users.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True, index=True)
     project_id = Column(Integer, nullable=True, index=True) # 可以关联到实验ID
     
     # type: 'code' or 'flow'

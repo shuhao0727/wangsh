@@ -43,7 +43,7 @@
 }
 
 .article-edit-editor-side.article-edit-editor-side-collapsed {
-  overflow: visible;
+  overflow: hidden;
   padding-right: 0;
 }
 
@@ -154,10 +154,10 @@
   min-height: 0;
   padding: 12px;
   overflow: hidden;
-  background: var(--ws-color-surface);
+  background: #FAFAFA;
 }
 
-/* 
+/*
  * The Deep Flex Chain for Form.Item 
  * We must target Antd internals to pass height down 
  */
@@ -224,8 +224,8 @@
   height: 100% !important;
   width: 100% !important;
   padding: 0; /* Let textarea handle padding */
-  border: 1px solid #d9d9d9; /* Re-apply border if lost */
-  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--ws-radius-md);
   box-sizing: border-box;
 }
 
@@ -248,8 +248,8 @@
   padding: 4px 12px;
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: #FFFFFF;
+  border-top: 1px solid rgba(0,0,0,0.04);
   width: 100%;
   box-sizing: border-box;
 }
@@ -266,10 +266,31 @@
     height: auto;
     overflow: visible;
   }
-  
+
   .article-edit-editor-main {
     height: auto;
     min-height: 500px; /* Minimum height for editor */
+  }
+}
+
+@media (max-width: 768px) {
+  .article-edit-editor-main {
+    min-height: 400px;
+  }
+
+  .article-editor-body {
+    padding: 8px;
+  }
+
+  .article-editor-toolbar {
+    gap: 4px;
+    padding: 8px;
+    flex-wrap: wrap;
+  }
+
+  .article-preview-toolbar {
+    gap: 4px;
+    padding: 8px;
   }
 }
 
@@ -278,27 +299,26 @@
   flex: 1;
   height: 100%;
   min-height: 0;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--ws-radius-md);
   overflow: hidden;
-  background: #fff;
+  background: #FFFFFF;
 }
 
 .md-ln-gutter {
-  width: 44px;
-  flex: 0 0 44px;
   overflow: hidden;
-  padding: 12px 6px;
+  padding: 12px 8px 12px 4px;
   background: rgba(0, 0, 0, 0.02);
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid rgba(0,0,0,0.04);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  color: var(--ws-color-text-tertiary);
   user-select: none;
+  transition: width 0.15s ease;
 }
 
 .md-ln {
-  line-height: 23.8px;
+  line-height: 24px;
   text-align: right;
 }
 
@@ -327,8 +347,15 @@
   border: 0;
   border-radius: 0;
   padding: 12px;
+  line-height: 24px;
+  font-size: 14px;
   height: 100% !important;
   box-shadow: none !important;
+  background: transparent;
+}
+
+.md-ln-editor .ant-input-data-count {
+  display: none;
 }
 
 .article-preview-card {
@@ -354,8 +381,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface);
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  background: #FAFAFA;
 }
 
 .article-preview-body {
@@ -363,7 +390,7 @@
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  background: var(--ws-color-surface);
+  background: #FAFAFA;
 }
 
 .article-editor-toolbar {
@@ -372,8 +399,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface);
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  background: #FAFAFA;
 }
 
 .article-editor-toolbar-label {
@@ -390,6 +417,20 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
-  border-top: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface);
+  border-top: 1px solid rgba(0,0,0,0.04);
+  background: #FAFAFA;
+}
+
+/* Actions card at bottom */
+.article-edit-actions-card {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--ws-color-surface-2) !important;
+  border-top: 1px solid rgba(0,0,0,0.04);
+  border-radius: 0 0 var(--ws-radius-lg) var(--ws-radius-lg);
+}
+
+.article-edit-actions-card .ant-card-body {
+  padding: 10px 16px !important;
 }

@@ -1,12 +1,17 @@
 import { parsePythonToIR } from "./python_sync";
 
 type CodeIRBlock = { kind: "block"; items: CodeIRNode[] };
-type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRDef;
+type CodeIRNode = CodeIRStmt | CodeIRIf | CodeIRWhile | CodeIRForRange | CodeIRFor | CodeIRForIn | CodeIRBreak | CodeIRContinue | CodeIRReturn | CodeIRDef;
 type SourceLoc = { line: number };
 type CodeIRStmt = { kind: "stmt"; text: string; loc: SourceLoc; focusRole?: string };
 type CodeIRIf = { kind: "if"; cond: string; then: CodeIRBlock; else: CodeIRBlock | null; loc: SourceLoc };
 type CodeIRWhile = { kind: "while"; cond: string; body: CodeIRBlock; loc: SourceLoc; focusRole?: string };
 type CodeIRForRange = { kind: "for_range"; v: string; start: string; end: string; step: string | null; body: CodeIRBlock; loc: SourceLoc };
+type CodeIRFor = { kind: "for"; body: CodeIRBlock; loc: SourceLoc };
+type CodeIRForIn = { kind: "for_in"; body: CodeIRBlock; loc: SourceLoc };
+type CodeIRBreak = { kind: "break"; loc: SourceLoc };
+type CodeIRContinue = { kind: "continue"; loc: SourceLoc };
+type CodeIRReturn = { kind: "return"; loc: SourceLoc };
 type CodeIRDef = { kind: "def"; name: string; params: string[]; body: CodeIRBlock; loc: SourceLoc };
 
 type PyValue = number | string | boolean | null;
@@ -132,6 +137,12 @@ export function validatePythonStrict(code: string): StrictValidationResult {
           }
         }
         walk(it.body, inFunc, topLevelSeenDefs);
+      } else if (it.kind === "for") {
+        walk(it.body, inFunc, topLevelSeenDefs);
+      } else if (it.kind === "for_in") {
+        walk(it.body, inFunc, topLevelSeenDefs);
+      } else if (it.kind === "break" || it.kind === "continue" || it.kind === "return") {
+        // control flow — no body to walk
       } else {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(it.name)) errors.push(`函数名不合法: ${it.name}`);
         for (const p of it.params) if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) errors.push(`参数名不合法: ${p}`);

@@ -204,8 +204,14 @@ class ArticleService:
         if author_id:
             query = query.where(Article.author_id == author_id)
         
-        # 计算总数
-        count_query = select(func.count()).select_from(query.subquery())
+        # 计算总数（直接基于条件构建 count 查询，避免 subquery 开销）
+        count_query = select(func.count(Article.id))
+        if published_only:
+            count_query = count_query.where(Article.published == True)
+        if category_id:
+            count_query = count_query.where(Article.category_id == category_id)
+        if author_id:
+            count_query = count_query.where(Article.author_id == author_id)
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
         

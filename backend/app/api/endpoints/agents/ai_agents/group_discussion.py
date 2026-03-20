@@ -33,11 +33,15 @@ from app.schemas.agents import (
     GroupDiscussionMemberOut,
     GroupDiscussionAdminMemberListResponse,
     GroupDiscussionAdminDeleteSessionsRequest,
+    GroupDiscussionStudentProfileRequest,
+    GroupDiscussionCrossSystemRequest,
 )
 from typing import List
 from app.services.agents.group_discussion import (
     admin_analyze_session,
     admin_compare_analyze_sessions,
+    admin_cross_system_analysis,
+    admin_student_profile_analysis,
     admin_delete_session,
     admin_delete_sessions,
     admin_list_analyses,
@@ -615,3 +619,44 @@ async def admin_get_analyses(
         for r in rows
     ]
     return GroupDiscussionAdminAnalysisListResponse(items=items)
+
+
+@router.post("/admin/student-profile", response_model=GroupDiscussionAdminAnalyzeResponse)
+async def admin_student_profile(
+    payload: GroupDiscussionStudentProfileRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: Dict[str, Any] = Depends(require_admin),
+) -> GroupDiscussionAdminAnalyzeResponse:
+    r = await admin_student_profile_analysis(
+        db,
+        session_id=payload.session_id,
+        user_id=payload.user_id,
+        agent_id=payload.agent_id,
+        admin_user=admin_user,
+    )
+    return GroupDiscussionAdminAnalyzeResponse(
+        analysis_id=int(r.id),
+        result_text=str(r.result_text),
+        created_at=r.created_at,
+    )
+
+
+@router.post("/admin/cross-system-analyze", response_model=GroupDiscussionAdminAnalyzeResponse)
+async def admin_cross_system_analyze(
+    payload: GroupDiscussionCrossSystemRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: Dict[str, Any] = Depends(require_admin),
+) -> GroupDiscussionAdminAnalyzeResponse:
+    r = await admin_cross_system_analysis(
+        db,
+        session_ids=payload.session_ids,
+        agent_id=payload.agent_id,
+        admin_user=admin_user,
+        target_date=payload.date,
+        class_name=payload.class_name,
+    )
+    return GroupDiscussionAdminAnalyzeResponse(
+        analysis_id=int(r.id),
+        result_text=str(r.result_text),
+        created_at=r.created_at,
+    )

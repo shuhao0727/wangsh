@@ -32,13 +32,17 @@ import {
   LogoutOutlined,
   ReloadOutlined,
   UserAddOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { groupDiscussionApi } from "@services/agents";
+import { config as appConfig } from "@services";
 import { userApi } from "@services";
 import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionPublicConfig } from "@services/znt/api/group-discussion-api";
 import type { User } from "@services/users";
+import { logger } from "@services/logger";
 import dayjs from "dayjs";
+import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 
 const { Text, Title } = Typography;
 
@@ -49,15 +53,17 @@ const STORAGE_KEYS = {
   FLOATING_POS: "gd_floating_pos",
   FLOATING_SIZE: "gd_floating_size",
   FLOATING_PINNED: "gd_floating_pinned",
+  BTN_TOP: "gd_btn_top",
 };
 
 type Props = {
   isAuthenticated: boolean;
   isStudent: boolean;
   isAdmin: boolean;
+  userId?: number;
 };
 
-const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin }) => {
+const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, userId }) => {
   const { message } = App.useApp();
   // --- 窗口状态管理 ---
   const [open, setOpen] = useState(false);
@@ -78,6 +84,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   
   const draggingRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
+  const [btnTop, setBtnTop] = useState(() => {
+    try { const v = localStorage.getItem(STORAGE_KEYS.BTN_TOP); return v ? Number(v) : 45; } catch { return 45; }
+  });
+  const btnDragRef = useRef<{ startY: number; origTop: number } | null>(null);
+  const btnDragged = useRef(false);
 
   const [config, setConfig] = useState<GroupDiscussionPublicConfig>({ enabled: true, join_lock_seconds: 180, rate_limit_seconds: 5 });
   const [filterDate, setFilterDate] = useState<string | null>(() => dayjs().format("YYYY-MM-DD"));
@@ -166,7 +177,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         message.error(res.message);
       }
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       message.error("移除成员失败，请重试");
     }
   };
@@ -178,7 +189,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       const res = await userApi.getUsers({ search: inviteKeyword, limit: 20 });
       setInviteUsers(res.users || []);
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       message.error("搜索用户失败");
     } finally {
       setInviteLoading(false);
@@ -205,7 +216,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         message.error(res.message);
       }
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       message.error("邀请失败，请重试");
     } finally {
       setInvitingUserId(null);
@@ -228,6 +239,39 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     draggingRef.current = null;
     localStorage.setItem(STORAGE_KEYS.FLOATING_POS, JSON.stringify(floatingPos));
   };
+
+  // --- 浮动按钮拖拽（仅垂直）---
+  const handleBtnDragStart = useCallback((e: React.PointerEvent) => {
+    btnDragRef.current = { startY: e.clientY, origTop: btnTop };
+    btnDragged.current = false;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }, [btnTop]);
+  const handleBtnDragMove = useCallback((e: React.PointerEvent) => {
+    if (!btnDragRef.current) return;
+    if (Math.abs(e.clientY - btnDragRef.current.startY) > 3) btnDragged.current = true;
+    const newTop = Math.max(0, Math.min(90, btnDragRef.current.origTop + (e.clientY - btnDragRef.current.startY) / window.innerHeight * 100));
+    setBtnTop(newTop);
+  }, []);
+  const handleBtnDragEnd = useCallback(() => {
+    if (!btnDragRef.current) return;
+    btnDragRef.current = null;
+    try { localStorage.setItem(STORAGE_KEYS.BTN_TOP, String(btnTop)); } catch {}
+    floatingBtnRegistry.settle("discussion");
+  }, [btnTop]);
+
+  // 注册到全局按钮注册表
+  useEffect(() => {
+    floatingBtnRegistry.register("discussion", btnTop, (v) => {
+      setBtnTop(v);
+      try { localStorage.setItem(STORAGE_KEYS.BTN_TOP, String(v)); } catch {}
+    });
+    return () => floatingBtnRegistry.unregister("discussion");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    floatingBtnRegistry.updateTop("discussion", btnTop);
+  }, [btnTop]);
   const handleResizeUp = () => {
     if (floatingRef.current) {
       const rect = floatingRef.current.getBoundingClientRect();
@@ -341,11 +385,20 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       localStorage.setItem(STORAGE_KEYS.GROUP_NAME, group_name || "");
       
       message.success(`成功加入 ${group_no} 组`);
-      setView("chat");
       setMessages([]);
       afterIdRef.current = 0;
+      setView("chat");
+
+      // 主动加载历史消息（防止 sessionId 未变时 useEffect 不重新触发）
+      try {
+        const msgRes = await groupDiscussionApi.listMessages({ sessionId: session_id, afterId: 0, limit: 50 });
+        if (msgRes.success && msgRes.data.items.length > 0) {
+          setMessages(msgRes.data.items.map((m: any) => ({ ...m, is_mine: userId ? m.user_id === userId : false })));
+          afterIdRef.current = msgRes.data.next_after_id;
+        }
+      } catch {}
     } catch (err) {
-      console.error(err);
+      logger.error(err);
     }
   };
 
@@ -407,7 +460,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     if (res.success && res.data.items.length > 0) {
       setMessages(prev => {
         const ids = new Set(prev.map(m => m.id));
-        const newItems = res.data.items.filter(m => !ids.has(m.id)).map(m => ({ ...m, is_mine: false })); // is_mine 实际上需要根据当前用户判断，这里简化
+        const newItems = res.data.items.filter(m => !ids.has(m.id)).map(m => ({ ...m, is_mine: userId ? m.user_id === userId : false }));
         return [...prev, ...newItems].sort((a, b) => a.id - b.id);
       });
       afterIdRef.current = res.data.next_after_id;
@@ -417,15 +470,69 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   useEffect(() => {
     if (view !== "chat" || !sessionId) return;
-    
-    let active = true;
-    const poll = async () => {
-      if (!active) return;
-      await loadMessages(sessionId);
-      if (active) setTimeout(poll, 3000);
+
+    // 使用 SSE 实时接收消息，替代轮询
+    const sseUrl = `${appConfig.apiUrl}/ai-agents/group-discussion/stream?session_id=${sessionId}&after_id=${afterIdRef.current}`;
+    let eventSource: EventSource | null = null;
+    let fallbackActive = false;
+
+    try {
+      eventSource = new EventSource(sseUrl, { withCredentials: true });
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.items && data.items.length > 0) {
+            setMessages(prev => {
+              const ids = new Set(prev.map(m => m.id));
+              const newItems = data.items.filter((m: any) => !ids.has(m.id)).map((m: any) => ({
+                ...m,
+                is_mine: userId ? m.user_id === userId : false,
+              }));
+              return [...prev, ...newItems].sort((a: any, b: any) => a.id - b.id);
+            });
+            if (data.next_after_id) {
+              afterIdRef.current = data.next_after_id;
+            }
+            scrollToBottom();
+          }
+        } catch {}
+      };
+
+      eventSource.onerror = () => {
+        // SSE 断开后回退到轮询
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        if (!fallbackActive) {
+          fallbackActive = true;
+          const poll = async () => {
+            if (!fallbackActive) return;
+            await loadMessages(sessionId);
+            if (fallbackActive) setTimeout(poll, 3000);
+          };
+          poll();
+        }
+      };
+    } catch {
+      // EventSource 不可用，直接轮询
+      fallbackActive = true;
+      const poll = async () => {
+        if (!fallbackActive) return;
+        await loadMessages(sessionId);
+        if (fallbackActive) setTimeout(poll, 3000);
+      };
+      poll();
+    }
+
+    return () => {
+      fallbackActive = false;
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
     };
-    poll();
-    return () => { active = false; };
   }, [view, sessionId]);
 
   const scrollToBottom = () => {
@@ -576,7 +683,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                 立即创建并加入
               </Button>
             </Form.Item>
-            <div style={{ marginTop: 20, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+            <div style={{ marginTop: 20, padding: 12, background: 'var(--ws-color-surface-2)', borderRadius: 8 }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 <div style={{ marginBottom: 4 }}>⚠️ 注意事项：</div>
                 <div>1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。</div>
@@ -594,11 +701,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {/* 聊天头部 */}
       <div style={{ 
         padding: '12px 16px', 
-        borderBottom: '1px solid #f0f0f0', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+        borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        background: '#fff'
+        background: '#FFFFFF'
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -620,38 +727,39 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       </div>
 
       {/* 消息列表 */}
-      <div 
+      <div
         ref={listRef}
-        style={{ 
-          flex: 1, 
-          overflowY: 'auto', 
-          padding: 16, 
-          background: '#f7f9fc',
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: 16,
+          background: '#FAFAFA',
           display: 'flex',
           flexDirection: 'column',
-          gap: 12
+          gap: 10
         }}
       >
         {messages.map(msg => (
-          <div key={msg.id} style={{ 
+          <div key={msg.id} style={{
             alignSelf: msg.is_mine ? 'flex-end' : 'flex-start',
-            maxWidth: '85%'
+            maxWidth: '75%'
           }}>
-            <div style={{ 
-              fontSize: 12, 
-              color: '#999', 
-              marginBottom: 4, 
+            <div style={{
+              fontSize: 11,
+              color: 'var(--ws-color-text-tertiary)',
+              marginBottom: 3,
               textAlign: msg.is_mine ? 'right' : 'left',
-              padding: '0 4px'
+              padding: '0 6px'
             }}>
-              {msg.user_display_name} · {dayjs(msg.created_at).format("HH:mm:ss")}
+              {msg.is_mine ? '' : msg.user_display_name + ' · '}{dayjs(msg.created_at).format("HH:mm")}
             </div>
             <div style={{
-              padding: '10px 14px',
-              background: msg.is_mine ? '#1677ff' : '#fff',
-              color: msg.is_mine ? '#fff' : '#333',
-              borderRadius: msg.is_mine ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              padding: '8px 12px',
+              fontSize: 13,
+              lineHeight: 1.6,
+              background: msg.is_mine ? 'var(--ws-color-primary)' : '#FFFFFF',
+              color: msg.is_mine ? '#FFFFFF' : 'var(--ws-color-text)',
+              borderRadius: msg.is_mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap'
             }}>
@@ -662,7 +770,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       </div>
 
       {/* 输入框 */}
-      <div style={{ padding: 12, background: '#fff', borderTop: '1px solid #f0f0f0' }}>
+      <div style={{ padding: 12, background: '#FFFFFF', borderTop: '1px solid rgba(0, 0, 0, 0.04)' }}>
         <Space.Compact style={{ width: '100%' }}>
           <Input 
             value={draft}
@@ -689,12 +797,21 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     <>
       {/* 悬浮按钮 */}
       {!open && (
-        <div style={{ position: "fixed", left: 0, top: "45%", zIndex: 1000 }}>
+        <div
+          style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: 1000, cursor: "grab", touchAction: "none" }}
+          onPointerDown={handleBtnDragStart}
+          onPointerMove={handleBtnDragMove}
+          onPointerUp={handleBtnDragEnd}
+        >
           <Button
             type="primary"
             icon={<TeamOutlined />}
-            onClick={() => setOpen(true)}
-            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, boxShadow: '2px 0 8px rgba(0,0,0,0.15)' }}
+            onClick={() => { if (!btnDragged.current) setOpen(true); }}
+            style={{
+              borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
+              boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
+              background: '#0EA5E9', borderColor: '#0EA5E9',
+            }}
           >
             小组讨论
           </Button>
@@ -716,8 +833,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             overflow: "hidden",
             boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
             borderRadius: 12,
-            background: "#fff",
-            border: "1px solid #d9d9d9",
+            background: "#FFFFFF",
+            border: "1px solid rgba(0, 0, 0, 0.08)",
             display: 'flex',
             flexDirection: 'column'
           }}
@@ -726,29 +843,28 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           {/* 窗口标题栏 */}
           <div
             style={{
-              padding: '12px 16px',
-              background: 'linear-gradient(to right, #e6f7ff, #ffffff)',
-              borderBottom: '1px solid #bae0ff',
+              padding: '8px 12px',
+              background: '#0EA5E9',
+              color: '#fff',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              userSelect: 'none'
+              userSelect: 'none',
+              cursor: floatingPinned ? 'default' : 'move',
             }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
           >
-            <div 
-              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: floatingPinned ? 'default' : 'move' }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-            >
-              <TeamOutlined style={{ color: '#1677ff', fontSize: 18 }} />
-              <Text strong style={{ fontSize: 16 }}>小组讨论</Text>
-            </div>
-            <Space size={4} onPointerDown={(e) => e.stopPropagation()}>
+            <span style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <TeamOutlined /> 小组讨论
+            </span>
+            <div style={{ display: 'flex', gap: 4 }} onPointerDown={(e) => e.stopPropagation()}>
               <Tooltip title={floatingPinned ? "取消固定" : "固定窗口"}>
                 <Button
                   type="text"
                   size="small"
+                  style={{ color: '#fff' }}
                   icon={floatingPinned ? <PushpinFilled /> : <PushpinOutlined />}
                   onClick={() => {
                     const next = !floatingPinned;
@@ -757,13 +873,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                   }}
                 />
               </Tooltip>
-              <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => { if(view==='intro') fetchGroups(); else loadMessages(sessionId!); }} />
-              <Button type="text" size="small" onClick={() => setOpen(false)}>关闭</Button>
-            </Space>
+              <Button type="text" size="small" icon={<ReloadOutlined />} style={{ color: '#fff' }} onClick={() => { if(view==='intro') fetchGroups(); else loadMessages(sessionId!); }} />
+              <Button type="text" size="small" icon={<CloseOutlined />} style={{ color: '#fff' }} onClick={() => setOpen(false)} />
+            </div>
           </div>
 
           {/* 窗口内容区 */}
-          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#FFFFFF' }}>
             {view === 'intro' ? renderIntro() : renderChat()}
           </div>
         </div>
@@ -803,7 +919,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
-                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#1677ff" }} />
+                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#0EA5E9" }} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {item.full_name || item.username || `User ${item.user_id}`}

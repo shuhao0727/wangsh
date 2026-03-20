@@ -8,6 +8,7 @@ import { FlowNode, FlowEdge } from "../flow/model";
 import { computeBeautify, DEFAULT_BEAUTIFY_PARAMS, DEFAULT_BEAUTIFY_THRESHOLDS } from "../flow/beautify";
 import { sortFlowGraphStable } from "../flow/determinism";
 import { FloatingPopup } from "./FloatingPopup";
+import { logger } from "@services/logger";
 import { normalizeAnnotationForTeaching } from "../flow/annotationTeaching";
 import { FlowAnnotationsSvg } from "./FlowAnnotationsSvg";
 
@@ -54,7 +55,7 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
         setLayoutNodes(withAnnotations.nodes);
         setLayoutEdges(withAnnotations.edges);
       } catch (e) {
-        console.error("Layout failed", e);
+        logger.error("Layout failed", e);
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
       } finally {
@@ -88,7 +89,7 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
   if (loading) return <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center" }}><Spin /></div>;
 
   return (
-    <div style={{ height: 400, position: "relative", overflow: "hidden", background: "#f5f5f5", border: "1px solid #d9d9d9" }}>
+    <div style={{ height: 400, position: "relative", overflow: "hidden", background: "#FAFAFA", border: "1px solid rgba(0, 0, 0, 0.08)" }}>
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
         <FlowEdgesSvg
           edges={layoutEdges}
@@ -171,7 +172,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
       <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
         <>
           {type === "code" ? (
-              <div style={{ flex: 1, minHeight: 360, border: "1px solid #d9d9d9", position: "relative" }}>
+              <div style={{ flex: 1, minHeight: 360, border: "1px solid rgba(0, 0, 0, 0.08)", position: "relative" }}>
                 <DiffEditor
                   original={typeof originalContent === "string" ? originalContent : ""}
                   modified={typeof optimizedContent === "string" ? optimizedContent : ""}

@@ -181,8 +181,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             logger.error(f"Error pumping WS to TTY: {e}")
             try:
                 await websocket.send_text(f"\r\nError writing to TTY: {e}\r\n")
-            except: pass
-
+            except Exception: pass
     async def pump_tty_to_ws():
         try:
             loop = asyncio.get_running_loop()
@@ -226,7 +225,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
         finally:
             try:
                 await websocket.close()
-            except:
+            except Exception:
                 pass
 
     try:
@@ -752,7 +751,8 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                 if terminated_seen:
                     try:
                         await websocket.close()
-                    except: pass
+                    except Exception:
+                        pass
                     return
                 raise
             if msg.get("type") == "event" and msg.get("event") == "output":

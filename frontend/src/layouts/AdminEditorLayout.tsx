@@ -14,16 +14,19 @@ const AdminEditorLayout: React.FC = () => {
 
   const isArticleEditor = location.pathname.startsWith("/admin/articles/editor");
   const isTypstEditor = location.pathname.startsWith("/admin/informatics/editor");
+  const isAssessmentEditor = location.pathname.startsWith("/admin/assessment/editor");
   const isFullscreenEditor = isTypstEditor || isArticleEditor;
 
   const backToList = () => {
     if (isTypstEditor) navigate("/admin/informatics");
+    else if (isAssessmentEditor) navigate("/admin/assessment");
     else navigate("/admin/articles");
   };
 
   const title = (() => {
     if (isTypstEditor) return location.pathname.includes("/new") ? "新建 Typst 笔记" : "编辑 Typst 笔记";
     if (isArticleEditor) return location.pathname.includes("/new") ? "新建文章" : "编辑文章";
+    if (isAssessmentEditor) return location.pathname.includes("/new") ? "新建测评" : "编辑测评";
     return "编辑";
   })();
 

@@ -33,7 +33,8 @@ const AdminTypstEditorPage: React.FC = () => {
         const n = await typstNotesApi.get(numericId);
         setNote(n);
       } catch (e: any) {
-        message.error(e?.response?.data?.detail || e?.message || "加载笔记失败");
+        const d = e?.response?.data?.detail;
+        message.error(typeof d === "string" ? d : (e?.message || "加载笔记失败"));
         navigate("/admin/informatics");
       } finally {
         setLoading(false);

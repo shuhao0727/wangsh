@@ -94,25 +94,29 @@ export default function TypstSidebar({
 
   return (
     <div className={`typst-editor-side ${sideCollapsed ? "typst-editor-side-collapsed" : ""}`}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Space size={0}>
-          <Tooltip title="目录">
-            <Button type="text" icon={<UnorderedListOutlined />} onClick={onOpenToc} />
-          </Tooltip>
-          <Tooltip title="刷新预览">
-            <Button type="text" icon={<ReloadOutlined />} onClick={onRefreshPreview} disabled={!noteId} />
-          </Tooltip>
-          <Tooltip title="保存">
-            <Button type="text" icon={<SaveOutlined />} onClick={onSave} loading={submitting} />
-          </Tooltip>
-        </Space>
-        <Button type="text" icon={sideCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={onToggleCollapsed} />
+      <div className="typst-editor-side-toolbar" style={sideCollapsed ? { justifyContent: "center", padding: "4px 0" } : undefined}>
+        {!sideCollapsed && (
+          <Space size={0}>
+            <Tooltip title="目录">
+              <Button type="text" icon={<UnorderedListOutlined />} onClick={onOpenToc} />
+            </Tooltip>
+            <Tooltip title="刷新预览">
+              <Button type="text" icon={<ReloadOutlined />} onClick={onRefreshPreview} disabled={!noteId} />
+            </Tooltip>
+            <Tooltip title="保存">
+              <Button type="text" icon={<SaveOutlined />} onClick={onSave} loading={submitting} />
+            </Tooltip>
+          </Space>
+        )}
+        <Tooltip title={sideCollapsed ? "展开侧边栏" : "收起侧边栏"}>
+          <Button type="text" icon={sideCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={onToggleCollapsed} />
+        </Tooltip>
       </div>
 
       {sideCollapsed ? null : (
         <>
           <Card title="基本信息" size="small" className="typst-editor-card">
-            <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <div>
                 <Text type="secondary">标题</Text>
                 <Input value={title} onChange={(e) => onSetTitle(e.target.value)} placeholder="请输入标题" />
@@ -172,7 +176,7 @@ export default function TypstSidebar({
           </Card>
 
           <Card title="写作面板" size="small" className="typst-editor-card">
-            <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <Text type="secondary">快捷</Text>
                 <Text>Ctrl/⌘ + Enter 保存</Text>
@@ -189,7 +193,7 @@ export default function TypstSidebar({
           </Card>
 
           <Card title="图片/资源" size="small" className="typst-editor-card">
-            <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <div>
                 <Text type="secondary">上传到目录</Text>
                 <Input value={assetPrefix} onChange={(e) => onSetAssetPrefix(e.target.value)} placeholder="images" />
@@ -204,7 +208,7 @@ export default function TypstSidebar({
                 <input id="typst-asset-upload" name="typst-asset-upload" aria-label="上传资源" ref={assetInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => onUploadFiles(e.target.files)} />
               </div>
               <Input value={assetSearch} onChange={(e) => onSetAssetSearch(e.target.value)} placeholder="搜索资源" />
-              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--ws-color-border)", borderRadius: "var(--ws-radius-md)" }}>
+              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "var(--ws-radius-md)" }}>
                 {assetsShown.length === 0 ? (
                   <div style={{ padding: 10 }}>
                     <Text type="secondary">暂无资源</Text>
@@ -215,7 +219,7 @@ export default function TypstSidebar({
                       key={a.id}
                       style={{
                         padding: "8px 10px",
-                        borderBottom: "1px solid var(--ws-color-border)",
+                        borderBottom: "1px solid rgba(0,0,0,0.04)",
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 10,

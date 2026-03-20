@@ -27,32 +27,33 @@ import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
 // import { AIAssistantModal } from "../AIAssistantModal";
 import type { RightPanelTabKey } from "../rightPanelTabPolicy";
-import type { RightPanelProps } from "./types";
+import { useCode } from "../../stores/CodeStore";
+import { useFlow } from "../../stores/FlowStore";
+import { useRunnerActions } from "../../stores/RunnerActionsStore";
+import { useUI, VARIABLE_COLUMNS } from "../../stores/UIStore";
 import { DebugTab } from "./DebugTab";
 import { PipelineTab } from "./PipelineTab";
 import { wsUrl } from "../../hooks/dapRunnerHelpers";
 import { useWsAccessToken } from "../../hooks/useWsAccessToken";
 import { getTerminalModeHint } from "./terminalHint";
 import { resolveDebugControlMatrix } from "../../adapters/debugCapabilityMap";
+import { logger } from "@services/logger";
 
 const { Text } = Typography;
 
-export const RightPanel = React.memo(function RightPanel(props: RightPanelProps) {
+export const RightPanel = React.memo(function RightPanel() {
+  const codeCtx = useCode();
+  const flowCtx = useFlow();
+  const ra = useRunnerActions();
+  const ui = useUI();
+  const revealLine = ui.revealLine;
+  const variableColumns = VARIABLE_COLUMNS;
   const {
-    generated,
-    code,
-    setCode,
-    codeMode,
-    setCodeMode,
-    revealLine,
-    variableColumns,
     runner,
-    flow,
     debugCapabilities,
     runnerError,
     lastLaunchMode,
     terminalBridge,
-    onRebuildFlowFromCode,
     onRun,
     onDebug,
     onContinue,
@@ -72,7 +73,9 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
     autoOptimizeCode,
     setAutoOptimizeCode,
     onOptimizeCode,
-  } = props;
+  } = ra;
+  const { code, setCode, codeMode, setCodeMode, generated, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = codeCtx;
+  const flow = { nodes: flowCtx.nodes, edges: flowCtx.edges };
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -144,9 +147,9 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
   };
   const handleDebugClick = async () => {
     setRebuildError(null);
-    if (runner.sourceMismatch && onRebuildFlowFromCode) {
+    if (runner.sourceMismatch && rebuildFlowFromCode) {
       try {
-        await onRebuildFlowFromCode();
+        await rebuildFlowFromCode();
       } catch (e: any) {
         setRebuildError(e?.message || "流程图重建失败，请修复代码后重试");
         return;
@@ -370,7 +373,7 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log("Run button clicked in RightPanelView");
+                  logger.debug("Run button clicked in RightPanelView");
                   clearTerminalUiSafely();
                   onRun([]);
                 }}
@@ -395,7 +398,7 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
                   onClick={async () => {
                     setRebuildError(null);
                     try {
-                      await onRebuildFlowFromCode?.();
+                      await rebuildFlowFromCode?.();
                     } catch (e: any) {
                       setRebuildError(e?.message || "流程图重建失败，请修复代码后重试");
                     }
@@ -474,7 +477,6 @@ export const RightPanel = React.memo(function RightPanel(props: RightPanelProps)
           onChange={(k) => setActiveTab(k as RightPanelTabKey)}
           type="card"
           size="small"
-          destroyOnHidden
           className="pythonlab-rightpanel-tabs"
           style={{ height: "100%" }}
           items={[

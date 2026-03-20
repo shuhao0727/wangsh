@@ -19,13 +19,13 @@ import { useFlowCanvasInteractions } from "./hooks/useFlowCanvasInteractions";
 import { useAnnotationInteractions } from "./hooks/useAnnotationInteractions";
 import { CanvasToolbar } from "./components/CanvasToolbar";
 import { usePythonFlowSync } from "./hooks/usePythonFlowSync";
+import { useUnifiedRunner } from "./hooks/useUnifiedRunner";
 import { usePythonLabActions } from "./hooks/usePythonLabActions";
+import { useBeautifyFlow } from "./hooks/useBeautifyFlow";
 import { useArrangeLayout } from "./hooks/useArrangeLayout";
 import { useConnectMode } from "./hooks/useConnectMode";
-import { useDapRunner } from "./hooks/useDapRunner";
 import type { DapCapabilities } from "./hooks/useDapRunner";
-import { usePyodideRunner } from "./hooks/usePyodideRunner";
-import { computeBeautify, type FlowBeautifyResult } from "./flow/beautify";
+import { computeBeautify } from "./flow/beautify";
 import { sortFlowGraphStable } from "./flow/determinism";
 import { loadEffectiveRuleSetV1, type PythonLabRuleSetV1 } from "./pipeline/rules";
 import { ensurePythonLabStorageCompatible } from "./storageCompat";
@@ -36,6 +36,9 @@ import { resolveFlowActivation, toDebugPauseEvent } from "./adapters/debugEventB
 import { normalizeDebugSessionView } from "./adapters/debugSessionBridge";
 import { applyDapNegotiatedCapabilities } from "./adapters/debugCapabilityMap";
 import { pythonlabSessionApi } from "./services/pythonlabSessionApi";
+import { logger } from "@services/logger";
+import { PythonLabProvider, useCanvas, useFlow, useUI, useDebug, CodeCtxProvider, RunnerActionsProvider } from "./stores";
+import type { VariableRow } from "./stores/UIStore";
 import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
 import { OptimizationDialog } from "./components/OptimizationDialog";
 import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabDebugApi";
@@ -43,18 +46,11 @@ import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabDebugA
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
-type VariableRow = {
-  key: string;
-  name: string;
-  value: string;
-  type: string;
-};
-
 function nextId(prefix: string) {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
 }
 
-const PythonLabStudio: React.FC<{
+const PythonLabStudioInner: React.FC<{
   experiment?: PythonLabExperiment;
 }> = ({ experiment }) => {
   const screens = Grid.useBreakpoint();
@@ -63,15 +59,11 @@ const PythonLabStudio: React.FC<{
   const prewarmOnceRef = useRef(false);
 
   useEffect(() => {
-    console.log("PythonLabStudio mounted - HMR Check");
+    logger.debug("PythonLabStudio mounted - HMR Check");
     message.info("PythonLab环境已就绪");
     ensurePythonLabStorageCompatible();
   }, []);
   const [ruleSet, setRuleSet] = useState<PythonLabRuleSetV1>(() => loadEffectiveRuleSetV1(experiment?.id ?? ""));
-  const [beautifyResult, setBeautifyResult] = useState<FlowBeautifyResult | null>(null);
-  const [beautifyLoading, setBeautifyLoading] = useState(false);
-  const [beautifyError, setBeautifyError] = useState<string | null>(null);
-  const [beautifyRefreshToken, setBeautifyRefreshToken] = useState(0);
   const [autoOptimizeCode, setAutoOptimizeCode] = useState(true);
   const [canvasRoutingStyle] = useState<"orthogonal" | "direct">(() => {
     try {
@@ -80,74 +72,18 @@ const PythonLabStudio: React.FC<{
       return "orthogonal";
     }
   });
-  const [scale, setScale] = useState(1);
-  const [offsetX, setOffsetX] = useState(0);
-  const [offsetY, setOffsetY] = useState(0);
+  const { scale, setScale, offsetX, setOffsetX, offsetY, setOffsetY, panMode, setPanMode, followMode, setFollowMode, followTick, setFollowTick, interactionFlag, setInteractionFlag, canvasBusy, setCanvasBusy, autoLayout, setAutoLayout } = useCanvas();
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const [panMode, setPanMode] = useState(false);
-  const [followMode, setFollowMode] = useState(true);
-  const [followTick, setFollowTick] = useState(0);
-  const [interactionFlag, setInteractionFlag] = useState(false);
-  const [canvasBusy, setCanvasBusy] = useState(false);
-  const [autoLayout, setAutoLayout] = useState(false);
 
   // Optimization State
-  const [optimizationVisible, setOptimizationVisible] = useState(false);
-  const [originalContent, setOriginalContent] = useState<string | null>(null);
-  const [optimizedContent, setOptimizedContent] = useState<string | null>(null);
-  const [optimizationLoading, setOptimizationLoading] = useState(false);
-  const [optimizationFeedback, setOptimizationFeedback] = useState("");
-  const [optimizationLogId, setOptimizationLogId] = useState<number | null>(null);
-
-  const handleOptimizeCode = async () => {
-    setOriginalContent(code);
-    setOptimizedContent("");
-    setOptimizationFeedback("");
-    setOptimizationLoading(true);
-    setOptimizationVisible(true);
-    try {
-      const res = await pythonlabFlowApi.optimizeCode(code);
-      setOptimizedContent(res.optimized_code);
-      setOptimizationLogId(res.log_id);
-    } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : "优化请求失败");
-      setOptimizationVisible(false);
-    } finally {
-      setOptimizationLoading(false);
-    }
-  };
-
-  const handleApplyOptimization = async () => {
-    const nextCode = typeof optimizedContent === "string" ? optimizedContent : "";
-    if (!nextCode.trim()) {
-      message.error("优化结果为空，无法应用");
-      return;
-    }
-    try {
-      const syntax = await pythonlabSyntaxApi.checkSyntax(nextCode);
-      if (!syntax.ok) {
-        message.error("优化后的代码未通过语法校验，已拒绝应用");
-        return;
-      }
-    } catch {}
-    setCodeMode("manual");
-    setCode(nextCode.endsWith("\n") ? nextCode : `${nextCode}\n`);
-    try {
-      await rebuildFlowFromCode();
-    } catch {}
-    message.success("代码优化已应用");
-
-    if (optimizationLogId) {
-      try {
-        await pythonlabFlowApi.applyOptimization(optimizationLogId);
-      } catch {}
-    }
-    setOptimizationVisible(false);
-  };
-
-  const handleRegenerateOptimization = async () => {
-    await handleOptimizeCode();
-  };
+  const {
+    optimizationVisible, setOptimizationVisible, originalContent, setOriginalContent,
+    optimizedContent, setOptimizedContent, optimizationLoading, setOptimizationLoading,
+    optimizationFeedback, setOptimizationFeedback, optimizationLogId, setOptimizationLogId,
+    leftCollapsed, setLeftCollapsed, nodeInspectorOpen, setNodeInspectorOpen,
+    revealLine, setRevealLine, nodeInspectorAnchorRect, setNodeInspectorAnchorRect,
+    variables, setVariables,
+  } = useUI();
 
   const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
   const canFrontendDebug = useMemo(() => {
@@ -238,18 +174,13 @@ const PythonLabStudio: React.FC<{
       localStorage.setItem("python_lab_canvas_routing_style", canvasRoutingStyle);
     } catch {}
   }, [canvasRoutingStyle]);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [nodes, setNodes] = useState<FlowNode[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [revealLine, setRevealLine] = useState<number | null>(null);
-  const [nodeInspectorOpen, setNodeInspectorOpen] = useState(false);
-  const [nodeInspectorAnchorRect, setNodeInspectorAnchorRect] = useState<DOMRect | null>(null);
-  const [edges, setEdges] = useState<FlowEdge[]>([]);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [connectMode, setConnectMode] = useState(false);
-  const [connectFromId, setConnectFromId] = useState<string | null>(null);
-  const [connectFromPort, setConnectFromPort] = useState<PortSide | null>(null);
-  const [variables, setVariables] = useState<VariableRow[]>([]);
+  const { nodes, setNodes, edges, setEdges, selectedNodeId, setSelectedNodeId, selectedEdgeId, setSelectedEdgeId, connectMode, setConnectMode, connectFromId, setConnectFromId, connectFromPort, setConnectFromPort } = useFlow();
+  const { beautifyResult, beautifyLoading, beautifyError, refreshBeautify } = useBeautifyFlow({
+    nodes, edges,
+    beautifyParams: ruleSet.beautify.params,
+    beautifyThresholds: ruleSet.beautify.thresholds,
+    beautifyAlignMode: ruleSet.beautify.alignMode,
+  });
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
@@ -294,7 +225,7 @@ const PythonLabStudio: React.FC<{
       if (shouldSuppressSelectionNoise(msg, name, stack, file)) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
-          console.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
+          logger.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
         }
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -312,7 +243,7 @@ const PythonLabStudio: React.FC<{
       if (shouldSuppressSelectionNoise(msg, name, stack, "")) {
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
-          console.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
+          logger.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
         }
         event.preventDefault();
         return;
@@ -364,6 +295,55 @@ const PythonLabStudio: React.FC<{
     autoOptimizeCode,
   });
 
+  const handleOptimizeCode = useCallback(async () => {
+    setOriginalContent(code);
+    setOptimizedContent("");
+    setOptimizationFeedback("");
+    setOptimizationLoading(true);
+    setOptimizationVisible(true);
+    try {
+      const res = await pythonlabFlowApi.optimizeCode(code);
+      setOptimizedContent(res.optimized_code);
+      setOptimizationLogId(res.log_id);
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "优化请求失败");
+      setOptimizationVisible(false);
+    } finally {
+      setOptimizationLoading(false);
+    }
+  }, [code, message, setOptimizationVisible, setOriginalContent, setOptimizedContent, setOptimizationFeedback, setOptimizationLoading, setOptimizationLogId]);
+
+  const handleApplyOptimization = async () => {
+    const nextCode = typeof optimizedContent === "string" ? optimizedContent : "";
+    if (!nextCode.trim()) {
+      message.error("优化结果为空，无法应用");
+      return;
+    }
+    try {
+      const syntax = await pythonlabSyntaxApi.checkSyntax(nextCode);
+      if (!syntax.ok) {
+        message.error("优化后的代码未通过语法校验，已拒绝应用");
+        return;
+      }
+    } catch {}
+    setCodeMode("manual");
+    setCode(nextCode.endsWith("\n") ? nextCode : `${nextCode}\n`);
+    try {
+      await rebuildFlowFromCode();
+    } catch {}
+    message.success("代码优化已应用");
+    if (optimizationLogId) {
+      try {
+        await pythonlabFlowApi.applyOptimization(optimizationLogId);
+      } catch {}
+    }
+    setOptimizationVisible(false);
+  };
+
+  const handleRegenerateOptimization = async () => {
+    await handleOptimizeCode();
+  };
+
   const {
     ensureAuto,
     setNodesAuto,
@@ -380,7 +360,6 @@ const PythonLabStudio: React.FC<{
     reverseEdge,
     peekDemoFlow,
     demoOptions,
-    variableColumns,
   } = usePythonLabActions({
     canvasRef,
     nextId,
@@ -479,40 +458,49 @@ const PythonLabStudio: React.FC<{
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [removeSelected, selectedEdgeId, selectedNodeId]);
 
-  const dapApi = useDapRunner({ code, debugMap });
-  const pyApi = usePyodideRunner({ code, debugMap });
+  const { breakpoints, activeRunnerKind, setActiveRunnerKind, lastLaunchMode, setLastLaunchMode, lastDebugFallback, setLastDebugFallback, updateBreakpoints: updateBreakpointsRaw } = useDebug();
+  const unified = useUnifiedRunner({ code, debugMap, activeKind: activeRunnerKind });
+  const { dap: dapApi, py: pyApi, active: activeApi } = unified;
 
-  const [breakpoints, setBreakpoints] = useState<Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>>([]);
-  const [activeRunnerKind, setActiveRunnerKind] = useState<"pyodide" | "dap">("pyodide");
-  const [lastLaunchMode, setLastLaunchMode] = useState<"idle" | "run" | "debug">("idle");
-  const [lastDebugFallback, setLastDebugFallback] = useState<string | null>(null);
+  // Keep a ref to syncBreakpoints to avoid infinite re-render loop:
+  // unified object is recreated every render (dap/py are new objects),
+  // so putting unified in useEffect deps causes infinite updates.
+  const syncBreakpointsRef = useRef(unified.syncBreakpoints);
+  syncBreakpointsRef.current = unified.syncBreakpoints;
+  const unifiedRef = useRef(unified);
+  unifiedRef.current = unified;
+  const activeApiRef = useRef(activeApi);
+  activeApiRef.current = activeApi;
+  const dapApiRef = useRef(dapApi);
+  dapApiRef.current = dapApi;
+  const pyApiRef = useRef(pyApi);
+  pyApiRef.current = pyApi;
 
   const updateBreakpoints = useCallback(
     (updater: (prev: Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => {
-      setBreakpoints((prev) => {
-        const next = updater(prev);
-        const sorted = next.slice().sort((a, b) => a.line - b.line);
-        (pyApi as ReturnType<typeof usePyodideRunner>).setBreakpoints?.(sorted);
-        (dapApi as ReturnType<typeof useDapRunner>).setBreakpoints?.(sorted);
-        return sorted;
-      });
+      updateBreakpointsRaw(updater);
     },
-    [dapApi, pyApi]
+    [updateBreakpointsRaw]
   );
+
+  // Sync breakpoints to runners whenever they change
+  useEffect(() => {
+    syncBreakpointsRef.current(breakpoints);
+  }, [breakpoints]);
 
   const enabledBreakpointCount = useMemo(() => breakpoints.filter((b) => b.enabled).length, [breakpoints]);
 
-  type RunnerApi = ReturnType<typeof useDapRunner> | ReturnType<typeof usePyodideRunner>;
-  const activeApi: RunnerApi = activeRunnerKind === "pyodide" ? pyApi : dapApi;
-  const runnerError = (activeApi?.error as string | null) ?? null;
+  const activeState = activeApi?.state;
+  const activeError = activeApi?.error;
+  const runnerError = (activeError as string | null) ?? null;
   const runner = useMemo(() => {
-    const base = (activeApi?.state as RunnerState) ?? {};
+    const base = (activeState as any) ?? {};
     const baseWarnings = Array.isArray(base?.warnings) ? base.warnings : [];
     const warnings: string[] = [];
     if (lastDebugFallback) warnings.push(lastDebugFallback);
     if (enabledBreakpointCount > 0) warnings.push(...baseWarnings);
     return { ...base, breakpoints, warnings };
-  }, [activeApi, breakpoints, enabledBreakpointCount, lastDebugFallback, lastLaunchMode]);
+  }, [activeState, breakpoints, enabledBreakpointCount, lastDebugFallback, lastLaunchMode]);
   const runnerView = useMemo(() => normalizeDebugSessionView(runner), [runner]);
 
   const needsStdin = useMemo(() => /\binput\s*\(/.test(code), [code]);
@@ -522,33 +510,6 @@ const PythonLabStudio: React.FC<{
       setRuleSet(loadEffectiveRuleSetV1(experiment?.id ?? ""));
     } catch {}
   }, [experiment?.id]);
-
-  useEffect(() => {
-    if (!nodes.length) {
-      setBeautifyResult(null);
-      setBeautifyLoading(false);
-      setBeautifyError(null);
-      return;
-    }
-    const tid = window.setTimeout(async () => {
-      setBeautifyLoading(true);
-      try {
-        const sorted = sortFlowGraphStable({ nodes, edges });
-        const resp = await computeBeautify(sorted.nodes, sorted.edges, ruleSet.beautify.params, ruleSet.beautify.thresholds, {
-          snapToGrid: !ruleSet.beautify.alignMode,
-        });
-        setBeautifyResult(resp);
-        setBeautifyError(null);
-      } catch (e: unknown) {
-        const msg = toErrorMessage(e, "Graphviz 渲染失败");
-        setBeautifyResult(null);
-        setBeautifyError(msg);
-      } finally {
-        setBeautifyLoading(false);
-      }
-    }, 500);
-    return () => window.clearTimeout(tid);
-  }, [beautifyRefreshToken, edges, nodes, ruleSet.beautify.alignMode, ruleSet.beautify.params, ruleSet.beautify.thresholds]);
 
   const fitViewToCenter = useCallback(
     (nextNodes: FlowNode[], nextEdges: FlowEdge[]) => {
@@ -574,13 +535,10 @@ const PythonLabStudio: React.FC<{
     if (resetTokenRef.current === token) return;
     resetTokenRef.current = token;
 
-    dapApi.reset?.();
-    pyApi.reset?.();
-    dapApi.clearOutput?.();
-    pyApi.clearOutput?.();
+    unifiedRef.current.resetAll();
+    unifiedRef.current.clearAllOutput();
     updateBreakpoints(() => []);
-    dapApi.setWatchExprs?.([]);
-    pyApi.setWatchExprs?.([]);
+    unifiedRef.current.syncWatchExprs([]);
     setActiveRunnerKind("pyodide");
     setLastLaunchMode("idle");
     setLastDebugFallback(null);
@@ -595,7 +553,7 @@ const PythonLabStudio: React.FC<{
       setCodeMode("manual");
       setCode(experiment.starterCode);
     }
-  }, [dapApi, experiment?.id, experiment?.starterCode, pyApi, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
+  }, [experiment?.id, experiment?.starterCode, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
 
   const onRun = useCallback(
     (_stdinLines: string[] = []) => {
@@ -610,7 +568,7 @@ const PythonLabStudio: React.FC<{
       // Auto-restart logic: If running or starting, stop first then restart
       const isRestart = runner.status === "starting" || runner.status === "running" || runner.status === "paused";
       if (isRestart) {
-        console.log("Auto-restarting session...");
+        logger.debug("Auto-restarting session...");
         // If it's DAP, we might need to stop it explicitly if we want clean restart,
         // but runner.runPlain/startDebug handles internal state reset.
         // However, stopping the previous session on backend is good practice to free resources.
@@ -631,8 +589,8 @@ const PythonLabStudio: React.FC<{
       // Clean logic: just call the runner. The runner handles tokens and status updates.
       if (plan.runnerKind === "dap") {
         setActiveRunnerKind("dap");
-        pyApi.reset?.();
-        const run = dapApi.runPlain;
+        pyApiRef.current.reset?.();
+        const run = dapApiRef.current.runPlain;
         if (typeof run !== "function") {
           message.error("运行器未就绪，请刷新页面后重试");
           return;
@@ -654,11 +612,11 @@ const PythonLabStudio: React.FC<{
       }
 
       setActiveRunnerKind("pyodide");
-      const dapStatus = dapApi?.state?.status;
+      const dapStatus = dapApiRef.current?.state?.status;
       if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
-        Promise.resolve(dapApi.stopDebug?.()).catch(() => {});
+        Promise.resolve(dapApiRef.current.stopDebug?.()).catch(() => {});
       }
-      const run = pyApi.runPlain;
+      const run = pyApiRef.current.runPlain;
       if (typeof run !== "function") {
         message.error("前端运行器未就绪，请刷新页面后重试");
         return;
@@ -672,7 +630,7 @@ const PythonLabStudio: React.FC<{
           }
       });
     },
-    [canFrontendDebug, dapApi, needsStdin, pyApi, pythonlabRuntime, runner.sessionId, runner.status, message]
+    [canFrontendDebug, needsStdin, pythonlabRuntime, runner.sessionId, runner.status, message]
   );
 
   const onDebug = useCallback(() => {
@@ -697,33 +655,22 @@ const PythonLabStudio: React.FC<{
 
     // Force DAP for debug
     setActiveRunnerKind("dap");
-    pyApi.reset?.();
-    Promise.resolve(dapApi.startDebug?.()).catch((e: unknown) => {
+    pyApiRef.current.reset?.();
+    Promise.resolve(dapApiRef.current.startDebug?.()).catch((e: unknown) => {
       message.error(e instanceof Error ? e.message : "启动调试失败");
     });
-  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, dapApi, pyApi, runner.status, message]);
+  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, runner.status, message]);
 
-  const onContinue = useCallback(() => {
-    activeApi?.continueRun?.();
-  }, [activeApi]);
-  const onPause = useCallback(() => {
-    activeApi?.pause?.();
-  }, [activeApi]);
-  const onStepOver = useCallback(() => {
-    activeApi?.stepOver?.();
-  }, [activeApi]);
-  const onStepInto = useCallback(() => {
-    activeApi?.stepInto?.();
-  }, [activeApi]);
-  const onStepOut = useCallback(() => {
-    activeApi?.stepOut?.();
-  }, [activeApi]);
+  const onContinue = useCallback(() => { unifiedRef.current.continueRun(); }, []);
+  const onPause = useCallback(() => { unifiedRef.current.pause(); }, []);
+  const onStepOver = useCallback(() => { unifiedRef.current.stepOver(); }, []);
+  const onStepInto = useCallback(() => { unifiedRef.current.stepInto(); }, []);
+  const onStepOut = useCallback(() => { unifiedRef.current.stepOut(); }, []);
   const onReset = useCallback(() => {
-    dapApi.reset?.();
-    pyApi.reset?.();
+    unifiedRef.current.resetAll();
     setLastLaunchMode("idle");
     setLastDebugFallback(null);
-  }, [dapApi, pyApi]);
+  }, []);
 
   const debugFrontendAdapter = useMemo(
     () =>
@@ -739,10 +686,11 @@ const PythonLabStudio: React.FC<{
       }),
     [onContinue, onDebug, onPause, onReset, onRun, onStepInto, onStepOut, onStepOver]
   );
+  const dapState = dapApi?.state;
   const dapNegotiatedCapabilities = useMemo(() => {
     if (activeRunnerKind !== "dap") return null;
-    return (dapApi?.state?.dapCapabilities ?? null) as DapCapabilities | null;
-  }, [activeRunnerKind, dapApi]);
+    return (dapState?.dapCapabilities ?? null) as DapCapabilities | null;
+  }, [activeRunnerKind, dapState]);
   const resolvedDebugCapabilities = useMemo(
     () => applyDapNegotiatedCapabilities(debugFrontendAdapter.capabilities, dapNegotiatedCapabilities),
     [dapNegotiatedCapabilities, debugFrontendAdapter.capabilities]
@@ -755,6 +703,16 @@ const PythonLabStudio: React.FC<{
     () => resolveFlowActivation({ event: debugPauseEvent, runner: runnerView }),
     [debugPauseEvent, runnerView]
   );
+
+  const activeEdgeIds = useMemo(() => {
+    const nodeId = flowActivation.activeNodeId;
+    if (!nodeId) return undefined;
+    const ids = new Set<string>();
+    for (const e of edges) {
+      if (e.to === nodeId) ids.add(e.id);
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [flowActivation.activeNodeId, edges]);
 
   const onToggleBreakpoint = useCallback(
     (line: number) => {
@@ -1055,7 +1013,51 @@ const PythonLabStudio: React.FC<{
     setSelectedEdgeId(null);
   }, [addNode, ensureAuto, nodes, offsetX, offsetY, scale, selectedNodeId]);
 
+  const codeApi = useMemo(() => ({
+    code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode,
+  }), [code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode]);
+
+  const runnerActionsApi = useMemo(() => ({
+    runner: runnerView,
+    runnerError,
+    lastLaunchMode,
+    terminalBridge: activeRunnerKind === "pyodide" ? pyApiRef.current.terminal : null,
+    debugCapabilities: resolvedDebugCapabilities,
+    onRun: debugFrontendAdapter.run,
+    onDebug: debugFrontendAdapter.debug,
+    onTerminalInput: () => {},
+    onContinue: debugFrontendAdapter.continueRun,
+    onPause: debugFrontendAdapter.pause,
+    onStepOver: debugFrontendAdapter.stepOver,
+    onStepInto: debugFrontendAdapter.stepInto,
+    onStepOut: debugFrontendAdapter.stepOut,
+    onReset: debugFrontendAdapter.reset,
+    onToggleBreakpoint,
+    onSetBreakpointEnabled,
+    onSetBreakpointCondition,
+    onSetBreakpointHitCount,
+    onAddWatch: (expr: string) => activeApiRef.current?.addWatch?.(expr),
+    onRemoveWatch: (expr: string) => activeApiRef.current?.removeWatch?.(expr),
+    onEvaluate: (expr: string) =>
+      typeof activeApiRef.current?.evaluate === "function"
+        ? activeApiRef.current.evaluate(expr)
+        : Promise.resolve({ ok: false as const, error: "当前运行器不支持求值" }),
+    onHistoryBack: () => activeApiRef.current?.historyBack?.(),
+    onHistoryForward: () => activeApiRef.current?.historyForward?.(),
+    onHistoryToLatest: () => activeApiRef.current?.historyToLatest?.(),
+    onClearPendingOutput: () => (activeApiRef.current as any)?.clearPendingOutput?.(),
+    beautifyResult: beautifyResult ?? null,
+    beautifyLoading: beautifyLoading ?? false,
+    beautifyError: beautifyError ?? null,
+    onRefreshBeautify: refreshBeautify,
+    autoOptimizeCode,
+    setAutoOptimizeCode,
+    onOptimizeCode: handleOptimizeCode,
+  }), [runnerView, runnerError, lastLaunchMode, activeRunnerKind, resolvedDebugCapabilities, debugFrontendAdapter, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
+
   return (
+    <CodeCtxProvider value={codeApi}>
+    <RunnerActionsProvider value={runnerActionsApi}>
     <div style={{ height: "calc(100vh - 130px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <Layout style={{ background: "transparent", height: "100%", flexDirection: isCompactViewport ? "column" : "row" }}>
         <Sider
@@ -1219,6 +1221,7 @@ const PythonLabStudio: React.FC<{
                 onSourcePointerDown={onSourcePointerDown}
                 onTargetPointerDown={onTargetPointerDown}
                 onAnchorPointerDown={onAnchorPointerDown}
+                activeEdgeIds={activeEdgeIds}
               />
               <FlowAnnotationsSvg
                 nodes={nodes}
@@ -1307,56 +1310,7 @@ const PythonLabStudio: React.FC<{
           theme="light"
           style={{ background: "transparent", height: isCompactViewport ? "42vh" : "100%", overflow: "hidden" }}
         >
-          <RightPanel
-            generated={generated}
-            code={code}
-            setCode={setCode}
-            codeMode={codeMode}
-            setCodeMode={setCodeMode}
-            revealLine={revealLine}
-            variableColumns={variableColumns}
-            runner={runnerView}
-            flow={{ nodes, edges }}
-            debugCapabilities={resolvedDebugCapabilities}
-            runnerError={runnerError}
-            lastLaunchMode={lastLaunchMode}
-            terminalBridge={activeRunnerKind === "pyodide" ? pyApi.terminal : null}
-            flowDiagnostics={flowDiagnostics}
-            flowExpandFunctions={flowExpandFunctions}
-            setFlowExpandFunctions={setFlowExpandFunctions}
-            onRebuildFlowFromCode={rebuildFlowFromCode}
-            onRun={debugFrontendAdapter.run}
-            onDebug={debugFrontendAdapter.debug}
-            onTerminalInput={() => { }}
-            onContinue={debugFrontendAdapter.continueRun}
-            onPause={debugFrontendAdapter.pause}
-            onStepOver={debugFrontendAdapter.stepOver}
-            onStepInto={debugFrontendAdapter.stepInto}
-            onStepOut={debugFrontendAdapter.stepOut}
-            onReset={debugFrontendAdapter.reset}
-            onToggleBreakpoint={onToggleBreakpoint}
-            onSetBreakpointEnabled={onSetBreakpointEnabled}
-            onSetBreakpointCondition={onSetBreakpointCondition}
-            onSetBreakpointHitCount={onSetBreakpointHitCount}
-            onAddWatch={(expr) => activeApi?.addWatch?.(expr)}
-            onRemoveWatch={(expr) => activeApi?.removeWatch?.(expr)}
-            onEvaluate={(expr) =>
-              typeof activeApi?.evaluate === "function"
-                ? activeApi.evaluate(expr)
-                : Promise.resolve({ ok: false, error: "当前运行器不支持求值" })
-            }
-            onHistoryBack={() => activeApi?.historyBack?.()}
-            onHistoryForward={() => activeApi?.historyForward?.()}
-            onHistoryToLatest={() => activeApi?.historyToLatest?.()}
-            beautifyResult={beautifyResult}
-            beautifyLoading={beautifyLoading}
-            beautifyError={beautifyError}
-            onRefreshBeautify={() => setBeautifyRefreshToken((t) => t + 1)}
-            onClearPendingOutput={() => activeApi?.clearPendingOutput?.()}
-            autoOptimizeCode={autoOptimizeCode}
-            setAutoOptimizeCode={setAutoOptimizeCode}
-            onOptimizeCode={handleOptimizeCode}
-          />
+          <RightPanel />
         </Sider>
       </Layout>
 
@@ -1414,7 +1368,15 @@ const PythonLabStudio: React.FC<{
       </FloatingPopup>
 
     </div>
+    </RunnerActionsProvider>
+    </CodeCtxProvider>
   );
 };
+
+const PythonLabStudio: React.FC<{ experiment?: PythonLabExperiment }> = ({ experiment }) => (
+  <PythonLabProvider>
+    <PythonLabStudioInner experiment={experiment} />
+  </PythonLabProvider>
+);
 
 export default PythonLabStudio;

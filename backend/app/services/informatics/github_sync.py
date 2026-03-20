@@ -194,7 +194,7 @@ async def update_sync_settings(
     item.interval_hours = max(1, int(interval_hours or 48))
     item.delete_mode = delete_mode if delete_mode in {"unpublish", "soft_delete"} else "unpublish"
     item.updated_by_id = int(updated_by_id) if updated_by_id is not None else None
-    if token is not None and token.strip():
+    if token is not None and token.strip() and token.strip() != "__use_saved_token__":
         item.token_encrypted = encrypt_api_key(token.strip())
     await db.commit()
     await db.refresh(item)
@@ -282,6 +282,19 @@ async def run_github_sync(
     force_recompile: bool = False,
     progress_hook: Optional[Callable[[dict], None]] = None,
 ) -> InformaticsGithubSyncRun:
+    # 清理残留的 running 记录（进程异常退出导致）
+    stale_runs = (
+        await db.execute(
+            select(InformaticsGithubSyncRun).where(InformaticsGithubSyncRun.status == "running")
+        )
+    ).scalars().all()
+    for sr in stale_runs:
+        sr.status = "failed"
+        sr.error_summary = "进程异常中断，自动清理"
+        sr.finished_at = datetime.now()
+    if stale_runs:
+        await db.commit()
+
     setting = await get_or_create_sync_settings(db)
     token: Optional[str] = None
     if setting.token_encrypted:
@@ -293,7 +306,10 @@ async def run_github_sync(
     owner, repo, branch = setting.repo_owner, setting.repo_name, setting.branch or "main"
     lock_key = f"inf:github-sync:{owner}:{repo}:{branch}"
     if not await _acquire_lock(lock_key):
-        raise RuntimeError("同步任务已在运行中，请稍后重试")
+        # 锁可能是残留的，强制释放后重试一次
+        await _release_lock(lock_key)
+        if not await _acquire_lock(lock_key):
+            raise RuntimeError("同步任务已在运行中，请稍后重试")
     run = InformaticsGithubSyncRun(
         trigger_type=trigger_type,
         status="running",

@@ -120,6 +120,8 @@ async def create_usage_record(
             used_at=usage_in.used_at,
         )
         return usage
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

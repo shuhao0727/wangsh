@@ -15,36 +15,75 @@
   --ws-page-max-width: clamp(1080px, 92vw, 1720px);
   --ws-page-max-width-wide: clamp(1320px, 94vw, 2080px);
   --ws-header-height: clamp(56px, 3.2vw, 68px);
-  --ws-color-bg: #ffffff;
-  --ws-color-surface: #ffffff;
-  --ws-color-surface-2: #f8fafc; /* Slate 50 */
-  --ws-color-border: transparent; 
-  --ws-color-text: #0f172a; /* Slate 900 - High contrast */
-  --ws-color-text-secondary: #475569; /* Slate 600 - Improved readability */
-  --ws-color-primary: #1677ff; /* Ant Design Default Blue */
-  --ws-color-primary-hover: #4096ff;
-  --ws-color-primary-active: #0958d9;
-  --ws-color-accent: #1677ff;
-  --ws-color-success: #52c41a;
-  --ws-color-warning: #faad14;
-  --ws-color-error: #ff4d4f;
-  --ws-color-info: #1677ff;
-  --ws-color-hover-bg: rgba(0, 0, 0, 0.02);
-  --ws-color-focus-ring: rgba(22, 119, 255, 0.2);
-  --ws-color-primary-soft: #e6f4ff;
-  --ws-color-primary-light: #e6f4ff;
-  --ws-color-success-soft: #f6ffed;
-  --ws-color-warning-soft: #fffbe6;
-  --ws-color-error-soft: #fff2f0;
-  --ws-color-info-soft: #e6f4ff;
-  --ws-radius-sm: clamp(4px, calc(0.12vw + 3.6px), 5px);
-  --ws-radius-md: clamp(6px, calc(0.16vw + 5.4px), 8px);
-  --ws-radius-lg: clamp(8px, calc(0.24vw + 7.2px), 12px);
-  --ws-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --ws-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --ws-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --ws-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
+
+  /* 背景层次 — 统一白色，无割裂 */
+  --ws-color-bg: #FFFFFF;
+  --ws-color-surface: #FFFFFF;
+  --ws-color-surface-2: #FAFAFA;
+  --ws-color-elevated: #FFFFFF;
+  --ws-color-overlay: rgba(15, 23, 42, 0.4);
+
+  /* 边框 — 极淡或透明 */
+  --ws-color-border: transparent;
+  --ws-color-border-secondary: transparent;
+
+  /* 文字 */
+  --ws-color-text: #0F172A;
+  --ws-color-text-secondary: #475569;
+  --ws-color-text-tertiary: #94A3B8;
+
+  /* 主色 — Sky Blue */
+  --ws-color-primary: #0EA5E9;
+  --ws-color-primary-hover: #38BDF8;
+  --ws-color-primary-active: #0284C7;
+  --ws-color-accent: #06B6D4;
+
+  /* 语义色 */
+  --ws-color-success: #10B981;
+  --ws-color-warning: #F59E0B;
+  --ws-color-error: #EF4444;
+  --ws-color-error-dark: #DC2626;
+  --ws-color-error-light: #FCA5A5;
+  --ws-color-info: #0EA5E9;
+
+  /* 交互 */
+  --ws-color-hover-bg: rgba(14, 165, 233, 0.04);
+  --ws-color-focus-ring: rgba(14, 165, 233, 0.2);
+
+  /* 柔和背景 */
+  --ws-color-primary-soft: rgba(14, 165, 233, 0.06);
+  --ws-color-primary-light: rgba(14, 165, 233, 0.1);
+  --ws-color-success-soft: rgba(16, 185, 129, 0.06);
+  --ws-color-warning-soft: rgba(245, 158, 11, 0.06);
+  --ws-color-error-soft: rgba(239, 68, 68, 0.06);
+  --ws-color-info-soft: rgba(14, 165, 233, 0.06);
+
+  /* 渐变 */
+  --ws-gradient-primary: linear-gradient(135deg, #0EA5E9, #06B6D4);
+  --ws-gradient-primary-soft: linear-gradient(135deg, rgba(14, 165, 233, 0.06), rgba(6, 182, 212, 0.06));
+  --ws-gradient-surface: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%);
+
+  /* 毛玻璃 */
+  --ws-glass-bg: rgba(255, 255, 255, 0.9);
+  --ws-glass-border: transparent;
+  --ws-glass-blur: blur(16px);
+
+  /* 圆角 */
+  --ws-radius-sm: clamp(4px, calc(0.12vw + 3.6px), 6px);
+  --ws-radius-md: clamp(6px, calc(0.16vw + 5.4px), 10px);
+  --ws-radius-lg: clamp(10px, calc(0.24vw + 8px), 14px);
+  --ws-radius-xl: 16px;
+
+  /* 阴影 — 全部极淡或无 */
+  --ws-shadow-xs: none;
+  --ws-shadow-sm: none;
+  --ws-shadow-md: none;
+  --ws-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --ws-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.08);
+  --ws-shadow-primary: none;
+  --ws-shadow-card-hover: none;
+
+  /* z-index */
   --ws-z-index-dropdown: 1000;
   --ws-z-index-sticky: 1020;
   --ws-z-index-fixed: 1030;
@@ -53,25 +92,31 @@
   --ws-z-index-popover: 1060;
   --ws-z-index-tooltip: 1070;
 
+  /* 过渡 */
+  --ws-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --ws-transition-base: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --ws-transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+  --ws-transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 间距 */
   --ws-space-1: clamp(6px, calc(0.28vw + 5px), 14px);
   --ws-space-2: clamp(10px, calc(0.4vw + 8px), 18px);
   --ws-space-3: clamp(14px, calc(0.58vw + 11px), 24px);
   --ws-space-4: clamp(18px, calc(0.76vw + 13px), 34px);
   --ws-space-5: clamp(24px, calc(0.92vw + 18px), 44px);
+
+  /* 字号 */
   --ws-text-xs: clamp(12px, calc(0.14vw + 11.2px), 14px);
   --ws-text-sm: clamp(13px, calc(0.22vw + 12.2px), 16px);
   --ws-text-md: clamp(14px, calc(0.3vw + 13px), 18px);
   --ws-text-lg: clamp(16px, calc(0.48vw + 14.3px), 22px);
   --ws-text-xl: clamp(20px, calc(0.76vw + 17.2px), 30px);
-  
-  /* Typography - Clean & Modern */
+
+  /* 字体 */
   --ws-font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --ws-font-size-base: var(--ws-text-md);
   --ws-font-size-sm: var(--ws-text-xs);
-  --ws-line-height-base: 1.6; /* Increased line height for breathability */
+  --ws-line-height-base: 1.6;
 }
 
 html {
@@ -101,8 +146,8 @@ body {
 
 /* 滚动条样式 - Subtle & Minimal */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -110,12 +155,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(99, 102, 241, 0.3);
 }
 
 /* 链接样式 */

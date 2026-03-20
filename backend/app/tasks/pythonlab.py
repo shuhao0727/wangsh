@@ -58,7 +58,13 @@ async def _set_session_meta(session_id: str, meta: Dict[str, Any]) -> None:
     await cache.set(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}", meta, expire_seconds=ttl)
 
 
-@celery_app.task(name="app.tasks.pythonlab.start_session")
+@celery_app.task(
+    name="app.tasks.pythonlab.start_session",
+    autoretry_for=(Exception,),
+    max_retries=2,
+    retry_backoff=True,
+    retry_backoff_max=30,
+)
 def start_session(session_id: str):
     async def run():
         meta = await _get_session_meta(session_id)

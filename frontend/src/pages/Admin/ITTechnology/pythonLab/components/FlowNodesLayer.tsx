@@ -50,7 +50,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
   const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null);
   const [editingText, setEditingText] = React.useState("");
 
-  const canUseActiveNodeId = !!activeNodeId && nodes.some((n) => n.id === activeNodeId);
+  const canUseActiveNodeId = !!activeNodeId && nodes.some((n) => n.id === activeNodeId && n.type !== "annotation");
   const commitNoteEdit = React.useCallback(
     (nodeId: string, value: string) => {
       const next = value.trim();
@@ -72,8 +72,9 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
   const defaultRoleForLine = (line: number): string | null => {
     const roles = new Set<string>();
     for (const n of nodes) {
+      if (n.type === "annotation") continue;
       if (!matchesNodeLine(n, line)) continue;
-      const r = (n as any).sourceRole;
+      const r = n.sourceRole;
       if (typeof r === "string" && r.trim()) roles.add(r);
     }
     const order = ["for_check", "for_inc", "for_init", "for_in_next", "for_in_bind", "while_check", "aug_assign", "call_site", "return_stmt"];
@@ -109,20 +110,19 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
         }
       `}</style>
       {nodes.filter(n => n.type !== "annotation").map((n) => {
-        if (n.shape === "connector" && !String(n.title || "").trim()) return null;
         const selected = n.id === selectedNodeId;
         const active = !activeEnabled
           ? false
           : canUseActiveNodeId
-          ? !!activeNodeId && n.id === activeNodeId && !selected
+          ? !!activeNodeId && n.id === activeNodeId
           : !!activeLine &&
             matchesNodeLine(n, activeLine) &&
-            (!hasRoleTarget || !effectiveFocusRole || n.sourceRole === effectiveFocusRole) &&
-            !selected;
+            (!hasRoleTarget || !effectiveFocusRole || n.sourceRole === effectiveFocusRole);
         const pulse = !!followMode && !!active && typeof followTick === "number";
         const size = nodeSizeForTitle(n.shape, n.title);
-        const borderColor = selected ? "#1677ff" : active ? "#1677ff" : shapeColor(n.shape);
-        const strokeWidth = selected ? 2.5 : active ? 2.5 : 2;
+        const borderColor = selected ? "#0EA5E9" : active ? "#0EA5E9" : shapeColor(n.shape);
+        const bgColor = active ? "rgba(22,119,255,0.08)" : "#fff";
+        const strokeWidth = selected ? 2.5 : active ? 3 : 2;
         const dashed = connectMode && connectFromId === n.id;
         const w = size.w;
         const h = size.h;
@@ -197,7 +197,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   height={h - pad * 2}
                   rx={(h - pad * 2) / 2}
                   ry={(h - pad * 2) / 2}
-                  fill="#fff"
+                  fill={bgColor}
                   stroke={borderColor}
                   strokeWidth={strokeWidth}
                   strokeDasharray={dashed ? "6 4" : undefined}
@@ -211,7 +211,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   height={h - pad * 2}
                   rx={10}
                   ry={10}
-                  fill="#fff"
+                  fill={bgColor}
                   stroke={borderColor}
                   strokeWidth={strokeWidth}
                   strokeDasharray={dashed ? "6 4" : undefined}
@@ -226,7 +226,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                     height={h - pad * 2}
                     rx={10}
                     ry={10}
-                    fill="#fff"
+                    fill={bgColor}
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}
@@ -254,7 +254,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                     height={h - pad * 2}
                     rx={10}
                     ry={10}
-                    fill="#fff"
+                    fill={bgColor}
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}
@@ -282,7 +282,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                     height={h - pad * 2}
                     rx={10}
                     ry={10}
-                    fill="#fff"
+                    fill={bgColor}
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}
@@ -295,6 +295,39 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   />
                   <path
                     d={`M ${pad + 8} ${h / 2} H ${w - pad - 8}`}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                </>
+              )}
+              {n.shape === "str_op" && (
+                <>
+                  <rect
+                    x={pad}
+                    y={pad}
+                    width={w - pad * 2}
+                    height={h - pad * 2}
+                    rx={10}
+                    ry={10}
+                    fill={bgColor}
+                    stroke={borderColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={dashed ? "6 4" : undefined}
+                  />
+                  <path
+                    d={`M ${pad + 8} ${h - pad - 6} q 6 -5 12 0 t 12 0 t 12 0`}
+                    stroke={borderColor}
+                    strokeWidth={1.5}
+                    fill="none"
+                  />
+                </>
+              )}
+              {n.shape === "jump" && (
+                <>
+                  <polygon
+                    points={`${pad + 12},${pad} ${w - pad},${pad} ${w - pad - 12},${h - pad} ${pad},${h - pad}`}
+                    fill={bgColor}
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}
@@ -324,17 +357,17 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                 </>
               )}
               {n.shape === "decision" && (
-                <polygon points={diamond} fill="#fff" stroke={borderColor} strokeWidth={strokeWidth} strokeDasharray={dashed ? "6 4" : undefined} />
+                <polygon points={diamond} fill={bgColor} stroke={borderColor} strokeWidth={strokeWidth} strokeDasharray={dashed ? "6 4" : undefined} />
               )}
               {n.shape === "io" && (
-                <polygon points={para} fill="#fff" stroke={borderColor} strokeWidth={strokeWidth} strokeDasharray={dashed ? "6 4" : undefined} />
+                <polygon points={para} fill={bgColor} stroke={borderColor} strokeWidth={strokeWidth} strokeDasharray={dashed ? "6 4" : undefined} />
               )}
               {n.shape === "connector" && (
                 <circle
                   cx={w / 2}
                   cy={h / 2}
                   r={Math.min(w, h) / 2 - pad}
-                  fill="#fff"
+                  fill={bgColor}
                   stroke={borderColor}
                   strokeWidth={strokeWidth}
                   strokeDasharray={dashed ? "6 4" : undefined}
@@ -411,7 +444,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                         ? edge.toPort ?? null
                         : null);
                   const active = (connectMode && connectFromId === n.id && connectFromPort === side) || (!!current && current === side);
-                  const stroke = active ? "#1677ff" : "rgba(0,0,0,0.35)";
+                  const stroke = active ? "#0EA5E9" : "rgba(0,0,0,0.35)";
                   return (
                     <g
                       key={`${n.id}_${side}`}

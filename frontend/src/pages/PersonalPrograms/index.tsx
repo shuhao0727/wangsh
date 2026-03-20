@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Button, Empty, Space, Tag, Typography, Skeleton } from "antd";
+import { Card, Row, Col, Button, Empty, Tag, Typography, Skeleton } from "antd";
 import { ArrowRightOutlined } from "@ant-design/icons";
 import { xbkPublicConfigApi } from "@services";
 import "./PersonalPrograms.css";
@@ -45,13 +45,13 @@ const PersonalProgramsPage: React.FC = () => {
               className="personal-programs-card"
               styles={{ body: { padding: "var(--ws-space-3)" } }}
             >
-              <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-                <Space align="center" style={{ justifyContent: "space-between" }}>
-                  <Text strong style={{ fontSize: "var(--ws-text-md)" }}>
+              <div className="personal-programs-card-body">
+                <div className="personal-programs-card-header">
+                  <Text strong className="personal-programs-card-title">
                     校本课（XBK）处理系统
                   </Text>
                   <Tag color="orange">新</Tag>
-                </Space>
+                </div>
                 <Text type="secondary">
                   第一阶段：页面与流程框架；数据处理将在下一阶段上线
                 </Text>
@@ -64,7 +64,7 @@ const PersonalProgramsPage: React.FC = () => {
                     进入
                   </Button>
                 </div>
-              </Space>
+              </div>
             </Card>
           </Col>
         </Row>

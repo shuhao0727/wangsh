@@ -21,8 +21,18 @@ export type ParsePythonResult =
 const normalize = (code: string) => code.replaceAll("\t", "  ").replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 
 const stripComment = (line: string) => {
-  const idx = line.indexOf("#");
-  return idx >= 0 ? line.slice(0, idx) : line;
+  let inStr: "'" | '"' | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inStr) {
+      if (ch === "\\" && i + 1 < line.length) { i++; continue; }
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') { inStr = ch; continue; }
+    if (ch === "#") return line.slice(0, i);
+  }
+  return line;
 };
 
 const indentOf = (line: string) => {
@@ -365,8 +375,7 @@ export type BuildFlowsResult = { main: BuildResult; functions: FunctionFlowResul
 export type BuildUnifiedFlowResult = BuildResult;
 
 const normalizeCondTitle = (cond: string) => {
-  const c = cond.trim().replaceAll("≤", "<=").replaceAll("≥", ">=").replaceAll("≠", "!=");
-  return c.endsWith("?") ? c : `${c} ?`;
+  return cond.trim().replaceAll("≤", "<=").replaceAll("≥", ">=").replaceAll("≠", "!=");
 };
 
 const isIO = (stmt: string) => {
@@ -394,10 +403,12 @@ const inferCollectionShape = (stmt: string): FlowNodeShape | null => {
   if (/=\s*\[[^\]]*\]\s*$/.test(t)) return "list_op";
   if (/=\s*dict\s*\(/.test(low)) return "dict_op";
   if (/=\s*list\s*\(/.test(low)) return "list_op";
-  if (/\.\s*(append|extend|insert|remove|clear|sort|reverse)\s*\(/.test(low)) return "list_op";
+  if (/\.\s*(append|extend|insert|remove|clear|sort|reverse|pop)\s*\(/.test(low)) return "list_op";
   if (/\.\s*(get|setdefault|update|keys|values|items|popitem)\s*\(/.test(low)) return "dict_op";
   if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*=/.test(t)) return "dict_op";
   if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[[^\]]+\]\s*=/.test(t)) return "list_op";
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*\[\s*(['"]).*?\1\s*\]\s*$/.test(t)) return "dict_op";
+  if (/\.\s*(split|strip|lstrip|rstrip|upper|lower|replace|join|find|rfind|startswith|endswith|format|count|index|title|capitalize|swapcase|center|ljust|rjust|zfill|encode|decode)\s*\(/.test(low)) return "str_op";
   return null;
 };
 
@@ -556,7 +567,9 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
 
   const emitStmtNode = (text: string, sourceLine?: number, sourceRole?: string) => {
     const collectionShape = inferCollectionShape(text);
-    const shape: FlowNodeShape = isIO(text) ? "io" : collectionShape ?? (isSubroutineCall(text) ? "subroutine" : "process");
+    const t = text.trim();
+    const isJump = t === "break" || t === "continue" || t === "return" || t.startsWith("return ");
+    const shape: FlowNodeShape = isJump ? "jump" : isIO(text) ? "io" : collectionShape ?? (isSubroutineCall(text) ? "subroutine" : "process");
     const split = splitNodeTitleSemantically(text, shape);
     if (sourceLine && split.diagnostics.length) {
       for (const d of split.diagnostics) {
@@ -578,7 +591,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
     return block.items.length === 1 && block.items[0].kind === "if";
   };
 
-  const emitIf = (it: CodeIRIf, parentJoinId?: string): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
+  const emitIf = (it: CodeIRIf, parentJoinId?: string, loopCtx?: LoopCtx): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
     const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line };
     nodes.push(d);
 
@@ -592,7 +605,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
       nodes.push(join);
     }
 
-    const thenRes = emitBlock(it.then);
+    const thenRes = emitBlock(it.then, loopCtx);
 
     // Check if the else block is an "elif" (single if statement)
     const isElif = it.else && isElifBlock(it.else);
@@ -605,11 +618,11 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
         // RECURSIVE FLATTENING:
         // Instead of emitting the else block as a standard block, we directly emit the inner IF
         // passing OUR joinId down to it. This effectively merges the exit points.
-        elseRes = emitIf(it.else.items[0] as CodeIRIf, joinId);
+        elseRes = emitIf(it.else.items[0] as CodeIRIf, joinId, loopCtx);
         elseEntry = elseRes.entry;
       } else {
         // Standard else block
-        const blockRes = emitBlock(it.else);
+        const blockRes = emitBlock(it.else, loopCtx);
         elseRes = {
           entry: blockRes.entry,
           exit: blockRes.exit,
@@ -660,7 +673,7 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
   const emitWhile = (it: CodeIRWhile) => {
     const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(it.cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "while_check" };
     nodes.push(d);
-    const bodyRes = emitBlock(it.body);
+    const bodyRes = emitBlock(it.body, { conditionNodeId: d.id });
     const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
     whiles.push({ headerLine: it.loc.line, checkNodeId: d.id, bodyLineRange });
     emitEdge(d.id, bodyRes.entry, "是");
@@ -674,22 +687,25 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
         style: "straight",
         routeMode: "auto",
         anchor: null,
-        label: "是",
         fromPort: "left",
         toPort: "left",
       });
     }
+    // break 节点：连线到循环出口（即 decision 的"否"方向，由外层处理）
+    // 这里将 break 节点的出边暂存，等外层 emitBlock 连接到循环后的下一个节点
+    // 实际上 break 应该跳出循环，所以我们把 break 节点作为额外出口
+    const breakExits = bodyRes.pendingBreaks;
     const irWhile: IRWhile = { kind: "while", cond: it.cond, body: bodyRes.ir, decisionId: d.id, backEdgeId };
-    return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id };
+    return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id, breakExits };
   };
 
   const emitForIn = (it: CodeIRForIn) => {
-    const cond = `has_next(${it.iterable})`;
+    const cond = `${it.iterable} 未遍历完`;
     const d: FlowNode = { type: "flow_element", id: nextId("dec"), shape: "decision", title: normalizeCondTitle(cond), x: 0, y: 0, sourceLine: it.loc.line, sourceRole: "for_in_next" };
     nodes.push(d);
-    const bindText = `${it.vars.join(", ")} = next(${it.iterable})`;
+    const bindText = `${it.vars.join(", ")} = 当前元素`;
     const bind = emitStmtNode(bindText, it.loc.line, "for_in_bind");
-    const bodyRes = emitBlock(it.body);
+    const bodyRes = emitBlock(it.body, { conditionNodeId: d.id });
     const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
     forIns.push({ headerLine: it.loc.line, vars: it.vars, nextNodeId: d.id, bindNodeId: bind.nodeId, bodyLineRange });
 
@@ -705,81 +721,121 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
         style: "straight",
         routeMode: "auto",
         anchor: null,
-        label: "是",
         fromPort: "left",
         toPort: "left",
       });
     }
 
+    const breakExits = bodyRes.pendingBreaks;
     const loopBody: IRBlock = { kind: "block", items: [bind.ir, ...bodyRes.ir.items] };
     const irWhile: IRWhile = { kind: "while", cond, body: loopBody, decisionId: d.id, backEdgeId };
-    return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id };
+    return { entry: d.id, exit: d.id, irItems: [irWhile as IRNode], whileDecisionId: d.id, breakExits };
   };
 
   const emitForRange = (it: CodeIRForRange) => {
     const stepText = it.step ? it.step.trim() : "1";
-    const rangeExpr = stepText === "1" ? `range(${it.start}, ${it.end})` : `range(${it.start}, ${it.end}, ${stepText})`;
-    const buildSeq = emitStmtNode(`${rangeExpr}`, it.loc.line, "for_init");
-    const buildIter = emitStmtNode(`it in ${rangeExpr}`, it.loc.line, "for_init");
-    const cond = `has_next(it)`;
+    const stepNum = Number(stepText);
+    const isNegStep = Number.isFinite(stepNum) && stepNum < 0;
+
+    // 教科书风格：初始化 → 条件判断 → 循环体 → 递增 → 回到条件
+    const initNode = emitStmtNode(`${it.v} = ${it.start}`, it.loc.line, "for_init");
+
+    const stepAnnotation = (stepText === "1" || stepText === "-1") ? "" : `, 步长=${stepText}`;
+    const condText = isNegStep
+      ? `${it.v} ∈ (${it.end}, ${it.start}]${stepAnnotation}`
+      : `${it.v} ∈ [${it.start}, ${it.end})${stepAnnotation}`;
     const d: FlowNode = {
       type: "flow_element",
       id: nextId("dec"),
       shape: "decision",
-      title: `${it.v}的值在列表？`,
+      title: condText,
       x: 0,
       y: 0,
       sourceLine: it.loc.line,
       sourceRole: "for_check",
     };
     nodes.push(d);
-    const bind = emitStmtNode(`${it.v} = next(it)`, it.loc.line, "for_inc");
-    const bodyRes = emitBlock(it.body);
-    const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
-    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: buildSeq.nodeId, checkNodeId: d.id, incNodeId: bind.nodeId, bodyLineRange });
 
-    emitEdge(buildSeq.nodeId, buildIter.nodeId);
-    emitEdge(buildIter.nodeId, d.id);
-    emitEdge(d.id, bind.nodeId, "是");
-    emitEdge(bind.nodeId, bodyRes.entry);
+    const bodyRes = emitBlock(it.body, { conditionNodeId: d.id });
+
+    const incText = stepText === "1" ? `${it.v} += 1`
+      : stepText === "-1" ? `${it.v} -= 1`
+      : isNegStep ? `${it.v} -= ${Math.abs(stepNum)}`
+      : `${it.v} += ${stepText}`;
+    const incNode = emitStmtNode(incText, it.loc.line, "for_inc");
+
+    const bodyLineRange = codeBlockLineRange(it.body) ?? undefined;
+    forRanges.push({ headerLine: it.loc.line, var: it.v, initNodeId: initNode.nodeId, checkNodeId: d.id, incNodeId: incNode.nodeId, bodyLineRange });
+
+    emitEdge(initNode.nodeId, d.id);
+    emitEdge(d.id, bodyRes.entry, "是");
+    if (bodyRes.exit) {
+      emitEdge(bodyRes.exit, incNode.nodeId);
+    }
     const backEdgeId = nextId("e");
     edges.push({
       id: backEdgeId,
-      from: bodyRes.exit || bind.nodeId,
+      from: incNode.nodeId,
       to: d.id,
       style: "straight",
       routeMode: "auto",
       anchor: null,
-      label: "是",
       fromPort: "left",
       toPort: "left",
     });
-    const loopBody: IRBlock = { kind: "block", items: [bind.ir, ...bodyRes.ir.items] };
-    const irWhile: IRWhile = { kind: "while", cond, body: loopBody, decisionId: d.id, backEdgeId };
-    return { entry: buildSeq.nodeId, exit: d.id, irItems: [buildSeq.ir as IRNode, buildIter.ir as IRNode, irWhile as IRNode], whileDecisionId: d.id };
+    const breakExits = bodyRes.pendingBreaks;
+    const loopBody: IRBlock = { kind: "block", items: [...bodyRes.ir.items, incNode.ir] };
+    const irWhile: IRWhile = { kind: "while", cond: condText, body: loopBody, decisionId: d.id, backEdgeId };
+    return { entry: initNode.nodeId, exit: d.id, irItems: [initNode.ir as IRNode, irWhile as IRNode], whileDecisionId: d.id, breakExits };
   };
 
-  const emitNode = (it: CodeIRNode): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null } => {
+  type LoopCtx = { conditionNodeId: string };
+
+  const emitNode = (it: CodeIRNode, loopCtx?: LoopCtx): { entry: string; exit: string | null; irItems: IRNode[]; whileDecisionId: string | null; pendingBreaks: string[] } => {
     if (it.kind === "stmt") {
+      const text = it.text.trim();
       const s = emitStmtNode(it.text, it.loc.line, inferStmtRole(it.text));
+
+      // break: 终止节点，收集到 pendingBreaks 由外层循环处理
+      if (text === "break" && loopCtx) {
+        return { entry: s.nodeId, exit: null, irItems: [s.ir as IRNode], whileDecisionId: null, pendingBreaks: [s.nodeId] };
+      }
+      // continue: 终止节点，直接连线到循环条件
+      if (text === "continue" && loopCtx) {
+        emitEdge(s.nodeId, loopCtx.conditionNodeId);
+        return { entry: s.nodeId, exit: null, irItems: [s.ir as IRNode], whileDecisionId: null, pendingBreaks: [] };
+      }
+
       const terminal = isFunctionFlow && isReturnStmt(it.text);
-      return { entry: s.nodeId, exit: terminal ? null : s.nodeId, irItems: [s.ir as IRNode], whileDecisionId: null as string | null };
+      return { entry: s.nodeId, exit: terminal ? null : s.nodeId, irItems: [s.ir as IRNode], whileDecisionId: null, pendingBreaks: [] };
     }
-    if (it.kind === "if") return emitIf(it);
-    if (it.kind === "while") return emitWhile(it);
-    if (it.kind === "for_range") return emitForRange(it);
-    if (it.kind === "for_in") return emitForIn(it);
-    return { entry: null as unknown as string, exit: null as unknown as string | null, irItems: [], whileDecisionId: null as string | null };
+    if (it.kind === "if") return { ...emitIf(it, undefined, loopCtx), pendingBreaks: [] };
+    if (it.kind === "while") {
+      const r = emitWhile(it);
+      return { entry: r.entry, exit: r.exit, irItems: r.irItems, whileDecisionId: r.whileDecisionId, pendingBreaks: r.breakExits ?? [] };
+    }
+    if (it.kind === "for_range") {
+      const r = emitForRange(it);
+      return { entry: r.entry, exit: r.exit, irItems: r.irItems, whileDecisionId: r.whileDecisionId, pendingBreaks: r.breakExits ?? [] };
+    }
+    if (it.kind === "for_in") {
+      const r = emitForIn(it);
+      return { entry: r.entry, exit: r.exit, irItems: r.irItems, whileDecisionId: r.whileDecisionId, pendingBreaks: r.breakExits ?? [] };
+    }
+    return { entry: null as unknown as string, exit: null as unknown as string | null, irItems: [], whileDecisionId: null, pendingBreaks: [] };
   };
 
-  const emitBlock = (b: CodeIRBlock): { entry: string; exit: string | null; ir: IRBlock } => {
+  const emitBlock = (b: CodeIRBlock, loopCtx?: LoopCtx): { entry: string; exit: string | null; ir: IRBlock; pendingBreaks: string[] } => {
     const items: IRNode[] = [];
     let entry: string | null = null;
     let prevExit: string | null = null;
     let pendingWhileDecisionId: string | null = null;
+    const pendingBreaks: string[] = [];
+    // break exits from loop nodes that need wiring to the next statement
+    let deferredBreakExits: string[] = [];
 
     for (const it of b.items) {
-      const res = emitNode(it);
+      const res = emitNode(it, loopCtx);
       for (const ir of res.irItems) items.push(ir);
       if (!entry && res.entry) entry = res.entry;
 
@@ -792,12 +848,46 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
         }
       }
 
+      // Wire deferred break exits from previous loop to this node's entry
+      for (const bk of deferredBreakExits) {
+        emitEdge(bk, res.entry);
+      }
+      deferredBreakExits = [];
+
+      // If this node is a loop (has whileDecisionId), its pendingBreaks are break exits
+      // that should be wired to the next statement after the loop
+      if (res.whileDecisionId && res.pendingBreaks.length > 0) {
+        deferredBreakExits = res.pendingBreaks;
+      } else {
+        // Non-loop break/continue: propagate up to the enclosing loop's emitBlock
+        pendingBreaks.push(...res.pendingBreaks);
+      }
+
       prevExit = res.exit;
       if (res.whileDecisionId) {
         pendingWhileDecisionId = res.whileDecisionId;
         prevExit = res.whileDecisionId;
       } else {
         pendingWhileDecisionId = null;
+      }
+    }
+
+    // If there are still deferred break exits at the end of the block,
+    // they become additional exit points — merge with normal exit via connector
+    if (deferredBreakExits.length > 0) {
+      if (prevExit === null) {
+        // No normal exit; use first break as exit
+        prevExit = deferredBreakExits[0];
+        deferredBreakExits = deferredBreakExits.slice(1);
+      }
+      if (deferredBreakExits.length > 0 && prevExit) {
+        const merge: FlowNode = { type: "flow_element", id: nextId("join"), shape: "connector", title: "", x: 0, y: 0 };
+        nodes.push(merge);
+        emitEdge(prevExit, merge.id);
+        for (const bk of deferredBreakExits) {
+          emitEdge(bk, merge.id);
+        }
+        prevExit = merge.id;
       }
     }
 
@@ -808,15 +898,25 @@ function buildFlowFromCodeIR(block: CodeIRBlock, warnings: string[], titles: { s
       items.push(p.ir);
     }
 
-    return { entry, exit: prevExit!, ir: { kind: "block", items } };
+    return { entry, exit: prevExit!, ir: { kind: "block", items }, pendingBreaks };
   };
 
   const body = emitBlock(block);
   emitEdge(startNode.id, body.entry);
   const last = block.items.length ? block.items[block.items.length - 1] : null;
-  if (body.exit !== null) {
-    emitEdge(body.exit, endNode.id, last && (last.kind === "while" || last.kind === "for_range" || last.kind === "for_in") ? "否" : undefined);
+  const hasNormalExit = body.exit !== null;
+  if (hasNormalExit) {
+    emitEdge(body.exit!, endNode.id, last && (last.kind === "while" || last.kind === "for_range" || last.kind === "for_in") ? "否" : undefined);
+  }
+
+  // 收集所有 return 节点（没有出边的 return_stmt），连接到结束节点
+  const outDegree = new Set(edges.map(e => e.from));
+  const returnNodes = nodes.filter(n => n.sourceRole === "return_stmt" && !outDegree.has(n.id));
+  if (hasNormalExit || returnNodes.length > 0) {
     nodes.push(endNode);
+    for (const rn of returnNodes) {
+      emitEdge(rn.id, endNode.id);
+    }
   }
 
   const ir: IRBlock = {

@@ -7,7 +7,7 @@
 .typst-editor-grid {
   display: grid;
   grid-template-columns: 320px 1fr;
-  gap: 24px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -17,86 +17,97 @@
 
 .typst-editor-side.typst-editor-side-collapsed {
   gap: 0;
-}
-
-@media (min-width: 992px) {
-  .typst-editor-grid {
-    gap: 16px;
-  }
+  overflow: hidden;
 }
 
 .typst-editor-side {
   position: sticky;
-  top: 72px;
+  top: 64px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-height: calc(100vh - 90px);
+  gap: 12px;
+  max-height: calc(100vh - 80px);
   overflow: auto;
   padding-bottom: 8px;
+}
+
+.typst-editor-side-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #FAFAFA;
+  border-radius: var(--ws-radius-md);
+  padding: 4px 6px;
 }
 
 .typst-editor-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .typst-editor-card {
-  border-radius: 10px;
-  border: 1px solid var(--ws-color-border);
+  border-radius: var(--ws-radius-lg);
+  border: none;
 }
 
 .typst-editor-card .ant-card-head {
-  background: linear-gradient(135deg, var(--ws-color-bg) 0%, var(--ws-color-info-soft) 100%);
-  border-bottom: 1px solid var(--ws-color-border);
-  border-radius: 10px 10px 0 0;
+  background: transparent;
+  border-bottom: none;
+  border-radius: var(--ws-radius-lg) var(--ws-radius-lg) 0 0;
+  min-height: 44px;
+  padding: 0 16px;
 }
 
 .typst-editor-card .ant-card-head-title {
   font-weight: 600;
-  color: var(--ws-color-primary);
+  color: var(--ws-color-text);
+  padding: 10px 0;
+}
+
+.typst-editor-card .ant-card-body {
+  padding: 12px 16px;
 }
 
 .typst-preview-box {
   height: 100%;
   border-radius: var(--ws-radius-md);
-  border: 1px solid var(--ws-color-border);
-  background: var(--ws-color-surface);
+  border: none;
+  background: #FAFAFA;
   padding: var(--ws-space-2);
   overflow: auto;
 }
 
 .typst-editor-panel {
-  height: min(820px, calc(100vh - 220px));
-  min-height: 560px;
+  height: min(780px, calc(100vh - 180px));
+  min-height: 480px;
 }
 
 .typst-editor-panel > .ant-input {
   height: 100%;
 }
 
+/* Line-numbered editor */
 .typst-ln-wrap {
   display: flex;
   height: 100%;
-  border: 1px solid var(--ws-color-border);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--ws-radius-md);
   overflow: hidden;
-  background: var(--ws-color-surface);
+  background: #FAFAFA;
 }
 
 .typst-ln-gutter {
-  width: 44px;
-  flex: 0 0 44px;
   overflow: hidden;
-  padding: 8px 6px;
+  padding: 8px 8px 8px 4px;
   background: rgba(0, 0, 0, 0.02);
-  border-right: 1px solid var(--ws-color-border);
+  border-right: 1px solid rgba(0, 0, 0, 0.04);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-color-text-tertiary);
   user-select: none;
+  transition: width 0.15s ease;
 }
 
 .typst-ln {
@@ -107,16 +118,48 @@
 .typst-ln-editor {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ant TextArea wrapper — 去掉额外间距 */
+.typst-ln-editor .ant-input-textarea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .typst-ln-editor .ant-input {
+  flex: 1;
   border: 0;
   border-radius: 0;
   padding: 8px 10px;
   line-height: 22px;
   font-size: 13px;
+  background: transparent;
 }
 
+/* 去掉 Ant TextArea 的字数统计区域（如果有） */
+.typst-ln-editor .ant-input-data-count {
+  display: none;
+}
+
+/* Footer bar */
+.typst-editor-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #FAFAFA;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 0 0 var(--ws-radius-lg) var(--ws-radius-lg);
+}
+
+.typst-editor-footer .ant-card-body {
+  padding: 10px 16px;
+}
+
+/* Responsive */
 @media (max-width: 1200px) {
   .typst-editor-grid {
     grid-template-columns: 1fr;
@@ -124,5 +167,21 @@
 
   .typst-editor-side {
     position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .typst-editor-grid {
+    gap: 10px;
+  }
+
+  .typst-editor-panel {
+    min-height: 360px;
+    height: min(600px, calc(100vh - 160px));
+  }
+
+  .typst-editor-card .ant-card-body {
+    padding: 10px 12px;
   }
 }

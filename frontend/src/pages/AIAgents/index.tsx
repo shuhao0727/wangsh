@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   App,
-  Row,
-  Col,
   Button,
   Modal,
   Form,
@@ -20,6 +18,9 @@ import {
 import AgentSidebar from "./AgentSidebar";
 import ChatArea from "./ChatArea";
 import GroupDiscussionPanel from "./GroupDiscussionPanel";
+import AssessmentPanel from "./AssessmentPanel";
+import ClassroomPanel from "./ClassroomPanel";
+import AgentErrorBoundary from "./AgentErrorBoundary";
 import useAuth from "@hooks/useAuth";
 import type {
   Agent,
@@ -33,6 +34,13 @@ import type { AIAgent } from "@services/znt/types";
 import { config } from "@services";
 import { logger } from "@services/logger";
 import "./AIAgents.css";
+
+const STREAM_TIMEOUT_MS = 120_000;
+
+const generateSessionId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const AIAgentsPage: React.FC = () => {
   const { message } = App.useApp();
@@ -71,6 +79,8 @@ const AIAgentsPage: React.FC = () => {
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
   const streamAbortRef = useRef<AbortController | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingTextRef = useRef<string>("");
 
   // 加载启用的智能体
   useEffect(() => {
@@ -89,7 +99,7 @@ const AIAgentsPage: React.FC = () => {
             <RobotOutlined />,
             <MessageOutlined />,
           ];
-          const colors = ["#1890ff", "#52c41a", "#722ed1", "#fa8c16"];
+          const colors = ["#0EA5E9", "#10B981", "#6366F1", "#F59E0B"];
 
           const iconIndex = index % icons.length;
 
@@ -115,7 +125,7 @@ const AIAgentsPage: React.FC = () => {
               name: "学习助手",
               description: "帮助你解决学习问题，提供学习建议",
               icon: <BookOutlined />,
-              color: "#1890ff",
+              color: "#0EA5E9",
               status: "online",
             },
             {
@@ -123,7 +133,7 @@ const AIAgentsPage: React.FC = () => {
               name: "代码导师",
               description: "编程问题解答，代码审查与优化",
               icon: <CodeOutlined />,
-              color: "#52c41a",
+              color: "#10B981",
               status: "online",
             },
             {
@@ -131,7 +141,7 @@ const AIAgentsPage: React.FC = () => {
               name: "竞赛指导",
               description: "信息学竞赛题目解析与训练指导",
               icon: <RobotOutlined />,
-              color: "#722ed1",
+              color: "#6366F1",
               status: "offline",
             },
             {
@@ -139,7 +149,7 @@ const AIAgentsPage: React.FC = () => {
               name: "文档分析",
               description: "文档内容提取、总结与分析",
               icon: <MessageOutlined />,
-              color: "#fa8c16",
+              color: "#F59E0B",
               status: "online",
             },
           ];
@@ -160,7 +170,7 @@ const AIAgentsPage: React.FC = () => {
             name: "学习助手",
             description: "帮助你解决学习问题，提供学习建议",
             icon: <BookOutlined />,
-            color: "#1890ff",
+            color: "#0EA5E9",
             status: "online",
           },
           {
@@ -168,7 +178,7 @@ const AIAgentsPage: React.FC = () => {
             name: "代码导师",
             description: "编程问题解答，代码审查与优化",
             icon: <CodeOutlined />,
-            color: "#52c41a",
+            color: "#10B981",
             status: "online",
           },
         ];
@@ -213,10 +223,7 @@ const AIAgentsPage: React.FC = () => {
   );
 
   const createNewConversation = useCallback((agent: Agent) => {
-    const newSessionId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const newSessionId = generateSessionId();
     setCurrentSessionId(newSessionId);
     try {
       localStorage.setItem(getSessionStorageKey(agent.id), newSessionId);
@@ -346,11 +353,7 @@ const AIAgentsPage: React.FC = () => {
     }
 
     logger.debug("✅ 已登录，发送消息并开启SSE");
-    const activeSessionId = currentSessionId || (
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    );
+    const activeSessionId = currentSessionId || generateSessionId();
     if (!currentSessionId) {
       setCurrentSessionId(activeSessionId);
       try {
@@ -377,14 +380,31 @@ const AIAgentsPage: React.FC = () => {
       const streamStartedAt = Date.now();
       const controller = new AbortController();
       streamAbortRef.current = controller;
+      // 120 秒超时：合并用户手动取消 + 自动超时
+      const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
+      // 构建多轮对话上下文（最近 10 轮）
+      const contextMessages: Array<{ role: string; content: string }> = [];
+      const recentMessages = messages.slice(-20); // 最多取最近 20 条（10 轮对话）
+      for (const msg of recentMessages) {
+        if (msg.sender === "user") {
+          contextMessages.push({ role: "user", content: msg.content });
+        } else if (msg.sender === "agent" && msg.content) {
+          contextMessages.push({ role: "assistant", content: msg.content });
+        }
+      }
+      // 加上当前用户消息
+      contextMessages.push({ role: "user", content });
+
       const body = {
         agent_id: parseInt(String(currentAgent.id), 10),
         message: content,
+        messages: contextMessages,
         user: auth.getDisplayName() || "guest",
         inputs: {},
       };
       let finalText = "";
       let usageSaved = false;
+      let finalized = false;
       
       const persistUsage = async (answerText: string) => {
         if (usageSaved || !userMessage.content) return;
@@ -401,12 +421,13 @@ const AIAgentsPage: React.FC = () => {
             used_at: new Date().toISOString(),
           });
           // 延迟刷新列表，避免后端写入延迟
-          setTimeout(async () => {
-              const listResp = await agentDataApi.listConversations({
+          setTimeout(() => {
+              agentDataApi.listConversations({
                 agent_id: parseInt(String(currentAgent.id), 10),
                 limit: 5,
-              });
-              if (listResp.success) setSessions(listResp.data);
+              }).then(listResp => {
+                if (listResp.success) setSessions(listResp.data);
+              }).catch(() => {});
           }, 1000);
         } catch (error) {
           logger.error("写入对话记录失败:", error);
@@ -501,11 +522,19 @@ const AIAgentsPage: React.FC = () => {
         };
         
         const updateAgentText = (text: string) => {
-          setStreamingContent(text);
+          pendingTextRef.current = text;
+          if (rafRef.current === null) {
+            rafRef.current = requestAnimationFrame(() => {
+              setStreamingContent(pendingTextRef.current);
+              rafRef.current = null;
+            });
+          }
         };
         
         // 结束时将完整消息合并到 messages
         const finalizeMessage = (finalText: string) => {
+            if (finalized) return;
+            finalized = true;
             const finalMsg: Message = {
               id: agentMessageId,
               content: finalText,
@@ -521,7 +550,9 @@ const AIAgentsPage: React.FC = () => {
         if (!res.ok) {
           const errText = `流式接口错误: HTTP ${res.status}`;
           markError(errText);
-          await persistUsage(finalText);
+          finalizeMessage(`⚠️ ${errText}`);
+          setStreamingContent("");
+          await persistUsage("");
           return;
         }
         
@@ -646,6 +677,10 @@ const AIAgentsPage: React.FC = () => {
                 errText = `${errText}\n${detail}`;
               }
               markError(errText);
+              // 将错误信息作为 agent 消息显示给用户
+              finalText = `⚠️ ${errText}`;
+              finalizeMessage(finalText);
+              await persistUsage("");
             } else {
               const fallback = getAnswerText();
               if (fallback) {
@@ -673,6 +708,11 @@ const AIAgentsPage: React.FC = () => {
         };
         setMessages((prev) => [...prev, errMsg]);
       } finally {
+        clearTimeout(timeoutId);
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
         streamAbortRef.current = null;
         setIsStreaming(false);
         setCurrentStreamingMessageId(null);
@@ -742,6 +782,15 @@ const AIAgentsPage: React.FC = () => {
     }
   }, [isStreaming]);
 
+  // 组件卸载时中止进行中的流式请求
+  useEffect(() => {
+    return () => {
+      if (streamAbortRef.current) {
+        streamAbortRef.current.abort();
+      }
+    };
+  }, []);
+
   // 登录处理函数
   const handleLogin = async (values: {
     username: string;
@@ -780,6 +829,7 @@ const AIAgentsPage: React.FC = () => {
   };
 
   return (
+    <AgentErrorBoundary>
     <div
       className="ai-agents-page"
     >
@@ -787,6 +837,19 @@ const AIAgentsPage: React.FC = () => {
         isAuthenticated={auth.isAuthenticated}
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
+        userId={auth.user?.id}
+      />
+      <AssessmentPanel
+        isAuthenticated={auth.isAuthenticated}
+        isStudent={auth.isStudent()}
+        isAdmin={auth.isAdmin()}
+        userId={auth.user?.id}
+      />
+      <ClassroomPanel
+        isAuthenticated={auth.isAuthenticated}
+        isStudent={auth.isStudent()}
+        isAdmin={auth.isAdmin()}
+        userId={auth.user?.id}
       />
       <div className="ai-agents-container">
         {/* Mobile Drawer for Sidebar */}
@@ -913,6 +976,7 @@ const AIAgentsPage: React.FC = () => {
         </Form>
       </Modal>
     </div>
+    </AgentErrorBoundary>
   );
 };
 

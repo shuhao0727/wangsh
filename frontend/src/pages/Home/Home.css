@@ -1,7 +1,7 @@
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -13,45 +13,77 @@
   max-width: clamp(980px, 86vw, 1320px);
   margin: 0 auto;
   width: 100%;
-  padding-block: var(--ws-space-2);
-  animation: fade-in-up 0.6s ease-out;
+  padding: var(--ws-space-3) var(--ws-space-3) var(--ws-space-5);
+  animation: fade-in-up 0.4s ease-out;
 }
 
+/* Banner — 带柔和渐变背景 */
 .home-banner {
   text-align: center;
-  padding: var(--ws-space-4) var(--ws-space-4) var(--ws-space-3);
-  background: #ffffff;
-  border-radius: var(--ws-radius-lg);
-  margin-bottom: var(--ws-space-4);
-  box-shadow: var(--ws-shadow-sm);
-  transition: box-shadow 0.3s;
+  padding: var(--ws-space-5) var(--ws-space-4);
+  margin-bottom: var(--ws-space-5);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.04) 0%, rgba(6, 182, 212, 0.04) 100%);
+  border-radius: var(--ws-radius-xl);
+  position: relative;
+  overflow: hidden;
 }
 
-.home-banner:hover {
-  box-shadow: var(--ws-shadow-md);
+/* Banner 装饰圆 */
+.home-banner::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.home-banner::after {
+  content: "";
+  position: absolute;
+  bottom: -30px;
+  left: -30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.04);
 }
 
 .home-banner-title {
-  color: var(--ws-color-primary) !important;
-  margin-bottom: var(--ws-space-1) !important;
+  color: var(--ws-color-text) !important;
+  margin-bottom: var(--ws-space-2) !important;
+  font-weight: 700 !important;
+  position: relative;
+  z-index: 1;
 }
 
 .home-banner-subtitle {
   font-size: var(--ws-text-sm);
   color: var(--ws-color-text-secondary);
+  position: relative;
+  z-index: 1;
 }
 
+/* Section 标题 */
 .home-section-title {
   margin-bottom: var(--ws-space-3) !important;
-  color: var(--ws-color-primary) !important;
+  color: var(--ws-color-text) !important;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: var(--ws-space-2);
+  font-size: var(--ws-text-lg) !important;
 }
 
+.home-section-title .anticon {
+  color: var(--ws-color-primary);
+}
+
+/* 外部链接网格 */
 .home-link-grid {
-  margin-bottom: var(--ws-space-4);
+  margin-bottom: var(--ws-space-5);
 }
 
 .home-link-grid .ant-col {
@@ -64,81 +96,48 @@
   margin-inline: auto;
 }
 
+/* 外部链接卡片 */
 .home-link-card {
   height: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--ws-transition-smooth);
   cursor: pointer;
-  border: 1px solid transparent;
-  background: #ffffff;
+  border-radius: var(--ws-radius-lg) !important;
+  background: var(--ws-color-surface-2) !important;
 }
 
 .home-link-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--ws-shadow-md);
-  border-color: var(--ws-color-primary-light, #e6f7ff);
+  background: rgba(14, 165, 233, 0.06) !important;
 }
 
 .home-link-card-inner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--ws-space-3);
 }
 
 .home-link-card-icon {
-  font-size: clamp(28px, 2.2vw, 36px);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
   flex-shrink: 0;
-  transition: transform 0.3s;
+  border-radius: var(--ws-radius-md);
+  background: rgba(14, 165, 233, 0.08);
+  color: var(--ws-color-primary);
+  transition: var(--ws-transition-base);
 }
 
 .home-link-card:hover .home-link-card-icon {
-  transform: scale(1.1);
+  background: rgba(14, 165, 233, 0.14);
+  transform: scale(1.05);
 }
 
-.home-module-card {
-  text-align: center;
-  height: 100%;
-  width: 100%;
-  cursor: pointer;
-  min-height: clamp(124px, 13vw, 156px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background: #ffffff;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: var(--ws-radius-lg);
-  box-shadow: var(--ws-shadow-sm);
-  border: 1px solid transparent;
-}
-
-.home-module-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--ws-shadow-lg);
-  border-color: var(--ws-color-primary);
-}
-
-.home-module-icon {
-  font-size: clamp(28px, 2.2vw, 36px);
-  margin-bottom: var(--ws-space-2);
-  transition: transform 0.3s;
-}
-
-.home-module-card:hover .home-module-icon {
-  transform: scale(1.1) rotate(5deg);
-}
-
-.home-footer {
-  text-align: center;
-  margin-top: var(--ws-space-4);
-  padding: var(--ws-space-3);
-  border-top: 1px solid var(--ws-color-border-secondary);
-  color: var(--ws-color-text-secondary);
-  font-size: var(--ws-text-sm);
-}
-
+/* 模块网格 */
 .home-module-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   justify-content: center;
   gap: var(--ws-space-3);
   margin-bottom: var(--ws-space-4);
@@ -147,39 +146,113 @@
 .home-module-grid-item {
   min-width: 0;
   opacity: 0;
-  animation: fade-in-up 0.5s ease-out forwards;
+  animation: fade-in-up 0.4s ease-out forwards;
 }
 
-/* Stagger animation for grid items */
-.home-module-grid-item:nth-child(1) { animation-delay: 0.1s; }
-.home-module-grid-item:nth-child(2) { animation-delay: 0.15s; }
-.home-module-grid-item:nth-child(3) { animation-delay: 0.2s; }
-.home-module-grid-item:nth-child(4) { animation-delay: 0.25s; }
-.home-module-grid-item:nth-child(5) { animation-delay: 0.3s; }
-.home-module-grid-item:nth-child(6) { animation-delay: 0.35s; }
+.home-module-grid-item:nth-child(1) { animation-delay: 0.05s; }
+.home-module-grid-item:nth-child(2) { animation-delay: 0.1s; }
+.home-module-grid-item:nth-child(3) { animation-delay: 0.15s; }
+.home-module-grid-item:nth-child(4) { animation-delay: 0.2s; }
+.home-module-grid-item:nth-child(5) { animation-delay: 0.25s; }
+.home-module-grid-item:nth-child(6) { animation-delay: 0.3s; }
 
+/* 模块卡片 */
+.home-module-card {
+  text-align: center;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
+  min-height: clamp(140px, 14vw, 168px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--ws-color-surface-2) !important;
+  transition: var(--ws-transition-smooth);
+  border-radius: var(--ws-radius-lg) !important;
+}
+
+.home-module-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--ws-space-3) !important;
+}
+
+.home-module-card:hover {
+  transform: translateY(-3px);
+}
+
+/* 每个模块独特的 hover 色 */
+.home-module-card[data-module="ai-agents"]:hover { background: rgba(14, 165, 233, 0.06) !important; }
+.home-module-card[data-module="informatics"]:hover { background: rgba(99, 102, 241, 0.06) !important; }
+.home-module-card[data-module="it-technology"]:hover { background: rgba(245, 158, 11, 0.06) !important; }
+.home-module-card[data-module="personal-programs"]:hover { background: rgba(16, 185, 129, 0.06) !important; }
+.home-module-card[data-module="articles"]:hover { background: rgba(6, 182, 212, 0.06) !important; }
+
+/* 模块图标容器 */
+.home-module-icon-wrap {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ws-radius-md);
+  margin-bottom: var(--ws-space-2);
+  font-size: 26px;
+  transition: var(--ws-transition-base);
+}
+
+.home-module-card:hover .home-module-icon-wrap {
+  transform: scale(1.08);
+}
+
+/* 旧的 icon class 兼容 */
+.home-module-icon {
+  font-size: clamp(28px, 2.2vw, 36px);
+  margin-bottom: var(--ws-space-2);
+  transition: var(--ws-transition-base);
+}
+
+.home-module-card:hover .home-module-icon {
+  transform: scale(1.1);
+}
+
+/* 底部 */
+.home-footer {
+  text-align: center;
+  margin-top: var(--ws-space-5);
+  padding: var(--ws-space-3);
+  color: var(--ws-color-text-tertiary);
+  font-size: var(--ws-text-xs);
+}
+
+/* 响应式 */
 @media (max-width: 430px) {
   .home-page {
-    padding-inline: 8px;
+    padding-inline: 12px;
   }
 
   .home-banner {
-    padding: var(--ws-space-3) var(--ws-space-2);
-    border-radius: var(--ws-radius-md);
+    padding: var(--ws-space-4) var(--ws-space-3);
+    border-radius: var(--ws-radius-lg);
   }
 
   .home-module-grid {
-    grid-template-columns: 1fr 1fr; /* 2 columns on mobile */
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
     margin-bottom: 20px;
   }
-  
+
   .home-module-card {
-    min-height: 110px;
+    min-height: 120px;
   }
-  
-  .home-module-icon {
-    font-size: 28px;
-    margin-bottom: 8px;
+
+  .home-module-icon-wrap {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
   }
 }

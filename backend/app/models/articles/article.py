@@ -21,11 +21,11 @@ class Article(Base):
     content = Column(Text, nullable=False, comment="文章正文内容 (Markdown格式)")
     summary = Column(Text, nullable=True, comment="文章摘要 (可选)")
     custom_css = Column(Text, nullable=True, comment="文章自定义CSS (可选)")
-    style_key = Column(String(100), ForeignKey("wz_markdown_styles.key"), nullable=True, comment="Markdown样式方案Key (可选)")
-    
+    style_key = Column(String(100), ForeignKey("wz_markdown_styles.key", ondelete="SET NULL"), nullable=True, comment="Markdown样式方案Key (可选)")
+
     # 外键关联 - 注意：用户表已改为 sys_users
-    author_id = Column(Integer, ForeignKey("sys_users.id"), nullable=False, comment="作者ID")
-    category_id = Column(Integer, ForeignKey("wz_categories.id"), nullable=True, comment="分类ID (可选)")
+    author_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), nullable=False, comment="作者ID")
+    category_id = Column(Integer, ForeignKey("wz_categories.id", ondelete="SET NULL"), nullable=True, comment="分类ID (可选)")
     
     # 状态字段
     published = Column(Boolean, default=False, server_default=expression.false(), comment="是否发布")

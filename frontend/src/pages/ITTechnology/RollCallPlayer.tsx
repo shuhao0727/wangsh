@@ -91,7 +91,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
                {currentName}
              </h1>
              {!isRunning && students.length > 0 && currentName !== '点击开始' && (
-               <div style={{ marginTop: 24, fontSize: 24, opacity: 0.6, color: '#40a9ff' }}>
+               <div style={{ marginTop: 24, fontSize: 24, opacity: 0.6, color: 'var(--ws-color-primary-hover)' }}>
                  🎉 幸运儿诞生
                </div>
              )}

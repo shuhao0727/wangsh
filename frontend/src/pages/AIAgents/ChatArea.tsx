@@ -125,13 +125,13 @@ const MessageBubble = React.memo<{
 
     const color =
       type === "start"
-        ? "#1677ff"
+        ? "#0EA5E9"
         : type === "node"
-          ? "#722ed1"
+          ? "#6366F1"
           : type === "finish"
-            ? "#52c41a"
+            ? "#10B981"
             : type === "error"
-              ? "#ff4d4f"
+              ? "#EF4444"
               : currentAgent?.color;
     const icon =
       type === "start"
@@ -200,7 +200,7 @@ const MessageBubble = React.memo<{
                   暂无节点
                 </Text>
               ) : (
-                <div style={{ paddingLeft: 12, borderLeft: "2px solid #f0f0f0" }}>
+                <div style={{ paddingLeft: 12, borderLeft: "2px solid rgba(0, 0, 0, 0.04)" }}>
                   {group.nodes.map((n) => (
                     <div
                       key={n.id}
@@ -234,7 +234,7 @@ const MessageBubble = React.memo<{
                         {n.name}
                       </Text>
 
-                      <Text type="secondary" style={{ fontSize: 12, color: "#999" }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
                         {n.startedAt ? dayjs(n.startedAt).format("HH:mm:ss") : ""}
                         {n.finishedAt
                           ? ` → ${dayjs(n.finishedAt).format("HH:mm:ss")}`
@@ -256,9 +256,10 @@ const MessageBubble = React.memo<{
         <Avatar
           size={32}
           icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent?.icon)}
+          aria-label={isUser ? "用户头像" : `${currentAgent?.name || "智能体"}头像`}
           style={{
             backgroundColor: isUser
-              ? "#1890ff"
+              ? "#0EA5E9"
               : (wf ? wf.color : currentAgent?.color),
             flexShrink: 0,
           }}
@@ -269,7 +270,7 @@ const MessageBubble = React.memo<{
               strong
               style={{
                 fontSize: "12px",
-                color: isUser ? "#1890ff" : (wf ? wf.color : currentAgent?.color),
+                color: isUser ? "#0EA5E9" : (wf ? wf.color : currentAgent?.color),
               }}
             >
               {isUser ? displayName : (wf ? wf.label : currentAgent?.name)}
@@ -507,6 +508,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <Avatar
             size={32}
             icon={currentAgent?.icon}
+            aria-label={`${currentAgent?.name || "智能体"}头像`}
             style={{ backgroundColor: currentAgent?.color }}
           />
           <Space size="small" align="center" style={{ marginLeft: 4 }}>
@@ -585,6 +587,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         <Space orientation="vertical" style={{ width: "100%" }}>
           <TextArea
             id="message-input"
+            aria-label="输入消息"
             value={inputMessage}
             onChange={(e) => onInputChange(e.target.value)}
             placeholder={`向${currentAgent?.name}发送消息...`}

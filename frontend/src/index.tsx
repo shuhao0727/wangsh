@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App as AntdApp, ConfigProvider } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import 'antd/dist/reset.css';
 import './styles/index.css';
 import './styles/ui-polish.css';
@@ -24,7 +25,7 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <ConfigProvider theme={antdTheme}>
+      <ConfigProvider theme={antdTheme} locale={zhCN}>
         <AntdApp>
           <AuthProvider>
             <App />

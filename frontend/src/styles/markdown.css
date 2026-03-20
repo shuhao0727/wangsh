@@ -20,13 +20,13 @@
 .ws-markdown h1 {
   font-size: 2em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--ws-color-border-secondary);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .ws-markdown h2 {
   font-size: 1.5em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--ws-color-border-secondary);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .ws-markdown h3 {
@@ -51,13 +51,18 @@
   margin: 0.4em 0;
 }
 
+/* 引用块 — 主色左边框 */
 .ws-markdown blockquote {
-  border-left: 4px solid var(--ws-color-primary);
+  border-left: 3px solid var(--ws-color-primary);
   margin: 1.5em 0;
-  padding: 1em;
-  background: var(--ws-color-surface-2);
+  padding: 0.8em 1em;
+  background: var(--ws-color-primary-soft);
   color: var(--ws-color-text-secondary);
-  border-radius: 4px;
+  border-radius: 0 8px 8px 0;
+}
+
+.ws-markdown blockquote p {
+  margin: 0.4em 0;
 }
 
 .ws-markdown a {
@@ -71,14 +76,14 @@
   border-bottom-color: var(--ws-color-primary);
 }
 
-/* Code Block Styling - Clean & Modern */
+/* 代码块 — 干净无边框 */
 .ws-markdown pre {
-  background: #f6f8fa; /* GitHub-like light background */
-  padding: 16px;
-  border-radius: 6px;
+  background: var(--ws-color-surface-2);
+  padding: 16px 20px;
+  border-radius: 10px;
   overflow: auto;
   margin: 1.5em 0;
-  border: 1px solid var(--ws-color-border);
+  border: none;
   position: relative;
 }
 
@@ -86,23 +91,23 @@
   background: transparent;
   border: none;
   padding: 0;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.9em;
   color: #24292f;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-/* Inline Code Styling */
+/* 行内代码 */
 .ws-markdown code {
-  background: rgba(175, 184, 193, 0.2);
-  padding: 0.2em 0.4em;
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  background: var(--ws-color-primary-soft);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.85em;
-  color: #24292f;
+  color: var(--ws-color-primary-active);
 }
 
-/* Table Styling */
+/* 表格 — 干净斑马纹 */
 .ws-markdown table {
   width: 100%;
   border-collapse: collapse;
@@ -113,36 +118,90 @@
 
 .ws-markdown th,
 .ws-markdown td {
-  border: 1px solid var(--ws-color-border);
-  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  padding: 10px 14px;
 }
 
 .ws-markdown th {
   background: var(--ws-color-surface-2);
   font-weight: 600;
   text-align: left;
+  color: var(--ws-color-text-secondary);
+  font-size: 0.9em;
 }
 
 .ws-markdown tr:nth-child(2n) {
-  background-color: #fcfcfc;
+  background-color: rgba(0, 0, 0, 0.01);
 }
 
+.ws-markdown tr:hover {
+  background-color: var(--ws-color-primary-soft);
+}
+
+/* 图片 — 圆角无边框 */
 .ws-markdown img {
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: 10px;
   margin: 1.5em 0;
-  border: 1px solid var(--ws-color-border-secondary);
-  box-shadow: var(--ws-shadow-sm);
+  border: none;
+  box-shadow: none;
 }
 
-/* Optional: Dark mode adjustments if CSS variables support it, 
-   or specific 'terminal' class if added by user content */
+/* 分割线 */
+.ws-markdown hr {
+  border: none;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 2em 0;
+}
+
+/* 终端风格代码块 */
 .ws-markdown pre.terminal {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border: 1px solid #333;
+  background: #1a1b26;
+  color: #a9b1d6;
+  border: none;
 }
 
 .ws-markdown pre.terminal code {
-  color: #d4d4d4;
+  color: #a9b1d6;
+}
+
+/* 移动端适配 */
+@media (max-width: 576px) {
+  .ws-markdown {
+    font-size: 14px;
+    line-height: 1.75;
+  }
+
+  .ws-markdown h1 {
+    font-size: 1.6em;
+  }
+
+  .ws-markdown h2 {
+    font-size: 1.3em;
+  }
+
+  .ws-markdown h3 {
+    font-size: 1.1em;
+  }
+
+  .ws-markdown pre {
+    padding: 12px;
+  }
+
+  .ws-markdown pre code {
+    font-size: 0.85em;
+  }
+
+  .ws-markdown blockquote {
+    margin: 1em 0;
+    padding: 0.6em 0.8em;
+  }
+
+  .ws-markdown th,
+  .ws-markdown td {
+    padding: 8px 10px;
+    font-size: 0.9em;
+  }
 }

@@ -137,7 +137,7 @@ async def post_trigger_sync(
 
 @router.get("/runs", response_model=List[GithubSyncRunItem])
 async def get_runs(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ):

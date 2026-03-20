@@ -161,13 +161,18 @@ const AdminAIAgents: React.FC = () => {
 
       if (editingAgent) {
         // 更新现有智能体
+        // model_name 可能是数组（tags模式），需要取第一个值
+        const modelName = Array.isArray(values.model_name)
+          ? (values.model_name[0] ?? "")
+          : (values.model_name || "");
         const response = await aiAgentsApi.updateAgent(editingAgent.id, {
           name: values.name,
           agent_type: values.agent_type,
-          description: values.description,
-          model_name: values.model_name,
+          description: values.description || undefined,
+          model_name: modelName || undefined,
+          system_prompt: values.system_prompt || undefined,
           api_endpoint: values.api_endpoint,
-          api_key: values.api_key,
+          api_key: values.api_key || undefined,
           is_active: values.is_active,
         });
         
@@ -181,11 +186,15 @@ const AdminAIAgents: React.FC = () => {
         }
       } else {
         // 创建新智能体
+        const createModelName = Array.isArray(values.model_name)
+          ? (values.model_name[0] ?? "")
+          : (values.model_name || "");
         const response = await aiAgentsApi.createAgent({
           name: values.name,
           agent_type: values.agent_type || "general",
-          description: values.description,
-          model_name: values.model_name,
+          description: values.description || undefined,
+          model_name: createModelName || undefined,
+          system_prompt: values.system_prompt || undefined,
           api_endpoint: values.api_endpoint,
           api_key: values.api_key,
           is_active: values.is_active !== undefined ? values.is_active : true,
@@ -274,7 +283,7 @@ const AdminAIAgents: React.FC = () => {
         },
       });
     } catch (error) {
-      console.error("测试智能体失败:", error);
+      logger.error("测试智能体失败:", error);
       message.error("测试智能体失败");
     }
   };
@@ -301,10 +310,14 @@ const AdminAIAgents: React.FC = () => {
           let errorCount = 0;
           
           for (const id of selectedRowKeys) {
-            const response = await aiAgentsApi.deleteAgent(id as number);
-            if (response.success) {
-              successCount++;
-            } else {
+            try {
+              const response = await aiAgentsApi.deleteAgent(id as number);
+              if (response.success) {
+                successCount++;
+              } else {
+                errorCount++;
+              }
+            } catch {
               errorCount++;
             }
           }
@@ -356,9 +369,6 @@ const AdminAIAgents: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      {/* 标题和操作栏 - 移除 redundant buttons */}
-      <div style={{ height: 16 }} /> {/* Spacer instead of buttons */}
-
       {/* 统计卡片 */}
       <StatisticsCards 
         data={statisticsData || {
@@ -387,7 +397,7 @@ const AdminAIAgents: React.FC = () => {
       />
 
       {/* 智能体表格 */}
-      <div style={{ flex: 1, minHeight: 0, marginTop: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, marginTop: 12 }}>
         <AdminTablePanel
           loading={loading}
           isEmpty={agents.length === 0}
@@ -398,17 +408,14 @@ const AdminAIAgents: React.FC = () => {
             </Button>
           }
           pagination={
-              <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                <Pagination
-                  current={currentPage}
-                  pageSize={pageSize}
-                  total={total}
-                  onChange={handlePageChange}
-                  showSizeChanger
-                  showQuickJumper
-                  showTotal={(total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条`}
-                />
-              </div>
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={total}
+                onChange={handlePageChange}
+                showSizeChanger
+                showTotal={(total) => `共 ${total} 条`}
+              />
           }
         >
           <Table

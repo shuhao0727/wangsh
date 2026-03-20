@@ -120,7 +120,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
     <Modal
       title={
         <div style={{ display: "flex", alignItems: "center" }}>
-          <DatabaseOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+          <DatabaseOutlined style={{ marginRight: 8, color: "#0EA5E9" }} />
           <span>智能体使用记录详情</span>
         </div>
       }
@@ -132,6 +132,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
         </Button>,
       ]}
       width={800}
+      styles={{ body: { padding: 24 } }}
     >
       <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
         {/* 基本信息区域 */}
@@ -158,7 +159,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 <Descriptions.Item label="响应时间">
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <ClockCircleOutlined
-                      style={{ marginRight: 4, color: "#fa8c16" }}
+                      style={{ marginRight: 4, color: "#F59E0B" }}
                     />
                     <Text>{formatResponseTime(record.response_time_ms)}</Text>
                   </div>
@@ -171,7 +172,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 <Descriptions.Item label="使用时间">
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <CalendarOutlined
-                      style={{ marginRight: 4, color: "#1890ff" }}
+                      style={{ marginRight: 4, color: "#0EA5E9" }}
                     />
                     <Text>
                       {dayjs(record.used_at).format("YYYY-MM-DD HH:mm:ss")}
@@ -249,7 +250,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
             </Row>
           ) : (
             <Alert
-              title="用户信息未关联"
+              message="用户信息未关联"
               description="此记录未关联到具体的用户信息"
               type="warning"
               showIcon
@@ -311,7 +312,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
             </Row>
           ) : (
             <Alert
-              title="智能体信息未关联"
+              message="智能体信息未关联"
               description="此记录未关联到具体的智能体信息"
               type="warning"
               showIcon
@@ -338,15 +339,15 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 const isQuestion = m.message_type === "question";
                 const isAnswer = m.message_type === "answer";
                 const borderColor = isQuestion
-                  ? "var(--ws-color-primary)"
+                  ? "#0EA5E9"
                   : isAnswer
-                    ? "var(--ws-color-success)"
-                    : "var(--ws-color-border)";
+                    ? "#10B981"
+                    : "rgba(0,0,0,0.08)";
                 const background = isQuestion
-                  ? "var(--ws-color-surface-2)"
+                  ? "#FAFAFA"
                   : isAnswer
-                    ? "var(--ws-color-info-soft)"
-                    : "var(--ws-color-surface-2)";
+                    ? "rgba(14, 165, 233, 0.06)"
+                    : "#FAFAFA";
                 const label = isQuestion ? "Q" : isAnswer ? "A" : m.message_type;
                 return (
                   <div key={m.id} style={{ marginBottom: 12 }}>
@@ -377,7 +378,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
           ) : (
             <>
               <Alert
-                title="未加载到完整对话"
+                message="未加载到完整对话"
                 description="当前记录未关联会话，或会话已被清理"
                 type="warning"
                 showIcon
@@ -388,10 +389,10 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 </Title>
                 <div
                   style={{
-                    backgroundColor: "#f9f9f9",
+                    backgroundColor: "#FAFAFA",
                     padding: "12px 16px",
                     borderRadius: "6px",
-                    borderLeft: "4px solid #1890ff",
+                    borderLeft: "4px solid #0EA5E9",
                     marginBottom: 12,
                   }}
                 >
@@ -401,10 +402,10 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#f0f9ff",
+                    backgroundColor: "rgba(14, 165, 233, 0.06)",
                     padding: "12px 16px",
                     borderRadius: "6px",
-                    borderLeft: "4px solid #52c41a",
+                    borderLeft: "4px solid #10B981",
                   }}
                 >
                   <Paragraph style={{ margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
@@ -425,7 +426,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 附加信息
               </Title>
               <Alert
-                title="附加数据"
+                message="附加数据"
                 description={
                   <pre style={{ fontSize: "12px", margin: 0 }}>
                     {JSON.stringify(record.additional_data, null, 2)}
@@ -443,9 +444,9 @@ const DetailModal: React.FC<DetailModalProps> = ({
           style={{
             marginTop: 24,
             padding: "16px",
-            backgroundColor: "var(--ws-color-surface-2)",
+            backgroundColor: "#FAFAFA",
             borderRadius: "6px",
-            border: "1px solid var(--ws-color-border)",
+            border: "1px solid rgba(0,0,0,0.04)",
           }}
         >
           <Row gutter={24}>

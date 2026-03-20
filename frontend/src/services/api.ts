@@ -123,7 +123,7 @@ export interface ValidationErrorResponse {
 const createApiClient = (): AxiosInstance => {
   const instance = axios.create({
     baseURL: config.apiUrl,
-    timeout: 30000,
+    timeout: 15000,
     withCredentials: true,
     headers: {
       "Content-Type": "application/json",

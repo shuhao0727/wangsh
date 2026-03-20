@@ -1,5 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Spin } from "antd";
+import { logger } from "@services/logger";
 
 export type PdfCanvasVirtualViewerHandle = {
   scrollToPage: (pageNumber: number) => void;
@@ -142,7 +143,7 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
             onFirstPageWrapHeight?.(metas[0].cssHeight + pagePadding * 2);
           }
         } catch (err) {
-          console.error("Failed to load PDF:", err);
+          logger.error("Failed to load PDF:", err);
           if (loadTokenRef.current !== token) return;
           setLoading(false);
         }

@@ -1,20 +1,21 @@
-/* BasicLayout 组件样式 - 横向导航版 */
+/* BasicLayout 组件样式 - 现代简约版 */
 
 .basic-layout {
   height: 100vh;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--ws-color-bg);
 }
 
-/* 顶部导航栏样式 */
+/* 顶部导航栏 — 干净无缝 */
 .top-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--ws-space-4);
-  background: var(--ws-color-surface);
-  border-bottom: 1px solid transparent;
+  background: #FFFFFF;
+  border-bottom: none;
   height: var(--ws-header-height);
   position: sticky;
   top: 0;
@@ -22,7 +23,18 @@
   box-shadow: none;
 }
 
-/* 左侧区域：Logo + 横向菜单 */
+/* 头部底部装饰线 — 极淡分隔 */
+.top-header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 左侧区域 */
 .header-left {
   display: flex;
   align-items: center;
@@ -30,43 +42,45 @@
   min-width: 0;
 }
 
-/* Logo 样式 */
+/* Logo */
 .logo {
   display: flex;
   align-items: center;
   margin-right: var(--ws-space-5);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--ws-transition-base);
 }
 
 .logo:hover {
-  opacity: 0.8;
+  opacity: 0.85;
+  transform: scale(1.02);
 }
 
 .logo-icon {
   width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
   height: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
-  min-width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px); /* Prevent shrinking */
+  min-width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--ws-color-primary);
+  background: var(--ws-color-primary);
   color: white;
-  font-size: var(--ws-text-lg); /* Slightly larger text inside */
-  font-weight: bold;
-  border-radius: var(--ws-radius-md); /* Slightly more rounded */
+  font-size: var(--ws-text-lg);
+  font-weight: 700;
+  border-radius: var(--ws-radius-md);
   margin-right: var(--ws-space-2);
-  line-height: 1; /* Reset line-height to prevent vertical stretching */
-  flex-shrink: 0; /* Prevent flex shrinking */
-  overflow: hidden; /* Ensure content stays inside */
+  line-height: 1;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .logo-text {
   margin: 0 !important;
-  color: var(--ws-color-primary);
+  color: var(--ws-color-text);
   font-size: var(--ws-text-lg);
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
+  letter-spacing: -0.02em;
 }
 
 /* 横向导航菜单 */
@@ -81,7 +95,6 @@
   scrollbar-width: thin;
 }
 
-/* 清除Ant Design默认的选中状态样式 */
 .horizontal-menu.ant-menu-horizontal {
   border-bottom: none !important;
   white-space: nowrap;
@@ -91,8 +104,8 @@
   padding: 0 var(--ws-space-3);
   font-size: var(--ws-text-sm);
   font-weight: 500;
-  color: #333333; /* Dark Grey for default state */
-  transition: all 0.3s ease;
+  color: var(--ws-color-text-secondary);
+  transition: var(--ws-transition-base);
   border-bottom: 2px solid transparent;
   position: relative;
 }
@@ -102,14 +115,14 @@
 }
 
 .horizontal-menu .ant-menu-item:hover {
-  color: #000000; /* Pure Black on hover */
-  border-bottom: 2px solid var(--ws-color-primary);
+  color: var(--ws-color-primary);
+  border-bottom: 2px solid var(--ws-color-primary-hover);
   background: transparent !important;
 }
 
 .horizontal-menu .ant-menu-item-selected {
-  color: #000000; /* Pure Black for selected state */
-  font-weight: 600; /* Slightly bolder */
+  color: var(--ws-color-primary);
+  font-weight: 600;
   border-bottom: 2px solid var(--ws-color-primary);
   background: transparent !important;
 }
@@ -125,7 +138,7 @@
   font-size: var(--ws-text-md);
 }
 
-/* 右侧：用户信息 */
+/* 右侧用户信息 */
 .header-right {
   display: flex;
   align-items: center;
@@ -137,14 +150,14 @@
   align-items: center;
   cursor: pointer;
   padding: var(--ws-space-1) var(--ws-space-2);
-  border-radius: var(--ws-radius-sm);
-  transition: all 0.3s;
+  border-radius: var(--ws-radius-md);
+  transition: var(--ws-transition-base);
   border: 1px solid transparent;
 }
 
 .user-info:hover {
   background-color: var(--ws-color-hover-bg);
-  border-color: var(--ws-color-border);
+  border-color: var(--ws-color-border-secondary);
 }
 
 .username {
@@ -163,7 +176,15 @@
   overflow: auto;
 }
 
-/* 响应式调整 */
+/* 移动端菜单按钮 */
+.mobile-menu-btn {
+  color: var(--ws-color-text);
+  font-size: 18px;
+  padding: 4px 8px;
+  height: auto;
+}
+
+/* 响应式 */
 @media (max-width: 1024px) {
   .horizontal-menu .ant-menu-item {
     padding: 0 16px;
@@ -185,9 +206,8 @@
     margin-right: 0;
   }
 
-  /* Hide menu in desktop style if logic fails, though JS handles it */
   .horizontal-menu {
-    display: none; 
+    display: none;
   }
 
   .header-right {
@@ -197,13 +217,6 @@
   .main-content {
     margin: 0;
     padding: var(--ws-space-3);
-  }
-  
-  .mobile-menu-btn {
-    color: var(--ws-color-text);
-    font-size: 18px;
-    padding: 4px 8px;
-    height: auto;
   }
 }
 
@@ -218,7 +231,7 @@
   .logo-text {
     font-size: var(--ws-text-md);
   }
-  
+
   .user-info {
     padding: 4px;
   }

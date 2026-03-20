@@ -4,7 +4,7 @@
   padding: var(--ws-space-2) var(--ws-space-3);
   height: calc(100vh - var(--ws-header-height) - 12px);
   display: flex;
-  flex-direction: row; /* Sidebar layout */
+  flex-direction: row;
   min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
@@ -12,7 +12,7 @@
 }
 
 .xbk-sidebar {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -21,8 +21,8 @@
 .xbk-sidebar-card {
   height: 100%;
   border-radius: var(--ws-radius-lg);
-  box-shadow: var(--ws-shadow-sm);
-  background: var(--ws-color-surface);
+  box-shadow: none;
+  background: var(--ws-color-surface-2);
   display: flex;
   flex-direction: column;
 }
@@ -34,7 +34,7 @@
 }
 
 .xbk-filter-form .ant-form-item {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .xbk-main {
@@ -47,18 +47,19 @@
 
 .xbk-header-bar {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.xbk-header-row {
+  display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  flex-shrink: 0;
-  min-height: 40px;
 }
-
-.xbk-actions {
-  flex: 1;
-  min-width: 0;
-}
+/* PLACEHOLDER_XBK_1 */
 
 .xbk-kpis {
   display: flex;
@@ -72,10 +73,10 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: var(--ws-color-surface);
+  background: var(--ws-color-surface-2);
   border-radius: var(--ws-radius-md);
-  border: 1px solid var(--ws-color-border-secondary);
-  box-shadow: var(--ws-shadow-sm);
+  border: none;
+  box-shadow: none;
   height: 32px;
   white-space: nowrap;
 }
@@ -93,7 +94,7 @@
 }
 
 .xbk-kpi-item.warn .value {
-  color: #fa541c;
+  color: var(--ws-color-error);
 }
 
 .xbk-table-card {
@@ -101,9 +102,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--ws-color-surface);
+  background: var(--ws-color-surface-2);
   border-radius: var(--ws-radius-lg);
-  box-shadow: var(--ws-shadow-sm);
+  box-shadow: none;
   padding: var(--ws-space-2);
   overflow: hidden;
 }
@@ -189,22 +190,42 @@
     width: 100%;
     height: auto;
   }
-  
+
   .xbk-main {
-    height: 600px; /* fallback height on mobile */
+    min-height: calc(100vh - 200px);
   }
 
-  .xbk-header-bar {
-    flex-direction: column-reverse;
+  .xbk-header-row {
+    flex-direction: column;
     align-items: stretch;
   }
-  
+
   .xbk-kpis {
     justify-content: space-between;
   }
-  
+
   .xbk-kpi-item {
     flex: 1;
     justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .xbk-page {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .xbk-kpi-item {
+    padding: 4px 8px;
+    height: 28px;
+  }
+
+  .xbk-kpi-item .label {
+    font-size: 11px;
+  }
+
+  .xbk-kpi-item .value {
+    font-size: 13px;
   }
 }

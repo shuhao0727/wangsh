@@ -188,3 +188,25 @@ test("sanitize leaked pseudo statements at emit stage", () => {
   expect(gen.python).toContain("print('ok')");
   expect(gen.python).not.toContain("it in students");
 });
+
+test("infer foreach from Chinese 未遍历完/当前元素 format", () => {
+  const nodes: any[] = [
+    { id: "s", shape: "start_end", title: "开始", x: 0, y: 0 },
+    { id: "d", shape: "decision", title: "students 未遍历完?", x: 0, y: 100 },
+    { id: "bind", shape: "process", title: "item = 当前元素", x: 0, y: 200 },
+    { id: "body", shape: "io", title: "print(item)", x: 0, y: 300 },
+    { id: "e", shape: "start_end", title: "结束", x: 0, y: 400 },
+  ];
+  const edges: any[] = [
+    { id: "e1", from: "s", to: "d", style: "straight" },
+    { id: "e2", from: "d", to: "bind", style: "straight", label: "是" },
+    { id: "e3", from: "bind", to: "body", style: "straight" },
+    { id: "e4", from: "body", to: "d", style: "straight" },
+    { id: "e5", from: "d", to: "e", style: "straight", label: "否" },
+  ];
+  const gen = generatePythonFromFlow(nodes as any, edges as any);
+  expect(gen.mode).toBe("structured");
+  expect(gen.python).toContain("for item in students:");
+  expect(gen.python).not.toContain("当前元素");
+  expect(gen.python).not.toContain("未遍历完");
+});

@@ -117,6 +117,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
         </Button>,
       ]}
       width={600}
+      styles={{ body: { padding: 24 } }}
     >
       <Form form={form} layout="vertical">
         <Form.Item
