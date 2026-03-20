@@ -81,6 +81,8 @@ class ActivityStats(BaseModel):
     option_counts: Optional[dict] = None
     correct_count: int = 0
     correct_rate: Optional[float] = None
+    blank_slot_stats: Optional[list] = None
+    top_wrong_answers: Optional[list] = None
 
 
 class ActivityListResponse(BaseModel):

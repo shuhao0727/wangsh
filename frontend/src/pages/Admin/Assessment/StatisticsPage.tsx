@@ -51,7 +51,6 @@ import type {
   AnswerDetailResponse,
   BasicProfileResponse,
 } from "@services/assessment";
-import { logger } from "@services/logger";
 
 const StatisticsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -405,7 +404,7 @@ const StatisticsPage: React.FC = () => {
                     value={pickToValue(radarRight)} onChange={v => setRadarRight(v ? parsePickerValue(v) : null)}
                     options={radarPickerOptions} placeholder="对比" />
                 </div>
-                {radarSeries.length > 0 && radarSeries.some(s => Object.keys(s.data).length >= 3) ? (
+                {radarSeries.length > 0 && radarSeries.some(s => Object.keys(s.data).length > 0) ? (
                   <RadarChart series={radarSeries} size={280} />
                 ) : (
                   <div style={{ textAlign: "center", color: "#999", padding: "40px 0" }}>暂无知识点数据</div>

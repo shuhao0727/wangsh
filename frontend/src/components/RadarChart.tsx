@@ -31,20 +31,34 @@ const RadarChart: React.FC<RadarChartProps> = ({
     } else if (dimensions) {
       allKeys = Object.keys(dimensions);
     }
-    if (allKeys.length < 3) return null;
+    allKeys.sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true }));
+    if (allKeys.length === 0) return null;
+    const padCount = Math.max(0, 3 - allKeys.length);
+    const paddedKeys = [...allKeys, ...Array.from({ length: padCount }, (_, i) => `__pad_${i}`)];
+    const visibleKeys = new Set(allKeys);
 
-    const indicator = allKeys.map(k => ({ name: k, max: 100 }));
+    const indicator = paddedKeys.map(k => ({ name: visibleKeys.has(k) ? k : "", max: 100 }));
 
     const seriesData = series && series.length > 0
       ? series.map((s, i) => ({
-          value: allKeys.map(k => s.data[k] ?? 0),
+          value: paddedKeys.map(k => {
+            if (visibleKeys.has(k)) return s.data[k] ?? 0;
+            const vals = allKeys.map(kk => s.data[kk] ?? 0);
+            const avg = vals.length ? vals.reduce((acc, n) => acc + n, 0) / vals.length : 0;
+            return Number(avg.toFixed(1));
+          }),
           name: s.name,
           areaStyle: { color: `${s.color || COLORS[i % COLORS.length]}22` },
           lineStyle: { color: s.color || COLORS[i % COLORS.length], width: 2 },
           itemStyle: { color: s.color || COLORS[i % COLORS.length] },
         }))
       : [{
-          value: allKeys.map(k => dimensions![k]),
+          value: paddedKeys.map(k => {
+            if (visibleKeys.has(k)) return dimensions![k] ?? 0;
+            const vals = allKeys.map(kk => dimensions![kk] ?? 0);
+            const avg = vals.length ? vals.reduce((acc, n) => acc + n, 0) / vals.length : 0;
+            return Number(avg.toFixed(1));
+          }),
           name: "掌握率",
           areaStyle: { color: `${color}22` },
           lineStyle: { color, width: 2 },

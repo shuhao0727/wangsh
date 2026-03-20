@@ -221,7 +221,8 @@ async def api_profile_status(
         )
         .limit(1)
     )
-    advanced_ready = ap_result.scalar_one_or_none() is not None
+    advanced_exists = ap_result.scalar_one_or_none() is not None
+    advanced_ready = bool(basic_ready and advanced_exists)
 
     return {"basic_ready": basic_ready, "advanced_ready": advanced_ready}
 

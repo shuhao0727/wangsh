@@ -37,6 +37,15 @@ export interface ActivityStats {
   option_counts: Record<string, number> | null;
   correct_count: number;
   correct_rate: number | null;
+  blank_slot_stats?: Array<{
+    slot_index: number;
+    correct_answer: string;
+    total_count: number;
+    correct_count: number;
+    correct_rate: number | null;
+    top_wrong_answers: Array<{ answer: string; count: number }>;
+  }> | null;
+  top_wrong_answers?: Array<{ answer: string; count: number }> | null;
 }
 
 export interface ActivityListResponse {

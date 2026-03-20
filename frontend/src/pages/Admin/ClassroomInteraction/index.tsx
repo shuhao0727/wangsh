@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Table, Button, Tag, Badge, Space, Modal, Form, Input, InputNumber,
-  Select, Switch, Popconfirm, message, Drawer, Progress, Segmented, Tooltip,
+  Select, Switch, Popconfirm, message, Drawer, Progress, Segmented,
 } from "antd";
 import {
   PlusOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined,
@@ -9,6 +9,35 @@ import {
 } from "@ant-design/icons";
 import { AdminPage } from "@components/Admin";
 import { classroomApi, Activity, ActivityCreateRequest, ActivityStats, OptionItem } from "@services/classroom";
+
+const parseBlankAnswers = (raw?: string | null): string[] => {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.map((v) => String(v ?? "").trim());
+    if (parsed && typeof parsed === "object") {
+      return Object.keys(parsed)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => String((parsed as any)[k] ?? "").trim());
+    }
+  } catch {}
+  return [text];
+};
+
+const toFillBlankPayload = (values: any): string | undefined => {
+  const blanks = (values.blank_answers || []).map((v: any) => String(v || "").trim()).filter(Boolean);
+  if (blanks.length === 0) return undefined;
+  if (blanks.length === 1) return blanks[0];
+  return JSON.stringify(blanks);
+};
+
+const formatCorrectAnswer = (raw?: string | null): string => {
+  const blanks = parseBlankAnswers(raw);
+  if (blanks.length <= 1) return String(raw || "");
+  return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
+};
 
 const AdminClassroomInteractionPage: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -47,7 +76,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
         activity_type: activityType,
         title: values.title,
         time_limit: values.time_limit || 60,
-        correct_answer: values.correct_answer || undefined,
+        correct_answer: activityType === "fill_blank" ? toFillBlankPayload(values) : (values.correct_answer || undefined),
         allow_multiple: values.allow_multiple || false,
       };
       if (activityType === "vote" && values.options) {
@@ -127,7 +156,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
             </Select>
             <Button icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
           </Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); setActivityType("vote"); form.resetFields(); setModalOpen(true); }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); setActivityType("vote"); form.resetFields(); form.setFieldsValue({ blank_answers: [""] }); setModalOpen(true); }}>
             创建活动
           </Button>
         </div>
@@ -172,7 +201,10 @@ const AdminClassroomInteractionPage: React.FC = () => {
                       <Button size="small" icon={<EditOutlined />} onClick={() => {
                         setEditingId(record.id);
                         setActivityType(record.activity_type as any);
-                        form.setFieldsValue({ ...record });
+                        form.setFieldsValue({
+                          ...record,
+                          blank_answers: record.activity_type === "fill_blank" ? parseBlankAnswers(record.correct_answer) : undefined,
+                        });
                         setModalOpen(true);
                       }}>编辑</Button>
                       <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
@@ -205,7 +237,14 @@ const AdminClassroomInteractionPage: React.FC = () => {
           <div style={{ marginBottom: 16 }}>
             <Segmented
               value={activityType}
-              onChange={(v) => setActivityType(v as any)}
+              onChange={(v) => {
+                const next = v as "vote" | "fill_blank";
+                setActivityType(next);
+                if (next === "fill_blank") {
+                  const cur = form.getFieldValue("blank_answers");
+                  if (!Array.isArray(cur) || cur.length === 0) form.setFieldValue("blank_answers", [""]);
+                }
+              }}
               options={[{ label: "投票", value: "vote" }, { label: "填空", value: "fill_blank" }]}
             />
           </div>
@@ -237,9 +276,32 @@ const AdminClassroomInteractionPage: React.FC = () => {
               </Form.Item>
             </>
           )}
-          <Form.Item name="correct_answer" label="正确答案">
-            <Input placeholder={activityType === "vote" ? "如 A 或 A,B" : "正确答案文本"} />
-          </Form.Item>
+          {activityType === "vote" && (
+            <Form.Item name="correct_answer" label="正确答案">
+              <Input placeholder="如 A 或 A,B" />
+            </Form.Item>
+          )}
+          {activityType === "fill_blank" && (
+            <Form.List name="blank_answers">
+              {(fields, { add, remove }) => (
+                <>
+                  <div style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>
+                    在标题中可使用（1）（2）... 作为空位标记；这里配置每个空位的标准答案
+                  </div>
+                  {fields.map((field, idx) => (
+                    <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
+                      <Tag color="purple">空位 {idx + 1}</Tag>
+                      <Form.Item {...field} name={field.name} noStyle rules={[{ required: true, message: "请输入标准答案" }]}>
+                        <Input placeholder={`空位 ${idx + 1} 标准答案`} style={{ width: 320 }} />
+                      </Form.Item>
+                      {fields.length > 1 && <Button size="small" danger onClick={() => remove(field.name)}>删除</Button>}
+                    </Space>
+                  ))}
+                  {fields.length < 10 && <Button type="dashed" onClick={() => add("")} block icon={<PlusOutlined />}>添加空位</Button>}
+                </>
+              )}
+            </Form.List>
+          )}
           <Form.Item name="time_limit" label="时间限制(秒)" rules={[{ required: true }]}>
             <InputNumber min={0} max={3600} style={{ width: "100%" }} />
           </Form.Item>
@@ -265,7 +327,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
               )}
             </div>
             {drawerActivity.correct_answer && (
-              <div style={{ marginBottom: 12, color: "#999", fontSize: 13 }}>正确答案：{drawerActivity.correct_answer}</div>
+              <div style={{ marginBottom: 12, color: "#999", fontSize: 13 }}>正确答案：{formatCorrectAnswer(drawerActivity.correct_answer)}</div>
             )}
             {drawerStats && (
               <div>
@@ -289,9 +351,37 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   </div>
                 )}
                 {drawerActivity.activity_type === "fill_blank" && drawerStats.correct_rate != null && (
-                  <div style={{ textAlign: "center", padding: 20 }}>
-                    <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
-                    <div style={{ marginTop: 8, color: "#999" }}>正确率</div>
+                  <div>
+                    <div style={{ textAlign: "center", padding: 20 }}>
+                      <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
+                      <div style={{ marginTop: 8, color: "#999" }}>整体正确率</div>
+                    </div>
+                    {Array.isArray(drawerStats.blank_slot_stats) && drawerStats.blank_slot_stats.length > 0 && (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>空位明细</div>
+                        {drawerStats.blank_slot_stats.map((slot) => (
+                          <div key={slot.slot_index} style={{ padding: "8px 10px", border: "1px solid #f0f0f0", borderRadius: 8, marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, marginBottom: 4 }}>
+                              <Tag color="purple">空位 {slot.slot_index}</Tag>
+                              标准答案：{slot.correct_answer}
+                            </div>
+                            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+                              正确 {slot.correct_count}/{slot.total_count}（{slot.correct_rate ?? 0}%）
+                            </div>
+                            {slot.top_wrong_answers?.length > 0 && (
+                              <div style={{ fontSize: 12, color: "#999" }}>
+                                高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(drawerStats.top_wrong_answers) && drawerStats.top_wrong_answers.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+                        错误最多答案：{drawerStats.top_wrong_answers.slice(0, 5).map((x) => `${x.answer}(${x.count})`).join("、")}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -28,6 +28,35 @@ interface Props {
 const DEFAULT_W = 420;
 const DEFAULT_H = 480;
 
+const parseBlankAnswers = (raw?: string | null): string[] => {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  if (!text.startsWith("[") && !text.startsWith("{")) return [text];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.map((v) => String(v ?? "").trim());
+    if (parsed && typeof parsed === "object") {
+      return Object.keys(parsed)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => String((parsed as any)[k] ?? "").trim());
+    }
+  } catch {}
+  return [text];
+};
+
+const getBlankCount = (activity: Activity | null): number => {
+  if (!activity || activity.activity_type !== "fill_blank") return 1;
+  const byAnswer = parseBlankAnswers(activity.correct_answer).length;
+  const marks = String(activity.title || "").match(/\(\d+\)/g) || [];
+  return Math.max(1, byAnswer, marks.length);
+};
+
+const formatDisplayAnswer = (raw?: string | null): string => {
+  const blanks = parseBlankAnswers(raw);
+  if (blanks.length <= 1) return String(raw || "");
+  return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
+};
+
 const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(() => {
@@ -47,7 +76,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   const [multiSelected, setMultiSelected] = useState<string[]>([]);
-  const [fillAnswer, setFillAnswer] = useState("");
+  const [fillAnswers, setFillAnswers] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [myAnswer, setMyAnswer] = useState<string | null>(null);
@@ -102,7 +131,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             setView(a.activity_type === "vote" ? "vote" : "fill_blank");
             setSelectedAnswer("");
             setMultiSelected([]);
-            setFillAnswer("");
+            setFillAnswers(Array(getBlankCount(a)).fill(""));
           }
           if (a.remaining_seconds != null && a.remaining_seconds > 0) {
             setRemaining(a.remaining_seconds);
@@ -155,7 +184,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     if (activity.activity_type === "vote") {
       answer = activity.allow_multiple ? multiSelected.sort().join(",") : selectedAnswer;
     } else {
-      answer = fillAnswer.trim();
+      const trimmed = fillAnswers.map((v) => v.trim());
+      const blankCount = getBlankCount(activity);
+      answer = blankCount > 1 ? JSON.stringify(trimmed) : (trimmed[0] || "");
     }
     if (!answer) { message.warning("请先作答"); return; }
     setSubmitting(true);
@@ -317,13 +348,21 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         {view === "fill_blank" && activity && (
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>{activity.title}</div>
-            <Input.TextArea
-              value={fillAnswer}
-              onChange={e => setFillAnswer(e.target.value)}
-              placeholder="请输入答案"
-              rows={3}
-              maxLength={500}
-            />
+            {Array.from({ length: getBlankCount(activity) }).map((_, idx) => (
+              <div key={idx} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>空位（{idx + 1}）</div>
+                <Input
+                  value={fillAnswers[idx] || ""}
+                  onChange={(e) => {
+                    const next = [...fillAnswers];
+                    next[idx] = e.target.value;
+                    setFillAnswers(next);
+                  }}
+                  placeholder={`请输入空位（${idx + 1}）答案`}
+                  maxLength={120}
+                />
+              </div>
+            ))}
             <Button type="primary" block style={{ marginTop: 16 }} onClick={handleSubmit} loading={submitting}>
               提交
             </Button>
@@ -335,7 +374,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           <div style={{ textAlign: "center", padding: "30px 0" }}>
             <div style={{ fontSize: 48, color: "#52c41a", marginBottom: 12 }}>✓</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>已提交</div>
-            <div style={{ color: "#999", marginBottom: 4 }}>你的答案：{myAnswer}</div>
+            <div style={{ color: "#999", marginBottom: 4 }}>你的答案：{formatDisplayAnswer(myAnswer)}</div>
             <div style={{ color: "#999" }}>等待活动结束后查看结果...</div>
           </div>
         )}
@@ -347,10 +386,10 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             <div style={{ padding: "12px 16px", background: isCorrect ? "#f6ffed" : "#fff2f0", borderRadius: 8, marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: "#999", marginBottom: 4 }}>你的答案</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: isCorrect ? "#52c41a" : "#ff4d4f" }}>
-                {myAnswer || "未作答"} {isCorrect != null && (isCorrect ? " ✓ 正确" : " ✗ 错误")}
+                {formatDisplayAnswer(myAnswer) || "未作答"} {isCorrect != null && (isCorrect ? " ✓ 正确" : " ✗ 错误")}
               </div>
               {activity.correct_answer && (
-                <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>正确答案：{activity.correct_answer}</div>
+                <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>正确答案：{formatDisplayAnswer(activity.correct_answer)}</div>
               )}
             </div>
             {/* 统计 */}

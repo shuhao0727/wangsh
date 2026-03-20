@@ -548,7 +548,7 @@ async def submit_answer(
 
         # 统计该知识点的尝试情况
         kp_answers_result = await db.execute(
-            select(AssessmentAnswer).where(
+            select(AssessmentAnswer).options(selectinload(AssessmentAnswer.question)).where(
                 and_(
                     AssessmentAnswer.session_id == session_id,
                     AssessmentAnswer.knowledge_point == kp,
@@ -1062,9 +1062,18 @@ async def get_config_statistics(
 def _first_attempt_per_kp(answers) -> list:
     """自适应计分：同一知识点只保留首次尝试（attempt_seq==1 或 is_adaptive==False），
     后续自适应题仅作练习不计入总分。无知识点的题目直接保留。"""
-    seen_kp: set[str] = set()
+    sorted_answers = sorted(
+        answers,
+        key=lambda a: (
+            getattr(a, "session_id", 0) or 0,
+            getattr(a, "knowledge_point", "") or "",
+            getattr(a, "attempt_seq", 1) or 1,
+            getattr(a, "id", 0) or 0,
+        ),
+    )
+    seen_kp: set[tuple[int, str]] = set()
     result = []
-    for a in answers:
+    for a in sorted_answers:
         kp = getattr(a, "knowledge_point", None)
         if not kp:
             result.append(a)
@@ -1072,9 +1081,10 @@ def _first_attempt_per_kp(answers) -> list:
         # 自适应追加题（attempt_seq > 1）跳过，不计分
         if getattr(a, "is_adaptive", False) and getattr(a, "attempt_seq", 1) > 1:
             continue
-        if kp in seen_kp:
+        skey = (getattr(a, "session_id", 0) or 0, kp)
+        if skey in seen_kp:
             continue
-        seen_kp.add(kp)
+        seen_kp.add(skey)
         result.append(a)
     return result
 

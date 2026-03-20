@@ -212,17 +212,56 @@ async def get_statistics(db: AsyncSession, activity_id: int) -> dict:
     total = len(responses)
     correct_count = sum(1 for r in responses if r.is_correct is True)
     option_counts: Optional[dict] = None
+    blank_slot_stats: Optional[list] = None
+    top_wrong_answers: Optional[list] = None
     if activity.activity_type == "vote" and activity.options:
         option_counts = {}
         for opt in activity.options:
             key = opt["key"] if isinstance(opt, dict) else opt.key
             option_counts[key] = sum(1 for r in responses if key in (r.answer or "").split(","))
+    elif activity.activity_type == "fill_blank" and activity.correct_answer:
+        correct_parts = _parse_blank_answers(activity.correct_answer)
+        if correct_parts is None:
+            correct_parts = [activity.correct_answer.strip()]
+        slot_wrong_maps: list[dict[str, int]] = [dict() for _ in range(len(correct_parts))]
+        slot_correct_counts = [0 for _ in range(len(correct_parts))]
+        overall_wrong_map: dict[str, int] = {}
+        for r in responses:
+            student_parts = _parse_blank_answers(r.answer or "")
+            if student_parts is None:
+                student_parts = [(r.answer or "").strip()]
+            for idx, right in enumerate(correct_parts):
+                student_val = student_parts[idx].strip() if idx < len(student_parts) else ""
+                if student_val.upper() == right.strip().upper():
+                    slot_correct_counts[idx] += 1
+                elif student_val:
+                    slot_wrong_maps[idx][student_val] = slot_wrong_maps[idx].get(student_val, 0) + 1
+            combined_wrong = " | ".join(student_parts).strip()
+            if not r.is_correct and combined_wrong:
+                overall_wrong_map[combined_wrong] = overall_wrong_map.get(combined_wrong, 0) + 1
+        blank_slot_stats = []
+        for idx, right in enumerate(correct_parts):
+            wrong_top = sorted(slot_wrong_maps[idx].items(), key=lambda x: x[1], reverse=True)[:5]
+            blank_slot_stats.append({
+                "slot_index": idx + 1,
+                "correct_answer": right,
+                "total_count": total,
+                "correct_count": slot_correct_counts[idx],
+                "correct_rate": round(slot_correct_counts[idx] / total * 100, 1) if total > 0 else None,
+                "top_wrong_answers": [{"answer": k, "count": v} for k, v in wrong_top],
+            })
+        top_wrong_answers = [
+            {"answer": k, "count": v}
+            for k, v in sorted(overall_wrong_map.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
     return {
         "activity_id": activity_id,
         "total_responses": total,
         "option_counts": option_counts,
         "correct_count": correct_count,
         "correct_rate": round(correct_count / total * 100, 1) if total > 0 else None,
+        "blank_slot_stats": blank_slot_stats,
+        "top_wrong_answers": top_wrong_answers,
     }
 
 
@@ -263,8 +302,37 @@ async def _get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity
 
 
 def _check_correct(student_answer: str, correct_answer: str, allow_multiple: bool) -> bool:
+    parsed_correct = _parse_blank_answers(correct_answer)
+    if parsed_correct is not None:
+        parsed_student = _parse_blank_answers(student_answer)
+        if parsed_student is None:
+            parsed_student = [student_answer.strip()]
+        if len(parsed_student) != len(parsed_correct):
+            return False
+        for idx in range(len(parsed_correct)):
+            if parsed_student[idx].strip().upper() != parsed_correct[idx].strip().upper():
+                return False
+        return True
     if allow_multiple:
         student_set = set(s.strip().upper() for s in student_answer.split(",") if s.strip())
         correct_set = set(s.strip().upper() for s in correct_answer.split(",") if s.strip())
         return student_set == correct_set
     return student_answer.strip().upper() == correct_answer.strip().upper()
+
+
+def _parse_blank_answers(value: str) -> Optional[List[str]]:
+    raw = (value or "").strip()
+    if not raw:
+        return []
+    if not raw.startswith("[") and not raw.startswith("{"):
+        return None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+    if isinstance(parsed, list):
+        return [str(x).strip() for x in parsed]
+    if isinstance(parsed, dict):
+        keys = sorted(parsed.keys(), key=lambda k: int(k) if str(k).isdigit() else str(k))
+        return [str(parsed[k]).strip() for k in keys]
+    return None
