@@ -1,4 +1,5 @@
 import base64
+import logging
 import mimetypes
 import os
 import posixpath
@@ -22,6 +23,8 @@ from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4, try
 from app.utils.cache import cache
 from app.utils.typst_asset_validation import normalize_asset_path
 from app.utils.typst_pdf_storage import abs_pdf_path
+
+logger = logging.getLogger(__name__)
 
 
 def parse_repo_from_url(repo_url: str) -> Tuple[str, str]:
@@ -131,11 +134,17 @@ def _normalize_imported_typst_content(content: str, source_path: str) -> str:
 async def get_or_create_sync_settings(db: AsyncSession) -> InformaticsGithubSyncSetting:
     res = await db.execute(
         select(InformaticsGithubSyncSetting)
-        .order_by(InformaticsGithubSyncSetting.id.asc())
-        .limit(1)
+        .order_by(InformaticsGithubSyncSetting.id.desc())
     )
-    item = res.scalar_one_or_none()
-    if item:
+    rows = list(res.scalars().all())
+    if rows:
+        item = rows[0]
+        if len(rows) > 1:
+            for old in rows[1:]:
+                await db.delete(old)
+            await db.commit()
+            await db.refresh(item)
+            logger.warning("GitHub 同步配置存在重复行，已自动清理: kept_id=%s removed=%s", item.id, len(rows) - 1)
         return item
     item = InformaticsGithubSyncSetting(
         repo_url=f"https://github.com/{getattr(settings, 'GITHUB_SYNC_REPO_OWNER', 'shuhao0727')}/{getattr(settings, 'GITHUB_SYNC_REPO_NAME', '2-My-notes')}",
