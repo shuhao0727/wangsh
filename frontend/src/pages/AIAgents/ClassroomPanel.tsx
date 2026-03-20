@@ -175,8 +175,6 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     if (pollRef.current) clearInterval(pollRef.current);
   }, []);
 
-  if (!isAuthenticated) return null;
-
 // PLACEHOLDER_RENDER
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -213,6 +211,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   useEffect(() => {
     floatingBtnRegistry.updateTop("classroom", btnTop);
   }, [btnTop]);
+
+  if (!isAuthenticated) return null;
 
   const floatingBtn = !open && (
     <div
