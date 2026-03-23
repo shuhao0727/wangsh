@@ -557,7 +557,8 @@ const AIAgentsPage: React.FC = () => {
           buffer += decoder.decode(value, { stream: true });
           const parts = buffer.split("\n\n");
           buffer = parts.pop() || "";
-          
+
+          // 逐个处理事件，每个事件之间让出控制权确保浏览器渲染
           for (const part of parts) {
             const lines = part.split("\n");
             let eventType = "";
@@ -607,7 +608,6 @@ const AIAgentsPage: React.FC = () => {
             };
             
             if (eventType === "workflow_started") {
-              console.log('[Workflow] started:', payload);
               const groupId = `wf-${Date.now()}-${Math.random()}`;
               currentGroupId = groupId;
               await forceRender(() => {
@@ -622,14 +622,12 @@ const AIAgentsPage: React.FC = () => {
                 ]);
               });
             } else if (eventType === "node_started") {
-              console.log('[Workflow] node_started:', payload);
               const name = getNodeName();
               const startedAt = payload?.data?.created_at || payload?.created_at;
               await forceRender(() => {
                 addNode(String(name), startedAt);
               });
             } else if (eventType === "node_finished") {
-              console.log('[Workflow] node_finished:', payload);
               const name = getNodeName();
               const finishedAt = payload?.data?.finished_at || payload?.finished_at;
               const summary = getAnswerText() || payload?.summary || payload?.result || "";
@@ -648,15 +646,15 @@ const AIAgentsPage: React.FC = () => {
               const delta = getAnswerText() || payload?.delta || "";
               if (delta) {
                 finalText += String(delta);
-                // 优化：使用requestAnimationFrame或防抖减少渲染频率
-                updateAgentText(finalText);
+                await forceRender(() => {
+                  updateAgentText(finalText);
+                });
               }
             } else if (eventType === "message") {
               // Dify 流式 message 事件的 answer 是增量 delta，需要累加
               const delta = getAnswerText();
               if (delta) {
                 finalText += String(delta);
-                console.log('[Stream] message delta:', delta, 'total:', finalText.length);
                 await forceRender(() => {
                   updateAgentText(finalText);
                 });
