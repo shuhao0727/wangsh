@@ -419,8 +419,10 @@ async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: i
         activity.analysis_updated_at = datetime.now(timezone.utc)
         await db.commit()
         return
-    chosen_agent_id = activity.analysis_agent_id or await _pick_default_active_agent(db)
-    if not chosen_agent_id:
+
+    # 构建候选智能体列表：优先用指定的，再 fallback 到其他可用智能体
+    candidate_ids = await _list_candidate_agents(db, preferred_id=activity.analysis_agent_id)
+    if not candidate_ids:
         activity.analysis_status = "failed"
         activity.analysis_result = None
         activity.analysis_context = context
@@ -428,43 +430,60 @@ async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: i
         activity.analysis_updated_at = datetime.now(timezone.utc)
         await db.commit()
         return
-    activity.analysis_agent_id = int(chosen_agent_id)
+
     activity.analysis_status = "running"
     activity.analysis_error = None
     activity.analysis_updated_at = datetime.now(timezone.utc)
     await db.commit()
+
     prompt = _build_analysis_prompt(context, activity.analysis_prompt)
     from app.services.agents.chat_blocking import run_agent_chat_blocking
-    try:
-        analysis_text = await run_agent_chat_blocking(
-            db,
-            agent_id=int(chosen_agent_id),
-            message=prompt,
-        )
-        activity.analysis_status = "success"
-        activity.analysis_result = analysis_text
-        activity.analysis_context = context
-        activity.analysis_error = None
-        activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
-    except Exception as exc:
-        logger.exception("课堂互动自动分析失败: activity_id=%s", activity_id)
-        activity.analysis_status = "failed"
-        activity.analysis_result = None
-        activity.analysis_context = context
-        activity.analysis_error = str(exc)
-        activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
+
+    errors = []
+    for agent_id in candidate_ids:
+        try:
+            analysis_text = await run_agent_chat_blocking(
+                db,
+                agent_id=agent_id,
+                message=prompt,
+            )
+            activity.analysis_agent_id = agent_id
+            activity.analysis_status = "success"
+            activity.analysis_result = analysis_text
+            activity.analysis_context = context
+            activity.analysis_error = None
+            activity.analysis_updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            return
+        except Exception as exc:
+            errors.append(f"agent#{agent_id}: {str(exc)[:200]}")
+            logger.warning("课堂分析 agent#%s 失败，尝试下一个: %s", agent_id, exc)
+            continue
+
+    # 所有候选都失败
+    logger.error("课堂互动自动分析失败: activity_id=%s, 尝试了 %d 个智能体均失败", activity_id, len(candidate_ids))
+    activity.analysis_status = "failed"
+    activity.analysis_result = None
+    activity.analysis_context = context
+    activity.analysis_error = f"已尝试 {len(candidate_ids)} 个智能体均失败：{'; '.join(errors)}"
+    activity.analysis_updated_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
-async def _pick_default_active_agent(db: AsyncSession) -> Optional[int]:
-    row = await db.execute(
+async def _list_candidate_agents(db: AsyncSession, preferred_id: Optional[int] = None) -> List[int]:
+    """返回候选智能体 ID 列表，优先指定的，再按 ID 排序取其他可用的"""
+    rows = await db.execute(
         select(AIAgent.id)
         .where(AIAgent.is_active == True, AIAgent.is_deleted == False)
         .order_by(AIAgent.id.asc())
-        .limit(1)
     )
-    return row.scalar_one_or_none()
+    all_ids = [r[0] for r in rows.all()]
+    if not all_ids:
+        return []
+    if preferred_id and preferred_id in all_ids:
+        # 优先指定的，其余作为 fallback
+        return [preferred_id] + [i for i in all_ids if i != preferred_id]
+    return all_ids
 
 
 def _build_analysis_prompt(context: dict, custom_prompt: Optional[str]) -> str:

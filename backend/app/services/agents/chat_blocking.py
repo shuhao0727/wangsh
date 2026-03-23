@@ -24,7 +24,7 @@ async def run_agent_chat_blocking(
 ) -> str:
     agent = await get_agent(db, agent_id, use_cache=False)
     if not agent:
-        raise ValueError("invalid_agent")
+        raise ValueError(f"智能体(id={agent_id})不存在或已删除")
 
     api_endpoint, api_key = resolve_credentials(agent)
 
@@ -39,7 +39,7 @@ async def run_agent_chat_blocking(
         return f"debug_stub: {msg[:800]}"
 
     if not api_endpoint or not api_key:
-        raise ValueError("invalid_agent")
+        raise ValueError(f"智能体(id={agent_id})未配置API地址或密钥")
 
     provider = get_provider(agent.agent_type, api_endpoint, api_key)
     provider_name = type(provider).__name__
