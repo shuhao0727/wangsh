@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useForceRender } from "./hooks/useForceRender";
 import {
   App,
   Button,
@@ -79,6 +80,7 @@ const AIAgentsPage: React.FC = () => {
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
   const streamAbortRef = useRef<AbortController | null>(null);
+  const forceRender = useForceRender();
 
   // 加载启用的智能体
   useEffect(() => {
@@ -608,7 +610,7 @@ const AIAgentsPage: React.FC = () => {
               console.log('[Workflow] started:', payload);
               const groupId = `wf-${Date.now()}-${Math.random()}`;
               currentGroupId = groupId;
-              flushSync(() => {
+              await forceRender(() => {
                 setWorkflowGroups((prev) => [
                   ...prev,
                   {
@@ -619,24 +621,21 @@ const AIAgentsPage: React.FC = () => {
                   },
                 ]);
               });
-              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "node_started") {
               console.log('[Workflow] node_started:', payload);
               const name = getNodeName();
               const startedAt = payload?.data?.created_at || payload?.created_at;
-              flushSync(() => {
+              await forceRender(() => {
                 addNode(String(name), startedAt);
               });
-              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "node_finished") {
               console.log('[Workflow] node_finished:', payload);
               const name = getNodeName();
               const finishedAt = payload?.data?.finished_at || payload?.finished_at;
               const summary = getAnswerText() || payload?.summary || payload?.result || "";
-              flushSync(() => {
+              await forceRender(() => {
                 finishNode(String(name), finishedAt, summary ? String(summary) : undefined);
               });
-              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "workflow_finished") {
               const final = getAnswerText();
               if (final) {
@@ -658,9 +657,9 @@ const AIAgentsPage: React.FC = () => {
               if (delta) {
                 finalText += String(delta);
                 console.log('[Stream] message delta:', delta, 'total:', finalText.length);
-                updateAgentText(finalText);
-                // 让出控制权，让浏览器有机会重绘
-                await new Promise(resolve => setTimeout(resolve, 0));
+                await forceRender(() => {
+                  updateAgentText(finalText);
+                });
               }
             } else if (eventType === "message_end") {
               const text = getAnswerText();
