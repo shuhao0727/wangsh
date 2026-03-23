@@ -1,6 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import { useForceRender } from "./hooks/useForceRender";
 import {
   App,
   Button,
@@ -80,7 +78,6 @@ const AIAgentsPage: React.FC = () => {
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
   const streamAbortRef = useRef<AbortController | null>(null);
-  const forceRender = useForceRender();
 
   // 加载启用的智能体
   useEffect(() => {
@@ -435,23 +432,22 @@ const AIAgentsPage: React.FC = () => {
       };
       
       try {
-        const res = await fetch(`${config.apiUrl}/ai-agents/stream`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-            "Cache-Control": "no-cache",
-          },
-          signal: controller.signal,
-          body: JSON.stringify(body),
-        });
-        const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder("utf-8");
+        // 使用 XMLHttpRequest 实现真正的流式接收
+        // XHR 的 onprogress 每次收到数据都会触发，不会像 fetch reader.read() 那样批处理
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${config.apiUrl}/ai-agents/stream`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "text/event-stream");
+        xhr.setRequestHeader("Cache-Control", "no-cache");
+        xhr.withCredentials = true;
+
+        // 存储 XHR 引用以便取消
+        const abortXhr = () => xhr.abort();
+        controller.signal.addEventListener("abort", abortXhr);
+
         let buffer = "";
         let currentGroupId = "";
-        
+
         const ensureGroup = () => {
           if (currentGroupId) return currentGroupId;
           const groupId = `wf-${Date.now()}-${Math.random()}`;
@@ -467,7 +463,7 @@ const AIAgentsPage: React.FC = () => {
           ]);
           return groupId;
         };
-        
+
         const addNode = (name: string, startedAt?: number) => {
           const groupId = ensureGroup();
           const node: WorkflowNode = {
@@ -505,7 +501,7 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
-        
+
         const markError = (msg: string) => {
           const groupId = ensureGroup();
           const node: WorkflowNode = {
@@ -520,189 +516,123 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
-        
+
         const updateAgentText = (text: string) => {
           setStreamingContent(text);
         };
-        
+
         // 结束时将完整消息合并到 messages
-        const finalizeMessage = (finalText: string) => {
+        const finalizeMessage = (ft: string) => {
             if (finalized) return;
             finalized = true;
             const finalMsg: Message = {
               id: agentMessageId,
-              content: finalText,
+              content: ft,
               sender: "agent",
               timestamp: new Date().toISOString(),
               agentId: currentAgent.id,
             };
             setMessages(prev => [...prev, finalMsg]);
-            setStreamingContent(""); // 清空流式状态
+            setStreamingContent("");
             setCurrentStreamingMessageId(null);
-            setIsStreaming(false); // 停止计时器
+            setIsStreaming(false);
         };
-        
-        if (!res.ok) {
-          const errText = `流式接口错误: HTTP ${res.status}`;
-          markError(errText);
-          finalizeMessage(`⚠️ ${errText}`);
-          setStreamingContent("");
-          await persistUsage("");
-          return;
-        }
-        
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+
+        const getNodeName = (p: any) => {
+          const d = p?.data || p;
+          return d?.title || d?.node_name || d?.node_id || d?.name || d?.id || "节点";
+        };
+
+        const getAnswerText = (p: any) => {
+          const d = p?.data || p;
+          return d?.answer || d?.text || d?.content || d?.outputs?.answer || d?.outputs?.text || d?.outputs?.content || "";
+        };
+
+        // 处理单个 SSE 事件
+        const processEvent = (eventStr: string) => {
+          const lines = eventStr.split("\n");
+          let eventType = "";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          let payload: any = null;
+          try { payload = dataStr ? JSON.parse(dataStr) : null; } catch { payload = { text: dataStr }; }
+          if (!eventType && payload?.event) eventType = String(payload.event);
+
+          if (eventType === "workflow_started") {
+            const groupId = `wf-${Date.now()}-${Math.random()}`;
+            currentGroupId = groupId;
+            setWorkflowGroups((prev) => [...prev, { id: groupId, label: `工作流 ${prev.length + 1}`, nodes: [], messageId: agentMessageId }]);
+          } else if (eventType === "node_started") {
+            addNode(String(getNodeName(payload)), payload?.data?.created_at || payload?.created_at);
+          } else if (eventType === "node_finished") {
+            const summary = getAnswerText(payload) || payload?.summary || payload?.result || "";
+            finishNode(String(getNodeName(payload)), payload?.data?.finished_at || payload?.finished_at, summary ? String(summary) : undefined);
+          } else if (eventType === "workflow_finished") {
+            const f = getAnswerText(payload);
+            if (f) { finalText = String(f); updateAgentText(finalText); }
+            finalizeMessage(finalText);
+            persistUsage(finalText);
+          } else if (eventType === "message_delta" || eventType === "message") {
+            const delta = eventType === "message_delta" ? (getAnswerText(payload) || payload?.delta || "") : getAnswerText(payload);
+            if (delta) { finalText += String(delta); updateAgentText(finalText); }
+          } else if (eventType === "message_end") {
+            const t = getAnswerText(payload);
+            if (t) { finalText = String(t); updateAgentText(finalText); }
+            finalizeMessage(finalText);
+            persistUsage(finalText);
+          } else if (eventType === "error") {
+            const rawError = payload?.error ? String(payload.error) : "";
+            const status = payload?.provider_status ? Number(payload.provider_status) : undefined;
+            const detail = payload?.detail ? String(payload.detail) : "";
+            let errText = payload?.message ? String(payload.message) : "";
+            if (!errText) {
+              if (rawError === "provider_status_429" || status === 429) errText = "上游服务返回 429（限流/额度不足）。请稍后重试";
+              else if (rawError) errText = rawError;
+              else errText = "对话发生错误";
+            }
+            if (detail && detail !== errText) errText = `${errText}\n${detail}`;
+            markError(errText);
+            finalText = `⚠️ ${errText}`;
+            finalizeMessage(finalText);
+            persistUsage("");
+          } else {
+            const fallback = getAnswerText(payload);
+            if (fallback) { finalText += String(fallback); updateAgentText(finalText); }
+          }
+        };
+
+        // XHR onprogress: 每次收到新数据都会触发，实现真正的流式渲染
+        let processedLength = 0;
+        xhr.onprogress = () => {
+          const newData = xhr.responseText.substring(processedLength);
+          processedLength = xhr.responseText.length;
+          buffer += newData;
           const parts = buffer.split("\n\n");
           buffer = parts.pop() || "";
-
-          // 逐个处理事件，每个事件之间让出控制权确保浏览器渲染
           for (const part of parts) {
-            const lines = part.split("\n");
-            let eventType = "";
-            let dataStr = "";
-            for (const line of lines) {
-              if (line.startsWith("event:")) {
-                eventType = line.slice(6).trim();
-              } else if (line.startsWith("data:")) {
-                dataStr += line.slice(5).trim();
-              }
-            }
-            
-            let payload: any = null;
-            try {
-              payload = dataStr ? JSON.parse(dataStr) : null;
-            } catch {
-              payload = { text: dataStr };
-            }
-            
-            if (!eventType && payload && payload.event) {
-              eventType = String(payload.event);
-            }
-            
-            const getNodeName = () => {
-              const d = payload?.data || payload;
-              return (
-                d?.title ||
-                d?.node_name ||
-                d?.node_id ||
-                d?.name ||
-                d?.id ||
-                "节点"
-              );
-            };
-            
-            const getAnswerText = () => {
-              const d = payload?.data || payload;
-              return (
-                d?.answer ||
-                d?.text ||
-                d?.content ||
-                d?.outputs?.answer ||
-                d?.outputs?.text ||
-                d?.outputs?.content ||
-                ""
-              );
-            };
-            
-            if (eventType === "workflow_started") {
-              const groupId = `wf-${Date.now()}-${Math.random()}`;
-              currentGroupId = groupId;
-              await forceRender(() => {
-                setWorkflowGroups((prev) => [
-                  ...prev,
-                  {
-                    id: groupId,
-                    label: `工作流 ${prev.length + 1}`,
-                    nodes: [],
-                    messageId: agentMessageId,
-                  },
-                ]);
-              });
-            } else if (eventType === "node_started") {
-              const name = getNodeName();
-              const startedAt = payload?.data?.created_at || payload?.created_at;
-              await forceRender(() => {
-                addNode(String(name), startedAt);
-              });
-            } else if (eventType === "node_finished") {
-              const name = getNodeName();
-              const finishedAt = payload?.data?.finished_at || payload?.finished_at;
-              const summary = getAnswerText() || payload?.summary || payload?.result || "";
-              await forceRender(() => {
-                finishNode(String(name), finishedAt, summary ? String(summary) : undefined);
-              });
-            } else if (eventType === "workflow_finished") {
-              const final = getAnswerText();
-              if (final) {
-                finalText = String(final);
-                updateAgentText(finalText);
-              }
-              finalizeMessage(finalText);
-              await persistUsage(finalText);
-            } else if (eventType === "message_delta") {
-              const delta = getAnswerText() || payload?.delta || "";
-              if (delta) {
-                finalText += String(delta);
-                await forceRender(() => {
-                  updateAgentText(finalText);
-                });
-              }
-            } else if (eventType === "message") {
-              // Dify 流式 message 事件的 answer 是增量 delta，需要累加
-              const delta = getAnswerText();
-              if (delta) {
-                finalText += String(delta);
-                await forceRender(() => {
-                  updateAgentText(finalText);
-                });
-              }
-            } else if (eventType === "message_end") {
-              const text = getAnswerText();
-              if (text) {
-                finalText = String(text);
-                updateAgentText(finalText);
-              }
-              finalizeMessage(finalText);
-              await persistUsage(finalText);
-            } else if (eventType === "error") {
-              const rawError = payload?.error ? String(payload.error) : "";
-              const status = payload?.provider_status ? Number(payload.provider_status) : undefined;
-              const detail = payload?.detail ? String(payload.detail) : "";
-              let errText = payload?.message ? String(payload.message) : "";
-              if (!errText) {
-                if (rawError === "provider_status_429" || status === 429) {
-                  errText = "上游服务返回 429（限流/额度不足）。请稍后重试，或更换 API Key/提升额度";
-                } else if (rawError) {
-                  errText = rawError;
-                } else {
-                  errText = "对话发生错误";
-                }
-              }
-              if (detail && detail !== errText) {
-                errText = `${errText}\n${detail}`;
-              }
-              markError(errText);
-              // 将错误信息作为 agent 消息显示给用户
-              finalText = `⚠️ ${errText}`;
-              finalizeMessage(finalText);
-              await persistUsage("");
-            } else {
-              const fallback = getAnswerText();
-              if (fallback) {
-                finalText += String(fallback);
-                updateAgentText(finalText);
-              }
-            }
+            const trimmed = part.trim();
+            if (trimmed) processEvent(trimmed);
           }
-        }
-        // 如果是正常结束循环（done=true）且未触发过 finalize，这里做一次兜底
-        if (!finalized && finalText) {
-            finalizeMessage(finalText);
-            await persistUsage(finalText);
-        }
+        };
+
+        await new Promise<void>((resolve, reject) => {
+          xhr.onload = () => {
+            // 处理剩余 buffer
+            if (buffer.trim()) processEvent(buffer.trim());
+            // 兜底 finalize
+            if (!finalized && finalText) {
+              finalizeMessage(finalText);
+              persistUsage(finalText);
+            }
+            resolve();
+          };
+          xhr.onerror = () => reject(new Error("网络错误"));
+          xhr.onabort = () => resolve();
+          xhr.send(JSON.stringify(body));
+        });
       } catch (e: any) {
         if (e?.name === "AbortError") {
           return;

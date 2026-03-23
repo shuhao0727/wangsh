@@ -52,6 +52,16 @@ module.exports = {
       "Cross-Origin-Embedder-Policy": "require-corp",
     },
     proxy: {
+      '/api/v1/ai-agents/stream': {
+        target: process.env.DEV_PROXY_TARGET || 'http://localhost:8000',
+        changeOrigin: true,
+        ws: true,
+        // SSE 流式接口：禁用代理缓冲，确保数据实时转发
+        onProxyRes: (proxyRes) => {
+          proxyRes.headers['cache-control'] = 'no-cache';
+          proxyRes.headers['x-accel-buffering'] = 'no';
+        },
+      },
       '/api': {
         target: process.env.DEV_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
