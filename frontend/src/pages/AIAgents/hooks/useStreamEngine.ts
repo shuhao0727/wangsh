@@ -84,9 +84,7 @@ export function useStreamEngine() {
           fullText = String(text);
           callbacks.onDelta(fullText);
         }
-        if (eventType === "message_end") {
-          finish();
-        }
+        finish();
       } else if (eventType === "workflow_started") {
         callbacks.onWorkflowStarted?.(payload?.workflow_run_id || `wf-${Date.now()}`);
       } else if (eventType === "node_started") {

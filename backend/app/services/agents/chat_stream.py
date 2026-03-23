@@ -130,17 +130,16 @@ async def _stream_dify(provider: DifyProvider, messages, model, user, inputs) ->
                 if resp.status_code != 200:
                     last_error = f"status_{resp.status_code}"
                     continue
-                buffer = ""
-                async for chunk in resp.aiter_bytes():
-                    if not chunk:
+
+                # 使用 aiter_lines() 避免数据截断
+                async for line in resp.aiter_lines():
+                    if not line:
+                        # 空行表示事件结束，输出双换行
+                        yield b"\n"
                         continue
-                    buffer += chunk.decode("utf-8", errors="ignore")
-                    while "\n\n" in buffer:
-                        part, buffer = buffer.split("\n\n", 1)
-                        if part:
-                            yield (part + "\n\n").encode("utf-8")
-                if buffer.strip():
-                    yield (buffer.strip() + "\n\n").encode("utf-8")
+                    # 输出行 + 单换行
+                    yield (line + "\n").encode("utf-8")
+
                 return
         except Exception as e:
             last_error = str(e)

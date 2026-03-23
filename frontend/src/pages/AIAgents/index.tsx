@@ -650,6 +650,8 @@ const AIAgentsPage: React.FC = () => {
                 finalText = String(text);
                 updateAgentText(finalText);
               }
+              finalizeMessage(finalText);
+              await persistUsage(finalText);
             } else if (eventType === "message_end") {
               const text = getAnswerText();
               if (text) {
