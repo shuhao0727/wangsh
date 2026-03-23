@@ -19,6 +19,7 @@ interface StreamOptions {
   url: string;
   body: Record<string, unknown>;
   callbacks: StreamCallbacks;
+  headers?: Record<string, string>;
   timeoutMs?: number;
 }
 
@@ -26,7 +27,7 @@ export function useStreamEngine() {
   const abortRef = useRef<AbortController | null>(null);
 
   const startStream = useCallback(async (options: StreamOptions) => {
-    const { url, body, callbacks, timeoutMs = 120_000 } = options;
+    const { url, body, callbacks, headers: extraHeaders, timeoutMs = 120_000 } = options;
 
     // 中止之前的请求
     if (abortRef.current) {
@@ -128,6 +129,9 @@ export function useStreamEngine() {
         xhr.open("POST", url);
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.setRequestHeader("Accept", "text/event-stream");
+        if (extraHeaders) {
+          Object.entries(extraHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        }
         xhr.withCredentials = true;
 
         const parser = createParser(handleEvent);

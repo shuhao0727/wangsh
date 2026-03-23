@@ -462,6 +462,7 @@ const AIAgentsPage: React.FC = () => {
       };
 
       try {
+        const token = auth.getToken();
         await startStreamEngine({
           url: `${config.apiUrl}/ai-agents/stream`,
           body: {
@@ -471,6 +472,7 @@ const AIAgentsPage: React.FC = () => {
             user: auth.getDisplayName() || "guest",
             inputs: {},
           },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           callbacks: {
             onDelta: (text) => {
               setStreamingContent(text);

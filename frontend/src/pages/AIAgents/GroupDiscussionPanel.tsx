@@ -472,7 +472,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     if (view !== "chat" || !sessionId) return;
 
     // 使用 SSE 实时接收消息，替代轮询
-    const sseUrl = `${appConfig.apiUrl}/ai-agents/group-discussion/stream?session_id=${sessionId}&after_id=${afterIdRef.current}`;
+    const token = sessionStorage.getItem("ws_access_token") || "";
+    const sseUrl = `${appConfig.apiUrl}/ai-agents/group-discussion/stream?session_id=${sessionId}&after_id=${afterIdRef.current}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
     let eventSource: EventSource | null = null;
     let fallbackActive = false;
 

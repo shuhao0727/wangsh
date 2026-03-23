@@ -25,6 +25,10 @@ async def get_access_token(
 ) -> Optional[str]:
     if token:
         return token
+    # SSE (EventSource) 不支持自定义 header，允许从 query param 读取 token
+    qt = request.query_params.get("token")
+    if qt:
+        return qt
     return (
         request.cookies.get(settings.ACCESS_TOKEN_COOKIE_NAME)
         or request.cookies.get("access_token")
