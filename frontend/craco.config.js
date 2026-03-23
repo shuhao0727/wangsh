@@ -53,17 +53,33 @@ module.exports = {
     },
     proxy: {
       '/api/v1/ai-agents/stream': {
-        target: process.env.DEV_PROXY_TARGET || 'http://localhost:8000',
+        target: process.env.DEV_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
-        ws: true,
-        // SSE 流式接口：禁用代理缓冲，确保数据实时转发
-        onProxyRes: (proxyRes) => {
-          proxyRes.headers['cache-control'] = 'no-cache';
-          proxyRes.headers['x-accel-buffering'] = 'no';
+        selfHandleResponse: true,
+        onProxyRes: (proxyRes, req, res) => {
+          // 写入响应头，禁用所有缓冲
+          res.writeHead(proxyRes.statusCode, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache, no-transform',
+            'x-accel-buffering': 'no',
+            'connection': 'keep-alive',
+            'transfer-encoding': 'chunked',
+          });
+          // 逐块转发，不使用 pipe（pipe 有内部缓冲）
+          proxyRes.on('data', (chunk) => {
+            res.write(chunk);
+            if (typeof res.flush === 'function') res.flush();
+          });
+          proxyRes.on('end', () => {
+            res.end();
+          });
+          proxyRes.on('error', () => {
+            res.end();
+          });
         },
       },
       '/api': {
-        target: process.env.DEV_PROXY_TARGET || 'http://localhost:8000',
+        target: process.env.DEV_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
         ws: true,
       },

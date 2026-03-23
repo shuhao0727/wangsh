@@ -33,7 +33,15 @@ async def stream_agent_chat_endpoint(
             request.inputs,
             history=history,
         )
-        return StreamingResponse(gen, media_type="text/event-stream")
+        return StreamingResponse(
+            gen,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -126,20 +126,15 @@ async def _stream_dify(provider: DifyProvider, messages, model, user, inputs) ->
     for url in candidates:
         try:
             try_payload = payload_primary if "/chat-messages" in url else payload_fallback
+
             async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
                 if resp.status_code != 200:
                     last_error = f"status_{resp.status_code}"
                     continue
 
-                # 使用 aiter_lines() 避免数据截断
-                async for line in resp.aiter_lines():
-                    if not line:
-                        # 空行表示事件结束，输出双换行
-                        yield b"\n"
-                        continue
-                    # 输出行 + 单换行
-                    yield (line + "\n").encode("utf-8")
-
+                async for chunk in resp.aiter_bytes():
+                    if chunk:
+                        yield chunk
                 return
         except Exception as e:
             last_error = str(e)

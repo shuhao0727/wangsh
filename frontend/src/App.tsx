@@ -34,7 +34,6 @@ const AdminPersonalProgramsPage = lazy(
 );
 const AdminArticlesPage = lazy(() => import("./pages/Admin/Articles"));
 const AdminArticleEditorPage = lazy(() => import("./pages/Admin/Articles/EditorPage"));
-const AdminArticleLegacyEditRedirect = lazy(() => import("./pages/Admin/Articles/LegacyEditRedirect"));
 const AdminTypstEditorPage = lazy(() => import("./pages/Admin/Informatics/EditorPage"));
 const AdminSystemPage = lazy(() => import("./pages/Admin/System"));
 const AdminAssessmentPage = lazy(() => import("./pages/Admin/Assessment"));
@@ -113,7 +112,7 @@ function App() {
               <Route path="/admin/articles/editor/new" element={<AdminArticleEditorPage />} />
               <Route path="/admin/articles/editor/:id" element={<AdminArticleEditorPage />} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
-              <Route path="/admin/articles/edit/:id" element={<AdminArticleLegacyEditRedirect />} />
+              <Route path="/admin/articles/edit/:id" element={<Navigate to="/admin/articles/editor/new" replace />} />
               <Route path="/admin/informatics/editor/new" element={<AdminTypstEditorPage />} />
               <Route path="/admin/informatics/editor/:id" element={<AdminTypstEditorPage />} />
               <Route path="/admin/assessment/editor/new" element={<AdminAssessmentEditorPage />} />

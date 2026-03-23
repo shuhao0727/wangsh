@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   App,
   Button,
@@ -33,6 +33,7 @@ import { aiAgentsApi, agentDataApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
 import { config } from "@services";
 import { logger } from "@services/logger";
+import { useStreamEngine } from "./hooks/useStreamEngine";
 
 const STREAM_TIMEOUT_MS = 120_000;
 
@@ -76,8 +77,10 @@ const AIAgentsPage: React.FC = () => {
   const [workflowGroups, setWorkflowGroups] = useState<WorkflowGroup[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
-  const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
-  const streamAbortRef = useRef<AbortController | null>(null);
+  const [streamStartTime, setStreamStartTime] = useState<number | null>(null);
+
+  // 使用 useStreamEngine hook
+  const { startStream: startStreamEngine, stopStream } = useStreamEngine();
 
   // 加载启用的智能体
   useEffect(() => {
@@ -375,13 +378,10 @@ const AIAgentsPage: React.FC = () => {
       setStreamStartTime(Date.now());
       setIsStreaming(true);
       const streamStartedAt = Date.now();
-      const controller = new AbortController();
-      streamAbortRef.current = controller;
-      // 120 秒超时：合并用户手动取消 + 自动超时
-      const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
-      // 构建多轮对话上下文（最近 10 轮）
+
+      // 构建多轮对话上下文
       const contextMessages: Array<{ role: string; content: string }> = [];
-      const recentMessages = messages.slice(-20); // 最多取最近 20 条（10 轮对话）
+      const recentMessages = messages.slice(-20);
       for (const msg of recentMessages) {
         if (msg.sender === "user") {
           contextMessages.push({ role: "user", content: msg.content });
@@ -389,23 +389,54 @@ const AIAgentsPage: React.FC = () => {
           contextMessages.push({ role: "assistant", content: msg.content });
         }
       }
-      // 加上当前用户消息
       contextMessages.push({ role: "user", content });
 
-      const body = {
-        agent_id: parseInt(String(currentAgent.id), 10),
-        message: content,
-        messages: contextMessages,
-        user: auth.getDisplayName() || "guest",
-        inputs: {},
-      };
-      let finalText = "";
+      let currentGroupId = "";
       let usageSaved = false;
-      let finalized = false;
-      
+
+      const ensureGroup = () => {
+        if (currentGroupId) return currentGroupId;
+        const groupId = `wf-${Date.now()}-${Math.random()}`;
+        currentGroupId = groupId;
+        setWorkflowGroups((prev) => [
+          ...prev,
+          { id: groupId, label: `工作流 ${prev.length + 1}`, nodes: [], messageId: agentMessageId },
+        ]);
+        return groupId;
+      };
+      const addNode = (name: string) => {
+        const groupId = ensureGroup();
+        const node: WorkflowNode = {
+          id: `${groupId}-${name}-${Date.now()}`,
+          name,
+          status: "started",
+          startedAt: new Date().toISOString(),
+        };
+        setWorkflowGroups((prev) =>
+          prev.map((g) => (g.id === groupId ? { ...g, nodes: [...g.nodes, node] } : g))
+        );
+      };
+
+      const finishNode = (name: string, detail?: string) => {
+        const groupId = ensureGroup();
+        setWorkflowGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  nodes: g.nodes.map((n) =>
+                    n.name === name
+                      ? { ...n, status: "finished", detail, finishedAt: new Date().toISOString() }
+                      : n
+                  ),
+                }
+              : g
+          )
+        );
+      };
+
       const persistUsage = async (answerText: string) => {
-        if (usageSaved || !userMessage.content) return;
-        if (!auth.isAuthenticated) return;
+        if (usageSaved || !userMessage.content || !auth.isAuthenticated) return;
         usageSaved = true;
         try {
           await agentDataApi.createUsage({
@@ -417,226 +448,74 @@ const AIAgentsPage: React.FC = () => {
             response_time_ms: Date.now() - streamStartedAt,
             used_at: new Date().toISOString(),
           });
-          // 延迟刷新列表，避免后端写入延迟
           setTimeout(() => {
-              agentDataApi.listConversations({
-                agent_id: parseInt(String(currentAgent.id), 10),
-                limit: 5,
-              }).then(listResp => {
-                if (listResp.success) setSessions(listResp.data);
-              }).catch(() => {});
+            agentDataApi.listConversations({
+              agent_id: parseInt(String(currentAgent.id), 10),
+              limit: 5,
+            }).then(listResp => {
+              if (listResp.success) setSessions(listResp.data);
+            }).catch(() => {});
           }, 1000);
         } catch (error) {
           logger.error("写入对话记录失败:", error);
         }
       };
-      
+
       try {
-        // 使用 XMLHttpRequest 实现真正的流式接收
-        // XHR 的 onprogress 每次收到数据都会触发，不会像 fetch reader.read() 那样批处理
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${config.apiUrl}/ai-agents/stream`);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.setRequestHeader("Accept", "text/event-stream");
-        xhr.setRequestHeader("Cache-Control", "no-cache");
-        xhr.withCredentials = true;
-
-        // 存储 XHR 引用以便取消
-        const abortXhr = () => xhr.abort();
-        controller.signal.addEventListener("abort", abortXhr);
-
-        let buffer = "";
-        let currentGroupId = "";
-
-        const ensureGroup = () => {
-          if (currentGroupId) return currentGroupId;
-          const groupId = `wf-${Date.now()}-${Math.random()}`;
-          currentGroupId = groupId;
-          setWorkflowGroups((prev) => [
-            ...prev,
-            {
-              id: groupId,
-              label: `工作流 ${prev.length + 1}`,
-              nodes: [],
-              messageId: agentMessageId,
+        await startStreamEngine({
+          url: `${config.apiUrl}/ai-agents/stream`,
+          body: {
+            agent_id: parseInt(String(currentAgent.id), 10),
+            message: content,
+            messages: contextMessages,
+            user: auth.getDisplayName() || "guest",
+            inputs: {},
+          },
+          callbacks: {
+            onDelta: (text) => {
+              setStreamingContent(text);
             },
-          ]);
-          return groupId;
-        };
-
-        const addNode = (name: string, startedAt?: number) => {
-          const groupId = ensureGroup();
-          const node: WorkflowNode = {
-            id: `${groupId}-${name}-${Date.now()}`,
-            name,
-            status: "started",
-            startedAt: startedAt ? new Date(startedAt * 1000).toISOString() : new Date().toISOString(),
-          };
-          setWorkflowGroups((prev) =>
-            prev.map((g) =>
-              g.id === groupId ? { ...g, nodes: [...g.nodes, node] } : g,
-            ),
-          );
-        };
-
-        const finishNode = (name: string, finishedAt?: number, detail?: string) => {
-          const groupId = ensureGroup();
-          setWorkflowGroups((prev) =>
-            prev.map((g) =>
-              g.id === groupId
-                ? {
-                    ...g,
-                    nodes: g.nodes.map((n) =>
-                      n.name === name
-                        ? {
-                            ...n,
-                            status: "finished",
-                            detail,
-                            finishedAt: finishedAt ? new Date(finishedAt * 1000).toISOString() : new Date().toISOString(),
-                          }
-                        : n,
-                    ),
-                  }
-                : g,
-            ),
-          );
-        };
-
-        const markError = (msg: string) => {
-          const groupId = ensureGroup();
-          const node: WorkflowNode = {
-            id: `${groupId}-error-${Date.now()}`,
-            name: "错误",
-            status: "error",
-            detail: msg,
-          };
-          setWorkflowGroups((prev) =>
-            prev.map((g) =>
-              g.id === groupId ? { ...g, nodes: [...g.nodes, node] } : g,
-            ),
-          );
-        };
-
-        const updateAgentText = (text: string) => {
-          setStreamingContent(text);
-        };
-
-        // 结束时将完整消息合并到 messages
-        const finalizeMessage = (ft: string) => {
-            if (finalized) return;
-            finalized = true;
-            const finalMsg: Message = {
-              id: agentMessageId,
-              content: ft,
-              sender: "agent",
-              timestamp: new Date().toISOString(),
-              agentId: currentAgent.id,
-            };
-            setMessages(prev => [...prev, finalMsg]);
-            setStreamingContent("");
-            setCurrentStreamingMessageId(null);
-            setIsStreaming(false);
-        };
-
-        const getNodeName = (p: any) => {
-          const d = p?.data || p;
-          return d?.title || d?.node_name || d?.node_id || d?.name || d?.id || "节点";
-        };
-
-        const getAnswerText = (p: any) => {
-          const d = p?.data || p;
-          return d?.answer || d?.text || d?.content || d?.outputs?.answer || d?.outputs?.text || d?.outputs?.content || "";
-        };
-
-        // 处理单个 SSE 事件
-        const processEvent = (eventStr: string) => {
-          const lines = eventStr.split("\n");
-          let eventType = "";
-          let dataStr = "";
-          for (const line of lines) {
-            if (line.startsWith("event:")) eventType = line.slice(6).trim();
-            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
-          }
-          let payload: any = null;
-          try { payload = dataStr ? JSON.parse(dataStr) : null; } catch { payload = { text: dataStr }; }
-          if (!eventType && payload?.event) eventType = String(payload.event);
-
-          if (eventType === "workflow_started") {
-            const groupId = `wf-${Date.now()}-${Math.random()}`;
-            currentGroupId = groupId;
-            setWorkflowGroups((prev) => [...prev, { id: groupId, label: `工作流 ${prev.length + 1}`, nodes: [], messageId: agentMessageId }]);
-          } else if (eventType === "node_started") {
-            addNode(String(getNodeName(payload)), payload?.data?.created_at || payload?.created_at);
-          } else if (eventType === "node_finished") {
-            const summary = getAnswerText(payload) || payload?.summary || payload?.result || "";
-            finishNode(String(getNodeName(payload)), payload?.data?.finished_at || payload?.finished_at, summary ? String(summary) : undefined);
-          } else if (eventType === "workflow_finished") {
-            const f = getAnswerText(payload);
-            if (f) { finalText = String(f); updateAgentText(finalText); }
-            finalizeMessage(finalText);
-            persistUsage(finalText);
-          } else if (eventType === "message_delta" || eventType === "message") {
-            const delta = eventType === "message_delta" ? (getAnswerText(payload) || payload?.delta || "") : getAnswerText(payload);
-            if (delta) { finalText += String(delta); updateAgentText(finalText); }
-          } else if (eventType === "message_end") {
-            const t = getAnswerText(payload);
-            if (t) { finalText = String(t); updateAgentText(finalText); }
-            finalizeMessage(finalText);
-            persistUsage(finalText);
-          } else if (eventType === "error") {
-            const rawError = payload?.error ? String(payload.error) : "";
-            const status = payload?.provider_status ? Number(payload.provider_status) : undefined;
-            const detail = payload?.detail ? String(payload.detail) : "";
-            let errText = payload?.message ? String(payload.message) : "";
-            if (!errText) {
-              if (rawError === "provider_status_429" || status === 429) errText = "上游服务返回 429（限流/额度不足）。请稍后重试";
-              else if (rawError) errText = rawError;
-              else errText = "对话发生错误";
-            }
-            if (detail && detail !== errText) errText = `${errText}\n${detail}`;
-            markError(errText);
-            finalText = `⚠️ ${errText}`;
-            finalizeMessage(finalText);
-            persistUsage("");
-          } else {
-            const fallback = getAnswerText(payload);
-            if (fallback) { finalText += String(fallback); updateAgentText(finalText); }
-          }
-        };
-
-        // XHR onprogress: 每次收到新数据都会触发，实现真正的流式渲染
-        let processedLength = 0;
-        xhr.onprogress = () => {
-          const newData = xhr.responseText.substring(processedLength);
-          processedLength = xhr.responseText.length;
-          buffer += newData;
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() || "";
-          for (const part of parts) {
-            const trimmed = part.trim();
-            if (trimmed) processEvent(trimmed);
-          }
-        };
-
-        await new Promise<void>((resolve, reject) => {
-          xhr.onload = () => {
-            // 处理剩余 buffer
-            if (buffer.trim()) processEvent(buffer.trim());
-            // 兜底 finalize
-            if (!finalized && finalText) {
-              finalizeMessage(finalText);
-              persistUsage(finalText);
-            }
-            resolve();
-          };
-          xhr.onerror = () => reject(new Error("网络错误"));
-          xhr.onabort = () => resolve();
-          xhr.send(JSON.stringify(body));
+            onEnd: (fullText) => {
+              const finalMsg: Message = {
+                id: agentMessageId,
+                content: fullText,
+                sender: "agent",
+                timestamp: new Date().toISOString(),
+                agentId: currentAgent.id,
+              };
+              setMessages((prev) => [...prev, finalMsg]);
+              setStreamingContent("");
+              setCurrentStreamingMessageId(null);
+              setIsStreaming(false);
+              persistUsage(fullText);
+            },
+            onError: (errText) => {
+              const errMsg: Message = {
+                id: `err-${Date.now()}`,
+                content: `⚠️ ${errText}`,
+                sender: "agent",
+                timestamp: new Date().toISOString(),
+                agentId: currentAgent.id,
+              };
+              setMessages((prev) => [...prev, errMsg]);
+              setStreamingContent("");
+              setCurrentStreamingMessageId(null);
+              setIsStreaming(false);
+            },
+            onWorkflowStarted: (groupId) => {
+              currentGroupId = groupId;
+              setWorkflowGroups((prev) => [
+                ...prev,
+                { id: groupId, label: `工作流 ${prev.length + 1}`, nodes: [], messageId: agentMessageId },
+              ]);
+            },
+            onNodeStarted: (name) => addNode(name),
+            onNodeFinished: (name, detail) => finishNode(name, detail),
+          },
+          timeoutMs: STREAM_TIMEOUT_MS,
         });
       } catch (e: any) {
-        if (e?.name === "AbortError") {
-          return;
-        }
+        if (e?.name === "AbortError") return;
         const errMsg: Message = {
           id: `err-${Date.now()}`,
           content: e?.message || "网络错误",
@@ -645,15 +524,20 @@ const AIAgentsPage: React.FC = () => {
           agentId: currentAgent.id,
         };
         setMessages((prev) => [...prev, errMsg]);
-      } finally {
-        clearTimeout(timeoutId);
-        streamAbortRef.current = null;
         setIsStreaming(false);
         setCurrentStreamingMessageId(null);
       }
     };
     startStream();
   };
+
+  // 停止流式响应
+  const handleStopStream = () => {
+    stopStream();
+    setIsStreaming(false);
+    setCurrentStreamingMessageId(null);
+  };
+
 
   // 聚焦输入框
   const handleFocusInput = () => {
@@ -701,29 +585,18 @@ const AIAgentsPage: React.FC = () => {
     setMessages(mapped);
   };
 
-  const handleStopStream = () => {
-    if (streamAbortRef.current) {
-      streamAbortRef.current.abort();
-    }
-    setIsStreaming(false);
-    message.info("已取消当前对话");
-  };
-
   useEffect(() => {
-    // Clean up startTime when streaming stops if needed, or keep it
     if (!isStreaming) {
-       // setStreamStartTime(null); // Optional: clear timer on stop
+       // setStreamStartTime(null);
     }
   }, [isStreaming]);
 
   // 组件卸载时中止进行中的流式请求
   useEffect(() => {
     return () => {
-      if (streamAbortRef.current) {
-        streamAbortRef.current.abort();
-      }
+      stopStream();
     };
-  }, []);
+  }, [stopStream]);
 
   // 登录处理函数
   const handleLogin = async (values: {

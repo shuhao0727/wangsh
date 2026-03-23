@@ -122,39 +122,45 @@ export function useStreamEngine() {
     };
 
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-        },
-        signal: controller.signal,
-        body: JSON.stringify(body),
+      // 使用 XHR 实现真正的流式读取
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "text/event-stream");
+        xhr.withCredentials = true;
+
+        const parser = createParser(handleEvent);
+        let processedLength = 0;
+
+        // 监听 abort 信号
+        controller.signal.addEventListener("abort", () => xhr.abort());
+
+        // 关键：onprogress 每次收到数据都触发
+        xhr.onprogress = () => {
+          const newText = xhr.responseText.substring(processedLength);
+          processedLength = xhr.responseText.length;
+          if (newText) {
+            parser.feed(newText);
+          }
+        };
+
+        xhr.onload = () => {
+          // 处理剩余数据
+          const remaining = xhr.responseText.substring(processedLength);
+          if (remaining) {
+            parser.feed(remaining);
+          }
+          if (!finished && fullText) {
+            finish();
+          }
+          resolve();
+        };
+
+        xhr.onerror = () => reject(new Error("网络错误"));
+        xhr.onabort = () => resolve();
+        xhr.send(JSON.stringify(body));
       });
-
-      if (!res.ok) {
-        callbacks.onError(`流式接口错误: HTTP ${res.status}`);
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) return;
-
-      const decoder = new TextDecoder("utf-8");
-      const parser = createParser(handleEvent);
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        parser.feed(decoder.decode(value, { stream: true }));
-      }
-
-      // 流正常结束，如果还没 finish 则兜底
-      if (!finished && fullText) {
-        finish();
-      }
     } catch (e: any) {
       if (e?.name === "AbortError") return;
       callbacks.onError(e?.message || "网络错误");
