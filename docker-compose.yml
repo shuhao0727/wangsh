@@ -35,7 +35,7 @@ x-common-with-pythonlab-env: &common-with-pythonlab-env
   PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
   PYTHONLAB_DEBUGPY_PORT: ${PYTHONLAB_DEBUGPY_PORT:-5678}
   PYTHONLAB_READINESS_TIMEOUT_SECONDS: ${PYTHONLAB_READINESS_TIMEOUT_SECONDS:-30}
-  PYTHONLAB_DEFAULT_MEMORY_MB: "32"
+  PYTHONLAB_DEFAULT_MEMORY_MB: "80"
   PYTHONLAB_ORPHAN_CLEANUP_ENABLED: ${PYTHONLAB_ORPHAN_CLEANUP_ENABLED:-true}
   PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
   PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
@@ -142,7 +142,7 @@ services:
     networks:
       - wangsh-network
       - dify_network
-    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
+    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini stamp head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
       - uploads_data:/app/uploads
@@ -255,7 +255,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 32M
+          memory: 80M
 
   frontend:
     platform: linux/amd64

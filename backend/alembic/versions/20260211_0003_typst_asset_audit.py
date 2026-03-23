@@ -43,8 +43,14 @@ def upgrade() -> None:
         END $$;
         """
     )
-    op.execute("CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_note_id_path ON inf_typst_assets(note_id, path);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_sha256 ON inf_typst_assets(sha256);")
+    op.execute("""
+        DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='inf_typst_assets') THEN
+                EXECUTE 'CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_note_id_path ON inf_typst_assets(note_id, path)';
+                EXECUTE 'CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_sha256 ON inf_typst_assets(sha256)';
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade() -> None:

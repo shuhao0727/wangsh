@@ -132,33 +132,33 @@ export const HotQuestionsPanel: React.FC = () => {
   ];
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div className="flex-1 min-h-0 flex flex-col">
       {/* 查询表单 */}
-      <div style={{ flex: "none", padding: "12px 0" }}>
+      <div className="flex-none py-3">
         <Form form={hotForm} layout="vertical" onFinish={loadHot}>
           <Row gutter={12} align="bottom">
             <Col span={6}>
-              <Form.Item name="agent_id" label="智能体" rules={[{ required: true, message: "请选择" }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="agent_id" label="智能体" rules={[{ required: true, message: "请选择" }]} className="!mb-0">
                 <Select options={agentOptions} loading={loadingAgents} placeholder="选择智能体" allowClear showSearch optionFilterProp="label" />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="range" label="时间范围" rules={[{ required: true, message: "请选择" }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="range" label="时间范围" rules={[{ required: true, message: "请选择" }]} className="!mb-0">
                 <RangePicker showTime style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={3}>
-              <Form.Item name="bucket_seconds" label="时间桶(秒)" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="bucket_seconds" label="时间桶(秒)" rules={[{ required: true }]} className="!mb-0">
                 <InputNumber min={1} style={{ width: "100%" }} placeholder="60" />
               </Form.Item>
             </Col>
             <Col span={3}>
-              <Form.Item name="top_n" label="TopN" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="top_n" label="TopN" rules={[{ required: true }]} className="!mb-0">
                 <InputNumber min={1} style={{ width: "100%" }} placeholder="10" />
               </Form.Item>
             </Col>
             <Col span={4}>
-              <Form.Item label=" " style={{ marginBottom: 0 }}>
+              <Form.Item label=" " className="!mb-0">
                 <Space>
                   <Button type="primary" onClick={() => hotForm.submit()} loading={loadingHot}>查询</Button>
                   <Button onClick={exportHot} loading={exportingHot} disabled={loadingHot}>导出</Button>
@@ -170,7 +170,7 @@ export const HotQuestionsPanel: React.FC = () => {
       </div>
 
       {/* 表格 + 分页 */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loadingHot}
           isEmpty={hotData.length === 0}
@@ -228,38 +228,38 @@ export const StudentQuestionChainsPanel: React.FC = () => {
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div className="flex-1 min-h-0 flex flex-col">
       {/* 查询表单 */}
-      <div style={{ flex: "none", padding: "12px 0" }}>
+      <div className="flex-none py-3">
         <Form form={chainForm} layout="vertical" onFinish={loadChains}>
           <Row gutter={12} align="bottom">
             <Col span={5}>
-              <Form.Item name="agent_id" label="智能体" rules={[{ required: true, message: "请选择" }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="agent_id" label="智能体" rules={[{ required: true, message: "请选择" }]} className="!mb-0">
                 <Select options={agentOptions} loading={loadingAgents} placeholder="选择智能体" allowClear showSearch optionFilterProp="label" />
               </Form.Item>
             </Col>
             <Col span={7}>
-              <Form.Item name="range" label="时间范围" rules={[{ required: true, message: "请选择" }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="range" label="时间范围" rules={[{ required: true, message: "请选择" }]} className="!mb-0">
                 <RangePicker showTime style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={3}>
-              <Form.Item name="class_name" label="班级" style={{ marginBottom: 0 }}>
+              <Form.Item name="class_name" label="班级" className="!mb-0">
                 <Input placeholder="高一(1)班" allowClear />
               </Form.Item>
             </Col>
             <Col span={3}>
-              <Form.Item name="student_id" label="学号" style={{ marginBottom: 0 }}>
+              <Form.Item name="student_id" label="学号" className="!mb-0">
                 <Input placeholder="20250001" allowClear />
               </Form.Item>
             </Col>
             <Col span={2}>
-              <Form.Item name="limit_sessions" label="会话数" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+              <Form.Item name="limit_sessions" label="会话数" rules={[{ required: true }]} className="!mb-0">
                 <InputNumber min={1} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={4}>
-              <Form.Item label=" " style={{ marginBottom: 0 }}>
+              <Form.Item label=" " className="!mb-0">
                 <Space>
                   <Button type="primary" onClick={() => chainForm.submit()} loading={loadingChains}>查询</Button>
                   <Button onClick={exportChains} loading={exportingChains} disabled={loadingChains}>导出</Button>
@@ -271,7 +271,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
       </div>
 
       {/* 表格 + 分页 */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loadingChains}
           isEmpty={chains.length === 0}
@@ -301,7 +301,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
             expandable={{
               expandedRowRender: (record: StudentSession) => (
                 <div>{record.messages.map((m) => (
-                  <div key={m.id} style={{ padding: "4px 0" }}>
+                  <div key={m.id} className="py-1">
                     <Text strong>{m.message_type === "question" ? "Q" : "A"}</Text>
                     <Text type="secondary"> {dayjs(m.created_at).format("HH:mm:ss")} </Text>
                     <Text>{m.content}</Text>

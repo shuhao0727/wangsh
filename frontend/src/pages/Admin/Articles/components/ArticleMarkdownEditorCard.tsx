@@ -60,8 +60,8 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
     <Card
       title={
         <Space size={8}>
-          <EditOutlined style={{ color: "#0EA5E9" }} />
-          <span style={{ color: "var(--ws-color-text)", fontWeight: 600 }}>编辑</span>
+          <EditOutlined className="text-primary" />
+          <span className="text-text-base font-semibold">编辑</span>
         </Space>
       }
       size="small"
@@ -85,7 +85,7 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
             </Tooltip>
           ))}
         </Space>
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
         <Radio.Group
           value={viewMode}
           onChange={(e) => onViewModeChange(e.target.value)}

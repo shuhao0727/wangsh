@@ -198,7 +198,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
               strokeDasharray={noteEdge ? "6 4" : activeEdge ? "6 3" : undefined}
               markerEnd={noteEdge ? (selected ? "url(#pyLabArrowNoteSelected)" : "url(#pyLabArrowNote)") : selected ? "url(#pyLabArrowSelected)" : activeEdge ? "url(#pyLabArrowActive)" : "url(#pyLabArrow)"}
               opacity={0.95}
-              style={{ pointerEvents: "none" }}
+              className="pointer-events-none"
             />
             {hasLabel && (
               <text
@@ -228,7 +228,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                   style={{ cursor: "grab", pointerEvents: "all" }}
                   onPointerDown={(evt) => onSourcePointerDown(evt, e.id, geom.start.x, geom.start.y)}
                 />
-                <circle cx={geom.start.x} cy={geom.start.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} style={{ pointerEvents: "none" }} />
+                <circle cx={geom.start.x} cy={geom.start.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
                 <circle
                   cx={geom.end.x}
                   cy={geom.end.y}
@@ -239,7 +239,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                   style={{ cursor: "grab", pointerEvents: "all" }}
                   onPointerDown={(evt) => onTargetPointerDown(evt, e.id, geom.end.x, geom.end.y)}
                 />
-                <circle cx={geom.end.x} cy={geom.end.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} style={{ pointerEvents: "none" }} />
+                <circle cx={geom.end.x} cy={geom.end.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
               </>
             )}
             {selected &&
@@ -270,7 +270,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                     style={{ cursor: "grab", pointerEvents: "all" }}
                     onPointerDown={(evt) => onAnchorPointerDown(evt, e.id, idx, a.x, a.y)}
                   />
-                  <circle cx={a.x} cy={a.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} style={{ pointerEvents: "none" }} />
+                  <circle cx={a.x} cy={a.y} r={6} fill="#fff" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
                 </g>
               ))}
               

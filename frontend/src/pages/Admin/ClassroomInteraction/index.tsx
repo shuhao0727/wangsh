@@ -1,30 +1,23 @@
+// 课堂互动 - 管理端
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Table,
-  Button,
-  Tag,
-  Badge,
-  Space,
-  Modal,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  Switch,
-  Popconfirm,
-  message,
-  Drawer,
-  Progress,
-  Segmented,
-  Pagination,
-  Alert,
+  Table, Button, Tag, Badge, Space, Modal, Form, Input, InputNumber,
+  Select, Switch, Popconfirm, message, Drawer, Progress, Segmented,
+  Pagination, Alert, Tooltip, Divider, Steps, Card,
 } from "antd";
 import {
   PlusOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined,
-  BarChartOutlined, EditOutlined, ReloadOutlined,
+  BarChartOutlined, EditOutlined, ReloadOutlined, RobotOutlined,
+  LeftOutlined, RightOutlined, CheckOutlined, CodeOutlined, CopyOutlined,
 } from "@ant-design/icons";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
-import { classroomApi, Activity, ActivityCreateRequest, ActivityStats, OptionItem, ActiveAgentOption } from "@services/classroom";
+import {
+  classroomApi, Activity, ActivityCreateRequest,
+  ActivityStats, OptionItem, ActiveAgentOption,
+} from "@services/classroom";
+
+// ─── 工具函数 ───
 
 const parseBlankAnswers = (raw?: string | null): string[] => {
   const text = String(raw || "").trim();
@@ -49,318 +42,231 @@ const toFillBlankPayload = (values: any): string | undefined => {
   return JSON.stringify(blanks);
 };
 
+// 从代码模板中提取 ___ 占位符数量
+const countBlanksInCode = (code: string): number => {
+  return (code.match(/___/g) || []).length;
+};
+
+// 从 options 中提取代码模板
+const extractCodeTemplate = (options: OptionItem[] | null): string => {
+  if (!Array.isArray(options)) return "";
+  const codeOpt = options.find((o) => o.key === "__code__");
+  return codeOpt?.text || "";
+};
+
+// 将代码模板打包进 options
+const packCodeTemplate = (code: string): OptionItem[] => [
+  { key: "__code__", text: code },
+];
+
 const formatCorrectAnswer = (raw?: string | null): string => {
   const blanks = parseBlankAnswers(raw);
   if (blanks.length <= 1) return String(raw || "");
   return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
 };
 
-const parseErrorMessage = (error: any): string => {
-  return String(error?.response?.data?.detail || error?.message || "操作失败");
+const parseErrorMessage = (error: any): string =>
+  String(error?.response?.data?.detail || error?.message || "操作失败");
+
+const ANALYSIS_STATUS_MAP: Record<string, { color: string; text: string }> = {
+  pending:        { color: "default",  text: "待分析" },
+  running:        { color: "blue",     text: "分析中" },
+  success:        { color: "success",  text: "分析完成" },
+  failed:         { color: "red",      text: "分析失败" },
+  skipped:        { color: "warning",  text: "已跳过" },
+  not_applicable: { color: "default",  text: "不适用" },
 };
 
-const AdminClassroomInteractionPage: React.FC = () => {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerActivity, setDrawerActivity] = useState<Activity | null>(null);
-  const [drawerStats, setDrawerStats] = useState<ActivityStats | null>(null);
-  const [activeAgents, setActiveAgents] = useState<ActiveAgentOption[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useState<number | undefined>(undefined);
-  const [analysisPrompt, setAnalysisPrompt] = useState("");
-  const [form] = Form.useForm();
+// 简单 Markdown 渲染
+const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
+  if (!text) return null;
+  return (
+    <div className="leading-relaxed text-sm text-gray-700">
+      {text.split(/\n{2}/).map((para, i) => {
+        if (para.startsWith("```")) {
+          const code = para.replace(/^```[^\n]*\n?/, "").replace(/```$/, "");
+          return <pre key={i} className="bg-gray-100 rounded-md px-3 py-2 text-xs my-2 overflow-auto">{code}</pre>;
+        }
+        return (
+          <p key={i} className="my-1.5 whitespace-pre-wrap">
+            {para.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+              part.startsWith("**") && part.endsWith("**")
+                ? <strong key={j}>{part.slice(2, -2)}</strong>
+                : part
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── 分步创建/编辑 Modal ───
+
+const STEP_TITLES = ["基本信息", "题目内容", "活动设置", "AI分析"];
+
+interface ActivityFormModalProps {
+  open: boolean;
+  editingId: number | null;
+  editingRecord: Activity | null;
+  activeAgents: ActiveAgentOption[];
+  loadingAgents: boolean;
+  onRefreshAgents: () => void;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
+  open, editingId, editingRecord, activeAgents, loadingAgents, onRefreshAgents, onClose, onSuccess,
+}) => {
+  const [step, setStep] = useState(0);
   const [activityType, setActivityType] = useState<"vote" | "fill_blank">("vote");
-  const statsTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const [codeTemplate, setCodeTemplate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [form] = Form.useForm();
 
-  const fetchList = useCallback(async () => {
-    setLoading(true);
-    try {
-      const resp = await classroomApi.list({ skip: (page - 1) * pageSize, limit: pageSize, status: statusFilter });
-      setActivities(resp.items);
-      setTotal(resp.total);
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-    setLoading(false);
-  }, [page, pageSize, statusFilter]);
-
-  useEffect(() => { fetchList(); }, [fetchList]);
-
-  const fetchActiveAgents = useCallback(async () => {
-    setLoadingAgents(true);
-    try {
-      const rows = await classroomApi.getActiveAgents();
-      setActiveAgents(rows);
-      setSelectedAgentId((prev) => {
-        if (rows.length === 0) return undefined;
-        if (prev == null) return rows[0].id;
-        if (!rows.some((row) => row.id === prev)) return rows[0].id;
-        return prev;
-      });
-    } catch (e: any) {
-      setActiveAgents([]);
-      setSelectedAgentId(undefined);
-      message.error(parseErrorMessage(e));
-    } finally {
-      setLoadingAgents(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchActiveAgents();
-  }, [fetchActiveAgents]);
-
-  const buildAnalysisConfig = () => {
-    const prompt = analysisPrompt.trim();
-    return {
-      analysis_agent_id: selectedAgentId,
-      analysis_prompt: prompt || undefined,
-    };
+  // 同步空位数量到 blank_answers
+  const syncBlankAnswers = (code: string) => {
+    const count = countBlanksInCode(code);
+    const cur: string[] = form.getFieldValue("blank_answers") || [];
+    if (count === cur.length) return;
+    const next = Array.from({ length: Math.max(count, 1) }, (_, i) => cur[i] ?? "");
+    form.setFieldValue("blank_answers", next);
   };
 
-  const handleCreate = async (values: any) => {
+  // 初始化：打开时回填或重置
+  useEffect(() => {
+    if (!open) return;
+    setStep(0);
+    if (editingRecord) {
+      const type = editingRecord.activity_type as "vote" | "fill_blank";
+      setActivityType(type);
+      const code = type === "fill_blank" ? extractCodeTemplate(editingRecord.options as OptionItem[] | null) : "";
+      setCodeTemplate(code);
+      form.resetFields();
+      form.setFieldsValue({
+        title: editingRecord.title,
+        time_limit: editingRecord.time_limit,
+        allow_multiple: editingRecord.allow_multiple,
+        correct_answer: editingRecord.correct_answer,
+        options: type === "vote" && Array.isArray(editingRecord.options) && editingRecord.options.length > 0
+          ? editingRecord.options
+          : [{ key: "A", text: "" }, { key: "B", text: "" }],
+        blank_answers: type === "fill_blank" ? parseBlankAnswers(editingRecord.correct_answer) : [""],
+        analysis_agent_id: editingRecord.analysis_agent_id ?? undefined,
+        analysis_prompt: editingRecord.analysis_prompt ?? "",
+      });
+    } else {
+      setActivityType("vote");
+      setCodeTemplate("");
+      form.resetFields();
+      form.setFieldsValue({
+        time_limit: 60, allow_multiple: false,
+        options: [{ key: "A", text: "" }, { key: "B", text: "" }],
+        blank_answers: [""],
+      });
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClose = () => {
+    form.resetFields();
+    setStep(0);
+    setActivityType("vote");
+    onClose();
+  };
+
+  const nextStep = async () => {
     try {
-      const analysisConfig = buildAnalysisConfig();
+      // 只校验当前步骤的字段
+      const fieldsToValidate: string[][] = [
+        ["title"],
+        activityType === "vote" ? ["options"] : ["blank_answers"],
+        ["time_limit"],
+        [],
+      ];
+      await form.validateFields(fieldsToValidate[step]);
+      setStep((s) => s + 1);
+    } catch {}
+  };
+
+  const handleFinish = async () => {
+    setSubmitting(true);
+    try {
+      const values = form.getFieldsValue(true);
       const data: ActivityCreateRequest = {
         activity_type: activityType,
         title: values.title,
-        time_limit: values.time_limit || 60,
-        correct_answer: activityType === "fill_blank" ? toFillBlankPayload(values) : (values.correct_answer || undefined),
+        time_limit: values.time_limit ?? 60,
+        correct_answer: activityType === "fill_blank"
+          ? toFillBlankPayload(values)
+          : (values.correct_answer || undefined),
         allow_multiple: values.allow_multiple || false,
-        analysis_agent_id: analysisConfig.analysis_agent_id,
-        analysis_prompt: analysisConfig.analysis_prompt,
+        analysis_agent_id: values.analysis_agent_id || undefined,
+        analysis_prompt: values.analysis_prompt?.trim() || undefined,
       };
-      if (activityType === "vote" && values.options) {
-        data.options = values.options.filter((o: any) => o?.text);
+      if (activityType === "vote") {
+        data.options = (values.options || []).filter((o: OptionItem) => o?.text?.trim());
+      } else if (codeTemplate.trim()) {
+        data.options = packCodeTemplate(codeTemplate.trim());
       }
       if (editingId) {
         await classroomApi.update(editingId, data);
         message.success("已更新");
       } else {
         await classroomApi.create(data);
-        message.success("已创建");
+        message.success("创建成功");
       }
-      setModalOpen(false);
-      fetchList();
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-  };
-
-  const handleStart = async (id: number) => {
-    try {
-      await classroomApi.start(id);
-      message.success("活动已开始");
-      fetchList();
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-  };
-
-  const handleEnd = async (id: number) => {
-    try {
-      await classroomApi.end(id, buildAnalysisConfig());
-      message.success("活动已结束");
-      fetchList();
-      if (drawerActivity?.id === id) refreshDrawer(id);
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-  };
-
-  const handleDelete = async (id: number) => {
-    try {
-      await classroomApi.remove(id);
-      message.success("已删除");
-      fetchList();
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-  };
-
-  const refreshDrawer = async (id: number) => {
-    try {
-      const detail = await classroomApi.getDetail(id);
-      setDrawerActivity(detail);
-      setDrawerStats(detail.stats || null);
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-  };
-
-  const openDrawer = (record: Activity) => {
-    setDrawerOpen(true);
-    refreshDrawer(record.id);
-    if (record.status === "active") {
-      statsTimerRef.current = setInterval(() => refreshDrawer(record.id), 3000);
+      handleClose();
+      onSuccess();
+    } catch (e: any) {
+      message.error(parseErrorMessage(e));
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setDrawerActivity(null);
-    setDrawerStats(null);
-    if (statsTimerRef.current) { clearInterval(statsTimerRef.current); statsTimerRef.current = undefined; }
-  };
-
-  useEffect(() => () => { if (statsTimerRef.current) clearInterval(statsTimerRef.current); }, []);
-
-  const analysisContext = drawerActivity?.analysis_context || {};
-  const riskSlots = Array.isArray(analysisContext.risk_slots) ? analysisContext.risk_slots : [];
-  const commonMistakes = Array.isArray(analysisContext.common_mistakes) ? analysisContext.common_mistakes : [];
-  const analysisStatusMap: Record<string, { color: string; text: string }> = {
-    pending: { color: "default", text: "待分析" },
-    running: { color: "blue", text: "分析中" },
-    success: { color: "success", text: "分析成功" },
-    failed: { color: "red", text: "分析失败" },
-    skipped: { color: "warning", text: "已跳过" },
-    not_applicable: { color: "default", text: "不适用" },
-  };
-  const analysisStatus = analysisStatusMap[String(drawerActivity?.analysis_status || "pending")] || analysisStatusMap.pending;
+  const footer = (
+    <div className="flex justify-between">
+      <Button onClick={step === 0 ? handleClose : () => setStep((s) => s - 1)} icon={step > 0 ? <LeftOutlined /> : undefined}>
+        {step === 0 ? "取消" : "上一步"}
+      </Button>
+      <Space>
+        {step < 3 ? (
+          <Button type="primary" onClick={nextStep} icon={<RightOutlined />} iconPosition="end">
+            下一步
+          </Button>
+        ) : (
+          <Button type="primary" loading={submitting} onClick={handleFinish} icon={<CheckOutlined />}>
+            {editingId ? "保存" : "创建"}
+          </Button>
+        )}
+      </Space>
+    </div>
+  );
 
   return (
-    <AdminPage scrollable={false}>
-      <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: 24, gap: 12 }}>
-        <div style={{ border: "1px solid #f0f0f0", borderRadius: 10, padding: 12, background: "#fafafa" }}>
-          <Space size={12} wrap style={{ width: "100%" }}>
-            <Select
-              value={selectedAgentId}
-              onChange={setSelectedAgentId}
-              placeholder={activeAgents.length > 0 ? "选择用于自动分析的智能体" : "暂无可用智能体"}
-              style={{ width: 280 }}
-              options={activeAgents.map((agent) => ({ label: agent.name, value: agent.id }))}
-              loading={loadingAgents}
-              disabled={loadingAgents || activeAgents.length === 0}
-            />
-            <Input
-              placeholder={activeAgents.length > 0 ? "可选：补充分析提示词（用于活动结束自动分析）" : "请先在智能体管理中启用至少一个智能体"}
-              value={analysisPrompt}
-              onChange={(e) => setAnalysisPrompt(e.target.value)}
-              maxLength={500}
-              style={{ flex: 1, minWidth: 260 }}
-              disabled={activeAgents.length === 0}
-            />
-            <Button icon={<ReloadOutlined />} onClick={fetchActiveAgents} loading={loadingAgents}>刷新智能体</Button>
-          </Space>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Space>
-            <Select
-              value={statusFilter}
-              onChange={(value) => {
-                setStatusFilter(value);
-                setPage(1);
-              }}
-              allowClear
-              placeholder="状态筛选"
-              style={{ width: 120 }}
-            >
-              <Select.Option value="draft">草稿</Select.Option>
-              <Select.Option value="active">进行中</Select.Option>
-              <Select.Option value="ended">已结束</Select.Option>
-            </Select>
-            <Button icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
-          </Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); setActivityType("vote"); form.resetFields(); form.setFieldsValue({ blank_answers: [""] }); setModalOpen(true); }}>
-            创建活动
-          </Button>
-        </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <AdminTablePanel
-            loading={loading}
-            isEmpty={!loading && activities.length === 0}
-            emptyDescription="暂无课堂互动活动"
-            pagination={(
-              <Pagination
-                current={page}
-                pageSize={pageSize}
-                total={total}
-                onChange={(nextPage, nextPageSize) => {
-                  if (nextPageSize && nextPageSize !== pageSize) {
-                    setPageSize(nextPageSize);
-                    setPage(1);
-                    return;
-                  }
-                  setPage(nextPage);
-                }}
-                showSizeChanger
-                showTotal={(t) => `共 ${t} 条`}
-              />
-            )}
-          >
-            <Table
-              dataSource={activities}
-              rowKey="id"
-              loading={loading}
-              pagination={false}
-              size="middle"
-              columns={[
-                { title: "ID", dataIndex: "id", width: 60 },
-                { title: "标题", dataIndex: "title", ellipsis: true },
-                {
-                  title: "类型", dataIndex: "activity_type", width: 80,
-                  render: (t: string) => <Tag color={t === "vote" ? "blue" : "green"}>{t === "vote" ? "投票" : "填空"}</Tag>,
-                },
-                {
-                  title: "状态", dataIndex: "status", width: 90,
-                  render: (s: string) => {
-                    const map: Record<string, { status: any; text: string }> = {
-                      draft: { status: "default", text: "草稿" },
-                      active: { status: "processing", text: "进行中" },
-                      ended: { status: "success", text: "已结束" },
-                    };
-                    const m = map[s] || { status: "default", text: s };
-                    return <Badge status={m.status} text={m.text} />;
-                  },
-                },
-                { title: "时限", dataIndex: "time_limit", width: 70, render: (v: number) => v > 0 ? `${v}s` : "无" },
-                { title: "参与", dataIndex: "response_count", width: 60 },
-                {
-                  title: "操作", width: 220,
-                  render: (_: any, record: Activity) => (
-                    <Space size="small">
-                      {record.status !== "active" && (
-                        <>
-                          <Button size="small" icon={<EditOutlined />} onClick={() => {
-                            setEditingId(record.id);
-                            setActivityType(record.activity_type as any);
-                            form.setFieldsValue({
-                              ...record,
-                              blank_answers: record.activity_type === "fill_blank" ? parseBlankAnswers(record.correct_answer) : undefined,
-                            });
-                            setModalOpen(true);
-                          }}>编辑</Button>
-                          {record.status === "draft" && (
-                            <>
-                              <Popconfirm title="确认开始？" onConfirm={() => handleStart(record.id)}>
-                                <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
-                              </Popconfirm>
-                              <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-                                <Button size="small" danger icon={<DeleteOutlined />} />
-                              </Popconfirm>
-                            </>
-                          )}
-                        </>
-                      )}
-                      {record.status === "active" && (
-                        <Popconfirm title="确认结束？" onConfirm={() => handleEnd(record.id)}>
-                          <Button size="small" danger icon={<StopOutlined />}>结束</Button>
-                        </Popconfirm>
-                      )}
-                      <Button size="small" icon={<BarChartOutlined />} onClick={() => openDrawer(record)}>详情</Button>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          </AdminTablePanel>
-        </div>
-      </div>
-      <Modal
-        title={editingId ? "编辑活动" : "创建活动"}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={() => form.submit()}
-        width={520}
-        destroyOnClose
+    <Modal
+      title={editingId ? "编辑活动" : "创建活动"}
+      open={open}
+      onCancel={handleClose}
+      footer={footer}
+      width={580}
+      destroyOnClose
+    >
+      <Steps
+        current={step}
+        size="small"
+        className="mb-6 mt-2"
+        items={STEP_TITLES.map((t, i) => ({ title: t, status: i < step ? "finish" : i === step ? "process" : "wait" }))}
+      />
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{ time_limit: 60, allow_multiple: false, options: [{ key: "A", text: "" }, { key: "B", text: "" }], blank_answers: [""] }}
       >
-        <Form form={form} layout="vertical" onFinish={handleCreate} initialValues={{ time_limit: 60, allow_multiple: false, options: [{ key: "A", text: "" }, { key: "B", text: "" }] }}>
-          <div style={{ marginBottom: 16 }}>
+        {/* 步骤 1：基本信息 */}
+        <div className={step === 0 ? "block" : "hidden"}>
+          <Form.Item label="活动类型" required>
             <Segmented
               value={activityType}
               onChange={(v) => {
@@ -371,201 +277,506 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   if (!Array.isArray(cur) || cur.length === 0) form.setFieldValue("blank_answers", [""]);
                 }
               }}
-              options={[{ label: "投票", value: "vote" }, { label: "填空", value: "fill_blank" }]}
+              options={[{ label: "投票 / 选择", value: "vote" }, { label: "填空", value: "fill_blank" }]}
+              className="mb-1"
             />
-          </div>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-            <Input placeholder="活动标题" maxLength={200} />
           </Form.Item>
+          <Form.Item name="title" label="活动标题" rules={[{ required: true, message: "请输入标题" }]}>
+            <Input placeholder="活动标题，填空题中可用（1）（2）标记空位" maxLength={200} />
+          </Form.Item>
+        </div>
+
+        {/* 步骤 2：题目内容 */}
+        <div className={step === 1 ? "block" : "hidden"}>
           {activityType === "vote" && (
             <>
               <Form.List name="options">
                 {(fields, { add, remove }) => (
                   <>
+                    <div className="text-xs text-gray-400 mb-2.5">至少2个选项，最多6个</div>
                     {fields.map((field, idx) => (
-                      <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
+                      <Space key={field.key} align="baseline" className="flex mb-2">
                         <Form.Item {...field} name={[field.name, "key"]} noStyle initialValue={String.fromCharCode(65 + idx)}>
                           <Input style={{ width: 40 }} disabled />
                         </Form.Item>
-                        <Form.Item {...field} name={[field.name, "text"]} noStyle rules={[{ required: true, message: "选项内容" }]}>
-                          <Input placeholder={`选项 ${String.fromCharCode(65 + idx)}`} style={{ width: 300 }} />
+                        <Form.Item {...field} name={[field.name, "text"]} noStyle rules={[{ required: true, message: "请填写选项" }]}>
+                          <Input placeholder={`选项 ${String.fromCharCode(65 + idx)}`} style={{ width: 360 }} />
                         </Form.Item>
                         {fields.length > 2 && <Button size="small" danger onClick={() => remove(field.name)}>删除</Button>}
                       </Space>
                     ))}
-                    {fields.length < 6 && <Button type="dashed" onClick={() => add({ key: String.fromCharCode(65 + fields.length), text: "" })} block icon={<PlusOutlined />}>添加选项</Button>}
+                    {fields.length < 6 && (
+                      <Button type="dashed" block icon={<PlusOutlined />}
+                        onClick={() => add({ key: String.fromCharCode(65 + fields.length), text: "" })}>
+                        添加选项
+                      </Button>
+                    )}
                   </>
                 )}
               </Form.List>
-              <Form.Item name="allow_multiple" label="允许多选" valuePropName="checked" style={{ marginTop: 12 }}>
-                <Switch />
+              <Form.Item name="correct_answer" label="正确答案（可选）" className="mt-4">
+                <Input placeholder="如 A 或 A,B（留空表示无标准答案）" />
               </Form.Item>
             </>
           )}
+          {activityType === "fill_blank" && (
+            <>
+              <div className="mb-3">
+                <div className="text-xs text-gray-500 mb-1.5 flex items-center gap-1.5">
+                  <CodeOutlined />
+                  代码片段模板（可选）— 用 <Tag color="purple" className="!mx-0.5 font-mono">___</Tag> 标记需要填写的位置
+                </div>
+                <Input.TextArea
+                  value={codeTemplate}
+                  onChange={(e) => {
+                    setCodeTemplate(e.target.value);
+                    syncBlankAnswers(e.target.value);
+                  }}
+                  placeholder={`// 示例：\ndef add(a, b):\n    return ___ + ___`}
+                  rows={8}
+                  style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace", fontSize: 13 }}
+                  className="!bg-code-bg !text-[#d4d4d4] !rounded-md"
+                  spellCheck={false}
+                />
+                {codeTemplate && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    检测到 <strong className="text-purple">{countBlanksInCode(codeTemplate)}</strong> 个空位
+                  </div>
+                )}
+              </div>
+              <Form.List name="blank_answers">
+                {(fields, { add, remove }) => (
+                  <>
+                    <div className="text-xs text-gray-400 mb-2.5">
+                      {codeTemplate ? "每个 ___ 对应一个标准答案" : "在标题中使用（1）（2）... 标记空位位置，这里填写每个空位的标准答案"}
+                    </div>
+                    {fields.map((field, idx) => (
+                      <Space key={field.key} align="baseline" className="flex mb-2">
+                        <Tag color="purple" className="min-w-[56px] text-center">空位 {idx + 1}</Tag>
+                        <Form.Item {...field} name={field.name} noStyle rules={[{ required: true, message: "请输入答案" }]}>
+                          <Input placeholder={`空位 ${idx + 1} 标准答案`} style={{ width: 360 }} />
+                        </Form.Item>
+                        {fields.length > 1 && <Button size="small" danger onClick={() => remove(field.name)}>删除</Button>}
+                      </Space>
+                    ))}
+                    {fields.length < 10 && (
+                      <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add("")}>
+                        添加空位
+                      </Button>
+                    )}
+                  </>
+                )}
+              </Form.List>
+            </>
+          )}
+        </div>
+
+        {/* 步骤 3：活动设置 */}
+        <div className={step === 2 ? "block" : "hidden"}>
+          <Form.Item name="time_limit" label="时间限制" rules={[{ required: true }]}>
+            <InputNumber min={0} max={3600} style={{ width: 180 }} addonAfter="秒" />
+          </Form.Item>
+          <div className="mb-4">
+            <div className="text-xs text-gray-500 mb-1.5">快速设置</div>
+            <Space>
+              {[30, 60, 120, 300, 0].map((v) => (
+                <Button key={v} size="small" type="dashed"
+                  onClick={() => form.setFieldValue("time_limit", v)}>
+                  {v === 0 ? "无限" : `${v}s`}
+                </Button>
+              ))}
+            </Space>
+          </div>
           {activityType === "vote" && (
-            <Form.Item name="correct_answer" label="正确答案">
-              <Input placeholder="如 A 或 A,B" />
+            <Form.Item name="allow_multiple" label="允许多选" valuePropName="checked">
+              <Switch />
             </Form.Item>
           )}
-          {activityType === "fill_blank" && (
-            <Form.List name="blank_answers">
-              {(fields, { add, remove }) => (
-                <>
-                  <div style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>
-                    在标题中可使用（1）（2）... 作为空位标记；这里配置每个空位的标准答案
-                  </div>
-                  {fields.map((field, idx) => (
-                    <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
-                      <Tag color="purple">空位 {idx + 1}</Tag>
-                      <Form.Item {...field} name={field.name} noStyle rules={[{ required: true, message: "请输入标准答案" }]}>
-                        <Input placeholder={`空位 ${idx + 1} 标准答案`} style={{ width: 320 }} />
-                      </Form.Item>
-                      {fields.length > 1 && <Button size="small" danger onClick={() => remove(field.name)}>删除</Button>}
-                    </Space>
-                  ))}
-                  {fields.length < 10 && <Button type="dashed" onClick={() => add("")} block icon={<PlusOutlined />}>添加空位</Button>}
-                </>
-              )}
-            </Form.List>
-          )}
-          <Form.Item name="time_limit" label="时间限制(秒)" rules={[{ required: true }]}>
-            <InputNumber min={0} max={3600} style={{ width: "100%" }} />
+        </div>
+
+        {/* 步骤 4：AI 分析 */}
+        <div className={step === 3 ? "block" : "hidden"}>
+          <div className="text-xs text-gray-500 mb-4">活动结束后自动触发 AI 分析（可选，跳过则不分析）</div>
+          <Form.Item name="analysis_agent_id" label="分析智能体">
+            <Select
+              placeholder={activeAgents.length > 0 ? "选择智能体" : "暂无可用智能体"}
+              allowClear
+              loading={loadingAgents}
+              disabled={loadingAgents || activeAgents.length === 0}
+              options={activeAgents.map((a) => ({ label: a.name, value: a.id }))}
+              className="w-full"
+            />
           </Form.Item>
-        </Form>
-      </Modal>
-      <Drawer
-        title={drawerActivity?.title || "活动详情"}
-        open={drawerOpen}
-        onClose={closeDrawer}
-        width={480}
-      >
+          <Form.Item name="analysis_prompt" label="补充提示词（可选）">
+            <Input.TextArea placeholder="可选：补充说明分析重点" maxLength={500} rows={3}
+              disabled={activeAgents.length === 0} />
+          </Form.Item>
+          <Button size="small" icon={<ReloadOutlined />} onClick={onRefreshAgents} loading={loadingAgents}>
+            刷新智能体列表
+          </Button>
+        </div>
+      </Form>
+    </Modal>
+  );
+};
+
+// ─── 主组件 ───
+
+const AdminClassroomInteractionPage: React.FC = () => {
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingRecord, setEditingRecord] = useState<Activity | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerActivity, setDrawerActivity] = useState<Activity | null>(null);
+  const [drawerStats, setDrawerStats] = useState<ActivityStats | null>(null);
+  const [activeAgents, setActiveAgents] = useState<ActiveAgentOption[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const statsTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await classroomApi.list({ skip: (page - 1) * pageSize, limit: pageSize, status: statusFilter });
+      let items = resp.items;
+      if (search.trim()) { const q = search.toLowerCase(); items = items.filter((a) => a.title.toLowerCase().includes(q)); }
+      if (typeFilter) { items = items.filter((a) => a.activity_type === typeFilter); }
+      setActivities(items);
+      setTotal(resp.total);
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
+    setLoading(false);
+  }, [page, pageSize, statusFilter, typeFilter, search]);
+
+  useEffect(() => { fetchList(); }, [fetchList]);
+
+  const fetchActiveAgents = useCallback(async () => {
+    setLoadingAgents(true);
+    try { setActiveAgents(await classroomApi.getActiveAgents()); }
+    catch { setActiveAgents([]); }
+    finally { setLoadingAgents(false); }
+  }, []);
+
+  useEffect(() => { fetchActiveAgents(); }, [fetchActiveAgents]);
+  useEffect(() => () => { if (statsTimerRef.current) clearInterval(statsTimerRef.current); }, []);
+
+  const openCreate = () => { setEditingId(null); setEditingRecord(null); setModalOpen(true); };
+  const openEdit = (record: Activity) => { setEditingId(record.id); setEditingRecord(record); setModalOpen(true); };
+
+  const handleStart = async (id: number) => {
+    try { await classroomApi.start(id); message.success("活动已开始"); fetchList(); }
+    catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const handleEnd = async (id: number) => {
+    const act = activities.find((a) => a.id === id) || drawerActivity;
+    try {
+      await classroomApi.end(id, { analysis_agent_id: act?.analysis_agent_id ?? undefined, analysis_prompt: act?.analysis_prompt ?? undefined });
+      message.success("活动已结束"); fetchList();
+      if (drawerActivity?.id === id) refreshDrawer(id);
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const handleDelete = async (id: number) => {
+    try { await classroomApi.remove(id); message.success("已删除"); fetchList(); }
+    catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRowKeys.length === 0) return;
+    try {
+      const result = await classroomApi.bulkRemove(selectedRowKeys);
+      const skippedCount = result.skipped.length;
+      if (skippedCount > 0) {
+        message.warning(`已删除 ${result.deleted.length} 条，${skippedCount} 条进行中无法删除`);
+      } else {
+        message.success(`已删除 ${result.deleted.length} 条`);
+      }
+      setSelectedRowKeys([]);
+      fetchList();
+    } catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const handleDuplicate = async (id: number) => {
+    try { await classroomApi.duplicate(id); message.success("已复制为新草稿"); fetchList(); }
+    catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const handleRestart = async (id: number) => {
+    try { await classroomApi.restart(id); message.success("已重新开始"); fetchList(); }
+    catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const refreshDrawer = async (id: number) => {
+    try { const d = await classroomApi.getDetail(id); setDrawerActivity(d); setDrawerStats(d.stats || null); }
+    catch (e: any) { message.error(parseErrorMessage(e)); }
+  };
+
+  const openDrawer = (record: Activity) => {
+    setDrawerOpen(true); refreshDrawer(record.id);
+    if (record.status === "active") { statsTimerRef.current = setInterval(() => refreshDrawer(record.id), 3000); }
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false); setDrawerActivity(null); setDrawerStats(null);
+    if (statsTimerRef.current) { clearInterval(statsTimerRef.current); statsTimerRef.current = undefined; }
+  };
+
+  const analysisContext = drawerActivity?.analysis_context || {};
+  const riskSlots = Array.isArray(analysisContext.risk_slots) ? analysisContext.risk_slots : [];
+  const commonMistakes = Array.isArray(analysisContext.common_mistakes) ? analysisContext.common_mistakes : [];
+  const analysisStatus = ANALYSIS_STATUS_MAP[String(drawerActivity?.analysis_status || "")] || ANALYSIS_STATUS_MAP.pending;
+
+  return (
+    <AdminPage scrollable={false}>
+      <div className="h-full flex flex-col p-6 gap-3">
+        {/* 筛选栏 */}
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <Space wrap>
+            <Input.Search
+              placeholder="搜索标题"
+              allowClear
+              style={{ width: 220 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onSearch={() => { setPage(1); fetchList(); }}
+            />
+            <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }} allowClear placeholder="状态" style={{ width: 110 }}>
+              <Select.Option value="draft">草稿</Select.Option>
+              <Select.Option value="active">进行中</Select.Option>
+              <Select.Option value="ended">已结束</Select.Option>
+            </Select>
+            <Select value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1); }} allowClear placeholder="类型" style={{ width: 100 }}>
+              <Select.Option value="vote">投票</Select.Option>
+              <Select.Option value="fill_blank">填空</Select.Option>
+            </Select>
+            <Button icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
+            {selectedRowKeys.length > 0 && (
+              <Popconfirm
+                title={`确认删除选中的 ${selectedRowKeys.length} 条活动？（只有草稿状态可被删除）`}
+                onConfirm={handleBulkDelete}
+              >
+                <Button danger icon={<DeleteOutlined />}>批量删除 ({selectedRowKeys.length})</Button>
+              </Popconfirm>
+            )}
+          </Space>
+          <Space>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>创建活动</Button>
+          </Space>
+        </div>
+
+        {/* 列表 */}
+        <div className="flex-1 min-h-0">
+          <AdminTablePanel
+            loading={loading}
+            isEmpty={!loading && activities.length === 0}
+            emptyDescription="暂无课堂互动活动"
+            pagination={
+              <Pagination
+                current={page} pageSize={pageSize} total={total}
+                onChange={(p, ps) => { if (ps !== pageSize) { setPageSize(ps); setPage(1); } else setPage(p); }}
+                showSizeChanger showTotal={(t) => `共 ${t} 条`}
+              />
+            }
+          >
+            <Table dataSource={activities} rowKey="id" loading={loading} pagination={false} size="middle"
+              rowSelection={{
+                type: "checkbox",
+                selectedRowKeys,
+                onChange: (keys) => setSelectedRowKeys(keys as number[]),
+              }}
+              columns={[
+              { title: "ID", dataIndex: "id", width: 60 },
+              { title: "标题", dataIndex: "title", ellipsis: true, width: 180 },
+              { title: "类型", dataIndex: "activity_type", width: 80,
+                render: (t: string) => <Tag color={t === "vote" ? "blue" : "green"}>{t === "vote" ? "投票" : "填空"}</Tag> },
+              { title: "状态", dataIndex: "status", width: 90,
+                render: (s: string) => {
+                  const m: Record<string, any> = { draft: ["default","草稿"], active: ["processing","进行中"], ended: ["success","已结束"] };
+                  const [status, text] = m[s] || ["default", s];
+                  return <Badge status={status} text={text} />;
+                } },
+              { title: "分析", dataIndex: "analysis_status", width: 90,
+                render: (s: string) => {
+                  if (!s) return <span className="text-gray-300">—</span>;
+                  const info = ANALYSIS_STATUS_MAP[s] || { color: "default", text: s };
+                  return <Tag color={info.color} className="text-xs">{info.text}</Tag>;
+                } },
+              { title: "时限", dataIndex: "time_limit", width: 70, render: (v: number) => v > 0 ? `${v}s` : "无限" },
+              { title: "参与", dataIndex: "response_count", width: 65,
+                render: (v: number) => <span style={{ color: v ? "#1677ff" : "#bbb", fontWeight: v ? 600 : undefined }}>{v ?? 0}</span> },
+              { title: "操作", width: 240,
+                render: (_: any, record: Activity) => {
+                  const isDraft = record.status === "draft";
+                  const isActive = record.status === "active";
+                  const isEnded = record.status === "ended";
+                  return (
+                    <Space size={4}>
+                      {!isActive && (
+                        <Tooltip title="编辑">
+                          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
+                        </Tooltip>
+                      )}
+                      {isDraft && (
+                        <Popconfirm title="确认开始？" onConfirm={() => handleStart(record.id)}>
+                          <Tooltip title="开始">
+                            <Button size="small" type="primary" icon={<PlayCircleOutlined />} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
+                      {isActive && (
+                        <Popconfirm title="确认结束活动？" onConfirm={() => handleEnd(record.id)}>
+                          <Tooltip title="结束">
+                            <Button size="small" danger icon={<StopOutlined />} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
+                      {isEnded && (
+                        <Popconfirm title="重新开始将清除所有答题记录，确认？" onConfirm={() => handleRestart(record.id)}>
+                          <Tooltip title="重新开始">
+                            <Button size="small" type="primary" icon={<PlayCircleOutlined />} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
+                      {isEnded && (
+                        <Tooltip title="复制为新草稿">
+                          <Button size="small" icon={<CopyOutlined />} onClick={() => handleDuplicate(record.id)} />
+                        </Tooltip>
+                      )}
+                      {!isActive && (
+                        <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+                          <Tooltip title="删除">
+                            <Button size="small" danger icon={<DeleteOutlined />} />
+                          </Tooltip>
+                        </Popconfirm>
+                      )}
+                      <Tooltip title="详情">
+                        <Button size="small" icon={<BarChartOutlined />} onClick={() => openDrawer(record)} />
+                      </Tooltip>
+                    </Space>
+                  );
+                } },
+            ]} />
+          </AdminTablePanel>
+        </div>
+      </div>
+
+      <ActivityFormModal
+        open={modalOpen}
+        editingId={editingId}
+        editingRecord={editingRecord}
+        activeAgents={activeAgents}
+        loadingAgents={loadingAgents}
+        onRefreshAgents={fetchActiveAgents}
+        onClose={() => setModalOpen(false)}
+        onSuccess={fetchList}
+      />
+
+      <Drawer title={drawerActivity?.title || "活动详情"} open={drawerOpen} onClose={closeDrawer} width={500}>
         {drawerActivity && (
           <div>
-            <div style={{ marginBottom: 16 }}>
+            <Space wrap className="mb-4">
               <Tag color={drawerActivity.activity_type === "vote" ? "blue" : "green"}>
                 {drawerActivity.activity_type === "vote" ? "投票" : "填空"}
               </Tag>
-              <Badge status={drawerActivity.status === "active" ? "processing" : drawerActivity.status === "ended" ? "success" : "default"} text={drawerActivity.status === "active" ? "进行中" : drawerActivity.status === "ended" ? "已结束" : "草稿"} />
+              <Badge
+                status={drawerActivity.status === "active" ? "processing" : drawerActivity.status === "ended" ? "success" : "default"}
+                text={drawerActivity.status === "active" ? "进行中" : drawerActivity.status === "ended" ? "已结束" : "草稿"}
+              />
               {drawerActivity.status === "active" && drawerActivity.remaining_seconds != null && (
-                <Tag color="orange" style={{ marginLeft: 8 }}>剩余 {drawerActivity.remaining_seconds}s</Tag>
+                <Tag color="orange">剩余 {drawerActivity.remaining_seconds}s</Tag>
               )}
-            </div>
+            </Space>
             {drawerActivity.correct_answer && (
-              <div style={{ marginBottom: 12, color: "#999", fontSize: 13 }}>正确答案：{formatCorrectAnswer(drawerActivity.correct_answer)}</div>
+              <div className="mb-3 px-2.5 py-1.5 bg-green-50 rounded-md text-sm">
+                <span className="text-green-500 font-medium">参考答案：</span>{formatCorrectAnswer(drawerActivity.correct_answer)}
+              </div>
             )}
             {drawerStats && (
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>统计 · 共 {drawerStats.total_responses} 人参与</div>
-                {drawerActivity.activity_type === "vote" && drawerStats.option_counts && drawerActivity.options && (
-                  <div>
-                    {drawerActivity.options.map((opt: OptionItem) => {
-                      const count = drawerStats.option_counts?.[opt.key] || 0;
-                      const pct = drawerStats.total_responses > 0 ? Math.round(count / drawerStats.total_responses * 100) : 0;
-                      const isCorrect = drawerActivity.correct_answer?.includes(opt.key);
-                      return (
-                        <div key={opt.key} style={{ marginBottom: 8 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 2 }}>
-                            <span style={{ color: isCorrect ? "#52c41a" : "#333" }}>{opt.key}. {opt.text}</span>
-                            <span style={{ color: "#999" }}>{count} 票 ({pct}%)</span>
-                          </div>
-                          <Progress percent={pct} showInfo={false} strokeColor={isCorrect ? "#52c41a" : "#4096ff"} size="small" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <Divider className="!my-3" />
+                <div className="text-sm font-semibold mb-2.5">答题统计（{drawerStats.total_responses} 人参与）</div>
+                {drawerActivity.activity_type === "vote" && Array.isArray(drawerActivity.options) && drawerActivity.options.map((opt) => {
+                  const count = drawerStats.option_counts?.[opt.key] || 0;
+                  const pct = drawerStats.total_responses > 0 ? Math.round(count / drawerStats.total_responses * 100) : 0;
+                  const isCorrect = drawerActivity.correct_answer?.includes(opt.key);
+                  return (
+                    <div key={opt.key} className="mb-2.5">
+                      <div className="flex justify-between text-sm mb-0.5">
+                        <span style={{ color: isCorrect ? "#52c41a" : "#333", fontWeight: isCorrect ? 600 : undefined }}>{opt.key}. {opt.text}</span>
+                        <span className="text-gray-400">{count} 票 ({pct}%)</span>
+                      </div>
+                      <Progress percent={pct} showInfo={false} strokeColor={isCorrect ? "#52c41a" : "#4096ff"} size="small" />
+                    </div>
+                  );
+                })}
                 {drawerActivity.activity_type === "fill_blank" && (
                   <div>
                     {drawerStats.correct_rate != null ? (
-                      <div style={{ textAlign: "center", padding: 20 }}>
+                      <div className="text-center p-5">
                         <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
-                        <div style={{ marginTop: 8, color: "#999" }}>整体正确率</div>
+                        <div className="mt-2 text-gray-400">整体正确率</div>
                       </div>
-                    ) : (
-                      <div style={{ marginBottom: 8, color: "#999", fontSize: 12 }}>当前暂无作答数据，可先发起活动并收集作答后再看统计。</div>
-                    )}
-                    {Array.isArray(drawerStats.blank_slot_stats) && drawerStats.blank_slot_stats.length > 0 && (
-                      <div style={{ marginTop: 4 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>空位明细</div>
-                        {drawerStats.blank_slot_stats.map((slot) => (
-                          <div key={slot.slot_index} style={{ padding: "8px 10px", border: "1px solid #f0f0f0", borderRadius: 8, marginBottom: 8 }}>
-                            <div style={{ fontSize: 13, marginBottom: 4 }}>
-                              <Tag color="purple">空位 {slot.slot_index}</Tag>
-                              标准答案：{slot.correct_answer}
-                            </div>
-                            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
-                              正确 {slot.correct_count}/{slot.total_count}（{slot.correct_rate ?? 0}%）
-                            </div>
-                            {slot.top_wrong_answers?.length > 0 && (
-                              <div style={{ fontSize: 12, color: "#999" }}>
-                                高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {Array.isArray(drawerStats.top_wrong_answers) && drawerStats.top_wrong_answers.length > 0 && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
-                        错误最多答案：{drawerStats.top_wrong_answers.slice(0, 5).map((x) => `${x.answer}(${x.count})`).join("、")}
-                      </div>
-                    )}
-                    <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                      <Tag color={analysisStatus.color}>{analysisStatus.text}</Tag>
-                      {drawerActivity.analysis_updated_at && <span style={{ color: "#999", fontSize: 12 }}>更新时间：{new Date(drawerActivity.analysis_updated_at).toLocaleString()}</span>}
-                    </div>
-                    {drawerActivity.analysis_status === "failed" && (
-                      <div style={{ marginTop: 10 }}>
-                        <Alert
-                          type="error"
-                          showIcon
-                          message="自动分析失败"
-                          description={`失败原因：${drawerActivity.analysis_error || "未知错误"}。可调整顶部AI配置后结束新活动重试。`}
-                        />
-                      </div>
-                    )}
-                    {drawerActivity.analysis_status === "skipped" && (
-                      <div style={{ marginTop: 10 }}>
-                        <Alert type="warning" showIcon message="自动分析已跳过" description="当前活动作答数据不足，系统未执行智能体分析。" />
-                      </div>
-                    )}
-                    {drawerActivity.analysis_status === "running" && (
-                      <div style={{ marginTop: 10 }}>
-                        <Alert type="info" showIcon message="自动分析进行中" description="请稍后刷新详情查看分析结论。" />
-                      </div>
-                    )}
-                    {drawerActivity.analysis_status === "success" && drawerActivity.analysis_result && (
-                      <div style={{ marginTop: 10, border: "1px solid #f0f0f0", borderRadius: 8, padding: 10, background: "#fafafa" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>AI分析结论</div>
-                        <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12, color: "#333" }}>{drawerActivity.analysis_result}</pre>
-                        {(riskSlots.length > 0 || commonMistakes.length > 0) && (
-                          <div style={{ marginTop: 10, borderTop: "1px dashed #e5e5e5", paddingTop: 10 }}>
-                            {riskSlots.length > 0 && (
-                              <div style={{ marginBottom: 6, fontSize: 12, color: "#555" }}>
-                                关键风险空位：{riskSlots.slice(0, 3).map((slot) => `空位${slot.slot_index}(${slot.correct_rate ?? 0}%)`).join("、")}
-                              </div>
-                            )}
-                            {commonMistakes.length > 0 && (
-                              <div style={{ fontSize: 12, color: "#555" }}>
-                                高频错答摘要：{commonMistakes.slice(0, 5).map((item) => `${item.answer}(${item.count})`).join("、")}
-                              </div>
-                            )}
+                    ) : <div className="text-gray-400 text-xs">暂无作答数据</div>}
+                    {Array.isArray(drawerStats.blank_slot_stats) && drawerStats.blank_slot_stats.map((slot) => (
+                      <div key={slot.slot_index} className="p-2 border border-gray-100 rounded-lg mb-2">
+                        <div className="text-sm mb-1">
+                          <Tag color="purple">空位 {slot.slot_index}</Tag>标准答案：{slot.correct_answer}
+                        </div>
+                        <Progress percent={slot.correct_rate ?? 0} size="small" format={(p) => `${p}% 正确`}
+                          strokeColor={slot.correct_rate != null && slot.correct_rate >= 60 ? "#52c41a" : "#ff4d4f"} />
+                        {slot.top_wrong_answers?.length > 0 && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
                           </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
+                )}
+                <Divider className="!mt-4 !mb-3" />
+                <div className="flex items-center gap-2 mb-2">
+                  <RobotOutlined className="text-purple" />
+                  <span className="text-sm font-semibold">AI 分析</span>
+                  <Tag color={analysisStatus.color} className="text-xs">{analysisStatus.text}</Tag>
+                  {drawerActivity.analysis_updated_at && (
+                    <span className="text-gray-300 text-xs">{new Date(drawerActivity.analysis_updated_at).toLocaleString()}</span>
+                  )}
+                </div>
+                {drawerActivity.analysis_status === "success" && drawerActivity.analysis_result && (
+                  <div className="border border-gray-100 rounded-lg px-3.5 py-2.5 bg-surface-2">
+                    <SimpleMarkdown text={drawerActivity.analysis_result} />
+                    {riskSlots.length > 0 && <div className="mt-2 text-xs" style={{ color: "#d46b08" }}>薄弱空位：{riskSlots.map((s: any) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}</div>}
+                    {commonMistakes.length > 0 && <div className="text-xs text-gray-600 mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
+                  </div>
+                )}
+                {drawerActivity.analysis_status === "failed" && (
+                  <Alert type="error" showIcon message="自动分析失败" description={`失败原因：${drawerActivity.analysis_error || "未知错误"}`} />
+                )}
+                {drawerActivity.analysis_status === "skipped" && (
+                  <Alert type="warning" showIcon message="自动分析已跳过" description="作答数据不足，已跳过分析" />
+                )}
+                {(!drawerActivity.analysis_status || drawerActivity.analysis_status === "pending") && (
+                  <div className="text-gray-300 text-xs">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
                 )}
               </div>
             )}
             {drawerActivity.status === "active" && (
               <Popconfirm title="确认结束活动？" onConfirm={() => handleEnd(drawerActivity.id)}>
-                <Button danger block style={{ marginTop: 20 }} icon={<StopOutlined />}>结束活动</Button>
+                <Button danger block className="mt-5" icon={<StopOutlined />}>结束活动</Button>
               </Popconfirm>
             )}
           </div>
         )}
       </Drawer>
+
     </AdminPage>
   );
 };

@@ -56,19 +56,19 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
   return (
     <div>
       {/* 得分概览 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, padding: "16px 20px", background: "#f6f8fa", borderRadius: 8 }}>
+      <div className="flex items-center gap-4 mb-5 px-5 py-4 bg-gray-50 rounded-lg">
         <Progress type="circle" percent={pct} size={64} strokeColor={pct >= 60 ? "#52c41a" : "#ff4d4f"} format={() => `${pct}%`} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 600 }}>
-            {data.earned_score} <span style={{ fontSize: 14, color: "#999", fontWeight: 400 }}>/ {data.total_score}</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-xl font-semibold">
+            {data.earned_score} <span className="text-sm text-gray-400 font-normal">/ {data.total_score}</span>
           </div>
-          <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>{new Date(data.created_at).toLocaleString("zh-CN")}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{new Date(data.created_at).toLocaleString("zh-CN")}</div>
         </div>
         {weakPoints.length > 0 && (
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>薄弱知识点</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
-              {weakPoints.map(p => <Tag key={p} color="warning" style={{ margin: 0 }}>{p}</Tag>)}
+          <div className="text-right flex-shrink-0">
+            <div className="text-xs text-gray-400 mb-1">薄弱知识点</div>
+            <div className="flex flex-wrap gap-1 justify-end">
+              {weakPoints.map(p => <Tag key={p} color="warning" className="!m-0">{p}</Tag>)}
             </div>
           </div>
         )}
@@ -76,9 +76,9 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
 
       {/* 雷达图 + 知识点进度条（左右布局） */}
       {kpDetails.length > 0 && (
-        <div style={{ display: "flex", gap: 20, marginBottom: 24, alignItems: "flex-start" }}>
+        <div className="flex gap-5 mb-6 items-start">
           {radarDims && (
-            <div style={{ flexShrink: 0, textAlign: "center" }}>
+            <div className="flex-shrink-0 text-center">
               {classRates ? (
                 <RadarChart series={[
                   { name: "学生水平", data: radarDims, color: "#4096ff" },
@@ -89,17 +89,17 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
               )}
             </div>
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-              <BookOutlined style={{ marginRight: 4 }} />知识点得分
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold mb-2">
+              <BookOutlined className="mr-1" />知识点得分
             </div>
             {kpDetails.map(kp => (
-              <div key={kp.name} style={{ marginBottom: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 2 }}>
+              <div key={kp.name} className="mb-1.5">
+                <div className="flex justify-between text-xs mb-0.5">
                   <span style={{ color: weakPoints.includes(kp.name) ? "#ff4d4f" : "#333" }}>{kp.name}</span>
-                  <span style={{ color: "#999" }}>
+                  <span className="text-gray-400">
                     {kp.earned}/{kp.total}
-                    {kp.classPct != null && <span style={{ marginLeft: 6, color: "#ff7a45" }}>班均{kp.classPct}%</span>}
+                    {kp.classPct != null && <span className="ml-1.5" style={{ color: "#ff7a45" }}>班均{kp.classPct}%</span>}
                   </span>
                 </div>
                 <Progress percent={kp.pct} size="small" strokeColor={kp.pct >= 60 ? "#52c41a" : "#ff4d4f"} showInfo={false} />
@@ -111,9 +111,9 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
 
       {/* AI 评语 */}
       {data.ai_summary && (
-        <div style={{ padding: "14px 20px", background: "#fafafa", borderRadius: 8, borderLeft: "3px solid #4096ff" }}>
-          <div style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>AI 评语</div>
-          <div style={{ fontSize: 14, lineHeight: 1.9, color: "#333" }}>
+        <div className="px-5 py-3.5 bg-gray-50 rounded-lg" style={{ borderLeft: "3px solid #4096ff" }}>
+          <div className="text-xs text-gray-400 mb-2">AI 评语</div>
+          <div className="text-sm leading-loose text-gray-700">
             <ReactMarkdown>{data.ai_summary}</ReactMarkdown>
           </div>
         </div>
@@ -157,14 +157,14 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
   return (
     <div>
       {/* 头部信息 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "10px 16px", background: "#f6f8fa", borderRadius: 8 }}>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      <div className="flex items-center justify-between mb-4 px-4 py-2.5 bg-gray-50 rounded-lg">
+        <div className="flex gap-1 flex-wrap">
           {sources.map(s => {
             const m = DATA_SOURCE_MAP[s];
             return <Tag key={s} color={m?.color}>{m?.label || s}</Tag>;
           })}
         </div>
-        <span style={{ fontSize: 12, color: "#999" }}>
+        <span className="text-xs text-gray-400">
           {new Date(profile.created_at).toLocaleString("zh-CN")}
           {profile.config_title && ` · ${profile.config_title}`}
         </span>
@@ -172,14 +172,14 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
 
       {/* 雷达图 */}
       {radarDims && (
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
+        <div className="text-center mb-6">
           <RadarChart dimensions={radarDims} size={260} />
         </div>
       )}
 
       {/* 画像内容 */}
       {profile.result_text && (
-        <div className="advanced-profile-md" style={{ padding: "16px 20px", background: "#fafafa", borderRadius: 8, fontSize: 14, lineHeight: 1.9, color: "#333" }}>
+        <div className="advanced-profile-md px-5 py-4 bg-gray-50 rounded-lg text-sm leading-loose text-gray-700">
           <style>{`
             .advanced-profile-md h1, .advanced-profile-md h2, .advanced-profile-md h3,
             .advanced-profile-md h4, .advanced-profile-md h5, .advanced-profile-md h6 {
@@ -204,9 +204,9 @@ interface AdvancedProfileEmptyProps {
 }
 
 export const AdvancedProfileEmpty: React.FC<AdvancedProfileEmptyProps> = ({ onGenerate, loading }) => (
-  <div style={{ textAlign: "center", padding: "40px 0" }}>
-    <div style={{ fontSize: 48, color: "#d9d9d9", marginBottom: 12 }}><ExperimentOutlined /></div>
-    <div style={{ color: "#999", marginBottom: 16 }}>尚未生成三维画像</div>
+  <div className="text-center py-10">
+    <div className="text-5xl text-gray-200 mb-3"><ExperimentOutlined /></div>
+    <div className="text-gray-400 mb-4">尚未生成三维画像</div>
     {onGenerate && (
       <Button type="primary" icon={<ExperimentOutlined />} onClick={onGenerate} loading={loading}>
         生成三维画像

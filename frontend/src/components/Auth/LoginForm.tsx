@@ -135,8 +135,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
         </Form.Item>
 
         {isAdmin && (
-          <div style={{ textAlign: "center", marginTop: "16px" }}>
-            <p style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)" }}>提示：仅支持管理员账号登录</p>
+          <div className="text-center mt-4">
+            <p className="text-xs text-text-secondary">提示：仅支持管理员账号登录</p>
           </div>
         )}
       </Form>

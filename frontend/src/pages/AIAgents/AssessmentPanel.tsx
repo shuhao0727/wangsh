@@ -431,8 +431,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         onClick={() => { if (!btnDragged.current) handleOpen(); }}
         style={{
           borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
-          boxShadow: "2px 0 8px rgba(0,0,0,0.15)",
           background: "#6366F1", borderColor: "#6366F1",
+          boxShadow: "2px 2px 8px rgba(99,102,241,0.4)",
         }}
       >
         自我评价
@@ -442,30 +442,27 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
   // ─── 渲染列表视图 ───
   const renderList = () => (
-    <div style={{ padding: 12, overflowY: "auto", flex: 1 }}>
+    <div className="overflow-auto flex-1 p-3">
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40 }}><Spin /></div>
+        <div className="text-center py-10"><Spin /></div>
       ) : availableList.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#999", padding: 40 }}>暂无可用检测</div>
+        <div className="text-center text-gray-400 py-10">暂无可用检测</div>
       ) : (
         availableList.map((item) => (
           <div
             key={item.id}
-            style={{
-              border: "1px solid #f0f0f0", borderRadius: 8, padding: 12, marginBottom: 8,
-              background: "#fafafa",
-            }}
+            className="border border-gray-100 rounded-lg p-3 mb-2 bg-surface-2"
           >
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.title}</div>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+            <div className="font-semibold mb-1">{item.title}</div>
+            <div className="text-xs text-gray-500 mb-2">
               总分 {item.total_score}
               {item.time_limit_minutes > 0 && <span> · {item.time_limit_minutes}分钟</span>}
             </div>
             {!item.session_status && (
               startingConfigId === item.id ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="flex items-center gap-2">
                   <Spin size="small" />
-                  <span style={{ fontSize: 12, color: "#6366F1" }}>AI 正在出题，请稍候...</span>
+                  <span className="text-xs text-purple">AI 正在出题，请稍候...</span>
                 </div>
               ) : (
                 <Button type="primary" size="small" onClick={() => handleStart(item.id)} disabled={startingConfigId !== null}>开始检测</Button>
@@ -475,7 +472,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               <Button size="small" onClick={() => handleContinue(item.session_id!, item.title)}>继续答题</Button>
             )}
             {item.session_status === "graded" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="flex items-center gap-2">
                 <Tag color="green">{item.earned_score}/{item.total_score} 分</Tag>
                 <Button type="link" size="small" onClick={() => handleViewResult(item.session_id!)}>查看结果</Button>
               </div>
@@ -489,7 +486,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 渲染答题视图 ───
   const renderQuiz = () => {
     const q = questions[currentIdx];
-    if (!q) return <div style={{ padding: 20 }}>加载中...</div>;
+    if (!q) return <div className="p-5">加载中...</div>;
     const result = answerResults.get(q.answer_id);
     const answered = !!result || q.is_answered;
     let options: string[] = [];
@@ -505,23 +502,23 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     }
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+      <div className="flex flex-col flex-1 overflow-hidden">
         {/* 顶部进度 */}
-        <div style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>第 {currentIdx + 1}/{questions.length} 题</span>
+        <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center">
+          <span className="font-semibold">第 {currentIdx + 1}/{questions.length} 题</span>
           {countdown && <Tag color="red">{countdown}</Tag>}
         </div>
         {/* 题号导航 */}
-        <div style={{ padding: "6px 12px", display: "flex", gap: 4, flexWrap: "wrap", borderBottom: "1px solid #f0f0f0" }}>
+        <div className="px-3 py-1.5 flex gap-1 flex-wrap border-b border-gray-100">
           {questions.map((qq, i) => {
             const done = answerResults.has(qq.answer_id) || qq.is_answered;
             return (
               <div
                 key={qq.answer_id}
                 onClick={() => { setCurrentIdx(i); setAnswerInput(""); }}
+                className="flex items-center justify-center rounded cursor-pointer text-xs"
                 style={{
-                  width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, cursor: "pointer",
+                  width: 24, height: 24,
                   background: i === currentIdx ? "#6366F1" : done ? "#10B981" : "#e5e7eb",
                   color: i === currentIdx || done ? "#fff" : "#666",
                   border: qq.is_adaptive ? "2px solid #A855F7" : "none",
@@ -533,16 +530,16 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           })}
         </div>
         {/* 题目内容 */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
-          <Tag color={q.question_type === "choice" ? "blue" : q.question_type === "fill" ? "green" : "orange"} style={{ marginBottom: 8 }}>
+        <div className="flex-1 overflow-y-auto p-3">
+          <Tag color={q.question_type === "choice" ? "blue" : q.question_type === "fill" ? "green" : "orange"} className="mb-2">
             {q.question_type === "choice" ? "选择题" : q.question_type === "fill" ? "填空题" : "简答题"} ({q.score}分)
           </Tag>
           {q.is_adaptive && (
-            <Tag color="purple" style={{ marginBottom: 8 }}>
+            <Tag color="purple" className="mb-2">
               自适应练习{q.attempt_seq && q.attempt_seq > 1 ? ` · 第${q.attempt_seq}次` : ""}
             </Tag>
           )}
-          <div style={{ fontSize: 14, marginBottom: 12, whiteSpace: "pre-wrap" }}>{q.content}</div>
+          <div className="text-sm mb-3 whitespace-pre-wrap">{q.content}</div>
 
           {/* 选择题 */}
           {q.question_type === "choice" && (
@@ -551,7 +548,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               onChange={(e) => {
                 if (!result && !submittingRef.current) handleSubmitAnswer(q.answer_id, e.target.value);
               }}
-              style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              className="flex flex-col gap-2"
             >
               {options.map((opt, i) => {
                 const letter = opt.charAt(0);
@@ -576,7 +573,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                 onPressEnter={() => !result && answerInput.trim() && handleSubmitAnswer(q.answer_id, answerInput)}
               />
               {!result && submittingAnswerId !== q.answer_id && (
-                <Button size="small" type="primary" style={{ marginTop: 8 }}
+                <Button size="small" type="primary" className="mt-2"
                   onClick={() => answerInput.trim() && handleSubmitAnswer(q.answer_id, answerInput)}
                 >提交</Button>
               )}
@@ -597,7 +594,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                 }}
               />
               {!result && answerInput.trim() && (
-                <Button size="small" style={{ marginTop: 8 }}
+                <Button size="small" className="mt-2"
                   onClick={() => handleSubmitAnswer(q.answer_id, answerInput)}
                 >保存</Button>
               )}
@@ -606,31 +603,31 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
           {/* 判题进度 */}
           {submittingAnswerId === q.answer_id && answerProgress && (
-            <div style={{ marginTop: 12, padding: 8, background: "#f0f5ff", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="mt-3 p-2 bg-blue-50 rounded-md flex items-center gap-2">
               <Spin size="small" />
-              <span style={{ fontSize: 13, color: "#6366F1" }}>{answerProgress}</span>
+              <span className="text-sm text-purple">{answerProgress}</span>
             </div>
           )}
 
           {/* 反馈 */}
           {result && (
-            <div style={{ marginTop: 12, padding: 8, background: result.is_correct ? "#f0fdf4" : "#fef2f2", borderRadius: 6 }}>
+            <div className="mt-3 p-2 rounded-md" style={{ background: result.is_correct ? "#f0fdf4" : "#fef2f2" }}>
               {result.is_correct !== null && (
-                <div style={{ marginBottom: 4 }}>
+                <div className="mb-1">
                   {result.is_correct
                     ? <span style={{ color: "#10B981" }}><CheckCircleFilled /> 正确 +{result.earned_score}分</span>
                     : <span style={{ color: "#EF4444" }}><CloseCircleFilled /> 错误 +{result.earned_score || 0}分</span>}
                 </div>
               )}
-              {result.explanation && <div style={{ fontSize: 12, color: "#666" }}>解析：{result.explanation}</div>}
-              {result.ai_feedback && <div style={{ fontSize: 12, color: "#666" }}>AI 反馈：{result.ai_feedback}</div>}
+              {result.explanation && <div className="text-xs text-gray-500">解析：{result.explanation}</div>}
+              {result.ai_feedback && <div className="text-xs text-gray-500">AI 反馈：{result.ai_feedback}</div>}
               {result.next_question && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#A855F7" }}>
+                <div className="mt-1.5 text-xs" style={{ color: "#A855F7" }}>
                   知识点「{result.next_question.knowledge_point}」已追加练习题，请继续作答
                 </div>
               )}
               {result.mastery_status === "mastered" && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#10B981" }}>
+                <div className="mt-1.5 text-xs" style={{ color: "#10B981" }}>
                   该知识点已掌握
                 </div>
               )}
@@ -638,7 +635,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           )}
         </div>
         {/* 底部导航 */}
-        <div style={{ padding: "8px 12px", borderTop: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between" }}>
+        <div className="px-3 py-2 border-t border-gray-100 flex justify-between">
           <Button size="small" icon={<LeftOutlined />} disabled={currentIdx === 0}
             onClick={() => { setCurrentIdx(currentIdx - 1); setAnswerInput(""); }}>上一题</Button>
           {currentIdx < questions.length - 1 ? (
@@ -656,24 +653,24 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
   // ─── 渲染结果视图 ───
   const renderResult = () => {
-    if (!sessionResult) return <div style={{ padding: 20, textAlign: "center" }}><Spin /></div>;
+    if (!sessionResult) return <div className="p-5 text-center"><Spin /></div>;
     const r = sessionResult;
     const pct = r.total_score > 0 ? Math.round(((r.earned_score || 0) / r.total_score) * 100) : 0;
 
     return (
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      <div className="flex-1 overflow-y-auto flex flex-col">
         {/* 顶部得分条 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", background: "linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 100%)" }}>
+        <div className="flex items-center gap-3.5 px-5 py-4" style={{ background: "linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 100%)" }}>
           <Progress type="circle" percent={pct} size={56}
             strokeColor={pct >= 60 ? "#10B981" : "#EF4444"}
-            format={() => <span style={{ fontSize: 15, fontWeight: 700, color: pct >= 60 ? "#10B981" : "#EF4444" }}>{pct}%</span>}
+            format={() => <span className="text-base font-bold" style={{ color: pct >= 60 ? "#10B981" : "#EF4444" }}>{pct}%</span>}
           />
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>
+            <div className="text-2xl font-bold">
               {r.earned_score ?? 0}
-              <span style={{ fontSize: 13, color: "#999", fontWeight: 400 }}> / {r.total_score}</span>
+              <span className="text-sm text-gray-400 font-normal"> / {r.total_score}</span>
             </div>
-            <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
+            <div className="text-xs text-gray-400 mt-0.5">
               {r.submitted_at ? new Date(r.submitted_at).toLocaleString("zh-CN") : ""}
             </div>
           </div>
@@ -681,7 +678,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
         {/* 画像生成进度条 */}
         {profileProgress > 0 && profileProgress < 100 && (
-          <div style={{ padding: "8px 20px 0" }}>
+          <div className="px-5 pt-2">
             <Progress
               percent={profileProgress}
               size="small"
@@ -693,31 +690,31 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
         {/* Tab 区域 */}
         <Tabs activeKey={resultTab} onChange={setResultTab}
-          style={{ flex: 1, display: "flex", flexDirection: "column" }}
+          className="flex-1 flex flex-col"
           tabBarStyle={{ padding: "0 16px", marginBottom: 0 }}
           items={[
             {
               key: "detail",
               label: "答题详情",
               children: (
-                <div style={{ padding: "12px 16px", overflowY: "auto" }}>
+                <div className="px-4 py-3 overflow-y-auto">
                   <Collapse size="small" items={r.answers.map((a, i) => ({
                     key: a.id,
                     label: (
                       <span>
                         第{i + 1}题
-                        {a.is_correct === true && <CheckCircleFilled style={{ color: "#10B981", marginLeft: 4 }} />}
-                        {a.is_correct === false && <CloseCircleFilled style={{ color: "#EF4444", marginLeft: 4 }} />}
-                        <span style={{ marginLeft: 4, fontSize: 12, color: "#999" }}>+{a.earned_score || 0}/{a.max_score}</span>
+                        {a.is_correct === true && <CheckCircleFilled className="ml-1" style={{ color: "#10B981" }} />}
+                        {a.is_correct === false && <CloseCircleFilled className="ml-1" style={{ color: "#EF4444" }} />}
+                        <span className="ml-1 text-xs text-gray-400">+{a.earned_score || 0}/{a.max_score}</span>
                       </span>
                     ),
                     children: (
-                      <div style={{ fontSize: 13 }}>
-                        <div style={{ marginBottom: 4 }}>{a.content}</div>
+                      <div className="text-sm">
+                        <div className="mb-1">{a.content}</div>
                         <div>我的答案：<span style={{ color: a.is_correct ? "#10B981" : "#EF4444" }}>{a.student_answer || "未作答"}</span></div>
                         <div>正确答案：{a.correct_answer}</div>
-                        {a.explanation && <div style={{ color: "#666", marginTop: 4 }}>解析：{a.explanation}</div>}
-                        {a.ai_feedback && <div style={{ color: "#666", marginTop: 2 }}>AI 反馈：{a.ai_feedback}</div>}
+                        {a.explanation && <div className="text-gray-500 mt-1">解析：{a.explanation}</div>}
+                        {a.ai_feedback && <div className="text-gray-500 mt-0.5">AI 反馈：{a.ai_feedback}</div>}
                       </div>
                     ),
                   }))} />
@@ -728,11 +725,11 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               key: "basic",
               label: "初级画像",
               children: (
-                <div style={{ padding: "16px", overflowY: "auto" }}>
+                <div className="p-4 overflow-y-auto">
                   {basicProfile ? (
                     <BasicProfileView data={basicProfile} />
                   ) : (
-                    <div style={{ color: "#999", textAlign: "center", padding: 40 }}>暂无画像数据</div>
+                    <div className="text-gray-400 text-center py-10">暂无画像数据</div>
                   )}
                 </div>
               ),
@@ -741,13 +738,11 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               key: "advanced",
               label: "三维画像",
               children: (
-                <div style={{ padding: "16px", overflowY: "auto" }}>
+                <div className="p-4 overflow-y-auto">
                   {advancedProfiles.length > 0 ? (
-                    advancedProfiles.map((p) => (
-                      <div key={p.id} style={{ marginBottom: 16 }}>
-                        <AdvancedProfileView profile={p} />
-                      </div>
-                    ))
+                    <div className="mb-4">
+                      <AdvancedProfileView profile={advancedProfiles[0]} />
+                    </div>
                   ) : (
                     <AdvancedProfileEmpty />
                   )}
@@ -763,42 +758,39 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 渲染窗口 ───
   const renderWindow = () => (
     <div
+      className="flex flex-col overflow-hidden"
       style={{
         position: "fixed", left: pos.x, top: pos.y,
         width: size.w, height: size.h,
         background: "#fff", borderRadius: 12,
         boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        display: "flex", flexDirection: "column",
-        zIndex: 1001, overflow: "hidden",
+        zIndex: 1001,
         resize: "both", minWidth: 320, minHeight: 400,
       }}
     >
       {/* 头部 */}
       <div
-        style={{
-          padding: "8px 12px", background: "#6366F1", color: "#fff",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          cursor: "move", userSelect: "none",
-        }}
+        className="flex justify-between items-center px-3 py-2 select-none text-white bg-purple"
+        style={{ cursor: pinned ? 'default' : 'move' }}
         onPointerDown={handleDragStart}
         onPointerMove={handleDragMove}
         onPointerUp={handleDragEnd}
       >
-        <span style={{ fontWeight: 600, fontSize: 14 }}>
-          {view === "list" ? "自主检测" : view === "quiz" ? configTitle : "检测结果"}
+        <span className="font-semibold text-sm">
+          {view === "list" ? "自我评价" : view === "quiz" ? configTitle : "自我评价"}
         </span>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div className="flex gap-1" onPointerDown={e => e.stopPropagation()}>
           {view !== "list" && view !== "quiz" && (
-            <Button type="text" size="small" icon={<LeftOutlined />} style={{ color: "#fff" }}
+            <Button type="text" size="small" icon={<LeftOutlined />} className="!text-white"
               onClick={() => setView("list")} />
           )}
-          <Button type="text" size="small" style={{ color: "#fff" }}
+          <Button type="text" size="small" className="!text-white"
             icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
             onClick={() => { const v = !pinned; setPinned(v); try { localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, String(v)); } catch {} }} />
-          <Button type="text" size="small" icon={<ReloadOutlined />} style={{ color: "#fff" }}
+          <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white"
             onClick={() => { if (view === "list") loadAvailable(); }} />
           <Tooltip title={view === "quiz" ? "自我检查中不可关闭，请先提交" : ""}>
-            <Button type="text" size="small" icon={<CloseOutlined />} style={{ color: "#fff" }}
+            <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white"
               disabled={view === "quiz"}
               onClick={() => setOpen(false)} />
           </Tooltip>
@@ -817,12 +809,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     <>
       {/* 答题时遮罩：模糊背景 + 禁止交互 */}
       {isQuizzing && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 999,
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          background: "rgba(0,0,0,0.15)",
-        }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 999, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", background: "rgba(0,0,0,0.15)" }} />
       )}
       {floatingBtn}
       {open && renderWindow()}

@@ -57,14 +57,14 @@ const AdminAgentData: React.FC = () => {
 
   return (
     <AdminPage padding={24} scrollable={false}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, gap: 0 }}>
+      <div className="flex flex-col h-full min-h-0">
         {/* 统计卡片 */}
-        <div style={{ flex: "none" }}>
+        <div className="flex-none">
           <StatisticsCards data={statistics} />
         </div>
 
         {/* Tab 导航 */}
-        <div style={{ flex: "none" }}>
+        <div className="flex-none">
           <Tabs
             activeKey={activeTabKey}
             onChange={handleTabChange}
@@ -73,12 +73,12 @@ const AdminAgentData: React.FC = () => {
               { key: "hot", label: "热点问题" },
               { key: "chains", label: "学生提问链条" },
             ]}
-            style={{ marginBottom: 0 }}
+            className="!mb-0"
           />
         </div>
 
         {/* 内容面板 — 占满剩余空间 */}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div className="flex-1 min-h-0 flex flex-col">
           {activeTabKey === "usage" && <UsageRecordPanel />}
           {activeTabKey === "hot" && <HotQuestionsPanel />}
           {activeTabKey === "chains" && <StudentQuestionChainsPanel />}

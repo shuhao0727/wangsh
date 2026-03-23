@@ -177,16 +177,10 @@ const UserMenu: React.FC<UserMenuProps> = ({
     // avatar模式下，添加点击事件来触发登录弹窗
     return (
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          cursor: "pointer",
-          ...style,
-        }}
+        className="flex items-center cursor-pointer"
         onClick={(e) => {
           logger.debug("UserMenu - 点击未登录区域");
-          e.stopPropagation(); // 防止事件冒泡
-          // 触发菜单点击事件
+          e.stopPropagation();
           if (onMenuClick) {
             logger.debug("UserMenu - 调用 onMenuClick('login')");
             onMenuClick("login");
@@ -199,7 +193,8 @@ const UserMenu: React.FC<UserMenuProps> = ({
         <Avatar
           size="default"
           icon={<UserOutlined />}
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.08)", marginRight: showName ? 8 : 0 }}
+          style={{ backgroundColor: "rgba(0,0,0,0.08)" }}
+          className={showName ? "mr-2" : ""}
         />
         {showName && <Text>未登录</Text>}
       </div>
@@ -211,25 +206,17 @@ const UserMenu: React.FC<UserMenuProps> = ({
 
   // 用户信息显示
   const userInfo = (
-    <div style={{ display: "flex", alignItems: "center", ...style }}>
+    <div className="flex items-center">
       <Avatar
         size={mode === "button" ? "small" : "default"}
         icon={<UserOutlined />}
-        style={{
-          backgroundColor: getAvatarColor(),
-          marginRight: showName ? 8 : 0,
-        }}
+        style={{ backgroundColor: getAvatarColor() }}
+        className={showName ? "mr-2" : ""}
       />
       {showName && (
-        <div
-          style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}
-        >
-          <Text strong style={{ fontSize: "14px" }}>
-            {getDisplayName()}
-          </Text>
-          <Text type="secondary" style={{ fontSize: "12px" }}>
-            {getRoleText()}
-          </Text>
+        <div className="flex flex-col leading-tight">
+          <Text strong className="text-sm">{getDisplayName()}</Text>
+          <Text type="secondary" className="text-xs">{getRoleText()}</Text>
         </div>
       )}
     </div>
@@ -238,16 +225,14 @@ const UserMenu: React.FC<UserMenuProps> = ({
   if (mode === "button") {
     return (
       <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-        <Button type="text" style={{ padding: "4px 8px", ...style }}>
-          {userInfo}
-        </Button>
+        <Button type="text" className="!px-2 !py-1">{userInfo}</Button>
       </Dropdown>
     );
   }
 
   return (
     <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-      <div style={{ cursor: "pointer" }}>{userInfo}</div>
+      <div className="cursor-pointer">{userInfo}</div>
     </Dropdown>
   );
 };

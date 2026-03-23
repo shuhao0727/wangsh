@@ -245,13 +245,13 @@ const TypstNotesPanel: React.FC = () => {
             style={{ marginBottom: 10 }}
           />
           {listLoading ? (
-            <div style={{ textAlign: "center", padding: 16 }}>
+            <div className="text-center p-4">
               <Spin />
             </div>
           ) : items.length === 0 ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无笔记" />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 220px)", overflow: "auto" }}>
+            <div className="flex flex-col gap-2 max-h-[calc(100vh-220px)] overflow-auto">
               {items.map((it) => (
                 <div
                   key={it.id}
@@ -273,7 +273,7 @@ const TypstNotesPanel: React.FC = () => {
                   <Text strong ellipsis>
                     {it.title}
                   </Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" className="text-xs">
                     更新：{new Date(it.updated_at).toLocaleString()}
                   </Text>
                 </div>
@@ -283,7 +283,7 @@ const TypstNotesPanel: React.FC = () => {
         </Card>
       </div>
 
-      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="min-w-0 flex flex-col gap-4">
         <Card
           size="small"
           title={
@@ -312,7 +312,7 @@ const TypstNotesPanel: React.FC = () => {
           styles={{ body: { padding: 12 } }}
         >
           {noteLoading ? (
-            <div style={{ textAlign: "center", padding: 24 }}>
+            <div className="text-center p-6">
               <Spin />
             </div>
           ) : !selectedId ? (
@@ -352,17 +352,10 @@ const TypstNotesPanel: React.FC = () => {
 
                 <Card size="small" title="实时预览（WASM）" style={{ borderRadius: 10, border: "none" }} styles={{ body: { padding: 10 } }}>
                   <div
-                    style={{
-                      minHeight: 420,
-                      borderRadius: 10,
-                      border: "1px solid rgba(0,0,0,0.04)",
-                      background: "#FAFAFA",
-                      overflow: "auto",
-                      padding: 10,
-                    }}
+                    className="min-h-[420px] rounded-xl border border-black/[0.04] bg-surface-2 overflow-auto p-2.5"
                   >
                     {svgLoading ? (
-                      <div style={{ textAlign: "center", padding: 24 }}>
+                      <div className="text-center p-6">
                         <Spin />
                       </div>
                     ) : svg ? (

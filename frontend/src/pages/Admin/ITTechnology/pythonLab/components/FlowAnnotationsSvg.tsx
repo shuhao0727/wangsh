@@ -143,7 +143,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
 
              {/* Text Content */}
              {!isEditing && (
-                 <foreignObject x={8} y={8} width={w - 16} height={h - 16} style={{ pointerEvents: "none" }}>
+                 <foreignObject x={8} y={8} width={w - 16} height={h - 16} className="pointer-events-none">
                      <div style={{ 
                          width: "100%", 
                          height: "100%", 

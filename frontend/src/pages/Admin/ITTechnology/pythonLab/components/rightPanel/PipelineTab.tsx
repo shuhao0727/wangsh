@@ -44,7 +44,7 @@ export function PipelineTab(props: {
     <>
       <div style={{ height: "100%", overflow: "auto", padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexShrink: 0 }}>
-          <div style={{ fontWeight: 600 }}>完整流程图参考</div>
+          <div className="font-semibold">完整流程图参考</div>
           <Space>
             <Button size="small" onClick={() => onRefreshBeautify?.()}>
               刷新

@@ -13,61 +13,41 @@ type Props = {
 };
 
 const AdminTablePanel: React.FC<Props> = ({
-  title,
-  extra,
-  loading = false,
-  isEmpty = false,
-  emptyDescription,
-  emptyAction,
-  children,
-  pagination,
-}) => {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {(title || extra) && (
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center", 
-          padding: "12px 24px",
-          borderBottom: "none" // Remove divider
-        }}>
-          {title && <div style={{ fontSize: 16, fontWeight: 600 }}>{title}</div>}
-          {extra && <div>{extra}</div>}
+  title, extra, loading = false, isEmpty = false,
+  emptyDescription, emptyAction, children, pagination,
+}) => (
+  <div className="flex flex-col h-full overflow-hidden">
+    {(title || extra) && (
+      <div className="flex items-center justify-between px-6 py-3">
+        {title && <div className="text-base font-semibold">{title}</div>}
+        {extra && <div>{extra}</div>}
+      </div>
+    )}
+
+    <div className="flex-1 overflow-hidden flex flex-col">
+      {loading ? (
+        <div className="flex items-center justify-center h-full">
+          <Spin size="large" />
+        </div>
+      ) : isEmpty ? (
+        <div className="flex items-center justify-center h-full">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription}>
+            {emptyAction}
+          </Empty>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          {children}
         </div>
       )}
-      
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
-            <Spin size="large" />
-          </div>
-        ) : isEmpty ? (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription}>
-              {emptyAction}
-            </Empty>
-          </div>
-        ) : (
-          <div style={{ flex: 1, overflow: "auto", padding: 0 }}>
-             {children}
-          </div>
-        )}
-      </div>
-      
-      {pagination ? (
-        <div style={{
-          padding: "12px 24px",
-          borderTop: "1px solid rgba(0,0,0,0.04)",
-          display: "flex",
-          justifyContent: "flex-end",
-          background: "transparent"
-        }}>
-          {pagination}
-        </div>
-      ) : null}
     </div>
-  );
-};
+
+    {pagination && (
+      <div className="flex justify-end px-6 py-3 border-t border-black/[0.04]">
+        {pagination}
+      </div>
+    )}
+  </div>
+);
 
 export default AdminTablePanel;

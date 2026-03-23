@@ -66,9 +66,9 @@ const ArticleEditorPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", padding: "120px 0" }}>
+      <div className="text-center py-28">
         <Spin size="large" />
-        <div style={{ marginTop: 12 }}>加载中...</div>
+        <div className="mt-3">加载中...</div>
       </div>
     );
   }

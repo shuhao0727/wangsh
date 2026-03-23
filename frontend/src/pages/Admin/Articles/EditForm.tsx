@@ -386,8 +386,8 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                   </Col>
                 </Row>
                 {isCreateMode && (
-                  <div style={{ textAlign: "center", marginTop: 12 }}>
-                    <Text type="secondary" style={{ fontSize: "12px" }}>
+                  <div className="text-center mt-3">
+                    <Text type="secondary" className="text-xs">
                       保存后文章将出现在文章列表中
                     </Text>
                   </div>
@@ -401,7 +401,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
               <Row gutter={16}>
                 <Col xs={24} lg={12}>
                   <Form.Item
-                    label={<span style={{ fontWeight: 500 }}>文章标题</span>}
+                    label={<span className="font-medium">文章标题</span>}
                     name="title"
                     rules={[
                       { required: true, message: "请输入文章标题" },
@@ -413,13 +413,13 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                 </Col>
 
                 <Col xs={12} lg={6}>
-                  <Form.Item name="published" label={<span style={{ fontWeight: 500 }}>发布状态</span>} valuePropName="checked">
+                  <Form.Item name="published" label={<span className="font-medium">发布状态</span>} valuePropName="checked">
                     <Switch checkedChildren="发布" unCheckedChildren="草稿" />
                   </Form.Item>
                 </Col>
 
                 <Col xs={12} lg={6}>
-                  <Form.Item label={<span style={{ fontWeight: 500 }}>分类</span>} name="category_id">
+                  <Form.Item label={<span className="font-medium">分类</span>} name="category_id">
                     <Select placeholder="选择分类" allowClear loading={loading} style={{ width: "100%" }}>
                       {categories.map((category) => (
                         <Option key={category.id} value={category.id}>
@@ -431,7 +431,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                 </Col>
 
                 <Col span={24}>
-                  <Form.Item label={<span style={{ fontWeight: 500 }}>文章摘要</span>} name="summary" rules={[{ max: 500, message: "摘要不能超过500个字符" }]}>
+                  <Form.Item label={<span className="font-medium">文章摘要</span>} name="summary" rules={[{ max: 500, message: "摘要不能超过500个字符" }]}>
                     <TextArea placeholder="请输入文章摘要" rows={2} maxLength={500} showCount />
                   </Form.Item>
                 </Col>
@@ -480,8 +480,8 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
                 </Col>
               </Row>
               {isCreateMode && (
-                <div style={{ textAlign: "center", marginTop: 12 }}>
-                  <Text type="secondary" style={{ fontSize: "12px" }}>
+                <div className="text-center mt-3">
+                  <Text type="secondary" className="text-xs">
                     保存后文章将出现在文章列表中
                   </Text>
                 </div>

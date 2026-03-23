@@ -86,10 +86,10 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
   const offsetX = -bounds.minX * scale + 50;
   const offsetY = -bounds.minY * scale + 50;
 
-  if (loading) return <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center" }}><Spin /></div>;
+  if (loading) return <div className="h-[400px] flex items-center justify-center"><Spin /></div>;
 
   return (
-    <div style={{ height: 400, position: "relative", overflow: "hidden", background: "#FAFAFA", border: "1px solid rgba(0, 0, 0, 0.08)" }}>
+    <div className="h-[400px] relative overflow-hidden rounded bg-surface-2" style={{ border: "1px solid rgba(0,0,0,0.08)" }}>
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
         <FlowEdgesSvg
           edges={layoutEdges}
@@ -169,10 +169,10 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
       draggable
       scrollable={false}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
+      <div className="flex flex-col gap-4 h-full">
         <>
           {type === "code" ? (
-              <div style={{ flex: 1, minHeight: 360, border: "1px solid rgba(0, 0, 0, 0.08)", position: "relative" }}>
+              <div className="flex-1 relative rounded" style={{ minHeight: 360, border: "1px solid rgba(0,0,0,0.08)" }}>
                 <DiffEditor
                   original={typeof originalContent === "string" ? originalContent : ""}
                   modified={typeof optimizedContent === "string" ? optimizedContent : ""}
@@ -186,28 +186,18 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                   }}
                 />
                 {loading ? (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "rgba(255, 255, 255, 0.72)",
-                      zIndex: 2,
-                    }}
-                  >
+                  <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "rgba(255,255,255,0.72)" }}>
                     <Spin tip="AI 正在思考优化方案...">
-                      <div style={{ padding: 50 }} />
+                      <div className="p-12" />
                     </Spin>
                   </div>
                 ) : null}
               </div>
           ) : (
-            <div style={{ flex: 1, minHeight: 360, position: "relative" }}>
+            <div className="flex-1 relative" style={{ minHeight: 360 }}>
               <Tabs
                 defaultActiveKey="optimized"
-                style={{ height: "100%" }}
+                className="h-full"
                 items={[
                   {
                     key: "original",
@@ -222,19 +212,9 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                 ]}
               />
               {loading ? (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(255, 255, 255, 0.72)",
-                    zIndex: 2,
-                  }}
-                >
+                <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "rgba(255,255,255,0.72)" }}>
                   <Spin tip="AI 正在思考优化方案...">
-                    <div style={{ padding: 50 }} />
+                    <div className="p-12" />
                   </Spin>
                 </div>
               ) : null}
@@ -253,7 +233,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <div className="flex justify-end gap-2">
             <Button onClick={onRegenerate}>重新生成</Button>
             <Button onClick={onDiscard}>放弃</Button>
             <Button type="primary" onClick={onApply}>

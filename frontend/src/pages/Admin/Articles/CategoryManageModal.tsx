@@ -160,7 +160,7 @@ const CategoryEditForm: React.FC<{
       </Form.Item>
 
       <Divider />
-      <div style={{ textAlign: "right" }}>
+      <div className="text-right">
         <Space>
           <Button onClick={onCancel}>取消</Button>
           <Button type="primary" htmlType="submit" loading={submitting}>
@@ -184,8 +184,8 @@ const getCategoryColumns = (
     width: 200,
     render: (text: string, record: CategoryWithUsage) => (
       <div>
-        <div style={{ fontWeight: "bold" }}>{text}</div>
-        <div style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)" }}>{record.slug}</div>
+        <div className="font-bold">{text}</div>
+        <div className="text-xs text-text-secondary">{record.slug}</div>
       </div>
     ),
   },
@@ -195,7 +195,7 @@ const getCategoryColumns = (
     key: "description",
     width: 250,
     render: (description: string) => (
-      <div style={{ color: "var(--ws-color-text-secondary)" }}>
+      <div className="text-text-secondary">
         {description || <Text type="secondary">暂无描述</Text>}
       </div>
     ),
@@ -206,7 +206,7 @@ const getCategoryColumns = (
     key: "article_count",
     width: 120,
     render: (count: number) => (
-      <Tag color={count > 0 ? "blue" : "default"} style={{ fontSize: "14px" }}>
+      <Tag color={count > 0 ? "blue" : "default"} className="text-sm">
         <FileTextOutlined /> {count} 篇
       </Tag>
     ),
@@ -218,10 +218,10 @@ const getCategoryColumns = (
     width: 150,
     render: (date: string) => (
       <div>
-        <div style={{ fontSize: "12px" }}>
+        <div className="text-xs">
           {dayjs(date).format("YYYY-MM-DD")}
         </div>
-        <div style={{ fontSize: "10px", color: "var(--ws-color-text-secondary)" }}>
+        <div className="text-[10px] text-text-secondary">
           {dayjs(date).format("HH:mm")}
         </div>
       </div>
@@ -247,7 +247,7 @@ const getCategoryColumns = (
               <div>
                 <div>确定要删除这个分类吗？</div>
                 <div
-                  style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)", marginTop: "4px" }}
+                  className="text-xs mt-1 text-text-secondary"
                 >
                   删除后不可恢复
                 </div>
@@ -556,8 +556,8 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     <>
       <Modal
         title={
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <FolderOutlined style={{ marginRight: "8px" }} />
+          <div className="flex items-center">
+            <FolderOutlined className="mr-2" />
             <span>分类管理</span>
           </div>
         }
@@ -574,7 +574,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
           {/* 搜索和操作栏 */}
           <Card
             size="small"
-            style={{ marginBottom: "16px" }}
+            className="mb-4"
             styles={{ body: { padding: "16px" } }}
           >
             <Row gutter={16} align="middle">
@@ -620,7 +620,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
             <Card
               title="高级筛选"
               size="small"
-              style={{ marginBottom: "16px" }}
+              className="mb-4"
               extra={
                 <Button
                   type="link"
@@ -639,14 +639,11 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
           {selectedRowKeys.length > 0 && (
             <Card
               size="small"
-              style={{ marginBottom: "16px", background: "rgba(14, 165, 233, 0.06)" }}
+              className="mb-4"
+              style={{ background: "rgba(14, 165, 233, 0.06)" }}
             >
               <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
+                className="flex justify-between items-center"
               >
                 <div>
                   <Text>
@@ -664,7 +661,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
           {/* 分类表格 */}
           <Card>
             {loading ? (
-              <div style={{ textAlign: "center", padding: "40px" }}>
+              <div className="text-center py-10">
                 <Spin size="large" />
               </div>
             ) : categories.length === 0 ? (
@@ -687,7 +684,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                   scroll={{ x: 1000 }}
                   size="middle"
                 />
-                <div style={{ marginTop: "24px", textAlign: "center" }}>
+                <div className="mt-6 text-center">
                   <Pagination
                     current={currentPage}
                     pageSize={pageSize}

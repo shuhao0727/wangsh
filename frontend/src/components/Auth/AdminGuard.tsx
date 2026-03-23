@@ -24,7 +24,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
 
   if (auth.isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
+      <div className="flex items-center justify-center min-h-screen">
         <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
       </div>
     );
@@ -36,7 +36,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
 
   if (!auth.isAdmin()) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
+      <div className="flex items-center justify-center min-h-screen">
         <Result
           status="403"
           title="权限不足"

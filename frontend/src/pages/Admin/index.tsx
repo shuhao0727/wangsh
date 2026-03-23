@@ -133,7 +133,7 @@ const AdminPage: React.FC = () => {
   // 如果正在加载或不是管理员，显示加载中
   if (auth.isLoading || loading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
+      <div className="text-center py-24">
         <Spin size="large" tip="加载管理员面板..." />
       </div>
     );
@@ -218,14 +218,14 @@ const AdminPage: React.FC = () => {
           description="您没有权限访问后端管理页面。只有超级管理员可以访问此页面。"
           type="error"
           showIcon
-          style={{ marginBottom: "24px" }}
+          className="mb-6"
         />
       )}
 
       {/* 系统概览统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} sm={12} md={8} lg={6}>
-          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
+          <div className="bg-gray-50 rounded-xl p-5">
             <Statistic
               title="总用户数"
               value={stats.totalUsers}
@@ -235,7 +235,7 @@ const AdminPage: React.FC = () => {
           </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
+          <div className="bg-gray-50 rounded-xl p-5">
             <Statistic
               title="活跃用户"
               value={stats.activeUsers}
@@ -245,7 +245,7 @@ const AdminPage: React.FC = () => {
           </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
+          <div className="bg-gray-50 rounded-xl p-5">
             <Statistic
               title="管理员数量"
               value={stats.superAdmins}
@@ -255,7 +255,7 @@ const AdminPage: React.FC = () => {
           </div>
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
-          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 20 }}>
+          <div className="bg-gray-50 rounded-xl p-5">
             <Statistic
               title="数据库大小"
               value={stats.databaseSize}
@@ -267,7 +267,7 @@ const AdminPage: React.FC = () => {
       </Row>
 
       {/* 管理功能标签页 */}
-      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", paddingTop: 24 }}>
+      <div className="border-t border-black/5 pt-6">
       <Tabs
         defaultActiveKey="users"
         size="large"
@@ -281,9 +281,9 @@ const AdminPage: React.FC = () => {
               </span>
             ),
             children: (
-              <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <span style={{ fontSize: 16, fontWeight: 600 }}>用户列表</span>
+              <div className="bg-gray-50 rounded-xl p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-base font-semibold">用户列表</span>
                   <Button type="primary" icon={<UserOutlined />}>
                     添加用户
                   </Button>
@@ -309,8 +309,8 @@ const AdminPage: React.FC = () => {
             children: (
               <Row gutter={[16, 16]}>
                 <Col xs={24} lg={12}>
-                  <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
-                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>API 统计</div>
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <div className="text-base font-semibold mb-4">API 统计</div>
                     <Descriptions column={1}>
                       <Descriptions.Item label="总请求数">
                         <Tag color="blue">{stats.apiRequests}</Tag>
@@ -329,8 +329,8 @@ const AdminPage: React.FC = () => {
                   </div>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
-                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>API 配置</div>
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <div className="text-base font-semibold mb-4">API 配置</div>
                     <Descriptions column={1}>
                       <Descriptions.Item label="JWT 有效期">
                         8天 (11520分钟)
@@ -366,8 +366,8 @@ const AdminPage: React.FC = () => {
               </span>
             ),
             children: (
-              <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
-                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>系统配置</div>
+              <div className="bg-gray-50 rounded-xl p-6">
+                <div className="text-base font-semibold mb-4">系统配置</div>
                 <Descriptions title="环境配置" column={2}>
                   <Descriptions.Item label="后端服务">
                     <Tag color="blue">{window.location.origin}{"/api/v1"}</Tag>
@@ -400,9 +400,9 @@ const AdminPage: React.FC = () => {
       </div>
 
       {/* 管理员信息 */}
-      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", marginTop: 24, paddingTop: 24 }}>
-        <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 24 }}>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>当前管理员信息</div>
+      <div className="border-t border-black/5 mt-6 pt-6">
+        <div className="bg-gray-50 rounded-xl p-6">
+          <div className="text-base font-semibold mb-4">当前管理员信息</div>
           <Descriptions>
             <Descriptions.Item label="用户名">
               {auth.user?.username}

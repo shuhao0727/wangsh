@@ -33,7 +33,6 @@ import { aiAgentsApi, agentDataApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
 import { config } from "@services";
 import { logger } from "@services/logger";
-import "./AIAgents.css";
 
 const STREAM_TIMEOUT_MS = 120_000;
 
@@ -830,9 +829,7 @@ const AIAgentsPage: React.FC = () => {
 
   return (
     <AgentErrorBoundary>
-    <div
-      className="ai-agents-page"
-    >
+    <div className="w-full h-full flex flex-col overflow-hidden bg-white">
       <GroupDiscussionPanel
         isAuthenticated={auth.isAuthenticated}
         isStudent={auth.isStudent()}
@@ -851,8 +848,8 @@ const AIAgentsPage: React.FC = () => {
         isAdmin={auth.isAdmin()}
         userId={auth.user?.id}
       />
-      <div className="ai-agents-container">
-        {/* Mobile Drawer for Sidebar */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Mobile Drawer */}
         <Drawer
           title="智能体列表"
           placement="left"
@@ -867,25 +864,16 @@ const AIAgentsPage: React.FC = () => {
             sessions={sessions}
             currentSessionId={currentSessionId}
             historyVisible={true}
-            onAgentChange={(id) => {
-              handleAgentChange(id);
-              if (isMobile) setHistoryVisible(false); // Close drawer on selection
-            }}
+            onAgentChange={(id) => { handleAgentChange(id); if (isMobile) setHistoryVisible(false); }}
             onToggleSidebar={() => setHistoryVisible(false)}
-            onStartNewConversation={() => {
-              handleStartNewConversation();
-              if (isMobile) setHistoryVisible(false);
-            }}
-            onSelectSession={(id) => {
-              handleSelectSession(id);
-              if (isMobile) setHistoryVisible(false);
-            }}
+            onStartNewConversation={() => { handleStartNewConversation(); if (isMobile) setHistoryVisible(false); }}
+            onSelectSession={(id) => { handleSelectSession(id); if (isMobile) setHistoryVisible(false); }}
           />
         </Drawer>
 
-        {/* Desktop Sidebar Column */}
+        {/* Desktop Sidebar */}
         {!isMobile && historyVisible && (
-          <div className="ai-agents-sidebar-col">
+          <div className="w-[280px] flex-shrink-0 flex flex-col h-full bg-white border-r border-black/[0.04]">
             <AgentSidebar
               agents={agents}
               currentAgent={currentAgent}
@@ -900,12 +888,12 @@ const AIAgentsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Chat Area Column */}
-        <div className="ai-agents-chat-col">
-          <div className="ai-agents-chat-shell">
+        {/* Chat Area */}
+        <div className="flex-1 min-w-0 flex flex-col h-full">
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
             <ChatArea
-              currentAgent={currentAgent}
               messages={messages}
+              currentAgent={currentAgent}
               workflowGroups={workflowGroups}
               inputMessage={inputMessage}
               historyVisible={historyVisible}
@@ -925,55 +913,59 @@ const AIAgentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 统一登录模态框 */}
+      {/* 登录弹窗 */}
       <Modal
-        title="登录"
+        title={
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm"
+              style={{ background: "linear-gradient(135deg, #0EA5E9 0%, #6366F1 100%)" }}>
+              W
+            </div>
+            <span>登录</span>
+          </div>
+        }
         open={loginModalVisible}
         onCancel={handleCloseLoginModal}
         footer={null}
         destroyOnHidden
+        width={400}
       >
-        <Form
-          form={loginForm}
-          name="login"
-          onFinish={handleLogin}
-          layout="vertical"
-          autoComplete="off"
-        >
-          <Form.Item
-            label="用户名/姓名"
-            name="username"
-            rules={[
-              { required: true, message: "请输入用户名/姓名" },
-              { min: 2, message: "至少2个字符" },
-            ]}
+        <div className="pt-2">
+          <Form
+            form={loginForm}
+            name="login"
+            onFinish={handleLogin}
+            layout="vertical"
+            autoComplete="off"
           >
-            <Input placeholder="请输入用户名（管理员）或姓名（学生）" />
-          </Form.Item>
-
-          <Form.Item
-            label="密码/学号"
-            name="password"
-            rules={[
-              { required: true, message: "请输入密码/学号" },
-              { min: 2, message: "至少2个字符" },
-            ]}
-          >
-            <Input.Password placeholder="请输入密码（管理员）或学号（学生）" />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              block
-              loading={auth.isLoading}
-              icon={<UserOutlined />}
+            <Form.Item
+              label="用户名/姓名"
+              name="username"
+              rules={[
+                { required: true, message: "请输入用户名/姓名" },
+                { min: 2, message: "至少2个字符" },
+              ]}
             >
-              登录
-            </Button>
-          </Form.Item>
-        </Form>
+              <Input placeholder="管理员账号 或 学生姓名" size="large" />
+            </Form.Item>
+            <Form.Item
+              label="密码/学号"
+              name="password"
+              rules={[
+                { required: true, message: "请输入密码/学号" },
+                { min: 2, message: "至少2个字符" },
+              ]}
+            >
+              <Input.Password placeholder="管理员密码 或 学号" size="large" />
+            </Form.Item>
+            <Form.Item className="mb-0">
+              <Button type="primary" htmlType="submit" block size="large"
+                loading={auth.isLoading} icon={<UserOutlined />}>
+                登录
+              </Button>
+            </Form.Item>
+          </Form>
+        </div>
       </Modal>
     </div>
     </AgentErrorBoundary>

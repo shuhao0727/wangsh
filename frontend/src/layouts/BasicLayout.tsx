@@ -21,6 +21,15 @@ const { Header, Content } = Layout;
 const { Title } = Typography;
 const { useBreakpoint } = Grid;
 
+// 这些页面需要 overflow:hidden + flex-col（子页面自己处理滚动）
+const FULL_HEIGHT_PATHS = [
+  /^\/home(\/|$)/,
+  /^\/ai-agents(\/|$)/,
+  /^\/articles(\/|$)/,
+  /^\/informatics(\/|$)/,
+  /^\/it-technology(\/|$)/,
+];
+
 const BasicLayout: React.FC = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -31,40 +40,26 @@ const BasicLayout: React.FC = () => {
     isAuthenticated,
     user,
     getToken,
-    logout,
     isLoggedIn,
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
-  
-  const isArticleDetailPage = /^\/articles\/[^/]+\/?$/.test(location.pathname);
-  const isAIAgentsPage = /^\/ai-agents(\/|$)/.test(location.pathname);
-  const isArticlesListPage = location.pathname === "/articles";
-  const isInformaticsPage = /^\/informatics(\/|$)/.test(location.pathname);
 
-  // Check if we are on a mobile screen (md and below)
-  // screens.md is true for >= 768px. So !screens.md is mobile.
-  // Note: screens might be empty on first render, so we default to true (desktop) to avoid flash
   const isMobile = screens.md === false;
+  const isFullHeight = FULL_HEIGHT_PATHS.some((re) => re.test(location.pathname));
 
-  // 调试日志：显示认证状态
   useEffect(() => {
     logger.debug("BasicLayout - 认证状态:", {
-      isLoading,
-      isAuthenticated,
-      isLoggedIn: isLoggedIn(),
-      user,
-      token: getToken() ? "有token" : "无token",
+      isLoading, isAuthenticated, isLoggedIn: isLoggedIn(), user,
+      token: getToken() ? "[exists]" : "[null]",
     });
   }, [isLoading, isAuthenticated, user, isLoggedIn, getToken]);
 
-  // 调试日志：当登录模态框状态变化时
   useEffect(() => {
     logger.debug("BasicLayout - 登录模态框状态:", isLoginModalVisible);
   }, [isLoginModalVisible]);
 
-  // 关闭移动端菜单当路由改变时
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
@@ -84,133 +79,64 @@ const BasicLayout: React.FC = () => {
       );
       if (!mounted) return;
       const next: Record<string, boolean> = {};
-      for (const [path, visible] of pairs) {
-        next[path] = visible;
-      }
+      for (const [path, visible] of pairs) next[path] = visible;
       setNavVisibleMap(next);
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  // 导航菜单项 - 按您的需求设置
   const navMenuItems = [
-    {
-      key: "/home",
-      icon: <HomeOutlined />,
-      label: "首页",
-    },
-    {
-      key: "/ai-agents",
-      icon: <RobotOutlined />,
-      label: "AI智能体",
-    },
-    {
-      key: "/informatics",
-      icon: <CodeOutlined />,
-      label: "信息学竞赛",
-    },
-    {
-      key: "/it-technology",
-      icon: <LaptopOutlined />,
-      label: "信息技术",
-    },
-    {
-      key: "/personal-programs",
-      icon: <AppstoreOutlined />,
-      label: "个人程序",
-    },
-    {
-      key: "/articles",
-      icon: <FileTextOutlined />,
-      label: "文章",
-    },
+    { key: "/home",              icon: <HomeOutlined />,        label: "首页" },
+    { key: "/ai-agents",        icon: <RobotOutlined />,       label: "AI智能体" },
+    { key: "/informatics",      icon: <CodeOutlined />,        label: "信息学竞赛" },
+    { key: "/it-technology",    icon: <LaptopOutlined />,      label: "信息技术" },
+    { key: "/personal-programs",icon: <AppstoreOutlined />,    label: "个人程序" },
+    { key: "/articles",         icon: <FileTextOutlined />,    label: "文章" },
   ].filter((it) => navVisibleMap[it.key] !== false);
 
-  // 处理菜单点击
-  const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key);
-  };
+  const handleMenuClick = ({ key }: { key: string }) => navigate(key);
 
-  // 处理登录成功
   const handleLoginSuccess = () => {
     setIsLoginModalVisible(false);
     message.success("登录成功！");
-    // 登录后刷新页面以更新菜单和状态
-    setTimeout(() => {
-      window.location.reload();
-    }, 500);
-  };
-
-  // 处理用户菜单点击
-  const handleUserMenuClick = (key: string) => {
-    if (key === "login") {
-      setIsLoginModalVisible(true);
-    } else if (key === "/ai-agents") {
-      navigate("/ai-agents");
-    } else if (key === "/home") {
-      navigate("/home");
-    } else if (key === "logout") {
-      logout();
-      navigate("/home");
-    }
-    // 其他菜单项的处理可以在这里添加
+    navigate(0);
   };
 
   return (
     <Layout className="basic-layout">
-      {/* 登录模态框 */}
-      <LoginForm
-        visible={isLoginModalVisible}
-        onClose={() => setIsLoginModalVisible(false)}
-        onSuccess={handleLoginSuccess}
-        isAdmin={false}
-        title="用户登录"
-      />
-
-      {/* 顶部导航栏 */}
       <Header className="top-header">
         <div className="header-left">
-          {/* 移动端菜单按钮 */}
-          {isMobile && (
-            <Button
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setMobileMenuOpen(true)}
-              className="mobile-menu-btn"
-              style={{ marginRight: 8 }}
-            />
-          )}
-
-          <div className="logo" onClick={() => navigate("/home")}>
+          {/* Logo */}
+          <div className="logo" onClick={() => navigate("/")}>
             <div className="logo-icon">W</div>
-            <Title level={4} className="logo-text">
-              WangSh
-            </Title>
+            {!isMobile && (
+              <Title level={4} className="logo-text">WangSh</Title>
+            )}
           </div>
 
-          {/* 桌面端：横向导航菜单 */}
+          {/* 桌面端导航 */}
           {!isMobile && (
             <Menu
               mode="horizontal"
-              defaultSelectedKeys={[location.pathname]}
               selectedKeys={[location.pathname]}
               items={navMenuItems}
               onClick={handleMenuClick}
               className="horizontal-menu"
+              overflowedIndicator={null}
             />
           )}
         </div>
 
-        {/* 右侧：用户信息 */}
         <div className="header-right">
-          <UserMenu
-            mode="avatar"
-            showName={!isMobile}
-            onMenuClick={handleUserMenuClick}
-            style={{ cursor: "pointer" }}
-          />
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              className="mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(true)}
+            />
+          )}
+          <UserMenu onMenuClick={(key) => { if (key === "login") setIsLoginModalVisible(true); }} />
         </div>
       </Header>
 
@@ -228,65 +154,30 @@ const BasicLayout: React.FC = () => {
           selectedKeys={[location.pathname]}
           items={navMenuItems}
           onClick={handleMenuClick}
-          style={{ border: "none" }}
+          className="border-none"
         />
       </Drawer>
 
-      {/* 内容区域 */}
+      {/* 登录弹窗 */}
+      <LoginForm
+        visible={isLoginModalVisible}
+        onClose={() => setIsLoginModalVisible(false)}
+        onSuccess={handleLoginSuccess}
+      />
+
+      {/* 内容区域 — 统一两种模式 */}
       <Content
         className="main-content"
-        style={
-          isAIAgentsPage
-            ? {
-                padding: "var(--ws-space-4)",
-                margin: 0,
-                flex: 1,
-                minHeight: 0,
-                overflow: "hidden",
-                boxSizing: "border-box",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
-                position: "relative",
-              }
-            : isArticlesListPage
-              ? {
-                  padding: 0,
-                  margin: 0,
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: "hidden",
-                  boxSizing: "border-box",
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "100%",
-                }
-            : isInformaticsPage
-              ? {
-                  padding: 0,
-                  margin: 0,
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: "hidden",
-                  boxSizing: "border-box",
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "100%",
-                }
-            : isArticleDetailPage
-              ? {
-                  padding: 0,
-                  margin: 0,
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: "hidden",
-                  boxSizing: "border-box",
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                }
-              : undefined
-        }
+        style={isFullHeight ? {
+          padding: 0,
+          margin: 0,
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+        } : undefined}
       >
         <Outlet />
       </Content>

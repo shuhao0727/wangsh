@@ -71,7 +71,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
       styles={{ body: { padding: 24 } }}
     >
       <div>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>名称：</Text>
             <Text>{agent.name || agent.agent_name}</Text>
@@ -83,7 +83,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         </Row>
 
         {agent.model_name && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={12}>
               <Text strong>模型名称：</Text>
               <Text>{agent.model_name}</Text>
@@ -98,7 +98,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         )}
 
         {agent.description && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={24}>
               <Text strong>描述：</Text>
               <Text>{agent.description}</Text>
@@ -107,32 +107,30 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         )}
 
         {agent.api_endpoint && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={24}>
               <Text strong>API地址：</Text>
-              <div style={{ marginTop: 4 }}>
-                <LinkOutlined style={{ marginRight: 4, color: "#0EA5E9" }} />
+              <div className="mt-1">
+                <LinkOutlined className="mr-1" style={{ color: "#0EA5E9" }} />
                 <Text copyable>{agent.api_endpoint}</Text>
               </div>
             </Col>
           </Row>
         )}
 
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={24}>
             <Text strong>API密钥：</Text>
-            <div style={{ marginTop: 4 }}>
-              <KeyOutlined style={{ marginRight: 4, color: "#F59E0B" }} />
+            <div className="mt-1">
+              <KeyOutlined className="mr-1" style={{ color: "#F59E0B" }} />
               <Tag color={agent.has_api_key ? "orange" : "default"}>{formatApiKey(agent)}</Tag>
-              <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                （部分隐藏）
-              </Text>
+              <Text type="secondary" className="ml-2 text-xs">（部分隐藏）</Text>
             </div>
           </Col>
         </Row>
 
         {!agent.model_name && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={12}>
               <Text strong>状态：</Text>
               <Tag color={agent.is_active ? "success" : "error"}>
@@ -147,7 +145,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         )}
 
         {agent.model_name && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={12}>
               <Text strong>创建时间：</Text>
               <Text>{dayjs(agent.created_at).format("YYYY-MM-DD HH:mm")}</Text>
@@ -162,7 +160,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
         )}
 
         {agent.deleted_at && (
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} className="mb-4">
             <Col span={24}>
               <Text strong>删除时间：</Text>
               <Text>{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}</Text>
@@ -176,9 +174,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
               <Text strong>已删除：</Text>
               <Tag color="error">是</Tag>
               {agent.deleted_at && (
-                <Text type="secondary" style={{ marginLeft: 8 }}>
-                  （{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}）
-                </Text>
+                <Text type="secondary" className="ml-2">（{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}）</Text>
               )}
             </Col>
           </Row>

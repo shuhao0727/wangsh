@@ -42,14 +42,15 @@ const AdminAssessmentEditorPage = lazy(() => import("./pages/Admin/Assessment/Ed
 const AdminAssessmentQuestionsPage = lazy(() => import("./pages/Admin/Assessment/QuestionsPage"));
 const AdminAssessmentStatisticsPage = lazy(() => import("./pages/Admin/Assessment/StatisticsPage"));
 const AdminClassroomInteractionPage = lazy(() => import("./pages/Admin/ClassroomInteraction"));
+const AdminClassroomPlanPage = lazy(() => import("./pages/Admin/ClassroomPlan/PlanPage"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
 
 const { Content } = Layout;
 
 // 加载中组件
 const LoadingIndicator = (
-  <div style={{ textAlign: "center", padding: "50px" }}>
-    <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
+  <div className="text-center p-12">
+    <Spin indicator={<LoadingOutlined className="text-4xl" spin />} />
   </div>
 );
 
@@ -98,6 +99,7 @@ function App() {
               <Route path="/admin/assessment/:id/questions" element={<AdminAssessmentQuestionsPage />} />
               <Route path="/admin/assessment/:id/statistics" element={<AdminAssessmentStatisticsPage />} />
               <Route path="/admin/classroom-interaction" element={<AdminClassroomInteractionPage />} />
+              <Route path="/admin/classroom-plan" element={<AdminClassroomPlanPage />} />
               <Route path="/admin/system" element={<AdminSystemPage />} />
             </Route>
 

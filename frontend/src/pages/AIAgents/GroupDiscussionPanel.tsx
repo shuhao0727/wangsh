@@ -546,7 +546,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   // --- 渲染组件 ---
 
   const renderIntro = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 4px' }}>
+    <div className="flex flex-col h-full px-1">
       <Segmented
         block
         value={introMode}
@@ -555,15 +555,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           { label: '加入小组', value: 'join', icon: <TeamOutlined /> },
           { label: '新建小组', value: 'create', icon: <PlusOutlined /> },
         ]}
-        style={{ marginBottom: 12 }}
+        className="mb-3"
       />
 
       {introMode === 'join' ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
           {isAdmin && (
             <Space
               wrap
-              style={{ marginBottom: 12, display: 'flex', width: "100%" }}
+              className="flex w-full mb-3"
             >
               <DatePicker 
                 value={filterDate ? dayjs(filterDate, "YYYY-MM-DD") : null}
@@ -597,47 +597,47 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               placeholder="搜索组号或组名..."
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
-              style={{ marginBottom: 12 }}
+              className="mb-3"
               allowClear
             />
           )}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="flex-1 overflow-y-auto">
             {groupsLoading ? (
-              <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+              <div className="p-6 flex justify-center">
                 <Spin />
               </div>
             ) : groups.length ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 2px" }}>
+              <div className="flex flex-col gap-2 px-0.5">
                 {groups.map((item) => (
                   <Card
                     key={`${item.session_date}-${item.class_name || ""}-${item.group_no}`}
                     size="small"
                     styles={{ body: { padding: 12 } }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div className="flex justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Text strong>{item.group_no}组</Text>
                           {item.group_name && <Tag>{item.group_name}</Tag>}
                         </div>
-                        <div style={{ marginTop: 6 }}>
+                        <div className="mt-1.5">
                           <Space
                             size={0}
                             separator={<Divider orientation="vertical" style={{ margin: "0 8px" }} />}
                           >
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" className="text-xs">
                               <UserOutlined /> {item.member_count}人
                             </Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" className="text-xs">
                               {item.message_count}条消息
                             </Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" className="text-xs">
                               {dayjs(item.session_date).format("MM-DD")}
                             </Text>
                           </Space>
                         </div>
                       </div>
-                      <div style={{ flexShrink: 0 }}>
+                      <div className="flex-shrink-0">
                         <Button
                           type="link"
                           size="small"
@@ -653,14 +653,14 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                 ))}
               </div>
             ) : (
-              <div style={{ padding: 24 }}>
+              <div className="p-6">
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无小组，快去新建一个吧" />
               </div>
             )}
           </div>
         </div>
       ) : (
-        <div style={{ padding: 20 }}>
+        <div className="p-5">
           <Form onFinish={handleJoinOrCreate} layout="vertical">
             <Form.Item
               label="组号 (必填)"
@@ -683,9 +683,9 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                 立即创建并加入
               </Button>
             </Form.Item>
-            <div style={{ marginTop: 20, padding: 12, background: 'var(--ws-color-surface-2)', borderRadius: 8 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <div style={{ marginBottom: 4 }}>⚠️ 注意事项：</div>
+            <div className="mt-5 p-3 bg-surface-2 rounded-lg">
+              <Text type="secondary" className="text-xs">
+                <div className="mb-1">⚠️ 注意事项：</div>
                 <div>1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。</div>
                 <div>2. 发送消息有 {config.rate_limit_seconds} 秒冷却限制。</div>
               </Text>
@@ -697,22 +697,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   );
 
   const renderChat = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full">
       {/* 聊天头部 */}
-      <div style={{ 
-        padding: '12px 16px', 
-        borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        background: '#FFFFFF'
-      }}>
+      <div className="px-4 py-3 border-b border-black/5 flex justify-between items-center bg-white">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Text strong style={{ fontSize: 16 }}>{currentGroup.no}组</Text>
+          <div className="flex items-center gap-2">
+            <Text strong className="text-base">{currentGroup.no}组</Text>
             {currentGroup.name && <Tag color="blue">{currentGroup.name}</Tag>}
           </div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" className="text-xs">
             <TeamOutlined /> 正在讨论中
           </Text>
         </div>
@@ -729,39 +722,21 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {/* 消息列表 */}
       <div
         ref={listRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: 16,
-          background: '#FAFAFA',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10
-        }}
+        className="flex-1 overflow-y-auto p-4 bg-surface-2 flex flex-col gap-2.5"
       >
         {messages.map(msg => (
-          <div key={msg.id} style={{
+          <div key={msg.id} className="max-w-[75%]" style={{
             alignSelf: msg.is_mine ? 'flex-end' : 'flex-start',
-            maxWidth: '75%'
           }}>
-            <div style={{
-              fontSize: 11,
-              color: 'var(--ws-color-text-tertiary)',
-              marginBottom: 3,
+            <div className="text-xs text-text-tertiary mb-0.5 px-1.5" style={{
               textAlign: msg.is_mine ? 'right' : 'left',
-              padding: '0 6px'
             }}>
               {msg.is_mine ? '' : msg.user_display_name + ' · '}{dayjs(msg.created_at).format("HH:mm")}
             </div>
-            <div style={{
-              padding: '8px 12px',
-              fontSize: 13,
-              lineHeight: 1.6,
+            <div className="px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap" style={{
               background: msg.is_mine ? 'var(--ws-color-primary)' : '#FFFFFF',
               color: msg.is_mine ? '#FFFFFF' : 'var(--ws-color-text)',
               borderRadius: msg.is_mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-              wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap'
             }}>
               {msg.content}
             </div>
@@ -770,20 +745,20 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       </div>
 
       {/* 输入框 */}
-      <div style={{ padding: 12, background: '#FFFFFF', borderTop: '1px solid rgba(0, 0, 0, 0.04)' }}>
-        <Space.Compact style={{ width: '100%' }}>
-          <Input 
+      <div className="p-3 bg-white border-t border-black/5">
+        <Space.Compact style={{ width: "100%" }}>
+          <Input
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onPressEnter={handleSend}
-            placeholder="输入消息..." 
+            placeholder="输入消息..."
             disabled={sending}
           />
           <Button type="primary" onClick={handleSend} loading={sending} disabled={!draft.trim()}>
             发送
           </Button>
         </Space.Compact>
-        <Text type="secondary" style={{ fontSize: 10, marginTop: 4, display: 'block', textAlign: 'center' }}>
+        <Text type="secondary" className="text-[10px] mt-1 block text-center">
           每 {config.rate_limit_seconds} 秒可发送一条消息
         </Text>
       </div>
@@ -809,8 +784,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             onClick={() => { if (!btnDragged.current) setOpen(true); }}
             style={{
               borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
-              boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
               background: '#0EA5E9', borderColor: '#0EA5E9',
+              boxShadow: '2px 2px 8px rgba(14,165,233,0.4)',
             }}
           >
             小组讨论
@@ -842,29 +817,20 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         >
           {/* 窗口标题栏 */}
           <div
-            style={{
-              padding: '8px 12px',
-              background: '#0EA5E9',
-              color: '#fff',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              userSelect: 'none',
-              cursor: floatingPinned ? 'default' : 'move',
-            }}
+            className={`px-3 py-2 flex justify-between items-center select-none text-white bg-primary ${floatingPinned ? 'cursor-default' : 'cursor-move'}`}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
           >
-            <span style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="font-semibold text-sm flex items-center gap-1.5">
               <TeamOutlined /> 小组讨论
             </span>
-            <div style={{ display: 'flex', gap: 4 }} onPointerDown={(e) => e.stopPropagation()}>
+            <div className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
               <Tooltip title={floatingPinned ? "取消固定" : "固定窗口"}>
                 <Button
                   type="text"
                   size="small"
-                  style={{ color: '#fff' }}
+                  className="!text-white"
                   icon={floatingPinned ? <PushpinFilled /> : <PushpinOutlined />}
                   onClick={() => {
                     const next = !floatingPinned;
@@ -873,13 +839,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                   }}
                 />
               </Tooltip>
-              <Button type="text" size="small" icon={<ReloadOutlined />} style={{ color: '#fff' }} onClick={() => { if(view==='intro') fetchGroups(); else loadMessages(sessionId!); }} />
-              <Button type="text" size="small" icon={<CloseOutlined />} style={{ color: '#fff' }} onClick={() => setOpen(false)} />
+              <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white" onClick={() => { if(view==='intro') fetchGroups(); else loadMessages(sessionId!); }} />
+              <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white" onClick={() => setOpen(false)} />
             </div>
           </div>
 
           {/* 窗口内容区 */}
-          <div style={{ flex: 1, overflow: 'hidden', background: '#FFFFFF' }}>
+          <div className="flex-1 overflow-hidden bg-white">
             {view === 'intro' ? renderIntro() : renderChat()}
           </div>
         </div>
@@ -888,7 +854,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {/* 成员列表抽屉 */}
       <Drawer
         title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="flex justify-between items-center">
             <span>成员列表 ({members.length})</span>
             {isAdmin && (
               <Button type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setInviteModalOpen(true)}>
@@ -906,31 +872,31 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         rootStyle={{ position: 'absolute' }}
       >
         {membersLoading ? (
-          <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+          <div className="p-6 flex justify-center">
             <Spin />
           </div>
         ) : members.length ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="flex flex-col gap-2">
             {members.map((item) => (
               <Card
                 key={String(item.user_id)}
                 size="small"
                 styles={{ body: { padding: 12 } }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+                <div className="flex justify-between gap-3">
+                  <div className="flex gap-3 min-w-0">
                     <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#0EA5E9" }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div className="min-w-0">
+                      <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                         {item.full_name || item.username || `User ${item.user_id}`}
                       </div>
                       <Space orientation="vertical" size={0}>
                         {item.student_id && (
-                          <Text type="secondary" style={{ fontSize: 12 }}>
+                          <Text type="secondary" className="text-xs">
                             {item.student_id}
                           </Text>
                         )}
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" className="text-xs">
                           {dayjs(item.joined_at).format("MM-DD HH:mm")}
                         </Text>
                       </Space>
@@ -964,28 +930,28 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           placeholder="搜索姓名、学号..."
           value={inviteKeyword}
           onChange={e => setInviteKeyword(e.target.value)}
-          style={{ marginBottom: 16 }}
+          className="mb-4"
           autoFocus
         />
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+        <div className="max-h-[400px] overflow-y-auto">
           {inviteLoading ? (
-            <div style={{ padding: 24, display: "flex", justifyContent: "center" }}>
+            <div className="p-6 flex justify-center">
               <Spin />
             </div>
           ) : inviteUsers.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {inviteUsers.map((user) => {
                 const isMember = members.some((m) => m.user_id === user.id);
                 return (
                   <Card key={String(user.id)} size="small" styles={{ body: { padding: 12 } }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+                    <div className="flex justify-between gap-3">
+                      <div className="flex gap-3 min-w-0">
                         <Avatar>{(user.full_name || user.username || "?")[0]}</Avatar>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div className="min-w-0">
+                          <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                             {user.full_name}
                           </div>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
+                          <Text type="secondary" className="text-xs">
                             {`${user.student_id || ""} ${user.class_name || ""}`.trim()}
                           </Text>
                         </div>

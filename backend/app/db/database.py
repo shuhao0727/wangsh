@@ -54,10 +54,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     在 FastAPI 依赖注入中使用
     """
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session
 
 
 async def init_db() -> None:

@@ -517,10 +517,10 @@ const GroupDiscussionAdminTab: React.FC = () => {
     : "小组讨论";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }}>
+    <div className="flex flex-col flex-1 min-h-0 h-full">
       <AdminCard
         size="small"
-        style={{ marginBottom: 16 }}
+        className="mb-4"
         styles={{ body: { padding: 16 } }}
       >
         <Space wrap>
@@ -635,7 +635,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           >
             清空选择
           </Button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(0, 0, 0, 0.08)', padding: '4px 12px', borderRadius: 6, background: '#FFFFFF' }}>
+          <div className="flex items-center gap-2 border border-black/10 px-3 py-1 rounded-md bg-white">
             <Text>学生端弹窗：</Text>
             <Switch
               checked={frontendVisible}
@@ -663,7 +663,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
         </Space>
       </AdminCard>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="flex-1 min-h-0">
       <AdminTablePanel
         loading={loading}
         isEmpty={!loading && sessions.length === 0}
@@ -743,28 +743,24 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   ) : (
                     <Space orientation="vertical" size={10} style={{ width: "100%" }}>
                       {messages.map((m) => (
-                        <div key={m.id} style={{ display: "flex", justifyContent: "flex-start" }}>
-                          <div style={{ maxWidth: "92%" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-                              <Text strong style={{ fontSize: 12 }}>
+                        <div key={m.id} className="flex justify-start">
+                          <div className="max-w-[92%]">
+                            <div className="flex justify-between gap-2.5 mb-1">
+                              <Text strong className="text-xs">
                                 {m.user_display_name}
                               </Text>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
+                              <Text type="secondary" className="text-xs">
                                 {dayjs(m.created_at).format("HH:mm:ss")}
                               </Text>
                             </div>
                             <div
+                              className="px-2.5 py-2 rounded-xl whitespace-pre-wrap break-words"
                               style={{
-                                padding: "8px 10px",
-                                borderRadius: 12,
                                 background: "var(--ws-color-surface)",
                                 border: "1px solid var(--ws-color-border)",
-                                boxShadow: "none",
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word",
                               }}
                             >
-                              <Text style={{ color: "var(--ws-color-text)" }}>{m.content}</Text>
+                              <Text className="text-text-base">{m.content}</Text>
                             </div>
                           </div>
                         </div>
@@ -779,7 +775,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               label: "成员",
               children: (
                 <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div className="flex justify-end">
                     <Button
                       type="primary"
                       size="small"
@@ -895,7 +891,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                           />
                         </Form.Item>
                       </Space>
-                      <Space wrap style={{ marginBottom: 8 }}>
+                      <Space wrap className="mb-2">
                         <Button
                           size="small"
                           onClick={() =>
@@ -980,26 +976,24 @@ const GroupDiscussionAdminTab: React.FC = () => {
                         {analyses.map((a) => (
                           <div
                             key={a.id}
+                            className="p-2.5 rounded-lg cursor-pointer"
                             style={{
-                              padding: 10,
-                              borderRadius: 10,
                               border: "1px solid var(--ws-color-border)",
                               background: "var(--ws-color-surface)",
-                              cursor: "pointer",
                             }}
                             onClick={() => setAnalysisResult(a.result_text)}
                           >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                            <div className="flex justify-between gap-2.5">
                               <Text strong>
                                 {a.analysis_type} · {(agents || []).find((x) => x.id === a.agent_id)?.agent_name ||
                                   (agents || []).find((x) => x.id === a.agent_id)?.name ||
                                   `智能体${a.agent_id}`}
                               </Text>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
+                              <Text type="secondary" className="text-xs">
                                 {dayjs(a.created_at).format("YYYY-MM-DD HH:mm")}
                               </Text>
                             </div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" className="text-xs">
                               点击查看结果
                             </Text>
                           </div>
@@ -1059,13 +1053,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   ]} />
                 </Form.Item>
               </Space>
-              <Space wrap style={{ marginBottom: 8 }}>
+              <Space wrap className="mb-2">
                 <Button size="small" type={compareState.useCache ? "primary" : "default"} onClick={() => setCompareState((s) => ({ ...s, useCache: !s.useCache }))}>
                   {compareState.useCache ? "使用缓存：开" : "使用缓存：关"}
                 </Button>
               </Space>
-              <div style={{ marginBottom: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12, marginBottom: 6, display: "block" }}>预设 Prompt 模板（点击填入）：</Text>
+              <div className="mb-2">
+                <Text type="secondary" className="text-xs mb-1.5 block">预设 Prompt 模板（点击填入）：</Text>
                 <Space wrap size={6}>
                   <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请按时间桶汇总各组讨论的学习主题，横向对比共性与差异，梳理代表性问题链条，给出教学建议。" })}>横向对比</Button>
                   <Button size="small" onClick={() => compareForm.setFieldsValue({ prompt: "请对比小组讨论热点话题与AI智能体提问热门问题，分析话题关联性、学生学习路径、共性知识盲点和AI依赖度，给出教学调整建议。" })}>跨系统关联</Button>
@@ -1082,9 +1076,9 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
           {compareState.loading && (
             <Card size="small">
-              <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div className="text-center py-4">
                 <Spin />
-                <div style={{ marginTop: 8 }}>
+                <div className="mt-2">
                   <Text type="secondary">正在调用智能体分析，请耐心等待（可能需要 30-120 秒）...</Text>
                 </div>
               </div>
@@ -1109,8 +1103,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
         confirmLoading={muteState.loading}
         width={400}
       >
-        <div style={{ padding: "20px 0" }}>
-          <Text style={{ display: "block", marginBottom: 12 }}>请选择禁言时长：</Text>
+        <div className="py-5">
+          <Text className="block mb-3">请选择禁言时长：</Text>
           <Radio.Group
             onChange={(e) => {
               const v = e.target.value;
@@ -1126,8 +1120,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
               <Radio value="custom">
                 自定义时长
                 {muteState.durationType === "custom" ? (
-                  <InputNumber
-                    style={{ width: 100, marginLeft: 10 }}
+                    <InputNumber
+                    className="w-24 ml-2.5"
                     min={1}
                     value={muteState.customMinutes}
                     onChange={(v) => setMuteState((s) => ({ ...s, customMinutes: v || 1 }))}
@@ -1148,8 +1142,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
         confirmLoading={addMemberLoading}
         width={500}
       >
-        <div style={{ padding: "20px 0" }}>
-          <Text style={{ display: "block", marginBottom: 8 }}>搜索用户：</Text>
+        <div className="py-5">
+          <Text className="block mb-2">搜索用户：</Text>
           <Select
             showSearch
             style={{ width: "100%" }}

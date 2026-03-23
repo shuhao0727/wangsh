@@ -148,7 +148,7 @@ const DianmingManager: React.FC = () => {
         </Button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
         loading={loading}
         isEmpty={data.length === 0}

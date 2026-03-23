@@ -282,6 +282,6 @@ async def api_my_profile_detail(
     profile = await get_profile(db, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="画像不存在")
-    if profile.target_id != str(current_user.get("id")):
+    if not current_user.get("id") or profile.target_id != str(current_user.get("id")):
         raise HTTPException(status_code=403, detail="无权查看此画像")
     return _format_student_profile(profile)

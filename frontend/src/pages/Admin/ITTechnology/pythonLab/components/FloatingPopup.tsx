@@ -154,27 +154,18 @@ export function FloatingPopup(props: {
       <div
         data-testid="floating-popup-header"
         onPointerDown={onHeaderPointerDown}
+        className="flex items-center justify-between gap-2 px-3 py-2 select-none"
         style={{
-          padding: "8px 12px",
           borderBottom: "1px solid var(--ws-color-border-secondary)",
           background: "var(--ws-color-surface)",
           cursor: draggable ? "move" : "default",
-          userSelect: "none",
           touchAction: "none",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
         }}
       >
-        <Space size={8}>
-          <Text style={{ fontWeight: 600, fontSize: "var(--ws-text-md)" }}>{title}</Text>
-        </Space>
-        <Space size={8}>
-          <Button type="text" size="small" icon={<CloseOutlined />} onPointerDown={(e) => e.stopPropagation()} onClick={onClose} />
-        </Space>
+        <Text className="font-semibold text-sm">{title}</Text>
+        <Button type="text" size="small" icon={<CloseOutlined />} onPointerDown={(e) => e.stopPropagation()} onClick={onClose} />
       </div>
-      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
+      <div className="flex flex-col gap-2 p-2 flex-1 min-h-0" style={{ overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
       {resizable ? (
         <div
           data-testid="floating-popup-resize-handle"

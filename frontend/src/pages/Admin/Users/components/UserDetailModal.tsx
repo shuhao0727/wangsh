@@ -20,7 +20,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
   const renderUserDetail = () => {
     return (
       <div>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>ID：</Text>
             <Text>{currentUser.id}</Text>
@@ -30,7 +30,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             <Text>{currentUser.username || "无"}</Text>
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>学号：</Text>
             <Text>{currentUser.student_id || "无"}</Text>
@@ -40,7 +40,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             <Text>{currentUser.full_name}</Text>
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>学年：</Text>
             {currentUser.study_year ? (
@@ -58,7 +58,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             )}
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>角色：</Text>
             <Tag color="purple">{currentUser.role_code}</Tag>
@@ -70,7 +70,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             </Tag>
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16} className="mb-4">
           <Col span={12}>
             <Text strong>创建时间：</Text>
             <Text>

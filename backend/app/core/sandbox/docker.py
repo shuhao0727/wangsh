@@ -90,7 +90,7 @@ class DockerProvider(SandboxProvider):
         self.runtime = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", "runc")
         self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
-        self.readiness_timeout = float(getattr(settings, "PYTHONLAB_READINESS_TIMEOUT_SECONDS", 30) or 30)
+        self.readiness_timeout = float(os.getenv("PYTHONLAB_READINESS_TIMEOUT_SECONDS", None) or getattr(settings, "PYTHONLAB_READINESS_TIMEOUT_SECONDS", 60) or 60)
         self._available_runtimes = None
 
     async def _get_available_runtimes(self) -> List[str]:
@@ -127,10 +127,11 @@ class DockerProvider(SandboxProvider):
             "import os, signal; "
             "try: "
             "  for p in os.listdir('/proc'): "
-            "    if p.isdigit() and p != str(os.getpid()): "
+            "    if p.isdigit() and p not in (str(os.getpid()), '1'): "
             "      try: "
             "        with open(f'/proc/{p}/cmdline', 'rb') as f: "
-            "          if b'debugpy' in f.read(): "
+            "          cmd = f.read(); "
+            "          if b'debugpy' in cmd and cmd.startswith(b'python'): "
             "            os.kill(int(p), signal.SIGKILL) "
             "      except: pass "
             "except: pass"
@@ -198,8 +199,9 @@ class DockerProvider(SandboxProvider):
             # Resource Limits
             limits = meta.get("limits", {})
             cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
-            mem_mb_limit = int(limits.get("memory_mb") or settings.PYTHONLAB_DEFAULT_MEMORY_MB)
-            mem_mb = mem_mb_limit if mem_mb_limit > 0 else int(settings.PYTHONLAB_DEFAULT_MEMORY_MB)
+            default_mem = int(settings.PYTHONLAB_DEFAULT_MEMORY_MB)
+            mem_mb_limit = int(limits.get("memory_mb") or default_mem)
+            mem_mb = max(mem_mb_limit, default_mem) if mem_mb_limit > 0 else default_mem
 
             if runtime_mode == "debug":
                 # Use python to kill debugpy since ps/pkill might be missing
@@ -207,10 +209,11 @@ class DockerProvider(SandboxProvider):
                     "import os, signal; "
                     "try: "
                     " for p in os.listdir('/proc'): "
-                    "  if p.isdigit() and p!=str(os.getpid()): "
+                    "  if p.isdigit() and p not in (str(os.getpid()),'1'): "
                     "   try: "
                     "    with open('/proc/%s/cmdline'%p,'rb') as f: "
-                    "     if b'debugpy' in f.read(): os.kill(int(p), signal.SIGKILL) "
+                    "     cmd=f.read(); "
+                    "     if b'debugpy' in cmd and cmd.startswith(b'python'): os.kill(int(p), signal.SIGKILL) "
                     "   except: pass "
                     "except: pass"
                 )
@@ -221,7 +224,7 @@ class DockerProvider(SandboxProvider):
                     f"python -c \"{kill_py}\" >/dev/null 2>&1 || true; "
                     f"sleep 0.25; "
                     f"env PYDEVD_DISABLE_FILE_VALIDATION=1 PYDEVD_CONNECT_TIMEOUT=15 "
-                    f"python -Xfrozen_modules=off -m debugpy --log-to /tmp/debugpy --listen 0.0.0.0:{self.debugpy_port} --wait-for-client /workspace/main.py; "
+                    f"python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:{self.debugpy_port} --wait-for-client /workspace/main.py; "
                     f"rc=$?; "
                     f"echo \"debugpy exited rc=$rc (iter=$i)\" 1>&2; "
                     f"sleep 0.8; "
@@ -252,6 +255,8 @@ class DockerProvider(SandboxProvider):
                 "-v", f"{str(mount_path)}:/workspace:rw",
             ]
             if runtime_mode == "debug":
+                # NET_BIND_SERVICE needed for debugpy to bind to its port
+                cmd.extend(["--cap-add", "NET_BIND_SERVICE"])
                 cmd.extend(["-p", f"{self.debugpy_port}"])
             else:
                 # Plain mode: fully isolate network to prevent student code from accessing external services
@@ -515,6 +520,8 @@ class DockerProvider(SandboxProvider):
                 return
             listening = await self._debugpy_is_listening(container_id, self.debugpy_port)
             if listening:
+                # 额外等待确保 debugpy 完全就绪接受 DAP 协议
+                await asyncio.sleep(1.5)
                 return
             await asyncio.sleep(0.2)
         # Timeout: cleanup the container to avoid orphans

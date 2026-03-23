@@ -34,42 +34,23 @@ const formatValue = (field: string, value: number) => {
 };
 
 const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => (
-  <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+  <div className="flex gap-3 mb-4 flex-wrap">
     {items.map((item) => (
       <div
         key={item.key}
-        style={{
-          flex: "1 1 0",
-          minWidth: 160,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 14px",
-          background: "#FAFAFA",
-          borderRadius: 10,
-        }}
+        className="flex-1 min-w-[160px] flex items-center gap-2.5 px-3.5 py-2.5 bg-surface-2 rounded-xl"
       >
         <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            background: item.bg,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: item.color,
-            fontSize: 16,
-            flexShrink: 0,
-          }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+          style={{ background: item.bg, color: item.color }}
         >
           {item.icon}
         </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Text type="secondary" style={{ fontSize: 12, display: "block", lineHeight: "16px" }}>
+        <div className="min-w-0 flex-1">
+          <Text type="secondary" className="!text-xs !block !leading-4">
             {item.label}
           </Text>
-          <Text style={{ fontSize: 18, fontWeight: 600, color: item.color, lineHeight: "24px" }}>
+          <Text className="!text-lg !font-semibold !leading-6" style={{ color: item.color }}>
             {formatValue(item.field, (data as any)[item.field])}
           </Text>
         </div>

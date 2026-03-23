@@ -4,7 +4,7 @@
  */
 import { useCallback, useRef } from "react";
 import { createParser } from "eventsource-parser";
-import type { EventSourceMessage } from "eventsource-parser";
+import type { ParsedEvent, ReconnectInterval } from "eventsource-parser";
 
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
@@ -48,7 +48,8 @@ export function useStreamEngine() {
       callbacks.onEnd(fullText);
     };
 
-    const handleEvent = (event: EventSourceMessage) => {
+    const handleEvent = (event: ParsedEvent | ReconnectInterval) => {
+      if (event.type !== 'event') return;
       const eventType = event.event || "";
       let payload: any = null;
       try {
@@ -137,7 +138,7 @@ export function useStreamEngine() {
       if (!reader) return;
 
       const decoder = new TextDecoder("utf-8");
-      const parser = createParser({ onEvent: handleEvent });
+      const parser = createParser(handleEvent);
 
       while (true) {
         const { value, done } = await reader.read();

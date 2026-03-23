@@ -57,10 +57,14 @@ const PythonLabStudioInner: React.FC<{
   const isCompactViewport = !screens.sm;
   const { message } = App.useApp();
   const prewarmOnceRef = useRef(false);
+  const readyMsgShownRef = useRef(false);
 
   useEffect(() => {
     logger.debug("PythonLabStudio mounted - HMR Check");
-    message.info("PythonLab环境已就绪");
+    if (!readyMsgShownRef.current) {
+      readyMsgShownRef.current = true;
+      message.info("PythonLab环境已就绪");
+    }
     ensurePythonLabStorageCompatible();
   }, []);
   const [ruleSet, setRuleSet] = useState<PythonLabRuleSetV1>(() => loadEffectiveRuleSetV1(experiment?.id ?? ""));
@@ -376,6 +380,9 @@ const PythonLabStudioInner: React.FC<{
     setConnectMode,
     setConnectFromId,
     setConnectFromPort,
+    offsetX,
+    offsetY,
+    scale,
   });
 
   const exportFlow = () => {
@@ -1058,7 +1065,7 @@ const PythonLabStudioInner: React.FC<{
   return (
     <CodeCtxProvider value={codeApi}>
     <RunnerActionsProvider value={runnerActionsApi}>
-    <div style={{ height: "calc(100vh - 130px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="flex-1 flex flex-col overflow-hidden">
       <Layout style={{ background: "transparent", height: "100%", flexDirection: isCompactViewport ? "column" : "row" }}>
         <Sider
           width={isCompactViewport ? "100%" : 250}
@@ -1075,7 +1082,7 @@ const PythonLabStudioInner: React.FC<{
             borderBottom: isCompactViewport && !leftCollapsed ? "1px solid var(--ws-color-border-secondary)" : "none",
           }}
         >
-          <div style={{ height: "100%" }}>
+          <div className="h-full">
             <TemplatePalette basic={basicTemplates} advanced={advancedTemplates} onAddNode={addNode} />
           </div>
         </Sider>
@@ -1084,7 +1091,7 @@ const PythonLabStudioInner: React.FC<{
           <Card
             title={
               <Space>
-                <span style={{ fontSize: 16, fontWeight: 600 }}>画布</span>
+                <span className="text-base font-semibold">画布</span>
                 {experiment?.title ? <Tag color="blue">{experiment.title}</Tag> : <Tag color="blue">UI</Tag>}
                 {experiment?.scenario && experiment.scenario !== experiment.title ? (
                   <Tag variant="filled">{experiment.scenario}</Tag>
@@ -1338,7 +1345,7 @@ const PythonLabStudioInner: React.FC<{
         onClose={() => setNodeInspectorOpen(false)}
       >
         {selectedNode ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="flex flex-col gap-3">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <Text type="secondary">标题</Text>
               <Input

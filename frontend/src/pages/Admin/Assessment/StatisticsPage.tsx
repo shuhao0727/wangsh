@@ -319,29 +319,29 @@ const StatisticsPage: React.FC = () => {
   return (
     <AdminPage scrollable>
       {/* 页面标题 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      <div className="flex items-center gap-3 mb-6">
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/admin/assessment")}>返回</Button>
-        <span style={{ fontSize: 20, fontWeight: 600 }}>{configTitle || "答题统计"}</span>
+        <span className="text-xl font-semibold">{configTitle || "答题统计"}</span>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 80 }}><Spin size="large" /></div>
+        <div className="text-center py-20"><Spin size="large" /></div>
       ) : stats ? (
         <>
           {/* 统计卡片 */}
-          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Row gutter={[16, 16]} className="mb-6">
             {statItems.map((s, i) => (
               <Col xs={12} sm={8} md={4} key={i}>
-                <div style={{ background: "#FAFAFA", borderRadius: 8, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ fontSize: 12, color: "#999" }}>{s.icon && <span style={{ marginRight: 4 }}>{s.icon}</span>}{s.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+                <div className="bg-gray-50 rounded-lg px-4 py-2.5 flex items-center justify-between">
+                  <div className="text-xs text-gray-400">{s.icon && <span className="mr-1">{s.icon}</span>}{s.label}</div>
+                  <div className="text-lg font-bold" style={{ color: s.color }}>{s.value}</div>
                 </div>
               </Col>
             ))}
           </Row>
 
           {/* 工具栏 */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="flex gap-2.5 mb-4 flex-wrap items-center">
             <Select placeholder="班级" allowClear style={{ width: 130 }} value={filterClass}
               onChange={v => setFilterClass(v)} options={classNames.map(c => ({ label: c, value: c }))} notFoundContent="暂无班级" />
             <Select placeholder="状态" allowClear style={{ width: 110 }} value={filterStatus}
@@ -352,7 +352,7 @@ const StatisticsPage: React.FC = () => {
             <Input.Search placeholder="搜索学生" allowClear style={{ width: 180 }}
               value={searchText} onChange={e => setSearchText(e.target.value)}
               onSearch={v => setSearchValue(v.trim())} enterButton={<SearchOutlined />} />
-            <div style={{ flex: 1 }} />
+            <div className="flex-1" />
             {filterClass && (
               <Popconfirm title={`确定让「${filterClass}」全班重新测试？`} onConfirm={() => handleBatchRetest("class")} okText="确定" cancelText="取消">
                 <Button icon={<RedoOutlined />} loading={batchRetesting}>全班重测</Button>
@@ -369,7 +369,7 @@ const StatisticsPage: React.FC = () => {
             <Col xs={24} lg={16}>
               <Card size="small" bodyStyle={{ padding: 0 }}
                 title={
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="flex items-center gap-2">
                     <span>学生答题列表{total > 0 ? ` (${total})` : ""}</span>
                     {selectedRowKeys.length > 0 && (
                       <>
@@ -386,7 +386,7 @@ const StatisticsPage: React.FC = () => {
                 <Table rowKey="id" columns={columns} dataSource={sessions} pagination={false}
                   rowSelection={rowSelection} loading={listLoading} size="small" scroll={{ x: 700, y: 600 }} />
                 {total > pageSize && (
-                  <div style={{ textAlign: "right", padding: "10px 16px" }}>
+                  <div className="text-right px-4 py-2.5">
                     <Pagination size="small" current={page} pageSize={pageSize} total={total}
                       onChange={(p, s) => { setPage(p); setSelectedRowKeys([]); if (s) setPageSize(s); }}
                       showTotal={t => `共 ${t} 条`} showSizeChanger />
@@ -396,18 +396,18 @@ const StatisticsPage: React.FC = () => {
             </Col>
             <Col xs={24} lg={8}>
               <Card size="small" title="知识点掌握率">
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <Select size="small" style={{ flex: 1 }} showSearch optionFilterProp="label"
+                <div className="flex gap-2 mb-2">
+                  <Select size="small" className="flex-1" showSearch optionFilterProp="label"
                     value={pickToValue(radarLeft)} onChange={v => setRadarLeft(parsePickerValue(v))}
                     options={radarPickerOptions} placeholder="选择数据" />
-                  <Select size="small" style={{ flex: 1 }} showSearch optionFilterProp="label" allowClear
+                  <Select size="small" className="flex-1" showSearch optionFilterProp="label" allowClear
                     value={pickToValue(radarRight)} onChange={v => setRadarRight(v ? parsePickerValue(v) : null)}
                     options={radarPickerOptions} placeholder="对比" />
                 </div>
                 {radarSeries.length > 0 && radarSeries.some(s => Object.keys(s.data).length > 0) ? (
                   <RadarChart series={radarSeries} size={280} />
                 ) : (
-                  <div style={{ textAlign: "center", color: "#999", padding: "40px 0" }}>暂无知识点数据</div>
+                  <div className="text-center text-gray-400 py-10">暂无知识点数据</div>
                 )}
               </Card>
             </Col>
@@ -419,7 +419,7 @@ const StatisticsPage: React.FC = () => {
       <Modal title="答题详情" open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailData(null); }} footer={null} width={720}>
         {detailLoading ? <Spin /> : detailData ? (
           <>
-            <Descriptions size="small" column={2} style={{ marginBottom: 16 }}>
+            <Descriptions size="small" column={2} className="mb-4">
               <Descriptions.Item label="状态"><Tag color={statusMap[detailData.status]?.color}>{statusMap[detailData.status]?.text || detailData.status}</Tag></Descriptions.Item>
               <Descriptions.Item label="得分">{detailData.earned_score ?? "-"} / {detailData.total_score}</Descriptions.Item>
               <Descriptions.Item label="开始时间">{detailData.started_at ? new Date(detailData.started_at).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
@@ -427,9 +427,9 @@ const StatisticsPage: React.FC = () => {
             </Descriptions>
             <Collapse size="small" items={detailData.answers.map((a: AnswerDetailResponse, i: number) => ({
               key: a.id,
-              label: <span>第{i + 1}题 <Tag>{a.question_type}</Tag>{a.is_correct === true && <Tag color="success">正确</Tag>}{a.is_correct === false && <Tag color="error">错误</Tag>}{a.earned_score != null && <span style={{ marginLeft: 8 }}>{a.earned_score}/{a.max_score}分</span>}</span>,
+              label: <span>第{i + 1}题 <Tag>{a.question_type}</Tag>{a.is_correct === true && <Tag color="success">正确</Tag>}{a.is_correct === false && <Tag color="error">错误</Tag>}{a.earned_score != null && <span className="ml-2">{a.earned_score}/{a.max_score}分</span>}</span>,
               children: (
-                <div style={{ fontSize: 13 }}>
+                <div className="text-sm">
                   <p><strong>题目：</strong>{a.content}</p>
                   {a.options && <p><strong>选项：</strong>{a.options}</p>}
                   <p><strong>学生答案：</strong>{a.student_answer || "（未作答）"}</p>
@@ -453,21 +453,21 @@ const StatisticsPage: React.FC = () => {
         styles={{ body: { padding: 0 } }}
       >
         {profileLoading ? (
-          <div style={{ textAlign: "center", padding: 60 }}><Spin size="large" /></div>
+          <div className="text-center py-16"><Spin size="large" /></div>
         ) : (
           <Tabs
             activeKey={profileTab}
             onChange={k => setProfileTab(k as "basic" | "advanced")}
-            style={{ padding: "0 24px" }}
+            className="px-6"
             items={[
               { key: "basic", label: "初级画像", children: profileData ? (
-                <div style={{ paddingBottom: 24 }}>
+                <div className="pb-6">
                   <BasicProfileView data={profileData} />
                 </div>
-              ) : <div style={{ color: "#999", padding: 40, textAlign: "center" }}>暂无初级画像数据</div> },
+              ) : <div className="text-gray-400 py-10 text-center">暂无初级画像数据</div> },
 
               { key: "advanced", label: "三维画像", children: advancedProfile ? (
-                <div style={{ paddingBottom: 24 }}>
+                <div className="pb-6">
                   <AdvancedProfileView profile={advancedProfile} />
                 </div>
               ) : (

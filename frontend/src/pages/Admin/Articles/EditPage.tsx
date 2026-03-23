@@ -99,7 +99,7 @@ const ArticleEditPage: React.FC = () => {
             <Button icon={<ArrowLeftOutlined />} onClick={handleCancel}>
               返回列表
             </Button>
-            <Title level={4} style={{ margin: 0 }}>
+            <Title level={4} className="!m-0">
               {isCreateMode ? "创建新文章" : "编辑文章"}
             </Title>
           </Space>
@@ -111,9 +111,9 @@ const ArticleEditPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
+      <div className="text-center py-24">
         <Spin size="large" />
-        <div style={{ marginTop: 16 }}>加载文章数据...</div>
+        <div className="mt-4">加载文章数据...</div>
       </div>
     );
   }

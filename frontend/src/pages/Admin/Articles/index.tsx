@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Typography,
   Space,
   Button,
   Table,
@@ -27,16 +26,12 @@ import {
 import dayjs from "dayjs";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
-import type {
-  ArticleWithRelations,
-  ArticleFilterParams,
-} from "@services";
-import { AdminCard, AdminPage, AdminTablePanel } from "@components/Admin";
+import type { ArticleWithRelations, ArticleFilterParams } from "@services";
+import { AdminPage, AdminTablePanel } from "@components/Admin";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
 import "./AdminArticles.css";
 
-const { Text } = Typography;
 const { Search } = Input;
 
 // 表格列配置
@@ -54,19 +49,13 @@ const getArticleColumns = (
     ellipsis: true,
     render: (text: string, record: ArticleWithRelations) => (
       <div>
-        <div style={{ fontWeight: "bold" }}>
-          {text}
-          {record.published ? (
-            <Tag color="green" style={{ marginLeft: 8, fontSize: "10px" }}>
-              已发布
-            </Tag>
-          ) : (
-            <Tag color="orange" style={{ marginLeft: 8, fontSize: "10px" }}>
-              草稿
-            </Tag>
-          )}
+        <div className="flex items-center gap-1.5 font-medium text-sm">
+          <span className="truncate">{text}</span>
+          <Tag bordered={false} color={record.published ? "green" : "orange"} className="text-xs flex-shrink-0">
+            {record.published ? "已发布" : "草稿"}
+          </Tag>
         </div>
-        <div style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)" }}>{record.slug}</div>
+        <div className="text-xs mt-0.5 text-text-tertiary">{record.slug}</div>
       </div>
     ),
   },
@@ -74,29 +63,22 @@ const getArticleColumns = (
     title: "分类",
     dataIndex: "category",
     key: "category",
-    width: 150,
+    width: 140,
     render: (category: any) =>
       category ? (
-        <Tag color="orange" style={{ cursor: "pointer" }}>
-          {category.name}
-        </Tag>
+        <Tag bordered={false} color="orange">{category.name}</Tag>
       ) : (
-        <Text type="secondary">未分类</Text>
+        <span className="text-xs text-text-tertiary">未分类</span>
       ),
   },
   {
-    title: "发布时间",
-    dataIndex: "published",
+    title: "更新时间",
+    dataIndex: "updated_at",
     key: "published_time",
-    width: 150,
-    render: (published: boolean, record: ArticleWithRelations) => (
-      <div>
-        <div style={{ fontSize: "12px" }}>
-          {published ? "已发布" : "未发布"}
-        </div>
-        <div style={{ fontSize: "10px", color: "var(--ws-color-text-secondary)" }}>
-          更新: {dayjs(record.updated_at).format("MM-DD HH:mm")}
-        </div>
+    width: 130,
+    render: (_: any, record: ArticleWithRelations) => (
+      <div className="text-xs text-text-secondary">
+        {dayjs(record.updated_at).format("MM-DD HH:mm")}
       </div>
     ),
   },
@@ -484,55 +466,40 @@ const AdminArticles: React.FC = () => {
 
   return (
     <AdminPage>
-      <div className="ws-responsive-toolbar" style={{ marginBottom: 16 }}>
-        <Space wrap className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
-          <Select
-            value={categoryFilter}
-            allowClear
-            placeholder="按分类筛选"
-            style={{ width: 280, maxWidth: "100%" }}
-            options={categories.map((c) => ({ value: c.id, label: c.name }))}
-            onChange={(v) => {
-              const next = typeof v === "number" ? v : undefined;
-              setCategoryFilter(next);
-              const newParams: ArticleFilterParams = {
-                ...searchParams,
-                page: 1,
-                category_id: next,
-              };
-              setCurrentPage(1);
-              setSearchParams(newParams);
-              loadArticles(newParams);
-            }}
-          />
-          <Search
-            value={titleKeyword}
-            allowClear
-            placeholder="搜索标题..."
-            style={{ width: 260, maxWidth: "100%" }}
-            onChange={(e) => setTitleKeyword(e.target.value)}
-            onSearch={(v) => setTitleKeyword(v)}
-          />
-        </Space>
-        <Space wrap className="ws-responsive-toolbar__group">
-          {selectedRowKeys.length > 0 && (
-            <Dropdown menu={batchMenu}>
-              <Button icon={<MoreOutlined />}>批量操作 ({selectedRowKeys.length})</Button>
-            </Dropdown>
-          )}
-          <Button icon={<ReloadOutlined />} onClick={() => loadArticles()} loading={loading}>
-            刷新
-          </Button>
-          <Button icon={<FolderOutlined />} onClick={() => setCategoryModalVisible(true)}>
-            分类管理
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddArticle}>
-            新建文章
-          </Button>
-        </Space>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Select
+          value={categoryFilter}
+          allowClear
+          placeholder="按分类筛选"
+          style={{ width: 200 }}
+          options={categories.map((c) => ({ value: c.id, label: c.name }))}
+          onChange={(v) => {
+            const next = typeof v === "number" ? v : undefined;
+            setCategoryFilter(next);
+            const newParams: ArticleFilterParams = { ...searchParams, page: 1, category_id: next };
+            setCurrentPage(1); setSearchParams(newParams); loadArticles(newParams);
+          }}
+        />
+        <Search
+          value={titleKeyword}
+          allowClear
+          placeholder="搜索标题..."
+          style={{ width: 220 }}
+          onChange={(e) => setTitleKeyword(e.target.value)}
+          onSearch={(v) => setTitleKeyword(v)}
+        />
+        <div className="flex-1" />
+        {selectedRowKeys.length > 0 && (
+          <Dropdown menu={batchMenu}>
+            <Button icon={<MoreOutlined />}>批量操作 ({selectedRowKeys.length})</Button>
+          </Dropdown>
+        )}
+        <Button icon={<ReloadOutlined />} onClick={() => loadArticles()} loading={loading}>刷新</Button>
+        <Button icon={<FolderOutlined />} onClick={() => setCategoryModalVisible(true)}>分类管理</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddArticle}>新建文章</Button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loading}
           isEmpty={displayedArticles.length === 0}

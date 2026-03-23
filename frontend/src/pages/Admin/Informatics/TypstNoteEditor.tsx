@@ -560,18 +560,18 @@ const TypstNoteEditorInner: React.FC<{
   const renderPreviewCanvas = () => (
     <div className="typst-preview-box">
       {renderLoading ? (
-        <div style={{ textAlign: "center", padding: 24 }}>
+        <div className="text-center p-6">
           <Spin />
         </div>
       ) : null}
       {renderError ? (
-        <div style={{ padding: 12 }}>
+        <div className="p-3">
           <Alert type="error" showIcon message="Typst 预览失败" description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{renderError}</pre>} />
         </div>
       ) : null}
       <PdfCanvasVirtualViewer data={previewPdfData} />
       {!renderLoading && !renderError && !previewPdfData ? (
-        <div style={{ padding: 12 }}>
+        <div className="p-3">
           <Space orientation="vertical">
             <Text type="secondary">暂无预览</Text>
             <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id)} disabled={!note?.id}>
@@ -652,7 +652,7 @@ const TypstNoteEditorInner: React.FC<{
         <Card
           size="small"
           title={
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="flex justify-between items-center">
               <span>内容</span>
               <Radio.Group
                 value={viewMode}
@@ -722,11 +722,11 @@ const TypstNoteEditorInner: React.FC<{
         footer={null}
         styles={{ body: { padding: 24 } }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+        <div className="flex justify-between mb-3">
           <Button icon={<ReloadOutlined />} onClick={refreshCategories}>
             刷新
           </Button>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <Input value={newCategoryPath} onChange={(e) => setNewCategoryPath(e.target.value)} placeholder="例如：竞赛/CSP/基础" />
             <Button
               type="primary"
@@ -749,9 +749,9 @@ const TypstNoteEditorInner: React.FC<{
             </Button>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="flex flex-col gap-2.5">
           {categoryDrafts.map((c, idx) => (
-            <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div key={c.id} className="flex gap-2 items-center">
               <Input
                 value={c.path}
                 onChange={(e) =>
@@ -817,7 +817,7 @@ const TypstNoteEditorInner: React.FC<{
         footer={null}
         styles={{ body: { padding: 24 } }}
       >
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+        <div className="flex gap-2.5 items-center mb-3">
           <Select
             value={styleEditingKey}
             options={styleList.map((s) => ({ value: s.key, label: s.key }))}
@@ -863,7 +863,7 @@ const TypstNoteEditorInner: React.FC<{
           >
             从资源重置
           </Button>
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
           <Button
             type="primary"
             icon={<SaveOutlined />}
@@ -891,7 +891,7 @@ const TypstNoteEditorInner: React.FC<{
         </div>
 
         {styleDraft ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 10, marginBottom: 12 }}>
+          <div className="grid grid-cols-[1fr_140px] gap-2.5 mb-3">
             <Input value={styleDraft.title} onChange={(e) => setStyleDraft((p) => (p ? { ...p, title: e.target.value } : p))} placeholder="标题" />
             <Input
               value={String(styleDraft.sort_order ?? 0)}

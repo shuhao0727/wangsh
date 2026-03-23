@@ -17,8 +17,8 @@ const StatusItem: React.FC<StatusItemProps> = ({ label, value, status }) => (
       {label}
     </Text>
     <div className="admin-status-item__value">
-      {status === "success" && <CheckCircleOutlined style={{ color: "var(--ws-color-success)" }} />}
-      {status === "error" && <CloseCircleOutlined style={{ color: "var(--ws-color-error)" }} />}
+      {status === "success" && <CheckCircleOutlined className="text-success" />}
+      {status === "error" && <CloseCircleOutlined className="text-error" />}
       <span className="admin-status-item__value-text">{value}</span>
     </div>
   </div>

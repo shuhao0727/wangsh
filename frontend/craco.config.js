@@ -1,7 +1,13 @@
 const path = require("path");
 const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
+const tailwindcss = require("tailwindcss");
 
 module.exports = {
+  style: {
+    postcss: {
+      plugins: (plugins) => [tailwindcss, ...plugins],
+    },
+  },
   webpack: {
     alias: {
       // 根路径别名

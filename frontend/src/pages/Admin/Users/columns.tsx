@@ -43,7 +43,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
       width: 120,
       render: (study_year: string | null) =>
         study_year ? (
-          <Tag color="blue" bordered={false} style={{ marginRight: 4, background: 'var(--ws-color-primary-soft)', color: 'var(--ws-color-primary)' }}>
+          <Tag color="blue" bordered={false} className="!mr-1 !bg-primary-soft !text-primary">
             {study_year}
           </Tag>
         ) : null,
@@ -60,7 +60,7 @@ export const getUserColumns = (props: ColumnConfigProps) => {
       width: 120,
       render: (className: string | null) =>
         className ? (
-          <Tag color="green" bordered={false} style={{ marginRight: 4, background: 'var(--ws-color-success-soft)', color: 'var(--ws-color-success)' }}>
+          <Tag color="green" bordered={false} className="!mr-1 !bg-success-soft !text-success">
             {className}
           </Tag>
         ) : null,

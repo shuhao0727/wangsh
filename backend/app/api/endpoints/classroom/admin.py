@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +57,47 @@ async def delete_activity(
         return {"message": "已删除"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{activity_id}/duplicate")
+async def duplicate_activity(
+    activity_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(require_admin),
+):
+    """复制活动为新草稿"""
+    try:
+        activity = await svc.duplicate_activity(db, activity_id, current_user.get("id"))
+        return _to_response(activity)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{activity_id}/restart")
+async def restart_activity(
+    activity_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(require_admin),
+):
+    """重新开始已结束的活动"""
+    try:
+        activity = await svc.restart_activity(db, activity_id)
+        return _to_response(activity)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_activities(
+    ids: List[int] = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(require_admin),
+):
+    """批量删除活动（只删除 draft 状态）"""
+    if not ids:
+        raise HTTPException(status_code=400, detail="请提供要删除的活动 ID 列表")
+    result = await svc.bulk_delete_activities(db, ids)
+    return result
 
 
 @router.get("/")

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Card, Row, Col, Breadcrumb, Alert, Button, Empty, Tag, Skeleton } from 'antd';
+import { Breadcrumb, Alert, Button, Empty, Skeleton } from 'antd';
 import {
-  HomeOutlined,
-  ReloadOutlined,
-  ArrowRightOutlined
+  HomeOutlined, ReloadOutlined, ArrowRightOutlined,
+  SoundOutlined, CodeOutlined, FormOutlined, BranchesOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
@@ -13,12 +12,46 @@ import { featureFlagsApi } from '@/services/system/featureFlags';
 import { logger } from '@services/logger';
 import './ITTechnology.css';
 
-const { Text } = Typography;
+type ViewState = 'launcher' | 'rollcall-selector' | 'rollcall-player';
 
-type ViewState =
-  | 'launcher'
-  | 'rollcall-selector'
-  | 'rollcall-player';
+const APPS = [
+  {
+    key: 'it_dianming_enabled',
+    title: '随机点名',
+    description: '公平公正的随机抽取工具，支持班级名单导入与特效展示。',
+    icon: <SoundOutlined />,
+    color: '#0EA5E9', bg: 'rgba(14,165,233,0.08)', ring: 'rgba(14,165,233,0.2)',
+    action: 'dianming',
+    available: true,
+  },
+  {
+    key: 'it_python_lab_enabled',
+    title: 'Python 实验室',
+    description: '在线 Python 编程环境，可视化流程图与代码执行。',
+    icon: <CodeOutlined />,
+    color: '#10B981', bg: 'rgba(16,185,129,0.08)', ring: 'rgba(16,185,129,0.2)',
+    action: 'python',
+    available: true,
+  },
+  {
+    key: 'it_survey_enabled',
+    title: '问卷调查',
+    description: '创建与分发在线问卷，实时收集学生反馈数据。',
+    icon: <FormOutlined />,
+    color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', ring: 'rgba(139,92,246,0.2)',
+    action: 'survey',
+    available: false,
+  },
+  {
+    key: 'it_mindmap_enabled',
+    title: '思维导图',
+    description: '结构化您的创意，在线绘制流程图与知识图谱。',
+    icon: <BranchesOutlined />,
+    color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', ring: 'rgba(245,158,11,0.2)',
+    action: 'mindmap',
+    available: false,
+  },
+];
 
 const ITTechnologyPage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,17 +62,15 @@ const ITTechnologyPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadFlags = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled'];
       const results = await Promise.all(
         keys.map(key => featureFlagsApi.getPublic(key).catch(() => ({ value: { enabled: false } } as any)))
       );
-      
       const newFlags: Record<string, boolean> = {};
-      results.forEach((res, index) => {
-        const k = keys[index];
+      results.forEach((res, i) => {
+        const k = keys[i];
         const enabled = res.value?.enabled === true;
         if (!enabled && k === 'it_python_lab_enabled' && process.env.REACT_APP_ENV === 'development') {
           newFlags[k] = res.value?.enabled !== false;
@@ -56,17 +87,14 @@ const ITTechnologyPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadFlags();
-  }, []);
+  useEffect(() => { loadFlags(); }, []);
 
   const handleSelectClass = (record: DianmingClass) => {
-    setCurrentClass(record);
-    setView('rollcall-player');
+    setCurrentClass(record); setView('rollcall-player');
   };
 
   const renderBreadcrumb = () => (
-    <Breadcrumb style={{ marginBottom: "var(--ws-space-3)" }}
+    <Breadcrumb className="mb-4"
       items={[
         {
           title: <><HomeOutlined /> 首页</>,
@@ -74,158 +102,87 @@ const ITTechnologyPage: React.FC = () => {
           onClick: (e) => { e.preventDefault(); setView('launcher'); setCurrentClass(null); }
         },
         ...(view !== 'launcher' ? [{
-          title: '随机点名',
-          href: "#",
+          title: '随机点名', href: "#",
           onClick: (e: React.MouseEvent) => { e.preventDefault(); setView('rollcall-selector'); setCurrentClass(null); }
         }] : []),
-        ...(view === 'rollcall-player' && currentClass ? [{
-          title: currentClass.class_name
-        }] : [])
+        ...(view === 'rollcall-player' && currentClass ? [{ title: currentClass.class_name }] : [])
       ]}
     />
   );
 
-  // 1. 点名播放器视图 (全屏覆盖)
   if (view === 'rollcall-player' && currentClass) {
-    return (
-      <RollCallPlayer 
-        record={currentClass} 
-        onBack={() => { setView('rollcall-selector'); setCurrentClass(null); }} 
-      />
-    );
+    return <RollCallPlayer record={currentClass} onBack={() => { setView('rollcall-selector'); setCurrentClass(null); }} />;
   }
 
   if (loading) {
     return (
-      <div className="it-technology-page">
-        <Card className="it-card">
-          <div className="it-technology-loading">
-            <Skeleton active />
-          </div>
-        </Card>
+      <div className="w-full flex-1 mx-auto px-6 py-8" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+          {[1,2,3,4].map(i => <div key={i} className="rounded-2xl p-6 bg-surface-2"><Skeleton active /></div>)}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="it-technology-page">
-         <Alert
-          type="error"
-          message="加载失败"
-          description={error}
-          showIcon
-          action={
-            <Button size="small" type="primary" onClick={loadFlags} icon={<ReloadOutlined />}>
-              重试
-            </Button>
-          }
+      <div className="w-full flex-1 mx-auto px-6 py-8" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
+        <Alert type="error" message="加载失败" description={error} showIcon
+          action={<Button size="small" type="primary" onClick={loadFlags} icon={<ReloadOutlined />}>重试</Button>}
         />
       </div>
     );
   }
 
+  const visibleApps = APPS.filter(app => flags[app.key]);
+
   return (
-    <div className="it-technology-page">
+    <div className="w-full flex-1 mx-auto px-6 py-8 flex flex-col" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
       {view === 'launcher' ? (
         <>
-          <Row gutter={[16, 16]}>
-            {/* 随机点名卡片 */}
-            {flags['it_dianming_enabled'] && (
-              <Col xs={24} md={12} lg={8}>
-                <Card className="it-card" styles={{ body: { padding: "var(--ws-space-3)" } }}>
-                  <div className="it-card-body">
-                    <div className="it-card-header">
-                      <Text strong className="it-card-title">随机点名</Text>
-                      <Tag color="blue">工具</Tag>
-                    </div>
-                    <Text type="secondary">
-                      公平公正的随机抽取工具，支持班级名单导入与特效展示。
-                    </Text>
-                    <div>
-                      <Button type="primary" icon={<ArrowRightOutlined />} onClick={() => setView('rollcall-selector')}>
-                        进入
-                      </Button>
-                    </div>
+          {visibleApps.length === 0 ? (
+            <div className="flex items-center justify-center flex-1">
+              <Empty description="暂无可用应用，请联系管理员在后台开启。" />
+            </div>
+          ) : (
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              {visibleApps.map(app => (
+                <button
+                  key={app.key}
+                  className="it-app-card relative flex flex-col items-center text-center rounded-2xl px-5 py-5 border-0 cursor-pointer w-full bg-surface-2"
+                  style={{ '--app-bg': app.bg, '--app-ring': app.ring } as React.CSSProperties}
+                  onClick={() => {
+                    if (!app.available) return;
+                    if (app.action === 'dianming') setView('rollcall-selector');
+                    if (app.action === 'python') navigate('/it-technology/python-lab');
+                  }}
+                >
+                  {/* 图标 */}
+                  <div className="it-app-icon flex items-center justify-center w-14 h-14 rounded-2xl mb-3 transition-transform duration-150"
+                    style={{ background: app.bg, color: app.color, fontSize: 28 }}>
+                    {app.icon}
                   </div>
-                </Card>
-              </Col>
-            )}
-
-            {(flags['it_python_lab_enabled'] || process.env.REACT_APP_ENV === 'development') && (
-              <Col xs={24} md={12} lg={8}>
-                <Card className="it-card" styles={{ body: { padding: "var(--ws-space-3)" } }}>
-                  <div className="it-card-body">
-                    <div className="it-card-header">
-                      <Text strong className="it-card-title">Python 实验室</Text>
-                      <Tag color="purple">编程</Tag>
+                  {/* 标题 */}
+                  <div className="font-semibold text-base text-text-base mb-2">{app.title}</div>
+                  {/* 描述 */}
+                  <div className="text-sm text-text-secondary leading-relaxed mb-3">{app.description}</div>
+                  {/* 按钮 */}
+                  {app.available ? (
+                    <div className="flex items-center gap-1 text-sm font-medium" style={{ color: app.color }}>
+                      立即使用 <ArrowRightOutlined className="it-app-arrow text-xs transition-transform duration-150" />
                     </div>
-                    <Text type="secondary">
-                      可视化流程图编程与代码实时转换，支持断点调试与变量追踪。
-                    </Text>
-                    <div>
-                      <Button type="primary" icon={<ArrowRightOutlined />} onClick={() => navigate('/it-technology/python-lab')}>
-                        进入
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-            )}
-
-            {/* 问卷调查卡片 */}
-            {flags['it_survey_enabled'] && (
-              <Col xs={24} md={12} lg={8}>
-                <Card className="it-card" styles={{ body: { padding: "var(--ws-space-3)" } }}>
-                  <div className="it-card-body">
-                    <div className="it-card-header">
-                      <Text strong className="it-card-title">问卷调查</Text>
-                      <Tag color="cyan">数据</Tag>
-                    </div>
-                    <Text type="secondary">
-                      快速创建在线问卷，收集反馈并实时分析数据。(开发中)
-                    </Text>
-                    <div>
-                      <Button disabled icon={<ArrowRightOutlined />}>敬请期待</Button>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-            )}
-
-            {/* 思维导图卡片 */}
-            {flags['it_mindmap_enabled'] && (
-              <Col xs={24} md={12} lg={8}>
-                <Card className="it-card" styles={{ body: { padding: "var(--ws-space-3)" } }}>
-                  <div className="it-card-body">
-                    <div className="it-card-header">
-                      <Text strong className="it-card-title">思维导图</Text>
-                      <Tag color="gold">工具</Tag>
-                    </div>
-                    <Text type="secondary">
-                      结构化您的创意，在线绘制流程图与知识图谱。(开发中)
-                    </Text>
-                    <div>
-                      <Button disabled icon={<ArrowRightOutlined />}>敬请期待</Button>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-            )}
-            
-            {/* 如果没有任何应用开启 */}
-            {!loading && !flags['it_dianming_enabled'] && !flags['it_python_lab_enabled'] && !flags['it_survey_enabled'] && !flags['it_mindmap_enabled'] && (
-              <Col span={24} className="it-empty-col">
-                <Empty description="暂无可用应用，请联系管理员在后台开启。" />
-              </Col>
-            )}
-          </Row>
+                  ) : (
+                    <div className="text-xs text-text-tertiary">敬请期待</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       ) : (
-        // 2. 班级选择视图
-        <div className="it-class-selector-wrap">
+        <div className="flex flex-col flex-1">
           {renderBreadcrumb()}
-          <div className="it-class-selector-content">
+          <div className="flex-1 rounded-2xl bg-white p-6">
             <ClassSelector onSelect={handleSelectClass} />
           </div>
         </div>

@@ -29,7 +29,7 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
         }}
       >
         <FileTextOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-        <Text type="secondary" style={{ fontSize: "16px" }}>
+        <Text type="secondary" className="text-base">
           开始输入内容，预览将在此处显示
         </Text>
         <Text type="secondary" style={{ fontSize: "12px", marginTop: "8px" }}>
@@ -43,7 +43,7 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
   const scopedCss = combinedCss.trim() ? toScopedCss(combinedCss, `.ws-markdown[data-article-scope="${scopeId}"]`) : "";
 
   return (
-    <div className="ws-markdown" data-article-scope={scopeId} style={{ flex: 1, minHeight: 0 }}>
+    <div className="ws-markdown flex-1 min-h-0" data-article-scope={scopeId}>
       {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>

@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css"; // Import KaTeX CSS
-import { Card, Avatar, Button, Space, Tag, Tooltip, Flex, Typography, Input, Spin, Collapse } from "antd";
+import { Card, Avatar, Button, Tag, Tooltip, Typography, Input, Spin, Collapse } from "antd";
 import { HistoryOutlined, SendOutlined, UserOutlined, ClockCircleOutlined, BranchesOutlined, SettingOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { ChatAreaProps, Message, WorkflowGroup, Agent } from "./types";
@@ -24,42 +24,42 @@ const ThinkingBubble = () => (
       <div className="thinking-dot" style={{ animationDelay: '0.2s' }} />
       <div className="thinking-dot" style={{ animationDelay: '0.4s' }} />
     </div>
-    <span style={{ fontSize: 12, opacity: 0.8 }}>思考中...</span>
+    <span className="text-xs opacity-80">思考中...</span>
   </div>
 );
 
 // Markdown components definition (stable reference)
 const markdownComponents: Components = {
   p: ({ children }) => (
-    <div style={{ margin: 0, lineHeight: 1.6 }}>{children}</div>
+    <div className="!m-0 leading-relaxed">{children}</div>
   ),
   h1: ({ children }) => (
-    <div style={{ fontSize: 16, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+    <div className="text-base font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
   h2: ({ children }) => (
-    <div style={{ fontSize: 14, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+    <div className="text-sm font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
   h3: ({ children }) => (
-    <div style={{ fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+    <div className="text-xs font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
   ul: ({ children }) => (
-    <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
+    <ul className="!m-0 pl-4 leading-relaxed list-inside">
       {children}
     </ul>
   ),
   ol: ({ children }) => (
-    <ol style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6, listStylePosition: "inside" }}>
+    <ol className="!m-0 pl-4 leading-relaxed list-inside">
       {children}
     </ol>
   ),
   li: ({ children }) => (
-    <li style={{ margin: 0, padding: 0, lineHeight: 1.6 }}>
+    <li className="!m-0 !p-0 leading-relaxed">
       {children}
     </li>
   ),
@@ -74,7 +74,7 @@ const markdownComponents: Components = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      style={{ color: "var(--ws-color-primary)" }}
+      className="text-primary"
     >
       {children}
     </a>
@@ -158,7 +158,7 @@ const MessageBubble = React.memo<{
   const renderWorkflowGroups = () => {
     if (!workflowGroups || workflowGroups.length === 0) return null;
     return (
-      <div style={{ marginTop: 8, marginBottom: 12 }}>
+      <div className="mt-2 mb-3">
         <Collapse
           ghost
           defaultActiveKey={workflowGroups.map((g) => g.id)}
@@ -186,7 +186,7 @@ const MessageBubble = React.memo<{
                 durationText = `${seconds}s`;
               }
               return (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="flex items-center gap-2">
                   <BranchesOutlined />
                   <Text type="secondary">{group.label}</Text>
                   <Text type="secondary">节点 {count}</Text>
@@ -196,21 +196,15 @@ const MessageBubble = React.memo<{
             })(),
             children:
               group.nodes.length === 0 ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" className="text-xs">
                   暂无节点
                 </Text>
               ) : (
-                <div style={{ paddingLeft: 12, borderLeft: "2px solid rgba(0, 0, 0, 0.04)" }}>
+                <div className="pl-3 border-l-2 border-black/5">
                   {group.nodes.map((n) => (
                     <div
                       key={n.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "4px 0",
-                        fontSize: 13,
-                      }}
+                      className="flex items-center gap-3 py-1 text-sm"
                     >
                       <Tag
                         color={
@@ -234,7 +228,7 @@ const MessageBubble = React.memo<{
                         {n.name}
                       </Text>
 
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Text type="secondary" className="text-xs">
                         {n.startedAt ? dayjs(n.startedAt).format("HH:mm:ss") : ""}
                         {n.finishedAt
                           ? ` → ${dayjs(n.finishedAt).format("HH:mm:ss")}`
@@ -265,7 +259,7 @@ const MessageBubble = React.memo<{
           }}
         />
         <div className={`message-bubble ${isUser ? 'user' : 'agent'}`}>
-          <div style={{ marginBottom: "4px" }}>
+          <div className="mb-1">
             <Text
               strong
               style={{
@@ -276,11 +270,7 @@ const MessageBubble = React.memo<{
               {isUser ? displayName : (wf ? wf.label : currentAgent?.name)}
             </Text>
             <Text
-              style={{
-                fontSize: "10px",
-                color: "#999",
-                marginLeft: "8px",
-              }}
+              className="text-[10px] text-gray-400 ml-2"
             >
               <ClockCircleOutlined /> {formatTimestamp(message.timestamp)}
             </Text>
@@ -290,33 +280,23 @@ const MessageBubble = React.memo<{
               {wf.detail ? (
                 <>
                   <div
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--ws-color-text-secondary)",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
+                    className="text-xs whitespace-pre-wrap break-words text-text-secondary"
                   >
                     <Button
                       type="link"
                       size="small"
                       onClick={() => setExpanded(!expanded)}
-                      style={{ padding: 0 }}
+                      className="!p-0"
                     >
                       {expanded ? "收起详情" : "查看详情"}
                     </Button>
                   </div>
                   {expanded && (
                     <div
+                      className="mt-2 px-3 py-2 rounded-lg text-xs whitespace-pre-wrap break-words"
                       style={{
-                        marginTop: 8,
                         background: "var(--ws-color-surface-2)",
                         border: `1px solid ${wf.color}`,
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        fontSize: "12px",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
                       }}
                     >
                       {wf.detail}
@@ -325,12 +305,7 @@ const MessageBubble = React.memo<{
                 </>
               ) : (
                 <div
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    fontSize: "12px",
-                    color: "var(--ws-color-text-secondary)",
-                  }}
+                  className="text-xs whitespace-pre-wrap break-words text-text-secondary"
                 >
                   {message.content}
                 </div>
@@ -340,7 +315,7 @@ const MessageBubble = React.memo<{
             <>
               {!isUser && renderWorkflowGroups()}
               {isThinking ? (
-                <div style={{ padding: '8px 4px', color: currentAgent?.color }}>
+                <div className="px-2 py-1" style={{ color: currentAgent?.color }}>
                   <ThinkingBubble />
                 </div>
               ) : (isUser || message.content) ? (
@@ -430,7 +405,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }}
         >
           <Spin size="large" />
-          <Text style={{ marginTop: 16 }}>正在加载智能体...</Text>
+          <Text className="mt-4 block">正在加载智能体...</Text>
         </div>
       </Card>
     );
@@ -476,143 +451,85 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   return (
-    <Card
-      className="chat-area-card"
-      bordered={false}
-      style={{
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        background: "transparent",
-      }}
-      styles={{
-        body: {
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          padding: 0,
-          overflow: "hidden",
-        },
-      }}
-    >
+    <div className="flex flex-col h-full overflow-hidden">
       {/* 对话头部 */}
-      <div className="chat-header">
-        <Space size="small">
+      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0 bg-white border-b border-black/[0.04] min-h-[56px]">
+        <div className="flex items-center gap-2">
           {!historyVisible && (
             <Tooltip title="显示侧边栏">
               <Button icon={<HistoryOutlined />} onClick={onToggleSidebar} type="text" />
             </Tooltip>
           )}
-          <Avatar
-            size={32}
-            icon={currentAgent?.icon}
-            aria-label={`${currentAgent?.name || "智能体"}头像`}
-            style={{ backgroundColor: currentAgent?.color }}
-          />
-          <Space size="small" align="center" style={{ marginLeft: 4 }}>
+          <Avatar size={32} icon={currentAgent?.icon} aria-label={`${currentAgent?.name || "智能体"}头像`}
+            style={{ backgroundColor: currentAgent?.color }} />
+          <div className="flex items-center gap-2 ml-1">
             <Text strong style={{ fontSize: 15, color: currentAgent?.color }}>
               {currentAgent?.name}
             </Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" className="text-xs hidden sm:inline">
               {currentAgent?.description}
             </Text>
-          </Space>
-          <Tag 
-            color={currentAgent?.status === "online" ? "success" : "default"} 
-            style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px' }}
-            variant="filled"
-          >
+          </div>
+          <Tag color={currentAgent?.status === "online" ? "success" : "default"}
+            className="ml-1 text-[10px] leading-[18px]" variant="filled">
             {currentAgent?.status === "online" ? "在线" : "离线"}
           </Tag>
-        </Space>
-        <Space>
+        </div>
+        <div className="flex items-center gap-2">
           {isStreaming && (
             <>
               <Tag color="processing">
-                <TimerDisplay 
-                  startTime={streamStartTime || null} 
-                  isRunning={true} 
-                  prefix="执行中 "
-                />
+                <TimerDisplay startTime={streamStartTime || null} isRunning={true} prefix="执行中 " />
               </Tag>
-              <Button size="small" danger onClick={onStopStream}>
-                停止
-              </Button>
+              <Button size="small" danger onClick={onStopStream}>停止</Button>
             </>
           )}
-          <Text type="secondary">共 {visibleMessages.length} 条消息</Text>
-        </Space>
+          <Text type="secondary" className="text-xs">{visibleMessages.length} 条消息</Text>
+        </div>
       </div>
 
-      {/* 消息列表 - 固定高度，带滚动条 */}
-      <div
-        ref={messageListRef}
-        className="chat-message-list"
-      >
+      {/* 消息列表 */}
+      <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-6 py-5 bg-surface-2">
         {visibleMessages.map((message) => {
-          const messageWorkflows =
-            workflowGroups?.filter((group) => group.messageId === message.id) || [];
+          const messageWorkflows = workflowGroups?.filter((group) => group.messageId === message.id) || [];
           return (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              currentAgent={currentAgent}
-              workflowGroups={messageWorkflows}
-              userDisplayName={userDisplayName}
-            />
+            <MessageBubble key={message.id} message={message} currentAgent={currentAgent}
+              workflowGroups={messageWorkflows} userDisplayName={userDisplayName} />
           );
         })}
-        {/* 渲染正在流式生成的内容 */}
         {isStreaming && (
-            <MessageBubble
-              message={{
-                id: 'streaming-temp',
-                content: streamingContent || "",
-                sender: 'agent',
-                timestamp: new Date().toISOString(),
-                agentId: currentAgent?.id
-              }}
-              currentAgent={currentAgent}
-              workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
-              userDisplayName={userDisplayName}
-              isThinking={!streamingContent}
-            />
+          <MessageBubble
+            message={{ id: 'streaming-temp', content: streamingContent || "", sender: 'agent', timestamp: new Date().toISOString(), agentId: currentAgent?.id }}
+            currentAgent={currentAgent}
+            workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
+            userDisplayName={userDisplayName}
+            isThinking={!streamingContent}
+          />
         )}
       </div>
 
       {/* 输入区域 */}
-      <div className="chat-input-area">
-        <Space orientation="vertical" style={{ width: "100%" }}>
-          <TextArea
-            id="message-input"
-            aria-label="输入消息"
-            value={inputMessage}
-            onChange={(e) => onInputChange(e.target.value)}
-            placeholder={`向${currentAgent?.name}发送消息...`}
-            autoSize={{ minRows: 2, maxRows: 6 }}
-            onKeyDown={handleKeyPress}
-            style={{ width: "100%" }}
-          />
-          <Flex justify="space-between" align="center">
-            <Space>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                Enter发送，Shift+Enter换行
-              </Text>
-            </Space>
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={handleSendMessageWithAuth}
-              disabled={!inputMessage.trim() || isStreaming}
-            >
-              发送
-            </Button>
-          </Flex>
-        </Space>
+      <div className="flex-shrink-0 px-5 pt-3 pb-4 bg-white border-t border-black/[0.04]">
+        <TextArea
+          id="message-input"
+          aria-label="输入消息"
+          value={inputMessage}
+          onChange={(e) => onInputChange(e.target.value)}
+          placeholder={`向${currentAgent?.name}发送消息...`}
+          autoSize={{ minRows: 2, maxRows: 6 }}
+          onKeyDown={handleKeyPress}
+          style={{ width: "100%" }}
+          className="mb-2"
+        />
+        <div className="flex items-center justify-between">
+          <Text type="secondary" className="text-xs">Enter 发送，Shift+Enter 换行</Text>
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessageWithAuth}
+            disabled={!inputMessage.trim() || isStreaming}>
+            发送
+          </Button>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 };
 

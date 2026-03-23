@@ -3,6 +3,11 @@
  * 重置样式和基础样式定义
  * ============================================ */
 
+/* Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* 重置样式 */
 *,
 *::before,
@@ -57,6 +62,17 @@
   --ws-color-warning-soft: rgba(245, 158, 11, 0.06);
   --ws-color-error-soft: rgba(239, 68, 68, 0.06);
   --ws-color-info-soft: rgba(14, 165, 233, 0.06);
+
+  /* 课堂互动 / 评测专属紫色 */
+  --ws-color-purple: #8B5CF6;
+  --ws-color-purple-hover: #7C3AED;
+  --ws-color-purple-soft: rgba(139, 92, 246, 0.06);
+  --ws-color-purple-ring: rgba(139, 92, 246, 0.25);
+
+  /* 代码块 */
+  --ws-color-code-bg: #1e1e1e;
+  --ws-color-code-text: #d4d4d4;
+  --ws-color-code-purple: #722ed1;
 
   /* 渐变 */
   --ws-gradient-primary: linear-gradient(135deg, #0EA5E9, #06B6D4);
@@ -245,6 +261,42 @@ a:active {
 .border-bottom { border-bottom: 1px solid var(--ws-color-border); }
 .border-top { border-top: 1px solid var(--ws-color-border); }
 .border-left { border-left: 1px solid var(--ws-color-border); }
+
+/* Home 页面模块卡片 hover 效果 */
+.module-card { transition: background 0.15s, box-shadow 0.15s; }
+.module-card:hover { background: var(--mc-bg) !important; box-shadow: 0 0 0 2px var(--mc-ring) !important; }
+.module-card:hover .module-arrow { opacity: 1; }
+.module-card:hover .module-icon { transform: scale(1.1); }
+.module-icon { transition: transform 0.15s; }
+.module-arrow { opacity: 0; transition: opacity 0.15s; }
+
+/* Home 页面外部链接 hover 效果 */
+.ext-card { transition: background 0.15s; }
+.ext-card:hover { background: var(--ec-bg) !important; }
+.ext-card:hover .ext-arrow { opacity: 1; }
+.ext-arrow { opacity: 0; transition: opacity 0.15s; }
+
+/* IT Technology 应用卡片 hover */
+.it-app-card { transition: background 0.15s, box-shadow 0.15s; }
+.it-app-card:hover { background: var(--app-bg) !important; box-shadow: 0 0 0 2px var(--app-ring) !important; }
+.it-app-card:hover .it-app-icon { transform: scale(1.1); }
+.it-app-card:hover .it-app-arrow { transform: translateX(3px); }
+
+/* Informatics 笔记卡片 hover */
+.informatics-note-card { background: #FAFAFA; transition: background 0.15s, box-shadow 0.15s; }
+.informatics-note-card:hover { background: rgba(14,165,233,0.06); box-shadow: 0 0 0 1.5px rgba(14,165,233,0.2); }
+
+/* 管理后台按钮 hover */
+.admin-btn-hover { background: rgba(14,165,233,0.12); transition: background 0.15s; }
+.admin-btn-hover:hover { background: rgba(14,165,233,0.22); }
+
+/* 文章列表项 hover */
+.article-item-hover { transition: background 0.15s, border-color 0.15s; border-bottom-color: rgba(0,0,0,0.04); }
+.article-item-hover:hover { background: rgba(14,165,233,0.04); border-bottom-color: transparent; }
+
+/* AdminLayout 用户菜单 hover */
+.admin-user-menu { transition: background 0.15s; }
+.admin-user-menu:hover { background: rgba(0,0,0,0.03); }
 
 /* 响应式断点 */
 @media (max-width: 768px) {

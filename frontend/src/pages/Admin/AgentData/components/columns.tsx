@@ -77,11 +77,11 @@ export const getAgentDataColumns = (
       return (
         <div>
           <div
-            style={{ display: "flex", alignItems: "center", marginBottom: 4, flexWrap: 'wrap', gap: '4px' }}
+            className="flex items-center mb-1 flex-wrap gap-1"
           >
-            <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: '0 1 auto' }}>
-              <UserOutlined style={{ marginRight: 4, color: "var(--ws-color-primary)", flexShrink: 0 }} />
-              <Text strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={user.name}>{user.name}</Text>
+            <div className="flex items-center min-w-0" style={{ flex: '0 1 auto' }}>
+              <UserOutlined className="mr-1 flex-shrink-0 text-primary" />
+              <Text strong className="overflow-hidden text-ellipsis whitespace-nowrap" title={user.name}>{user.name}</Text>
             </div>
             <Tag
               color={
@@ -96,10 +96,10 @@ export const getAgentDataColumns = (
                 : userStatusConfig.inactive.text}
             </Tag>
           </div>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginBottom: 2 }}>
+          <div className="text-xs mb-0.5 text-text-secondary">
             学号: {user.student_id}
           </div>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${user.grade} • ${user.class_name}`}>
+          <div className="text-xs overflow-hidden text-ellipsis whitespace-nowrap text-text-secondary" title={`${user.grade} • ${user.class_name}`}>
             {user.grade} • {user.class_name}
           </div>
         </div>
@@ -126,10 +126,10 @@ export const getAgentDataColumns = (
       return (
         <div>
           <div
-            style={{ display: "flex", alignItems: "center", marginBottom: 4 }}
+            className="flex items-center mb-1"
           >
             {config.icon}
-            <Text strong style={{ marginLeft: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={agent.agent_name}>
+            <Text strong className="ml-1 overflow-hidden text-ellipsis whitespace-nowrap" style={{ maxWidth: '140px' }} title={agent.agent_name}>
               {agent.agent_name}
             </Text>
           </div>
@@ -139,7 +139,7 @@ export const getAgentDataColumns = (
           >
             {config.text}
           </Tag>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)", marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`模型: ${agent.model_name}`}>
+          <div className="text-xs mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-text-secondary" title={`模型: ${agent.model_name}`}>
             模型: {agent.model_name}
           </div>
         </div>
@@ -158,8 +158,8 @@ export const getAgentDataColumns = (
     width: 250,
     render: (question: string) => (
       <Tooltip title={question}>
-        <div style={{ lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-          <MessageOutlined style={{ marginRight: 4, color: "#10B981" }} />
+        <div className="leading-relaxed overflow-hidden" style={{ textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          <MessageOutlined className="mr-1" style={{ color: "#10B981" }} />
           {question}
         </div>
       </Tooltip>
@@ -173,7 +173,7 @@ export const getAgentDataColumns = (
     render: (answer: string) => {
       return (
         <Tooltip title={answer}>
-          <div style={{ lineHeight: 1.5, color: "var(--ws-color-text-secondary)", overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{answer}</div>
+          <div className="leading-relaxed overflow-hidden text-text-secondary line-clamp-2">{answer}</div>
         </Tooltip>
       );
     },
@@ -184,8 +184,8 @@ export const getAgentDataColumns = (
     key: "response_time",
     width: 120,
     render: (responseTime?: number) => (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <ClockCircleOutlined style={{ marginRight: 4, color: "#F59E0B" }} />
+      <div className="flex items-center">
+        <ClockCircleOutlined className="mr-1" style={{ color: "#F59E0B" }} />
         {formatResponseTime(responseTime)}
       </div>
     ),
@@ -198,8 +198,8 @@ export const getAgentDataColumns = (
     key: "used_at",
     width: 150,
     render: (date: string) => (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <CalendarOutlined style={{ marginRight: 4, color: "#0EA5E9" }} />
+      <div className="flex items-center">
+        <CalendarOutlined className="mr-1" style={{ color: "#0EA5E9" }} />
         {dayjs(date).format("MM-DD HH:mm")}
       </div>
     ),
@@ -215,17 +215,7 @@ export const getAgentDataColumns = (
     render: (sessionId?: string) => (
       <Tooltip title={sessionId}>
         <div
-          style={{
-            fontSize: "12px",
-            fontFamily: "monospace",
-            backgroundColor: "var(--ws-color-surface-2)",
-            padding: "2px 6px",
-            borderRadius: "3px",
-            maxWidth: "120px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
+          className="text-xs font-mono rounded px-1.5 py-0.5 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap bg-surface-2"
         >
           {sessionId || "-"}
         </div>
@@ -266,7 +256,7 @@ export const getCompactAgentDataColumns = (
       return (
         <div>
           <Text strong>{user.name}</Text>
-          <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>{user.student_id}</div>
+          <div className="text-xs text-text-secondary">{user.student_id}</div>
         </div>
       );
     },
@@ -281,11 +271,7 @@ export const getCompactAgentDataColumns = (
       return (
         <Tooltip title={agent.agent_name}>
           <div
-            style={{
-              maxWidth: "100px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
+            className="max-w-[100px] overflow-hidden text-ellipsis"
           >
             {agent.agent_name}
           </div>

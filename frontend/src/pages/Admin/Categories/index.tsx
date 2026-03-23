@@ -56,8 +56,8 @@ const getCategoryColumns = (
     width: 200,
     render: (text: string, record: CategoryWithUsage) => (
       <div>
-        <div style={{ fontWeight: "bold" }}>{text}</div>
-          <div style={{ fontSize: "12px", color: "var(--ws-color-text-secondary)" }}>{record.slug}</div>
+        <div className="font-bold">{text}</div>
+          <div className="text-xs text-text-secondary">{record.slug}</div>
       </div>
     ),
   },
@@ -67,7 +67,7 @@ const getCategoryColumns = (
     key: "description",
     width: 250,
     render: (description: string) => (
-      <div style={{ color: "var(--ws-color-text-secondary)" }}>
+      <div className="text-text-secondary">
         {description || <Text type="secondary">暂无描述</Text>}
       </div>
     ),
@@ -78,7 +78,7 @@ const getCategoryColumns = (
     key: "article_count",
     width: 120,
     render: (count: number) => (
-      <Tag color={count > 0 ? "blue" : "default"} style={{ fontSize: "14px" }}>
+      <Tag color={count > 0 ? "blue" : "default"} className="text-sm">
         <FileTextOutlined /> {count} 篇
       </Tag>
     ),
@@ -90,10 +90,10 @@ const getCategoryColumns = (
     width: 150,
     render: (date: string) => (
       <div>
-        <div style={{ fontSize: "12px" }}>
+        <div className="text-xs">
           {dayjs(date).format("YYYY-MM-DD")}
         </div>
-        <div style={{ fontSize: "10px", color: "var(--ws-color-text-secondary)" }}>
+        <div className="text-[10px] text-text-secondary">
           {dayjs(date).format("HH:mm")}
         </div>
       </div>
@@ -274,8 +274,8 @@ const CategoryEditForm: React.FC<{
         />
       </Form.Item>
 
-      <div style={{ borderTop: "1px solid rgba(0,0,0,0.04)", marginTop: 16, paddingTop: 16 }}>
-        <div style={{ textAlign: "right" }}>
+      <div className="border-t border-black/5 mt-4 pt-4">
+        <div className="text-right">
           <Space>
             <Button onClick={onCancel}>取消</Button>
             <Button type="primary" htmlType="submit" loading={submitting}>
@@ -524,52 +524,33 @@ const AdminCategories: React.FC = () => {
 
   return (
     <AdminPage>
-      {/* 搜索和操作栏 */}
-      <div className="ws-responsive-toolbar" style={{ marginBottom: 16 }}>
-        <Space wrap className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
-          <Search
-            placeholder="搜索分类名称或slug..."
-            allowClear
-            enterButton={<SearchOutlined />}
-            size="middle"
-            onSearch={handleSearch}
-            style={{ maxWidth: 300 }}
-          />
-        </Space>
-        <Space wrap className="ws-responsive-toolbar__group">
-          {selectedRowKeys.length > 0 && (
-            <Dropdown menu={batchMenu}>
-              <Button icon={<MoreOutlined />}>
-                批量操作 ({selectedRowKeys.length})
-              </Button>
-            </Dropdown>
-          )}
-          <Button
-            icon={<FilterOutlined />}
-            onClick={() => setFilterVisible(!filterVisible)}
-            type={filterVisible ? "primary" : "default"}
-          >
-            筛选
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => loadCategories()}
-          >
-            刷新
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAddCategory}
-          >
-            新增分类
-          </Button>
-        </Space>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Search
+          placeholder="搜索分类名称或slug..."
+          allowClear
+          enterButton={<SearchOutlined />}
+          size="middle"
+          onSearch={handleSearch}
+          style={{ width: 280 }}
+        />
+        <div className="flex-1" />
+        {selectedRowKeys.length > 0 && (
+          <Dropdown menu={batchMenu}>
+            <Button icon={<MoreOutlined />}>批量操作 ({selectedRowKeys.length})</Button>
+          </Dropdown>
+        )}
+        <Button
+          icon={<FilterOutlined />}
+          onClick={() => setFilterVisible(!filterVisible)}
+          type={filterVisible ? "primary" : "default"}
+        >筛选</Button>
+        <Button icon={<ReloadOutlined />} onClick={() => loadCategories()}>刷新</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCategory}>新增分类</Button>
       </div>
 
       {/* 筛选表单 */}
       {filterVisible && (
-        <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+        <div className="bg-gray-50 rounded-xl p-4 mb-4">
           {renderFilterForm()}
         </div>
       )}
@@ -577,10 +558,10 @@ const AdminCategories: React.FC = () => {
       {/* 分类表格 */}
       <AdminCard
         title={
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="flex items-center">
             <span>分类列表</span>
             {selectedRowKeys.length > 0 && (
-              <Tag color="blue" style={{ marginLeft: 8 }}>
+              <Tag color="blue" className="ml-2">
                 已选择 {selectedRowKeys.length} 项
               </Tag>
             )}
@@ -594,11 +575,11 @@ const AdminCategories: React.FC = () => {
         styles={{ body: { padding: 0 } }}
       >
         {loading ? (
-          <div style={{ textAlign: "center", padding: 40 }}>
+          <div className="text-center py-10">
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="加载中..." />
           </div>
         ) : categories.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40 }}>
+          <div className="text-center py-10">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description="暂无分类数据"
@@ -623,7 +604,7 @@ const AdminCategories: React.FC = () => {
               scroll={{ x: 1000 }}
               size="middle"
             />
-            <div style={{ padding: "12px 24px" }}>
+            <div className="px-6 py-3">
               <Pagination
                 current={currentPage}
                 pageSize={pageSize}

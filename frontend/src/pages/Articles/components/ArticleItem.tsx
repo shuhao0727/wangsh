@@ -1,11 +1,8 @@
-
 import React from "react";
-import { Typography, Tag } from "antd";
-import { CalendarOutlined, FolderOutlined } from "@ant-design/icons";
+import { Tag } from "antd";
+import { CalendarOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { ArticleWithRelations } from "@services";
-
-const { Text } = Typography;
 
 interface ArticleItemProps {
   article: ArticleWithRelations;
@@ -13,37 +10,39 @@ interface ArticleItemProps {
 }
 
 const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
-  const articleId = article.id || "unknown";
-  const articleSlug = article.slug || "";
-  const articleTitle = article.title || "无标题";
-  const articleDate = article.created_at
-    ? dayjs(article.created_at).format("YYYY-MM-DD")
-    : "未知日期";
-  const articleSummary = article.summary || "暂无摘要";
+  const slug = article.slug || "";
+  const title = article.title || "无标题";
+  const date = article.created_at ? dayjs(article.created_at).format("YYYY-MM-DD") : "";
+  const summary = article.summary || "";
   const categoryName = article.category?.name || "";
-  const authorName = article.author?.username || "未知";
+  const authorName = article.author?.username || "";
 
   return (
     <div
-      key={articleId}
-      onClick={() => articleSlug && onClick(articleSlug)}
-      className="article-item-row"
+      onClick={() => slug && onClick(slug)}
+      className="group px-3 py-3 rounded-lg cursor-pointer article-item-hover border-b"
     >
-      <div className="article-card-title">{articleTitle}</div>
-      <div className="article-card-row-bottom">
-        <div className="article-card-summary">{articleSummary}</div>
-        <div className="article-card-meta">
-          <span className="meta-item">
-            <CalendarOutlined /> {articleDate}
-          </span>
+      <div className="font-semibold text-sm leading-snug mb-1 text-text-base">
+        {title}
+      </div>
+      <div className="flex items-center gap-3">
+        {summary && (
+          <div className="flex-1 min-w-0 text-xs truncate text-text-secondary">
+            {summary}
+          </div>
+        )}
+        <div className="flex items-center gap-2 flex-shrink-0 text-xs text-text-tertiary">
+          {date && (
+            <span className="flex items-center gap-1">
+              <CalendarOutlined />{date}
+            </span>
+          )}
           {categoryName && (
-            <Tag bordered={false} className="meta-tag">
+            <Tag bordered={false} className="!m-0 !text-[11px] !bg-primary-soft !text-primary">
               {categoryName}
             </Tag>
           )}
-          <span className="meta-item">
-            作者：{authorName}
-          </span>
+          {authorName && <span>{authorName}</span>}
         </div>
       </div>
     </div>

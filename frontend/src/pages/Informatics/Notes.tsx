@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Button, Card, Empty, Input, Row, Col, Space, Spin, Typography } from "antd";
-import { CodeOutlined, RightOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button, Empty, Input, Spin } from "antd";
+import { CodeOutlined, RightOutlined, SearchOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNoteListItem } from "@services";
 import "./Informatics.css";
-
-const { Title, Text } = Typography;
 
 const InformaticsNotesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,71 +22,69 @@ const InformaticsNotesPage: React.FC = () => {
     }
   }, [search]);
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   return (
     <div className="informatics-page">
+      {/* Hero 头部 */}
       <div className="informatics-hero">
-        <div className="informatics-hero-left">
-          <Title level={2} style={{ margin: 0 }}>
-            <CodeOutlined /> 信息学竞赛
-          </Title>
-          <Text type="secondary">整理的 Typst 笔记与讲义（已发布内容）</Text>
+        <div>
+          <div className="flex items-center gap-2 text-2xl font-bold text-primary">
+            <CodeOutlined />
+            <span>信息学竞赛</span>
+          </div>
+          <div className="text-sm mt-1 text-text-secondary">
+            整理的 Typst 笔记与讲义（已发布内容）
+          </div>
         </div>
-        <div className="informatics-hero-right">
-          <Space>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onPressEnter={load}
-              placeholder="搜索标题"
-              allowClear
-              style={{ width: 260 }}
-              prefix={<SearchOutlined />}
-            />
-            <Button onClick={load} loading={loading}>
-              搜索
-            </Button>
-          </Space>
+        <div className="flex items-center gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onPressEnter={load}
+            placeholder="搜索标题"
+            allowClear
+            style={{ width: 240 }}
+            prefix={<SearchOutlined />}
+          />
+          <Button onClick={load} loading={loading}>搜索</Button>
         </div>
       </div>
 
+      {/* 内容区 */}
       <div className="informatics-content">
         {loading ? (
-          <div style={{ textAlign: "center", padding: 48 }}>
+          <div className="flex items-center justify-center py-16">
             <Spin size="large" />
           </div>
         ) : items.length === 0 ? (
-          <Card className="informatics-card">
+          <div className="flex items-center justify-center py-16">
             <Empty description="暂无已发布内容" />
-          </Card>
+          </div>
         ) : (
-          <Row gutter={[16, 16]}>
+          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
             {items.map((it) => (
-              <Col key={it.id} xs={24} sm={12} lg={8} xl={6}>
-                <Card
-                  className="informatics-card"
-                  title={<Text strong>{it.title}</Text>}
-                  extra={
-                    <Button type="link" onClick={() => navigate(`/informatics/${it.id}`)} icon={<RightOutlined />}>
-                      阅读
-                    </Button>
-                  }
-                >
-                  <div style={{ minHeight: 46 }}>
-                    <Text type="secondary">{it.summary || "—"}</Text>
+              <div
+                key={it.id}
+                className="informatics-note-card group rounded-xl p-5 cursor-pointer"
+                onClick={() => navigate(`/informatics/${it.id}`)}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="font-semibold text-sm leading-snug flex-1 pr-2 text-text-base">
+                    {it.title}
                   </div>
-                  <div style={{ marginTop: 12 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      更新：{new Date(it.updated_at).toLocaleString("zh-CN")}
-                    </Text>
-                  </div>
-                </Card>
-              </Col>
+                  <RightOutlined className="opacity-0 group-hover:opacity-100 transition-opacity text-xs flex-shrink-0 mt-0.5 text-primary" />
+                </div>
+                <div className="text-xs leading-relaxed mb-3 line-clamp-2 text-text-secondary min-h-[32px]">
+                  {it.summary || "暂无简介"}
+                </div>
+                <div className="flex items-center gap-1 text-xs text-text-tertiary">
+                  <ClockCircleOutlined />
+                  <span>{new Date(it.updated_at).toLocaleDateString("zh-CN")}</span>
+                </div>
+              </div>
             ))}
-          </Row>
+          </div>
         )}
       </div>
     </div>
@@ -96,4 +92,3 @@ const InformaticsNotesPage: React.FC = () => {
 };
 
 export default InformaticsNotesPage;
-

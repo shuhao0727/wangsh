@@ -156,7 +156,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
             description={testResult.error}
             type={testResult.success ? "success" : "error"}
             showIcon
-            style={{ marginTop: 16 }}
+            className="mt-4"
           />
       )}
     </Modal>

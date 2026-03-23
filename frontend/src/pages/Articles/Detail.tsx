@@ -258,7 +258,7 @@ const ArticleDetailPage: React.FC = () => {
   // 加载状态
   if (loading) {
     return (
-      <div style={{ maxWidth: 1560, margin: "0 auto", padding: "40px 24px" }}>
+      <div className="max-w-[1560px] mx-auto px-6 py-10">
         <Skeleton active paragraph={{ rows: 10 }} />
       </div>
     );
@@ -267,7 +267,7 @@ const ArticleDetailPage: React.FC = () => {
   // 错误状态
   if (error) {
     return (
-      <div style={{ maxWidth: 1560, margin: "0 auto", padding: "40px 24px" }}>
+      <div className="max-w-[1560px] mx-auto px-6 py-10">
         <Alert
           title="文章加载失败"
           description={error}
@@ -331,8 +331,8 @@ const ArticleDetailPage: React.FC = () => {
       {/* 文章元信息 */}
       <div className="article-meta-row">
         <Space wrap size="large" style={{ width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <UserOutlined style={{ color: "var(--ws-color-primary)" }} />
+          <div className="flex items-center gap-2">
+            <UserOutlined className="text-primary" />
             <Text>
               {article.author?.full_name ||
                 article.author?.username ||
@@ -340,21 +340,21 @@ const ArticleDetailPage: React.FC = () => {
             </Text>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <CalendarOutlined style={{ color: "var(--ws-color-success)" }} />
+          <div className="flex items-center gap-2">
+            <CalendarOutlined className="text-success" />
             <Text>
               {dayjs(article.created_at).format("YYYY年MM月DD日")}
             </Text>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ClockCircleOutlined style={{ color: "var(--ws-color-info)" }} />
+          <div className="flex items-center gap-2">
+            <ClockCircleOutlined className="text-primary" />
             <Text>发布于 {dayjs(article.created_at).fromNow()}</Text>
           </div>
 
           {article.category && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <FolderOutlined style={{ color: "var(--ws-color-accent)" }} />
+            <div className="flex items-center gap-2">
+              <FolderOutlined className="text-warning" />
               <Tag color="orange">
                 <Link to={`/articles?category=${article.category.id}`}>
                   {article.category.name}
@@ -365,10 +365,10 @@ const ArticleDetailPage: React.FC = () => {
         </Space>
       </div>
 
-      <Divider style={{ margin: "12px 0 24px" }} />
+      <Divider className="!mt-3 !mb-6" />
 
       {/* 文章内容 */}
-      <div style={{ minHeight: 400 }}>
+      <div className="min-h-[400px]">
         {article.content ? (
           <div className="article-content ws-markdown" data-article-scope={scopeId}>
             {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
@@ -425,25 +425,14 @@ const ArticleDetailPage: React.FC = () => {
             </ReactMarkdown>
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div
-              style={{ fontSize: 48, color: "var(--ws-color-text-secondary)", marginBottom: 24 }}
-            >
+          <div className="text-center px-5 py-16">
+            <div className="text-5xl mb-6 text-text-secondary">
               📝
             </div>
-            <Title
-              level={3}
-              style={{ color: "var(--ws-color-text-secondary)", marginBottom: 16 }}
-            >
+            <Title level={3} className="mb-4 text-text-secondary">
               文章内容正在建设中
             </Title>
-            <Paragraph
-              style={{
-                maxWidth: 500,
-                margin: "0 auto",
-                color: "var(--ws-color-text-secondary)",
-              }}
-            >
+            <Paragraph className="max-w-[500px] mx-auto text-text-secondary">
               这篇文章的详细内容正在编写中，敬请期待。
             </Paragraph>
           </div>
@@ -453,14 +442,7 @@ const ArticleDetailPage: React.FC = () => {
       <Divider />
 
       {/* 文章底部信息 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          paddingTop: 16,
-        }}
-      >
+      <div className="flex justify-between items-center pt-4">
         <Text type="secondary">
           最后更新：{dayjs(article.updated_at).format("YYYY-MM-DD HH:mm")}
         </Text>
@@ -486,19 +468,19 @@ const ArticleDetailPage: React.FC = () => {
         <SplitPanePage
           leftWidth={280}
           alignItems="stretch"
-          style={{ height: "100%" }}
+          className="h-full"
           left={
             <div className="article-left-pane">
               <PanelCard
                 title={
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="flex items-center gap-2">
                     <BookOutlined />
                     <span>文章目录</span>
                   </div>
                 }
                 bodyPadding={0}
               >
-                <div className="article-toc-list" style={{ border: "none" }}>
+                <div className="article-toc-list border-none">
                   {tableOfContents.length > 0 ? (
                     tableOfContents.map((item) => (
                       <div
@@ -507,16 +489,16 @@ const ArticleDetailPage: React.FC = () => {
                         className="article-toc-item"
                         style={{ paddingLeft: `${(item.level - 1) * 16 + 12}px` }}
                       >
-                        <Text
+                          <Text
                           ellipsis={{ tooltip: item.text }}
-                          style={{ fontSize: 14 }}
+                          className="text-sm"
                         >
                           {item.text}
                         </Text>
                       </div>
                     ))
                   ) : (
-                    <div style={{ padding: 16, textAlign: "center" }}>
+                          <div className="p-4 text-center">
                       <Text type="secondary">暂无目录</Text>
                     </div>
                   )}

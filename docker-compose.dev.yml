@@ -102,7 +102,7 @@ services:
       - MAX_UPLOAD_SIZE=10485760
       # 开发模式热加载
       - BACKEND_RELOAD=True
-      - PYTHONLAB_DEFAULT_MEMORY_MB=50
+      - PYTHONLAB_DEFAULT_MEMORY_MB=80
       - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}
       - PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
       - PYTHONLAB_DEBUGPY_PORT=${PYTHONLAB_DEBUGPY_PORT:-5678}
@@ -215,7 +215,7 @@ services:
       - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
       - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
-      - PYTHONLAB_DEFAULT_MEMORY_MB=50
+      - PYTHONLAB_DEFAULT_MEMORY_MB=80
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -233,42 +233,43 @@ services:
     command: >
       sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab"
 
-  # 前端服务 (React + TypeScript)
+  # 前端服务 (React craco dev server，热加载)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
       target: development
+    container_name: wangsh-frontend
     restart: unless-stopped
+    ports:
+      - "6608:6608"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL}
-      - REACT_APP_ENV=${REACT_APP_ENV}
-      - REACT_APP_VERSION=${REACT_APP_VERSION:-1.4.0}
-      # 开发模式热加载
+      - NODE_ENV=development
+      - PORT=6608
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
-    volumes:
-      # 代码热重载：将本地代码挂载到容器
-      - ./frontend:/app
-      - /app/node_modules # 避免覆盖容器内的 node_modules
-    depends_on:
-      - backend
+      - DEV_PROXY_TARGET=http://backend:8000
     networks:
       - wangsh-network
-    command: sh -c "npm start"
+    depends_on:
+      - backend
 
-  # Caddy 服务 (反向代理)
+  # Caddy 服务 (仅用于生产/模拟生产，开发时可不启动)
+  # 开发时直接访问 http://localhost:6608，API 通过 craco proxy 转发
   caddy:
     image: public.ecr.aws/docker/library/caddy:2-alpine
     container_name: wangsh-caddy
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_PORT:-6608}:80"
     volumes:
       - ./gateway/Caddyfile.dev:/etc/caddy/Caddyfile
     depends_on:
-      - frontend
       - backend
+      - frontend
     networks:
       - wangsh-network
       - dify_network

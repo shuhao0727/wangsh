@@ -456,7 +456,7 @@ const ArticlesPage: React.FC = () => {
             }}
           >
             <span>{category.name}</span>
-            <span style={{ color: "var(--ws-color-text-secondary)", fontSize: "0.85rem" }}>
+            <span className="text-text-secondary text-sm">
               ({category.article_count || 0})
             </span>
           </div>
@@ -522,7 +522,7 @@ const ArticlesPage: React.FC = () => {
                       items={categoryMenuItems}
                     />
                     {categories.length === 0 && !categoriesLoading ? (
-                      <Empty description="暂无分类" style={{ marginTop: 12 }} />
+                      <Empty description="暂无分类" className="mt-3" />
                     ) : null}
                   </div>
                 </div>
@@ -537,10 +537,10 @@ const ArticlesPage: React.FC = () => {
                 <div className="articles-right-body">
                   <div className="articles-right-scroll">
                     {loading ? (
-                      <div className="loading-container" style={{ padding: 24 }}>
+                      <div className="loading-container p-6">
                         <Skeleton active paragraph={{ rows: 4 }} />
-                        <Skeleton active paragraph={{ rows: 4 }} style={{ marginTop: 24 }} />
-                        <Skeleton active paragraph={{ rows: 4 }} style={{ marginTop: 24 }} />
+                        <Skeleton active paragraph={{ rows: 4 }} className="mt-6" />
+                        <Skeleton active paragraph={{ rows: 4 }} className="mt-6" />
                       </div>
                     ) : displayedArticles.length === 0 ? (
                       <div className="empty-container">

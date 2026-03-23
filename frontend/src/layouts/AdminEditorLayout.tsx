@@ -50,7 +50,7 @@ const AdminEditorLayout: React.FC = () => {
           <Button icon={<ArrowLeftOutlined />} onClick={backToList}>
             返回列表
           </Button>
-          <Text strong style={{ fontSize: 16 }}>
+          <Text strong className="text-base">
             {title}
           </Text>
         </Space>

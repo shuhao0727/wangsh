@@ -42,27 +42,13 @@ class GlobalErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "100vh",
-            padding: "20px",
-            backgroundColor: "var(--ws-color-bg)",
-          }}
-        >
+        <div className="flex items-center justify-center min-h-screen p-5 bg-surface">
           <Result
             status="error"
             title="页面遇到了一些问题"
             subTitle="抱歉，应用程序发生了一个意外错误。我们已经记录了这个问题。"
             extra={[
-              <Button
-                type="primary"
-                key="reload"
-                icon={<ReloadOutlined />}
-                onClick={this.handleReload}
-              >
+              <Button type="primary" key="reload" icon={<ReloadOutlined />} onClick={this.handleReload}>
                 刷新页面
               </Button>,
             ]}
@@ -70,30 +56,14 @@ class GlobalErrorBoundary extends Component<Props, State> {
             {process.env.NODE_ENV === "development" && this.state.error && (
               <div className="desc">
                 <Paragraph>
-                  <Text
-                    strong
-                    style={{
-                      fontSize: 16,
-                    }}
-                  >
-                    错误详情:
-                  </Text>
+                  <Text strong className="text-base">错误详情:</Text>
                 </Paragraph>
                 <Paragraph>
                   <Text type="danger">{this.state.error.toString()}</Text>
                 </Paragraph>
                 {this.state.errorInfo && (
                   <Paragraph>
-                    <pre
-                      style={{
-                        maxWidth: "800px",
-                        overflow: "auto",
-                        padding: "16px",
-                        background: "rgba(0,0,0,0.05)",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                      }}
-                    >
+                    <pre className="max-w-2xl overflow-auto p-4 rounded text-xs bg-black/5">
                       {this.state.errorInfo.componentStack}
                     </pre>
                   </Paragraph>

@@ -1,14 +1,3 @@
-.informatics-page {
-  max-width: var(--ws-page-max-width-wide);
-  width: 100%;
-  margin: 0 auto;
-  padding: var(--ws-space-4);
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .informatics-hero {
   display: flex;
   justify-content: space-between;
@@ -215,19 +204,6 @@
   .informatics-typst-viewer {
     padding: var(--ws-space-2);
     border-radius: 0;
-  }
-
-  .informatics-mobile-header {
-    padding: 12px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #FFFFFF;
-    flex-shrink: 0;
-    position: sticky;
-    top: 0;
-    z-index: 10;
   }
 }
 

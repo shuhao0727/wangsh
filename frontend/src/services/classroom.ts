@@ -110,6 +110,20 @@ export const classroomApi = {
   remove: async (id: number): Promise<void> => {
     await api.delete(`${ADMIN_BASE}/${id}`);
   },
+
+  bulkRemove: async (ids: number[]): Promise<{ deleted: number[]; skipped: number[] }> => {
+    const resp = await api.post(`${ADMIN_BASE}/bulk-delete`, { ids });
+    return resp.data as any;
+  },
+
+  duplicate: async (id: number): Promise<Activity> => {
+    const resp = await api.post(`${ADMIN_BASE}/${id}/duplicate`);
+    return resp.data as any;
+  },
+  restart: async (id: number): Promise<Activity> => {
+    const resp = await api.post(`${ADMIN_BASE}/${id}/restart`);
+    return resp.data as any;
+  },
   list: async (params?: { skip?: number; limit?: number; status?: string }): Promise<ActivityListResponse> => {
     const resp = await api.get(ADMIN_BASE + "/", { params });
     return resp.data as any;

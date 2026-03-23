@@ -111,28 +111,28 @@ const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, 
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.04)" }}>
             <Row gutter={12}>
               <Col span={6}>
-                <Form.Item label="班级" name="class_name" style={{ marginBottom: 8 }}>
+                <Form.Item label="班级" name="class_name" className="mb-2">
                   <Select placeholder="选择班级" allowClear>
                     {filterOptions.classNames.map((c) => <Option key={c} value={c}>{c}</Option>)}
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={6}>
-                <Form.Item label="学年" name="grade" style={{ marginBottom: 8 }}>
+                <Form.Item label="学年" name="grade" className="mb-2">
                   <Select placeholder="选择学年" allowClear>
                     {filterOptions.grades.map((g) => <Option key={g} value={g}>{g}级</Option>)}
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={6}>
-                <Form.Item label="智能体" name="agent_name" style={{ marginBottom: 8 }}>
+                <Form.Item label="智能体" name="agent_name" className="mb-2">
                   <Select placeholder="选择智能体" allowClear>
                     {filterOptions.agentNames.map((a) => <Option key={a} value={a}>{a}</Option>)}
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={6}>
-                <Form.Item label="时间范围" name="date_range" style={{ marginBottom: 8 }}>
+                <Form.Item label="时间范围" name="date_range" className="mb-2">
                   <RangePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
                 </Form.Item>
               </Col>

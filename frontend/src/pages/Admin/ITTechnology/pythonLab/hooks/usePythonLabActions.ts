@@ -22,6 +22,9 @@ export function usePythonLabActions(params: {
   setConnectMode: React.Dispatch<React.SetStateAction<boolean>>;
   setConnectFromId: React.Dispatch<React.SetStateAction<string | null>>;
   setConnectFromPort: React.Dispatch<React.SetStateAction<PortSide | null>>;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
 }) {
   const {
     canvasRef,
@@ -39,6 +42,9 @@ export function usePythonLabActions(params: {
     setConnectMode,
     setConnectFromId,
     setConnectFromPort,
+    offsetX,
+    offsetY,
+    scale,
   } = params;
 
   const ensureAuto = useCallback(() => {
@@ -99,19 +105,20 @@ export function usePythonLabActions(params: {
     ensureAuto();
     const rect = canvasRef.current?.getBoundingClientRect();
     const size = nodeSize(tpl.key);
-    const xBase = rect ? Math.max(16, (rect.width - size.w) / 2) : 120;
-    const yBase = rect ? Math.max(16, (rect.height - size.h) / 2) : 120;
+    // 把屏幕中心转换为画布坐标系：canvasX = (screenCenter - offsetX) / scale
+    const screenCenterX = rect ? rect.width / 2 : 400;
+    const screenCenterY = rect ? rect.height / 2 : 300;
+    const xBase = (screenCenterX - offsetX) / scale - size.w / 2;
+    const yBase = (screenCenterY - offsetY) / scale - size.h / 2;
     const node: FlowNode = {
       id: nextId("node"),
       type: tpl.key === "note" ? "annotation" : "flow_element",
       shape: tpl.key,
       title: tpl.key === "note" ? "注释内容" : tpl.title,
-      x: xBase + Math.floor(Math.random() * 80) - 40,
-      y: yBase + Math.floor(Math.random() * 80) - 40,
+      x: Math.max(0, xBase + Math.floor(Math.random() * 60) - 30),
+      y: Math.max(0, yBase + Math.floor(Math.random() * 60) - 30),
       ...(tpl.key === "note"
-        ? {
-          style: { backgroundColor: "#FFF9C4", opacity: 1, dashed: true },
-        }
+        ? { style: { backgroundColor: "#FFF9C4", opacity: 1, dashed: true } }
         : {}),
     };
     setNodes((prev) => [...prev, node]);

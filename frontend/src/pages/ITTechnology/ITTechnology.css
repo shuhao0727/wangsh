@@ -1,144 +1,47 @@
-.it-technology-page {
-  max-width: var(--ws-page-max-width-wide);
-  margin: 0 auto;
-  padding: var(--ws-space-5);
-  width: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.it-card {
-  border-radius: var(--ws-radius-lg);
-  border: none;
-  background: var(--ws-color-surface-2);
-}
-
-.it-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.it-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-}
-
-.it-card-title {
-  font-size: var(--ws-text-md);
-}
-
-.it-empty-col {
-  text-align: center;
-  padding: 50px 0;
-}
-
-.it-class-selector-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.it-class-selector-content {
-  background: var(--ws-color-surface);
-  padding: var(--ws-space-4);
-  border-radius: var(--ws-radius-lg);
-  flex: 1;
-}
-
-.it-technology-loading {
-  padding: calc(var(--ws-space-5) * 1.2) 0;
-  text-align: center;
-}
-
-@media (max-width: 430px) {
-  .it-technology-page {
-    padding: var(--ws-space-3);
-  }
-}
-
-/* Class Selector */
-.it-class-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--ws-space-4);
-}
-
-.it-class-card {
-  border-radius: var(--ws-radius-lg);
-  border: none;
-  transition: var(--ws-transition-fast);
-  cursor: pointer;
-  background: var(--ws-color-surface-2);
-  text-align: center;
-}
-
+/* Class Selector hover */
 .it-class-card:hover {
-  background: var(--ws-color-hover-bg);
+  background: rgba(14, 165, 233, 0.06) !important;
 }
 
-/* Roll Call Player */
+/* Roll Call Player — 全屏点名界面 */
 .it-player-container {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: radial-gradient(circle at center, #1f1f1f 0%, #000000 100%);
   z-index: 1000;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #fff;
-}
-
-.it-player-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 10;
-}
-
-.it-player-info {
-  font-size: 16px;
-  opacity: 0.8;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 8px 16px;
-  border-radius: 20px;
-  backdrop-filter: blur(4px);
-}
-
-.it-player-main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
+  gap: 40px;
 }
 
 .it-player-name {
-  color: #fff;
-  margin: 0;
-  font-weight: 700;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
-  transition: all 0.1s;
-  font-feature-settings: "tnum";
+  font-size: clamp(64px, 12vw, 120px);
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-shadow: 0 0 60px rgba(14, 165, 233, 0.6);
+  line-height: 1;
+  padding: 0 32px;
+  transition: all 0.1s ease;
 }
 
-.it-player-controls {
-  padding-bottom: 80px;
+.it-player-name.animating {
+  animation: roll 0.08s ease infinite;
+}
+
+@keyframes roll {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.it-player-actions {
   display: flex;
   gap: 24px;
+  align-items: center;
 }
 
 .it-player-btn {
@@ -172,20 +75,6 @@
 }
 
 @media (max-width: 576px) {
-  .it-technology-page {
-    padding: var(--ws-space-3);
-  }
-  
-  .it-hero {
-    padding: var(--ws-space-4);
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .it-class-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  }
-
   .it-player-btn {
     height: 56px !important;
     padding: 0 32px !important;

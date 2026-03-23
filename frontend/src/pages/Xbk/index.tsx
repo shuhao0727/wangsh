@@ -364,7 +364,7 @@ const XbkPage: React.FC = () => {
   }, [suspendedAll]);
 /* PLACEHOLDER_XBK_TSX_5 */
 
-  if (loading) return <div className="xbk-page"><div style={{ textAlign: "center", padding: "80px 0" }}><Spin size="large" /></div></div>;
+  if (loading) return <div className="xbk-page"><div className="text-center py-20"><Spin size="large" /></div></div>;
   if (!enabled) return <div className="xbk-page"><Result status="403" title="未开放" subTitle="XBK 处理系统当前未对前台开放，请联系管理员开启。" extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>} /></div>;
 
   const years = meta.years.length > 0 ? meta.years : [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
@@ -423,7 +423,7 @@ const XbkPage: React.FC = () => {
               </Select>
             </Form.Item>
             <Form.Item label="搜索">
-              <Input value={filters.search_text} placeholder="关键字搜索..." allowClear prefix={<SearchOutlined style={{ color: "var(--ws-color-text-tertiary)" }} />} onChange={(e) => setFilters((p) => ({ ...p, search_text: e.target.value }))} />
+              <Input value={filters.search_text} placeholder="关键字搜索..." allowClear prefix={<SearchOutlined className="text-text-tertiary" />} onChange={(e) => setFilters((p) => ({ ...p, search_text: e.target.value }))} />
             </Form.Item>
             <Button block onClick={resetFilters}>重置筛选</Button>
           </Form>

@@ -69,7 +69,7 @@ const EditorPage: React.FC = () => {
   if (!isNew) {
     return (
       <AdminPage>
-        <div style={{ display: "flex", justifyContent: "center", padding: 100 }}>
+        <div className="flex justify-center p-24">
           <Spin size="large" />
         </div>
       </AdminPage>
@@ -77,25 +77,25 @@ const EditorPage: React.FC = () => {
   }
 
   const fieldLabel = (text: string) => (
-    <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>
+    <span className="font-medium text-[13px]">{text}</span>
   );
 
   return (
     <AdminPage scrollable>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "20px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
+      <div className="max-w-[680px] mx-auto py-5">
+        <div className="flex items-center mb-6">
           <Button type="text" icon={<ArrowLeftOutlined />}
             onClick={() => navigate("/admin/assessment")}
-            style={{ color: "var(--ws-color-text-secondary)" }}>返回列表</Button>
+            className="text-text-secondary">返回列表</Button>
         </div>
 
-        <Card variant="borderless" style={{ borderRadius: "var(--ws-radius-md)", background: "var(--ws-color-surface)", padding: "20px 24px" }}>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>新建测评</div>
+        <Card variant="borderless" className="rounded-md bg-surface px-5 py-5">
+          <div className="text-base font-semibold mb-5">新建测评</div>
           <Form form={form} layout="vertical">
             <Form.Item name="title" label={fieldLabel("测评标题")} rules={[{ required: true, message: "请输入标题" }]}>
               <Input placeholder="如：Python循环结构课堂检测" maxLength={200} />
             </Form.Item>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="grid grid-cols-2 gap-4">
               <Form.Item name="grade" label={fieldLabel("年级")}>
                 <Select placeholder="选择年级" allowClear>
                   {GRADE_OPTIONS.map(g => <Select.Option key={g} value={g}>{g}</Select.Option>)}
@@ -111,12 +111,12 @@ const EditorPage: React.FC = () => {
             <Form.Item name="knowledge_points" label={fieldLabel("知识点")} tooltip="用逗号或顿号分隔">
               <Input placeholder="如：for循环、while循环、递归" />
             </Form.Item>
-            <Form.Item name="teaching_objectives" label={fieldLabel("教学目标")} style={{ marginBottom: 0 }}>
+            <Form.Item name="teaching_objectives" label={fieldLabel("教学目标")} className="!mb-0">
               <TextArea rows={2} placeholder="可选，AI 出题时会参考" />
             </Form.Item>
           </Form>
-          <div style={{ marginTop: 24, textAlign: "right" }}>
-            <Button onClick={() => navigate("/admin/assessment")} style={{ marginRight: 12 }}>取消</Button>
+          <div className="mt-6 text-right">
+            <Button onClick={() => navigate("/admin/assessment")} className="mr-3">取消</Button>
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleCreate}>创建测评</Button>
           </div>
         </Card>

@@ -138,7 +138,7 @@ export default function TypstSidebar({
                   popupRender={(menu) => (
                     <div>
                       {menu}
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: 8 }}>
+                      <div className="flex justify-between p-2">
                         <Button icon={<SettingOutlined />} onClick={onOpenCategoryManage} size="small">
                           管理分类
                         </Button>
@@ -148,26 +148,26 @@ export default function TypstSidebar({
                       </div>
                     </div>
                   )}
-                  style={{ width: "100%" }}
+                  className="w-full"
                 />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="flex justify-between items-center">
                 <Text type="secondary">发布</Text>
                 <Switch checked={published} onChange={onSetPublished} checkedChildren="已发布" unCheckedChildren="未发布" />
               </div>
               <div>
                 <Text type="secondary">样式</Text>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Select value={styleKey} onChange={(v) => onSetStyleKey(v)} options={styleOptions.map((k) => ({ value: k, label: k }))} style={{ flex: 1 }} />
+                <div className="flex gap-2">
+                  <Select value={styleKey} onChange={(v) => onSetStyleKey(v)} options={styleOptions.map((k) => ({ value: k, label: k }))} className="flex-1" />
                   <Button icon={<EditOutlined />} onClick={onOpenStyleEditor} />
                 </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ flex: 1 }}>
+              <div className="flex justify-between gap-3">
+                <div className="flex-1">
                   <Text type="secondary">编译</Text>
                   <div>{compiledAt ? <Tag color="blue">已编译</Tag> : <Tag>未编译</Tag>}</div>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div className="flex-1">
                   <Text type="secondary">模式</Text>
                   <div>{isCreateMode ? <Tag color="blue">新建</Tag> : <Tag color="green">编辑</Tag>}</div>
                 </div>
@@ -177,15 +177,15 @@ export default function TypstSidebar({
 
           <Card title="写作面板" size="small" className="typst-editor-card">
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div className="flex justify-between gap-2.5">
                 <Text type="secondary">快捷</Text>
                 <Text>Ctrl/⌘ + Enter 保存</Text>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div className="flex justify-between gap-2.5">
                 <Text type="secondary">建议</Text>
                 <Text>分屏更利于排版</Text>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="flex justify-between items-center">
                 <Text type="secondary">自动预览</Text>
                 <Switch checked={autoPreview} onChange={onSetAutoPreview} checkedChildren="开" unCheckedChildren="关" />
               </div>
@@ -198,19 +198,19 @@ export default function TypstSidebar({
                 <Text type="secondary">上传到目录</Text>
                 <Input value={assetPrefix} onChange={(e) => onSetAssetPrefix(e.target.value)} placeholder="images" />
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="flex gap-2">
                 <Button icon={<UploadOutlined />} onClick={onUploadClick} disabled={submitting}>
                   上传资源
                 </Button>
                 <Button onClick={onRefreshAssets} disabled={submitting || !noteId}>
                   刷新列表
                 </Button>
-                <input id="typst-asset-upload" name="typst-asset-upload" aria-label="上传资源" ref={assetInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => onUploadFiles(e.target.files)} />
+                <input id="typst-asset-upload" name="typst-asset-upload" aria-label="上传资源" ref={assetInputRef} type="file" multiple className="hidden" onChange={(e) => onUploadFiles(e.target.files)} />
               </div>
               <Input value={assetSearch} onChange={(e) => onSetAssetSearch(e.target.value)} placeholder="搜索资源" />
               <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "var(--ws-radius-md)" }}>
                 {assetsShown.length === 0 ? (
-                  <div style={{ padding: 10 }}>
+                  <div className="p-2.5">
                     <Text type="secondary">暂无资源</Text>
                   </div>
                 ) : (
@@ -226,19 +226,19 @@ export default function TypstSidebar({
                         alignItems: "center",
                       }}
                     >
-                      <div style={{ minWidth: 0 }}>
+                      <div className="min-w-0">
                         <Text ellipsis style={{ maxWidth: 220, display: "inline-block" }}>
                           {a.path}
                         </Text>
                         <div>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
+                          <Text type="secondary" className="text-xs">
                             {a.mime}
                           </Text>
-                          <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                          <Text type="secondary" className="text-xs ml-2">
                             {(a.size_bytes ? `${a.size_bytes}B` : "-") + (a.uploaded_by_id ? ` · u${a.uploaded_by_id}` : "")}
                           </Text>
                           {a.sha256 ? (
-                            <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                            <Text type="secondary" className="text-xs ml-2">
                               {a.sha256.slice(0, 10)}
                             </Text>
                           ) : null}

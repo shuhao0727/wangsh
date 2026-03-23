@@ -45,7 +45,7 @@ const AdminTypstEditorPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center" }}>
+      <div className="text-center p-10">
         <Spin size="large" />
       </div>
     );

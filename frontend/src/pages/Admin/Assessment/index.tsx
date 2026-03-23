@@ -213,26 +213,21 @@ const AdminAssessment: React.FC = () => {
   return (
     <AdminPage scrollable={false}>
       {/* 搜索栏 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div className="flex items-center gap-2 mb-3">
         <Input.Search
           placeholder="搜索测评标题"
           allowClear
-          style={{ width: 300 }}
+          style={{ width: 280 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onSearch={() => { setCurrentPage(1); loadData(); }}
         />
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={openCreateModal}
-        >
-          新建测评
-        </Button>
+        <div className="flex-1" />
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>新建测评</Button>
       </div>
 
       {/* 表格 */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loading}
           isEmpty={items.length === 0}
@@ -267,7 +262,7 @@ const AdminAssessment: React.FC = () => {
       {/* 新建测评弹窗 */}
       <Modal title="新建测评" open={createOpen} onCancel={() => setCreateOpen(false)}
         onOk={handleCreate} confirmLoading={creating} okText="创建" cancelText="取消" width={520} destroyOnHidden>
-        <Form form={createForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={createForm} layout="vertical" className="mt-3">
           <Form.Item name="title" label="测评标题" rules={[{ required: true, message: "请输入标题" }]}>
             <Input placeholder="如：Python循环结构课堂检测" maxLength={200} />
           </Form.Item>

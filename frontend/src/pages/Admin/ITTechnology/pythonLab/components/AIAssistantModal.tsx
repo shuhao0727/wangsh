@@ -83,7 +83,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   };
 
   const renderChat = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="flex flex-col h-full">
       <div style={{ flex: 1, overflowY: "auto", padding: 12, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
         {messages.length === 0 && (
             <div style={{ textAlign: "center", marginTop: 40, color: "#999" }}>
@@ -92,7 +92,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 <p>开启上方“自动优化”开关，我将结合当前代码为你提供建议。</p>
             </div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {messages.map((item, index) => (
             <div key={index} style={{ display: "flex", justifyContent: item.role === "user" ? "flex-end" : "flex-start" }}>
               <div
@@ -107,7 +107,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                 {item.role === "user" ? (
                     item.content
                 ) : (
-                    <div className="markdown-body" style={{ fontSize: 14 }}>
+                    <div className="markdown-body text-sm">
                         <ReactMarkdown>{item.content}</ReactMarkdown>
                     </div>
                 )}
@@ -150,7 +150,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       draggable
       scrollable={false}
     >
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div className="flex flex-col h-full">
         {/* Header / Toolbar */}
         <div style={{ 
             padding: "8px 12px", 
@@ -163,14 +163,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <Space size={16}>
                 <Space size={4}>
                     <CodeOutlined style={{ color: autoOptimizeCode ? "#0EA5E9" : "#999" }} />
-                    <span style={{ fontSize: 12 }}>自动优化代码</span>
+                    <span className="text-xs">自动优化代码</span>
                     <Switch size="small" checked={autoOptimizeCode} onChange={handleAutoOptimizeCodeChange} />
                 </Space>
             </Space>
         </div>
 
         {/* Chat Body */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div className="flex-1 overflow-hidden">
             {renderChat()}
         </div>
       </div>

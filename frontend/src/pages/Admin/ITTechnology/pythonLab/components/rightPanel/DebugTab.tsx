@@ -68,9 +68,9 @@ export function DebugTab(props: {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="flex flex-col gap-3">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <Text style={{ fontWeight: 600 }}>变量</Text>
+          <Text className="font-semibold">变量</Text>
           {showExpandButton !== false ? (
             <Button size="small" type="text" icon={<ExpandOutlined />} onClick={onExpand}>
               调试器放大
@@ -85,8 +85,8 @@ export function DebugTab(props: {
           rowKey="name"
           locale={{ emptyText: "暂无变量" }}
         />
-        <Text style={{ fontWeight: 600 }}>表达式</Text>
-        <div style={{ display: "flex", gap: 8 }}>
+        <Text className="font-semibold">表达式</Text>
+        <div className="flex gap-2">
           <Input
             id="pythonlab-watch-expression-input"
             name="pythonlab-watch-expression-input"

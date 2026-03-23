@@ -189,8 +189,8 @@ export const RightPanel = React.memo(function RightPanel() {
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const clampEditorHeight = (hostH: number, desired: number) => {
-    const minH = 48; // Minimum height to fit the header
-    const minBottomPanelH = 120;
+    const minH = 120;
+    const minBottomPanelH = 200; // 控制栏 + tabs + 终端最小高度
     const maxH = hostH > 0 ? Math.max(minH, hostH - minBottomPanelH) : 900;
     return Math.max(minH, Math.min(maxH, desired));
   };
@@ -211,11 +211,17 @@ export const RightPanel = React.memo(function RightPanel() {
     const host = panelRef.current;
     if (!host) return;
     let raf = 0;
+    // 延迟一帧确保父容器已完成布局
     const run = () => {
       const hostH = host.getBoundingClientRect().height;
-      setEditorHeight((h) => clampEditorHeight(hostH, h));
+      if (hostH > 0) {
+        setEditorHeight((h) => clampEditorHeight(hostH, h));
+      }
     };
-    raf = window.requestAnimationFrame(run);
+    // 多等一帧确保布局稳定
+    raf = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(run);
+    });
     if (typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => {
         window.cancelAnimationFrame(raf);
@@ -279,49 +285,39 @@ export const RightPanel = React.memo(function RightPanel() {
   };
 
   return (
-    <div ref={panelRef} style={{ height: "100%", display: "flex", flexDirection: "column", background: "#ffffff", borderLeft: "1px solid var(--ws-color-border)" }}>
+    <div ref={panelRef} className="h-full flex flex-col bg-white" style={{ borderLeft: "1px solid var(--ws-color-border)" }}>
       <Card
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-            <CodeOutlined style={{ color: "var(--ws-color-primary)", flexShrink: 0 }} />
-            <span style={{ fontWeight: 600, flexShrink: 0 }}>Python</span>
-            <Tag color={isSyntaxOk ? "success" : "error"} variant="filled" style={{ flexShrink: 0, margin: 0 }}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            <CodeOutlined className="text-primary flex-shrink-0" />
+            <span className="font-semibold flex-shrink-0">Python</span>
+            <Tag color={isSyntaxOk ? "success" : "error"} variant="filled" className="!flex-shrink-0 !m-0">
               {isSyntaxOk ? "语法正确" : "语法错误"}
             </Tag>
-            <Tag color={statusColor} variant="filled" style={{ flexShrink: 0, margin: 0 }}>
+            <Tag color={statusColor} variant="filled" className="!flex-shrink-0 !m-0">
               {statusText}
             </Tag>
             {runner.sourceMismatch && (
               <Tooltip title={runner.sourceMismatchMessage || "流程图与运行代码版本不一致"}>
-                <Tag color="warning" variant="filled" style={{ flexShrink: 0, margin: 0 }}>
-                  映射失配
-                </Tag>
+                <Tag color="warning" variant="filled" className="!flex-shrink-0 !m-0">映射失配</Tag>
               </Tooltip>
             )}
           </div>
         }
         extra={
           <Space>
-            <Space size={2} style={{ marginRight: 8 }}>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<MinusOutlined />} 
+            <Space size={2} className="mr-2">
+              <Button type="text" size="small" icon={<MinusOutlined />}
                 disabled={editorFontSize <= 10}
-                onClick={() => setEditorFontSize(s => Math.max(10, s - 1))} 
-              />
+                onClick={() => setEditorFontSize(s => Math.max(10, s - 1))} />
               <Tooltip title={`字体大小: ${editorFontSize}px`}>
-                <span style={{ fontSize: 12, minWidth: 24, textAlign: 'center', color: 'var(--ws-color-text-secondary)', userSelect: 'none' }}>
+                <span className="text-xs text-text-secondary select-none" style={{ minWidth: 24, textAlign: 'center', display: 'inline-block' }}>
                   {editorFontSize}
                 </span>
               </Tooltip>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<PlusOutlined />} 
+              <Button type="text" size="small" icon={<PlusOutlined />}
                 disabled={editorFontSize >= 32}
-                onClick={() => setEditorFontSize(s => Math.min(32, s + 1))} 
-              />
+                onClick={() => setEditorFontSize(s => Math.min(32, s + 1))} />
             </Space>
             <Tooltip title="立即优化代码">
                <Button type="text" icon={<ThunderboltOutlined />} size="small" onClick={onOptimizeCode} />
@@ -343,7 +339,7 @@ export const RightPanel = React.memo(function RightPanel() {
           </Space>
         }
         variant="borderless"
-        style={{ height: editorHeight, display: "flex", flexDirection: "column", minHeight: 48, flexShrink: 0, boxShadow: "none", borderBottom: "1px solid var(--ws-color-border-secondary)", borderLeft: "1px solid var(--ws-color-border)", overflow: "hidden" }}
+        style={{ height: editorHeight, maxHeight: "70%", display: "flex", flexDirection: "column", minHeight: 120, flexShrink: 1, boxShadow: "none", borderBottom: "1px solid var(--ws-color-border-secondary)", borderLeft: "1px solid var(--ws-color-border)", overflow: "hidden" }}
         styles={{ body: { padding: 0, flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }, header: { padding: "0 12px", minHeight: 48, borderBottom: "1px solid var(--ws-color-border-secondary)" } }}
       >
         <MonacoPythonEditor
@@ -362,7 +358,7 @@ export const RightPanel = React.memo(function RightPanel() {
       </Card>
 
       <Card variant="borderless" style={{ flexShrink: 0, borderRadius: 0, borderBottom: "1px solid var(--ws-color-border-secondary)", borderLeft: "1px solid var(--ws-color-border)" }} styles={{ body: { padding: "8px 12px" } }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="flex items-center justify-between">
           <Space size={4}>
             <Tooltip title="运行 (Run)">
               <Button
@@ -381,10 +377,16 @@ export const RightPanel = React.memo(function RightPanel() {
                 style={toolButtonStyle}
               />
             </Tooltip>
-            <Tooltip title="调试 (Debug)">
+            <Tooltip title={
+              !controlMatrix.debug
+                ? "请等待当前执行完成"
+                : runner.breakpoints.filter(b => b.enabled).length === 0
+                  ? "请先在代码左侧行号处点击设置断点，再启动调试"
+                  : "调试 (Debug)"
+            }>
               <Button
                 type="text"
-                icon={<BugOutlined style={{ color: !controlMatrix.debug ? undefined : runner.sourceMismatch ? "var(--ws-color-warning)" : "var(--ws-color-primary)", fontSize: 18 }} />}
+                icon={<BugOutlined style={{ color: !controlMatrix.debug ? undefined : runner.sourceMismatch ? "var(--ws-color-warning)" : runner.breakpoints.filter(b => b.enabled).length === 0 ? "var(--ws-color-text-tertiary)" : "var(--ws-color-primary)", fontSize: 18 }} />}
                 onClick={handleDebugClick}
                 disabled={!controlMatrix.debug}
                 style={toolButtonStyle}
@@ -419,7 +421,7 @@ export const RightPanel = React.memo(function RightPanel() {
             <Tooltip title="继续 (Continue)">
               <Button type="text" icon={<FastForwardOutlined style={{ fontSize: 18 }} />} onClick={onContinue} disabled={!controlMatrix.continue} style={toolButtonStyle} />
             </Tooltip>
-            <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 8px" }} />
+            <div className="w-px h-4 bg-black/[0.08] mx-2" />
             <Tooltip title="单步跳过 (Step Over)">
               <Button type="text" icon={<RightOutlined />} onClick={onStepOver} disabled={!controlMatrix.stepOver} style={toolButtonStyle} />
             </Tooltip>
@@ -429,7 +431,7 @@ export const RightPanel = React.memo(function RightPanel() {
             <Tooltip title="单步跳出 (Step Out)">
               <Button type="text" icon={<LogoutOutlined />} onClick={onStepOut} disabled={!controlMatrix.stepOut} style={toolButtonStyle} />
             </Tooltip>
-            <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 8px" }} />
+            <div className="w-px h-4 bg-black/[0.08] mx-2" />
             <Tooltip title="重置/停止 (Reset)">
               <Button type="text" danger icon={<ReloadOutlined />} onClick={onReset} style={toolButtonStyle} />
             </Tooltip>
@@ -446,7 +448,7 @@ export const RightPanel = React.memo(function RightPanel() {
         )}
         {firstError && (
           <div style={softNoticeStyle.error}>
-            <Text type="danger" style={{ fontSize: 12 }}>
+            <Text type="danger" className="text-xs">
               {firstError}
             </Text>
           </div>
@@ -471,14 +473,13 @@ export const RightPanel = React.memo(function RightPanel() {
         <div style={{ position: "absolute", top: -3, bottom: -3, width: "100%", cursor: "row-resize", zIndex: 10 }} />
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "#fff", borderLeft: "1px solid var(--ws-color-border)" }}>
+      <div className="flex-1 min-h-0 flex flex-col bg-white" style={{ borderLeft: "1px solid var(--ws-color-border)", minHeight: 120 }}>
         <Tabs
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as RightPanelTabKey)}
           type="card"
           size="small"
-          className="pythonlab-rightpanel-tabs"
-          style={{ height: "100%" }}
+          className="pythonlab-rightpanel-tabs h-full"
           items={[
             {
               key: "terminal",
@@ -486,13 +487,13 @@ export const RightPanel = React.memo(function RightPanel() {
               icon: <ConsoleSqlOutlined />,
               children: (
                 <div style={{ height: "100%", background: "#ffffff", padding: 4, display: "flex", flexDirection: "column" }}>
-                  <div style={{ flex: 1, minHeight: 0 }}>
+                  <div className="flex-1 min-h-0">
                     {terminalBridge ? (
                       <PyodideTerminal ref={terminalUiRef as any} bridge={terminalBridge} fontSize={editorFontSize} showLineNumbers />
                     ) : terminalWsUrl ? (
                       <XtermTerminal ref={terminalUiRef as any} wsUrl={terminalWsUrl} fontSize={editorFontSize} showLineNumbers />
                     ) : (
-                      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div className="h-full flex items-center justify-center">
                         <Text type="secondary">
                           {!runner.sessionId
                             ? terminalModeHint
@@ -548,7 +549,7 @@ export const RightPanel = React.memo(function RightPanel() {
         draggable
         scrollable={false}
       >
-        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <div className="h-full flex flex-col">
           <MonacoPythonEditor
             value={code}
             activeLine={runner.activeLine}
@@ -576,7 +577,7 @@ export const RightPanel = React.memo(function RightPanel() {
         draggable
         scrollable={false}
       >
-        <div style={{ height: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div className="h-full overflow-hidden flex flex-col">
           <DebugTab
             runner={runner}
             variableColumns={variableColumns}

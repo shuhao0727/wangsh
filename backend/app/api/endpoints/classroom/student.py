@@ -13,6 +13,7 @@ from app.core.deps import get_current_user
 from app.schemas.user_info import UserInfo
 from app.schemas.classroom import ResponseSubmit
 from app.services import classroom as svc
+from app.services.classroom import calc_remaining
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -122,7 +123,6 @@ async def get_result(
 
 
 def _to_student_view(activity, my_resp=None) -> dict:
-    from app.services.classroom import calc_remaining
     return {
         "id": activity.id,
         "activity_type": activity.activity_type,

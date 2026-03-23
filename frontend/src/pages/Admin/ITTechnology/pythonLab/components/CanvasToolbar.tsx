@@ -1,22 +1,32 @@
 import React from "react";
-import { Button, Dropdown, Space, Tooltip } from "antd";
+import { Button, Dropdown, Tooltip } from "antd";
 import {
   ApartmentOutlined,
-  DeleteOutlined,
+  ClearOutlined,
+  NodeIndexOutlined,
   DragOutlined,
   DownloadOutlined,
   EyeOutlined,
   ExperimentOutlined,
-  LinkOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MessageOutlined,
-  ReloadOutlined,
-  ShrinkOutlined,
+  ColumnWidthOutlined,
+  SyncOutlined,
   UploadOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
+
+const Divider = () => (
+  <div className="w-px h-4 bg-black/[0.1] mx-2 flex-shrink-0" />
+);
+
+// 按钮组：组内按钮紧凑，组间用 Divider
+const Group: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex items-center gap-0.5">{children}</div>
+);
 
 export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
   leftCollapsed: boolean;
@@ -42,169 +52,132 @@ export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
   setScale: React.Dispatch<React.SetStateAction<number>>;
 }) {
   const {
-    leftCollapsed,
-    toggleLeft,
-    demoOptions,
-    onLoadDemo,
-    onArrange,
-    autoLayout,
-    onToggleAutoLayout,
-    connectMode,
-    onToggleConnect,
-    panMode,
-    onTogglePan,
-    followMode,
-    onToggleFollow,
-    canDelete,
-    onDelete,
-    onClear,
-    onAddNote,
-    onExportFlow,
-    onImportFlow,
-    scale,
-    setScale,
+    leftCollapsed, toggleLeft, demoOptions, onLoadDemo,
+    onArrange, autoLayout, onToggleAutoLayout,
+    connectMode, onToggleConnect, panMode, onTogglePan,
+    followMode, onToggleFollow, canDelete, onDelete, onClear,
+    onAddNote, onExportFlow, onImportFlow, scale, setScale,
   } = props;
   const fileRef = React.useRef<HTMLInputElement | null>(null);
-  
-  const toolButtonStyle: React.CSSProperties = {
-    color: "var(--ws-color-text-secondary)",
-  };
-  const activeStyle: React.CSSProperties = {
-    color: "var(--ws-color-primary)",
-    background: "var(--ws-color-primary-bg)",
-  };
+
+  const btn = "text-text-secondary";
+  const activeCls = "text-primary bg-primary-soft";
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 4,
-        maxWidth: "100%",
-      }}
-    >
-      <Tooltip title={leftCollapsed ? "展开左侧模块" : "收起左侧模块"}>
-        <Button type="text" icon={leftCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={toggleLeft} style={toolButtonStyle} />
-      </Tooltip>
-      
-      <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />
+    <div className="flex items-center flex-wrap gap-1 max-w-full px-1">
+      {/* 左侧面板切换 */}
+      <Group>
+        <Tooltip title={leftCollapsed ? "展开左侧模块" : "收起左侧模块"}>
+          <Button type="text" size="small"
+            icon={leftCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={toggleLeft} className={btn} />
+        </Tooltip>
+      </Group>
 
-      <Dropdown
-        trigger={["click"]}
-        menu={{
+      <Divider />
+
+      {/* 示例 + 整理 */}
+      <Group>
+        <Dropdown trigger={["click"]} menu={{
           items: demoOptions.map((d) => ({
             key: d.key,
             label: (
-              <div style={{ minWidth: 200 }}>
-                <div style={{ fontWeight: 600 }}>{d.label}</div>
-                {d.description ? <div style={{ fontSize: 12, color: "var(--ws-color-text-tertiary)" }}>{d.description}</div> : null}
+              <div style={{ minWidth: 180 }}>
+                <div className="font-semibold text-sm">{d.label}</div>
+                {d.description && <div className="text-xs text-text-tertiary">{d.description}</div>}
               </div>
             ),
           })),
           onClick: ({ key }) => onLoadDemo(String(key)),
-        }}
-      >
-        <Tooltip title="示例流程">
-          <Button type="text" icon={<ExperimentOutlined />} style={toolButtonStyle} />
+        }}>
+          <Tooltip title="示例流程">
+            <Button type="text" size="small" icon={<ExperimentOutlined />} className={btn} />
+          </Tooltip>
+        </Dropdown>
+        <Tooltip title="立即整理">
+          <Button type="text" size="small" icon={<ApartmentOutlined />} onClick={onArrange} className={btn} />
         </Tooltip>
-      </Dropdown>
-      <Tooltip title="立即执行整理">
-        <Button type="text" icon={<ApartmentOutlined />} onClick={onArrange} style={toolButtonStyle} />
-      </Tooltip>
-      <Tooltip title={autoLayout ? "自动整理模式：开启" : "自动整理模式：关闭"}>
-        <Button
-          type="text"
-          icon={<ApartmentOutlined />}
-          style={autoLayout ? activeStyle : toolButtonStyle}
-          onClick={onToggleAutoLayout}
+        <Tooltip title={autoLayout ? "自动整理：开启" : "自动整理：关闭"}>
+          <Button type="text" size="small" icon={<SyncOutlined />}
+            className={autoLayout ? activeCls : btn} onClick={onToggleAutoLayout} />
+        </Tooltip>
+      </Group>
+
+      <Divider />
+
+      {/* 交互模式 */}
+      <Group>
+        <Tooltip title="连线模式">
+          <Button type="text" size="small" icon={<NodeIndexOutlined />}
+            className={connectMode ? activeCls : btn} onClick={onToggleConnect} />
+        </Tooltip>
+        <Tooltip title="抓手移动">
+          <Button type="text" size="small" icon={<DragOutlined />}
+            className={panMode ? activeCls : btn} onClick={onTogglePan} />
+        </Tooltip>
+        <Tooltip title="跟随执行点">
+          <Button type="text" size="small" icon={<EyeOutlined />}
+            className={followMode ? activeCls : btn} onClick={onToggleFollow} />
+        </Tooltip>
+      </Group>
+
+      <Divider />
+
+      {/* 编辑操作 */}
+      <Group>
+        <Tooltip title="删除选中">
+          <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete} onClick={onDelete} />
+        </Tooltip>
+        <Tooltip title="清空画布">
+          <Button type="text" size="small" danger icon={<ClearOutlined />} onClick={onClear} />
+        </Tooltip>
+        <Tooltip title="添加注释">
+          <Button type="text" size="small" icon={<MessageOutlined />} onClick={onAddNote} className={btn} />
+        </Tooltip>
+      </Group>
+
+      <Divider />
+
+      {/* 导入/导出 */}
+      <Group>
+        <Tooltip title="导入流程图">
+          <Button type="text" size="small" icon={<UploadOutlined />}
+            onClick={() => fileRef.current?.click()} className={btn} />
+        </Tooltip>
+        <Tooltip title="导出流程图">
+          <Button type="text" size="small" icon={<DownloadOutlined />}
+            onClick={() => onExportFlow?.()} className={btn} />
+        </Tooltip>
+        <input id="import-flow-input" name="import-flow-input" aria-label="导入流程图"
+          ref={fileRef} type="file" accept="application/json" className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { onImportFlow?.(typeof r.result === "string" ? r.result : ""); };
+            r.readAsText(f);
+            e.currentTarget.value = "";
+          }}
         />
-      </Tooltip>
-      
-      <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />
+      </Group>
 
-      <Tooltip title="切换连线模式">
-        <Button 
-            type="text" 
-            icon={<LinkOutlined />} 
-            style={connectMode ? activeStyle : toolButtonStyle}
-            onClick={onToggleConnect} 
-        />
-      </Tooltip>
-      <Tooltip title="抓手移动画布">
-        <Button 
-            type="text" 
-            icon={<DragOutlined />} 
-            style={panMode ? activeStyle : toolButtonStyle}
-            onClick={onTogglePan} 
-        />
-      </Tooltip>
-      <Tooltip title="跟随执行点">
-        <Button 
-            type="text" 
-            icon={<EyeOutlined />} 
-            style={followMode ? activeStyle : toolButtonStyle}
-            onClick={onToggleFollow} 
-        />
-      </Tooltip>
+      <Divider />
 
-      <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />
-
-      <Tooltip title="删除选中节点/连线">
-        <Button type="text" danger icon={<DeleteOutlined />} disabled={!canDelete} onClick={onDelete} />
-      </Tooltip>
-      <Tooltip title="清空画布">
-        <Button type="text" danger icon={<ReloadOutlined />} onClick={onClear} />
-      </Tooltip>
-      <Tooltip title="注释工具">
-        <Button type="text" icon={<MessageOutlined />} onClick={onAddNote} style={toolButtonStyle} />
-      </Tooltip>
-
-      <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />
-
-      <Tooltip title="导入流程图">
-        <Button
-          type="text"
-          icon={<UploadOutlined />}
-          onClick={() => fileRef.current?.click()}
-          style={toolButtonStyle}
-        />
-      </Tooltip>
-      <Tooltip title="导出流程图">
-        <Button type="text" icon={<DownloadOutlined />} onClick={() => onExportFlow?.()} style={toolButtonStyle} />
-      </Tooltip>
-      <input
-        id="import-flow-input"
-        name="import-flow-input"
-        aria-label="导入流程图"
-        ref={fileRef}
-        type="file"
-        accept="application/json"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const f = e.target.files?.[0] || null;
-          if (!f) return;
-          const r = new FileReader();
-          r.onload = () => {
-            const text = typeof r.result === "string" ? r.result : "";
-            onImportFlow?.(text);
-          };
-          r.readAsText(f);
-          e.currentTarget.value = "";
-        }}
-      />
-
-      <div style={{ width: 1, height: 16, background: "var(--ws-color-border-secondary)", margin: "0 4px" }} />
-
-      <Tooltip title="缩小">
-        <Button type="text" icon={<ZoomOutOutlined />} onClick={() => setScale((s) => Math.max(0.2, s - 0.1))} style={toolButtonStyle} />
-      </Tooltip>
-      <Tooltip title={`重置缩放（当前 ${Math.round(scale * 100)}%）`}>
-        <Button type="text" icon={<ShrinkOutlined />} onClick={() => setScale(1)} style={toolButtonStyle} />
-      </Tooltip>
-      <Tooltip title="放大">
-        <Button type="text" icon={<ZoomInOutlined />} onClick={() => setScale((s) => Math.min(3, s + 0.1))} style={toolButtonStyle} />
-      </Tooltip>
+      {/* 缩放 */}
+      <Group>
+        <Tooltip title="缩小">
+          <Button type="text" size="small" icon={<ZoomOutOutlined />}
+            onClick={() => setScale((s) => Math.max(0.2, s - 0.1))} className={btn} />
+        </Tooltip>
+        <Tooltip title={`重置缩放（${Math.round(scale * 100)}%）`}>
+          <Button type="text" size="small" icon={<ColumnWidthOutlined />}
+            onClick={() => setScale(1)} className={btn} />
+        </Tooltip>
+        <Tooltip title="放大">
+          <Button type="text" size="small" icon={<ZoomInOutlined />}
+            onClick={() => setScale((s) => Math.min(3, s + 0.1))} className={btn} />
+        </Tooltip>
+      </Group>
     </div>
   );
 });

@@ -93,12 +93,12 @@ const AdminITTechnology: React.FC = () => {
   if (view === 'dianming-manager') {
     return (
       <AdminPage padding={24} scrollable={false}>
-        <div style={{ marginBottom: 16, flexShrink: 0 }}>
-          <Button type="link" onClick={() => setView('dashboard')} style={{ padding: 0, color: 'var(--ws-color-text-secondary)' }}>
+        <div className="mb-4 shrink-0">
+          <Button type="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="flex-1 min-h-0">
           <DianmingManager />
         </div>
       </AdminPage>

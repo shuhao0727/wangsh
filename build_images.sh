@@ -36,7 +36,6 @@ docker buildx build \
   --platform "${PLATFORM}" \
   --target backend_runtime \
   -t "${REGISTRY}/wangsh-backend:${VERSION}" \
-  -t "${REGISTRY}/wangsh-backend:latest" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -46,7 +45,6 @@ docker buildx build \
   --platform "${PLATFORM}" \
   --target worker_runtime \
   -t "${REGISTRY}/wangsh-typst-worker:${VERSION}" \
-  -t "${REGISTRY}/wangsh-typst-worker:latest" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -56,7 +54,6 @@ docker buildx build \
   --platform "${PLATFORM}" \
   --target pythonlab_worker_runtime \
   -t "${REGISTRY}/wangsh-pythonlab-worker:${VERSION}" \
-  -t "${REGISTRY}/wangsh-pythonlab-worker:latest" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
   --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
   -f backend/Dockerfile.prod \
@@ -79,7 +76,6 @@ echo "==> Building frontend ..."
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/wangsh-frontend:${VERSION}" \
-  -t "${REGISTRY}/wangsh-frontend:latest" \
   --build-arg REACT_APP_VERSION="${VERSION}" \
   -f frontend/Dockerfile.prod \
   --load \
@@ -89,7 +85,6 @@ echo "==> Building gateway ..."
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/wangsh-gateway:${VERSION}" \
-  -t "${REGISTRY}/wangsh-gateway:latest" \
   -f gateway/Dockerfile \
   --load \
   gateway

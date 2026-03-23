@@ -17,8 +17,8 @@ export default function ArticleMarkdownPreviewCard({ content, scopeId, styleCss,
     <Card
       title={
         <Space size={8}>
-          <EyeOutlined style={{ color: "#0EA5E9" }} />
-          <span style={{ color: "var(--ws-color-text)", fontWeight: 600 }}>预览</span>
+          <EyeOutlined className="text-primary" />
+          <span className="text-text-base font-semibold">预览</span>
         </Space>
       }
       size="small"
@@ -26,10 +26,10 @@ export default function ArticleMarkdownPreviewCard({ content, scopeId, styleCss,
       styles={{ body: { padding: 0 } }}
     >
       <div className="article-preview-toolbar">
-        <Text strong style={{ color: "var(--ws-color-text)" }}>
+        <Text strong className="text-text-base">
           内容预览
         </Text>
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
         <Tag color="orange" style={{ fontSize: "11px" }}>
           实时更新
         </Tag>

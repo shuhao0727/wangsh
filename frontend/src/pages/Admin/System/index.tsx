@@ -21,7 +21,7 @@ import TypstMetricsPanel from "./TypstMetrics";
 const { Text } = Typography;
 
 const InfoRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+  <div className="flex justify-between items-center py-2">
     <Text type="secondary">{label}</Text>
     <span>{value}</span>
   </div>
@@ -76,7 +76,7 @@ const AdminSystem: React.FC = () => {
 
   return (
     <AdminPage>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 16 }}>
+      <div className="flex justify-end items-center mb-4">
         <Space>
           <Segmented value={tab} options={[{ label: "系统", value: "system" }, { label: "Typst", value: "typst" }]} onChange={(v) => setTab(v as any)} />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
@@ -89,7 +89,7 @@ const AdminSystem: React.FC = () => {
         <Row gutter={[16, 16]}>
           <Col xs={24}>
             <AdminCard title="前端导航可见性">
-              <div style={{ display: "flex", gap: 24, rowGap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="flex gap-6 flex-wrap items-center" style={{ rowGap: 12 }}>
                 {NAV_VISIBILITY_ITEMS.map((item) => (
                   <Space key={item.path} size={8}>
                     <Text>{item.label}</Text>
@@ -118,20 +118,20 @@ const AdminSystem: React.FC = () => {
 
           <Col xs={24} lg={12}>
             <AdminCard title="安全设置">
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="flex flex-col gap-3">
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>JWT 过期时间</Text>
+                  <Text type="secondary" className="text-xs">JWT 过期时间</Text>
                   <Space.Compact style={{ width: "100%" }}>
-                    <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly style={{ flex: 1 }} />
+                    <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly className="flex-1" />
                     <Button disabled>分钟</Button>
                   </Space.Compact>
                 </div>
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>算法</Text>
+                  <Text type="secondary" className="text-xs">算法</Text>
                   <Input value={settings?.security?.algorithm ?? ""} readOnly />
                 </div>
                 <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Auto Create Tables</Text>
+                  <Text type="secondary" className="text-xs">Auto Create Tables</Text>
                   <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly />
                 </div>
               </div>
@@ -142,7 +142,7 @@ const AdminSystem: React.FC = () => {
             <AdminCard title="观测指标">
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={12}>
-                  <Text strong style={{ display: "block", marginBottom: 8 }}>HTTP</Text>
+                  <Text strong className="block mb-2">HTTP</Text>
                   <InfoRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
                   <InfoRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
                   <InfoRow label="5xx" value={overview?.observability?.http?.["5xx"] ?? "-"} />
@@ -150,7 +150,7 @@ const AdminSystem: React.FC = () => {
                   <InfoRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
                 </Col>
                 <Col xs={24} md={12}>
-                  <Text strong style={{ display: "block", marginBottom: 8 }}>DB Pool</Text>
+                  <Text strong className="block mb-2">DB Pool</Text>
                   <InfoRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
                   <InfoRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />
                   <InfoRow label="checked_out" value={overview?.observability?.db?.checked_out ?? "-"} />

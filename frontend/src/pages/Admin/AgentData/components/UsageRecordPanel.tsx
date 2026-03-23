@@ -96,7 +96,7 @@ const UsageRecordPanel: React.FC = () => {
         exportDisabled={selectedRowKeys.length === 0}
       />
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loading}
           isEmpty={!loading && data.length === 0}

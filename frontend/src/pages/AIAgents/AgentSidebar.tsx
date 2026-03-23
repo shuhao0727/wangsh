@@ -1,10 +1,6 @@
 import React from "react";
-import { Avatar, Button, Space, Tag, Select, Badge, Tooltip, Flex, Typography } from "antd";
-import {
-  SettingOutlined,
-  HistoryOutlined,
-  SendOutlined,
-} from "@ant-design/icons";
+import { Avatar, Button, Tag, Select, Tooltip, Typography } from "antd";
+import { SettingOutlined, MenuFoldOutlined, PlusOutlined, HistoryOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { AgentSidebarProps } from "./types";
 
@@ -12,48 +8,39 @@ const { Text } = Typography;
 const { Option } = Select;
 
 const AgentSidebar: React.FC<AgentSidebarProps> = ({
-  agents,
-  currentAgent,
-  sessions,
-  currentSessionId,
-  historyVisible,
-  onAgentChange,
-  onToggleSidebar,
-  onStartNewConversation,
-  onSelectSession,
+  agents, currentAgent, sessions, currentSessionId,
+  historyVisible, onAgentChange, onToggleSidebar,
+  onStartNewConversation, onSelectSession,
 }) => {
   if (!currentAgent) {
     return (
-      <div className="agent-sidebar">
-        <div className="agent-sidebar-empty">
-          <Text type="secondary">正在加载智能体...</Text>
-        </div>
+      <div className="flex flex-col h-full p-4 items-center justify-center">
+        <Text type="secondary" className="text-sm">正在加载智能体...</Text>
       </div>
     );
   }
 
-  const formatTimestamp = (timestamp: string) => {
-    return dayjs(timestamp).format("MM-DD HH:mm");
-  };
+  const formatTimestamp = (timestamp: string) => dayjs(timestamp).format("MM-DD HH:mm");
 
   return (
-    <div className="agent-sidebar">
+    <div className="flex flex-col h-full p-4">
+
       {/* 头部 */}
-      <div className="agent-sidebar-header">
-        <Space>
-          <SettingOutlined />
-          <Text strong>智能体</Text>
-        </Space>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <SettingOutlined className="text-text-secondary" />
+          <Text strong className="text-sm">智能体</Text>
+        </div>
         {onToggleSidebar && (
           <Tooltip title="隐藏侧边栏">
-            <Button type="text" size="small" icon={<HistoryOutlined />} onClick={onToggleSidebar} />
+            <Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={onToggleSidebar} />
           </Tooltip>
         )}
       </div>
 
       {/* 智能体选择器 */}
-      <div className="agent-sidebar-selector">
-        <Text type="secondary" className="agent-sidebar-label">当前智能体</Text>
+      <div className="mb-4">
+        <Text type="secondary" className="block text-xs mb-1.5">当前智能体</Text>
         <Select
           value={currentAgent.id}
           onChange={onAgentChange}
@@ -62,83 +49,82 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         >
           {agents.map((agent) => (
             <Option key={agent.id} value={agent.id} label={agent.name}>
-              <Space>
-                <Avatar
-                  shape="square"
-                  size="small"
-                  icon={agent.icon}
-                  style={{ backgroundColor: agent.color, borderRadius: 6 }}
-                />
-                <span>{agent.name}</span>
-                <Badge status={agent.status === "online" ? "success" : "default"} />
-              </Space>
+              <div className="flex items-center gap-2">
+                <Avatar shape="square" size="small" icon={agent.icon}
+                  style={{ backgroundColor: agent.color }} />
+                <span className="text-sm">{agent.name}</span>
+              </div>
             </Option>
           ))}
         </Select>
       </div>
 
-      {/* 智能体详情 */}
-      <div className="agent-sidebar-detail">
-        <Flex align="flex-start" gap={12}>
-          <Avatar
-            shape="square"
-            size={40}
-            icon={currentAgent.icon}
-            style={{ backgroundColor: currentAgent.color, flexShrink: 0, borderRadius: 8 }}
-          />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="agent-sidebar-detail-head">
-              <Text strong style={{ fontSize: 14 }}>{currentAgent.name}</Text>
-              <Tag
-                color={currentAgent.status === "online" ? "success" : "default"}
-                className="agent-status-tag"
-              >
-                {currentAgent.status === "online" ? "在线" : "离线"}
-              </Tag>
-            </div>
-            <div className="agent-sidebar-desc">{currentAgent.description}</div>
+      {/* 当前智能体信息卡 */}
+      <div className="rounded-xl p-3 mb-4 bg-surface-2">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <Avatar shape="square" size="small" icon={currentAgent.icon}
+              style={{ backgroundColor: currentAgent.color }} />
+            <Text strong className="text-sm truncate">{currentAgent.name}</Text>
           </div>
-        </Flex>
+          <Tag color="success" className="!m-0 !text-[10px] !leading-4 !h-[18px] !border-0">
+            在线
+          </Tag>
+        </div>
+        {currentAgent.description && (
+          <Text type="secondary" className="text-xs leading-relaxed line-clamp-2">
+            {currentAgent.description}
+          </Text>
+        )}
       </div>
 
-      {/* 对话记录 */}
-      <div className="agent-sidebar-sessions">
-        <div className="agent-sidebar-sessions-header">
-          <Text type="secondary" className="agent-sidebar-label">对话记录</Text>
-          <Button type="link" size="small" icon={<SendOutlined />} onClick={onStartNewConversation} style={{ padding: 0, height: "auto" }}>
-            新对话
-          </Button>
-        </div>
+      {/* 历史记录 */}
+      {historyVisible && (
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2">
+            <Text type="secondary" className="text-xs font-medium">历史记录</Text>
+            <Button type="link" size="small" icon={<PlusOutlined />}
+              onClick={onStartNewConversation} className="!p-0 !h-auto">
+              新对话
+            </Button>
+          </div>
 
-        <div className="agent-sidebar-sessions-list">
-          {sessions.length === 0 ? (
-            <div className="agent-sidebar-sessions-empty">
-              <HistoryOutlined style={{ fontSize: 24, opacity: 0.3 }} />
-              <div>暂无历史记录</div>
-            </div>
-          ) : (
-            <div className="agent-sidebar-sessions-items">
-              {sessions.map((s) => (
+          <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1">
+            {sessions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <HistoryOutlined className="text-2xl opacity-20 text-text-secondary" />
+                <Text type="secondary" className="text-xs">暂无历史记录</Text>
+              </div>
+            ) : (
+              sessions.map((s) => (
                 <div
                   key={s.session_id}
-                  className={`agent-session-item ${s.session_id === currentSessionId ? "active" : ""}`}
                   onClick={() => onSelectSession(s.session_id)}
+                  className={`rounded-lg p-2.5 cursor-pointer transition-colors duration-150 ${
+                    s.session_id === currentSessionId
+                      ? "bg-primary-soft"
+                      : "hover:bg-surface-2"
+                  }`}
                 >
-                  <div className="agent-session-item-meta">
-                    <Tag color="blue" className="agent-session-tag">{s.turns}轮</Tag>
-                    <Text type="secondary" style={{ fontSize: 10 }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <Tag color="blue" className="!m-0 !text-[10px] !leading-4 !h-[18px]">
+                      {s.turns}轮
+                    </Tag>
+                    <span className="text-[10px] text-text-tertiary">
                       {formatTimestamp(s.last_at)}
-                    </Text>
+                    </span>
                   </div>
-                  <div className="agent-session-item-preview">
+                  <div className={`text-sm leading-snug line-clamp-2 ${
+                    s.session_id === currentSessionId ? "text-primary" : "text-text-base"
+                  }`}>
                     {s.preview || "新对话"}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

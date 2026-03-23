@@ -119,8 +119,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
   return (
     <Modal
       title={
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <DatabaseOutlined style={{ marginRight: 8, color: "#0EA5E9" }} />
+        <div className="flex items-center">
+          <DatabaseOutlined className="mr-2 text-primary" />
           <span>智能体使用记录详情</span>
         </div>
       }
@@ -134,15 +134,15 @@ const DetailModal: React.FC<DetailModalProps> = ({
       width={800}
       styles={{ body: { padding: 24 } }}
     >
-      <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
+      <div className="overflow-y-auto" style={{ maxHeight: "70vh" }}>
         {/* 基本信息区域 */}
-        <div style={{ marginBottom: 24 }}>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <MessageOutlined style={{ marginRight: 8 }} />
+        <div className="mb-6">
+          <Title level={4} className="mb-4">
+            <MessageOutlined className="mr-2" />
             对话信息
           </Title>
 
-          <Row gutter={24} style={{ marginBottom: 16 }}>
+          <Row gutter={24} className="mb-4">
             <Col span={12}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="记录ID">
@@ -151,15 +151,15 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 <Descriptions.Item label="会话ID">
                   <Tag
                     icon={<CopyOutlined />}
-                    style={{ fontFamily: "monospace" }}
+                    className="font-mono"
                   >
                     {record.session_id || "未记录"}
                   </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="响应时间">
-                  <div style={{ display: "flex", alignItems: "center" }}>
+                  <div className="flex items-center">
                     <ClockCircleOutlined
-                      style={{ marginRight: 4, color: "#F59E0B" }}
+                      className="mr-1 text-warning"
                     />
                     <Text>{formatResponseTime(record.response_time_ms)}</Text>
                   </div>
@@ -170,9 +170,9 @@ const DetailModal: React.FC<DetailModalProps> = ({
             <Col span={12}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="使用时间">
-                  <div style={{ display: "flex", alignItems: "center" }}>
+                  <div className="flex items-center">
                     <CalendarOutlined
-                      style={{ marginRight: 4, color: "#0EA5E9" }}
+                      className="mr-1 text-primary"
                     />
                     <Text>
                       {dayjs(record.used_at).format("YYYY-MM-DD HH:mm:ss")}
@@ -193,17 +193,17 @@ const DetailModal: React.FC<DetailModalProps> = ({
         <Divider />
 
         {/* 学生信息区域 */}
-        <div style={{ marginBottom: 24 }}>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <UserOutlined style={{ marginRight: 8 }} />
+        <div className="mb-6">
+          <Title level={4} className="mb-4">
+            <UserOutlined className="mr-2" />
             学生信息
           </Title>
 
           {user ? (
             <Row gutter={24}>
               <Col span={8}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     姓名
                   </Text>
                   <Text>{user.name}</Text>
@@ -211,8 +211,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={8}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     学号
                   </Text>
                   <Text copyable>{user.student_id}</Text>
@@ -220,8 +220,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={8}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     状态
                   </Text>
                   <Tag color={user.is_active ? "success" : "error"}>
@@ -231,8 +231,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     班级
                   </Text>
                   <Text>{user.class_name}</Text>
@@ -240,8 +240,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     学年
                   </Text>
                   <Text>{user.grade}</Text>
@@ -261,29 +261,29 @@ const DetailModal: React.FC<DetailModalProps> = ({
         <Divider />
 
         {/* 智能体信息区域 */}
-        <div style={{ marginBottom: 24 }}>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <RobotOutlined style={{ marginRight: 8 }} />
+        <div className="mb-6">
+          <Title level={4} className="mb-4">
+            <RobotOutlined className="mr-2" />
             智能体信息
           </Title>
 
           {agent ? (
             <Row gutter={24}>
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     智能体名称
                   </Text>
-                  <div style={{ display: "flex", alignItems: "center" }}>
+                  <div className="flex items-center">
                     {agentTypeConfigItem.icon}
-                    <Text style={{ marginLeft: 8 }}>{agent.agent_name}</Text>
+                    <Text className="ml-2">{agent.agent_name}</Text>
                   </div>
                 </div>
               </Col>
 
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     智能体类型
                   </Text>
                   <Tag color={agentTypeConfigItem.color}>
@@ -293,8 +293,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     模型名称
                   </Text>
                   <Text>{agent.model_name}</Text>
@@ -302,8 +302,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
               </Col>
 
               <Col span={12}>
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: "block", marginBottom: 4 }}>
+                <div className="mb-3">
+                  <Text strong className="block mb-1">
                     创建者
                   </Text>
                   <Text>用户ID: {agent.user_id}</Text>
@@ -323,14 +323,14 @@ const DetailModal: React.FC<DetailModalProps> = ({
         <Divider />
 
         {/* 完整对话区域 */}
-        <div style={{ marginBottom: 16 }}>
-          <Title level={4} style={{ marginBottom: 16 }}>
-            <MessageOutlined style={{ marginRight: 8 }} />
+        <div className="mb-4">
+          <Title level={4} className="mb-4">
+            <MessageOutlined className="mr-2" />
             完整对话
           </Title>
 
           {conversationLoading ? (
-            <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div className="text-center py-6">
               <Spin />
             </div>
           ) : conversationMessages.length > 0 ? (
@@ -350,24 +350,23 @@ const DetailModal: React.FC<DetailModalProps> = ({
                     : "#FAFAFA";
                 const label = isQuestion ? "Q" : isAnswer ? "A" : m.message_type;
                 return (
-                  <div key={m.id} style={{ marginBottom: 12 }}>
-                    <div style={{ marginBottom: 4, display: "flex", gap: 8, alignItems: "center" }}>
+                  <div key={m.id} className="mb-3">
+                    <div className="mb-1 flex gap-2 items-center">
                       <Tag color={isQuestion ? "blue" : isAnswer ? "green" : "cyan"} style={{ marginInlineEnd: 0 }}>
                         {label}
                       </Tag>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Text type="secondary" className="text-xs">
                         {dayjs(m.created_at).format("YYYY-MM-DD HH:mm:ss")}
                       </Text>
                     </div>
                     <div
+                      className="px-4 py-3 rounded-md"
                       style={{
                         backgroundColor: background,
-                        padding: "12px 16px",
-                        borderRadius: 6,
                         borderLeft: `4px solid ${borderColor}`,
                       }}
                     >
-                      <Paragraph style={{ margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                      <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
                         {m.content}
                       </Paragraph>
                     </div>
@@ -383,32 +382,17 @@ const DetailModal: React.FC<DetailModalProps> = ({
                 type="warning"
                 showIcon
               />
-              <div style={{ marginTop: 16 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
+              <div className="mt-4">
+                <Title level={5} className="mb-2">
                   单轮摘要
                 </Title>
-                <div
-                  style={{
-                    backgroundColor: "#FAFAFA",
-                    padding: "12px 16px",
-                    borderRadius: "6px",
-                    borderLeft: "4px solid #0EA5E9",
-                    marginBottom: 12,
-                  }}
-                >
-                  <Paragraph style={{ margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                <div className="bg-gray-50 px-4 py-3 rounded-md mb-3" style={{ borderLeft: "4px solid #0EA5E9" }}>
+                  <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
                     {record.question}
                   </Paragraph>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: "rgba(14, 165, 233, 0.06)",
-                    padding: "12px 16px",
-                    borderRadius: "6px",
-                    borderLeft: "4px solid #10B981",
-                  }}
-                >
-                  <Paragraph style={{ margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                <div className="px-4 py-3 rounded-md" style={{ backgroundColor: "rgba(14, 165, 233, 0.06)", borderLeft: "4px solid #10B981" }}>
+                  <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
                     {record.answer}
                   </Paragraph>
                 </div>
@@ -421,14 +405,14 @@ const DetailModal: React.FC<DetailModalProps> = ({
         {record.additional_data && (
           <>
             <Divider />
-            <div style={{ marginBottom: 16 }}>
-              <Title level={4} style={{ marginBottom: 16 }}>
+            <div className="mb-4">
+              <Title level={4} className="mb-4">
                 附加信息
               </Title>
               <Alert
                 message="附加数据"
                 description={
-                  <pre style={{ fontSize: "12px", margin: 0 }}>
+                  <pre className="text-xs !m-0">
                     {JSON.stringify(record.additional_data, null, 2)}
                   </pre>
                 }
@@ -440,53 +424,45 @@ const DetailModal: React.FC<DetailModalProps> = ({
         )}
 
         {/* 统计信息 */}
-        <div
-          style={{
-            marginTop: 24,
-            padding: "16px",
-            backgroundColor: "#FAFAFA",
-            borderRadius: "6px",
-            border: "1px solid rgba(0,0,0,0.04)",
-          }}
-        >
+        <div className="mt-6 p-4 bg-gray-50 rounded-md border border-black/5">
           <Row gutter={24}>
-            <Col span={8} style={{ textAlign: "center" }}>
+            <Col span={8} className="text-center">
               <div>
                 <Text
                   type="secondary"
-                  style={{ display: "block", fontSize: "12px" }}
+                  className="block text-xs"
                 >
                   问题字数
                 </Text>
-                <Title level={3} style={{ margin: "8px 0" }}>
+                <Title level={3} className="!my-2">
                   {record.question ? record.question.length : 0}
                 </Title>
               </div>
             </Col>
 
-            <Col span={8} style={{ textAlign: "center" }}>
+            <Col span={8} className="text-center">
               <div>
                 <Text
                   type="secondary"
-                  style={{ display: "block", fontSize: "12px" }}
+                  className="block text-xs"
                 >
                   回答字数
                 </Text>
-                <Title level={3} style={{ margin: "8px 0" }}>
+                <Title level={3} className="!my-2">
                   {record.answer ? record.answer.length : 0}
                 </Title>
               </div>
             </Col>
 
-            <Col span={8} style={{ textAlign: "center" }}>
+            <Col span={8} className="text-center">
               <div>
                 <Text
                   type="secondary"
-                  style={{ display: "block", fontSize: "12px" }}
+                  className="block text-xs"
                 >
                   响应时间
                 </Text>
-                <Title level={3} style={{ margin: "8px 0" }}>
+                <Title level={3} className="!my-2">
                   {record.response_time_ms
                     ? formatResponseTime(record.response_time_ms)
                     : "未知"}

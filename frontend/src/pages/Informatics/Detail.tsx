@@ -100,7 +100,7 @@ const InformaticsDetailPage: React.FC = () => {
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/informatics")}>
             返回
           </Button>
-          <Title level={3} style={{ margin: 0 }}>
+          <Title level={3} className="!m-0">
             {title}
           </Title>
         </Space>
@@ -108,24 +108,24 @@ const InformaticsDetailPage: React.FC = () => {
 
       <div className="informatics-content">
         {loading ? (
-          <div style={{ textAlign: "center", padding: 48 }}>
+          <div className="text-center p-12">
             <Spin size="large" />
           </div>
         ) : (
           <PanelCard>
             {note?.summary ? (
-              <div style={{ marginBottom: 12 }}>
+              <div className="mb-3">
                 <Text type="secondary">{note.summary}</Text>
               </div>
             ) : null}
-            <div style={{ marginBottom: 12 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+            <div className="mb-3">
+              <Text type="secondary" className="text-xs">
                 更新：{note?.updated_at ? new Date(note.updated_at).toLocaleString("zh-CN") : "-"}
               </Text>
             </div>
             {note?.toc?.length ? (
-              <Card size="small" title="目录" style={{ marginBottom: 12, borderRadius: 12 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Card size="small" title="目录" className="mb-3 rounded-xl">
+                <div className="flex flex-col gap-1.5">
                   {note.toc.map((it: any, idx: number) => (
                     <div key={idx} style={{ paddingLeft: Math.max(0, (it.level || 1) - 1) * 12 }}>
                       <Text>{extractHeadingText(it.text || it)}</Text>
@@ -140,7 +140,7 @@ const InformaticsDetailPage: React.FC = () => {
               style={{ userSelect: "none", WebkitUserSelect: "none" } as any}
             >
               {pdfLoading ? (
-                <div style={{ textAlign: "center", padding: 24 }}>
+                <div className="text-center p-6">
                   <Spin />
                 </div>
               ) : null}

@@ -528,18 +528,18 @@ start_docker_stack() {
     print_info "启动Docker开发环境服务栈..."
     cd "${PROJECT_ROOT}"
     if [ -f ".env.dev" ]; then
-        docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres redis adminer backend frontend caddy
+        docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
     else
-        docker-compose -f docker-compose.dev.yml up -d postgres redis adminer backend frontend caddy
+        docker-compose -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
     fi
 
-    print_info "等待入口服务就绪..."
+    print_info "等待前端服务就绪..."
     local max_attempts=60
     local attempt=1
-    local docker_web_port="${WEB_PORT:-8080}"
-    while ! curl -fsS "http://localhost:${docker_web_port}/health" > /dev/null 2>&1; do
+    local frontend_port="6608"
+    while ! curl -fsS "http://localhost:${frontend_port}" > /dev/null 2>&1; do
         if [ ${attempt} -ge ${max_attempts} ]; then
-            print_error "Docker服务栈启动超时（入口未就绪）"
+            print_error "Docker服务栈启动超时（前端未就绪）"
             docker-compose -f docker-compose.dev.yml ps
             exit 1
         fi
@@ -725,11 +725,15 @@ show_service_status() {
     echo "📊 服务状态："
     
     if [ "${START_MODE:-local}" = "docker" ]; then
-        local docker_web_port="${WEB_PORT:-8080}"
-        if lsof -Pi :"${docker_web_port}" -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo -e "  ${GREEN}✅ 入口页面:    http://localhost:${docker_web_port}${NC}"
+        if lsof -Pi :6608 -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✅ 前端页面:    http://localhost:6608${NC}"
         else
-            echo -e "  ${RED}❌ 入口页面:    未运行${NC}"
+            echo -e "  ${RED}❌ 前端页面:    未运行${NC}"
+        fi
+        if lsof -Pi :${BACKEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✅ 后端API服务: http://localhost:${BACKEND_PORT}${NC}"
+        else
+            echo -e "  ${RED}❌ 后端API服务: 未运行${NC}"
         fi
     else
         if lsof -Pi :${BACKEND_PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -861,8 +865,8 @@ main() {
     # 尝试打开浏览器
     if command -v open > /dev/null; then
         if [ "${START_MODE}" = "docker" ]; then
-            open "http://localhost:${WEB_PORT:-8080}"
-            open "http://localhost:${WEB_PORT:-8080}/docs"
+            open "http://localhost:6608"
+            open "http://localhost:${BACKEND_PORT}/docs"
         else
             open "http://localhost:${FRONTEND_PORT}"
             open "http://localhost:${BACKEND_PORT}/docs"

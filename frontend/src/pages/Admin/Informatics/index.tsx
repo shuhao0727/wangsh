@@ -146,17 +146,17 @@ const AdminInformatics: React.FC = () => {
       title: syncTaskStatus.successful ? "同步完成" : "同步结束（有失败）",
       width: 760,
       content: (
-        <div style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>
+        <div className="whitespace-pre-wrap mt-2">
           <div>新增：{created.length} 个</div>
           <div>更新：{updated.length} 个</div>
           <div>删除：{deleted.length} 个</div>
           <div>已编译：{compiledCount} 个</div>
           <div>编译失败：{failed.length} 个</div>
-          {created.length > 0 ? <div style={{ marginTop: 8 }}>新增文件：{"\n"}{pathPreview(created)}</div> : null}
-          {updated.length > 0 ? <div style={{ marginTop: 8 }}>更新文件：{"\n"}{pathPreview(updated)}</div> : null}
-          {deleted.length > 0 ? <div style={{ marginTop: 8 }}>删除文件：{"\n"}{pathPreview(deleted)}</div> : null}
+          {created.length > 0 ? <div className="mt-2">新增文件：{"\n"}{pathPreview(created)}</div> : null}
+          {updated.length > 0 ? <div className="mt-2">更新文件：{"\n"}{pathPreview(updated)}</div> : null}
+          {deleted.length > 0 ? <div className="mt-2">删除文件：{"\n"}{pathPreview(deleted)}</div> : null}
           {failed.length > 0 ? (
-            <div style={{ marginTop: 8 }}>
+            <div className="mt-2">
               编译失败：
               {"\n"}
               {failed
@@ -317,7 +317,7 @@ const AdminInformatics: React.FC = () => {
 
   return (
     <AdminPage>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, gap: 12, flexWrap: "wrap" }}>
+      <div className="flex justify-between mb-4 gap-3 flex-wrap">
         <Space>
           <Select
             value={categoryFilter || undefined}
@@ -348,7 +348,7 @@ const AdminInformatics: React.FC = () => {
         </Space>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="flex-1 min-h-0">
         <AdminTablePanel
           loading={loading}
           isEmpty={displayedItems.length === 0}
@@ -386,7 +386,7 @@ const AdminInformatics: React.FC = () => {
             <Input placeholder="https://github.com/shuhao0727/2-My-notes" />
           </Form.Item>
           <Space style={{ width: "100%", display: "flex", marginBottom: 8 }} align="start">
-            <Form.Item style={{ flex: 1 }} name="branch" label="分支" rules={[{ required: true, message: "请输入分支" }]}>
+            <Form.Item className="flex-1" name="branch" label="分支" rules={[{ required: true, message: "请输入分支" }]}>
               <Input placeholder="main" />
             </Form.Item>
             <Form.Item style={{ width: 180 }} name="interval_hours" label="同步周期(小时)" rules={[{ required: true, message: "请输入同步周期" }]}>
@@ -408,7 +408,7 @@ const AdminInformatics: React.FC = () => {
             <Input.Password placeholder="留空表示不修改已保存 Token" />
           </Form.Item>
 
-          <Space style={{ marginBottom: 12 }}>
+          <Space className="mb-3">
             <Button
               loading={syncLoading}
               onClick={async () => {
@@ -531,48 +531,48 @@ const AdminInformatics: React.FC = () => {
             </Button>
           </Space>
 
-          <div style={{ background: "#FAFAFA", borderRadius: 10, padding: 12 }}>
+          <div className="bg-gray-50 rounded-xl p-3">
             <Text strong>最近同步状态</Text>
-            <div style={{ marginTop: 8 }}>
+            <div className="mt-2">
               <Text type="secondary">运行状态：</Text>
               <Tag color={lastRun?.status?.includes("success") ? "green" : lastRun?.status?.includes("failed") ? "red" : "blue"}>
                 {lastRun?.status || "暂无"}
               </Tag>
             </div>
-            <div style={{ marginTop: 6 }}>
+            <div className="mt-1.5">
               <Text type="secondary">
                 统计：新增 {lastRun?.created_count ?? 0}，更新 {lastRun?.updated_count ?? 0}，删除 {lastRun?.deleted_count ?? 0}，跳过 {lastRun?.skipped_count ?? 0}
               </Text>
             </div>
             {lastRun?.error_summary ? (
-              <div style={{ marginTop: 6 }}>
+              <div className="mt-1.5">
                 <Text type="danger">错误：{lastRun.error_summary}</Text>
               </div>
             ) : null}
             {lastRun?.finished_at ? (
-              <div style={{ marginTop: 6 }}>
+              <div className="mt-1.5">
                 <Text type="secondary">完成时间：{new Date(lastRun.finished_at).toLocaleString("zh-CN")}</Text>
               </div>
             ) : null}
             {syncTaskStatus ? (
-              <div style={{ marginTop: 10 }}>
+              <div className="mt-2.5">
                 <Progress
                   percent={syncTaskStatus.progress_percent}
                   status={syncTaskStatus.state === "FAILURE" ? "exception" : syncTaskStatus.ready ? "success" : "active"}
                 />
-                <div style={{ marginTop: 6 }}>
+                <div className="mt-1.5">
                   <Text type="secondary">
                     进度：{syncTaskStatus.progress_done}/{syncTaskStatus.progress_total || "?"}
                     {syncTaskStatus.progress_phase ? ` · 阶段 ${syncTaskStatus.progress_phase}` : ""}
                   </Text>
                 </div>
                 {syncTaskStatus.progress_current ? (
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <Text type="secondary">当前文件：{syncTaskStatus.progress_current}</Text>
                   </div>
                 ) : null}
                 {syncTaskStatus.error ? (
-                  <div style={{ marginTop: 4 }}>
+                  <div className="mt-1">
                     <Text type="danger">任务错误：{syncTaskStatus.error}</Text>
                   </div>
                 ) : null}

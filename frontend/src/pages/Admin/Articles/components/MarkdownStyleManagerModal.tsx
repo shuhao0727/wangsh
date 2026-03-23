@@ -111,7 +111,7 @@ export default function MarkdownStyleManagerModal({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 12, minHeight: 520 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="flex flex-col gap-2.5">
           <Select
             value={styleEditingKey || undefined}
             placeholder="选择样式"
@@ -124,11 +124,11 @@ export default function MarkdownStyleManagerModal({
               label: s.title ? `${s.title}（${s.key}）` : s.key,
             }))}
           />
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <Button
               danger
               size="small"
-              style={{ flex: 1 }}
+              className="flex-1"
               onClick={() => {
                 if (!styleEditingKey) return;
                 Modal.confirm({
@@ -153,12 +153,12 @@ export default function MarkdownStyleManagerModal({
               删除
             </Button>
           </div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" className="text-xs">
             样式方案可复用，文章通过 style_key 选择
           </Text>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="flex flex-col gap-2.5">
           {styleDraft ? (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 120px", gap: 10 }}>
@@ -171,7 +171,7 @@ export default function MarkdownStyleManagerModal({
                   value={styleDraft.sort_order ?? 0}
                   onChange={(v) => setStyleDraft((p) => (p ? { ...p, sort_order: Number(v || 0) } : p))}
                   placeholder="排序"
-                  style={{ width: "100%" }}
+                  className="w-full"
                 />
                 <Button
                   type="primary"
@@ -201,13 +201,7 @@ export default function MarkdownStyleManagerModal({
                   }}
                 />
                 <div
-                  style={{
-                    border: "1px solid rgba(0,0,0,0.04)",
-                    borderRadius: 8,
-                    background: "#FAFAFA",
-                    overflow: "auto",
-                    padding: 12,
-                  }}
+                  className="border border-black/[0.04] rounded-lg bg-surface-2 overflow-auto p-3"
                 >
                   <ArticlePreviewContent content={STYLE_PREVIEW_MD} scopeId={`style-preview-${styleDraft.key}`} styleCss={styleDraft.content || ""} />
                 </div>

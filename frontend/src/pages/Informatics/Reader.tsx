@@ -10,7 +10,7 @@ import PanelCard from "@components/Layout/PanelCard";
 import { useDebounce } from "@hooks/useDebounce";
 import "./Informatics.css";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 type PdfOutlineItem = {
   title: string;
@@ -140,11 +140,11 @@ const InformaticsReaderPage: React.FC = () => {
         if (!catMap.has(curPath)) {
           const node: TreeNode = { 
             title: (
-              <span style={{ fontWeight: 500, color: "var(--ws-color-text-secondary)" }}>{p}</span>
-            ), 
-            key: `cat:${curPath}`, 
+              <span className="font-medium text-text-secondary">{p}</span>
+            ),
+            key: `cat:${curPath}`,
             children: [],
-            icon: <FolderOutlined style={{ color: "var(--ws-color-primary-light)" }} />
+            icon: <FolderOutlined className="text-primary" />
           };
           cur.children = cur.children || [];
           cur.children.push(node);
@@ -173,7 +173,7 @@ const InformaticsReaderPage: React.FC = () => {
       catNode.children.push({
         key: `note:${it.id}`,
         isLeaf: true,
-        icon: <FileTextOutlined style={{ color: "var(--ws-color-text-tertiary)" }} />,
+        icon: <FileTextOutlined className="text-text-tertiary" />,
         title: (
           <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
             <Text strong style={{ display: "block", fontSize: 13 }} ellipsis={{ tooltip: sourceStem || it.title }}>
@@ -228,8 +228,8 @@ const InformaticsReaderPage: React.FC = () => {
       const node: TreeNode = {
         key,
         title: (
-          <Text ellipsis={{ tooltip: it.title }} style={{ display: "block", fontSize: 13 }}>
-            {it.title} <Text type="secondary" style={{ fontSize: 10 }}>p{it.pageNumber}</Text>
+          <Text ellipsis={{ tooltip: it.title }} className="block text-sm">
+            {it.title} <Text type="secondary" className="text-[10px]">p{it.pageNumber}</Text>
           </Text>
         ),
       };
@@ -306,38 +306,26 @@ const InformaticsReaderPage: React.FC = () => {
   // --- Render Helpers ---
 
   const renderSearch = () => (
-    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+    <div className="flex gap-2 mb-2">
       <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         onPressEnter={loadList}
         placeholder="搜索文档..."
         allowClear
-        prefix={<SearchOutlined style={{ color: "var(--ws-color-text-tertiary)" }} />}
+        prefix={<SearchOutlined className="text-text-tertiary" />}
         size="middle"
-        style={{ 
-          flex: 1, 
-          borderRadius: "var(--ws-radius-md)",
-          boxShadow: "none",
-          background: "var(--ws-color-bg-container)"
-        }}
-        className="informatics-search-input"
+        className="flex-1"
       />
-      <Button 
-        icon={<ReloadOutlined />} 
-        onClick={loadList} 
-        loading={listLoading}
-        size="middle"
-        type="text"
-        style={{ borderRadius: "var(--ws-radius-md)", color: "var(--ws-color-text-secondary)" }}
-      />
+      <Button icon={<ReloadOutlined />} onClick={loadList} loading={listLoading}
+        size="middle" type="text" className="text-text-secondary" />
     </div>
   );
 
   const renderDocTree = () => (
     <div className="informatics-scroll-container">
       {listLoading ? (
-        <div style={{ padding: 16 }}>
+        <div className="p-4">
           <Skeleton active paragraph={{ rows: 6 }} />
         </div>
       ) : (
@@ -374,15 +362,10 @@ const InformaticsReaderPage: React.FC = () => {
             showIcon
             showLine={{ showLeafIcon: false }}
             switcherIcon={({ expanded }: any) => (
-              <MenuOutlined style={{ 
-                fontSize: 10, 
-                opacity: 0.4, 
-                transform: expanded ? 'rotate(90deg)' : 'none', 
-                transition: 'transform 0.2s' 
-              }} />
+              <MenuOutlined className={`text-[10px] opacity-40 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
             )}
           />
-          {items.length === 0 ? <Empty description="暂无已发布内容" style={{ marginTop: 12 }} /> : null}
+          {items.length === 0 ? <Empty description="暂无已发布内容" className="mt-3" /> : null}
         </>
       )}
     </div>
@@ -398,14 +381,7 @@ const InformaticsReaderPage: React.FC = () => {
           blockNode
           showLine={{ showLeafIcon: false }}
           switcherIcon={({ expanded }: any) => (
-            <RightOutlined
-              style={{
-                fontSize: 10,
-                opacity: 0.5,
-                transform: expanded ? "rotate(90deg)" : "none",
-                transition: "transform 0.2s",
-              }}
-            />
+            <RightOutlined className={`text-[10px] opacity-50 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
           )}
           onSelect={(keys) => {
             const key = String(keys?.[0] || "");
@@ -416,7 +392,7 @@ const InformaticsReaderPage: React.FC = () => {
           }}
         />
       ) : (
-        <div style={{ padding: 16, textAlign: 'center' }}>
+        <div className="p-4 text-center">
           <Text type="secondary">暂无目录</Text>
         </div>
       )}
@@ -424,7 +400,7 @@ const InformaticsReaderPage: React.FC = () => {
   );
 
   const renderLeftContent = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="flex flex-col h-full">
       {renderSearch()}
       <Tabs
         defaultActiveKey="docs"
@@ -452,25 +428,25 @@ const InformaticsReaderPage: React.FC = () => {
       style={{ userSelect: "none", WebkitUserSelect: "none" } as any}
     >
       {pdfLoading ? (
-        <div style={{ padding: 32 }}>
+        <div className="p-8">
           <Skeleton active avatar paragraph={{ rows: 8 }} />
-          <div style={{ height: 32 }} />
+          <div className="h-8" />
           <Skeleton active avatar paragraph={{ rows: 8 }} />
         </div>
       ) : null}
       {!pdfLoading && pdfError ? (
-        <div style={{ padding: 12 }}>
+        <div className="p-3">
           <Alert
             type="error"
             showIcon
             message="文档编译失败"
-            description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{pdfError}</pre>}
+            description={<pre className="!m-0 whitespace-pre-wrap">{pdfError}</pre>}
           />
-          <div style={{ height: 10 }} />
+          <div className="h-2.5" />
           <Text type="secondary">提示：通常是缺少图片资源（例如 images/a.png）或导入路径不正确，请在管理端上传资源或修正文档引用。</Text>
         </div>
       ) : null}
-      <div style={{ display: pdfLoading ? 'none' : 'block' }}>
+      <div className={pdfLoading ? 'hidden' : 'block'}>
         <PdfCanvasVirtualViewer ref={viewerRef} data={pdfData} rootRef={rightScrollRef} onPdfLoaded={handlePdfLoaded} />
       </div>
     </div>
@@ -479,13 +455,13 @@ const InformaticsReaderPage: React.FC = () => {
   // --- Mobile Layout ---
   if (isMobile) {
     return (
-      <div className="informatics-page">
+      <div className="w-full flex-1 min-h-0 flex flex-col mx-auto p-4" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
         {selectedId ? (
           // Mobile Reader View
-          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="informatics-mobile-header">
+          <div className="h-full flex flex-col">
+            <div className="flex items-center gap-2 px-3 py-3 flex-shrink-0 bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
               <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setSelectedId(null)} />
-              <Text ellipsis strong style={{ flex: 1 }}>
+              <Text ellipsis strong className="flex-1">
                 {items.find((x) => x.id === selectedId)?.title || "内容"}
               </Text>
               <Button type="text" icon={<MenuOutlined />} onClick={() => setMobileDrawerOpen(true)} />
@@ -506,7 +482,7 @@ const InformaticsReaderPage: React.FC = () => {
           </div>
         ) : (
           // Mobile List View
-          <div style={{ height: '100%', padding: 12, display: 'flex', flexDirection: 'column' }}>
+          <div className="h-full p-3 flex flex-col">
             {renderLeftContent()}
           </div>
         )}
@@ -516,7 +492,7 @@ const InformaticsReaderPage: React.FC = () => {
 
   // --- Desktop Layout ---
   return (
-    <div className="informatics-page">
+    <div className="w-full flex-1 min-h-0 flex flex-col mx-auto p-4" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
       <SplitPanePage
         leftWidth={320}
         alignItems="stretch"
@@ -528,9 +504,9 @@ const InformaticsReaderPage: React.FC = () => {
         right={
           <PanelCard
             title={
-              <Title level={4} style={{ margin: 0, fontSize: "18px", color: "var(--ws-color-text)" }}>
+              <span className="text-lg font-semibold text-text-base">
                 {selectedId ? items.find((x) => x.id === selectedId)?.title || "内容" : "内容"}
-              </Title>
+              </span>
             }
           >
             {renderReader()}

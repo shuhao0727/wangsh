@@ -8,22 +8,17 @@ import {
   Button,
   Dropdown,
   Input,
-  Space,
   Table,
   Pagination,
   Select,
   Upload,
-  Divider,
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   ReloadOutlined,
   DownloadOutlined,
-  DownOutlined,
   UploadOutlined,
   DeleteOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 
 // 导入自定义Hook和组件
@@ -57,106 +52,59 @@ const AdminUsers: React.FC = () => {
 
   return (
     <AdminPage>
-      {/* 顶部工具栏 (Toolbar) - 类似于 PythonLab 的 CanvasToolbar */}
-      <div
-        className="admin-users-toolbar ws-responsive-toolbar"
-      >
-        <div className="ws-responsive-toolbar__group ws-responsive-toolbar__group--grow">
-          <Space size={8} wrap>
-            <Search
-              placeholder="搜索用户..."
-              allowClear
-              size="middle"
-              value={state.searchKeyword}
-              onChange={(e) => actions.handleSearch(e.target.value)}
-              onSearch={actions.handleSearch}
-              className="admin-users-search"
-              prefix={<SearchOutlined style={{ color: "rgba(0,0,0,0.25)" }} />}
-            />
-            <Select
-              placeholder="角色"
-              className="admin-users-select"
-              allowClear
-              size="middle"
-              onChange={(value) => actions.handleRoleFilter(value as string)}
-              bordered={false}
-              showArrow
-            >
-              {roleOptions.map((role) => (
-                <Option key={role.value} value={role.value}>
-                  {role.label}
-                </Option>
-              ))}
-            </Select>
-            <Select
-              placeholder="状态"
-              className="admin-users-select"
-              allowClear
-              size="middle"
-              onChange={(value) => actions.handleStatusFilter(value as boolean)}
-              bordered={false}
-              showArrow
-            >
-              {statusOptions.map((status) => (
-                <Option key={String(status.value)} value={status.value}>
-                  {status.label}
-                </Option>
-              ))}
-            </Select>
-          </Space>
-        </div>
-
-        <Space size={4} wrap className="ws-responsive-toolbar__group">
-          <Button type="text" icon={<ReloadOutlined />} onClick={actions.handleReset} title="重置" />
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: "xlsx",
-                  label: "下载 XLSX 模板",
-                  onClick: () => actions.handleDownloadTemplate("xlsx"),
-                },
-                {
-                  key: "csv",
-                  label: "下载 CSV 模板",
-                  onClick: () => actions.handleDownloadTemplate("csv"),
-                },
-              ],
-            }}
-          >
-            <Button type="text" icon={<DownloadOutlined />} title="下载模板">
-              模板
-              <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
-            </Button>
-          </Dropdown>
-          <Upload
-            beforeUpload={actions.handleFileUpload}
-            accept=".xlsx,.csv,.txt"
-            showUploadList={false}
-          >
-            <Button type="text" icon={<UploadOutlined />} title="导入用户" />
-          </Upload>
-          <Divider orientation="vertical" />
-          {state.selectedRowKeys.length > 0 && (
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={actions.handleBatchDelete}
-              title="批量删除"
-            >
-              删除 ({state.selectedRowKeys.length})
-            </Button>
-          )}
-          <Button
-            type="primary"
-            size="middle"
-            icon={<PlusOutlined />}
-            onClick={actions.handleAddUser}
-          >
-            添加用户
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Search
+          placeholder="搜索用户..."
+          allowClear
+          size="middle"
+          value={state.searchKeyword}
+          onChange={(e) => actions.handleSearch(e.target.value)}
+          onSearch={actions.handleSearch}
+          style={{ width: 220 }}
+        />
+        <Select
+          placeholder="角色"
+          allowClear
+          size="middle"
+          onChange={(value) => actions.handleRoleFilter(value as string)}
+          style={{ width: 120 }}
+        >
+          {roleOptions.map((role) => (
+            <Option key={role.value} value={role.value}>{role.label}</Option>
+          ))}
+        </Select>
+        <Select
+          placeholder="状态"
+          allowClear
+          size="middle"
+          onChange={(value) => actions.handleStatusFilter(value as boolean)}
+          style={{ width: 100 }}
+        >
+          {statusOptions.map((status) => (
+            <Option key={String(status.value)} value={status.value}>{status.label}</Option>
+          ))}
+        </Select>
+        <div className="flex-1" />
+        <Button type="text" icon={<ReloadOutlined />} onClick={actions.handleReset} title="重置" />
+        <Dropdown
+          menu={{
+            items: [
+              { key: "xlsx", label: "下载 XLSX 模板", onClick: () => actions.handleDownloadTemplate("xlsx") },
+              { key: "csv", label: "下载 CSV 模板", onClick: () => actions.handleDownloadTemplate("csv") },
+            ],
+          }}
+        >
+          <Button type="text" icon={<DownloadOutlined />}>模板</Button>
+        </Dropdown>
+        <Upload beforeUpload={actions.handleFileUpload} accept=".xlsx,.csv,.txt" showUploadList={false}>
+          <Button type="text" icon={<UploadOutlined />} title="导入用户" />
+        </Upload>
+        {state.selectedRowKeys.length > 0 && (
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={actions.handleBatchDelete}>
+            删除 ({state.selectedRowKeys.length})
           </Button>
-        </Space>
+        )}
+        <Button type="primary" icon={<PlusOutlined />} onClick={actions.handleAddUser}>添加用户</Button>
       </div>
 
       {/* 表格区域 */}

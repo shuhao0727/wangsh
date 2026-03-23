@@ -92,7 +92,7 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
       Modal.success({
         title: "API密钥",
         content: (
-          <div style={{ fontFamily: "monospace", background: "#F8FAFC", padding: 12, borderRadius: 8, wordBreak: "break-all" }}>
+          <div className="font-mono bg-gray-50 p-3 rounded-lg break-all">
             {resp.data}
           </div>
         ),
@@ -165,7 +165,7 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
   }, [availableModels, checkCanTest, modelDiscoveryResult, testResult]);
 
   /* ── label helper ── */
-  const fieldLabel = (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>;
+  const fieldLabel = (text: string) => <span className="font-medium text-sm">{text}</span>;
 
   return (
     <Modal
@@ -183,44 +183,44 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
     >
       <Form form={form} layout="vertical" initialValues={{ agent_type: "general", is_active: true }} onFieldsChange={handleFormChange}>
         {/* 第一行：名称 + 类型 + 启用 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 16, alignItems: "start" }}>
-          <Form.Item label={fieldLabel("名称")} name="name" rules={[{ required: true, message: "请输入名称" }]} style={{ marginBottom: 16 }}>
+        <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "1fr 1fr auto" }}>
+          <Form.Item label={fieldLabel("名称")} name="name" rules={[{ required: true, message: "请输入名称" }]} className="!mb-4">
             <Input placeholder="如：MiniMax" />
           </Form.Item>
-          <Form.Item label={fieldLabel("类型")} name="agent_type" rules={[{ required: true }]} style={{ marginBottom: 16 }}>
+          <Form.Item label={fieldLabel("类型")} name="agent_type" rules={[{ required: true }]} className="!mb-4">
             <Select onChange={() => { resetTestResult(); setTimeout(checkCanTest, 100); }}>
               {AgentTypeOptions.map(o => <Select.Option key={o.value} value={o.value}><Space>{o.icon}{o.label}</Space></Select.Option>)}
             </Select>
           </Form.Item>
-          <Form.Item label={fieldLabel("状态")} name="is_active" valuePropName="checked" style={{ marginBottom: 16 }}>
+          <Form.Item label={fieldLabel("状态")} name="is_active" valuePropName="checked" className="!mb-4">
             <Switch checkedChildren="启用" unCheckedChildren="停用" onChange={resetTestResult} />
           </Form.Item>
         </div>
 
         {/* 第二行：API 地址 + 密钥 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="grid grid-cols-2 gap-4">
           <Form.Item label={fieldLabel("API 地址")} name="api_endpoint" rules={[{ required: true, message: "请输入API地址" },
             { validator: async (_: any, v: string) => { if (!v) return; try { new URL(v); } catch { throw new Error("请输入有效的URL"); } } }]}
-            style={{ marginBottom: 16 }}>
+            className="!mb-4">
             <Input placeholder="https://api.siliconflow.cn/v1" />
           </Form.Item>
           <Form.Item label={
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="flex items-center gap-2">
               {fieldLabel("API 密钥")}
               {editingAgent?.id && editingAgent?.has_api_key && (
-                <Button type="link" size="small" icon={<EyeOutlined />} style={{ padding: 0, height: "auto", fontSize: 12 }}
+                <Button type="link" size="small" icon={<EyeOutlined />} className="!p-0 !h-auto !text-xs"
                   onClick={() => { setAdminPassword(""); setRevealVisible(true); }}>
                   查看
                 </Button>
               )}
             </span>
-          } name="api_key" rules={[{ min: 8, message: "至少8位" }]} style={{ marginBottom: 16 }}>
+          } name="api_key" rules={[{ min: 8, message: "至少8位" }]} className="!mb-4">
             <Input.Password placeholder={editingAgent?.has_api_key ? `已保存（****${editingAgent.api_key_last4 || ""})` : "请输入API密钥"} onFocus={resetTestResult} />
           </Form.Item>
         </div>
 
         {/* 模型选择 */}
-        <Form.Item label={fieldLabel("模型")} name="model_name" style={{ marginBottom: 16 }}
+        <Form.Item label={fieldLabel("模型")} name="model_name" className="!mb-4"
           normalize={(v) => Array.isArray(v) ? (v[0] ?? "") : v}
           getValueProps={(v) => ({ value: v ? [v] : [] })}
           extra={discoveringModels ? "正在发现可用模型..." : modelDiscoveryResult?.success ? `发现 ${availableModels.length} 个模型` : modelDiscoveryResult ? `发现失败: ${modelDiscoveryResult.error_message}` : "点击「测试连接」获取可用模型"}>
@@ -230,23 +230,23 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
             suffix={discoveringModels ? <LoadingOutlined spin /> : modelDiscoveryResult?.success === false ? <CloseCircleOutlined style={{ color: "#EF4444" }} /> : undefined}
             filterOption={(input, option) => (option?.label ?? "").toLowerCase().includes(input.toLowerCase()) || (option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
             options={availableModels.map(m => ({ value: m.id, label: m.id, description: m.description || "" }))}
-            optionRender={(option: any) => (<div><div>{option.label || option.data?.label}</div>{(option.description || option.data?.description) && <div style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>{option.description || option.data?.description}</div>}</div>)} />
+            optionRender={(option: any) => (<div><div>{option.label || option.data?.label}</div>{(option.description || option.data?.description) && <div className="text-xs text-text-secondary">{option.description || option.data?.description}</div>}</div>)} />
         </Form.Item>
 
         {/* 描述 */}
-        <Form.Item label={fieldLabel("描述")} name="description" style={{ marginBottom: 16 }}>
+        <Form.Item label={fieldLabel("描述")} name="description" className="!mb-4">
           <Input.TextArea placeholder="可选" rows={2} />
         </Form.Item>
 
         {/* System Prompt */}
-        <Form.Item label={fieldLabel("系统提示词")} name="system_prompt" style={{ marginBottom: 16 }}>
+        <Form.Item label={fieldLabel("系统提示词")} name="system_prompt" className="!mb-4">
           <Input.TextArea placeholder="设置智能体的角色和行为约束（可选）" rows={3} maxLength={8000} showCount />
         </Form.Item>
 
         {/* 测试结果 */}
         {testing && (
-          <div style={{ textAlign: "center", padding: 20 }}>
-            <Spin><div style={{ marginTop: 16 }}>正在测试连接...</div></Spin>
+          <div className="text-center p-5">
+            <Spin><div className="mt-4">正在测试连接...</div></Spin>
           </div>
         )}
         {testResult && !testing && (
@@ -254,13 +254,13 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
             type={testResult.success ? "success" : "error"} showIcon
             message={testResult.message || testResult.data?.message}
             description={
-              <Space direction="vertical" size={2} style={{ marginTop: 4 }}>
+              <Space direction="vertical" size={2} className="mt-1">
                 {testResult.response_time && <span>响应时间: {testResult.response_time}ms</span>}
                 {testResult.provider && <span>服务商: {testResult.provider}</span>}
                 {testResult.model_count != null && <span>可用模型: {testResult.model_count} 个</span>}
               </Space>
             }
-            style={{ marginBottom: 0 }}
+            className="!mb-0"
           />
         )}
       </Form>

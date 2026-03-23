@@ -14,7 +14,7 @@ export default function TypstTocDrawer({ open, toc, onClose, onJump }: Props) {
   return (
     <Drawer title="目录" open={open} onClose={onClose} placement="right" size="default">
       {toc?.length ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {toc.map((it: any, idx: number) => (
             <div key={idx} style={{ paddingLeft: Math.max(0, (it.level || 1) - 1) * 12 }}>
               <Button type="link" style={{ padding: 0, height: "auto" }} onClick={() => onJump(it)}>
