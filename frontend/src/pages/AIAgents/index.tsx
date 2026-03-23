@@ -692,7 +692,7 @@ const AIAgentsPage: React.FC = () => {
           }
         }
         // 如果是正常结束循环（done=true）且未触发过 finalize，这里做一次兜底
-        if (!usageSaved && finalText) {
+        if (!finalized && finalText) {
             finalizeMessage(finalText);
             await persistUsage(finalText);
         }
