@@ -78,7 +78,14 @@ export function useStreamEngine() {
           fullText += String(delta);
           callbacks.onDelta(fullText);
         }
-      } else if (eventType === "message" || eventType === "message_end") {
+      } else if (eventType === "message") {
+        // Dify 流式 message 事件的 answer 是增量 delta，需要累加
+        const delta = getAnswerText(payload);
+        if (delta) {
+          fullText += String(delta);
+          callbacks.onDelta(fullText);
+        }
+      } else if (eventType === "message_end") {
         const text = getAnswerText(payload);
         if (text) {
           fullText = String(text);

@@ -645,13 +645,12 @@ const AIAgentsPage: React.FC = () => {
                 updateAgentText(finalText);
               }
             } else if (eventType === "message") {
-              const text = getAnswerText();
-              if (text) {
-                finalText = String(text);
+              // Dify 流式 message 事件的 answer 是增量 delta，需要累加
+              const delta = getAnswerText();
+              if (delta) {
+                finalText += String(delta);
                 updateAgentText(finalText);
               }
-              finalizeMessage(finalText);
-              await persistUsage(finalText);
             } else if (eventType === "message_end") {
               const text = getAnswerText();
               if (text) {
