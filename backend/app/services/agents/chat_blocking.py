@@ -22,7 +22,7 @@ async def run_agent_chat_blocking(
     inputs: Optional[Dict[str, Any]] = None,
     history: Optional[list] = None,
 ) -> str:
-    agent = await get_agent(db, agent_id)
+    agent = await get_agent(db, agent_id, use_cache=False)
     if not agent:
         raise ValueError("invalid_agent")
 
