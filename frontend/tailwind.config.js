@@ -28,6 +28,7 @@ module.exports = {
         surface: "var(--ws-color-surface)",
         "surface-2": "var(--ws-color-surface-2)",
         "code-bg": "var(--ws-color-code-bg)",
+        "code-text": "var(--ws-color-code-text)",
       },
       borderRadius: {
         sm: "var(--ws-radius-sm)",
