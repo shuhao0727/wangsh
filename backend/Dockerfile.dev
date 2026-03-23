@@ -43,8 +43,6 @@ COPY requirements.txt .
 
 # 安装 Python 依赖
 RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
-    pip install --upgrade pip \
-    && env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
     pip install -r requirements.txt
 
 ARG TYPST_VERSION=0.14.2
