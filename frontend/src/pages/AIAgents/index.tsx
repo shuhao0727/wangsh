@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   App,
   Button,
@@ -78,8 +79,6 @@ const AIAgentsPage: React.FC = () => {
   const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null);
   const [streamStartTime, setStreamStartTime] = useState<number | null>(null); // Replace streamSeconds with startTime
   const streamAbortRef = useRef<AbortController | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const pendingTextRef = useRef<string>("");
 
   // 加载启用的智能体
   useEffect(() => {
@@ -467,13 +466,13 @@ const AIAgentsPage: React.FC = () => {
           return groupId;
         };
         
-        const addNode = (name: string) => {
+        const addNode = (name: string, startedAt?: number) => {
           const groupId = ensureGroup();
           const node: WorkflowNode = {
             id: `${groupId}-${name}-${Date.now()}`,
             name,
             status: "started",
-            startedAt: new Date().toISOString(),
+            startedAt: startedAt ? new Date(startedAt * 1000).toISOString() : new Date().toISOString(),
           };
           setWorkflowGroups((prev) =>
             prev.map((g) =>
@@ -481,8 +480,8 @@ const AIAgentsPage: React.FC = () => {
             ),
           );
         };
-        
-        const finishNode = (name: string, detail?: string) => {
+
+        const finishNode = (name: string, finishedAt?: number, detail?: string) => {
           const groupId = ensureGroup();
           setWorkflowGroups((prev) =>
             prev.map((g) =>
@@ -495,7 +494,7 @@ const AIAgentsPage: React.FC = () => {
                             ...n,
                             status: "finished",
                             detail,
-                            finishedAt: new Date().toISOString(),
+                            finishedAt: finishedAt ? new Date(finishedAt * 1000).toISOString() : new Date().toISOString(),
                           }
                         : n,
                     ),
@@ -521,13 +520,7 @@ const AIAgentsPage: React.FC = () => {
         };
         
         const updateAgentText = (text: string) => {
-          pendingTextRef.current = text;
-          if (rafRef.current === null) {
-            rafRef.current = requestAnimationFrame(() => {
-              setStreamingContent(pendingTextRef.current);
-              rafRef.current = null;
-            });
-          }
+          setStreamingContent(text);
         };
         
         // 结束时将完整消息合并到 messages
@@ -544,6 +537,7 @@ const AIAgentsPage: React.FC = () => {
             setMessages(prev => [...prev, finalMsg]);
             setStreamingContent(""); // 清空流式状态
             setCurrentStreamingMessageId(null);
+            setIsStreaming(false); // 停止计时器
         };
         
         if (!res.ok) {
@@ -611,24 +605,38 @@ const AIAgentsPage: React.FC = () => {
             };
             
             if (eventType === "workflow_started") {
+              console.log('[Workflow] started:', payload);
               const groupId = `wf-${Date.now()}-${Math.random()}`;
               currentGroupId = groupId;
-              setWorkflowGroups((prev) => [
-                ...prev,
-                {
-                  id: groupId,
-                  label: `工作流 ${prev.length + 1}`,
-                  nodes: [],
-                  messageId: agentMessageId,
-                },
-              ]);
+              flushSync(() => {
+                setWorkflowGroups((prev) => [
+                  ...prev,
+                  {
+                    id: groupId,
+                    label: `工作流 ${prev.length + 1}`,
+                    nodes: [],
+                    messageId: agentMessageId,
+                  },
+                ]);
+              });
+              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "node_started") {
+              console.log('[Workflow] node_started:', payload);
               const name = getNodeName();
-              addNode(String(name));
+              const startedAt = payload?.data?.created_at || payload?.created_at;
+              flushSync(() => {
+                addNode(String(name), startedAt);
+              });
+              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "node_finished") {
+              console.log('[Workflow] node_finished:', payload);
               const name = getNodeName();
+              const finishedAt = payload?.data?.finished_at || payload?.finished_at;
               const summary = getAnswerText() || payload?.summary || payload?.result || "";
-              finishNode(String(name), summary ? String(summary) : undefined);
+              flushSync(() => {
+                finishNode(String(name), finishedAt, summary ? String(summary) : undefined);
+              });
+              await new Promise(resolve => setTimeout(resolve, 0));
             } else if (eventType === "workflow_finished") {
               const final = getAnswerText();
               if (final) {
@@ -649,7 +657,10 @@ const AIAgentsPage: React.FC = () => {
               const delta = getAnswerText();
               if (delta) {
                 finalText += String(delta);
+                console.log('[Stream] message delta:', delta, 'total:', finalText.length);
                 updateAgentText(finalText);
+                // 让出控制权，让浏览器有机会重绘
+                await new Promise(resolve => setTimeout(resolve, 0));
               }
             } else if (eventType === "message_end") {
               const text = getAnswerText();
@@ -709,10 +720,6 @@ const AIAgentsPage: React.FC = () => {
         setMessages((prev) => [...prev, errMsg]);
       } finally {
         clearTimeout(timeoutId);
-        if (rafRef.current !== null) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
         streamAbortRef.current = null;
         setIsStreaming(false);
         setCurrentStreamingMessageId(null);

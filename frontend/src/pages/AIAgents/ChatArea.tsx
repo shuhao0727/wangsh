@@ -501,9 +501,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <MessageBubble
             message={{ id: 'streaming-temp', content: streamingContent || "", sender: 'agent', timestamp: new Date().toISOString(), agentId: currentAgent?.id }}
             currentAgent={currentAgent}
-            workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
+            workflowGroups={(() => {
+              const groups = workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId) || [];
+              console.log('[ChatArea] Streaming workflows:', groups.length, 'messageId:', currentStreamingMessageId);
+              return groups;
+            })()}
             userDisplayName={userDisplayName}
-            isThinking={!streamingContent}
+            isThinking={!streamingContent && workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId && group.nodes.length > 0).length === 0}
           />
         )}
       </div>
