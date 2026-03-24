@@ -33,27 +33,27 @@ docker compose -f docker-compose.yml up -d
 
 ## 镜像版本
 
-当前版本: **1.5.0**
+当前版本: **1.5.1**
 
 ### 镜像列表
-- shuhao07/wangsh-backend:1.5.0
-- shuhao07/wangsh-frontend:1.5.0
-- shuhao07/wangsh-gateway:1.5.0
-- shuhao07/wangsh-typst-worker:1.5.0
-- shuhao07/wangsh-pythonlab-worker:1.5.0
-- shuhao07/pythonlab-sandbox:py311
+- shuhao07/wangsh-backend:1.5.1
+- shuhao07/wangsh-frontend:1.5.1
+- shuhao07/wangsh-gateway:1.5.1
+- shuhao07/wangsh-typst-worker:1.5.1
+- shuhao07/wangsh-pythonlab-worker:1.5.1
+- shuhao07/pythonlab-sandbox:1.5.1
 
 ## 构建镜像
 
 ```bash
 # 构建所有镜像
-./build_images.sh 1.5.0
+./build_images.sh 1.5.1
 
 # 只构建前端
 docker buildx build \
   --platform linux/amd64 \
-  -t shuhao07/wangsh-frontend:1.5.0 \
-  --build-arg REACT_APP_VERSION=1.5.0 \
+  -t shuhao07/wangsh-frontend:1.5.1 \
+  --build-arg REACT_APP_VERSION=1.5.1 \
   -f frontend/Dockerfile.prod \
   --load \
   frontend
@@ -63,12 +63,12 @@ docker buildx build \
 
 ```bash
 # 推送所有镜像
-docker push shuhao07/wangsh-backend:1.5.0
-docker push shuhao07/wangsh-frontend:1.5.0
-docker push shuhao07/wangsh-gateway:1.5.0
-docker push shuhao07/wangsh-typst-worker:1.5.0
-docker push shuhao07/wangsh-pythonlab-worker:1.5.0
-docker push shuhao07/pythonlab-sandbox:py311
+docker push shuhao07/wangsh-backend:1.5.1
+docker push shuhao07/wangsh-frontend:1.5.1
+docker push shuhao07/wangsh-gateway:1.5.1
+docker push shuhao07/wangsh-typst-worker:1.5.1
+docker push shuhao07/wangsh-pythonlab-worker:1.5.1
+docker push shuhao07/pythonlab-sandbox:1.5.1
 ```
 
 ## 服务器部署步骤
@@ -161,6 +161,12 @@ docker compose restart frontend
 ```
 
 ## 更新记录
+
+### 2026-03-24 - v1.5.1
+- ✅ 登录时效切换为短时策略（Access 60 分钟、Refresh 7 天）
+- ✅ 修复智能体流式空响应导致前端挂起的问题
+- ✅ OpenRouter 运行时请求头与连接测试逻辑统一
+- ✅ 多平台并用场景下，OpenRouter 全局 Key 不再兜底到 SiliconFlow 等非 OpenRouter 平台
 
 ### 2026-03-23 - v1.5.0
 - ✅ 修复端口配置为 6608
