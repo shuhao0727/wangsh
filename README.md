@@ -40,15 +40,6 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 - `ACCESS_TOKEN_EXPIRE_MINUTES`：访问令牌有效期（到期后会走刷新流程）
 - `REFRESH_TOKEN_EXPIRE_DAYS`：刷新令牌有效期（到期后需要重新登录）
 
-版本统一管理：
-
-- 仓库根目录 [`VERSION`](./VERSION) 是默认版本单一来源。
-- `scripts/deploy.sh` 与 `build_images.sh` 会优先读取 `VERSION`，自动派生：
-  - `APP_VERSION`
-  - `IMAGE_TAG`
-  - `REACT_APP_VERSION`
-- 如需临时覆盖（不改 `VERSION`）：可用 `VERSION_OVERRIDE=1.5.2 bash scripts/deploy.sh build`
-
 ## CI 并发调试回归
 
 并发互斥回归脚本：

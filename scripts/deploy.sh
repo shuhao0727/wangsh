@@ -2,7 +2,6 @@ set -euo pipefail
 
 cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
-version_file="${VERSION_FILE:-VERSION}"
 
 # 部署脚本默认使用生产配置 (.env)
 if [ -z "${env_file}" ]; then
@@ -12,81 +11,6 @@ if [ -z "${env_file}" ]; then
 fi
 
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
-
-read_env_value() {
-  local key="$1"
-  local file="$2"
-  awk -F= -v k="${key}" '$0 ~ ("^"k"=") {sub("^"k"=",""); print; exit}' "${file}" 2>/dev/null || true
-}
-
-read_repo_version() {
-  if [ -f "${version_file}" ]; then
-    tr -d '[:space:]' < "${version_file}"
-    return
-  fi
-  echo ""
-}
-
-warn_version_conflict() {
-  local key="$1"
-  local env_val="$2"
-  local canonical="$3"
-  if [ -n "${env_val}" ] && [ "${env_val}" != "${canonical}" ]; then
-    echo "warning: ${key} in ${env_file} (${env_val}) != VERSION (${canonical}), using VERSION" >&2
-  fi
-}
-
-resolve_version_context() {
-  local env_app env_tag env_version env_react repo_ver manual_ver
-  env_app="$(read_env_value "APP_VERSION" "${env_file}")"
-  env_tag="$(read_env_value "IMAGE_TAG" "${env_file}")"
-  env_version="$(read_env_value "VERSION" "${env_file}")"
-  env_react="$(read_env_value "REACT_APP_VERSION" "${env_file}")"
-  repo_ver="$(read_repo_version)"
-  manual_ver="${VERSION_OVERRIDE:-}"
-
-  if [ -n "${manual_ver}" ]; then
-    RESOLVED_APP_VERSION="${manual_ver}"
-    RESOLVED_IMAGE_TAG="${manual_ver}"
-    RESOLVED_VERSION="${manual_ver}"
-    RESOLVED_REACT_APP_VERSION="${manual_ver}"
-    return
-  fi
-
-  if [ -n "${repo_ver}" ]; then
-    warn_version_conflict "APP_VERSION" "${env_app}" "${repo_ver}"
-    warn_version_conflict "IMAGE_TAG" "${env_tag}" "${repo_ver}"
-    warn_version_conflict "VERSION" "${env_version}" "${repo_ver}"
-    warn_version_conflict "REACT_APP_VERSION" "${env_react}" "${repo_ver}"
-
-    RESOLVED_APP_VERSION="${repo_ver}"
-    RESOLVED_IMAGE_TAG="${repo_ver}"
-    RESOLVED_VERSION="${repo_ver}"
-    RESOLVED_REACT_APP_VERSION="${repo_ver}"
-    return
-  fi
-
-  # 向后兼容：没有 VERSION 文件时沿用旧解析规则
-  RESOLVED_APP_VERSION="${env_app}"
-  if [ -z "${RESOLVED_APP_VERSION}" ] && [ -n "${env_version}" ]; then
-    RESOLVED_APP_VERSION="${env_version}"
-  fi
-
-  RESOLVED_IMAGE_TAG="${env_tag}"
-  if [ -z "${RESOLVED_IMAGE_TAG}" ] && [ -n "${RESOLVED_APP_VERSION}" ]; then
-    RESOLVED_IMAGE_TAG="${RESOLVED_APP_VERSION}"
-  fi
-
-  RESOLVED_VERSION="${env_version}"
-  if [ -z "${RESOLVED_VERSION}" ] && [ -n "${RESOLVED_APP_VERSION}" ]; then
-    RESOLVED_VERSION="${RESOLVED_APP_VERSION}"
-  fi
-
-  RESOLVED_REACT_APP_VERSION="${env_react}"
-  if [ -z "${RESOLVED_REACT_APP_VERSION}" ] && [ -n "${RESOLVED_APP_VERSION}" ]; then
-    RESOLVED_REACT_APP_VERSION="${RESOLVED_APP_VERSION}"
-  fi
-}
 
 require_env_file() {
   if [ ! -f "${env_file}" ]; then
@@ -103,11 +27,25 @@ require_docker() {
 }
 
 compose() {
-  resolve_version_context
-  APP_VERSION="${RESOLVED_APP_VERSION}" \
-    IMAGE_TAG="${RESOLVED_IMAGE_TAG}" \
-    VERSION="${RESOLVED_VERSION}" \
-    REACT_APP_VERSION="${RESOLVED_REACT_APP_VERSION}" \
+  app_version="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  version="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  react_version="$(awk -F= '/^REACT_APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+
+  if [ -z "${app_version}" ] && [ -n "${version}" ]; then
+    app_version="${version}"
+  fi
+  if [ -z "${tag}" ] && [ -n "${app_version}" ]; then
+    tag="${app_version}"
+  fi
+  if [ -z "${version}" ] && [ -n "${app_version}" ]; then
+    version="${app_version}"
+  fi
+  if [ -z "${react_version}" ] && [ -n "${app_version}" ]; then
+    react_version="${app_version}"
+  fi
+
+  APP_VERSION="${app_version}" IMAGE_TAG="${tag}" VERSION="${version}" REACT_APP_VERSION="${react_version}" \
     docker compose --env-file "${env_file}" -f "${compose_file}" "$@"
 }
 
@@ -207,16 +145,21 @@ case "${cmd}" in
   push)
     require_env_file
     require_docker
-    registry="$(read_env_value "DOCKER_REGISTRY" "${env_file}")"
-    ns="$(read_env_value "DOCKERHUB_NAMESPACE" "${env_file}")"
-    resolve_version_context
-    tag="${RESOLVED_IMAGE_TAG}"
-    name_backend="$(read_env_value "IMAGE_NAME_BACKEND" "${env_file}")"
-    name_frontend="$(read_env_value "IMAGE_NAME_FRONTEND" "${env_file}")"
-    name_worker="$(read_env_value "IMAGE_NAME_WORKER" "${env_file}")"
+    registry="$(awk -F= '/^DOCKER_REGISTRY=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    ns="$(awk -F= '/^DOCKERHUB_NAMESPACE=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    if [ -z "${tag}" ]; then
+      tag="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    fi
+    if [ -z "${tag}" ]; then
+      tag="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    fi
+    name_backend="$(awk -F= '/^IMAGE_NAME_BACKEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    name_frontend="$(awk -F= '/^IMAGE_NAME_FRONTEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    name_worker="$(awk -F= '/^IMAGE_NAME_WORKER=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
 
     if [ -z "${registry}" ] || [ -z "${ns}" ] || [ -z "${tag}" ] || [ -z "${name_backend}" ] || [ -z "${name_frontend}" ] || [ -z "${name_worker}" ]; then
-      echo "missing DOCKER_REGISTRY/DOCKERHUB_NAMESPACE/IMAGE_NAME_* in ${env_file} (version from VERSION/IMAGE_TAG)" >&2
+      echo "missing DOCKER_REGISTRY/DOCKERHUB_NAMESPACE/IMAGE_TAG/IMAGE_NAME_* in ${env_file}" >&2
       exit 2
     fi
 
