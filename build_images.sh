@@ -10,7 +10,19 @@ read_env_value() {
   awk -F= -v k="${key}" '$0 ~ ("^"k"=") {sub("^"k"=",""); print; exit}' "${file}" 2>/dev/null || true
 }
 
+read_repo_version() {
+  local file="${1:-VERSION}"
+  if [ -f "${file}" ]; then
+    tr -d '[:space:]' < "${file}"
+    return
+  fi
+  echo ""
+}
+
 VERSION="${1:-}"
+if [ -z "${VERSION}" ]; then
+  VERSION="$(read_repo_version "VERSION")"
+fi
 if [ -z "${VERSION}" ]; then
   VERSION="$(read_env_value "APP_VERSION" ".env")"
 fi
@@ -66,7 +78,7 @@ echo "==> Building pythonlab-sandbox (Multi-Arch) ..."
 # 真正的多架构构建和推送在 push_images.sh 中进行
 docker buildx build \
   --platform "${PLATFORM}" \
-  -t "${REGISTRY}/pythonlab-sandbox:py311" \
+  -t "${REGISTRY}/pythonlab-sandbox:${VERSION}" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
   --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
   backend/docker/pythonlab-sandbox \
@@ -97,13 +109,13 @@ IMAGES=(
   "wangsh-gateway"
   "wangsh-typst-worker"
   "wangsh-pythonlab-worker"
-  "pythonlab-sandbox:py311"
+  "pythonlab-sandbox:${VERSION}"
 )
 
 for IMG in "${IMAGES[@]}"; do
   echo "--> Checking ${IMG} ..."
-  if [[ "${IMG}" == "pythonlab-sandbox:py311" ]]; then
-     docker images | grep -E "pythonlab-sandbox" | grep "py311" || true
+  if [[ "${IMG}" == "pythonlab-sandbox:${VERSION}" ]]; then
+     docker images | grep -E "pythonlab-sandbox" | grep "${VERSION}" || true
   else
      docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker|pythonlab-worker)" | grep "${VERSION}" || true
   fi

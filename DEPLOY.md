@@ -35,6 +35,8 @@ docker compose -f docker-compose.yml up -d
 
 当前版本: **1.5.1**
 
+默认版本来源：项目根目录 `VERSION`（部署脚本与构建脚本优先读取该文件）。
+
 ### 镜像列表
 - shuhao07/wangsh-backend:1.5.1
 - shuhao07/wangsh-frontend:1.5.1
