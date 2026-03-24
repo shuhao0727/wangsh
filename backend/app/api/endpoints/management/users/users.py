@@ -15,7 +15,7 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.core.deps import require_admin, get_db
 from app.models import User
@@ -134,8 +134,7 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListResponse(BaseModel):

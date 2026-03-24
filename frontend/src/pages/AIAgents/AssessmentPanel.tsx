@@ -85,7 +85,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       return s ? JSON.parse(s) : { x: 60, y: 200 };
     } catch { return { x: 60, y: 200 }; }
   });
-  const [size, setSize] = useState(() => {
+  const [size, _setSize] = useState(() => {
     try {
       const s = localStorage.getItem(STORAGE_KEYS.FLOATING_SIZE);
       return s ? JSON.parse(s) : { w: DEFAULT_W, h: DEFAULT_H };
@@ -366,7 +366,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     try {
       setSubmitting(true);
       message.loading({ content: "正在提交并评分，请稍候...", key: "submit", duration: 0 });
-      const submitResult = await assessmentSessionApi.submit(sessionId);
+      const _submitResult = await assessmentSessionApi.submit(sessionId);
       message.success({ content: "提交成功", key: "submit" });
       // 立即加载答题详情
       const result = await assessmentSessionApi.getResult(sessionId);
@@ -488,7 +488,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     const q = questions[currentIdx];
     if (!q) return <div className="p-5">加载中...</div>;
     const result = answerResults.get(q.answer_id);
-    const answered = !!result || q.is_answered;
+    const _answered = !!result || q.is_answered;
     let options: string[] = [];
     if (q.options) {
       try {

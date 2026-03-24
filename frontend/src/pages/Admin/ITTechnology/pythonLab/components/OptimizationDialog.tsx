@@ -81,8 +81,8 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
   }, [layoutNodes]);
 
   const scale = 0.6; // Mini preview scale
-  const width = (bounds.maxX - bounds.minX) * scale + 100;
-  const height = (bounds.maxY - bounds.minY) * scale + 100;
+  const _width = (bounds.maxX - bounds.minX) * scale + 100;
+  const _height = (bounds.maxY - bounds.minY) * scale + 100;
   const offsetX = -bounds.minX * scale + 50;
   const offsetY = -bounds.minY * scale + 50;
 

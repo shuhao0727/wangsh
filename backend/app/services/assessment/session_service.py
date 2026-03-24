@@ -285,7 +285,7 @@ async def start_session(
     return {
         "session_id": session.id,
         "config_title": config.title,
-        "total_questions": len(drawn_questions),
+        "total_questions": len(drawn_questions) + len(adaptive_questions),
         "total_score": actual_total,
         "time_limit_minutes": config.time_limit_minutes,
         "started_at": session.started_at,
@@ -450,9 +450,10 @@ async def submit_answer(
     # 获取正确答案（从 snapshot 或 question）
     correct_answer = ""
     explanation = ""
-    if answer.question_snapshot:
+    snapshot_raw = getattr(answer, "question_snapshot", None)
+    if snapshot_raw:
         try:
-            snap = json.loads(answer.question_snapshot)
+            snap = json.loads(snapshot_raw)
             correct_answer = snap.get("correct_answer", "")
             explanation = snap.get("explanation", "")
         except Exception:
@@ -522,8 +523,10 @@ async def submit_answer(
         pass
 
     # ─── 自适应追加逻辑 ───
-    if answer.is_adaptive and answer.knowledge_point:
-        kp = answer.knowledge_point
+    answer_is_adaptive = bool(getattr(answer, "is_adaptive", False))
+    answer_knowledge_point = getattr(answer, "knowledge_point", None)
+    if answer_is_adaptive and answer_knowledge_point:
+        kp = answer_knowledge_point
         config = (await db.execute(
             select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
         )).scalar_one()

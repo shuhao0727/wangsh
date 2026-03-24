@@ -35,7 +35,7 @@ export const AIAgentTester = {
 
 // 用户API（空实现）
 export const zntUsersApi = {
-  getUsers: (params?: any) =>
+  getUsers: (_params?: any) =>
     Promise.resolve({
       data: {
         items: [],
@@ -47,7 +47,7 @@ export const zntUsersApi = {
       success: true,
       message: "功能已简化",
     }),
-  getUser: (id: number) =>
+  getUser: (_id: number) =>
     Promise.resolve({
       data: null,
       success: true,
@@ -75,7 +75,7 @@ export const zntUsersApi = {
       success: true,
       message: "功能已简化，数据未保存",
     }),
-  deleteUser: (id: number) =>
+  deleteUser: (_id: number) =>
     Promise.resolve({
       data: true,
       success: true,
@@ -87,7 +87,7 @@ export const zntUsersApi = {
       success: true,
       message: "功能已简化",
     }),
-  importUsers: (file: File) =>
+  importUsers: (_file: File) =>
     Promise.resolve({
       data: {
         success: true,
@@ -104,7 +104,7 @@ export const zntUsersApi = {
 
 // 学生认证API（空实现）
 export const studentAuthApi = {
-  login: (data: StudentLoginRequest) =>
+  login: (_data: StudentLoginRequest) =>
     Promise.resolve({
       data: {
         access_token: "mock_token_" + Date.now(),
@@ -133,7 +133,7 @@ export const studentAuthApi = {
       success: true,
       message: "功能已简化",
     }),
-  verifyToken: (token: string) =>
+  verifyToken: (_token: string) =>
     Promise.resolve({
       data: {
         valid: true,

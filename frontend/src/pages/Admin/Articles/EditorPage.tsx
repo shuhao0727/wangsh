@@ -21,7 +21,7 @@ const ArticleEditorPage: React.FC = () => {
       setLoading(true);
       const response = await articleApi.getArticle(articleId);
       setArticle(response.data);
-    } catch (error) {
+    } catch (_error) {
       message.error("加载文章失败");
       navigate("/admin/articles");
     } finally {

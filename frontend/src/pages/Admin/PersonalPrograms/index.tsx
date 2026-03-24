@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Typography, message, Row, Col } from "antd";
+import { message, Row, Col } from "antd";
 import { AppstoreOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { xbkPublicConfigApi } from "@services";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
-
-const { Title } = Typography;
 
 const AdminPersonalPrograms: React.FC = () => {
   const [xbkEnabled, setXbkEnabled] = useState(false);
@@ -39,7 +37,7 @@ const AdminPersonalPrograms: React.FC = () => {
       const res = await xbkPublicConfigApi.set(nextEnabled);
       setXbkEnabled(Boolean(res.enabled));
       message.success(res.enabled ? "已开启前台 XBK 入口" : "已关闭前台 XBK 入口");
-    } catch (e) {
+    } catch (_e) {
       setXbkEnabled(prev);
       message.error("更新失败，请确认已登录管理员账号");
     } finally {

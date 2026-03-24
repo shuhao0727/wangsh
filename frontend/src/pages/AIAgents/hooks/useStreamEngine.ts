@@ -110,7 +110,9 @@ export function useStreamEngine() {
         }
         finish();
       } else if (eventType === "error") {
-        const errMsg = payload?.message || payload?.error || "对话发生错误";
+        const baseMsg = payload?.message || payload?.error || "对话发生错误";
+        const detail = typeof payload?.detail === "string" ? payload.detail.trim() : "";
+        const errMsg = detail ? `${baseMsg}（${detail.slice(0, 220)}）` : baseMsg;
         callbacks.onError(String(errMsg));
       } else {
         // 未知事件类型，尝试提取文本

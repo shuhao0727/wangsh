@@ -5,7 +5,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Typography, Tabs } from "antd";
+import { Tabs } from "antd";
 
 import StatisticsCards from "./components/StatisticsCards";
 import UsageRecordPanel from "./components/UsageRecordPanel";
@@ -14,8 +14,6 @@ import { HotQuestionsPanel, StudentQuestionChainsPanel } from "./components/Anal
 import type { StatisticsData } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
 import { AdminPage } from "@components/Admin";
-
-const { Title } = Typography;
 
 type TabKey = "usage" | "hot" | "chains";
 

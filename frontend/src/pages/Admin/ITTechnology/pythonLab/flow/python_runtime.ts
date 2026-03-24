@@ -15,7 +15,7 @@ type CodeIRReturn = { kind: "return"; loc: SourceLoc };
 type CodeIRDef = { kind: "def"; name: string; params: string[]; body: CodeIRBlock; loc: SourceLoc };
 
 type PyValue = number | string | boolean | null;
-type Env = Record<string, PyValue>;
+type _Env = Record<string, PyValue>;
 
 type Expr =
   | { kind: "num"; value: number }

@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Input, Button, Typography, Space, Switch, App } from "antd";
+import { Input, Button, Space, Switch, App } from "antd";
 import { RobotOutlined, SendOutlined, CodeOutlined } from "@ant-design/icons";
 import { pythonlabFlowApi } from "../services/pythonlabDebugApi";
 import ReactMarkdown from "react-markdown";
 import { FloatingPopup } from "./FloatingPopup";
-
-const { Text } = Typography;
 
 interface AIAssistantModalProps {
   open: boolean;
@@ -74,7 +72,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         message.error(res.error || "AI response failed");
         setMessages((prev) => [...prev, { role: "assistant", content: "Error: " + (res.error || "Unknown error") }]);
       }
-    } catch (error) {
+    } catch (_error) {
       message.error("Network error");
       setMessages((prev) => [...prev, { role: "assistant", content: "Error: Network error" }]);
     } finally {

@@ -5,7 +5,6 @@ import React from "react";
 import { Space, Tag, Tooltip, Button, Switch } from "antd";
 import {
   KeyOutlined,
-  LinkOutlined,
   EyeOutlined,
   EditOutlined,
   DeleteOutlined,

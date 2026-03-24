@@ -40,7 +40,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
               form.setFieldValue("prompt_template", promptRes.content);
           }
       }
-    } catch (error) {
+    } catch (_error) {
       message.error("Failed to load configuration");
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
 
       message.success("Configuration saved");
       onClose();
-    } catch (error) {
+    } catch (_error) {
       message.error("Failed to save configuration");
     } finally {
       setLoading(false);

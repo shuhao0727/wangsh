@@ -452,7 +452,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           } else {
             message.error(res.message || "移除失败");
           }
-        } catch (e) {
+        } catch (_e) {
           message.error("移除失败");
         }
       },
@@ -476,7 +476,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       } else {
         message.error(res.message || "解除禁言失败");
       }
-    } catch (e) {
+    } catch (_e) {
       message.error("解除禁言失败");
     }
   };
@@ -503,7 +503,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       } else {
         message.error(res.message || "禁言失败");
       }
-    } catch (e) {
+    } catch (_e) {
       message.error("禁言失败");
     } finally {
       setMuteState((s) => ({ ...s, loading: false }));

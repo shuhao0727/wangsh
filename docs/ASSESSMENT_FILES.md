@@ -37,6 +37,7 @@ backend/app/schemas/assessment/
 backend/app/services/assessment/
   ├── __init__.py              # 导出所有服务函数
   ├── config_service.py        # 配置 CRUD + toggle
+  ├── export_service.py        # 统计导出（xlsx）
   ├── question_service.py      # 题目 CRUD + AI 出题（调用智能体，解析 JSON）
   ├── session_service.py       # 开始检测 + 抽题 + 答题 + 提交 + 评分
   ├── basic_profile_service.py # 初级画像自动生成（提交后调用）
@@ -84,8 +85,7 @@ frontend/src/pages/Admin/Assessment/
   ├── index.tsx                 # 测评配置列表
   ├── EditorPage.tsx            # 测评编辑页（新建/编辑）
   ├── QuestionsPage.tsx         # 题库管理
-  ├── StatisticsPage.tsx        # 答题统计
-  └── ProfilesPage.tsx          # 画像中心（生成+列表+详情）
+  └── StatisticsPage.tsx        # 答题统计（含画像入口）
 ```
 
 ### 2.3 API 服务层
@@ -103,25 +103,19 @@ frontend/src/services/assessment/
 
 | 文件 | 修改内容 |
 |------|---------|
-| `frontend/src/App.tsx` | 添加 assessment 相关路由（5 个管理端页面） |
-| `frontend/src/layouts/AdminLayout.tsx` | 侧边栏菜单新增"自主检测"分组 |
+| `frontend/src/App.tsx` | 添加 assessment 相关路由（4 个管理端页面） |
+| `frontend/src/layouts/AdminLayout.tsx` | 侧边栏菜单新增"自适应测评"入口 |
 | `frontend/src/pages/AIAgents/index.tsx` | 引入 AssessmentPanel 浮动按钮 |
 
 ---
 
-## 3. 文件总计
+## 3. 文件规模说明
 
-| 类别 | 新建 | 修改 |
-|------|------|------|
-| 后端 Models | 8 | 1 |
-| 后端 Schemas | 5 | 0 |
-| 后端 Services | 6 | 0 |
-| 后端 API | 3 | 1 |
-| 后端 Migration | 1 | 0 |
-| 前端 Pages | 6 | 1 |
-| 前端 Services | 5 | 0 |
-| 前端 Layout/Route | 0 | 2 |
-| **合计** | **34** | **5** |
+assessment 模块已进入持续迭代阶段，文件数量会随版本变化。请以以下目录实时状态为准：
+- `backend/app/services/assessment/`
+- `backend/app/api/endpoints/assessment/`
+- `frontend/src/pages/Admin/Assessment/`
+- `frontend/src/services/assessment/`
 
 ---
 
@@ -160,8 +154,8 @@ frontend/src/services/assessment/
 2. Services（profile_service.py）
 3. API（admin.py 中的 profiles 部分 + student.py 中的 my-profiles）
 4. 前端 services（profile.ts）
-5. 前端 ProfilesPage.tsx
-6. AssessmentPanel.tsx 中添加三维画像 Tab
+5. 在 StatisticsPage.tsx 中补齐画像生成/查看能力
+6. AssessmentPanel.tsx 中补齐三维画像 Tab 与状态查询
 ```
 
 ---

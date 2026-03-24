@@ -15,8 +15,6 @@ import {
   EyeOutlined,
   PlusOutlined,
   MinusOutlined,
-  RollbackOutlined,
-  RobotOutlined,
   ThunderboltOutlined
 } from "@ant-design/icons";
 import { validatePythonLite } from "../../flow/python_sync";
@@ -70,12 +68,22 @@ export const RightPanel = React.memo(function RightPanel() {
     beautifyError,
     onRefreshBeautify,
     onClearPendingOutput,
-    autoOptimizeCode,
-    setAutoOptimizeCode,
+    autoOptimizeCode: _autoOptimizeCode,
+    setAutoOptimizeCode: _setAutoOptimizeCode,
     onOptimizeCode,
   } = ra;
-  const { code, setCode, codeMode, setCodeMode, generated, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = codeCtx;
-  const flow = { nodes: flowCtx.nodes, edges: flowCtx.edges };
+  const {
+    code,
+    setCode,
+    codeMode,
+    setCodeMode,
+    generated,
+    flowDiagnostics: _flowDiagnostics,
+    flowExpandFunctions: _flowExpandFunctions,
+    setFlowExpandFunctions: _setFlowExpandFunctions,
+    rebuildFlowFromCode,
+  } = codeCtx;
+  const _flow = { nodes: flowCtx.nodes, edges: flowCtx.edges };
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);

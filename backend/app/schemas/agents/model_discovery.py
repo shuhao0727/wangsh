@@ -4,7 +4,7 @@
 """
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, validator, HttpUrl
+from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl
 from enum import Enum
 
 
@@ -43,8 +43,7 @@ class AIModelInfo(BaseModel):
     description: Optional[str] = Field(None, description="模型描述")
     available: bool = Field(True, description="模型是否可用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # 服务商配置
@@ -57,8 +56,9 @@ class ServiceProviderConfig(BaseModel):
     organization: Optional[str] = Field(None, description="组织ID（OpenAI需要）")
     project: Optional[str] = Field(None, description="项目ID（某些服务商需要）")
     
-    @validator("base_url")
-    def validate_base_url(cls, v):
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str):
         """验证base_url格式"""
         if not v:
             return v
@@ -74,8 +74,9 @@ class ModelDiscoveryRequest(BaseModel):
     api_key: str = Field(..., description="API密钥")
     provider: Optional[AIServiceProvider] = Field(None, description="服务商类型（可选，自动检测）")
     
-    @validator("api_endpoint")
-    def validate_api_endpoint(cls, v):
+    @field_validator("api_endpoint")
+    @classmethod
+    def validate_api_endpoint(cls, v: str):
         """验证API端点格式"""
         if not v:
             raise ValueError("API端点不能为空")

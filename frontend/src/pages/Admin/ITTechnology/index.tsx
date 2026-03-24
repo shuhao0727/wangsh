@@ -83,7 +83,7 @@ const AdminITTechnology: React.FC = () => {
       });
       setFlags(prev => ({ ...prev, [`${key}_enabled`]: checked }));
       message.success(`${checked ? '已启用' : '已禁用'}应用`);
-    } catch (error) {
+    } catch (_error) {
       message.error("操作失败");
     } finally {
       setLoading(prev => ({ ...prev, [key]: false }));

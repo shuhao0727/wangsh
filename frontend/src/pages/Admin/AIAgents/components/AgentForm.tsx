@@ -6,7 +6,7 @@ import {
   Form, Input, Select, Switch, Button, Space, Modal, Spin, Alert, Tooltip,
 } from "antd";
 import {
-  ThunderboltOutlined, CloudOutlined, CheckCircleOutlined,
+  ThunderboltOutlined, CloudOutlined,
   CloseCircleOutlined, LoadingOutlined, PlayCircleOutlined, EyeOutlined,
 } from "@ant-design/icons";
 

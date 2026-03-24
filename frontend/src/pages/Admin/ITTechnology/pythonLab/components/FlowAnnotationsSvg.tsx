@@ -27,7 +27,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
     onNodeDoubleClick,
     onResizeStart,
     onArrowTargetDragStart,
-    onArrowRotateStart,
+    onArrowRotateStart: _onArrowRotateStart,
     onUpdateNodeTitle
   } = props;
 

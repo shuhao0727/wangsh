@@ -6,7 +6,7 @@ AI智能体相关的 Pydantic 模型
 
 from datetime import datetime
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field, validator, HttpUrl, AnyHttpUrl
+from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyHttpUrl
 from uuid import UUID
 
 
@@ -26,8 +26,9 @@ class AIAgentBase(BaseModel):
     system_prompt: Optional[str] = Field(None, max_length=8000, description="系统提示词（智能体人设/角色设定）")
     is_active: bool = Field(True, description="是否启用")
     
-    @validator("name")
-    def validate_name_not_empty(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: str):
         """验证名称非空"""
         if not v.strip():
             raise ValueError("智能体名称不能为空")
@@ -51,8 +52,9 @@ class AIAgentUpdate(BaseModel):
     clear_api_key: Optional[bool] = Field(False, description="是否清除已保存的API密钥")
     is_active: Optional[bool] = Field(None, description="是否启用")
 
-    @validator("name")
-    def validate_name_not_empty(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: Optional[str]):
         """验证名称非空（如果提供）"""
         if v is not None:
             if not v.strip():
@@ -60,7 +62,8 @@ class AIAgentUpdate(BaseModel):
             return v.strip()
         return v
 
-    @validator("model_name", pre=True)
+    @field_validator("model_name", mode="before")
+    @classmethod
     def coerce_model_name(cls, v):
         """兼容前端 tags 模式可能传入数组"""
         if isinstance(v, list):
@@ -77,8 +80,7 @@ class AIAgentInDB(AIAgentBase):
     created_at: datetime = Field(..., description="创建时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AIAgentResponse(AIAgentInDB):
@@ -89,8 +91,7 @@ class AIAgentResponse(AIAgentInDB):
     model_name: Optional[str] = Field(None, description="模型名称（前端兼容字段）")
     system_prompt: Optional[str] = Field(None, description="系统提示词")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AIAgentListResponse(BaseModel):

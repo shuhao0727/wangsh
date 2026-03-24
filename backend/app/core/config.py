@@ -7,7 +7,7 @@ import os
 import json
 from pathlib import Path
 from typing import List, Optional, Union
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -428,11 +428,12 @@ class Settings(BaseSettings):
                 self.DAP_HOST_IP = "127.0.0.1"
         return self
     
-    class Config:
-        env_file = str(PROJECT_ROOT / ".env")
-        env_file_encoding = "utf-8"
-        case_sensitive = False  # 环境变量不区分大小写
-        extra = "ignore"  # 忽略额外的环境变量
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,  # 环境变量不区分大小写
+        extra="ignore",  # 忽略额外的环境变量
+    )
 
 
 # 创建全局配置实例

@@ -882,7 +882,7 @@ const TypstNoteEditorInner: React.FC<{
                 setStyleOptions((keys && keys.length ? keys : ["my_style"]).filter(Boolean));
                 setStylesVersion((v) => v + 1);
                 message.success("已保存");
-              } catch (e: any) {
+              } catch (_e: any) {
               }
             }}
           >

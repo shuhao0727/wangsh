@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-03-18
+> 最后更新：2026-03-24
 
 ## 一、概览
 
@@ -22,7 +22,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 - **触发方式**：手动触发（workflow_dispatch）
 - **输入参数**：
-  - `image_tag`（必填）：镜像版本号，如 `1.3.0`
+  - `image_tag`（必填）：镜像版本号，如 `1.5.0`
   - `push_latest`（可选）：是否同时推送 `latest` 标签，默认 `true`
 - **构建平台**：`linux/amd64`
 - **构建的镜像**（共 5 个）：
@@ -70,6 +70,17 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 - **触发方式**：PR 修改 debug 相关路径时自动触发
 - **功能**：调用 `pythonlab-phasec-gate.yml` 进行可见性测试
 
+### 2.6 ci-quality.yml — 通用质量门禁
+
+- **触发方式**：
+  - `pull_request`
+  - `push` 到 `main`
+  - 文档-only 改动会跳过（`docs/**`、`**/*.md`）
+- **功能**：
+  - 后端：安装 `backend/requirements.txt` 并执行 `pytest -q`
+  - 前端：`npm ci` + `npm run -s type-check` + `npm run -s lint`
+- **目的**：覆盖全仓基础质量，不仅限于 PythonLab 路径
+
 ---
 
 ## 三、本地脚本
@@ -114,11 +125,11 @@ bash scripts/deploy.sh <命令>
 
 | 镜像 | 用途 | 基础镜像 |
 |------|------|---------|
-| `wangsh-backend` | FastAPI 后端 API | Python 3.13 |
+| `wangsh-backend` | FastAPI 后端 API | Python 3.11 |
 | `wangsh-frontend` | React 静态资源 + Caddy | Node 构建 + Caddy |
 | `wangsh-gateway` | Caddy 反向代理网关 | Caddy |
-| `wangsh-typst-worker` | Celery Worker（Typst PDF 编译） | Python 3.13 + Typst |
-| `wangsh-pythonlab-worker` | Celery Worker（PythonLab 任务） | Python 3.13 |
+| `wangsh-typst-worker` | Celery Worker（Typst PDF 编译） | Python 3.11 + Typst |
+| `wangsh-pythonlab-worker` | Celery Worker（PythonLab 任务） | Python 3.11 |
 | `wangsh-pythonlab-sandbox` | PythonLab 沙箱容器 | Python 3.11（精简） |
 
 ---
@@ -131,3 +142,14 @@ bash scripts/deploy.sh <命令>
 | `DOCKERHUB_TOKEN` | DockerHub 访问令牌 |
 | `PYTHONLAB_SMOKE_USERNAME` | PythonLab 冒烟测试用户名 |
 | `PYTHONLAB_SMOKE_PASSWORD` | PythonLab 冒烟测试密码 |
+
+---
+
+## 六、当前质量基线（2026-03-24）
+
+- 本轮已修复前端批量重命名导致的编译回归（错误导入名、错误解构键名）。
+- 本地验证结果：
+  - 后端：`cd backend && pytest -q` → `91 passed`
+  - 前端：`cd frontend && npm run -s type-check` → 通过
+  - 前端：`cd frontend && npm run -s lint` → `0 errors, 68 warnings`
+- 说明：当前 CI 质量门禁以“无 error”为硬约束；warnings 属于后续持续优化项。

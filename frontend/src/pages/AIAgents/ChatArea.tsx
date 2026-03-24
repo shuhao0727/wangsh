@@ -354,7 +354,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   inputMessage,
   historyVisible,
   isAuthenticated,
-  isStudent,
+  isStudent: _isStudent,
   userDisplayName,
   isStreaming,
   streamingContent, // 新增：流式内容

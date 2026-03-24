@@ -761,7 +761,7 @@ export function routeOrthogonalAvoiding(params: {
     arr.push({ x: p.x, idx: i });
     rowMap.set(p.y, arr);
   }
-  rowMap.forEach((arr, y) => {
+  rowMap.forEach((arr, _y) => {
     arr.sort((a, b) => a.x - b.x);
     for (let i = 1; i < arr.length; i++) {
       const a = nodes[arr[i - 1].idx];
@@ -781,7 +781,7 @@ export function routeOrthogonalAvoiding(params: {
     arr.push({ y: p.y, idx: i });
     colMap.set(p.x, arr);
   }
-  colMap.forEach((arr, x) => {
+  colMap.forEach((arr, _x) => {
     arr.sort((a, b) => a.y - b.y);
     for (let i = 1; i < arr.length; i++) {
       const a = nodes[arr[i - 1].idx];

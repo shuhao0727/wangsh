@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-03-18
+> 最后更新：2026-03-24
 
 ## 一、健康检查
 
@@ -122,6 +122,12 @@
 | POST | `/ai-agents/admin/export/conversations` | 导出对话 | 管理员 |
 | GET | `/ai-agents/admin/export/hot-questions` | 导出热门问题 | 管理员 |
 | GET | `/ai-agents/admin/export/student-chains` | 导出学生链 | 管理员 |
+
+补充说明（2026-03-24）：
+- 当使用 OpenRouter 时，后端会自动做模型名双向回退以降低配置误差：
+  - `xxx:free` 在 `404/429/5xx` 时可回退尝试 `xxx`
+  - `xxx` 在“模型不存在类 404”或 `429/5xx` 时可回退尝试 `xxx:free`
+- `/ai-agents/stream` 的 SSE `error` 事件会透传上游 `detail` 字段，前端会显示更具体的失败原因（如 guardrail/data policy 限制）。
 
 ### 小组讨论（/ai-agents/group-discussion）
 
@@ -315,3 +321,97 @@
 | POST | `/debug/flow/generate_code` | 生成代码 | 是 |
 | POST | `/debug/flow/test_agent_connection` | 测试智能体连接 | 是 |
 | POST | `/debug/flow/parse` | 解析流程图 | 是 |
+
+## 十三、自适应测评（/assessment）
+
+### 管理端（/assessment/admin）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/assessment/admin/configs` | 创建测评配置 | 超级管理员 |
+| GET | `/assessment/admin/configs` | 测评配置列表 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}` | 测评配置详情 | 超级管理员 |
+| PUT | `/assessment/admin/configs/{config_id}` | 更新测评配置 | 超级管理员 |
+| DELETE | `/assessment/admin/configs/{config_id}` | 删除测评配置 | 超级管理员 |
+| PUT | `/assessment/admin/configs/{config_id}/toggle` | 开关测评 | 超级管理员 |
+| POST | `/assessment/admin/configs/{config_id}/generate-questions` | AI 生成题目 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}/questions` | 题库列表 | 超级管理员 |
+| POST | `/assessment/admin/questions` | 新增题目 | 超级管理员 |
+| PUT | `/assessment/admin/questions/{question_id}` | 更新题目 | 超级管理员 |
+| DELETE | `/assessment/admin/questions/{question_id}` | 删除题目 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}/class-names` | 已参与班级列表 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}/sessions` | 会话列表 | 超级管理员 |
+| GET | `/assessment/admin/sessions/{session_id}` | 会话详情 | 超级管理员 |
+| GET | `/assessment/admin/sessions/{session_id}/basic-profile` | 学生初级画像 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}/statistics` | 统计数据 | 超级管理员 |
+| POST | `/assessment/admin/sessions/{session_id}/allow-retest` | 单人重测 | 超级管理员 |
+| POST | `/assessment/admin/configs/{config_id}/batch-retest` | 批量重测 | 超级管理员 |
+| GET | `/assessment/admin/configs/{config_id}/export` | 导出 xlsx | 超级管理员 |
+| POST | `/assessment/admin/profiles/generate` | 生成三维画像 | 超级管理员 |
+| POST | `/assessment/admin/profiles/batch-generate` | 批量生成三维画像 | 超级管理员 |
+| GET | `/assessment/admin/profiles` | 画像列表 | 超级管理员 |
+| GET | `/assessment/admin/profiles/{profile_id}` | 画像详情 | 超级管理员 |
+| DELETE | `/assessment/admin/profiles/{profile_id}` | 删除画像 | 超级管理员 |
+
+### 学生端（/assessment）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/assessment/available` | 可参与测评列表 | 是 |
+| POST | `/assessment/sessions/start` | 开始测评 | 是 |
+| GET | `/assessment/sessions/{session_id}/questions` | 当前测评题目 | 是 |
+| POST | `/assessment/sessions/{session_id}/answer` | 提交单题答案 | 是 |
+| POST | `/assessment/sessions/{session_id}/submit` | 提交整卷 | 是 |
+| GET | `/assessment/sessions/{session_id}/result` | 测评结果 | 是 |
+| GET | `/assessment/sessions/{session_id}/basic-profile` | 初级画像 | 是 |
+| GET | `/assessment/sessions/{session_id}/profile-status` | 三维画像状态 | 是 |
+| GET | `/assessment/my-profiles` | 我的三维画像列表 | 是 |
+| GET | `/assessment/my-profiles/{profile_id}` | 我的三维画像详情 | 是 |
+
+说明：统计接口 `pass_rate` 字段返回 `0~1` 比例值，前端再格式化为百分比。
+
+## 十四、课堂互动（/classroom）
+
+### 管理端（/classroom/admin）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/classroom/admin/` | 创建活动 | 管理员 |
+| PUT | `/classroom/admin/{activity_id}` | 更新活动 | 管理员 |
+| DELETE | `/classroom/admin/{activity_id}` | 删除活动 | 管理员 |
+| POST | `/classroom/admin/{activity_id}/duplicate` | 复制活动 | 管理员 |
+| POST | `/classroom/admin/{activity_id}/restart` | 重启活动 | 管理员 |
+| POST | `/classroom/admin/bulk-delete` | 批量删除 | 管理员 |
+| GET | `/classroom/admin/` | 活动列表 | 管理员 |
+| GET | `/classroom/admin/{activity_id}` | 活动详情 | 管理员 |
+| POST | `/classroom/admin/{activity_id}/start` | 开始活动 | 管理员 |
+| POST | `/classroom/admin/{activity_id}/end` | 结束活动 | 管理员 |
+| GET | `/classroom/admin/{activity_id}/statistics` | 活动统计 | 管理员 |
+| GET | `/classroom/admin/stream` | SSE 活动流 | 管理员 |
+
+### 学生端（/classroom）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/classroom/active` | 当前活动 | 是 |
+| GET | `/classroom/stream` | SSE 活动流 | 是 |
+| GET | `/classroom/{activity_id}` | 活动详情 | 是 |
+| POST | `/classroom/{activity_id}/respond` | 提交响应 | 是 |
+| GET | `/classroom/{activity_id}/result` | 查看活动结果 | 是 |
+
+### 课堂计划（/classroom/plans）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/classroom/plans/admin` | 创建计划 | 管理员 |
+| PUT | `/classroom/plans/admin/{plan_id}` | 更新计划 | 管理员 |
+| DELETE | `/classroom/plans/admin/{plan_id}` | 删除计划 | 管理员 |
+| GET | `/classroom/plans/admin` | 计划列表 | 管理员 |
+| GET | `/classroom/plans/admin/{plan_id}` | 计划详情 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/start` | 启动计划 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/reset` | 重置计划 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/next` | 下一项 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/end` | 结束计划 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/start` | 启动计划项 | 管理员 |
+| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/end` | 结束计划项 | 管理员 |
+| GET | `/classroom/plans/active-plan` | 当前生效计划 | 是 |

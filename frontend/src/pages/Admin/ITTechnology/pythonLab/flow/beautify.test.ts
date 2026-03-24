@@ -308,7 +308,7 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
   const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
   const heightIn = 10;
   const pxPerIn = 72;
-  const graphHPx = heightIn * pxPerIn;
+  const _graphHPx = heightIn * pxPerIn;
   const toIn = (px: number) => Number((px / pxPerIn).toFixed(4));
   const toGvYIn = (yPx: number) => Number((heightIn - yPx / pxPerIn).toFixed(4));
   const pt = (xPx: number, yPx: number) => `${toIn(xPx)} ${toGvYIn(yPx)}`;

@@ -7,7 +7,15 @@ from typing import AsyncGenerator, Optional, Dict, Any
 STREAM_TIMEOUT_SECONDS = 120
 
 from app.services.agents.ai_agent import get_agent
-from app.services.agents.providers import get_provider, provider_error_message, extract_provider_detail, resolve_credentials, build_messages
+from app.services.agents.providers import (
+    get_provider,
+    provider_error_message,
+    extract_provider_detail,
+    resolve_credentials,
+    build_messages,
+    openrouter_model_candidates,
+    should_retry_openrouter_fallback,
+)
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.agents.providers.circuit_breaker import breaker
 from app.core.config import settings
@@ -54,47 +62,68 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
         return
 
     headers = provider.build_headers()
-    payload = provider.build_stream_payload(chat_messages, model)
     chat_url = provider.chat_url()
+    candidate_models = [model]
+    if getattr(provider, "is_openrouter", False):
+        candidate_models = openrouter_model_candidates(model) or [model]
 
     try:
         client = get_http_client()
-        async with asyncio.timeout(STREAM_TIMEOUT_SECONDS):
-            async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
-                if resp.status_code != 200:
-                    breaker.record_failure(provider_name)
-                    body_bytes = await resp.aread()
-                    body_text = body_bytes.decode("utf-8", errors="ignore")
-                    status_code = int(resp.status_code)
-                    detail = extract_provider_detail(body_text)
-                    err = {
-                        "error": f"provider_status_{status_code}",
-                        "message": provider_error_message(status_code),
-                        "provider_status": status_code,
-                        "detail": detail[:500],
-                    }
-                    yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+        for idx, candidate_model in enumerate(candidate_models):
+            payload = provider.build_stream_payload(chat_messages, candidate_model)
+            async with asyncio.timeout(STREAM_TIMEOUT_SECONDS):
+                async with client.stream("POST", chat_url, headers=headers, json=payload) as resp:
+                    if resp.status_code != 200:
+                        body_bytes = await resp.aread()
+                        body_text = body_bytes.decode("utf-8", errors="ignore")
+                        status_code = int(resp.status_code)
+                        detail = extract_provider_detail(body_text)
+                        can_fallback = (
+                            idx < len(candidate_models) - 1
+                            and should_retry_openrouter_fallback(
+                                status_code,
+                                detail,
+                                candidate_model,
+                                candidate_models[idx + 1],
+                            )
+                        )
+                        if can_fallback:
+                            continue
+
+                        breaker.record_failure(provider_name)
+                        err = {
+                            "error": f"provider_status_{status_code}",
+                            "message": provider_error_message(status_code),
+                            "provider_status": status_code,
+                            "detail": detail[:500],
+                            "attempted_model": candidate_model,
+                        }
+                        if idx < len(candidate_models) - 1:
+                            err["fallback_model"] = candidate_models[idx + 1]
+                        yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
+                        return
+
+                    final_text = ""
+                    async for raw_line in resp.aiter_lines():
+                        if not raw_line:
+                            continue
+                        line = raw_line.strip()
+                        if provider.is_stream_done(line):
+                            break
+                        content = provider.parse_stream_line(line)
+                        if not content:
+                            continue
+                        final_text += content
+                        chunk = {"answer": content}
+                        yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
+
+                    if final_text:
+                        breaker.record_success(provider_name)
+                        end_payload = {"answer": final_text}
+                        if candidate_model != model:
+                            end_payload["fallback_model_used"] = candidate_model
+                        yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
                     return
-
-                final_text = ""
-                async for raw_line in resp.aiter_lines():
-                    if not raw_line:
-                        continue
-                    line = raw_line.strip()
-                    if provider.is_stream_done(line):
-                        break
-                    content = provider.parse_stream_line(line)
-                    if not content:
-                        continue
-                    final_text += content
-                    chunk = {"answer": content}
-                    yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
-
-                if final_text:
-                    breaker.record_success(provider_name)
-                    end_payload = {"answer": final_text}
-                    yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
-                return
 
     except asyncio.TimeoutError:
         breaker.record_failure(provider_name)

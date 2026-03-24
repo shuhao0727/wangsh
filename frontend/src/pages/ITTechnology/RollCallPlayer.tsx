@@ -25,7 +25,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
         } else {
           setCurrentName('暂无学生');
         }
-      } catch (error) {
+      } catch (_error) {
         message.error('获取学生名单失败');
       } finally {
         setLoading(false);

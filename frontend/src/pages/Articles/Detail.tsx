@@ -375,7 +375,7 @@ const ArticleDetailPage: React.FC = () => {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                h1: ({ node, ...props }) => {
+                h1: ({ node: _node, ...props }) => {
                   const text = headingText(props.children);
                   const id = text ? makeId(text) : undefined;
                   return (
@@ -384,7 +384,7 @@ const ArticleDetailPage: React.FC = () => {
                     </h1>
                   );
                 },
-                h2: ({ node, ...props }) => {
+                h2: ({ node: _node, ...props }) => {
                   const text = headingText(props.children);
                   const id = text ? makeId(text) : undefined;
                   return (
@@ -393,7 +393,7 @@ const ArticleDetailPage: React.FC = () => {
                     </h2>
                   );
                 },
-                h3: ({ node, ...props }) => {
+                h3: ({ node: _node, ...props }) => {
                   const text = headingText(props.children);
                   const id = text ? makeId(text) : undefined;
                   return (
@@ -402,7 +402,7 @@ const ArticleDetailPage: React.FC = () => {
                     </h3>
                   );
                 },
-                h4: ({ node, ...props }) => {
+                h4: ({ node: _node, ...props }) => {
                   const text = headingText(props.children);
                   const id = text ? makeId(text) : undefined;
                   return (
@@ -411,12 +411,12 @@ const ArticleDetailPage: React.FC = () => {
                     </h4>
                   );
                 },
-                a: ({ node, ...props }) => (
+                a: ({ node: _node, ...props }) => (
                   <a target="_blank" rel="noopener noreferrer" {...props}>
                     {props.children}
                   </a>
                 ),
-                img: ({ node, ...props }) => (
+                img: ({ node: _node, ...props }) => (
                   <img alt={(props as any).alt ?? ""} {...props} />
                 ),
               }}

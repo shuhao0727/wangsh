@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Table, Button, Tag, Badge, Space, Modal, Form, Input, InputNumber,
   Select, Switch, Popconfirm, message, Drawer, Progress, Segmented,
-  Pagination, Alert, Tooltip, Divider, Steps, Card,
+  Pagination, Alert, Tooltip, Divider, Steps,
 } from "antd";
 import {
   PlusOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined,

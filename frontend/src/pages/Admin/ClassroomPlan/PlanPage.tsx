@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Table, Button, Tag, Badge, Space, Form, Input, InputNumber,
   Select, Popconfirm, message, Spin, Row, Col,
-  Card, Tooltip, Progress, Drawer,
+  Card, Tooltip, Drawer,
 } from "antd";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,

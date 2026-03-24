@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Response, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, update
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.core.deps import require_admin, get_db
 from app.core.config import settings
@@ -20,9 +20,8 @@ router = APIRouter(prefix="/system")
 class FeatureFlagSchema(BaseModel):
     key: str
     value: Any
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 @router.get("/feature-flags", response_model=List[FeatureFlagSchema])
 async def list_feature_flags(

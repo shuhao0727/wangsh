@@ -112,13 +112,14 @@ def _make_session(id=1, config_id=1, user_id=100, status="in_progress",
 
 def _make_answer(id=1, session_id=1, question_id=1, question_type="choice",
                  max_score=10, student_answer=None, ai_score=None,
-                 is_correct=None, ai_feedback=None, answered_at=None, question=None):
+                 is_correct=None, ai_feedback=None, answered_at=None,
+                 question_snapshot=None, question=None):
     return SimpleNamespace(
         id=id, session_id=session_id, question_id=question_id,
         question_type=question_type, max_score=max_score,
         student_answer=student_answer, ai_score=ai_score,
         is_correct=is_correct, ai_feedback=ai_feedback,
-        answered_at=answered_at, question=question,
+        answered_at=answered_at, question_snapshot=question_snapshot, question=question,
     )
 
 
@@ -259,6 +260,7 @@ def test_start_session_empty_question_pool():
         MockScalarResult(None),     # no existing session
         MockScalarResult(values=[]),  # empty question pool for choice
         MockScalarResult(values=[]),  # fallback: all questions also empty
+        MockScalarResult(values=[]),  # adaptive question pool empty
     ])
 
     try:
@@ -375,8 +377,8 @@ def test_get_config_statistics_with_data():
     assert result["avg_score"] == 76.7  # (80+60+90)/3
     assert result["max_score"] == 90
     assert result["min_score"] == 60
-    # pass_rate: threshold=60, all 3 pass → 100.0
-    assert result["pass_rate"] == 100.0
+    # pass_rate: 返回 0~1 比例，threshold=60, all 3 pass → 1.0
+    assert result["pass_rate"] == 1.0
 
 
 def test_get_config_statistics_config_not_found():
@@ -386,4 +388,3 @@ def test_get_config_statistics_config_not_found():
         assert False
     except ValueError as e:
         assert "不存在" in str(e)
-

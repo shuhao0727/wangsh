@@ -30,7 +30,7 @@ export function useArrangeLayout(params: {
 }) {
   const {
     canvasRef,
-    scale,
+    scale: _scale,
     setScale,
     setOffsetX,
     setOffsetY,
@@ -38,7 +38,7 @@ export function useArrangeLayout(params: {
     edges,
     setNodes,
     setEdges,
-    codeMode,
+    codeMode: _codeMode,
     onSemanticEdit,
     setSelectedNodeId,
     setSelectedEdgeId,

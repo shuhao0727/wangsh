@@ -626,7 +626,7 @@ const AIAgentsPage: React.FC = () => {
       } else {
         message.error(result.error || "登录失败");
       }
-    } catch (error) {
+    } catch (_error) {
       message.error("登录过程中发生错误");
     }
   };

@@ -5,7 +5,7 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from uuid import UUID
 
 from app.schemas.articles.markdown_style import MarkdownStyleResponse
@@ -29,19 +29,22 @@ class ArticleBase(BaseModel):
     style_key: Optional[str] = Field(None, min_length=1, max_length=100, description="Markdown样式方案key (可选)")
     published: bool = Field(False, description="是否发布")
     
-    @validator("slug")
-    def validate_slug(cls, v):
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: str):
         """验证slug格式"""
         if not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
         return v.lower()
 
-    @validator("custom_css")
-    def validate_custom_css(cls, v):
+    @field_validator("custom_css")
+    @classmethod
+    def validate_custom_css(cls, v: Optional[str]):
         return _sanitize_custom_css(v)
 
-    @validator("style_key")
-    def validate_style_key(cls, v):
+    @field_validator("style_key")
+    @classmethod
+    def validate_style_key(cls, v: Optional[str]):
         if v is None:
             return None
         if not v.replace("-", "").replace("_", "").isalnum():
@@ -55,8 +58,9 @@ class ArticleCreate(ArticleBase):
     category_id: Optional[int] = Field(None, description="分类ID (可选)")
     # 标签功能已移除，删除了tag_ids字段
     
-    @validator("title")
-    def validate_title_not_empty(cls, v):
+    @field_validator("title")
+    @classmethod
+    def validate_title_not_empty(cls, v: str):
         """验证标题非空"""
         if not v.strip():
             raise ValueError("标题不能为空")
@@ -75,19 +79,22 @@ class ArticleUpdate(BaseModel):
     category_id: Optional[int] = Field(None, description="分类ID (可选)")
     # 标签功能已移除，删除了tag_ids字段
     
-    @validator("slug")
-    def validate_slug(cls, v):
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: Optional[str]):
         """验证slug格式"""
         if v is not None and not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
         return v.lower() if v else v
 
-    @validator("custom_css")
-    def validate_custom_css(cls, v):
+    @field_validator("custom_css")
+    @classmethod
+    def validate_custom_css(cls, v: Optional[str]):
         return _sanitize_custom_css(v)
 
-    @validator("style_key")
-    def validate_style_key(cls, v):
+    @field_validator("style_key")
+    @classmethod
+    def validate_style_key(cls, v: Optional[str]):
         if v is None:
             return None
         if not v.replace("-", "").replace("_", "").isalnum():
@@ -103,8 +110,7 @@ class ArticleInDBBase(ArticleBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ArticleInDB(ArticleInDBBase):
@@ -120,8 +126,7 @@ class AuthorInfo(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CategoryInfo(BaseModel):
@@ -130,8 +135,7 @@ class CategoryInfo(BaseModel):
     name: str
     slug: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # 标签功能已移除，删除了TagInfo类
@@ -139,8 +143,7 @@ class CategoryInfo(BaseModel):
 
 class ArticleResponse(ArticleInDBBase):
     """文章响应模型"""
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ArticleWithRelations(ArticleResponse):
@@ -149,8 +152,7 @@ class ArticleWithRelations(ArticleResponse):
     category: Optional[CategoryInfo] = None
     style: Optional[MarkdownStyleResponse] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ArticleList(BaseModel):

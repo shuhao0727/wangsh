@@ -4,7 +4,6 @@ import {
   App,
   DatePicker,
   Select,
-  Badge,
   Button,
   Card,
   Divider,
@@ -44,7 +43,7 @@ import { logger } from "@services/logger";
 import dayjs from "dayjs";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const STORAGE_KEYS = {
   SESSION_ID: "gd_session_id",
@@ -112,7 +111,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [searchKeyword, setSearchKeyword] = useState("");
   
   const [messages, setMessages] = useState<any[]>([]);
-  const [polling, setPolling] = useState(false);
+  const [_polling, _setPolling] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [lastSendTime, setLastSendTime] = useState(0);

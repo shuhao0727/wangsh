@@ -202,7 +202,7 @@ const PythonLabStudioInner: React.FC<{
         normalizedMessage.includes("getrangeat") ||
         normalizedMessage.includes("selection") ||
         normalizedMessage.includes("domexception");
-      const isLikelyExternal =
+      const _isLikelyExternal =
         file.includes("content.js") ||
         file.includes("content-script") ||
         file.startsWith("chrome-extension://") ||

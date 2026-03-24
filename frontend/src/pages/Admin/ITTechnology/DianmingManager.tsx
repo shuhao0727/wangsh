@@ -17,7 +17,7 @@ const DianmingManager: React.FC = () => {
     try {
       const res = await dianmingApi.listClasses();
       setData(res);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取班级列表失败');
     } finally {
       setLoading(false);
@@ -52,7 +52,7 @@ const DianmingManager: React.FC = () => {
       setEditingRecord(null);
       form.resetFields();
       fetchData();
-    } catch (error) {
+    } catch (_error) {
       message.error(editingRecord ? '更新失败' : '导入失败');
     }
   };
@@ -62,7 +62,7 @@ const DianmingManager: React.FC = () => {
       await dianmingApi.deleteClass(record.year, record.class_name);
       message.success('删除成功');
       fetchData();
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败');
     }
   };
@@ -79,7 +79,7 @@ const DianmingManager: React.FC = () => {
         names_text: namesText,
       });
       setIsModalVisible(true);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取学生名单失败');
     }
   };

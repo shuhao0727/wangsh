@@ -7,6 +7,9 @@ from app.core.config import settings
 from app.utils.agent_secrets import try_decrypt_api_key
 
 
+OPENROUTER_FREE_SUFFIX = ":free"
+
+
 def resolve_credentials(agent):
     """解析 agent 的 endpoint 和 api_key，含 OpenRouter fallback"""
     api_endpoint = (agent.api_endpoint or "").strip().rstrip("/")
@@ -66,3 +69,102 @@ def extract_provider_detail(body_text: str) -> str:
     except Exception:
         pass
     return t[:500]
+
+
+def openrouter_fallback_model(model: str) -> Optional[str]:
+    """OpenRouter free 模型回退：xxx:free -> xxx"""
+    m = (model or "").strip()
+    suffix = OPENROUTER_FREE_SUFFIX
+    if m.endswith(suffix) and len(m) > len(suffix):
+        return m[: -len(suffix)]
+    return None
+
+
+def openrouter_free_model(model: str) -> Optional[str]:
+    """OpenRouter free 模型补全：xxx -> xxx:free"""
+    m = (model or "").strip()
+    suffix = OPENROUTER_FREE_SUFFIX
+    if not m or m.endswith(suffix):
+        return None
+    return f"{m}{suffix}"
+
+
+def openrouter_model_candidates(model: str) -> List[str]:
+    """
+    生成 OpenRouter 候选模型：
+    - xxx:free -> [xxx:free, xxx]
+    - xxx -> [xxx, xxx:free]
+    """
+    m = (model or "").strip()
+    if not m:
+        return []
+
+    candidates = [m]
+    if m.endswith(OPENROUTER_FREE_SUFFIX):
+        fallback = openrouter_fallback_model(m)
+    else:
+        fallback = openrouter_free_model(m)
+
+    if fallback and fallback not in candidates:
+        candidates.append(fallback)
+    return candidates
+
+
+def _looks_like_model_not_found(detail: str) -> bool:
+    d = (detail or "").strip().lower()
+    if not d:
+        return True
+    patterns = (
+        "model not found",
+        "unknown model",
+        "no such model",
+        "does not exist",
+        "invalid model",
+        "no endpoints available",
+        "no endpoint available",
+        "模型不存在",
+        "模型不可用",
+    )
+    return any(p in d for p in patterns)
+
+
+def should_retry_openrouter_fallback(status_code: int, detail: str, model: str, fallback_model: Optional[str] = None) -> bool:
+    """
+    是否触发 OpenRouter 模型名回退重试。
+    - xxx:free -> xxx
+    - xxx -> xxx:free（用于仅有 free 别名的模型）
+    """
+    current = (model or "").strip()
+    if not current:
+        return False
+
+    fallback = (fallback_model or "").strip()
+    if not fallback:
+        if current.endswith(OPENROUTER_FREE_SUFFIX):
+            fallback = openrouter_fallback_model(current) or ""
+        else:
+            fallback = openrouter_free_model(current) or ""
+
+    if not fallback or fallback == current:
+        return False
+
+    # 鉴权/计费错误不做模型名回退，避免掩盖真实问题。
+    if status_code in (401, 402, 403):
+        return False
+
+    free_to_non_free = current.endswith(OPENROUTER_FREE_SUFFIX) and (not fallback.endswith(OPENROUTER_FREE_SUFFIX))
+    non_free_to_free = (not current.endswith(OPENROUTER_FREE_SUFFIX)) and fallback.endswith(OPENROUTER_FREE_SUFFIX)
+
+    # 404 常见于 guardrail/data policy 路由不到可用 endpoint；
+    # 429/5xx 常见于拥塞，回退到非 free 往往可恢复。
+    if free_to_non_free:
+        return status_code in (404, 429, 500, 502, 503, 504)
+
+    # 一些模型只存在 :free 别名，non-free 404 时可尝试加 :free。
+    if non_free_to_free:
+        if status_code in (429, 500, 502, 503, 504):
+            return True
+        if status_code == 404:
+            return _looks_like_model_not_found(detail)
+
+    return False

@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 QuestionType = Literal["choice", "fill", "short_answer"]
@@ -26,8 +26,9 @@ class QuestionBase(BaseModel):
     mode: QuestionMode = Field("fixed", description="模式: fixed/adaptive")
     adaptive_config: Optional[str] = Field(None, description="自适应配置 JSON")
 
-    @validator("content")
-    def validate_content(cls, v):
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v: str):
         if not v.strip():
             raise ValueError("题目内容不能为空")
         return v.strip()
@@ -70,8 +71,7 @@ class QuestionResponse(BaseModel):
     adaptive_config: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class QuestionListResponse(BaseModel):

@@ -5,7 +5,7 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class CategoryBase(BaseModel):
@@ -14,8 +14,9 @@ class CategoryBase(BaseModel):
     slug: str = Field(..., min_length=1, max_length=100, description="URL友好的别名")
     description: Optional[str] = Field(None, description="分类描述 (可选)")
     
-    @validator("slug")
-    def validate_slug(cls, v):
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: str):
         """验证slug格式"""
         if not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
@@ -25,8 +26,9 @@ class CategoryBase(BaseModel):
 class CategoryCreate(CategoryBase):
     """分类创建模型"""
     
-    @validator("name")
-    def validate_name_not_empty(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: str):
         """验证分类名非空"""
         if not v.strip():
             raise ValueError("分类名不能为空")
@@ -39,15 +41,17 @@ class CategoryUpdate(BaseModel):
     slug: Optional[str] = Field(None, min_length=1, max_length=100, description="URL友好的别名")
     description: Optional[str] = Field(None, description="分类描述 (可选)")
     
-    @validator("slug")
-    def validate_slug(cls, v):
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: Optional[str]):
         """验证slug格式"""
         if v is not None and not v.replace("-", "").replace("_", "").isalnum():
             raise ValueError("slug只能包含字母、数字、破折号和下划线")
         return v.lower() if v else v
     
-    @validator("name")
-    def validate_name_not_empty(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: Optional[str]):
         """验证分类名非空"""
         if v is not None and not v.strip():
             raise ValueError("分类名不能为空")
@@ -60,8 +64,7 @@ class CategoryInDBBase(CategoryBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CategoryInDB(CategoryInDBBase):
@@ -72,16 +75,14 @@ class CategoryInDB(CategoryInDBBase):
 class CategoryResponse(CategoryInDBBase):
     """分类响应模型"""
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CategoryWithUsage(CategoryResponse):
     """包含使用次数的分类响应模型"""
     article_count: int = Field(0, description="该分类下的文章数量")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CategoryList(BaseModel):

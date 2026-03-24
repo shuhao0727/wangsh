@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, distinct, delete, func, update
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.core import deps
 from app.models.xxjs.dianming import XxjsDianming
@@ -27,8 +27,7 @@ class DianmingStudentCreate(DianmingStudentBase):
 class DianmingStudent(DianmingStudentBase):
     id: int
     created_at: Any
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DianmingImportRequest(BaseModel):
     year: str

@@ -1,8 +1,8 @@
 # WangSh 自主检测系统 + 多维画像分析 — 开发指导文档
 
 > 版本：v2.0
-> 日期：2026-03-18
-> 状态：设计完成，待开发
+> 日期：2026-03-24
+> 状态：第 2 期已完成，第 3 期进行中
 
 ---
 
@@ -84,6 +84,8 @@
 
 ### 第 1 期：后端基础 + 管理端
 
+**当前状态：已完成**
+
 1. 创建 7 张数据表（Model + Alembic 迁移）→ 详见 [ASSESSMENT_DATABASE.md](./ASSESSMENT_DATABASE.md)
 2. 后端 CRUD API（configs, questions）→ 详见 [ASSESSMENT_API.md](./ASSESSMENT_API.md)
 3. AI 出题服务（调用智能体生成题目，解析 JSON 存入题库）
@@ -92,6 +94,8 @@
 **验证：** 管理端创建测评 → AI 生成题目 → 审核编辑 → 开启测评
 
 ### 第 2 期：学生端 + 评分 + 初级画像
+
+**当前状态：已完成**
 
 1. 学生端浮动窗口（AssessmentPanel.tsx）→ 详见 [ASSESSMENT_FRONTEND.md](./ASSESSMENT_FRONTEND.md)
 2. 开始测评 API（创建 session + 抽题逻辑）
@@ -103,8 +107,10 @@
 
 ### 第 3 期：三维融合画像
 
+**当前状态：部分完成（后端生成与批量生成已落地，独立画像中心页待完善）**
+
 1. 高级画像生成服务（聚合三方数据 + 调用 AI）→ 详见 [ASSESSMENT_PROMPTS.md](./ASSESSMENT_PROMPTS.md)
-2. 管理端画像中心页面（`/admin/assessment/profiles`）
+2. 管理端画像能力完善（当前并入 `StatisticsPage`，后续可拆分为独立画像中心页）
 3. 学生端"查看三维画像"按钮
 4. 答题统计可视化（知识点掌握率、成绩分布）
 

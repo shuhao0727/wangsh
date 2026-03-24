@@ -24,12 +24,12 @@ interface XtermTerminalProps {
 }
 
 const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(function XtermTerminal(
-  { wsUrl, className, onClear, fontSize = 14, showLineNumbers },
+  { wsUrl, className, onClear: _onClear, fontSize = 14, showLineNumbers },
   ref
 ) {
   const showLineNumbersOn = showLineNumbers !== false;
   const [gutterText, setGutterText] = useState("");
-  const [gutterDigits, setGutterDigits] = useState(2);
+  const [_gutterDigits, setGutterDigits] = useState(2);
   const gutterRafRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInternal | null>(null);
@@ -290,7 +290,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       term.loadAddon(fitAddon);
       try {
         term.open(container);
-      } catch (e: any) {
+      } catch (_e: any) {
         try { term.dispose(); } catch {}
         return;
       }

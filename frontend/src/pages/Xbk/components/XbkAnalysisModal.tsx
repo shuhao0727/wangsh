@@ -51,7 +51,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
         setCourseStats(courses.items || []);
         setClassStats(classes.items || []);
         setNoSelection(noSel.items || []);
-      } catch (e: any) {
+      } catch (_e: any) {
         message.error("加载分析数据失败");
       } finally {
         setLoading(false);

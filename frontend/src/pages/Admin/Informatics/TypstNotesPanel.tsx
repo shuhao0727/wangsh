@@ -134,7 +134,7 @@ const TypstNotesPanel: React.FC = () => {
       setSvgLoading(true);
       try {
         await compileSvg(src, token);
-      } catch (e: any) {
+      } catch (_e: any) {
         if (previewTokenRef.current === token) setSvg("");
       } finally {
         if (previewTokenRef.current === token) setSvgLoading(false);

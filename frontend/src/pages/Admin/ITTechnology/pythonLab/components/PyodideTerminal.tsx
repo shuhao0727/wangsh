@@ -15,7 +15,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const { bridge, fontSize, showLineNumbers } = props;
     const showLineNumbersOn = showLineNumbers !== false;
     const [gutterText, setGutterText] = useState("");
-    const [gutterDigits, setGutterDigits] = useState(2);
+    const [_gutterDigits, setGutterDigits] = useState(2);
     const gutterRafRef = useRef<number | null>(null);
     const hostRef = useRef<HTMLDivElement | null>(null);
     const termRef = useRef<Terminal | null>(null);

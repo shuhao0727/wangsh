@@ -24,7 +24,7 @@ export function promptAndInlineInputs(
     let count = 0;
     let insufficient = false;
     let nextPrompt = "input: ";
-    const replaced = src.replace(pattern, (_m, promptExpr) => {
+    const replaced = src.replace(pattern, (_m, _promptExpr) => {
         count += 1;
         const value = inputQueue[count - 1];
         if (value === undefined) {

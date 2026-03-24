@@ -5,7 +5,15 @@ import json
 from typing import Any, Dict, Optional
 
 from app.services.agents.ai_agent import get_agent
-from app.services.agents.providers import get_provider, provider_error_message, extract_provider_detail, resolve_credentials, build_messages
+from app.services.agents.providers import (
+    get_provider,
+    provider_error_message,
+    extract_provider_detail,
+    resolve_credentials,
+    build_messages,
+    openrouter_model_candidates,
+    should_retry_openrouter_fallback,
+)
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.agents.providers.circuit_breaker import breaker
 from app.core.config import settings
@@ -59,30 +67,50 @@ async def run_agent_chat_blocking(
         raise ValueError("model_not_configured")
 
     headers = provider.build_headers()
-    payload = provider.build_blocking_payload(chat_messages, model)
     chat_url = provider.chat_url()
+    candidate_models = [model]
+    if getattr(provider, "is_openrouter", False):
+        candidate_models = openrouter_model_candidates(model) or [model]
 
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-        resp = None
-        for attempt in range(3):
-            resp = await client.post(chat_url, headers=headers, json=payload)
-            if resp.status_code == 200:
+        last_error: Optional[str] = None
+        for idx, candidate_model in enumerate(candidate_models):
+            payload = provider.build_blocking_payload(chat_messages, candidate_model)
+            resp = None
+            for attempt in range(3):
+                resp = await client.post(chat_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    break
+                if resp.status_code in (429, 502, 503, 504) and attempt < 2:
+                    await asyncio.sleep(1.5 * (2 ** attempt))
+                    continue
                 break
-            if resp.status_code in (429, 502, 503, 504) and attempt < 2:
-                await asyncio.sleep(1.5 * (2 ** attempt))
-                continue
-            break
 
-        if not resp or resp.status_code != 200:
-            breaker.record_failure(provider_name)
+            if resp and resp.status_code == 200:
+                breaker.record_success(provider_name)
+                return provider.parse_blocking_response(resp.json())
+
             status_code = int(resp.status_code) if resp else 0
             msg = provider_error_message(status_code)
             detail = extract_provider_detail(resp.text if resp else "")
-            suffix = f" - {detail}" if detail else ""
-            raise ValueError(f"provider_status_{status_code}: {msg}{suffix}")
+            can_fallback = (
+                idx < len(candidate_models) - 1
+                and should_retry_openrouter_fallback(
+                    status_code,
+                    detail,
+                    candidate_model,
+                    candidate_models[idx + 1],
+                )
+            )
+            if can_fallback:
+                continue
 
-        breaker.record_success(provider_name)
-        return provider.parse_blocking_response(resp.json())
+            suffix = f" - {detail}" if detail else ""
+            last_error = f"provider_status_{status_code}: {msg}{suffix}"
+            break
+
+        breaker.record_failure(provider_name)
+        raise ValueError(last_error or "provider_request_failed")
 
 
 async def _blocking_dify(provider: DifyProvider, messages, model, user, inputs) -> str:

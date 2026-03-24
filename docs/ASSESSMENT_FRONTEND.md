@@ -90,7 +90,6 @@
 /admin/assessment/editor/{id}           编辑测评
 /admin/assessment/{id}/questions        题库管理
 /admin/assessment/{id}/statistics       答题统计
-/admin/assessment/profiles              画像中心
 ```
 
 ### 2.2 侧边栏菜单
@@ -101,19 +100,7 @@
 {
   key: "/admin/assessment",
   icon: <FormOutlined />,
-  label: "自主检测",
-  children: [
-    {
-      key: "/admin/assessment",
-      icon: <FileTextOutlined />,
-      label: "测评管理",
-    },
-    {
-      key: "/admin/assessment/profiles",
-      icon: <UserOutlined />,
-      label: "画像中心",
-    },
-  ],
+  label: "自适应测评",
 }
 ```
 
@@ -174,29 +161,14 @@
 - 学生列表：表格（姓名、得分、用时、状态、操作→查看详情/查看初级画像）
 - 点击学生姓名：弹窗显示该学生的逐题答题详情
 
-### 2.7 画像中心页 `/admin/assessment/profiles`
+### 2.7 画像入口（并入统计页）
 
-**组件：** `frontend/src/pages/Admin/Assessment/ProfilesPage.tsx`
+当前实现未单独提供 `/admin/assessment/profiles` 页面。
 
-**布局：** AdminPage，左右分栏
-
-**左侧 — 生成画像：**
-- 画像类型：Radio（个人/小组/群体）
-- 根据类型动态显示：
-  - 个人：选择学生（Select 搜索）
-  - 小组：选择小组讨论会话（Select）
-  - 群体：输入班级名称（Input）
-- 数据源选择：
-  - 测评配置：Select（可选，拉取测评数据）
-  - 小组讨论会话：Select（可选，拉取讨论数据）
-  - 课堂智能体：Select 多选（可选，拉取 AI 对话数据）
-- 生成用智能体：Select 单选
-- "生成画像"按钮 / "批量生成"按钮（个人画像时可选多个学生）
-
-**右侧 — 画像列表与详情：**
-- 画像列表：按时间倒序，显示类型 Tag + 目标名称 + 数据源 Tags + 时间
-- 点击画像：右侧展示 Markdown 渲染的画像内容 + 结构化评分雷达图
-- 操作：删除
+画像相关操作已并入 `StatisticsPage.tsx`：
+- 批量生成：按筛选班级或全部已评分学生触发
+- 单人查看：在学生列表点击「画像」查看基础画像/三维画像
+- 统计页内提供知识点雷达图与画像展示能力
 
 ---
 

@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class AssessmentConfigBase(BaseModel):
@@ -21,8 +21,9 @@ class AssessmentConfigBase(BaseModel):
     available_start: Optional[datetime] = Field(None, description="开放开始时间")
     available_end: Optional[datetime] = Field(None, description="开放结束时间")
 
-    @validator("title")
-    def validate_title(cls, v):
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str):
         if not v.strip():
             raise ValueError("测评标题不能为空")
         return v.strip()
@@ -48,8 +49,9 @@ class AssessmentConfigUpdate(BaseModel):
     available_end: Optional[datetime] = Field(None, description="开放结束时间")
     agent_ids: Optional[List[int]] = Field(None, description="关联的课堂智能体 ID 列表")
 
-    @validator("title")
-    def validate_title(cls, v):
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: Optional[str]):
         if v is not None and not v.strip():
             raise ValueError("测评标题不能为空")
         return v.strip() if v else v
@@ -61,8 +63,7 @@ class AssessmentConfigAgentResponse(BaseModel):
     name: str
     agent_type: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssessmentConfigResponse(BaseModel):
@@ -89,8 +90,7 @@ class AssessmentConfigResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssessmentConfigListResponse(BaseModel):

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Typography, Button, Tag, Alert, Skeleton } from "antd";
 import {
   SyncOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  DatabaseOutlined, CloudServerOutlined, ApiOutlined,
   TeamOutlined, FileTextOutlined, RobotOutlined,
 } from "@ant-design/icons";
 import { AdminPage } from "@components/Admin";

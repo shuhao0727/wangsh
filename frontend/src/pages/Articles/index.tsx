@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Typography, Tag, Button, Empty, Spin, Pagination, Menu, Input, Grid, Skeleton } from "antd";
+import { Tag, Button, Empty, Spin, Pagination, Menu, Input, Grid, Skeleton } from "antd";
 import {
-  CalendarOutlined,
-  FolderOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
@@ -20,8 +18,6 @@ import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
 import ArticleItem from "./components/ArticleItem";
 import "./Articles.css"; // 导入样式文件
-
-const { Text } = Typography;
 
 // 工具函数：检测对象是否是验证错误对象 - 更严格的检查
 const isValidationError = (obj: any): boolean => {

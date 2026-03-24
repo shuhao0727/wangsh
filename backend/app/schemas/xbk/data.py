@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class XbkStudentOut(BaseModel):
@@ -13,8 +13,7 @@ class XbkStudentOut(BaseModel):
     name: str
     gender: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class XbkCourseOut(BaseModel):
@@ -28,8 +27,7 @@ class XbkCourseOut(BaseModel):
     quota: int
     location: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class XbkSelectionOut(BaseModel):
@@ -41,8 +39,7 @@ class XbkSelectionOut(BaseModel):
     name: Optional[str] = None
     course_code: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class XbkListResponse(BaseModel):

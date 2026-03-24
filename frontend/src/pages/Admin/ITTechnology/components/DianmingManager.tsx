@@ -19,7 +19,7 @@ const DianmingManager: React.FC<Props> = ({ onStartRollCall, onBack }) => {
     try {
       const res = await dianmingApi.listClasses();
       setData(res);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取班级列表失败');
     } finally {
       setLoading(false);
@@ -41,7 +41,7 @@ const DianmingManager: React.FC<Props> = ({ onStartRollCall, onBack }) => {
       setIsModalVisible(false);
       form.resetFields();
       fetchData();
-    } catch (error) {
+    } catch (_error) {
       message.error('导入失败');
     }
   };
@@ -51,7 +51,7 @@ const DianmingManager: React.FC<Props> = ({ onStartRollCall, onBack }) => {
       await dianmingApi.deleteClass(record.year, record.class_name);
       message.success('删除成功');
       fetchData();
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败');
     }
   };

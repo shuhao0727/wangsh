@@ -1045,34 +1045,34 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
     try {
       await clientRef.current.request("continue", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) { }
+    } catch (_e) { }
   }, []);
 
   const pauseRun = useCallback(async () => {
     try {
       await clientRef.current.request("pause", { threadId: 1 });
-    } catch (e) { }
+    } catch (_e) { }
   }, []);
 
   const stepOver = useCallback(async () => {
     try {
       await clientRef.current.request("next", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) { }
+    } catch (_e) { }
   }, []);
 
   const stepInto = useCallback(async () => {
     try {
       await clientRef.current.request("stepIn", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) { }
+    } catch (_e) { }
   }, []);
 
   const stepOut = useCallback(async () => {
     try {
       await clientRef.current.request("stepOut", { threadId: 1 });
       dispatch({ type: "SET_STATUS", payload: "running" });
-    } catch (e) { }
+    } catch (_e) { }
   }, []);
 
   const evaluate = useCallback(async (expr: string) => {

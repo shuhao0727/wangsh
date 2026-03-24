@@ -98,7 +98,7 @@ export function wsUrl(path: string, token: string | null): string {
     // We assume 'path' is the full path from root, e.g. "/api/v1/debug/..."
     // So we just use protocol + host + path
     return `${protocol}//${host}${appendToken(path, token)}`;
-  } catch (e) {
+  } catch (_e) {
     // Fallback
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${window.location.host}${appendToken(path, token)}`;

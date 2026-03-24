@@ -46,7 +46,7 @@ const CTRL_INPUT_READY = 3;
 const CTRL_INPUT_LEN = 4;
 const CTRL_EVAL_LEN = 5;
 
-const CTRL_CMD_RESUME = 1;
+const _CTRL_CMD_RESUME = 1;
 const CTRL_CMD_STEP = 2;
 const CTRL_CMD_STOP = 3;
 const CTRL_CMD_EVAL = 4;
@@ -80,7 +80,7 @@ function initSharedViews(buf: SharedArrayBuffer | null) {
   evalText16 = new Uint16Array(sharedBuffer, evalOffset, EVAL_MAX_CODE_UNITS);
 }
 
-function setInputToShared(text: string) {
+function _setInputToShared(text: string) {
   if (!ctrl || !inputText16) return;
   const len = Math.min(text.length, INPUT_MAX_CODE_UNITS);
   for (let i = 0; i < len; i++) inputText16[i] = text.charCodeAt(i);
@@ -101,7 +101,7 @@ function waitForInput(prompt: string): string {
   return s;
 }
 
-function shouldPauseAtLine(line: number): { pause: boolean; step: boolean } {
+function shouldPauseAtLine(_line: number): { pause: boolean; step: boolean } {
   if (!ctrl) return { pause: false, step: false };
   if (stopRequested) return { pause: true, step: false };
   if (stepMode) return { pause: true, step: true };
@@ -334,7 +334,7 @@ async function runCode(code: string) {
   }
 }
 
-async function evalExpr(expr: string) {
+async function _evalExpr(expr: string) {
   if (!pyodide) throw new Error("pyodide not ready");
   const fn = pyodide.globals.get("__pydbg_eval_repr");
   const obj = fn(expr);

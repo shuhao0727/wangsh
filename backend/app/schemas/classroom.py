@@ -1,6 +1,6 @@
 """课堂互动 Pydantic schemas"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -62,8 +62,7 @@ class ActivityResponse(BaseModel):
     analysis_error: Optional[str] = None
     analysis_updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ActivityStudentView(BaseModel):

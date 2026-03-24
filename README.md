@@ -2,10 +2,10 @@
 
 ## 本地开发
 
-**开发配置**：请使用 `.env.dev` (复制自 `.env.dev.example`)。`start-dev.sh` 会自动优先加载它。
+**开发配置**：请使用 `.env.dev`（可从 `.env.example` 复制）。`start-dev.sh` 会自动优先加载它。
 
 ```bash
-cp .env.dev.example .env.dev
+cp .env.example .env.dev
 bash start-dev.sh
 ```
 
@@ -19,7 +19,7 @@ bash stop-dev.sh
 
 **生产配置**：请使用 `.env` (复制自 `.env.example`)。`scripts/deploy.sh` 默认使用它。
 
-看文档： [DEPLOY.md](docs/DEPLOY.md)
+看文档： [DEPLOY.md](./DEPLOY.md)
 
 最常用的一键部署命令（服务器上）：
 
@@ -128,26 +128,10 @@ PR 门禁工作流（已落地）：
 - `5`：断言失败
 - `10`：未知异常
 
-## 环境变量说明
+## 文档索引
 
-看文档： [ENV.md](file:///Users/wsh/wangsh/docs/ENV.md)
-
-## 环境对齐（开发 vs 生产）
-
-请阅读： [ENV_SYNC.md](file:///Users/wsh/wangsh/docs/ENV_SYNC.md)
-
-快速验证：
-- 开发：`./stop-dev.sh && ./start-dev.sh`，访问 `http://localhost:6608`，执行 Typst 编译/预览
-- 生产模拟：`bash scripts/deploy.sh up-amd64`，访问 `http://localhost:6608`
-
-## 镜像说明
-
-看文档： [IMAGES.md](file:///Users/wsh/wangsh/docs/IMAGES.md)
-
-## Typst 流水线
-
-看文档： [TYPST.md](file:///Users/wsh/wangsh/docs/TYPST.md)
-
-## 数据库设计
-
-看文档： [DB_SCHEMA.md](file:///Users/wsh/wangsh/docs/DB_SCHEMA.md)
+- 接口清单：[docs/API.md](./docs/API.md)
+- CI/CD 说明：[docs/CICD.md](./docs/CICD.md)
+- 自主检测总览：[docs/ASSESSMENT_DESIGN.md](./docs/ASSESSMENT_DESIGN.md)
+- 自主检测 API：[docs/ASSESSMENT_API.md](./docs/ASSESSMENT_API.md)
+- 自主检测前端：[docs/ASSESSMENT_FRONTEND.md](./docs/ASSESSMENT_FRONTEND.md)

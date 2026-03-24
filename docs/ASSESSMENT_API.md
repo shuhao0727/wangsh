@@ -1,12 +1,13 @@
 # 后端 API 设计
 
 > 隶属于 [ASSESSMENT_DESIGN.md](./ASSESSMENT_DESIGN.md)
+> 最后更新：2026-03-24
 
 ---
 
 ## 1. 管理端 API（需要管理员权限）
 
-前缀：`/api/v1/assessment`
+前缀：`/api/v1/assessment/admin`
 
 ### 1.1 测评配置管理
 
@@ -33,10 +34,16 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/configs/{id}/class-names` | 获取已参与班级列表（用于统计筛选） |
 | GET | `/configs/{id}/sessions` | 学生答题情况列表（含初级画像摘要） |
 | GET | `/sessions/{sid}` | 单个学生答题详情（含每题得分和 AI 评语） |
 | GET | `/sessions/{sid}/basic-profile` | 查看某学生的初级画像 |
+| POST | `/sessions/{sid}/allow-retest` | 允许单个学生重测（清理历史会话） |
+| POST | `/configs/{id}/batch-retest` | 批量重测（按班级或会话列表） |
 | GET | `/configs/{id}/statistics` | 统计数据（平均分、通过率、各知识点掌握率） |
+| GET | `/configs/{id}/export` | 导出统计明细（xlsx） |
+
+说明：`/statistics` 返回的 `pass_rate` 字段为 `0~1` 比例值，前端按百分比展示。
 
 ### 1.4 高级画像管理（三维融合）
 
@@ -101,6 +108,7 @@
 | POST | `/sessions/{sid}/answer` | 提交单题答案（选择题即时判分） |
 | POST | `/sessions/{sid}/submit` | 提交整卷（AI 统一评分 + 自动生成初级画像） |
 | GET | `/sessions/{sid}/result` | 查看检测结果（总分 + 各题详情 + AI 评语） |
+| GET | `/sessions/{sid}/profile-status` | 查询三维画像生成状态 |
 
 ### 2.2 画像查看
 
@@ -126,8 +134,8 @@
 **后端逻辑：**
 1. 检查该测评是否 `enabled=true`
 2. 检查该学生是否已有 `in_progress` 的会话（有则返回已有会话）
-3. 从题库随机抽题（按 `question_config` 中的题型和数量）
-4. 如果题库为空，调用 AI 实时生成题目，存入 `question_snapshot`
+3. 抽取固定题（按 `question_config` 配置）
+4. 加载自适应知识点题（`mode=adaptive`），并为首轮题实时调用 AI 生成 `question_snapshot`
 5. 创建 `session`（status=`in_progress`）和对应的 `answer` 记录（student_answer 为空）
 6. 返回 session_id
 

@@ -293,7 +293,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
         const r = await evaluate(expr);
         if (r.ok) results.push({ expr, ok: true, value: r.value, type: r.type });
         else results.push({ expr, ok: false, error: r.error || "Error" });
-      } catch (e: any) {
+      } catch (_e: any) {
       }
     }
     dispatch({ type: "SET_WATCH_RESULTS", payload: results });

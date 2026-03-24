@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 
 class Token(BaseModel):
@@ -17,8 +17,7 @@ class Token(BaseModel):
     role_code: str
     full_name: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenData(BaseModel):
@@ -33,8 +32,7 @@ class UserBase(BaseModel):
     """用户基础模型"""
     full_name: str = Field(..., max_length=100, description="全名")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(UserBase):
@@ -44,25 +42,23 @@ class UserCreate(UserBase):
     student_id: Optional[str] = Field(None, max_length=50, description="学号（学生使用）")
     role_code: str = Field("student", max_length=20, description="角色代码")
     
-    @validator("password")
-    def validate_password_strength(cls, v, values):
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: Optional[str]):
         """验证密码强度"""
         if v and len(v) < 8:
             raise ValueError("密码长度至少为8个字符")
-        
-        # 如果创建管理员用户，必须有密码
-        role_code = values.get("role_code")
-        if role_code in ["admin", "super_admin"] and not v:
-            raise ValueError("管理员用户必须设置密码")
         return v
-    
-    @validator("username")
-    def validate_username(cls, v, values):
-        """验证用户名"""
-        role_code = values.get("role_code")
-        if role_code in ["admin", "super_admin"] and not v:
-            raise ValueError("管理员用户必须设置用户名")
-        return v
+
+    @model_validator(mode="after")
+    def validate_admin_required_fields(self):
+        """管理员账号必须提供用户名和密码"""
+        if self.role_code in ["admin", "super_admin"]:
+            if not self.username:
+                raise ValueError("管理员用户必须设置用户名")
+            if not self.password:
+                raise ValueError("管理员用户必须设置密码")
+        return self
 
 
 class UserLogin(BaseModel):
@@ -96,8 +92,7 @@ class UserInDB(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserResponse(BaseModel):
@@ -113,8 +108,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentLoginResponse(BaseModel):
@@ -149,8 +143,9 @@ class PasswordReset(BaseModel):
     token: str = Field(..., description="重置令牌")
     new_password: str = Field(..., min_length=8, max_length=128, description="新密码")
     
-    @validator("new_password")
-    def validate_password_strength(cls, v):
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str):
         """验证密码强度"""
         if len(v) < 8:
             raise ValueError("密码长度至少为8个字符")

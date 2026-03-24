@@ -3,14 +3,11 @@ import {
   Typography,
   Space,
   Button,
-  Row,
-  Col,
   Table,
   Tag,
   Input,
   Form,
   Modal,
-  Popconfirm,
   message,
   Empty,
   Pagination,
@@ -372,7 +369,7 @@ const AdminCategories: React.FC = () => {
 
   // 处理筛选表单提交
   const handleFilterSubmit = (values: any) => {
-    const { sortBy, minArticles } = values;
+    const { _sortBy, _minArticles } = values;
     const newParams: CategoryFilterParams = {
       ...searchParams,
       page: 1,
