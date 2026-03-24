@@ -95,6 +95,13 @@ const InformaticsReaderPage: React.FC = () => {
     }
   }, []);
 
+  const handleManualRefresh = useCallback(async () => {
+    await loadList();
+    if (selectedId) {
+      await loadNote(selectedId);
+    }
+  }, [loadList, selectedId, loadNote]);
+
   useEffect(() => {
     if (!selectedId) return;
     loadNote(selectedId);
@@ -317,7 +324,7 @@ const InformaticsReaderPage: React.FC = () => {
         size="middle"
         className="flex-1"
       />
-      <Button icon={<ReloadOutlined />} onClick={loadList} loading={listLoading}
+      <Button icon={<ReloadOutlined />} onClick={() => { void handleManualRefresh(); }} loading={listLoading || pdfLoading}
         size="middle" type="text" className="text-text-secondary" />
     </div>
   );

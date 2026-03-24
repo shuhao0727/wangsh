@@ -102,7 +102,7 @@
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/ai-agents/` | 获取智能体列表 | 管理员 |
-| GET | `/ai-agents/active` | 获取活跃智能体 | 是 |
+| GET | `/ai-agents/active` | 获取活跃智能体 | 否 |
 | GET | `/ai-agents/statistics` | 智能体统计 | 管理员 |
 | GET | `/ai-agents/{agent_id}` | 获取智能体详情 | 管理员 |
 | POST | `/ai-agents/` | 创建智能体 | 管理员 |
@@ -131,6 +131,7 @@
 - OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
 - `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
+- 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（忽略请求体中的 `user_id`），用于防止伪造归属。
 
 ### 小组讨论（/ai-agents/group-discussion）
 
@@ -167,9 +168,9 @@
 |------|------|------|------|
 | POST | `/model-discovery/discover` | 发现可用模型 | 管理员 |
 | POST | `/model-discovery/discover/{agent_id}` | 为指定智能体发现模型 | 管理员 |
-| GET | `/model-discovery/preset-models` | 获取预设模型列表 | 管理员 |
-| GET | `/model-discovery/detect-provider` | 检测 API 提供商 | 管理员 |
-| GET | `/model-discovery/supported-providers` | 获取支持的提供商 | 管理员 |
+| GET | `/model-discovery/preset-models` | 获取预设模型列表 | 否 |
+| GET | `/model-discovery/detect-provider` | 检测 API 提供商 | 否 |
+| GET | `/model-discovery/supported-providers` | 获取支持的提供商 | 否 |
 
 ## 九、信息学笔记
 

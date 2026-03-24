@@ -96,7 +96,7 @@ const TypstNoteEditorInner: React.FC<{
   const previewLastAtRef = useRef(0);
   const autoPreviewPendingKeyRef = useRef<string>("");
   const autoPreviewLastSuccessKeyRef = useRef<string>("");
-  const previewRefreshRequestRef = useRef<{ id?: number } | null>(null);
+  const previewRefreshRequestRef = useRef<{ id?: number; force?: boolean } | null>(null);
   const assetsCacheRef = useRef<Map<string, Uint8Array>>(new Map());
   const assetInputRef = useRef<HTMLInputElement | null>(null);
   const [previewRefreshSeq, setPreviewRefreshSeq] = useState(0);
@@ -266,8 +266,8 @@ const TypstNoteEditorInner: React.FC<{
     }
   }, [categoryPath, content, note?.id, parseAxiosBlobError, published, styleKey, summary, title, toc]);
 
-  const queuePreviewRefresh = useCallback((id?: number) => {
-    previewRefreshRequestRef.current = { id };
+  const queuePreviewRefresh = useCallback((id?: number, options?: { force?: boolean }) => {
+    previewRefreshRequestRef.current = { id, force: Boolean(options?.force) };
     setPreviewRefreshSeq((v) => v + 1);
   }, []);
 
@@ -287,15 +287,16 @@ const TypstNoteEditorInner: React.FC<{
   useEffect(() => {
     const req = previewRefreshRequestRef.current;
     if (!req) return;
-    if (viewMode === "edit") return;
+    if (viewMode === "edit" && !req.force) return;
     if (!note?.id) return;
     if (req.id !== undefined && req.id !== note.id) return;
     if (previewRefreshTimerRef.current) window.clearTimeout(previewRefreshTimerRef.current);
     const requestedId = req.id;
+    const requestedForce = Boolean(req.force);
     const run = async () => {
       const currentReq = previewRefreshRequestRef.current;
       if (!currentReq) return;
-      if (viewModeRef.current === "edit") return;
+      if (viewModeRef.current === "edit" && !currentReq.force) return;
       if (!note?.id) return;
       if (requestedId !== undefined && requestedId !== note.id) return;
 
@@ -317,7 +318,7 @@ const TypstNoteEditorInner: React.FC<{
       const res = await renderServerPreview(++previewTokenRef.current);
       previewInFlightRef.current = false;
       if (res.rateLimited) {
-        previewRefreshRequestRef.current = { id: requestedId };
+        previewRefreshRequestRef.current = { id: requestedId, force: requestedForce };
         previewRefreshTimerRef.current = window.setTimeout(run, 1600);
       }
     };
@@ -574,7 +575,7 @@ const TypstNoteEditorInner: React.FC<{
         <div className="p-3">
           <Space orientation="vertical">
             <Text type="secondary">暂无预览</Text>
-            <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id)} disabled={!note?.id}>
+            <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
               刷新预览
             </Button>
           </Space>
@@ -606,7 +607,7 @@ const TypstNoteEditorInner: React.FC<{
             assetSearch={assetSearch}
             onOpenToc={() => setTocOpen(true)}
             onToggleCollapsed={() => setSideCollapsed((v) => !v)}
-            onRefreshPreview={() => queuePreviewRefresh(note?.id)}
+            onRefreshPreview={() => queuePreviewRefresh(note?.id, { force: true })}
             onSave={save}
             onSetTitle={setTitle}
             onSetSummary={setSummary}
@@ -698,7 +699,7 @@ const TypstNoteEditorInner: React.FC<{
             </Col>
             <Col>
               <Space>
-                <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id)} disabled={!note?.id}>
+                <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
                   刷新预览
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} loading={submitting} onClick={save}>
@@ -841,7 +842,9 @@ const TypstNoteEditorInner: React.FC<{
                 const s = await typstStylesApi.get(styleEditingKey);
                 setStyleEditing(s);
                 setStyleDraft({ ...s });
-              } catch {}
+              } catch (e: any) {
+                message.error(e?.response?.data?.detail || e?.message || "加载失败");
+              }
             }}
           >
             刷新

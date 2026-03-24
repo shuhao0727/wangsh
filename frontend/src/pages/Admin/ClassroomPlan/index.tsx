@@ -200,7 +200,7 @@ interface ConsoleProps {
   plan: Plan | null;
   open: boolean;
   onClose: () => void;
-  onRefresh: (id: number) => void;
+  onRefresh: (id: number) => Promise<void>;
 }
 
 const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefresh }) => {
@@ -208,13 +208,24 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
 
   const doAction = async (key: string, fn: () => Promise<any>) => {
     setLoading(key);
-    try { await fn(); if (plan) onRefresh(plan.id); }
+    try { await fn(); if (plan) await onRefresh(plan.id); }
     catch (e: any) { message.error(parseErr(e)); }
     finally { setLoading(null); }
   };
 
   if (!plan) return null;
   const items = [...plan.items].sort((a, b) => a.order_index - b.order_index);
+  const handleRefresh = async () => {
+    setLoading("refresh-plan");
+    try {
+      await onRefresh(plan.id);
+      message.success("已刷新");
+    } catch (e: any) {
+      message.error(parseErr(e));
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <Modal
@@ -250,7 +261,7 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
               loading={loading === "start-plan"}>启动计划</Button>
           </Popconfirm>
         )}
-        <Button size="small" icon={<ReloadOutlined />} onClick={() => onRefresh(plan.id)}>刷新</Button>
+        <Button size="small" icon={<ReloadOutlined />} loading={loading === "refresh-plan"} onClick={() => { void handleRefresh(); }}>刷新</Button>
       </div>
 
       <div className="border border-gray-100 rounded-md overflow-hidden">
@@ -327,11 +338,9 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
   useEffect(() => { if (open) fetchList(); }, [open, fetchList]);
 
   const refreshPlan = async (id: number) => {
-    try {
-      const p = await planApi.get(id);
-      setPlans(prev => prev.map(pl => pl.id === id ? p : pl));
-      if (consolePlan?.id === id) setConsolePlan(p);
-    } catch {}
+    const p = await planApi.get(id);
+    setPlans(prev => prev.map(pl => pl.id === id ? p : pl));
+    if (consolePlan?.id === id) setConsolePlan(p);
   };
 
   const openConsole = async (plan: Plan) => {
@@ -355,7 +364,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
         width={760}
       >
         <div className="flex justify-between mb-3">
-          <Button icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchList} loading={loading}>刷新</Button>
           <Button type="primary" icon={<PlusOutlined />}
             onClick={() => { setEditing(null); setFormOpen(true); }}>创建计划</Button>
         </div>

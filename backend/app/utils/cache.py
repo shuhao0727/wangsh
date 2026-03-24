@@ -144,7 +144,8 @@ class RedisCache:
         self, 
         key: str, 
         value: Any, 
-        expire_seconds: Optional[int] = None
+        expire_seconds: Optional[int] = None,
+        nx: bool = False,
     ) -> bool:
         """设置缓存值"""
         try:
@@ -156,9 +157,9 @@ class RedisCache:
                 serialized_value = str(value)
             
             if expire_seconds:
-                result = await client.setex(key, expire_seconds, serialized_value)
+                result = await client.set(key, serialized_value, ex=expire_seconds, nx=nx)
             else:
-                result = await client.set(key, serialized_value)
+                result = await client.set(key, serialized_value, nx=nx)
             return result is True
         except Exception as e:
             logger.warning(f"Redis设置缓存失败: {e}")

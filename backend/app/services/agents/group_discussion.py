@@ -383,16 +383,17 @@ async def send_message(
     if rate_seconds > 0:
         rate_key = _gd_key("rate", int(session_id), int(user_id))
         if settings.GROUP_DISCUSSION_REDIS_ENABLED:
-            if await cache.exists(rate_key):
+            # 使用 Redis SET NX EX 原子限流，避免并发请求下重复放行
+            acquired = await cache.set(rate_key, 1, expire_seconds=rate_seconds, nx=True)
+            if not acquired:
                 ttl = await cache.ttl(rate_key)
                 remain = int(ttl or 0)
-                await _gd_metric_incr("send_rate_block")
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"发送过于频繁（{max(1, remain)}秒后可再发送）",
-                )
-            ok = await cache.set(rate_key, 1, expire_seconds=rate_seconds)
-            if not ok:
+                if remain > 0:
+                    await _gd_metric_incr("send_rate_block")
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=f"发送过于频繁（{max(1, remain)}秒后可再发送）",
+                    )
                 last_created_at = (
                     await db.execute(
                         select(GroupDiscussionMessage.created_at)

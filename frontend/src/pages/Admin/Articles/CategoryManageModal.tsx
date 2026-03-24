@@ -600,6 +600,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                   <Button
                     icon={<ReloadOutlined />}
                     onClick={() => loadCategories()}
+                    loading={loading}
                   >
                     刷新
                   </Button>

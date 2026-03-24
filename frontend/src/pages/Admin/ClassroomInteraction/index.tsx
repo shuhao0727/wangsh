@@ -451,21 +451,39 @@ const AdminClassroomInteractionPage: React.FC = () => {
       if (typeFilter) { items = items.filter((a) => a.activity_type === typeFilter); }
       setActivities(items);
       setTotal(resp.total);
-    } catch (e: any) { message.error(parseErrorMessage(e)); }
-    setLoading(false);
+      return true;
+    } catch (e: any) {
+      message.error(parseErrorMessage(e));
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }, [page, pageSize, statusFilter, typeFilter, search]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
-  const fetchActiveAgents = useCallback(async () => {
+  const fetchActiveAgents = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? true;
     setLoadingAgents(true);
-    try { setActiveAgents(await classroomApi.getActiveAgents()); }
-    catch { setActiveAgents([]); }
+    try {
+      setActiveAgents(await classroomApi.getActiveAgents());
+    } catch (e: any) {
+      if (!silent) message.error(parseErrorMessage(e));
+    }
     finally { setLoadingAgents(false); }
   }, []);
 
-  useEffect(() => { fetchActiveAgents(); }, [fetchActiveAgents]);
+  useEffect(() => { fetchActiveAgents({ silent: true }); }, [fetchActiveAgents]);
   useEffect(() => () => { if (statsTimerRef.current) clearInterval(statsTimerRef.current); }, []);
+
+  const handleRefreshList = useCallback(async () => {
+    const ok = await fetchList();
+    if (ok) message.success("已刷新");
+  }, [fetchList]);
+
+  const handleRefreshAgents = useCallback(() => {
+    void fetchActiveAgents({ silent: false });
+  }, [fetchActiveAgents]);
 
   const openCreate = () => { setEditingId(null); setEditingRecord(null); setModalOpen(true); };
   const openEdit = (record: Activity) => { setEditingId(record.id); setEditingRecord(record); setModalOpen(true); };
@@ -557,7 +575,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
               <Select.Option value="vote">投票</Select.Option>
               <Select.Option value="fill_blank">填空</Select.Option>
             </Select>
-            <Button icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => { void handleRefreshList(); }} loading={loading}>刷新</Button>
             {selectedRowKeys.length > 0 && (
               <Popconfirm
                 title={`确认删除选中的 ${selectedRowKeys.length} 条活动？（只有草稿状态可被删除）`}
@@ -674,7 +692,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
         editingRecord={editingRecord}
         activeAgents={activeAgents}
         loadingAgents={loadingAgents}
-        onRefreshAgents={fetchActiveAgents}
+        onRefreshAgents={handleRefreshAgents}
         onClose={() => setModalOpen(false)}
         onSuccess={fetchList}
       />

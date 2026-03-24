@@ -100,9 +100,11 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const [selectedDoneActivityId, setSelectedDoneActivityId] = useState<number | null>(null);
   const [reviewStats, setReviewStats] = useState<ActivityStats | null>(null);
   const [reviewStatsLoading, setReviewStatsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const refreshingRef = useRef(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const viewRef = useRef<ViewType>("idle");
   const floatingRef = useRef<HTMLDivElement>(null);
@@ -149,8 +151,12 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   }, []);
 
   // 轮询活动
-  const checkActive = useCallback(async () => {
-    if (!isAuthenticated) return;
+  const checkActive = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? true;
+    if (!isAuthenticated) {
+      if (!silent) message.warning("请先登录后再刷新");
+      return false;
+    }
     const activity = activityRef.current;
     const open = openRef.current;
     try {
@@ -205,12 +211,31 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         setView("idle");
         setActivity(null);
       }
-    } catch {}
+      return true;
+    } catch {
+      if (!silent) message.error("刷新失败，请稍后重试");
+      return false;
+    }
   }, [isAuthenticated, handleOpen]);
 
+  const handleManualRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      const ok = await checkActive({ silent: false });
+      if (ok) message.success("已刷新");
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }, [checkActive]);
+
   useEffect(() => {
-    checkActive();
-    pollRef.current = setInterval(checkActive, 3000);
+    void checkActive({ silent: true });
+    pollRef.current = setInterval(() => {
+      void checkActive({ silent: true });
+    }, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [checkActive]);
 
@@ -356,7 +381,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             />
           </Tooltip>
           <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white"
-            onClick={checkActive} />
+            loading={refreshing}
+            onClick={() => { void handleManualRefresh(); }} />
           <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white"
             onClick={() => setOpen(false)} />
         </div>
@@ -386,7 +412,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                       <div
                         onClick={() => {
                           if (isPending) return;
-                          if (isItemActive) { checkActive(); return; }
+                          if (isItemActive) { void checkActive({ silent: true }); return; }
                           if (isItemDone && item.activity?.id != null) {
                             if (isReviewing) {
                               setView("idle");

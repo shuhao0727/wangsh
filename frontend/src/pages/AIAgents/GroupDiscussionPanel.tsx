@@ -114,9 +114,12 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [_polling, _setPolling] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [chatRefreshing, setChatRefreshing] = useState(false);
   const [lastSendTime, setLastSendTime] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const afterIdRef = useRef(0);
+  const sendingRef = useRef(false);
+  const chatRefreshingRef = useRef(false);
 
   // --- 成员管理状态 ---
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
@@ -403,7 +406,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   // --- 业务逻辑：发送消息 ---
   const handleSend = async () => {
-    if (!draft.trim() || !sessionId) return;
+    const text = draft.trim();
+    if (!text || !sessionId || sendingRef.current) return;
     
     // 前端冷却校验
     const now = Date.now();
@@ -413,9 +417,10 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       return;
     }
 
+    sendingRef.current = true;
     setSending(true);
     try {
-      const res = await groupDiscussionApi.sendMessage({ sessionId, content: draft });
+      const res = await groupDiscussionApi.sendMessage({ sessionId, content: text });
       if (res.success) {
         setDraft("");
         setLastSendTime(Date.now());
@@ -433,6 +438,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         message.error(res.message);
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -466,6 +472,43 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       scrollToBottom();
     }
   };
+
+  const handleManualRefresh = useCallback(async () => {
+    if (view === "intro") {
+      await fetchGroups();
+      return;
+    }
+    if (!sessionId) {
+      message.warning("当前未加入小组");
+      return;
+    }
+    if (chatRefreshingRef.current) return;
+    chatRefreshingRef.current = true;
+    setChatRefreshing(true);
+    try {
+      const res = await groupDiscussionApi.listMessages({
+        sessionId,
+        afterId: 0,
+        limit: 200,
+      });
+      if (!res.success) {
+        message.error(res.message || "刷新失败");
+        return;
+      }
+      const fullItems = (res.data.items || [])
+        .map((m: any) => ({ ...m, is_mine: userId ? m.user_id === userId : false }))
+        .sort((a: any, b: any) => a.id - b.id);
+      setMessages(fullItems);
+      afterIdRef.current = res.data.next_after_id || (fullItems.length > 0 ? fullItems[fullItems.length - 1].id : 0);
+      scrollToBottom();
+    } catch (err) {
+      logger.error(err);
+      message.error("刷新失败，请稍后重试");
+    } finally {
+      chatRefreshingRef.current = false;
+      setChatRefreshing(false);
+    }
+  }, [view, fetchGroups, sessionId, userId]);
 
   useEffect(() => {
     if (view !== "chat" || !sessionId) return;
@@ -754,7 +797,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             placeholder="输入消息..."
             disabled={sending}
           />
-          <Button type="primary" onClick={handleSend} loading={sending} disabled={!draft.trim()}>
+          <Button type="primary" onClick={handleSend} loading={sending} disabled={sending || !draft.trim()}>
             发送
           </Button>
         </Space.Compact>
@@ -839,7 +882,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                   }}
                 />
               </Tooltip>
-              <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white" onClick={() => { if(view==='intro') fetchGroups(); else loadMessages(sessionId!); }} />
+              <Button
+                type="text"
+                size="small"
+                icon={<ReloadOutlined />}
+                className="!text-white"
+                loading={view === "intro" ? groupsLoading : chatRefreshing}
+                disabled={view !== "intro" && (!sessionId || chatRefreshing)}
+                onClick={() => { void handleManualRefresh(); }}
+              />
               <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white" onClick={() => setOpen(false)} />
             </div>
           </div>

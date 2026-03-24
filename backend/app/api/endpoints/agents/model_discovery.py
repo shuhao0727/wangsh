@@ -8,7 +8,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db
+from app.core.deps import get_db, require_admin
 from app.schemas.agents import (
     AIServiceProvider,
     ModelDiscoveryRequest,
@@ -26,6 +26,7 @@ router = APIRouter()
 @router.post("/discover", response_model=ModelDiscoveryResponse)
 async def discover_models(
     request: ModelDiscoveryRequest,
+    _: dict = Depends(require_admin),
 ):
     """
     发现可用模型列表
@@ -46,6 +47,7 @@ async def discover_models(
 async def discover_models_by_agent(
     agent_id: int,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     """
     使用已保存的智能体配置发现可用模型列表

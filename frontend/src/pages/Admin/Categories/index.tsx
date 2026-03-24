@@ -541,7 +541,7 @@ const AdminCategories: React.FC = () => {
           onClick={() => setFilterVisible(!filterVisible)}
           type={filterVisible ? "primary" : "default"}
         >筛选</Button>
-        <Button icon={<ReloadOutlined />} onClick={() => loadCategories()}>刷新</Button>
+        <Button icon={<ReloadOutlined />} onClick={() => loadCategories()} loading={loading}>刷新</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCategory}>新增分类</Button>
       </div>
 

@@ -259,7 +259,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({ editing, onCancel, onSucc
 // ─── 控制台面板 ───────────────────────────────────────────────────────
 interface ConsolePanelProps {
   plan: Plan;
-  onRefresh: (id: number) => void;
+  onRefresh: (id: number) => Promise<void>;
 }
 
 const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
@@ -279,7 +279,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
 
   const doAction = async (key: string, fn: () => Promise<any>) => {
     setLoading(key);
-    try { await fn(); onRefresh(plan.id); }
+    try { await fn(); await onRefresh(plan.id); }
     catch (e: any) { message.error(parseErr(e)); }
     finally { setLoading(null); }
   };
@@ -289,8 +289,20 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
       await classroomApi.update(item.activity_id, { time_limit: editTimeVal });
       message.success("时间已更新");
       setEditTimeId(null);
-      onRefresh(plan.id);
+      await onRefresh(plan.id);
     } catch (e: any) { message.error(parseErr(e)); }
+  };
+
+  const handleRefresh = async () => {
+    setLoading("refresh-plan");
+    try {
+      await onRefresh(plan.id);
+      message.success("已刷新");
+    } catch (e: any) {
+      message.error(parseErr(e));
+    } finally {
+      setLoading(null);
+    }
   };
 
   const items = [...plan.items].sort((a, b) => a.order_index - b.order_index);
@@ -316,7 +328,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
             <Button size="small" icon={<ReloadOutlined />} loading={loading === "reset-plan"}>重置计划</Button>
           </Popconfirm>
         )}
-        <Button size="small" icon={<ReloadOutlined />} onClick={() => onRefresh(plan.id)}>刷新</Button>
+        <Button size="small" icon={<ReloadOutlined />} loading={loading === "refresh-plan"} onClick={() => { void handleRefresh(); }}>刷新</Button>
       </div>
 
       <div className="border border-gray-100 rounded-md overflow-hidden">
@@ -423,13 +435,11 @@ const ClassroomPlanPage: React.FC = () => {
   useEffect(() => { fetchList(); }, [fetchList]);
 
   const refreshPlan = async (id: number) => {
-    try {
-      const p = await planApi.get(id);
-      setPlans(prev => prev.map(pl => pl.id === id ? p : pl));
-      setRightView(prev =>
-        prev.type === "console" && prev.plan.id === id ? { type: "console", plan: p } : prev
-      );
-    } catch {}
+    const p = await planApi.get(id);
+    setPlans(prev => prev.map(pl => pl.id === id ? p : pl));
+    setRightView(prev =>
+      prev.type === "console" && prev.plan.id === id ? { type: "console", plan: p } : prev
+    );
   };
 
   const handleDelete = async (id: number) => {
@@ -456,7 +466,7 @@ const ClassroomPlanPage: React.FC = () => {
           <Card size="small" title="计划列表"
             extra={
               <Space>
-                <Button size="small" icon={<ReloadOutlined />} onClick={fetchList}>刷新</Button>
+                <Button size="small" icon={<ReloadOutlined />} onClick={fetchList} loading={loading}>刷新</Button>
                 <Button size="small" type="primary" icon={<PlusOutlined />}
                   onClick={() => setRightView({ type: "form", editing: null })}>新建</Button>
               </Space>

@@ -3,7 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_super_admin
+from app.core.deps import get_db, get_current_user, require_super_admin, require_admin
 from app.schemas.agents import (
     AIAgentCreate,
     AIAgentUpdate,
@@ -74,6 +74,7 @@ async def read_agents(
     agent_type: Optional[str] = Query(None, description="智能体类型过滤"),
     is_active: Optional[bool] = Query(None, description="是否启用过滤"),
     include_deleted: bool = Query(False, description="是否包含已删除的智能体"),
+    _: dict = Depends(require_admin),
 ):
     try:
         agents = await get_agents(
@@ -130,6 +131,7 @@ async def read_active_agents(
 @router.get("/statistics", response_model=AgentStatisticsData)
 async def get_agents_statistics(
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         return await get_agent_statistics(db)
@@ -144,6 +146,7 @@ async def get_agents_statistics(
 async def read_agent(
     agent_id: int,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         agent = await get_agent(db, agent_id)
@@ -167,6 +170,7 @@ async def read_agent(
 async def create_new_agent(
     agent_in: AIAgentCreate,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         agent = await create_agent(db, agent_in=agent_in)
@@ -189,6 +193,7 @@ async def update_existing_agent(
     agent_id: int,
     agent_in: AIAgentUpdate,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         agent = await update_agent(db, agent_id=agent_id, agent_in=agent_in)
@@ -220,6 +225,7 @@ async def delete_existing_agent(
     agent_id: int,
     hard_delete: bool = Query(False, description="是否硬删除（永久删除）"),
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         success = await delete_agent(db, agent_id=agent_id, hard_delete=hard_delete)
@@ -243,6 +249,7 @@ async def delete_existing_agent(
 async def test_agent_connection(
     test_request: AgentTestRequest,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         return await test_agent(db, test_request=test_request)
@@ -257,6 +264,7 @@ async def test_agent_connection(
 async def discover_agent_models(
     agent_id: int,
     db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     try:
         agent = await get_agent(db, agent_id)

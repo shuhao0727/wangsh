@@ -408,6 +408,23 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     }
   }, []);
 
+  // ─── 手动刷新（按当前视图） ───
+  const handleManualRefresh = useCallback(() => {
+    if (view === "list") {
+      void loadAvailable();
+      return;
+    }
+    if (view === "result" && sessionId) {
+      void handleViewResult(sessionId);
+      return;
+    }
+    if (view === "quiz") {
+      message.info("答题进行中，暂无可刷新的内容");
+      return;
+    }
+    message.info("当前暂无可刷新的内容");
+  }, [view, sessionId, loadAvailable, handleViewResult]);
+
   // 清理轮询
   useEffect(() => {
     return () => {
@@ -787,8 +804,14 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           <Button type="text" size="small" className="!text-white"
             icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
             onClick={() => { const v = !pinned; setPinned(v); try { localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, String(v)); } catch {} }} />
-          <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white"
-            onClick={() => { if (view === "list") loadAvailable(); }} />
+          <Button
+            type="text"
+            size="small"
+            icon={<ReloadOutlined />}
+            className="!text-white"
+            loading={loading}
+            onClick={handleManualRefresh}
+          />
           <Tooltip title={view === "quiz" ? "自我检查中不可关闭，请先提交" : ""}>
             <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white"
               disabled={view === "quiz"}
