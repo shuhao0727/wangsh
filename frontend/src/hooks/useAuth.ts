@@ -6,7 +6,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { authApi } from "@services";
-import { getStoredAccessToken, getCookieToken } from "@services/api";
+import { AUTH_EXPIRED_EVENT, getStoredAccessToken, getCookieToken } from "@services/api";
 import { logger } from "@services/logger";
 
 export interface User {
@@ -207,6 +207,26 @@ const useAuthController = () => {
       fetchCurrentUser();
     }
   }, [fetchCurrentUser]);
+
+  // 统一处理全局会话过期事件（由 API 层在 refresh 失败时触发）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onAuthExpired = (event: Event) => {
+      const detail = (event as CustomEvent<{ reason?: string }>).detail;
+      const reason =
+        typeof detail?.reason === "string" && detail.reason.trim()
+          ? detail.reason.trim()
+          : "登录已过期，请重新登录";
+      setAuthState((prev) => ({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: prev.isAuthenticated || prev.user ? reason : prev.error,
+      }));
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
+  }, []);
 
   return {
     ...authState,

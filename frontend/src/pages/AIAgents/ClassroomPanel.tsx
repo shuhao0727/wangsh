@@ -8,6 +8,8 @@ import { Button, Radio, Checkbox, Input, Tag, Progress, message, Tooltip } from 
 import { CloseOutlined, PushpinOutlined, PushpinFilled, ThunderboltOutlined, ReloadOutlined } from "@ant-design/icons";
 import { classroomApi, Activity, ActivityStats } from "@services/classroom";
 import { planApi, Plan } from "@services/classroomPlan";
+import { config as appConfig } from "@services";
+import { getStoredAccessToken } from "@services/api";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 
 const STORAGE_KEYS = {
@@ -104,6 +106,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const streamRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshingRef = useRef(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const viewRef = useRef<ViewType>("idle");
@@ -218,6 +221,21 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     }
   }, [isAuthenticated, handleOpen]);
 
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setOpen(false);
+    setView("idle");
+    setActivity(null);
+    setActivePlan(null);
+    setSelectedAnswer("");
+    setMultiSelected([]);
+    setFillAnswers([""]);
+    setMyAnswer(null);
+    setIsCorrect(null);
+    setStats(null);
+    setRemaining(null);
+  }, [isAuthenticated]);
+
   const handleManualRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
@@ -238,6 +256,65 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     }, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [checkActive]);
+
+  // SSE 增强：优先用实时推送触发刷新，轮询作为兜底
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let stopped = false;
+    let stream: EventSource | null = null;
+
+    const clearRetry = () => {
+      if (streamRetryRef.current) {
+        clearTimeout(streamRetryRef.current);
+        streamRetryRef.current = null;
+      }
+    };
+
+    const closeStream = () => {
+      if (stream) {
+        stream.close();
+        stream = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (stopped) return;
+      clearRetry();
+      streamRetryRef.current = setTimeout(connect, 3000);
+    };
+
+    const connect = () => {
+      if (stopped) return;
+      clearRetry();
+      const token = getStoredAccessToken();
+      const query = token ? `?token=${encodeURIComponent(token)}` : "";
+      const streamUrl = `${appConfig.apiUrl}/classroom/stream${query}`;
+      try {
+        stream = new EventSource(streamUrl, { withCredentials: true });
+        stream.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            if (payload?.type === "connected") return;
+          } catch {}
+          void checkActive({ silent: true });
+        };
+        stream.onerror = () => {
+          closeStream();
+          scheduleReconnect();
+        };
+      } catch {
+        closeStream();
+        scheduleReconnect();
+      }
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      clearRetry();
+      closeStream();
+    };
+  }, [isAuthenticated, checkActive]);
 
   // 倒计时
   useEffect(() => {
@@ -283,6 +360,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (pollRef.current) clearInterval(pollRef.current);
+    if (streamRetryRef.current) clearTimeout(streamRetryRef.current);
   }, []);
 
   // 打开历史题目回顾

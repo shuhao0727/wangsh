@@ -82,3 +82,11 @@ test("AssessmentPanel supports drag interaction", () => {
   expect(src).toContain("onPointerMove");
   expect(src).toContain("onPointerUp");
 });
+
+test("AssessmentPanel clears active state and polling when auth is lost", () => {
+  const src = readPanelSource();
+  expect(src).toContain("if (isAuthenticated) return;");
+  expect(src).toContain("setView(\"list\")");
+  expect(src).toContain("setSessionId(null)");
+  expect(src).toContain("clearInterval(pollingRef.current)");
+});

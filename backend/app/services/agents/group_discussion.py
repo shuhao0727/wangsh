@@ -73,6 +73,29 @@ def _display_name(user: Dict[str, Any]) -> str:
     return f"用户{user.get('id')}"
 
 
+def resolve_target_class_name(*, user: Dict[str, Any], class_name: Optional[str]) -> str:
+    role = str(user.get("role_code") or "")
+    requested_class = (class_name or "").strip()
+    user_class = (user.get("class_name") or "").strip()
+
+    if role == "student":
+        target = user_class or "未知班级"
+        if requested_class:
+            requested_n = _normalize_class_name(requested_class)
+            target_n = _normalize_class_name(target)
+            if requested_n != target_n:
+                raise HTTPException(status_code=403, detail="学生只能加入本班小组")
+        return _normalize_class_name(target)
+
+    if requested_class:
+        return _normalize_class_name(requested_class)
+    if user_class:
+        return _normalize_class_name(user_class)
+    if role in ["admin", "super_admin"]:
+        raise HTTPException(status_code=422, detail="管理员加入或创建小组时必须指定班级")
+    return _normalize_class_name("管理员")
+
+
 async def get_or_create_today_session(
     db: AsyncSession,
     *,
@@ -81,17 +104,7 @@ async def get_or_create_today_session(
     group_name: Optional[str] = None,
     user: Dict[str, Any],
 ) -> GroupDiscussionSession:
-    # Prioritize explicit class_name, fallback to user's class_name
-    if class_name and class_name.strip():
-        raw_class_name = class_name
-    else:
-        role = str(user.get("role_code") or "")
-        if role == "student":
-            raw_class_name = (user.get("class_name") or "").strip() or "未知班级"
-        else:
-            raw_class_name = "管理员"
-
-    class_name_n = _normalize_class_name(raw_class_name)
+    class_name_n = resolve_target_class_name(user=user, class_name=class_name)
     group_no_n = _normalize_group_no(group_no)
     group_name_n = _normalize_group_name(group_name)
     user_id = int(user.get("id") or 0)
@@ -300,10 +313,38 @@ async def enforce_join_lock(*, user_id: int, requested_group_no: str, user_role:
         if isinstance(locked_group, str) and locked_group and locked_group != requested_group_no and remaining > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"组号已锁定，{remaining}秒内不可更改",
+                detail=f"组号已锁定为 {locked_group}，{remaining}秒内不可更改",
             )
-    await cache.set(key, {"group_no": requested_group_no}, expire_seconds=int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS))
     return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
+
+
+async def set_join_lock(*, user_id: int, requested_group_no: str, user_role: str = "student") -> None:
+    # 仅对学生加锁；管理员不受限制
+    if user_role in ["admin", "super_admin"]:
+        return
+    if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
+        return
+    key = _gd_key("join_lock", int(user_id))
+    lock_seconds = int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS)
+    # 原子写入：nx=True 防止并发请求覆盖已有锁
+    acquired = await cache.set(
+        key,
+        {"group_no": requested_group_no},
+        expire_seconds=lock_seconds,
+        nx=True,
+    )
+    if not acquired:
+        # 锁已存在（并发请求抢先写入），检查组号是否一致
+        existing = await cache.get(key)
+        if isinstance(existing, dict):
+            locked_group = existing.get("group_no")
+            if locked_group and locked_group != requested_group_no:
+                ttl = await cache.ttl(key)
+                remain = int(ttl or 0)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"组号已锁定为 {locked_group}，{max(1, remain)}秒内不可更改",
+                )
 
 
 async def list_messages(

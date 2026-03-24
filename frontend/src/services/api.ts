@@ -10,6 +10,21 @@ import { logger } from "./logger";
 let refreshPromise: Promise<void> | null = null;
 const ACCESS_TOKEN_KEY = "ws_access_token";
 const REFRESH_TOKEN_KEY = "ws_refresh_token";
+export const AUTH_EXPIRED_EVENT = "ws:auth-expired";
+let lastAuthExpiredNotifyAt = 0;
+
+const notifyAuthExpired = (reason?: string) => {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  if (now - lastAuthExpiredNotifyAt < 3000) return;
+  lastAuthExpiredNotifyAt = now;
+  const msg = typeof reason === "string" && reason.trim() ? reason.trim() : "登录已过期，请重新登录";
+  window.dispatchEvent(
+    new CustomEvent(AUTH_EXPIRED_EVENT, {
+      detail: { reason: msg, at: now },
+    }),
+  );
+};
 
 export const getStoredAccessToken = () => {
   if (typeof window === "undefined") return null;
@@ -231,6 +246,7 @@ const createApiClient = (): AxiosInstance => {
       
       // 防止无限重试
       if (error.response?.status === 401 && !originalRequest._retry) {
+        const hadAuthContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
         originalRequest._retry = true;
 
         try {
@@ -293,6 +309,9 @@ const createApiClient = (): AxiosInstance => {
               : err?.message;
           logger.debug("⚠️ API: 会话刷新失败", detail);
           authTokenStorage.clear();
+          if (hadAuthContext) {
+            notifyAuthExpired(typeof detail === "string" ? detail : undefined);
+          }
           return Promise.reject(error);
         }
       }

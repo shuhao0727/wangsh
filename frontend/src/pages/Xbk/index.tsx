@@ -250,7 +250,22 @@ const XbkPage: React.FC = () => {
   }, []);
 
   const openEditModal = useCallback((kind: "students" | "courses" | "selections", record: any) => {
-    setEditKind(kind); setEditMode("edit"); setEditRecord(record); setEditVisible(true);
+    const isVirtualSelection = kind === "selections" && Number(record?.id || 0) <= 0;
+    setEditKind(kind);
+    setEditMode(isVirtualSelection ? "create" : "edit");
+    if (isVirtualSelection) {
+      const next = {
+        ...record,
+        course_code:
+          record?.course_code === "休学或其他" || record?.course_code === "未选"
+            ? ""
+            : record?.course_code,
+      };
+      setEditRecord(next);
+    } else {
+      setEditRecord(record);
+    }
+    setEditVisible(true);
   }, []);
 
   const handleDeleteRow = useCallback(async (kind: "students" | "courses" | "selections", id: number) => {
@@ -267,10 +282,21 @@ const XbkPage: React.FC = () => {
     title: "操作", key: "actions", width: 140, fixed: "right" as const,
     render: (_: unknown, record: any) => (
       <Space size={8}>
-        <Button size="small" onClick={() => openEditModal(kind, record)}>编辑</Button>
-        <Popconfirm title="确认删除？" onConfirm={() => handleDeleteRow(kind, record.id)}>
-          <Button size="small" danger>删除</Button>
-        </Popconfirm>
+        {(() => {
+          const isVirtualSelection = kind === "selections" && Number(record?.id || 0) <= 0;
+          return (
+            <>
+              <Button size="small" onClick={() => openEditModal(kind, record)}>
+                {isVirtualSelection ? "补录" : "编辑"}
+              </Button>
+              {!isVirtualSelection && (
+                <Popconfirm title="确认删除？" onConfirm={() => handleDeleteRow(kind, record.id)}>
+                  <Button size="small" danger>删除</Button>
+                </Popconfirm>
+              )}
+            </>
+          );
+        })()}
       </Space>
     ),
   }), [handleDeleteRow, openEditModal]);
@@ -377,11 +403,18 @@ const XbkPage: React.FC = () => {
 
   const renderTable = (tab: DataTabKey) => {
     const p = pg[tab];
-    const map: Record<DataTabKey, { columns: any; data: any; rowKey: string }> = {
+    const map: Record<DataTabKey, { columns: any; data: any; rowKey: string | ((record: any) => string) }> = {
       course_results: { columns: courseResultColumns, data: courseResults, rowKey: "id" },
       students: { columns: studentColumns, data: students, rowKey: "id" },
       courses: { columns: courseColumns, data: courses, rowKey: "id" },
-      selections: { columns: selectionColumns, data: selections, rowKey: "id" },
+      selections: {
+        columns: selectionColumns,
+        data: selections,
+        rowKey: (record: XbkSelectionRow) =>
+          Number(record?.id || 0) > 0
+            ? String(record.id)
+            : `virtual-${record.year}-${record.term}-${record.student_no}-${record.course_code || ""}`,
+      },
       unselected: { columns: unselectedColumns, data: unselectedAll, rowKey: "id" },
       suspended: { columns: suspendedColumns, data: suspendedAll, rowKey: "id" },
     };

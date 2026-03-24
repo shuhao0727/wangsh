@@ -24,6 +24,11 @@
 | GET | `/auth/verify` | 验证令牌有效性 | 是 |
 | GET | `/auth/health` | 认证服务健康检查 | 否 |
 
+补充说明（2026-03-24）：
+- `/auth/refresh` 采用 refresh token 轮换策略：同一个 refresh token 成功换发一次后会被撤销，再次使用应返回 `401`。
+- 前端 API 客户端在出现 `401 -> refresh 失败` 时，会触发 `ws:auth-expired` 全局事件，统一将页面登录态回收，避免“前端仍显示已登录但接口持续 401”。
+- SSE 鉴权支持 query token 与 Cookie 双通道；当 query token 无效但 Cookie 中会话有效时，可继续完成握手（例如 `/classroom/stream`）。
+
 ## 三、系统管理（/system）
 
 | 方法 | 路径 | 说明 | 认证 |
@@ -132,6 +137,10 @@
 - `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
 - 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（忽略请求体中的 `user_id`），用于防止伪造归属。
+- 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
+- 小组讨论班级归属策略：
+  - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
+  - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。
 
 ### 小组讨论（/ai-agents/group-discussion）
 
@@ -265,6 +274,10 @@
 | GET | `/xbk/course-results` | 获取课程成绩 | 管理员 |
 | GET | `/xbk/meta` | 获取元数据（年级/班级） | 管理员 |
 | DELETE | `/xbk` | 清空所有数据 | 管理员 |
+
+补充说明（2026-03-24）：
+- `GET /xbk/data/selections` 可能包含 `id=0` 的虚拟行（用于展示未选课/休学等状态），该类虚拟行不对应真实选课主键。
+- `PUT/DELETE /xbk/data/selections/{selection_id}` 仅适用于真实记录（`selection_id > 0`）。
 
 ### 统计分析（/xbk）
 

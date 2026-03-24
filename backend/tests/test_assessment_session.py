@@ -335,6 +335,44 @@ def test_submit_answer_short_answer_only_saves():
     assert answer.student_answer == "我的答案"
 
 
+def test_submit_answer_fill_without_agent_falls_back_to_text_match_correct():
+    """填空题在未配置智能体时应回退文本比对，正确答案应得满分"""
+    q = _make_question(question_type="fill", correct_answer="print")
+    answer = _make_answer(id=11, question_type="fill", max_score=10, question=q)
+    session = _make_session(user_id=100, status="in_progress", config_id=1)
+    config = _make_config(agent_id=None)
+
+    db = _make_db([
+        MockScalarResult(session),
+        MockScalarResult(answer),
+        MockScalarResult(config),
+    ])
+
+    result = asyncio.run(submit_answer(db, session_id=1, user_id=100, answer_id=11, student_answer="print"))
+    assert result["is_correct"] is True
+    assert result["earned_score"] == 10
+    assert answer.ai_score == 10
+
+
+def test_submit_answer_fill_without_agent_falls_back_to_text_match_wrong():
+    """填空题在未配置智能体时应回退文本比对，错误答案应得0分"""
+    q = _make_question(question_type="fill", correct_answer="print")
+    answer = _make_answer(id=12, question_type="fill", max_score=10, question=q)
+    session = _make_session(user_id=100, status="in_progress", config_id=1)
+    config = _make_config(agent_id=None)
+
+    db = _make_db([
+        MockScalarResult(session),
+        MockScalarResult(answer),
+        MockScalarResult(config),
+    ])
+
+    result = asyncio.run(submit_answer(db, session_id=1, user_id=100, answer_id=12, student_answer="printf"))
+    assert result["is_correct"] is False
+    assert result["earned_score"] == 0
+    assert answer.ai_score == 0
+
+
 # ─── get_config_statistics 测试 ───
 
 

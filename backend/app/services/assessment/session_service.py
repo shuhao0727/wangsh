@@ -494,20 +494,28 @@ async def submit_answer(
             select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
         )).scalar_one()
         if q:
-            try:
-                grading = await _ai_grade_answer(db, config, q, student_answer, answer.max_score)
-                answer.ai_score = grading["score"]
-                answer.is_correct = grading["is_correct"]
-                answer.ai_feedback = grading["feedback"]
-                result.update({
-                    "is_correct": grading["is_correct"],
-                    "earned_score": grading["score"],
-                    "ai_feedback": grading["feedback"],
-                    "correct_answer": correct_answer,
-                })
-            except Exception as e:
-                logger.error(f"AI 评分失败 answer_id={answer_id}: {e}")
-                # 简单文本比对兜底
+            use_ai_grading = bool(getattr(config, "agent_id", None))
+            if use_ai_grading:
+                try:
+                    grading = await _ai_grade_answer(db, config, q, student_answer, answer.max_score)
+                    answer.ai_score = grading["score"]
+                    answer.is_correct = grading["is_correct"]
+                    answer.ai_feedback = grading["feedback"]
+                    result.update({
+                        "is_correct": grading["is_correct"],
+                        "earned_score": grading["score"],
+                        "ai_feedback": grading["feedback"],
+                        "correct_answer": correct_answer,
+                    })
+                except Exception as e:
+                    logger.error(f"AI 评分失败 answer_id={answer_id}: {e}")
+                    # 简单文本比对兜底
+                    is_correct = student_answer.strip().lower() == correct_answer.strip().lower()
+                    answer.is_correct = is_correct
+                    answer.ai_score = answer.max_score if is_correct else 0
+                    result.update({"is_correct": is_correct, "earned_score": answer.ai_score, "correct_answer": correct_answer})
+            else:
+                # 未配置评分智能体时，填空题回退到文本比对，避免正确答案被误判为 0 分
                 is_correct = student_answer.strip().lower() == correct_answer.strip().lower()
                 answer.is_correct = is_correct
                 answer.ai_score = answer.max_score if is_correct else 0

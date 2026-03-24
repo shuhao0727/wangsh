@@ -61,6 +61,8 @@ interface Props {
 
 const DEFAULT_W = 560;
 const DEFAULT_H = 620;
+const PROFILE_POLL_INTERVAL_MS = 3000;
+const MAX_PROFILE_POLL_ATTEMPTS = 40; // 约 2 分钟
 
 /** 同一 config_id 只保留最新一条画像 */
 function dedup(profiles: StudentProfile[]): StudentProfile[] {
@@ -120,6 +122,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // 画像生成进度
   const [profileProgress, setProfileProgress] = useState(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const profilePollAttemptRef = useRef(0);
   // 开始检测进度
   const [startingConfigId, setStartingConfigId] = useState<number | null>(null);
   // 浮动按钮位置
@@ -330,8 +333,19 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 启动画像轮询 ───
   const startProfilePolling = useCallback((sid: number) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
+    profilePollAttemptRef.current = 0;
     setProfileProgress(10);
     pollingRef.current = setInterval(async () => {
+      profilePollAttemptRef.current += 1;
+      if (profilePollAttemptRef.current > MAX_PROFILE_POLL_ATTEMPTS) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+        setProfileProgress(95);
+        message.warning("画像生成耗时较长，请稍后手动刷新结果查看");
+        return;
+      }
       try {
         const status = await assessmentSessionApi.getProfileStatus(sid);
         if (status.basic_ready && !status.advanced_ready) {
@@ -357,7 +371,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       } catch {
         // 轮询失败静默忽略
       }
-    }, 3000);
+    }, PROFILE_POLL_INTERVAL_MS);
   }, []);
 
   // ─── 提交整卷 ───
@@ -390,6 +404,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setLoading(true);
       setProfileProgress(0);
       if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      profilePollAttemptRef.current = 0;
       const [result, basic, advResp] = await Promise.all([
         assessmentSessionApi.getResult(sid),
         assessmentSessionApi.getBasicProfile(sid).catch(() => null),
@@ -429,8 +444,34 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      profilePollAttemptRef.current = 0;
     };
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setOpen(false);
+    setView("list");
+    setLoading(false);
+    setSessionId(null);
+    setQuestions([]);
+    setCurrentIdx(0);
+    setAnswerResults(new Map());
+    setSubmittingAnswerId(null);
+    setAnswerProgress(null);
+    setSubmitting(false);
+    setAnswerInput("");
+    setSessionResult(null);
+    setBasicProfile(null);
+    setAdvancedProfiles([]);
+    setProfileProgress(0);
+    setStartingConfigId(null);
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    profilePollAttemptRef.current = 0;
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) return null;
 

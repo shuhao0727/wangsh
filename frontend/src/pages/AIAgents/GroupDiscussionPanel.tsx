@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ReactDOM from "react-dom";
 import {
   App,
+  Alert,
   DatePicker,
   Select,
   Button,
@@ -37,9 +38,11 @@ import {
 import { groupDiscussionApi } from "@services/agents";
 import { config as appConfig } from "@services";
 import { userApi } from "@services";
+import { getStoredAccessToken } from "@services/api";
 import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionPublicConfig } from "@services/znt/api/group-discussion-api";
 import type { User } from "@services/users";
 import { logger } from "@services/logger";
+import { getJoinLockRemainingSeconds, parseJoinLockHint, type JoinLockHint } from "./groupDiscussionJoinLock";
 import dayjs from "dayjs";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 
@@ -101,6 +104,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     const v = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
     return v ? Number(v) : null;
   });
+  const [createForm] = Form.useForm<{ groupNo: string; groupName?: string; className?: string }>();
   const [currentGroup, setCurrentGroup] = useState<{ no: string; name: string }>(() => ({
     no: localStorage.getItem(STORAGE_KEYS.GROUP_NO) || "",
     name: localStorage.getItem(STORAGE_KEYS.GROUP_NAME) || "",
@@ -109,6 +113,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [groups, setGroups] = useState<GroupDiscussionGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [joinLockHint, setJoinLockHint] = useState<JoinLockHint | null>(null);
+  const [joinLockRemaining, setJoinLockRemaining] = useState(0);
   
   const [messages, setMessages] = useState<any[]>([]);
   const [_polling, _setPolling] = useState(false);
@@ -139,6 +145,26 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const floatingRenderHeight = isCompactViewport ? Math.max(360, Math.min(floatingSize.h, window.innerHeight - 90)) : floatingSize.h;
   const floatingRenderLeft = isCompactViewport ? 4 : floatingPos.x;
   const floatingRenderTop = isCompactViewport ? 72 : floatingPos.y;
+
+  const clearDiscussionSessionState = useCallback((options?: { clearStorage?: boolean }) => {
+    const clearStorage = options?.clearStorage ?? true;
+    setSessionId(null);
+    setCurrentGroup({ no: "", name: "" });
+    setJoinLockHint(null);
+    setJoinLockRemaining(0);
+    setView("intro");
+    setMessages([]);
+    setDraft("");
+    setSending(false);
+    setChatRefreshing(false);
+    afterIdRef.current = 0;
+    if (!clearStorage) return;
+    try {
+      localStorage.removeItem(STORAGE_KEYS.SESSION_ID);
+      localStorage.removeItem(STORAGE_KEYS.GROUP_NO);
+      localStorage.removeItem(STORAGE_KEYS.GROUP_NAME);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const syncViewport = () => setViewportWidth(window.innerWidth || 1280);
@@ -317,17 +343,31 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   }, [filterClass, classList]);
 
   useEffect(() => {
-    if (open && sessionId) {
-      setView("chat");
-      // 尝试加载一次消息来验证 Session 有效性
-      loadMessages(sessionId).catch(() => {
-        handleExit(); // 如果加载失败（如404），退出到列表
-      });
-    } else if (open) {
-      setView("intro");
-      fetchGroups();
+    if (!isAdmin || introMode !== "create") return;
+    const existing = String(createForm.getFieldValue("className") || "").trim();
+    if (existing) return;
+    const fallbackClass = String(filterClass || classList[0] || "").trim();
+    if (fallbackClass) {
+      createForm.setFieldValue("className", fallbackClass);
     }
-  }, [open]);
+  }, [isAdmin, introMode, filterClass, classList, createForm]);
+
+  useEffect(() => {
+    if (!joinLockHint) {
+      setJoinLockRemaining(0);
+      return;
+    }
+    const syncRemaining = () => {
+      const remaining = getJoinLockRemainingSeconds(joinLockHint);
+      setJoinLockRemaining(remaining);
+      if (remaining <= 0) {
+        setJoinLockHint(null);
+      }
+    };
+    syncRemaining();
+    const timer = window.setInterval(syncRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [joinLockHint]);
 
   // --- 业务逻辑：获取小组列表 ---
   const fetchGroups = useCallback(async () => {
@@ -364,6 +404,10 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   // --- 业务逻辑：加入/创建小组 ---
   const handleJoinOrCreate = async (values: { groupNo: string; groupName?: string; className?: string }) => {
     try {
+      if (isAdmin && !String(values.className || "").trim()) {
+        message.error("请先填写班级");
+        return;
+      }
       const res = await groupDiscussionApi.join({
         groupNo: values.groupNo,
         groupName: values.groupName,
@@ -371,11 +415,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       });
       
       if (!res.success) {
+        setJoinLockHint(parseJoinLockHint(res.message));
         message.error(res.message || "操作失败");
         return;
       }
 
       const { session_id, group_no, group_name } = res.data;
+      setJoinLockHint(null);
       
       // 更新状态
       setSessionId(session_id);
@@ -444,19 +490,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   };
 
   // --- 业务逻辑：退出小组 ---
-  const handleExit = () => {
-    setSessionId(null);
-    setCurrentGroup({ no: "", name: "" });
-    localStorage.removeItem(STORAGE_KEYS.SESSION_ID);
-    localStorage.removeItem(STORAGE_KEYS.GROUP_NO);
-    localStorage.removeItem(STORAGE_KEYS.GROUP_NAME);
-    setView("intro");
-    setMessages([]);
-    fetchGroups(); // 刷新列表
-  };
+  const handleExit = useCallback(() => {
+    clearDiscussionSessionState({ clearStorage: true });
+    void fetchGroups(); // 刷新列表
+  }, [clearDiscussionSessionState, fetchGroups]);
 
   // --- 消息加载与轮询 ---
-  const loadMessages = async (sid: number) => {
+  const loadMessages = useCallback(async (sid: number) => {
     const res = await groupDiscussionApi.listMessages({
       sessionId: sid,
       afterId: afterIdRef.current,
@@ -471,7 +511,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       afterIdRef.current = res.data.next_after_id;
       scrollToBottom();
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setOpen(false);
+    setMembersDrawerOpen(false);
+    setInviteModalOpen(false);
+    clearDiscussionSessionState({ clearStorage: true });
+  }, [isAuthenticated, clearDiscussionSessionState]);
 
   const handleManualRefresh = useCallback(async () => {
     if (view === "intro") {
@@ -511,10 +559,24 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   }, [view, fetchGroups, sessionId, userId]);
 
   useEffect(() => {
-    if (view !== "chat" || !sessionId) return;
+    if (!open || !isAuthenticated) return;
+    if (sessionId) {
+      setView("chat");
+      // 尝试加载一次消息来验证 Session 有效性
+      loadMessages(sessionId).catch(() => {
+        handleExit(); // 如果加载失败（如404），退出到列表
+      });
+      return;
+    }
+    setView("intro");
+    fetchGroups();
+  }, [open, isAuthenticated, sessionId, loadMessages, handleExit, fetchGroups]);
+
+  useEffect(() => {
+    if (!isAuthenticated || view !== "chat" || !sessionId) return;
 
     // 使用 SSE 实时接收消息，替代轮询
-    const token = sessionStorage.getItem("ws_access_token") || "";
+    const token = getStoredAccessToken() || "";
     const sseUrl = `${appConfig.apiUrl}/ai-agents/group-discussion/stream?session_id=${sessionId}&after_id=${afterIdRef.current}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
     let eventSource: EventSource | null = null;
     let fallbackActive = false;
@@ -576,7 +638,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         eventSource = null;
       }
     };
-  }, [view, sessionId]);
+  }, [isAuthenticated, view, sessionId, userId, loadMessages]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -600,6 +662,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         ]}
         className="mb-3"
       />
+      {joinLockHint && joinLockRemaining > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-3"
+          message={`组号已锁定为 ${joinLockHint.lockedGroupNo} 组`}
+          description={`请在 ${joinLockRemaining} 秒后切换到其他组，或直接加入 ${joinLockHint.lockedGroupNo} 组。`}
+        />
+      )}
 
       {introMode === 'join' ? (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -704,7 +775,17 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         </div>
       ) : (
         <div className="p-5">
-          <Form onFinish={handleJoinOrCreate} layout="vertical">
+          <Form form={createForm} onFinish={handleJoinOrCreate} layout="vertical">
+            {isAdmin && (
+              <Form.Item
+                label="班级 (必填)"
+                name="className"
+                rules={[{ required: true, message: "请输入班级" }]}
+                extra={classList.length > 0 ? `建议使用已有班级：${classList.slice(0, 3).join("、")}` : "请输入目标班级，例如：高一(1)班"}
+              >
+                <Input placeholder="例如: 高一(1)班" size="large" />
+              </Form.Item>
+            )}
             <Form.Item
               label="组号 (必填)"
               name="groupNo"

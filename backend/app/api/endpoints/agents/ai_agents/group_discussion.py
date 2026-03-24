@@ -48,6 +48,7 @@ from app.services.agents.group_discussion import (
     admin_list_messages,
     admin_list_sessions,
     enforce_join_lock,
+    set_join_lock,
     get_or_create_today_session,
     list_today_groups,
     list_messages,
@@ -193,6 +194,11 @@ async def join_group_discussion(
         group_no=payload.group_no,
         group_name=payload.group_name,
         user=user,
+    )
+    await set_join_lock(
+        user_id=int(user["id"]),
+        requested_group_no=str(session.group_no),
+        user_role=role,
     )
     display_name = (user.get("full_name") or user.get("student_id") or user.get("username") or "").strip()
     return GroupDiscussionJoinResponse(
