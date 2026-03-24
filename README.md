@@ -152,6 +152,7 @@ PR 门禁工作流（已落地）：
 
 - 接口清单：[docs/API.md](./docs/API.md)
 - CI/CD 说明：[docs/CICD.md](./docs/CICD.md)
+- 发布与运维记录：[docs/RELEASE_NOTES.md](./docs/RELEASE_NOTES.md)
 - 自主检测总览：[docs/ASSESSMENT_DESIGN.md](./docs/ASSESSMENT_DESIGN.md)
 - 自主检测 API：[docs/ASSESSMENT_API.md](./docs/ASSESSMENT_API.md)
 - 自主检测前端：[docs/ASSESSMENT_FRONTEND.md](./docs/ASSESSMENT_FRONTEND.md)
