@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import { generatePythonFromFlow } from "./flow/ir";
 import { buildUnifiedFlowFromPython } from "./flow/python_sync";
 import { FOR_TEACHING_EXAMPLE_CODE, FOR_TEACHING_EXAMPLE_HEADER } from "./forTeachingExample";

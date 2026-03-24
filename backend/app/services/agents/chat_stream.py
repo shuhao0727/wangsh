@@ -117,12 +117,12 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
                         chunk = {"answer": content}
                         yield f"event: message_delta\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
 
-                    if final_text:
-                        breaker.record_success(provider_name)
-                        end_payload = {"answer": final_text}
-                        if candidate_model != model:
-                            end_payload["fallback_model_used"] = candidate_model
-                        yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
+                    # 只要上游 HTTP 200，就认为该次调用成功；即使没有文本，也必须发 message_end，避免前端挂起。
+                    breaker.record_success(provider_name)
+                    end_payload = {"answer": final_text}
+                    if candidate_model != model:
+                        end_payload["fallback_model_used"] = candidate_model
+                    yield f"event: message_end\ndata: {json.dumps(end_payload, ensure_ascii=False)}\n\n".encode("utf-8")
                     return
 
     except asyncio.TimeoutError:

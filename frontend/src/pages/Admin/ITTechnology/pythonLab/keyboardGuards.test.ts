@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import { shouldHandleCanvasDeleteShortcut, shouldStopMonacoEditorKeyPropagation } from "./keyboardGuards";
 
 test("画布选中时 Delete 触发全局删除", () => {

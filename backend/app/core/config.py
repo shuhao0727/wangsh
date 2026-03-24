@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     
     # ==================== 安全配置 ====================
     SECRET_KEY: str = Field(default="change_me")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=11520)  # 8 days (60*24*8)
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30)       # 30 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)  # 1 hour
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)     # 7 days
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_COOKIE_NAME: str = Field(default="ws_access_token")
     REFRESH_TOKEN_COOKIE_NAME: str = Field(default="ws_refresh_token")

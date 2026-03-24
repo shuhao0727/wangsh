@@ -14,7 +14,11 @@ class OpenAIProvider(LLMProvider):
         self.is_openrouter = is_openrouter
 
     def build_headers(self) -> Dict[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}"}
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if self.is_openrouter:
+            headers["HTTP-Referer"] = "https://github.com/wangsh"
+            headers["X-Title"] = "WangSh AI"
+        return headers
 
     def chat_url(self) -> str:
         base = self.api_endpoint

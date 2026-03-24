@@ -28,10 +28,10 @@ test("StatisticsPage displays 6 statistic cards", () => {
   expect(src).toContain("通过率");
 });
 
-test("StatisticsPage renders knowledge point Progress bars", () => {
+test("StatisticsPage renders knowledge point radar area", () => {
   const src = readSource();
   expect(src).toContain("知识点掌握率");
-  expect(src).toContain("<Progress");
+  expect(src).toContain("RadarChart");
 });
 
 test("StatisticsPage has student session list table", () => {
@@ -44,7 +44,8 @@ test("StatisticsPage has student session list table", () => {
 test("StatisticsPage has detail and profile modals", () => {
   const src = readSource();
   expect(src).toContain("答题详情");
-  expect(src).toContain("学生初级画像");
+  expect(src).toContain("初级画像");
+  expect(src).toContain("三维画像");
   expect(src).toContain("<Modal");
 });
 

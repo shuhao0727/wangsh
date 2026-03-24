@@ -29,6 +29,17 @@ cp .env.example .env
 bash scripts/deploy.sh deploy
 ```
 
+登录过期配置（短时登录）：
+
+```env
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+说明：
+- `ACCESS_TOKEN_EXPIRE_MINUTES`：访问令牌有效期（到期后会走刷新流程）
+- `REFRESH_TOKEN_EXPIRE_DAYS`：刷新令牌有效期（到期后需要重新登录）
+
 ## CI 并发调试回归
 
 并发互斥回归脚本：

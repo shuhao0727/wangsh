@@ -36,7 +36,9 @@ const LoginPage: React.FC = () => {
       message.error(res.error || "登录失败");
       return;
     }
-    if (requireAdmin && !auth.isAdmin()) {
+    const role = res.user?.role_code || "";
+    const isAdminUser = role === "admin" || role === "super_admin";
+    if (requireAdmin && !isAdminUser) {
       message.warning("当前账号不是管理员，无法访问管理后台");
       await auth.logout();
       return;

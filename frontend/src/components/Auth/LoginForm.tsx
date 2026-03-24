@@ -42,7 +42,9 @@ const LoginForm: React.FC<LoginFormProps> = ({
         message.success(isAdmin ? "管理员登录成功！" : "登录成功！");
 
         // 如果是管理员登录，检查权限
-        if (isAdmin && !auth.isAdmin()) {
+        const role = result.user?.role_code || "";
+        const isAdminUser = role === "admin" || role === "super_admin";
+        if (isAdmin && !isAdminUser) {
           message.warning("当前账号不是管理员，无法访问管理后台");
           auth.logout();
           return;

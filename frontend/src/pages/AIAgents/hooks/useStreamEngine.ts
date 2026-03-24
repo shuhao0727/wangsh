@@ -38,15 +38,26 @@ export function useStreamEngine() {
     abortRef.current = controller;
 
     // 超时信号
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let timeoutTriggered = false;
+    const timeoutId = setTimeout(() => {
+      timeoutTriggered = true;
+      controller.abort();
+    }, timeoutMs);
 
     let fullText = "";
     let finished = false;
+    const hasVisibleText = (text: string) => text.trim().length > 0;
 
-    const finish = () => {
+    const finishSuccess = () => {
       if (finished) return;
       finished = true;
       callbacks.onEnd(fullText);
+    };
+
+    const finishError = (message: string) => {
+      if (finished) return;
+      finished = true;
+      callbacks.onError(message);
     };
 
     const handleEvent = (event: ParsedEvent | ReconnectInterval) => {
@@ -92,7 +103,11 @@ export function useStreamEngine() {
           fullText = String(text);
           callbacks.onDelta(fullText);
         }
-        finish();
+        if (hasVisibleText(fullText)) {
+          finishSuccess();
+          return;
+        }
+        finishError("模型未返回内容");
       } else if (eventType === "workflow_started") {
         callbacks.onWorkflowStarted?.(payload?.workflow_run_id || `wf-${Date.now()}`);
       } else if (eventType === "node_started") {
@@ -108,12 +123,16 @@ export function useStreamEngine() {
           fullText = String(final);
           callbacks.onDelta(fullText);
         }
-        finish();
+        if (hasVisibleText(fullText)) {
+          finishSuccess();
+          return;
+        }
+        finishError("模型未返回内容");
       } else if (eventType === "error") {
         const baseMsg = payload?.message || payload?.error || "对话发生错误";
         const detail = typeof payload?.detail === "string" ? payload.detail.trim() : "";
         const errMsg = detail ? `${baseMsg}（${detail.slice(0, 220)}）` : baseMsg;
-        callbacks.onError(String(errMsg));
+        finishError(String(errMsg));
       } else {
         // 未知事件类型，尝试提取文本
         const fallback = getAnswerText(payload);
@@ -157,22 +176,33 @@ export function useStreamEngine() {
           if (remaining) {
             parser.feed(remaining);
           }
-          if (!finished && fullText) {
-            finish();
+          if (!finished) {
+            if (hasVisibleText(fullText)) {
+              finishSuccess();
+            } else {
+              finishError("模型未返回内容");
+            }
           }
           resolve();
         };
 
         xhr.onerror = () => reject(new Error("网络错误"));
-        xhr.onabort = () => resolve();
+        xhr.onabort = () => {
+          if (!finished && timeoutTriggered) {
+            finishError(`请求超时（${Math.ceil(timeoutMs / 1000)}秒）`);
+          }
+          resolve();
+        };
         xhr.send(JSON.stringify(body));
       });
     } catch (e: any) {
       if (e?.name === "AbortError") return;
-      callbacks.onError(e?.message || "网络错误");
+      finishError(e?.message || "网络错误");
     } finally {
       clearTimeout(timeoutId);
-      abortRef.current = null;
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
     }
   }, []);
 

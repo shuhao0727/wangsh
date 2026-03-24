@@ -27,13 +27,15 @@ test("AssessmentPanel uses createPortal for floating window", () => {
   expect(src).toContain("document.body");
 });
 
-test("AssessmentPanel has 4 view states", () => {
+test("AssessmentPanel has list/quiz/result views and basic/advanced result tabs", () => {
   const src = readPanelSource();
-  // Should have list, quiz, result, profile views
+  // 主视图
   expect(src).toContain('"list"');
   expect(src).toContain('"quiz"');
   expect(src).toContain('"result"');
-  expect(src).toContain('"profile"');
+  // 结果页 Tab
+  expect(src).toContain('"basic"');
+  expect(src).toContain('"advanced"');
 });
 
 test("AssessmentPanel persists window state in localStorage", () => {

@@ -478,6 +478,20 @@ const AIAgentsPage: React.FC = () => {
               setStreamingContent(text);
             },
             onEnd: (fullText) => {
+              if (!fullText || !fullText.trim()) {
+                const errMsg: Message = {
+                  id: `err-${Date.now()}`,
+                  content: "⚠️ 模型未返回内容",
+                  sender: "agent",
+                  timestamp: new Date().toISOString(),
+                  agentId: currentAgent.id,
+                };
+                setMessages((prev) => [...prev, errMsg]);
+                setStreamingContent("");
+                setCurrentStreamingMessageId(null);
+                setIsStreaming(false);
+                return;
+              }
               const finalMsg: Message = {
                 id: agentMessageId,
                 content: fullText,
@@ -613,7 +627,7 @@ const AIAgentsPage: React.FC = () => {
         loginForm.resetFields();
 
         // 登录成功后自动发送草稿消息
-        if (draftMessage && currentAgent && auth.isAuthenticated) {
+        if (draftMessage && currentAgent && result.user) {
           const draft = draftMessage.trim();
           if (draft) {
             logger.debug("📝 登录成功后自动发送草稿消息", draft);

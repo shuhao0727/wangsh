@@ -17,7 +17,8 @@ def resolve_credentials(agent):
     if agent.agent_type != "dify":
         if not api_endpoint:
             api_endpoint = settings.OPENROUTER_API_URL.strip().rstrip("/")
-        if not api_key:
+        is_openrouter_endpoint = "openrouter.ai" in (api_endpoint or "").lower()
+        if not api_key and is_openrouter_endpoint:
             api_key = settings.OPENROUTER_API_KEY
     return api_endpoint, api_key
 

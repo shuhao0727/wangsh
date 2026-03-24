@@ -112,7 +112,9 @@ const AdminLayout: React.FC = () => {
   const handleLogin = async (values: { username: string; password: string }) => {
     const res = await auth.login(values.username, values.password);
     if (!res.success) { message.error(res.error || "登录失败"); return; }
-    if (!auth.isAdmin()) { message.error("当前账号不是管理员"); await auth.logout(); return; }
+    const role = res.user?.role_code || "";
+    const isAdminUser = role === "admin" || role === "super_admin";
+    if (!isAdminUser) { message.error("当前账号不是管理员"); await auth.logout(); return; }
     message.success("登录成功");
     setIsLoginModalVisible(false);
     form.resetFields();

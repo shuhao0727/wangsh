@@ -6,6 +6,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { authApi } from "@services";
+import { getStoredAccessToken, getCookieToken } from "@services/api";
 import { logger } from "@services/logger";
 
 export interface User {
@@ -32,8 +33,6 @@ let sharedFetchPromise: Promise<User | null> | null = null;
 
 const AuthContext = createContext<ReturnType<typeof useAuthController> | null>(null);
 
-const ACCESS_TOKEN_KEY = "ws_access_token";
-
 const useAuthController = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -45,11 +44,7 @@ const useAuthController = () => {
   const initialFetchRef = useRef(false);
 
   const getToken = useCallback(() => {
-    try {
-      return sessionStorage.getItem(ACCESS_TOKEN_KEY);
-    } catch {
-      return null;
-    }
+    return getStoredAccessToken() || getCookieToken();
   }, []);
 
   // 获取当前用户信息（增强版，添加调试和错误处理）

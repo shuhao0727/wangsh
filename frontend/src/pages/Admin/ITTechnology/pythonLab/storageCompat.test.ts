@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import { ensurePythonLabStorageCompatible } from "./storageCompat";
 import { pythonLabPipelineRecordsKey, pythonLabPipelineRecordsKeyV1 } from "./pipeline/records";
 import { pythonLabRuleSetBundleKey, pythonLabRuleSetBundleKeyV1, pythonLabRuleSetKey } from "./pipeline/rules";

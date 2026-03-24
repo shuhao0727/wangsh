@@ -128,6 +128,9 @@
   - `xxx:free` 在 `404/429/5xx` 时可回退尝试 `xxx`
   - `xxx` 在“模型不存在类 404”或 `429/5xx` 时可回退尝试 `xxx:free`
 - `/ai-agents/stream` 的 SSE `error` 事件会透传上游 `detail` 字段，前端会显示更具体的失败原因（如 guardrail/data policy 限制）。
+- OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
+- `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
+- 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
 
 ### 小组讨论（/ai-agents/group-discussion）
 
