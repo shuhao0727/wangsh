@@ -195,7 +195,14 @@ class DockerProvider(SandboxProvider):
                 mount_path = Path(host_ws_root_str) / ws_path.name
             else:
                 mount_path = ws_path
-            
+
+            # Check workspace disk usage
+            quota_mb = settings.PYTHONLAB_WORKSPACE_DISK_QUOTA_MB
+            if mount_path.exists():
+                total_size = sum(f.stat().st_size for f in mount_path.rglob('*') if f.is_file())
+                if total_size > quota_mb * 1024 * 1024:
+                    raise RuntimeError(f"Workspace exceeds disk quota: {total_size / 1024 / 1024:.1f}MB > {quota_mb}MB")
+
             # Resource Limits
             limits = meta.get("limits", {})
             cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
@@ -247,8 +254,8 @@ class DockerProvider(SandboxProvider):
                 "--log-driver", "json-file",
                 "--log-opt", f"max-size={settings.PYTHONLAB_LOG_MAX_SIZE}",
                 "--log-opt", f"max-file={settings.PYTHONLAB_LOG_MAX_FILE}",
-                # Limit /tmp writes to 50MB tmpfs to prevent disk-fill attacks
-                "--tmpfs", "/tmp:rw,noexec,nosuid,size=50m",
+                # Limit /tmp writes to 100MB tmpfs to prevent disk-fill attacks
+                "--tmpfs", "/tmp:rw,noexec,nosuid,size=100m",
                 "-e", "PYTHONPATH=/workspace",
                 "-e", "PYTHONUNBUFFERED=1",
                 "-w", "/workspace",  # Force working directory

@@ -116,7 +116,21 @@ async def delete_class(
     await db.commit()
     return {"success": True}
 
-@router.put("/class/students")
+@router.get("/class/students", response_model=List[DianmingStudent])
+async def get_class_students(
+    year: str,
+    class_name: str,
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    """获取指定班级的学生名单"""
+    stmt = select(XxjsDianming).where(
+        XxjsDianming.year == year,
+        XxjsDianming.class_name == class_name
+    ).order_by(XxjsDianming.student_no.asc(), XxjsDianming.id.asc())
+    rows = (await db.execute(stmt)).scalars().all()
+    return rows
+
+@router.put("/class/students", response_model=List[DianmingStudent])
 async def update_class_students(
     data: DianmingImportRequest,
     db: AsyncSession = Depends(deps.get_db),

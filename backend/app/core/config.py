@@ -339,6 +339,7 @@ class Settings(BaseSettings):
     PYTHONLAB_CONTAINER_PIDS_LIMIT: int = Field(default=128)
     PYTHONLAB_LOG_MAX_SIZE: str = Field(default="10m")
     PYTHONLAB_LOG_MAX_FILE: str = Field(default="3")
+    PYTHONLAB_WORKSPACE_DISK_QUOTA_MB: int = Field(default=512)  # 512MB disk quota
 
     GROUP_DISCUSSION_REDIS_ENABLED: bool = Field(default=True)
     GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=False)
