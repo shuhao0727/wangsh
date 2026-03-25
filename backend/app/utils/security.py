@@ -77,25 +77,3 @@ def hash_super_admin_password() -> str:
         admin_password = admin_password[:72]  # 简单截断，实际项目中应该提示用户修改
     
     return get_password_hash(admin_password)
-
-
-# 测试函数
-def test_password_hash():
-    """测试密码哈希功能"""
-    test_password = "test_password"
-    hashed = get_password_hash(test_password)
-    print(f"原始密码: {test_password}")
-    print(f"哈希值: {hashed}")
-    print(f"验证结果: {verify_password(test_password, hashed)}")
-    print(f"验证错误密码结果: {verify_password('wrong', hashed)}")
-    
-    # 测试超级管理员密码哈希
-    try:
-        super_admin_hash = hash_super_admin_password()
-        print(f"\n超级管理员密码哈希: {super_admin_hash[:50]}...")
-    except ValueError as e:
-        print(f"超级管理员密码测试失败: {e}")
-
-
-if __name__ == "__main__":
-    test_password_hash()

@@ -172,8 +172,23 @@ async def get_or_create_today_session(
             created_by_user_id=user_id,
         )
         db.add(row)
-        await db.commit()
-        await db.refresh(row)
+        try:
+            await db.commit()
+            await db.refresh(row)
+        except IntegrityError:
+            # 并发创建同一会话时，回滚后回查已创建记录
+            await db.rollback()
+            row = (
+                await db.execute(
+                    select(GroupDiscussionSession).where(
+                        GroupDiscussionSession.session_date == today,
+                        GroupDiscussionSession.class_name == class_name_n,
+                        GroupDiscussionSession.group_no == group_no_n,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not row:
+                raise
     else:
         # 如果 Session 已存在但用户不在其中，更新组名（如果是创建者补录）
         if (
@@ -219,6 +234,36 @@ async def get_or_create_today_session(
         # 并发请求已插入，忽略冲突
 
     return row
+
+
+async def ensure_session_view_access(
+    db: AsyncSession,
+    *,
+    session_id: int,
+    user: Dict[str, Any],
+) -> GroupDiscussionSession:
+    session = (
+        await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id == int(session_id)))
+    ).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="讨论组不存在")
+
+    role = str(user.get("role_code") or "")
+    if role in ["admin", "super_admin"]:
+        return session
+
+    user_id = int(user.get("id") or 0)
+    member_exists = (
+        await db.execute(
+            select(GroupDiscussionMember.id).where(
+                GroupDiscussionMember.session_id == int(session_id),
+                GroupDiscussionMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not member_exists:
+        raise HTTPException(status_code=403, detail="无权限访问该讨论组")
+    return session
 
 
 async def list_today_groups(
@@ -1191,11 +1236,33 @@ async def admin_cross_system_analysis(
     if not ids:
         raise HTTPException(status_code=422, detail="请选择要分析的会话")
 
+    target_day: Optional[date] = None
+    date_text = (target_date or "").strip()
+    if date_text:
+        try:
+            target_day = date.fromisoformat(date_text)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="日期格式不正确，请使用 YYYY-MM-DD")
+
+    target_class_name: Optional[str] = None
+    class_text = (class_name or "").strip()
+    if class_text:
+        target_class_name = _normalize_class_name(class_text)
+
     sessions = (
         await db.execute(select(GroupDiscussionSession).where(GroupDiscussionSession.id.in_(ids)))
     ).scalars().all()
     if not sessions:
         raise HTTPException(status_code=404, detail="未找到会话")
+
+    if target_day is not None:
+        mismatch = [int(s.id) for s in sessions if s.session_date != target_day]
+        if mismatch:
+            raise HTTPException(status_code=422, detail="所选会话与指定日期不一致")
+    if target_class_name is not None:
+        mismatch = [int(s.id) for s in sessions if str(getattr(s, "class_name", "")) != target_class_name]
+        if mismatch:
+            raise HTTPException(status_code=422, detail="所选会话与指定班级不一致")
 
     # 小组讨论消息
     msgs = (
@@ -1226,20 +1293,25 @@ async def admin_cross_system_analysis(
         )
     ).scalars().all()
     member_user_ids = [int(uid) for uid in member_rows if uid]
+    if not member_user_ids:
+        raise HTTPException(status_code=422, detail="所选会话暂无成员，无法进行跨系统分析")
 
     # 查询这些学生同期的 AI 对话
+    if target_day is not None:
+        day_start = datetime.combine(target_day, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+
     conv_stmt = (
         select(ZntConversation)
         .where(
             ZntConversation.message_type == "question",
             ZntConversation.created_at >= day_start,
             ZntConversation.created_at < day_end,
+            ZntConversation.user_id.in_(member_user_ids),
         )
         .order_by(ZntConversation.created_at.asc())
         .limit(500)
     )
-    if member_user_ids:
-        conv_stmt = conv_stmt.where(ZntConversation.user_id.in_(member_user_ids))
 
     convs = (await db.execute(conv_stmt)).scalars().all()
     agent_lines = [f"[{c.created_at}] {c.user_name or '学生'} → {c.agent_name or '智能体'}: {c.content}" for c in convs]

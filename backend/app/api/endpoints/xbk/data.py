@@ -519,7 +519,7 @@ async def list_course_results(
         await db.execute(
             stmt.order_by(
                 XbkStudent.class_name.asc(),  # 先按班级
-                cast(func.regexp_replace(XbkStudent.student_no, '\D', '', 'g'), Integer).asc(), # 再按学号数字部分
+                cast(func.regexp_replace(XbkStudent.student_no, r'\D', '', 'g'), Integer).asc(), # 再按学号数字部分
                 XbkStudent.student_no.asc(), # 最后按学号字符串
                 XbkSelection.course_code.asc() # 如果选多门课，按课程排序
             )

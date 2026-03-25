@@ -480,45 +480,49 @@ start_docker_infrastructure() {
         print_info "Adminer容器已在运行"
     fi
     
-    if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
-        print_info "启动Typst Worker容器..."
-        cd "${PROJECT_ROOT}"
-        if [ -f ".env.dev" ]; then
-            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d typst-worker
-        else
-            docker-compose -f docker-compose.dev.yml up -d typst-worker
-        fi
-        print_success "Typst Worker已启动"
-    else
-        print_info "Typst Worker容器已在运行"
-    fi
-
-    if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
-        # Ensure arm64 sandbox image exists for Apple Silicon dev machines
-        local sandbox_image="${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}"
-        if ! docker image inspect "${sandbox_image}" > /dev/null 2>&1; then
-            print_info "构建 PythonLab sandbox 镜像 (${sandbox_image})..."
-            local sandbox_dir="${PROJECT_ROOT}/backend/docker/pythonlab-sandbox"
-            if [ -d "${sandbox_dir}" ]; then
-                docker build --platform linux/arm64 \
-                    -t "${sandbox_image}" \
-                    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
-                    "${sandbox_dir}"
-                print_success "Sandbox 镜像构建完成: ${sandbox_image}"
+    if [ "${START_MODE:-local}" = "docker" ]; then
+        if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+            print_info "启动Typst Worker容器..."
+            cd "${PROJECT_ROOT}"
+            if [ -f ".env.dev" ]; then
+                docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d typst-worker
             else
-                print_warning "未找到 sandbox Dockerfile: ${sandbox_dir}，跳过构建"
+                docker-compose -f docker-compose.dev.yml up -d typst-worker
             fi
-        fi
-        print_info "启动PythonLab Worker容器..."
-        cd "${PROJECT_ROOT}"
-        if [ -f ".env.dev" ]; then
-            docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d pythonlab-worker
+            print_success "Typst Worker已启动"
         else
-            docker-compose -f docker-compose.dev.yml up -d pythonlab-worker
+            print_info "Typst Worker容器已在运行"
         fi
-        print_success "PythonLab Worker已启动"
+
+        if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+            # Ensure arm64 sandbox image exists for Apple Silicon dev machines
+            local sandbox_image="${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}"
+            if ! docker image inspect "${sandbox_image}" > /dev/null 2>&1; then
+                print_info "构建 PythonLab sandbox 镜像 (${sandbox_image})..."
+                local sandbox_dir="${PROJECT_ROOT}/backend/docker/pythonlab-sandbox"
+                if [ -d "${sandbox_dir}" ]; then
+                    docker build --platform linux/arm64 \
+                        -t "${sandbox_image}" \
+                        --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
+                        "${sandbox_dir}"
+                    print_success "Sandbox 镜像构建完成: ${sandbox_image}"
+                else
+                    print_warning "未找到 sandbox Dockerfile: ${sandbox_dir}，跳过构建"
+                fi
+            fi
+            print_info "启动PythonLab Worker容器..."
+            cd "${PROJECT_ROOT}"
+            if [ -f ".env.dev" ]; then
+                docker-compose --env-file .env.dev -f docker-compose.dev.yml up -d pythonlab-worker
+            else
+                docker-compose -f docker-compose.dev.yml up -d pythonlab-worker
+            fi
+            print_success "PythonLab Worker已启动"
+        else
+            print_info "PythonLab Worker容器已在运行"
+        fi
     else
-        print_info "PythonLab Worker容器已在运行"
+        print_info "本地模式跳过 Docker Typst/PythonLab Worker，避免自动拉起 backend 容器占用 8000 端口"
     fi
     
     print_success "Docker基础设施启动完成"
@@ -608,12 +612,12 @@ start_local_backend() {
     done
     
     # 验证端口确实被新进程占用
-    local current_pid=$(lsof -ti:${BACKEND_PORT})
-    if [[ -n "$current_pid" ]] && [[ "$current_pid" == "$BACKEND_PID" ]]; then
+    if kill -0 "${BACKEND_PID}" > /dev/null 2>&1 && pgrep -f "uvicorn main:app" > /dev/null 2>&1; then
         print_success "本地后端服务启动成功 (PID: ${BACKEND_PID})"
     else
-        print_warning "后端服务已启动，但端口占用PID与预期不一致"
-        print_success "本地后端服务启动完成"
+        print_error "未检测到本地 uvicorn 进程，后端启动状态异常，请查看日志: ${BACKEND_LOG}"
+        tail -20 "${BACKEND_LOG}" || true
+        return 1
     fi
     
     print_info "API文档: http://localhost:${BACKEND_PORT}/docs"
@@ -768,16 +772,25 @@ show_service_status() {
         echo -e "  ${RED}❌ Adminer:    未运行${NC}"
     fi
     
-    if docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
-        echo -e "  ${GREEN}✅ Typst Worker: 运行中${NC}"
-    else
-        echo -e "  ${RED}❌ Typst Worker: 未运行${NC}"
-    fi
+    if [ "${START_MODE:-local}" = "docker" ]; then
+        if docker ps --format "{{.Names}}" | grep -qx "wangsh-typst-worker"; then
+            echo -e "  ${GREEN}✅ Typst Worker: 运行中${NC}"
+        else
+            echo -e "  ${RED}❌ Typst Worker: 未运行${NC}"
+        fi
 
-    if docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
-        echo -e "  ${GREEN}✅ PythonLab:    运行中${NC}"
+        if docker ps --format "{{.Names}}" | grep -qx "wangsh-pythonlab-worker"; then
+            echo -e "  ${GREEN}✅ PythonLab:    运行中${NC}"
+        else
+            echo -e "  ${RED}❌ PythonLab:    未运行${NC}"
+        fi
     else
-        echo -e "  ${RED}❌ PythonLab:    未运行${NC}"
+        if pgrep -f "celery.*app\\.core\\.celery_app:celery_app" > /dev/null; then
+            echo -e "  ${GREEN}✅ Celery Worker: 本地运行中${NC}"
+        else
+            echo -e "  ${YELLOW}⚠️  Celery Worker: 未运行（部分异步功能可能不可用）${NC}"
+        fi
+        echo -e "  ${BLUE}ℹ️  Docker Worker: 本地模式默认跳过 Typst/PythonLab 容器${NC}"
     fi
     
     echo ""
@@ -799,6 +812,9 @@ show_service_status() {
     echo "📋 日志文件："
     echo "  后端日志: ${BACKEND_LOG}"
     echo "  前端日志: ${FRONTEND_LOG}"
+    if [ "${START_MODE:-local}" = "local" ]; then
+        echo "  Celery日志: ${CELERY_LOG}"
+    fi
     echo ""
     echo "🛑 停止服务："
     echo "  运行 ./stop-dev.sh 停止所有服务"
@@ -852,6 +868,9 @@ main() {
         start_docker_stack
     else
         start_local_backend
+        if ! start_local_celery_worker; then
+            print_warning "本地 Celery Worker 启动失败，Typst/PythonLab 等异步能力可能不可用"
+        fi
         start_local_frontend
     fi
     

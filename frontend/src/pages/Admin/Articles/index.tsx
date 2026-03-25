@@ -30,7 +30,6 @@ import type { ArticleWithRelations, ArticleFilterParams } from "@services";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
-import "./AdminArticles.css";
 
 const { Search } = Input;
 

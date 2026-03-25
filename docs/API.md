@@ -141,6 +141,12 @@
 - 小组讨论班级归属策略：
   - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
   - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。
+- 小组讨论会话读取权限：
+  - 学生调用 `/ai-agents/group-discussion/messages` 与 `/ai-agents/group-discussion/stream` 时，必须是该会话成员，否则返回 `403`。
+  - 管理员/超级管理员可读取任意会话（用于巡检与管理）。
+- 跨系统分析 `/ai-agents/group-discussion/admin/cross-system-analyze`：
+  - 当传入 `date`/`class_name` 时，会校验所选 `session_ids` 与参数一致；不一致返回 `422`。
+  - 当所选会话没有成员时直接返回 `422`，避免误扫全量 AI 对话数据。
 
 ### 小组讨论（/ai-agents/group-discussion）
 

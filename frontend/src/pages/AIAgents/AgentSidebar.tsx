@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { Avatar, Button, Tag, Select, Tooltip, Typography } from "antd";
-import { SettingOutlined, MenuFoldOutlined, PlusOutlined, HistoryOutlined } from "@ant-design/icons";
+import { SettingOutlined, MenuFoldOutlined, PlusOutlined, HistoryOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { AgentSidebarProps } from "./types";
 
@@ -12,6 +12,46 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   historyVisible, onAgentChange, onToggleSidebar,
   onStartNewConversation, onSelectSession,
 }) => {
+  // 折叠状态 - Hooks 必须在条件判断之前
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    today: false,
+    yesterday: true,
+    thisWeek: true,
+    thisMonth: true,
+    older: true,
+  });
+
+  // 按日期分组
+  const groupedSessions = useMemo(() => {
+    const now = dayjs();
+    const groups = {
+      today: [] as typeof sessions,
+      yesterday: [] as typeof sessions,
+      thisWeek: [] as typeof sessions,
+      thisMonth: [] as typeof sessions,
+      older: [] as typeof sessions,
+    };
+
+    sessions.forEach((s) => {
+      const date = dayjs(s.last_at);
+      const diffDays = now.diff(date, 'day');
+
+      if (diffDays === 0) groups.today.push(s);
+      else if (diffDays === 1) groups.yesterday.push(s);
+      else if (diffDays <= 7) groups.thisWeek.push(s);
+      else if (diffDays <= 30) groups.thisMonth.push(s);
+      else groups.older.push(s);
+    });
+
+    return groups;
+  }, [sessions]);
+
+  const formatTimestamp = (timestamp: string) => dayjs(timestamp).format("MM-DD HH:mm");
+
+  const toggleGroup = (key: string) => {
+    setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   if (!currentAgent) {
     return (
       <div className="flex flex-col h-full p-4 items-center justify-center">
@@ -19,8 +59,6 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
       </div>
     );
   }
-
-  const formatTimestamp = (timestamp: string) => dayjs(timestamp).format("MM-DD HH:mm");
 
   return (
     <div className="flex flex-col h-full p-4">
@@ -89,38 +127,63 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1">
+          <div className="flex-1 overflow-y-auto min-h-0 max-h-60 flex flex-col gap-2">
             {sessions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 gap-2">
                 <HistoryOutlined className="text-2xl opacity-20 text-text-secondary" />
                 <Text type="secondary" className="text-xs">暂无历史记录</Text>
               </div>
             ) : (
-              sessions.map((s) => (
-                <div
-                  key={s.session_id}
-                  onClick={() => onSelectSession(s.session_id)}
-                  className={`rounded-lg p-2.5 cursor-pointer transition-colors duration-150 ${
-                    s.session_id === currentSessionId
-                      ? "bg-primary-soft"
-                      : "hover:bg-surface-2"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <Tag color="blue" className="!m-0 !text-[10px] !leading-4 !h-[18px]">
-                      {s.turns}轮
-                    </Tag>
-                    <span className="text-[10px] text-text-tertiary">
-                      {formatTimestamp(s.last_at)}
-                    </span>
-                  </div>
-                  <div className={`text-sm leading-snug line-clamp-2 ${
-                    s.session_id === currentSessionId ? "text-primary" : "text-text-base"
-                  }`}>
-                    {s.preview || "新对话"}
-                  </div>
-                </div>
-              ))
+              <>
+                {[
+                  { key: 'today', label: '今天', data: groupedSessions.today },
+                  { key: 'yesterday', label: '昨天', data: groupedSessions.yesterday },
+                  { key: 'thisWeek', label: '本周', data: groupedSessions.thisWeek },
+                  { key: 'thisMonth', label: '本月', data: groupedSessions.thisMonth },
+                  { key: 'older', label: '更早', data: groupedSessions.older },
+                ].map(({ key, label, data }) =>
+                  data.length > 0 && (
+                    <div key={key}>
+                      <div
+                        onClick={() => toggleGroup(key)}
+                        className="flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-surface-2 rounded transition-colors"
+                      >
+                        <Text type="secondary" className="text-xs font-medium">
+                          {label} <span className="text-text-tertiary">({data.length})</span>
+                        </Text>
+                        {collapsed[key] ? <RightOutlined className="text-[10px]" /> : <DownOutlined className="text-[10px]" />}
+                      </div>
+                      {!collapsed[key] && (
+                        <div className="flex flex-col gap-1 mt-1">
+                          {data.map((s) => (
+                            <div
+                              key={s.session_id}
+                              onClick={() => onSelectSession(s.session_id)}
+                              className={`rounded-lg p-2.5 cursor-pointer transition-colors duration-150 ${
+                                s.session_id === currentSessionId ? "bg-primary-soft" : "hover:bg-surface-2"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <Tag color="blue" className="!m-0 !text-[10px] !leading-4 !h-[18px]">
+                                  {s.turns}轮
+                                </Tag>
+                                <span className="text-[10px] text-text-tertiary">
+                                  {formatTimestamp(s.last_at)}
+                                </span>
+                              </div>
+                              <div className={`text-sm leading-snug line-clamp-2 ${
+                                s.session_id === currentSessionId ? "text-primary" : "text-text-base"
+                              }`}>
+                                {s.preview || "新对话"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </>
             )}
           </div>
         </div>

@@ -187,7 +187,7 @@ interface Props {
 }
 
 export const ActivityDetailDrawer: React.FC<Props> = ({ open, activity, stats, onClose, extra }) => (
-  <Drawer title={activity?.title || "活动详情"} open={open} onClose={onClose} width={500}>
+  <Drawer title={activity?.title || "活动详情"} open={open} onClose={onClose} size="default">
     {activity && <ActivityDetailContent activity={activity} stats={stats} />}
     {extra}
   </Drawer>

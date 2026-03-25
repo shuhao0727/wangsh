@@ -331,7 +331,20 @@ CREATE INDEX idx_znt_group_discussion_sessions_group_no ON znt_group_discussion_
 CREATE INDEX idx_znt_group_discussion_sessions_group_name ON znt_group_discussion_sessions(group_name);
 CREATE INDEX idx_znt_group_discussion_sessions_last_message_at ON znt_group_discussion_sessions(last_message_at);
 
--- 7. 小组讨论消息表
+-- 7. 小组讨论成员表
+CREATE TABLE znt_group_discussion_members (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    muted_until TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT uq_group_session_user UNIQUE (session_id, user_id)
+);
+CREATE INDEX idx_znt_group_discussion_members_session_id ON znt_group_discussion_members(session_id);
+CREATE INDEX idx_znt_group_discussion_members_user_id ON znt_group_discussion_members(user_id);
+CREATE INDEX idx_znt_group_discussion_members_joined_at ON znt_group_discussion_members(joined_at);
+
+-- 8. 小组讨论消息表
 CREATE TABLE znt_group_discussion_messages (
     id BIGSERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL,
@@ -344,7 +357,7 @@ CREATE INDEX idx_znt_group_discussion_messages_session_id_id ON znt_group_discus
 CREATE INDEX idx_znt_group_discussion_messages_session_id_created_at ON znt_group_discussion_messages(session_id, created_at);
 CREATE INDEX idx_znt_group_discussion_messages_user_id_created_at ON znt_group_discussion_messages(user_id, created_at);
 
--- 8. 小组讨论分析结果表
+-- 9. 小组讨论分析结果表
 CREATE TABLE znt_group_discussion_analyses (
     id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL,
@@ -468,6 +481,14 @@ ALTER TABLE znt_group_discussion_sessions
 ALTER TABLE znt_group_discussion_messages
     ADD CONSTRAINT znt_group_discussion_messages_session_id_fkey
     FOREIGN KEY (session_id) REFERENCES znt_group_discussion_sessions(id) ON DELETE CASCADE;
+
+ALTER TABLE znt_group_discussion_members
+    ADD CONSTRAINT znt_group_discussion_members_session_id_fkey
+    FOREIGN KEY (session_id) REFERENCES znt_group_discussion_sessions(id) ON DELETE CASCADE;
+
+ALTER TABLE znt_group_discussion_members
+    ADD CONSTRAINT znt_group_discussion_members_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE;
 
 ALTER TABLE znt_group_discussion_messages
     ADD CONSTRAINT znt_group_discussion_messages_user_id_fkey

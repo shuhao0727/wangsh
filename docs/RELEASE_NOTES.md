@@ -2,6 +2,41 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.1-hotfix.7（2026-03-24）
+
+### 1. 变更范围
+
+- 小组讨论读取权限收口（阻断学生跨会话越权读取）
+- 跨系统分析参数生效与空成员保护
+- 并发建组冲突兜底与初始化 SQL 对齐
+
+关键改动文件：
+- `backend/app/services/agents/group_discussion.py`
+- `backend/app/api/endpoints/agents/ai_agents/group_discussion.py`
+- `backend/tests/test_group_discussion_access_control.py`
+- `backend/db/init.sql/full_init_v4.sql`
+- `docs/API.md`
+
+### 2. 核心修复
+
+- 学生读取讨论消息与 SSE 流时，新增“必须是会话成员”校验；非成员返回 `403`。
+- `/admin/cross-system-analyze` 的 `date/class_name` 参数改为强校验：
+  - 所选会话与参数不一致时返回 `422`。
+  - 所选会话无成员时返回 `422`，避免误扫全量 AI 提问数据。
+- 新建小组并发冲突时，创建路径捕获唯一键冲突并回查既有会话，避免并发报错。
+- `full_init_v4.sql` 补齐 `znt_group_discussion_members` 表、索引和外键，确保脚本化初始化与当前模型一致。
+
+### 3. 验证结果
+
+- `pytest -q backend/tests/test_group_discussion_access_control.py backend/tests/test_group_discussion_send_message.py backend/tests/test_group_discussion_join_lock.py backend/tests/test_group_discussion_class_scope.py` → `17 passed`
+- `CI=true npm test -- --runInBand src/pages/AIAgents/GroupDiscussionPanel.test.ts src/pages/AIAgents/groupDiscussionJoinLock.test.ts` → `7 passed`
+
+### 4. 配置影响
+
+- 无新增配置项。
+
+---
+
 ## v1.5.1-hotfix.6（2026-03-24）
 
 ### 1. 变更范围

@@ -697,7 +697,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
         onSuccess={fetchList}
       />
 
-      <Drawer title={drawerActivity?.title || "活动详情"} open={drawerOpen} onClose={closeDrawer} width={500}>
+      <Drawer title={drawerActivity?.title || "活动详情"} open={drawerOpen} onClose={closeDrawer} size="default">
         {drawerActivity && (
           <div>
             <Space wrap className="mb-4">

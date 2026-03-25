@@ -410,7 +410,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
         )}
       </div>
       {/* 活动详情 Drawer */}
-      <Drawer title={drawerActivity?.title || "活动详情"} open={!!drawerActivity} onClose={() => { setDrawerActivity(null); setDrawerStats(null); }} width={500}>
+      <Drawer title={drawerActivity?.title || "活动详情"} open={!!drawerActivity} onClose={() => { setDrawerActivity(null); setDrawerStats(null); }} size="default">
         {drawerActivity && <ActivityDetailContent activity={drawerActivity} stats={drawerStats} />}
       </Drawer>
     </div>

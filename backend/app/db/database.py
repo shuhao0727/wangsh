@@ -3,12 +3,15 @@
 SQLAlchemy 异步引擎和会话管理
 """
 
+import logging
 from typing import AsyncGenerator, Optional
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -66,7 +69,7 @@ async def init_db() -> None:
     """
     if not settings.DEBUG:
         # 生产环境中不应自动创建表，必须使用 Alembic 迁移
-        print("🚫 生产环境：禁止自动建表，请使用 Alembic 迁移")
+        logger.warning("生产环境：禁止自动建表，请使用 Alembic 迁移")
         return
     
     async with engine.begin() as conn:
@@ -85,19 +88,17 @@ async def init_db() -> None:
         
         if total_table_count == 0:
             # 数据库完全为空，创建所有表（初始状态）
-            print("🔄 数据库为空，正在创建初始表结构...")
+            logger.info("数据库为空，正在创建初始表结构...")
             await conn.run_sync(Base.metadata.create_all)
-            print("✅ 初始表结构创建完成")
-            print("📝 注意：后续所有数据库变更请使用 Alembic 迁移")
+            logger.info("初始表结构创建完成")
+            logger.info("后续所有数据库变更请使用 Alembic 迁移")
             
             # 标记这是初始创建
             await conn.execute(text("COMMENT ON DATABASE wangsh_db IS '由 init_db() 初始创建，后续变更使用 Alembic 迁移'"))
         else:
             # 数据库中已经有表，不进行任何操作
-            print(f"✅ 检测到 {total_table_count} 个表，跳过自动建表")
-            print("📌 提示：所有数据库变更请使用 Alembic 迁移")
-            print("   运行：python -m alembic upgrade head   # 应用最新迁移")
-            print("   运行：python -m alembic revision --autogenerate -m '描述'   # 创建新迁移")
+            logger.info("检测到 %d 个表，跳过自动建表", total_table_count)
+            logger.info("所有数据库变更请使用 Alembic 迁移")
 
 
 async def close_db() -> None:

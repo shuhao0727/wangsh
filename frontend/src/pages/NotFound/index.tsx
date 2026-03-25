@@ -1,13 +1,12 @@
 import React from 'react';
 import { Button, Result } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import './NotFound.css';
 
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="not-found-page">
+    <div className="flex justify-center items-center h-full min-h-[calc(100vh-200px)] bg-bg p-6 sm:p-4 sm:min-h-[calc(100vh-120px)]">
       <Result
         status="404"
         title="404"

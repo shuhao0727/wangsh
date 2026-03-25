@@ -4,7 +4,6 @@ import { Spin, message } from "antd";
 import ArticleEditForm from "./EditForm";
 import { articleApi, categoryApi } from "@services";
 import type { ArticleWithRelations } from "@services";
-import "./EditorPage.css";
 
 const ArticleEditorPage: React.FC = () => {
   const navigate = useNavigate();
@@ -74,7 +73,7 @@ const ArticleEditorPage: React.FC = () => {
   }
 
   return (
-    <div className="article-editor-page">
+    <div className="w-full flex-1 min-h-0 overflow-hidden">
       <ArticleEditForm
         article={article}
         categories={categories}

@@ -21,48 +21,49 @@ async def get_summary(
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
-    student_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
-    course_stmt = select(func.count()).select_from(XbkCourse).where(XbkCourse.is_deleted.is_(False))
-    selection_stmt = select(func.count()).select_from(XbkSelection).where(XbkSelection.is_deleted.is_(False), XbkSelection.course_code != "")
-    unselected_stmt = select(func.count()).select_from(XbkSelection).where(XbkSelection.is_deleted.is_(False), XbkSelection.course_code == "")
-    suspended_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
+    # 合并前4个COUNT查询为单个查询
+    from sqlalchemy import case, literal_column
 
+    # 构建过滤条件
+    filters = [XbkStudent.is_deleted.is_(False)]
     if year is not None:
-        student_stmt = student_stmt.where(XbkStudent.year == year)
-        course_stmt = course_stmt.where(XbkCourse.year == year)
-        selection_stmt = selection_stmt.where(XbkSelection.year == year)
-        unselected_stmt = unselected_stmt.where(XbkSelection.year == year)
-        suspended_stmt = suspended_stmt.where(XbkStudent.year == year)
+        filters.append(XbkStudent.year == year)
     if term:
-        student_stmt = student_stmt.where(XbkStudent.term == term)
-        course_stmt = course_stmt.where(XbkCourse.term == term)
-        selection_stmt = selection_stmt.where(XbkSelection.term == term)
-        unselected_stmt = unselected_stmt.where(XbkSelection.term == term)
-        suspended_stmt = suspended_stmt.where(XbkStudent.term == term)
+        filters.append(XbkStudent.term == term)
     if grade:
-        student_stmt = student_stmt.where(XbkStudent.grade == grade)
-        course_stmt = course_stmt.where(XbkCourse.grade == grade)
-        selection_stmt = selection_stmt.where(XbkSelection.grade == grade)
-        unselected_stmt = unselected_stmt.where(XbkSelection.grade == grade)
-        suspended_stmt = suspended_stmt.where(XbkStudent.grade == grade)
+        filters.append(XbkStudent.grade == grade)
     if class_name:
-        student_stmt = student_stmt.where(XbkStudent.class_name == class_name)
-        suspended_stmt = suspended_stmt.where(XbkStudent.class_name == class_name)
-        sub = select(XbkStudent.student_no).where(
-            XbkStudent.is_deleted.is_(False),
-            XbkStudent.class_name == class_name,
-            *( [XbkStudent.year == year] if year is not None else [] ),
-            *( [XbkStudent.term == term] if term else [] ),
-            *( [XbkStudent.grade == grade] if grade else [] ),
-        )
-        selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
-        unselected_stmt = unselected_stmt.where(XbkSelection.student_no.in_(sub))
+        filters.append(XbkStudent.class_name == class_name)
 
-    students = (await db.execute(student_stmt)).scalar_one() or 0
-    courses = (await db.execute(course_stmt)).scalar_one() or 0
-    selections = (await db.execute(selection_stmt)).scalar_one() or 0
-    unselected_count = (await db.execute(unselected_stmt)).scalar_one() or 0
-    
+    # 学生子查询（用于selection过滤）
+    student_sub = None
+    if class_name:
+        student_sub = select(XbkStudent.student_no).where(*filters)
+
+    # 合并统计查询
+    summary_stmt = select(
+        func.count(func.distinct(XbkStudent.id)).label('students'),
+        func.count(func.distinct(XbkCourse.id)).label('courses'),
+        func.count(case((XbkSelection.course_code != "", XbkSelection.id), else_=None)).label('selections'),
+        func.count(case((XbkSelection.course_code == "", XbkSelection.id), else_=None)).label('unselected')
+    ).select_from(XbkStudent).outerjoin(
+        XbkSelection,
+        (XbkStudent.student_no == XbkSelection.student_no) &
+        (XbkStudent.year == XbkSelection.year) &
+        (XbkStudent.term == XbkSelection.term) &
+        (XbkSelection.is_deleted.is_(False))
+    ).outerjoin(
+        XbkCourse,
+        (XbkStudent.year == XbkCourse.year) &
+        (XbkStudent.term == XbkCourse.term) &
+        (XbkCourse.is_deleted.is_(False)) &
+        ((XbkStudent.grade == XbkCourse.grade) if grade else literal_column("true"))
+    ).where(*filters)
+
+    result = (await db.execute(summary_stmt)).one()
+    students, courses, selections, unselected_count = result
+
+    # suspended_count 需要单独查询
     selected_student_sub = (
         select(XbkSelection.student_no)
         .where(XbkSelection.is_deleted.is_(False))
@@ -74,17 +75,20 @@ async def get_summary(
         selected_student_sub = selected_student_sub.where(XbkSelection.term == term)
     if grade:
         selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
-    if class_name:
-        selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(sub))
-    
-    suspended_stmt = suspended_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
+    if class_name and student_sub is not None:
+        selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(student_sub))
+
+    suspended_stmt = select(func.count()).select_from(XbkStudent).where(
+        *filters,
+        XbkStudent.student_no.not_in(selected_student_sub)
+    )
     suspended_count = (await db.execute(suspended_stmt)).scalar_one() or 0
 
     return {
-        "students": students,
-        "courses": courses,
-        "selections": selections,
-        "unselected_count": unselected_count,
+        "students": int(students or 0),
+        "courses": int(courses or 0),
+        "selections": int(selections or 0),
+        "unselected_count": int(unselected_count or 0),
         "suspended_count": suspended_count,
     }
 
@@ -109,10 +113,23 @@ async def course_stats(
         class_count_stmt = class_count_stmt.where(XbkStudent.class_name == class_name)
     class_count = int((await db.execute(class_count_stmt)).scalar_one() or 0)
 
+    # 使用JOIN一次性获取课程统计，避免N+1查询
     selection_stmt = (
-        select(XbkSelection.course_code, func.count().label("count"))
-        .where(XbkSelection.is_deleted.is_(False))
-        .group_by(XbkSelection.course_code)
+        select(
+            XbkSelection.course_code,
+            func.count(XbkSelection.id).label("count"),
+            XbkCourse.course_name,
+            XbkCourse.quota
+        )
+        .join(XbkCourse,
+              (XbkSelection.course_code == XbkCourse.course_code) &
+              (XbkSelection.year == XbkCourse.year) &
+              (XbkSelection.term == XbkCourse.term))
+        .where(
+            XbkSelection.is_deleted.is_(False),
+            XbkCourse.is_deleted.is_(False)
+        )
+        .group_by(XbkSelection.course_code, XbkCourse.course_name, XbkCourse.quota)
     )
     if year is not None:
         selection_stmt = selection_stmt.where(XbkSelection.year == year)
@@ -131,30 +148,17 @@ async def course_stats(
         selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
 
     rows = (await db.execute(selection_stmt)).all()
-    codes = [r[0] for r in rows]
-
-    course_map: Dict[str, Dict[str, Any]] = {}
-    if codes:
-        course_stmt = select(XbkCourse.course_code, XbkCourse.course_name, XbkCourse.quota).where(
-            XbkCourse.is_deleted.is_(False),
-            XbkCourse.course_code.in_(codes),
-            *( [XbkCourse.year == year] if year is not None else [] ),
-            *( [XbkCourse.term == term] if term else [] ),
-            *( [XbkCourse.grade == grade] if grade else [] ),
-        )
-        for code, name, quota in (await db.execute(course_stmt)).all():
-            course_map[str(code)] = {"course_name": str(name), "quota": int(quota or 0)}
 
     items = [
         {
             "course_code": str(code),
-            "course_name": course_map.get(str(code), {}).get("course_name"),
+            "course_name": str(name) if name else None,
             "count": int(count),
-            "quota": int(course_map.get(str(code), {}).get("quota") or 0),
+            "quota": int(quota or 0),
             "class_count": class_count,
-            "allowed_total": int(course_map.get(str(code), {}).get("quota") or 0) * class_count,
+            "allowed_total": int(quota or 0) * class_count,
         }
-        for code, count in rows
+        for code, count, name, quota in rows
     ]
     
     # Calculate unselected students (Actually Suspended/Other in new logic)

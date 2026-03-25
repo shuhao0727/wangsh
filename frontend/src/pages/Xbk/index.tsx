@@ -26,6 +26,10 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { cnLen, calcColumnWidth, getScrollY } from "@utils/table";
+import type { XbkTab, XbkPagination } from "./types";
+import { useXbkFilters } from "./hooks/useXbkFilters";
+import { useXbkPagination, DEFAULT_PAGINATION } from "./hooks/useXbkPagination";
 import { xbkDataApi, xbkPublicConfigApi } from "@services";
 import useAuth from "@hooks/useAuth";
 import type {
@@ -46,52 +50,7 @@ import "./Xbk.css";
 
 const { Option } = Select;
 
-type DataTabKey = "course_results" | "students" | "courses" | "selections" | "unselected" | "suspended";
-
-type Filters = {
-  year?: number;
-  term?: "上学期" | "下学期";
-  grade?: "高一" | "高二";
-  class_name?: string;
-  search_text?: string;
-};
-
-type PaginationState = { page: number; size: number; total: number };
-
-const cnLen = (value: unknown) => {
-  if (value === null || value === undefined) return 0;
-  const s = String(value);
-  let n = 0;
-  for (const ch of s) n += ch.charCodeAt(0) > 127 ? 2 : 1;
-  return n;
-};
-
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-
-const calcColumnWidth = (
-  rows: Array<Record<string, unknown>>,
-  key: string,
-  title: string,
-  min: number,
-  max: number,
-  sampleSize = 200,
-) => {
-  const sample = rows.slice(0, Math.max(0, sampleSize));
-  let maxLen = cnLen(title);
-  for (const r of sample) maxLen = Math.max(maxLen, cnLen(r?.[key]));
-  return clamp(maxLen * 8 + 24, min, max);
-};
-
-const getScrollY = (root: HTMLDivElement | null) => {
-  if (!root) return 360;
-  const holder = root.querySelector(".ant-tabs-content-holder") as HTMLElement | null;
-  const nav = root.querySelector(".ant-tabs-nav") as HTMLElement | null;
-  const pagination = root.querySelector(".ant-table-pagination") as HTMLElement | null;
-  const base = holder?.clientHeight || root.clientHeight;
-  const navH = nav?.offsetHeight || 0;
-  const pagH = pagination?.offsetHeight || 64;
-  return clamp(base - navH - pagH - 8, 220, 1200);
-};
+type DataTabKey = XbkTab;
 
 const getErrorMsg = (e: unknown, defaultMsg: string) => {
   const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -102,21 +61,13 @@ const getErrorMsg = (e: unknown, defaultMsg: string) => {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const DEFAULT_PAGINATION: Record<DataTabKey, PaginationState> = {
-  course_results: { page: 1, size: 50, total: 0 },
-  students: { page: 1, size: 50, total: 0 },
-  courses: { page: 1, size: 50, total: 0 },
-  selections: { page: 1, size: 50, total: 0 },
-  unselected: { page: 1, size: 50, total: 0 },
-  suspended: { page: 1, size: 50, total: 0 },
-};
-
 const XbkPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ year: CURRENT_YEAR, term: "上学期" });
+  const { filters, setFilters, updateFilter } = useXbkFilters();
+  const { pg, setPg, updatePg } = useXbkPagination();
   const [activeTab, setActiveTab] = useState<DataTabKey>("course_results");
   const [meta, setMeta] = useState<XbkMeta>({ years: [], terms: [], classes: [] });
   const [summary, setSummary] = useState<XbkSummary | null>(null);
@@ -128,12 +79,6 @@ const XbkPage: React.FC = () => {
   const [courseResults, setCourseResults] = useState<XbkCourseResultRow[]>([]);
   const [unselectedAll, setUnselectedAll] = useState<XbkStudentRow[]>([]);
   const [suspendedAll, setSuspendedAll] = useState<XbkStudentRow[]>([]);
-
-  const [pg, setPg] = useState<Record<DataTabKey, PaginationState>>({ ...DEFAULT_PAGINATION });
-  const pgRef = useRef(pg);
-  pgRef.current = pg;
-  const updatePg = (tab: DataTabKey, partial: Partial<PaginationState>) =>
-    setPg((prev) => ({ ...prev, [tab]: { ...prev[tab], ...partial } }));
 
   const [importVisible, setImportVisible] = useState(false);
   const [exportVisible, setExportVisible] = useState(false);
@@ -176,7 +121,7 @@ const XbkPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
-    const p = pgRef.current[activeTab];
+    const p = pg[activeTab];
     const base = { year: filters.year, term: filters.term, grade: filters.grade, class_name: filters.class_name, search_text: filters.search_text };
     try {
       if (activeTab === "course_results") {
@@ -201,7 +146,7 @@ const XbkPage: React.FC = () => {
     } catch (e) {
       message.error(getErrorMsg(e, "加载数据失败"));
     } finally { setDataLoading(false); }
-  }, [activeTab, pg[activeTab].page, pg[activeTab].size, filters.year, filters.term, filters.grade, filters.class_name, filters.search_text]);
+  }, [activeTab, filters.year, filters.term, filters.grade, filters.class_name, filters.search_text, pg[activeTab]?.page, pg[activeTab]?.size]);
 
   useEffect(() => {
     let m = true;
@@ -244,6 +189,24 @@ const XbkPage: React.FC = () => {
     await Promise.all([loadMeta(), loadSummary(), loadData()]);
     message.success("已刷新");
   }, [loadData, loadMeta, loadSummary]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        handleRefresh();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault();
+        setImportVisible(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        setExportVisible(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [enabled, handleRefresh]);
 
   const openCreateModal = useCallback((kind: "students" | "courses" | "selections") => {
     setEditKind(kind); setEditMode("create"); setEditRecord(null); setEditVisible(true);
@@ -403,7 +366,12 @@ const XbkPage: React.FC = () => {
 
   const renderTable = (tab: DataTabKey) => {
     const p = pg[tab];
-    const map: Record<DataTabKey, { columns: any; data: any; rowKey: string | ((record: any) => string) }> = {
+    type TableConfig = {
+      columns: ColumnsType<any>;
+      data: any[];
+      rowKey: string | ((record: any) => string)
+    };
+    const map: Record<DataTabKey, TableConfig> = {
       course_results: { columns: courseResultColumns, data: courseResults, rowKey: "id" },
       students: { columns: studentColumns, data: students, rowKey: "id" },
       courses: { columns: courseColumns, data: courses, rowKey: "id" },
@@ -421,6 +389,7 @@ const XbkPage: React.FC = () => {
     const { columns, data, rowKey } = map[tab];
     return (
       <Table rowKey={rowKey} columns={columns} dataSource={data} loading={dataLoading} tableLayout="fixed"
+        virtual
         pagination={{ current: p.page, pageSize: p.size, total: p.total, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条` }}
         onChange={(pag) => updatePg(tab, { page: pag.current || 1, size: pag.pageSize || 50 })}
         size="middle" scroll={{ x: "max-content", y: tableScrollY }}

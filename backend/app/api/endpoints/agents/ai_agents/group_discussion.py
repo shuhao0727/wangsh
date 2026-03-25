@@ -48,6 +48,7 @@ from app.services.agents.group_discussion import (
     admin_list_messages,
     admin_list_sessions,
     enforce_join_lock,
+    ensure_session_view_access,
     set_join_lock,
     get_or_create_today_session,
     list_today_groups,
@@ -289,6 +290,7 @@ async def get_group_discussion_messages(
 ) -> GroupDiscussionMessageListResponse:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
+    await ensure_session_view_access(db, session_id=session_id, user=user)
     rows, next_after = await list_messages(db, session_id=session_id, after_id=after_id, limit=limit)
     items = [
         GroupDiscussionMessageOut(
@@ -313,6 +315,7 @@ async def stream_group_discussion_messages(
 ):
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
+    await ensure_session_view_access(db, session_id=session_id, user=user)
 
     async def gen():
         nonlocal after_id
