@@ -659,6 +659,7 @@ const AIAgentsPage: React.FC = () => {
         isStudent={auth.isStudent()}
         isAdmin={auth.isAdmin()}
         userId={auth.user?.id}
+        className={auth.user?.class_name ?? undefined}
       />
       <AssessmentPanel
         isAuthenticated={auth.isAuthenticated}

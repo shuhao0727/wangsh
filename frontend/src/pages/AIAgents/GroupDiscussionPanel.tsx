@@ -63,9 +63,10 @@ type Props = {
   isStudent: boolean;
   isAdmin: boolean;
   userId?: number;
+  className?: string;
 };
 
-const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, userId }) => {
+const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, userId, className }) => {
   const { message } = App.useApp();
   // --- 窗口状态管理 ---
   const [open, setOpen] = useState(false);
@@ -776,7 +777,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       ) : (
         <div className="p-5">
           <Form form={createForm} onFinish={handleJoinOrCreate} layout="vertical">
-            {isAdmin && (
+            {isAdmin ? (
               <Form.Item
                 label="班级 (必填)"
                 name="className"
@@ -785,7 +786,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               >
                 <Input placeholder="例如: 高一(1)班" size="large" />
               </Form.Item>
-            )}
+            ) : className ? (
+              <Form.Item label="班级">
+                <Input value={className} disabled size="large" />
+              </Form.Item>
+            ) : null}
             <Form.Item
               label="组号 (必填)"
               name="groupNo"
