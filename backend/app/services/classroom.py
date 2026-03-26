@@ -16,13 +16,15 @@ from app.models.agents import AIAgent
 logger = logging.getLogger(__name__)
 
 # ─── SSE pub/sub ───
+# NOTE: 进程内 pub/sub，仅支持单 worker 部署。
+# 若需多 worker 横向扩展，需替换为 Redis pub/sub 或类似方案。
 _subscribers: Dict[str, Dict[str, asyncio.Queue]] = {}  # channel -> {sub_id: queue}
 
 # 超时检查节流：最多每30秒执行一次
 _last_auto_end_check: float = 0.0
 
 
-def _publish(channel: str, event: dict):
+def publish(channel: str, event: dict):
     """向指定频道的所有订阅者推送事件"""
     subs = _subscribers.get(channel, {})
     for q in subs.values():
@@ -144,7 +146,8 @@ async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, s
         count_q = count_q.where(ClassroomActivity.status == status)
     total = (await db.execute(count_q)).scalar() or 0
     rows = (await db.execute(q.offset(skip).limit(limit))).scalars().all()
-    # 批量获取 response_count
+    # 批量获取 response_count，以 dict 形式返回避免污染 ORM 实例
+    rc_map: dict[int, int] = {}
     if rows:
         ids = [r.id for r in rows]
         rc_q = select(ClassroomResponse.activity_id, func.count(ClassroomResponse.id)).where(
@@ -152,9 +155,7 @@ async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, s
         ).group_by(ClassroomResponse.activity_id)
         rc_rows = (await db.execute(rc_q)).all()
         rc_map = {r[0]: r[1] for r in rc_rows}
-        for r in rows:
-            r._response_count = rc_map.get(r.id, 0)
-    return rows, total
+    return rows, rc_map, total
 
 
 async def get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
@@ -180,8 +181,9 @@ async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivit
     activity.started_at = now
     await db.commit()
     await db.refresh(activity)
-    _publish("student", {"type": "activity_started", "activity_id": activity.id})
-    _publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    publish("student", {"type": "activity_started", "activity_id": activity.id})
+    publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
     return activity
 
 
@@ -209,8 +211,9 @@ async def end_activity(
             r.is_correct = _check_correct(r.answer, activity.correct_answer, activity.allow_multiple)
     await db.commit()
     await db.refresh(activity)
-    _publish("student", {"type": "activity_ended", "activity_id": activity.id})
-    _publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
+    publish("student", {"type": "activity_ended", "activity_id": activity.id})
+    publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
+    publish("admin_global", {"type": "activity_ended", "activity_id": activity.id})
     await _run_auto_analysis_for_ended_activity(db, activity.id)
     await db.refresh(activity)
     return activity
@@ -237,8 +240,9 @@ async def restart_activity(db: AsyncSession, activity_id: int) -> ClassroomActiv
     activity.analysis_error = None
     await db.commit()
     await db.refresh(activity)
-    _publish("student", {"type": "activity_started", "activity_id": activity.id})
-    _publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    publish("student", {"type": "activity_started", "activity_id": activity.id})
+    publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
     return activity
 
 
@@ -280,9 +284,10 @@ async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answ
     db.add(resp)
     await db.commit()
     await db.refresh(resp)
-    _publish(f"admin_{activity.created_by}", {
+    publish(f"admin_{activity.created_by}", {
         "type": "new_response", "activity_id": activity_id,
     })
+    publish("admin_global", {"type": "new_response", "activity_id": activity_id})
     return resp
 
 
@@ -488,13 +493,20 @@ async def _list_candidate_agents(db: AsyncSession, preferred_id: Optional[int] =
 
 def _build_analysis_prompt(context: dict, custom_prompt: Optional[str]) -> str:
     custom = _normalize_prompt(custom_prompt)
-    extra = f"\n教师补充要求：{custom}\n" if custom else ""
+    if custom:
+        # 用户自定义提示词，直接使用
+        return f"{custom}\n\n统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
+
+    # 默认提示词
     return (
-        "你是教学诊断助手。请基于以下填空题统计数据，输出Markdown分析，要求："
-        "1）先给出总体结论；2）逐空位指出易错点与错误模式；3）给出3条可执行教学建议；"
-        "4）最后输出一个```json```代码块，字段包含risk_slots、common_mistakes、teaching_actions。"
-        f"{extra}"
-        f"\n统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
+        "你是教学诊断助手。请基于以下填空题统计数据，输出简洁的Markdown分析报告。\n\n"
+        "**格式要求：**\n"
+        "1. 总体结论（1-2句话）\n"
+        "2. 易错分析（逐空位列出，每个空位2-3句话）\n"
+        "3. 教学建议（3条，每条1句话）\n"
+        "4. 最后输出JSON代码块：```json\n{\"risk_slots\": [...], \"common_mistakes\": [...], \"teaching_actions\": [...]}\n```\n\n"
+        "**字数限制：分析内容（不含JSON）控制在200字以内。**\n\n"
+        f"统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
     )
 
 

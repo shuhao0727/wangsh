@@ -1,21 +1,51 @@
 # 部署指南
 
+## 服务器信息
+
+- **域名**: wangsh.cn
+- **SSH 端口**: 6607
+- **用户**: shuhao
+- **当前版本**: 1.5.1
+
+### 快速连接
+```bash
+ssh wangsh.cn
+```
+
+---
+
 ## 快速开始
 
 ### 开发环境
 
+**方式1：使用便捷脚本（推荐）**
+
+```bash
+# 本地模式（Docker基础设施 + 本地业务代码）
+bash start-dev.sh
+
+# Docker模式（全部在Docker中运行）
+bash start-dev.sh --docker
+```
+
+**方式2：直接使用 Docker Compose**
+
 ```bash
 # 1. 复制配置文件
-cp .env.example .env
+cp .env.dev.example .env.dev
 
-# 2. 启动开发环境（包含所有必需服务）
-docker compose -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
+# 2. 启动所有服务
+docker compose -f docker-compose.dev.yml up -d
 
 # 3. 访问
 # 前端：http://localhost:6608
 # 后端：http://localhost:8000
 # 数据库管理：http://localhost:8081
 ```
+
+**两种方式对比**：
+- `start-dev.sh`：自动检测端口冲突、支持混合模式、日志管理
+- `docker compose`：简单直接、全部容器化
 
 ### 生产环境
 
@@ -28,10 +58,10 @@ cp .env.example .env
 ./build_images.sh
 
 # 3. 推送镜像到 Docker Hub（可选）
-./scripts/deploy.sh push
+docker compose push
 
 # 4. 部署
-./scripts/deploy.sh deploy
+docker compose up -d
 ```
 
 ---
@@ -82,11 +112,11 @@ REACT_APP_VERSION=1.5.1
 ### 2. 测试镜像
 
 ```bash
-# 模拟生产环境测试
-./scripts/deploy.sh simulate
+# 启动所有服务
+docker compose up -d
 
 # 健康检查
-./scripts/deploy.sh health
+curl http://localhost:6608/health
 ```
 
 ### 3. 推送到 Docker Hub
@@ -96,31 +126,35 @@ REACT_APP_VERSION=1.5.1
 docker login
 
 # 推送所有镜像
-./scripts/deploy.sh push
+docker compose push
 ```
 
 ---
 
-## 部署脚本命令
+## 常用部署命令
 
-`scripts/deploy.sh` 提供以下命令：
+Docker Compose 命令：
 
 | 命令 | 说明 |
 |------|------|
-| `deploy` | 完整部署（拉取镜像 + 启动 + 健康检查） |
-| `deploy-amd64` | AMD64 平台部署 |
-| `deploy-local` | 本地部署（不重新构建） |
-| `up` | 启动并构建服务 |
-| `pull-up` | 拉取镜像并启动 |
-| `build` | 构建所有镜像 |
-| `push` | 推送镜像到 Docker Hub |
-| `down` | 停止所有容器 |
-| `down-v` | 停止容器并删除 volumes |
-| `logs` | 查看服务日志 |
-| `health` | 健康检查 |
-| `simulate` | 模拟生产环境测试 |
-| `backup-db` | 备份数据库 |
-| `restore-db` | 恢复数据库 |
+| `docker compose up -d` | 启动所有服务 |
+| `docker compose up -d --build` | 构建并启动服务 |
+| `docker compose pull` | 拉取最新镜像 |
+| `docker compose push` | 推送镜像到 Docker Hub |
+| `docker compose down` | 停止所有容器 |
+| `docker compose down -v` | 停止容器并删除 volumes |
+| `docker compose logs -f` | 查看实时日志 |
+| `docker compose ps` | 查看服务状态 |
+| `docker compose restart` | 重启所有服务 |
+
+开发环境命令：
+```bash
+# 启动开发环境
+docker compose -f docker-compose.dev.yml up -d
+
+# 停止开发环境
+docker compose -f docker-compose.dev.yml down
+```
 
 ---
 
@@ -205,27 +239,27 @@ docker compose -f docker-compose.dev.yml ps pythonlab-worker
 
 ```bash
 # 查看当前版本
-./scripts/migrate-db.sh current
+docker exec wangsh-backend alembic current
 
-# 查看待执行迁移
-./scripts/migrate-db.sh history
+# 查看迁移历史
+docker exec wangsh-backend alembic history
 ```
 
 ### 执行迁移
 
 ```bash
 # 升级到最新版本
-./scripts/migrate-db.sh upgrade
+docker exec wangsh-backend alembic upgrade head
 
 # 升级到指定版本
-./scripts/migrate-db.sh upgrade <revision>
+docker exec wangsh-backend alembic upgrade <revision>
 ```
 
 ### 迁移验证
 
 ```bash
-# 验证数据库结构
-./scripts/verify-deployment.sh
+# 验证数据库连接
+docker exec wangsh-backend python -c "from app.db.database import engine; import asyncio; asyncio.run(engine.dispose())"
 ```
 
 ### 常见问题
@@ -247,23 +281,23 @@ docker compose -f docker-compose.dev.yml ps pythonlab-worker
 
 ```bash
 # 1. 备份当前数据库
-./scripts/deploy.sh backup-db
+docker exec wangsh-postgres pg_dump -U admin wangsh_db > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 2. 回滚数据库
-./scripts/rollback.sh rollback -1
+docker exec wangsh-backend alembic downgrade -1
 
 # 3. 回滚代码（重新部署旧版本）
-IMAGE_TAG=1.5.0 ./scripts/deploy.sh pull-up
+IMAGE_TAG=1.5.0 docker compose pull && docker compose up -d
 
 # 4. 验证
-./scripts/verify-deployment.sh
+curl http://localhost:6608/health
 ```
 
 ### 回滚失败处理
 
 如果回滚失败，使用备份恢复：
 ```bash
-./scripts/deploy.sh restore-db ./backups/<backup-file>
+docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
 ```
 
 ---
@@ -273,15 +307,26 @@ IMAGE_TAG=1.5.0 ./scripts/deploy.sh pull-up
 ### 备份数据库
 
 ```bash
-./scripts/deploy.sh backup-db
-```
+# 完整备份
+docker exec wangsh-postgres pg_dump -U admin wangsh_db > backup_$(date +%Y%m%d_%H%M%S).sql
 
-备份文件保存在 `./backups/` 目录
+# 仅备份结构
+docker exec wangsh-postgres pg_dump -U admin --schema-only wangsh_db > schema_backup.sql
+
+# 仅备份数据
+docker exec wangsh-postgres pg_dump -U admin --data-only wangsh_db > data_backup.sql
+```
 
 ### 恢复数据库
 
 ```bash
-./scripts/deploy.sh restore-db <backup-file>
+# 恢复完整备份
+docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
+
+# 先删除数据库再恢复（慎用）
+docker exec wangsh-postgres psql -U admin -c "DROP DATABASE IF EXISTS wangsh_db;"
+docker exec wangsh-postgres psql -U admin -c "CREATE DATABASE wangsh_db;"
+docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
 ```
 
 ---
@@ -317,10 +362,13 @@ IMAGE_TAG=1.5.0 ./scripts/deploy.sh pull-up
 
 ```bash
 # 基础健康检查
-./scripts/deploy.sh health
+curl http://localhost:6608/health
 
-# 详细健康检查
-./scripts/health-check-detailed.sh
+# 检查所有服务状态
+docker compose ps
+
+# 检查特定服务日志
+docker compose logs backend --tail 50
 ```
 
 ### 关键指标
@@ -334,7 +382,10 @@ IMAGE_TAG=1.5.0 ./scripts/deploy.sh pull-up
 
 ```bash
 # 查看实时日志
-./scripts/deploy.sh logs
+docker compose logs -f
+
+# 查看特定服务日志
+docker compose logs -f backend
 
 # 查看错误日志
 docker compose logs backend | grep ERROR

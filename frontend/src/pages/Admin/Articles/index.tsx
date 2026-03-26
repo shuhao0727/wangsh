@@ -30,6 +30,7 @@ import type { ArticleWithRelations, ArticleFilterParams } from "@services";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 
 const { Search } = Input;
 
@@ -238,6 +239,9 @@ const AdminArticles: React.FC = () => {
     loadArticles();
     loadCategories();
   }, [loadArticles, loadCategories]);
+
+  // 自动刷新：每5秒刷新一次文章列表
+  useAdminSSE('article_changed', loadArticles);
 
   useEffect(() => {
     const unsub = subscribeArticleUpdated((_payload, meta) => {

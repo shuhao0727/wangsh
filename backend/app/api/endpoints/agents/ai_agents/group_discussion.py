@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin, require_user
 from app.core.config import settings
+from app.services import classroom as svc
 from app.schemas.agents import (
     GroupDiscussionJoinRequest,
     GroupDiscussionJoinResponse,
@@ -151,7 +152,15 @@ async def stream_public_config(
                 except Exception:
                     pass
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 
@@ -374,7 +383,15 @@ async def stream_group_discussion_messages(
                 except Exception:
                     pass
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/messages", response_model=GroupDiscussionMessageOut)
@@ -489,6 +506,10 @@ async def admin_delete_session_api(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Any:
     await admin_delete_session(db, session_id=session_id)
+
+    # 发布事件
+    svc.publish("admin_global", {"type": "discussion_changed", "action": "delete", "id": session_id})
+
     return {"success": True}
 
 
@@ -499,6 +520,7 @@ async def admin_batch_delete_sessions_api(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Any:
     deleted = await admin_delete_sessions(db, session_ids=payload.session_ids)
+    svc.publish("admin_global", {"type": "discussion_changed", "action": "batch_delete"})
     return {"success": True, "deleted": deleted}
 
 

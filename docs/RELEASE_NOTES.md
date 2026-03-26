@@ -316,10 +316,9 @@
 - 根目录 `VERSION`
 
 脚本行为：
-- `scripts/deploy.sh` / `build_images.sh` 优先读取 `VERSION`
+- `build_images.sh` 优先读取 `VERSION`
 - 自动派生：`APP_VERSION`、`IMAGE_TAG`、`REACT_APP_VERSION`
 - 临时覆盖方式：
-  - `VERSION_OVERRIDE=1.5.2 bash scripts/deploy.sh build`
   - `./build_images.sh 1.5.2`
 
 ### 5. 构建与部署（生产）
@@ -329,16 +328,16 @@
 cat VERSION
 
 # 2) 构建镜像
-bash scripts/deploy.sh build
+bash build_images.sh
 
 # 3) 推送镜像
-bash scripts/deploy.sh push
+docker compose push
 
 # 4) 服务器拉取并启动
-bash scripts/deploy.sh pull-up
+docker compose pull && docker compose up -d
 
 # 5) 健康检查
-bash scripts/deploy.sh health
+curl http://localhost:6608/health
 ```
 
 ### 6. 验证基线

@@ -35,7 +35,6 @@ async def get_active_activities(
 
 @router.get("/stream")
 async def student_stream(
-    db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ):
     sub_id = str(uuid.uuid4())
@@ -55,7 +54,15 @@ async def student_stream(
         finally:
             svc.unsubscribe("student", sub_id)
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/{activity_id}")

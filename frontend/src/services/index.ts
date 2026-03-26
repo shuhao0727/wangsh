@@ -4,7 +4,7 @@
  */
 
 // 核心 API 服务
-export { api, authApi, healthApi } from "./api";
+export { api, authApi, healthApi, getStoredAccessToken } from "./api";
 export type { ApiResponse, ValidationErrorResponse } from "./api";
 
 // 配置服务

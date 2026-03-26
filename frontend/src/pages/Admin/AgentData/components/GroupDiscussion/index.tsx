@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import { Button, Card, DatePicker, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Spin, Table, Tabs, Typography, message, Tag, Radio, InputNumber, Switch } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -262,6 +263,9 @@ const GroupDiscussionAdminTab: React.FC = () => {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  // SSE 实时更新
+  useAdminSSE('discussion_changed', loadSessions);
 
   useEffect(() => {
     if (!sessionModalOpen) return;

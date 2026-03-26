@@ -11,7 +11,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
                                 ↓
                     DockerHub（镜像仓库）
                                 ↓
-              服务器 → scripts/deploy.sh deploy（拉取镜像并部署）
+              服务器 → docker compose pull && docker compose up -d（拉取镜像并部署）
 ```
 
 ---
@@ -83,25 +83,25 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 ---
 
-## 三、本地脚本
+## 三、本地部署命令
 
-### 3.1 scripts/deploy.sh — 统一部署入口
+### 3.1 Docker Compose — 部署命令
 
 ```bash
-bash scripts/deploy.sh <命令>
+docker compose <命令>
 ```
 
 | 命令 | 说明 |
 |------|------|
-| `deploy` | 拉取镜像 → 启动服务 → 健康检查 |
-| `deploy-amd64` | 同上，强制 `linux/amd64` 平台 |
-| `deploy-local` | 本地部署（不重新构建） |
-| `up` | 本地构建并启动（`docker compose up -d --build`） |
-| `pull-up` | 拉取最新镜像并启动 |
-| `build` | 仅构建镜像 |
+| `up -d` | 启动所有服务 |
+| `up -d --build` | 构建并启动服务 |
+| `pull` | 拉取最新镜像 |
 | `push` | 推送镜像到 DockerHub |
 | `down` | 停止所有服务 |
-| `down-v` | 停止服务并删除数据卷 |
+| `down -v` | 停止服务并删除数据卷 |
+| `logs -f` | 查看实时日志 |
+| `ps` | 查看服务状态 |
+| `restart` | 重启所有服务 |
 | `logs` | 查看服务日志 |
 | `health` | 健康检查 |
 | `simulate` | 模拟部署测试（临时环境） |

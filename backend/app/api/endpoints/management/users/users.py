@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from app.core.deps import require_admin, get_db
 from app.models import User
+from app.services import classroom as svc
 
 router = APIRouter()
 
@@ -314,7 +315,10 @@ async def create_user(
         db.add(new_user)
         await db.commit()
         await db.refresh(new_user)
-        
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
+
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(new_user)
         
@@ -413,10 +417,13 @@ async def update_user(
         
         if user_data.is_active is not None:
             user.is_active = user_data.is_active  # type: ignore
-        
+
         await db.commit()
         await db.refresh(user)
-        
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
+
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(user)
         
@@ -464,7 +471,10 @@ async def delete_user(
         # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
         user.is_deleted = True  # type: ignore
         await db.commit()
-        
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
+
         return {
             "success": True,
             "message": "用户删除成功",
@@ -513,7 +523,9 @@ async def batch_delete_users(
             deleted_ids.append(user.id)
         
         await db.commit()
-        
+
+        svc.publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
+
         return {
             "success": True,
             "message": f"成功删除 {len(deleted_ids)} 个用户",

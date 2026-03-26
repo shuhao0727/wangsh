@@ -58,9 +58,10 @@ const getBlankCount = (activity: Activity | null): number => {
   if (!activity || activity.activity_type !== "fill_blank") return 1;
   const code = getCodeTemplate(activity);
   if (code) return Math.max(1, (code.match(/___/g) || []).length);
-  const byAnswer = parseBlankAnswers(activity.correct_answer).length;
   const marks = String(activity.title || "").match(/\(\d+\)/g) || [];
-  return Math.max(1, byAnswer, marks.length);
+  if (marks.length > 0) return marks.length;
+  const byAnswer = parseBlankAnswers(activity.correct_answer).length;
+  return Math.max(1, byAnswer);
 };
 
 const formatDisplayAnswer = (raw?: string | null): string => {

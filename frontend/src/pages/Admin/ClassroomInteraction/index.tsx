@@ -407,9 +407,13 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
               className="w-full"
             />
           </Form.Item>
-          <Form.Item name="analysis_prompt" label="补充提示词（可选）">
-            <Input.TextArea placeholder="可选：补充说明分析重点" maxLength={500} rows={3}
-              disabled={activeAgents.length === 0} />
+          <Form.Item name="analysis_prompt" label="AI 分析提示词" tooltip="留空使用默认提示词（200字以内分析）；填写则完全自定义">
+            <Input.TextArea
+              placeholder="默认：简洁分析（总体结论+易错分析+教学建议，200字内）&#10;自定义：完全替换默认提示词，可自由控制格式和长度"
+              maxLength={1000}
+              rows={4}
+              disabled={activeAgents.length === 0}
+            />
           </Form.Item>
           <Button size="small" icon={<ReloadOutlined />} onClick={onRefreshAgents} loading={loadingAgents}>
             刷新智能体列表
@@ -434,9 +438,9 @@ const AdminClassroomInteractionPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRecord, setEditingRecord] = useState<Activity | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerActivity, setDrawerActivity] = useState<Activity | null>(null);
-  const [drawerStats, setDrawerStats] = useState<ActivityStats | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailActivity, setDetailActivity] = useState<Activity | null>(null);
+  const [detailStats, setDetailStats] = useState<ActivityStats | null>(null);
   const [activeAgents, setActiveAgents] = useState<ActiveAgentOption[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
@@ -494,11 +498,11 @@ const AdminClassroomInteractionPage: React.FC = () => {
   };
 
   const handleEnd = async (id: number) => {
-    const act = activities.find((a) => a.id === id) || drawerActivity;
+    const act = activities.find((a) => a.id === id) || detailActivity;
     try {
       await classroomApi.end(id, { analysis_agent_id: act?.analysis_agent_id ?? undefined, analysis_prompt: act?.analysis_prompt ?? undefined });
       message.success("活动已结束"); fetchList();
-      if (drawerActivity?.id === id) refreshDrawer(id);
+      if (detailActivity?.id === id) refreshDetail(id);
     } catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
@@ -532,25 +536,25 @@ const AdminClassroomInteractionPage: React.FC = () => {
     catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
-  const refreshDrawer = async (id: number) => {
-    try { const d = await classroomApi.getDetail(id); setDrawerActivity(d); setDrawerStats(d.stats || null); }
+  const refreshDetail = async (id: number) => {
+    try { const d = await classroomApi.getDetail(id); setDetailActivity(d); setDetailStats(d.stats || null); }
     catch (e: any) { message.error(parseErrorMessage(e)); }
   };
 
-  const openDrawer = (record: Activity) => {
-    setDrawerOpen(true); refreshDrawer(record.id);
-    if (record.status === "active") { statsTimerRef.current = setInterval(() => refreshDrawer(record.id), 3000); }
+  const openDetail = (record: Activity) => {
+    setDetailOpen(true); refreshDetail(record.id);
+    if (record.status === "active") { statsTimerRef.current = setInterval(() => refreshDetail(record.id), 3000); }
   };
 
-  const closeDrawer = () => {
-    setDrawerOpen(false); setDrawerActivity(null); setDrawerStats(null);
+  const closeDetail = () => {
+    setDetailOpen(false); setDetailActivity(null); setDetailStats(null);
     if (statsTimerRef.current) { clearInterval(statsTimerRef.current); statsTimerRef.current = undefined; }
   };
 
-  const analysisContext = drawerActivity?.analysis_context || {};
+  const analysisContext = detailActivity?.analysis_context || {};
   const riskSlots = Array.isArray(analysisContext.risk_slots) ? analysisContext.risk_slots : [];
   const commonMistakes = Array.isArray(analysisContext.common_mistakes) ? analysisContext.common_mistakes : [];
-  const analysisStatus = ANALYSIS_STATUS_MAP[String(drawerActivity?.analysis_status || "")] || ANALYSIS_STATUS_MAP.pending;
+  const analysisStatus = ANALYSIS_STATUS_MAP[String(detailActivity?.analysis_status || "")] || ANALYSIS_STATUS_MAP.pending;
 
   return (
     <AdminPage scrollable={false}>
@@ -676,7 +680,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                         </Popconfirm>
                       )}
                       <Tooltip title="详情">
-                        <Button size="small" icon={<BarChartOutlined />} onClick={() => openDrawer(record)} />
+                        <Button size="small" icon={<BarChartOutlined />} onClick={() => openDetail(record)} />
                       </Tooltip>
                     </Space>
                   );
@@ -697,34 +701,40 @@ const AdminClassroomInteractionPage: React.FC = () => {
         onSuccess={fetchList}
       />
 
-      <Drawer title={drawerActivity?.title || "活动详情"} open={drawerOpen} onClose={closeDrawer} size="default">
-        {drawerActivity && (
+      <Modal
+        title={detailActivity?.title || "活动详情"}
+        open={detailOpen}
+        onCancel={closeDetail}
+        width={680}
+        footer={null}
+      >
+        {detailActivity && (
           <div>
             <Space wrap className="mb-4">
-              <Tag color={drawerActivity.activity_type === "vote" ? "blue" : "green"}>
-                {drawerActivity.activity_type === "vote" ? "投票" : "填空"}
+              <Tag color={detailActivity.activity_type === "vote" ? "blue" : "green"}>
+                {detailActivity.activity_type === "vote" ? "投票" : "填空"}
               </Tag>
               <Badge
-                status={drawerActivity.status === "active" ? "processing" : drawerActivity.status === "ended" ? "success" : "default"}
-                text={drawerActivity.status === "active" ? "进行中" : drawerActivity.status === "ended" ? "已结束" : "草稿"}
+                status={detailActivity.status === "active" ? "processing" : detailActivity.status === "ended" ? "success" : "default"}
+                text={detailActivity.status === "active" ? "进行中" : detailActivity.status === "ended" ? "已结束" : "草稿"}
               />
-              {drawerActivity.status === "active" && drawerActivity.remaining_seconds != null && (
-                <Tag color="orange">剩余 {drawerActivity.remaining_seconds}s</Tag>
+              {detailActivity.status === "active" && detailActivity.remaining_seconds != null && (
+                <Tag color="orange">剩余 {detailActivity.remaining_seconds}s</Tag>
               )}
             </Space>
-            {drawerActivity.correct_answer && (
+            {detailActivity.correct_answer && (
               <div className="mb-3 px-2.5 py-1.5 bg-green-50 rounded-md text-sm">
-                <span className="text-green-500 font-medium">参考答案：</span>{formatCorrectAnswer(drawerActivity.correct_answer)}
+                <span className="text-green-500 font-medium">参考答案：</span>{formatCorrectAnswer(detailActivity.correct_answer)}
               </div>
             )}
-            {drawerStats && (
+            {detailStats && (
               <div>
                 <Divider className="!my-3" />
-                <div className="text-sm font-semibold mb-2.5">答题统计（{drawerStats.total_responses} 人参与）</div>
-                {drawerActivity.activity_type === "vote" && Array.isArray(drawerActivity.options) && drawerActivity.options.map((opt) => {
-                  const count = drawerStats.option_counts?.[opt.key] || 0;
-                  const pct = drawerStats.total_responses > 0 ? Math.round(count / drawerStats.total_responses * 100) : 0;
-                  const isCorrect = drawerActivity.correct_answer?.includes(opt.key);
+                <div className="text-sm font-semibold mb-2.5">答题统计（{detailStats.total_responses} 人参与）</div>
+                {detailActivity.activity_type === "vote" && Array.isArray(detailActivity.options) && detailActivity.options.map((opt) => {
+                  const count = detailStats.option_counts?.[opt.key] || 0;
+                  const pct = detailStats.total_responses > 0 ? Math.round(count / detailStats.total_responses * 100) : 0;
+                  const isCorrect = detailActivity.correct_answer?.includes(opt.key);
                   return (
                     <div key={opt.key} className="mb-2.5">
                       <div className="flex justify-between text-sm mb-0.5">
@@ -735,15 +745,15 @@ const AdminClassroomInteractionPage: React.FC = () => {
                     </div>
                   );
                 })}
-                {drawerActivity.activity_type === "fill_blank" && (
+                {detailActivity.activity_type === "fill_blank" && (
                   <div>
-                    {drawerStats.correct_rate != null ? (
+                    {detailStats.correct_rate != null ? (
                       <div className="text-center p-5">
-                        <Progress type="circle" percent={drawerStats.correct_rate} size={100} format={(p) => `${p}%`} />
+                        <Progress type="circle" percent={detailStats.correct_rate} size={100} format={(p) => `${p}%`} />
                         <div className="mt-2 text-gray-400">整体正确率</div>
                       </div>
                     ) : <div className="text-gray-400 text-xs">暂无作答数据</div>}
-                    {Array.isArray(drawerStats.blank_slot_stats) && drawerStats.blank_slot_stats.map((slot) => (
+                    {Array.isArray(detailStats.blank_slot_stats) && detailStats.blank_slot_stats.map((slot) => (
                       <div key={slot.slot_index} className="p-2 border border-gray-100 rounded-lg mb-2">
                         <div className="text-sm mb-1">
                           <Tag color="purple">空位 {slot.slot_index}</Tag>标准答案：{slot.correct_answer}
@@ -764,36 +774,42 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   <RobotOutlined className="text-purple" />
                   <span className="text-sm font-semibold">AI 分析</span>
                   <Tag color={analysisStatus.color} className="text-xs">{analysisStatus.text}</Tag>
-                  {drawerActivity.analysis_updated_at && (
-                    <span className="text-gray-300 text-xs">{new Date(drawerActivity.analysis_updated_at).toLocaleString()}</span>
+                  {detailActivity.analysis_updated_at && (
+                    <span className="text-gray-300 text-xs">{new Date(detailActivity.analysis_updated_at).toLocaleString()}</span>
                   )}
                 </div>
-                {drawerActivity.analysis_status === "success" && drawerActivity.analysis_result && (
+                {detailActivity.analysis_status === "running" && (
+                  <div className="border border-blue-100 rounded-lg px-3.5 py-3 bg-blue-50">
+                    <div className="text-sm text-blue-600 mb-2">AI 正在分析中...</div>
+                    <Progress percent={100} status="active" showInfo={false} />
+                  </div>
+                )}
+                {detailActivity.analysis_status === "success" && detailActivity.analysis_result && (
                   <div className="border border-gray-100 rounded-lg px-3.5 py-2.5 bg-surface-2">
-                    <SimpleMarkdown text={drawerActivity.analysis_result} />
+                    <SimpleMarkdown text={detailActivity.analysis_result} />
                     {riskSlots.length > 0 && <div className="mt-2 text-xs" style={{ color: "#d46b08" }}>薄弱空位：{riskSlots.map((s: any) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}</div>}
                     {commonMistakes.length > 0 && <div className="text-xs text-gray-600 mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
                   </div>
                 )}
-                {drawerActivity.analysis_status === "failed" && (
-                  <Alert type="error" showIcon message="自动分析失败" description={`失败原因：${drawerActivity.analysis_error || "未知错误"}`} />
+                {detailActivity.analysis_status === "failed" && (
+                  <Alert type="error" showIcon message="自动分析失败" description={`失败原因：${detailActivity.analysis_error || "未知错误"}`} />
                 )}
-                {drawerActivity.analysis_status === "skipped" && (
+                {detailActivity.analysis_status === "skipped" && (
                   <Alert type="warning" showIcon message="自动分析已跳过" description="作答数据不足，已跳过分析" />
                 )}
-                {(!drawerActivity.analysis_status || drawerActivity.analysis_status === "pending") && (
+                {(!detailActivity.analysis_status || detailActivity.analysis_status === "pending") && (
                   <div className="text-gray-300 text-xs">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
                 )}
               </div>
             )}
-            {drawerActivity.status === "active" && (
-              <Popconfirm title="确认结束活动？" onConfirm={() => handleEnd(drawerActivity.id)}>
+            {detailActivity.status === "active" && (
+              <Popconfirm title="确认结束活动？" onConfirm={() => handleEnd(detailActivity.id)}>
                 <Button danger block className="mt-5" icon={<StopOutlined />}>结束活动</Button>
               </Popconfirm>
             )}
           </div>
         )}
-      </Drawer>
+      </Modal>
 
     </AdminPage>
   );

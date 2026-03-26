@@ -14,6 +14,7 @@ from loguru import logger
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_super_admin
 from app.schemas.user_info import UserInfo
+from app.services import classroom as svc
 from app.schemas.assessment import (
     AssessmentConfigCreate,
     AssessmentConfigUpdate,
@@ -120,6 +121,10 @@ async def api_create_config(
     try:
         config = await create_config(db, config_in, current_user.get("id"))
         config = await get_config(db, config.id)
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "assessment_changed", "action": "create", "id": config.id})
+
         return _format_config_response(config)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -192,6 +197,10 @@ async def api_update_config(
         config = await get_config(db, config.id)
         qcount = await get_config_question_count(db, config_id)
         scount = await get_config_session_count(db, config_id)
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "assessment_changed", "action": "update", "id": config_id})
+
         return _format_config_response(config, qcount, scount)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -211,6 +220,10 @@ async def api_delete_config(
     success = await delete_config(db, config_id)
     if not success:
         raise HTTPException(status_code=404, detail="测评配置不存在")
+
+    # 发布事件
+    svc.publish("admin_global", {"type": "assessment_changed", "action": "delete", "id": config_id})
+
     return {"message": "删除成功"}
 
 

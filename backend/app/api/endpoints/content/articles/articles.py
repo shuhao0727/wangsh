@@ -19,6 +19,7 @@ from app.schemas.articles import (
 from app.services.articles.article import ArticleService
 from app.core.config import settings
 from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
+from app.services import classroom as svc
 from .markdown_styles import router as markdown_styles_router
 
 router = APIRouter()
@@ -194,7 +195,9 @@ async def create_article(
             article_slug = cast(str, article.slug)
             # 清理缓存
             await clear_article_cache(article_id=article_id_val, slug=article_slug)
-        
+            # 发布事件到全局管理员频道
+            svc.publish("admin_global", {"type": "article_changed", "action": "create", "id": article_id_val})
+
         return article
         
     except ValueError as e:
@@ -434,6 +437,8 @@ async def update_article(
             article_id_val = cast(int, article.id)
             new_slug = cast(Optional[str], getattr(article, "slug", None))
             await clear_article_cache(article_id=article_id_val, slug=old_slug or new_slug)
+            # 发布事件到全局管理员频道
+            svc.publish("admin_global", {"type": "article_changed", "action": "update", "id": article_id_val})
         except Exception:
             pass
 
@@ -455,7 +460,7 @@ async def update_article(
 async def delete_article(
     article_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_super_admin)
+    current_user: Dict[str, Any] = Depends(require_super_admin)
 ) -> None:
     """
     删除文章
@@ -485,12 +490,15 @@ async def delete_article(
     
     # 删除文章
     success = await ArticleService.delete_article(db=db, article_id=article_id)
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"删除文章ID {article_id} 失败"
         )
+
+    # 发布事件到全局管理员频道
+    svc.publish("admin_global", {"type": "article_changed", "action": "delete", "id": article_id})
 
 
 @router.post("/{article_id}/publish", response_model=ArticleResponse)

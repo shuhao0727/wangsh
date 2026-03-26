@@ -97,6 +97,7 @@ async def bulk_delete_activities(
     if not ids:
         raise HTTPException(status_code=400, detail="请提供要删除的活动 ID 列表")
     result = await svc.bulk_delete_activities(db, ids)
+    svc.publish("admin_global", {"type": "activity_changed", "action": "bulk_delete"})
     return result
 
 
@@ -108,8 +109,8 @@ async def list_activities(
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(require_admin),
 ):
-    rows, total = await svc.list_activities(db, skip=skip, limit=limit, status=status)
-    items = [_to_response(a) for a in rows]
+    rows, rc_map, total = await svc.list_activities(db, skip=skip, limit=limit, status=status)
+    items = [_to_response(a, response_count=rc_map.get(a.id, 0)) for a in rows]
     return {"items": items, "total": total, "page": skip // limit + 1, "page_size": limit}
 
 
@@ -122,8 +123,7 @@ async def get_activity(
     try:
         activity = await svc.get_activity(db, activity_id)
         stats = await svc.get_statistics(db, activity_id)
-        activity._response_count = stats["total_responses"]
-        resp = _to_response(activity)
+        resp = _to_response(activity, response_count=stats["total_responses"])
         resp["stats"] = stats
         return resp
     except ValueError as e:
@@ -176,7 +176,6 @@ async def get_statistics(
 
 @router.get("/stream")
 async def admin_stream(
-    db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(require_admin),
 ):
     user_id = current_user.get("id")
@@ -198,12 +197,20 @@ async def admin_stream(
         finally:
             svc.unsubscribe(channel, sub_id)
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
-def _to_response(activity) -> dict:
+def _to_response(activity, response_count: int = 0) -> dict:
     from app.services.classroom import calc_remaining
-    resp_count = getattr(activity, "_response_count", 0)
+    resp_count = response_count
     return {
         "id": activity.id,
         "activity_type": activity.activity_type,

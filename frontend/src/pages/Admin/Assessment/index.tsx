@@ -2,6 +2,7 @@
  * 测评配置列表页 - /admin/assessment
  */
 import React, { useCallback, useEffect, useState } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import {
   Button,
   Table,
@@ -69,6 +70,9 @@ const AdminAssessment: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // SSE 实时更新
+  useAdminSSE('assessment_changed', loadData);
 
   const loadAgents = useCallback(async () => {
     try {

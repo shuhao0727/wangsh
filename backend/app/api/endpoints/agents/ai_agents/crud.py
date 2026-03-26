@@ -28,6 +28,7 @@ from app.services.agents import (
     get_agent_statistics,
     get_active_agents,
 )
+from app.services import classroom as svc
 from app.utils.agent_secrets import last4, try_decrypt_api_key
 from app.services.auth import authenticate_user
 
@@ -175,6 +176,9 @@ async def create_new_agent(
     try:
         agent = await create_agent(db, agent_in=agent_in)
 
+        # 发布事件
+        svc.publish("admin_global", {"type": "agent_changed", "action": "create", "id": agent.id})
+
         return _format_agent_response(agent)
     except ValueError as e:
         raise HTTPException(
@@ -202,6 +206,9 @@ async def update_existing_agent(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"智能体ID {agent_id} 不存在",
             )
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "agent_changed", "action": "update", "id": agent_id})
 
         return _format_agent_response(agent)
     except ValueError as e:
@@ -234,6 +241,9 @@ async def delete_existing_agent(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"智能体ID {agent_id} 不存在",
             )
+
+        # 发布事件
+        svc.publish("admin_global", {"type": "agent_changed", "action": "delete", "id": agent_id})
 
         return {"success": True, "message": "智能体删除成功"}
     except HTTPException:

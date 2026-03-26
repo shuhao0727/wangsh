@@ -14,6 +14,7 @@ import {
 } from "@services";
 import { logger } from "@services/logger";
 import { UsersState, UserActions, SearchParams } from "../types";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 
 /**
  * 用户管理 Hook
@@ -412,6 +413,9 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     handleRoleFilter,
     handleStatusFilter,
   };
+
+  // SSE 实时更新
+  useAdminSSE('user_changed', loadUsers);
 
   return {
     state,

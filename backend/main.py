@@ -42,12 +42,14 @@ async def lifespan(app: FastAPI):
     - 关闭时：清理资源
     """
     logger.info("应用启动中...")
-    
+
     if settings.DEBUG or settings.AUTO_CREATE_TABLES:
         logger.info("创建数据库表（仅开发环境/首次部署可选，生产请使用 Alembic 迁移）...")
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await _ensure_dev_schema(conn)
+            await _ensure_views(conn)
+            await _sync_alembic_version(conn)
 
     # 创建超级管理员账户
     await create_super_admin()
@@ -157,6 +159,42 @@ async def _ensure_dev_schema(conn):
         )
     except Exception:
         logger.warning("_ensure_dev_schema 执行失败（表可能尚未创建），跳过")
+
+
+async def _ensure_views(conn):
+    """确保视图存在"""
+    try:
+        await conn.execute(
+            text("""
+                CREATE OR REPLACE VIEW v_conversations_with_deleted AS
+                SELECT
+                    c.id, c.user_id,
+                    COALESCE(c.user_name, u.full_name, '未知用户') AS display_user_name,
+                    c.agent_id,
+                    COALESCE(c.agent_name, a.name, '未知智能体') AS display_agent_name,
+                    c.session_id, c.message_type, c.content, c.response_time_ms, c.created_at,
+                    CASE WHEN u.id IS NULL OR u.is_deleted = true THEN true ELSE false END AS is_user_deleted,
+                    CASE WHEN a.id IS NULL OR a.is_deleted = true THEN true ELSE false END AS is_agent_deleted
+                FROM znt_conversations c
+                LEFT JOIN sys_users u ON c.user_id = u.id
+                LEFT JOIN znt_agents a ON c.agent_id = a.id
+            """)
+        )
+        logger.info("视图 v_conversations_with_deleted 已创建/更新")
+    except Exception:
+        logger.warning("创建视图失败，跳过")
+
+
+async def _sync_alembic_version(conn):
+    """同步 Alembic 版本到最新"""
+    try:
+        result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+        current = result.scalar_one_or_none()
+        if not current:
+            await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('20260325_xbk_idx')"))
+            logger.info("Alembic 版本已同步到最新")
+    except Exception:
+        logger.warning("同步 Alembic 版本失败，跳过")
 
 
 async def create_super_admin():

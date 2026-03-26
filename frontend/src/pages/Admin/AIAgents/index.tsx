@@ -3,6 +3,7 @@
  * 连接后端数据库，支持完整的CRUD操作和测试功能
  */
 import React, { useCallback, useEffect, useState } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import {
   Button,
   Table,
@@ -194,8 +195,8 @@ const AdminAIAgents: React.FC = () => {
           description: values.description || undefined,
           model_name: createModelName || undefined,
           system_prompt: values.system_prompt || undefined,
-          api_endpoint: values.api_endpoint,
-          api_key: values.api_key,
+          api_endpoint: values.api_endpoint || undefined,
+          api_key: values.api_key || undefined,
           is_active: values.is_active !== undefined ? values.is_active : true,
         });
         
@@ -365,6 +366,9 @@ const AdminAIAgents: React.FC = () => {
     loadAgents();
     loadStatistics();
   }, [loadAgents, loadStatistics]);
+
+  // SSE 实时更新
+  useAdminSSE('agent_changed', loadAgents);
 
   return (
     <AdminPage scrollable={false}>
