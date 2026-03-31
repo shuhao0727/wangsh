@@ -249,6 +249,11 @@ const createApiClient = (): AxiosInstance => {
         const hadAuthContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
         originalRequest._retry = true;
 
+        // 访客（从未登录过）收到 401 时，直接拒绝，不尝试 refresh
+        if (!hadAuthContext) {
+          return Promise.reject(error);
+        }
+
         try {
           if (isAuthEndpoint(originalRequest.url)) {
             return Promise.reject(error);

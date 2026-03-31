@@ -19,7 +19,7 @@ from app.schemas.articles import (
 from app.services.articles.article import ArticleService
 from app.core.config import settings
 from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
-from app.services import classroom as svc
+from app.core.pubsub import publish
 from .markdown_styles import router as markdown_styles_router
 
 router = APIRouter()
@@ -196,7 +196,7 @@ async def create_article(
             # 清理缓存
             await clear_article_cache(article_id=article_id_val, slug=article_slug)
             # 发布事件到全局管理员频道
-            svc.publish("admin_global", {"type": "article_changed", "action": "create", "id": article_id_val})
+            publish("admin_global", {"type": "article_changed", "action": "create", "id": article_id_val})
 
         return article
         
@@ -438,7 +438,7 @@ async def update_article(
             new_slug = cast(Optional[str], getattr(article, "slug", None))
             await clear_article_cache(article_id=article_id_val, slug=old_slug or new_slug)
             # 发布事件到全局管理员频道
-            svc.publish("admin_global", {"type": "article_changed", "action": "update", "id": article_id_val})
+            publish("admin_global", {"type": "article_changed", "action": "update", "id": article_id_val})
         except Exception:
             pass
 
@@ -498,7 +498,7 @@ async def delete_article(
         )
 
     # 发布事件到全局管理员频道
-    svc.publish("admin_global", {"type": "article_changed", "action": "delete", "id": article_id})
+    publish("admin_global", {"type": "article_changed", "action": "delete", "id": article_id})
 
 
 @router.post("/{article_id}/publish", response_model=ArticleResponse)
@@ -571,12 +571,14 @@ async def list_public_articles(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(settings.ARTICLE_PAGE_SIZE_DEFAULT, ge=1, le=settings.ARTICLE_PAGE_SIZE_MAX, description="每页数量"),
     category_id: Optional[int] = Query(None, description="按分类ID筛选"),
+    q: Optional[str] = Query(None, description="搜索关键词（标题/内容）"),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
     获取已发布的文章列表（公开接口）
     
     权限：无需认证
+    支持搜索：通过 q 参数按标题/内容模糊搜索
     """
     # 生成缓存键
     cache_key = ArticleCacheKeys.public_list(
@@ -585,10 +587,12 @@ async def list_public_articles(
         category_id=category_id
     )
     
-    # 尝试从缓存获取
-    cached_result = await cache.get(cache_key)
-    if cached_result is not None:
-        return cached_result
+    # 有搜索关键词时跳过缓存
+    if not q:
+        # 尝试从缓存获取
+        cached_result = await cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
     
     # 缓存未命中，从数据库获取
     result = await ArticleService.list_articles(
@@ -598,7 +602,8 @@ async def list_public_articles(
         published_only=True,  # 只获取已发布的文章
         category_id=category_id,
         author_id=None,
-        include_relations=True  # 公开接口包含关联信息
+        include_relations=True,  # 公开接口包含关联信息
+        search=q,
     )
     
         # 将SQLAlchemy对象转换为字典（匹配Pydantic模型）

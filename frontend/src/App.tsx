@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Spin, Layout } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import BasicLayout from "@layouts/BasicLayout";
@@ -7,6 +7,12 @@ import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
+
+// 旧路由兼容重定向
+const ArticleEditRedirect: React.FC = () => {
+  const { id } = useParams();
+  return <Navigate to={`/admin/articles/editor/${id}`} replace />;
+};
 
 // 页面懒加载
 const HomePage = lazy(() => import("./pages/Home"));
@@ -112,7 +118,7 @@ function App() {
               <Route path="/admin/articles/editor/new" element={<AdminArticleEditorPage />} />
               <Route path="/admin/articles/editor/:id" element={<AdminArticleEditorPage />} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
-              <Route path="/admin/articles/edit/:id" element={<Navigate to="/admin/articles/editor/new" replace />} />
+              <Route path="/admin/articles/edit/:id" element={<ArticleEditRedirect />} />
               <Route path="/admin/informatics/editor/new" element={<AdminTypstEditorPage />} />
               <Route path="/admin/informatics/editor/:id" element={<AdminTypstEditorPage />} />
               <Route path="/admin/assessment/editor/new" element={<AdminAssessmentEditorPage />} />

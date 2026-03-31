@@ -1,0 +1,13 @@
+# ============================================
+# WangSh 开发/测试依赖
+# 安装方式: pip install -r requirements-dev.txt
+# ============================================
+
+# 包含生产依赖
+-r requirements.txt
+
+# 测试
+pytest==9.0.2
+
+# Kubernetes（沙箱扩展，开发预留）
+kubernetes==32.0.0

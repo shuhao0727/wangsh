@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from app.core.deps import require_admin, get_db
 from app.models import User
-from app.services import classroom as svc
+from app.core.pubsub import publish
 
 router = APIRouter()
 
@@ -58,6 +58,7 @@ def _parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]
 def _parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
     workbook = load_workbook(filename=io.BytesIO(content), data_only=True, read_only=True)
     worksheet = workbook.active
+    assert worksheet is not None  # XLSX 文件总是有 active sheet
     row_iterator = worksheet.iter_rows(values_only=True)
     header_row = next(row_iterator, None)
     if not header_row:
@@ -290,12 +291,12 @@ async def create_user(
             existing_user = check_result.scalar_one_or_none()
             
             if existing_user:
-                if existing_user.username == user_data.username:
+                if existing_user.username == user_data.username:  # type: ignore[union-attr]
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="用户名已存在"
                     )
-                if existing_user.student_id == user_data.student_id:
+                if existing_user.student_id == user_data.student_id:  # type: ignore[union-attr]
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="学号已存在"
@@ -317,7 +318,7 @@ async def create_user(
         await db.refresh(new_user)
 
         # 发布事件
-        svc.publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
+        publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(new_user)
@@ -384,12 +385,12 @@ async def update_user(
             existing_user = check_result.scalar_one_or_none()
             
             if existing_user:
-                if existing_user.username == user_data.username:
+                if existing_user.username == user_data.username:  # type: ignore[union-attr]
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="用户名已存在"
                     )
-                if existing_user.student_id == user_data.student_id:
+                if existing_user.student_id == user_data.student_id:  # type: ignore[union-attr]
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="学号已存在"
@@ -422,7 +423,7 @@ async def update_user(
         await db.refresh(user)
 
         # 发布事件
-        svc.publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
+        publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(user)
@@ -473,7 +474,7 @@ async def delete_user(
         await db.commit()
 
         # 发布事件
-        svc.publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
+        publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
 
         return {
             "success": True,
@@ -524,7 +525,7 @@ async def batch_delete_users(
         
         await db.commit()
 
-        svc.publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
+        publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
 
         return {
             "success": True,
@@ -595,6 +596,7 @@ async def download_user_import_template(
 
     workbook = Workbook()
     worksheet = workbook.active
+    assert worksheet is not None  # Workbook() 总是有一个 active sheet
     worksheet.title = "用户导入模板"
     worksheet.append(USER_IMPORT_HEADERS)
     for sample_row in USER_IMPORT_TEMPLATE_ROWS:
@@ -691,10 +693,10 @@ async def import_users(
                 
                 if existing_user:
                     # 更新现有用户
-                    existing_user.full_name = full_name
-                    existing_user.study_year = study_year or existing_user.study_year
-                    existing_user.class_name = class_name or existing_user.class_name
-                    existing_user.is_active = is_active
+                    existing_user.full_name = full_name  # type: ignore[assignment]
+                    existing_user.study_year = study_year or existing_user.study_year  # type: ignore[assignment]
+                    existing_user.class_name = class_name or existing_user.class_name  # type: ignore[assignment]
+                    existing_user.is_active = is_active  # type: ignore[assignment]
                     if username and username != existing_user.username:
                         # 检查用户名是否已被其他用户使用
                         username_check = select(User).where(
@@ -705,7 +707,7 @@ async def import_users(
                         username_result = await db.execute(username_check)
                         if username_result.scalar_one_or_none():
                             raise ValueError(f"用户名 '{username}' 已被其他用户使用")
-                        existing_user.username = username
+                        existing_user.username = username  # type: ignore[assignment]
                     
                     await db.commit()
                     await db.refresh(existing_user)
@@ -716,7 +718,7 @@ async def import_users(
                         full_name=full_name,
                         status="success",
                         message="用户信息已更新",
-                        user_id=existing_user.id
+                        user_id=existing_user.id  # type: ignore[arg-type]
                     ))
                     updated_count += 1
                 else:
@@ -751,7 +753,7 @@ async def import_users(
                         full_name=full_name,
                         status="success",
                         message="用户创建成功",
-                        user_id=new_user.id
+                        user_id=new_user.id  # type: ignore[arg-type]
                     ))
                     imported_count += 1
                     

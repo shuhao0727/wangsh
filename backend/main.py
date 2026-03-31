@@ -3,256 +3,52 @@ WangSh 后端应用主入口
 FastAPI 应用配置和启动
 """
 
-import os
 import time
 import uuid
-import asyncio
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from sqlalchemy import select, text
+from sqlalchemy import text
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
-from app.db.database import engine, Base, AsyncSessionLocal
+from app.db.database import AsyncSessionLocal
 from app.api import api_router
 from app.core.celery_app import celery_app
-from app.utils.security import hash_super_admin_password
-from app.utils.cache import cache, startup_cache, shutdown_cache
-from app.core.http_client import HttpClientManager
-from app.models import User
-from app.services.informatics.typst_styles import read_resource_style
-from app.models.informatics.typst_style import TypstStyle
-from app.services.articles.markdown_style_examples import ensure_style_examples
-from app.services.articles.article_examples import ensure_article_examples
-from app.services.informatics.github_sync import get_or_create_sync_settings
+from app.utils.cache import cache
+from app.core.startup import (
+    init_database,
+    init_super_admin,
+    init_seed_data,
+    init_services,
+    start_background_tasks,
+    shutdown,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    应用生命周期管理
-    - 启动时：初始化数据库连接，创建表，创建超级管理员，初始化缓存
-    - 关闭时：清理资源
-    """
+    """应用生命周期管理"""
     logger.info("应用启动中...")
 
-    if settings.DEBUG or settings.AUTO_CREATE_TABLES:
-        logger.info("创建数据库表（仅开发环境/首次部署可选，生产请使用 Alembic 迁移）...")
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            await _ensure_dev_schema(conn)
-            await _ensure_views(conn)
-            await _sync_alembic_version(conn)
-
-    # 创建超级管理员账户
-    await create_super_admin()
-
-    async with AsyncSessionLocal() as db:
-        try:
-            res = await db.execute(select(TypstStyle))
-            any_style = res.scalar_one_or_none()
-            if not any_style:
-                content = read_resource_style("my_style")
-                if content.strip():
-                    db.add(TypstStyle(key="my_style", title="my_style", content=content, sort_order=0))
-                    await db.commit()
-        except Exception:
-            logger.exception("初始化 TypstStyle 失败")
-        try:
-            await ensure_style_examples(db)
-        except Exception:
-            logger.exception("初始化 style examples 失败")
-        try:
-            await ensure_article_examples(db)
-        except Exception:
-            logger.exception("初始化 article examples 失败")
-    
-    # 初始化缓存
-    try:
-        logger.info("缓存服务初始化完成")
-    except Exception as e:
-        logger.error(f"缓存服务初始化失败: {e}")
-        # 不抛出异常，避免应用启动失败
-    
-    # 初始化全局 HTTP 客户端
-    HttpClientManager.get_client()
-    logger.info("全局 HTTP 客户端初始化完成")
+    await init_database()
+    await init_super_admin()
+    await init_seed_data()
+    await init_services()
 
     logger.info("应用启动完成")
-    cleanup_task = None
-    if bool(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_ENABLED", True)):
-        interval = int(getattr(settings, "PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS", 300) or 300)
+    cleanup_task = start_background_tasks()
 
-        async def loop():
-            last_sync_ts = 0.0
-            while True:
-                try:
-                    celery_app.send_task("app.tasks.pythonlab.cleanup_orphans")
-                    celery_app.send_task("app.tasks.pythonlab.cleanup_stale_sessions")
-                    async with AsyncSessionLocal() as db:
-                        cfg = await get_or_create_sync_settings(db)
-                        enabled = bool(cfg.enabled)  # type: ignore[arg-type]
-                        _hours: int = getattr(cfg, "interval_hours", None) or 48  # type: ignore[assignment]
-                        sync_interval = max(1, _hours)
-                    now_ts = asyncio.get_event_loop().time()
-                    if enabled and now_ts - last_sync_ts >= sync_interval * 3600:
-                        celery_app.send_task("app.tasks.informatics_sync.sync_informatics_from_github")
-                        last_sync_ts = now_ts
-                except Exception:
-                    logger.exception("定时清理/同步任务执行异常")
-                await asyncio.sleep(max(30, interval))
-
-        cleanup_task = asyncio.create_task(loop())
     yield
+
     logger.info("应用关闭中...")
-    if cleanup_task is not None:
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
-    
-    # 关闭缓存连接
-    try:
-        await shutdown_cache()
-        logger.info("缓存服务已关闭")
-    except Exception as e:
-        logger.error(f"缓存服务关闭失败: {e}")
-    
-    # 关闭全局 HTTP 客户端
-    await HttpClientManager.close()
-    logger.info("全局 HTTP 客户端已关闭")
-
-    # 清理数据库连接
-    await engine.dispose()
-    logger.info("应用已关闭")
-
-
-async def _ensure_dev_schema(conn):
-    try:
-        await conn.execute(
-            text(
-                "ALTER TABLE znt_group_discussion_sessions "
-                "ADD COLUMN IF NOT EXISTS group_name VARCHAR(64)"
-            )
-        )
-        await conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_znt_group_discussion_sessions_group_name "
-                "ON znt_group_discussion_sessions (group_name)"
-            )
-        )
-        await conn.execute(
-            text(
-                "ALTER TABLE znt_group_discussion_analyses "
-                "ADD COLUMN IF NOT EXISTS compare_session_ids TEXT"
-            )
-        )
-    except Exception:
-        logger.warning("_ensure_dev_schema 执行失败（表可能尚未创建），跳过")
-
-
-async def _ensure_views(conn):
-    """确保视图存在"""
-    try:
-        await conn.execute(
-            text("""
-                CREATE OR REPLACE VIEW v_conversations_with_deleted AS
-                SELECT
-                    c.id, c.user_id,
-                    COALESCE(c.user_name, u.full_name, '未知用户') AS display_user_name,
-                    c.agent_id,
-                    COALESCE(c.agent_name, a.name, '未知智能体') AS display_agent_name,
-                    c.session_id, c.message_type, c.content, c.response_time_ms, c.created_at,
-                    CASE WHEN u.id IS NULL OR u.is_deleted = true THEN true ELSE false END AS is_user_deleted,
-                    CASE WHEN a.id IS NULL OR a.is_deleted = true THEN true ELSE false END AS is_agent_deleted
-                FROM znt_conversations c
-                LEFT JOIN sys_users u ON c.user_id = u.id
-                LEFT JOIN znt_agents a ON c.agent_id = a.id
-            """)
-        )
-        logger.info("视图 v_conversations_with_deleted 已创建/更新")
-    except Exception:
-        logger.warning("创建视图失败，跳过")
-
-
-async def _sync_alembic_version(conn):
-    """同步 Alembic 版本到最新"""
-    try:
-        result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
-        current = result.scalar_one_or_none()
-        if not current:
-            await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('20260325_xbk_idx')"))
-            logger.info("Alembic 版本已同步到最新")
-    except Exception:
-        logger.warning("同步 Alembic 版本失败，跳过")
-
-
-async def create_super_admin():
-    """
-    创建或更新超级管理员账户
-    从环境变量读取配置
-    基于 sys_users 表结构（v3.0），使用 role_code='super_admin' 标识超级管理员
-    """
-    logger.info("检查超级管理员账户...")
-
-    try:
-        # 从环境变量获取超级管理员配置
-        admin_username = settings.SUPER_ADMIN_USERNAME
-        admin_password = settings.SUPER_ADMIN_PASSWORD
-        admin_full_name = settings.SUPER_ADMIN_FULL_NAME
-        
-        # 不再需要 email 字段
-        if not all([admin_username, admin_password]):
-            logger.warning("超级管理员配置不完整，跳过创建")
-            return
-        
-        # 哈希密码
-        hashed_password = hash_super_admin_password()
-        
-        async with AsyncSessionLocal() as session:
-            # 检查管理员是否已存在（根据 username）
-            query = select(User).where(
-                User.username == admin_username,
-                User.role_code.in_(['admin', 'super_admin'])
-            )
-            result = await session.execute(query)
-            existing_admin = result.scalar_one_or_none()
-            
-            if existing_admin:
-                # 更新现有管理员
-                existing_admin.hashed_password = hashed_password  # type: ignore[assignment]
-                existing_admin.role_code = 'super_admin'  # type: ignore[assignment]
-                existing_admin.is_active = True  # type: ignore
-                existing_admin.full_name = admin_full_name if admin_full_name else existing_admin.full_name  # type: ignore[assignment]
-                logger.info(f"超级管理员账户已更新: {admin_username}")
-            else:
-                # 创建新管理员
-                new_admin = User(
-                    username=admin_username,
-                    hashed_password=hashed_password,
-                    full_name=admin_full_name if admin_full_name else "系统超级管理员",
-                    role_code='super_admin',
-                    is_active=True
-                )
-                session.add(new_admin)
-                logger.info(f"超级管理员账户已创建: {admin_username}")
-            
-            await session.commit()
-            logger.info("超级管理员账户设置完成")
-    
-    except Exception as e:
-        logger.error(f"创建超级管理员失败: {e}")
-        # 不抛出异常，避免应用启动失败
+    await shutdown(cleanup_task)
 
 
 # 创建 FastAPI 应用实例

@@ -11,7 +11,6 @@ from loguru import logger
 from app.db.database import get_db
 from app.core.config import settings
 from app.services.auth import get_current_user as auth_get_current_user
-from app.services.auth import get_current_user_or_student
 from app.services.auth import verify_token
 from app.core.session_guard import verify_request_session
 from app.schemas.user_info import UserInfo
@@ -182,13 +181,3 @@ async def require_user(
     return current_user
 
 
-async def get_current_user_for_znt(
-    db: AsyncSession = Depends(get_db),
-    token: Optional[str] = Depends(get_access_token)
-) -> Optional[UserInfo]:
-    """
-    为znt_users API提供的兼容性用户获取函数
-    无token时返回None
-    """
-    result = await get_current_user_or_student(token, db)
-    return cast(UserInfo, result) if result else None

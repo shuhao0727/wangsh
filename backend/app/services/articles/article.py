@@ -188,10 +188,11 @@ class ArticleService:
         published_only: bool = True,
         category_id: Optional[int] = None,
         author_id: Optional[int] = None,
-        include_relations: bool = False
+        include_relations: bool = False,
+        search: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        获取文章列表（支持分页和筛选）
+        获取文章列表（支持分页、筛选和搜索）
         """
         # 构建查询
         query = select(Article)
@@ -203,6 +204,11 @@ class ArticleService:
             query = query.where(Article.category_id == category_id)
         if author_id:
             query = query.where(Article.author_id == author_id)
+        if search and search.strip():
+            keyword = f"%{search.strip()}%"
+            query = query.where(
+                Article.title.ilike(keyword) | Article.content.ilike(keyword)
+            )
         
         # 计算总数（直接基于条件构建 count 查询，避免 subquery 开销）
         count_query = select(func.count(Article.id))
@@ -212,6 +218,11 @@ class ArticleService:
             count_query = count_query.where(Article.category_id == category_id)
         if author_id:
             count_query = count_query.where(Article.author_id == author_id)
+        if search and search.strip():
+            keyword = f"%{search.strip()}%"
+            count_query = count_query.where(
+                Article.title.ilike(keyword) | Article.content.ilike(keyword)
+            )
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
         
@@ -277,7 +288,7 @@ class ArticleService:
             .values(published=published, updated_at=datetime.now())
         )
         
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[union-attr]
             return None
         
         await db.commit()

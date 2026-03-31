@@ -30,7 +30,7 @@ x-common-env: &common-env
 # 包含 common-env + PythonLab 环境变量的合并版本
 x-common-with-pythonlab-env: &common-with-pythonlab-env
   <<: *common-env
-  PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.5.2}
+  PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.5.3}
   PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
   PYTHONLAB_SESSION_TTL_SECONDS: ${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
   PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
@@ -113,7 +113,7 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-backend:${IMAGE_TAG:-1.5.2}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-backend:${IMAGE_TAG:-1.5.3}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -122,6 +122,8 @@ services:
         max-file: "3"
     environment:
       <<: *common-with-pythonlab-env
+      # ⚠️ SSE pub/sub 为进程内实现，多 worker 时 SSE 推送会失效
+      # 如需多 worker，请先将 SSE 改为 Redis pub/sub
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
       AUTH_TRUST_X_FORWARDED_FOR: ${AUTH_TRUST_X_FORWARDED_FOR:-true}
@@ -168,7 +170,7 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG:-1.5.2}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG:-1.5.3}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -211,7 +213,7 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG:-1.5.2}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG:-1.5.3}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -250,7 +252,7 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
-    image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.5.2}
+    image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.5.3}
     restart: unless-stopped
     command: [ "sh", "-lc", "sleep infinity" ]
     networks:
@@ -269,7 +271,7 @@ services:
         REACT_APP_VERSION: ${REACT_APP_VERSION:-}
         NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}
         CADDY_IMAGE: ${CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2-alpine}
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-frontend:${IMAGE_TAG:-1.5.2}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-frontend:${IMAGE_TAG:-1.5.3}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -300,7 +302,7 @@ services:
   gateway:
     platform: linux/amd64
     build: ./gateway
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-gateway:${IMAGE_TAG:-1.5.2}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKERHUB_NAMESPACE:-shuhao07}/wangsh-gateway:${IMAGE_TAG:-1.5.3}
     restart: unless-stopped
     logging:
       driver: "json-file"

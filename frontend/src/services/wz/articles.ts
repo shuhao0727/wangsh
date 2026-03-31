@@ -233,12 +233,10 @@ export const articleApi = {
   },
 
   /**
-   * 搜索文章
+   * 搜索文章（通过公开列表接口的 q 参数，无需认证）
    */
   searchArticles: (query: string, page: number = 1, size: number = 20) => {
-    // 后端直接返回数据，没有ApiResponse包装
-    // 使用client.get避免ApiResponse包装期望
-    return api.client.get<ArticleListResponse>("/articles/search", {
+    return api.client.get<ArticleListResponse>("/articles/public/list", {
       params: {
         q: query,
         page,

@@ -17,16 +17,17 @@ bash stop-dev.sh
 
 ## 生产部署（Docker Compose）
 
-**生产配置**：请使用 `.env` (复制自 `.env.example`)。`scripts/deploy.sh` 默认使用它。
+**生产配置**：请使用 `.env` (复制自 `.env.example`)。
 
 看文档： [docs/DEPLOY.md](./docs/DEPLOY.md)
 
-最常用的一键部署命令（服务器上）：
+最常用的部署命令（服务器上）：
 
 ```bash
 cp .env.example .env
 # 修改 .env 中的密钥和配置
-bash scripts/deploy.sh deploy
+./build_images.sh
+docker compose up -d
 ```
 
 登录过期配置（短时登录）：

@@ -200,11 +200,22 @@ const useAuthController = () => {
     }
   }, [authState.user]);
 
-  // 初始化时获取用户信息
+  // 初始化时获取用户信息（仅在有 token 时才请求，避免访客触发无谓 401）
   useEffect(() => {
     if (!initialFetchRef.current) {
       initialFetchRef.current = true;
-      fetchCurrentUser();
+      const token = getStoredAccessToken() || getCookieToken();
+      if (token) {
+        fetchCurrentUser();
+      } else {
+        // 无 token，直接设为未登录状态，不发请求
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        });
+      }
     }
   }, [fetchCurrentUser]);
 

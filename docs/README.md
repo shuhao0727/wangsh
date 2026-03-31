@@ -13,10 +13,6 @@
 - [database-migration-fix.md](database-migration-fix.md) - 数据库迁移修复方案（2026-03-25）
 - [migration_analysis.md](migration_analysis.md) - 历史迁移链分析
 
-## 开发相关
-
-- [CLAUDE_MEMORY.md](CLAUDE_MEMORY.md) - 项目记忆文档（供AI助手参考）
-
 ## 评估系统文档
 
 评估系统相关文档已整理到 [assessment/](./assessment/) 目录：

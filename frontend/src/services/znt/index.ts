@@ -14,7 +14,7 @@ import type {
 // 导入API
 import aiAgentsApi from "./api/ai-agents-api";
 
-// 模拟的测试功能
+/** @deprecated 模拟实现，未被任何页面使用 */
 export const testAIAgent = () =>
   Promise.resolve({
     data: {
@@ -27,13 +27,15 @@ export const testAIAgent = () =>
     message: "功能已简化",
   });
 
-export const quickTest = testAIAgent; // 别名
+/** @deprecated */
+export const quickTest = testAIAgent;
 
+/** @deprecated */
 export const AIAgentTester = {
   testAIAgent: testAIAgent,
 };
 
-// 用户API（空实现）
+/** @deprecated 空实现，真实用户 API 在 services/users/index.ts */
 export const zntUsersApi = {
   getUsers: (_params?: any) =>
     Promise.resolve({
@@ -102,7 +104,7 @@ export const zntUsersApi = {
     }),
 };
 
-// 学生认证API（空实现）
+/** @deprecated 空实现，真实认证 API 在 services/api.ts authApi */
 export const studentAuthApi = {
   login: (_data: StudentLoginRequest) =>
     Promise.resolve({

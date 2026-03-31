@@ -24,6 +24,10 @@ celery_app.conf.update(
     task_soft_time_limit=300,   # 5 分钟软超时
     task_time_limit=600,        # 10 分钟硬超时
     include=["app.tasks.typst_compile", "app.tasks.pythonlab", "app.tasks.informatics_sync"],
+    task_routes={
+        "app.tasks.typst_compile.compile_typst_note": {"queue": "typst"},
+        "app.tasks.informatics_sync.sync_informatics_from_github": {"queue": "typst"},
+    },
     beat_schedule={
         # 每 5 分钟清理孤儿容器（无对应 Redis 会话的 Docker 容器）
         "pythonlab-cleanup-orphans": {

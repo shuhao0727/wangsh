@@ -1,23 +1,11 @@
-from celery import Celery
+"""
+兼容层：统一指向 app.core.celery_app
+旧代码通过 `from app.celery_app import celery` 引用，
+新代码通过 `from app.core.celery_app import celery_app` 引用。
+两者指向同一个 Celery 实例。
+"""
 
-from app.core.config import settings
+from app.core.celery_app import celery_app
 
-
-celery = Celery(
-    "wangsh",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND,
-)
-
-celery.conf.update(
-    task_serializer=settings.CELERY_TASK_SERIALIZER,
-    result_serializer=settings.CELERY_RESULT_SERIALIZER,
-    accept_content=settings.CELERY_ACCEPT_CONTENT,
-    timezone=settings.TIMEZONE,
-    enable_utc=False,
-    task_routes={
-        "app.tasks.typst_compile.compile_typst_note": {"queue": "typst"},
-        "app.tasks.informatics_sync.sync_informatics_from_github": {"queue": "typst"},
-    },
-    imports=("app.tasks.typst_compile", "app.tasks.pythonlab", "app.tasks.informatics_sync"),
-)
+# 兼容旧代码的变量名
+celery = celery_app

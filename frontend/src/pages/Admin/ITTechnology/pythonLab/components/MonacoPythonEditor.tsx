@@ -1,7 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
+import * as monaco from "monaco-editor";
 import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
+
+// 使用本地 npm 包中的 Monaco，避免从 CDN (jsdelivr) 加载失败
+loader.config({ monaco });
 
 // 异步加载 monaco 实例，避免将整个 monaco-editor 打入主 chunk
 let monacoInstance: typeof MonacoType | null = null;

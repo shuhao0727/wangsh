@@ -271,6 +271,5 @@ Claude 会自动：
 
 ### 其他文档
 - `docs/CLAUDE_GUIDE.md` - Claude 使用指南
-- `docs/CLAUDE_MEMORY.md` - Claude 项目记忆
 - `docs/database-migration-fix.md` - 数据库迁移
 - `docs/migration_analysis.md` - 迁移链分析

@@ -15,36 +15,11 @@ from app.models.agents import AIAgent
 
 logger = logging.getLogger(__name__)
 
-# ─── SSE pub/sub ───
-# NOTE: 进程内 pub/sub，仅支持单 worker 部署。
-# 若需多 worker 横向扩展，需替换为 Redis pub/sub 或类似方案。
-_subscribers: Dict[str, Dict[str, asyncio.Queue]] = {}  # channel -> {sub_id: queue}
+# ─── SSE pub/sub（已提取到 app.core.pubsub，此处保持向后兼容导入）───
+from app.core.pubsub import publish, subscribe, unsubscribe  # noqa: F401
 
 # 超时检查节流：最多每30秒执行一次
 _last_auto_end_check: float = 0.0
-
-
-def publish(channel: str, event: dict):
-    """向指定频道的所有订阅者推送事件"""
-    subs = _subscribers.get(channel, {})
-    for q in subs.values():
-        try:
-            q.put_nowait(event)
-        except asyncio.QueueFull:
-            pass
-
-
-def subscribe(channel: str, sub_id: str) -> asyncio.Queue:
-    q: asyncio.Queue = asyncio.Queue(maxsize=50)
-    _subscribers.setdefault(channel, {})[sub_id] = q
-    return q
-
-
-def unsubscribe(channel: str, sub_id: str):
-    subs = _subscribers.get(channel, {})
-    subs.pop(sub_id, None)
-    if not subs:
-        _subscribers.pop(channel, None)
 
 
 # ─── CRUD ───

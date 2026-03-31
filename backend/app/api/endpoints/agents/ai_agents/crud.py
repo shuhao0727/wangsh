@@ -28,7 +28,7 @@ from app.services.agents import (
     get_agent_statistics,
     get_active_agents,
 )
-from app.services import classroom as svc
+from app.core.pubsub import publish
 from app.utils.agent_secrets import last4, try_decrypt_api_key
 from app.services.auth import authenticate_user
 
@@ -177,7 +177,7 @@ async def create_new_agent(
         agent = await create_agent(db, agent_in=agent_in)
 
         # 发布事件
-        svc.publish("admin_global", {"type": "agent_changed", "action": "create", "id": agent.id})
+        publish("admin_global", {"type": "agent_changed", "action": "create", "id": agent.id})
 
         return _format_agent_response(agent)
     except ValueError as e:
@@ -208,7 +208,7 @@ async def update_existing_agent(
             )
 
         # 发布事件
-        svc.publish("admin_global", {"type": "agent_changed", "action": "update", "id": agent_id})
+        publish("admin_global", {"type": "agent_changed", "action": "update", "id": agent_id})
 
         return _format_agent_response(agent)
     except ValueError as e:
@@ -243,7 +243,7 @@ async def delete_existing_agent(
             )
 
         # 发布事件
-        svc.publish("admin_global", {"type": "agent_changed", "action": "delete", "id": agent_id})
+        publish("admin_global", {"type": "agent_changed", "action": "delete", "id": agent_id})
 
         return {"success": True, "message": "智能体删除成功"}
     except HTTPException:
@@ -291,13 +291,13 @@ async def discover_agent_models(
                 detail="该智能体未配置API密钥",
             )
 
-        if not agent.api_endpoint:
+        if not agent.api_endpoint:  # type: ignore[truthy-bool]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="该智能体未配置API地址",
             )
 
-        request = ModelDiscoveryRequest(api_endpoint=str(agent.api_endpoint), api_key=str(api_key))
+        request = ModelDiscoveryRequest(api_endpoint=str(agent.api_endpoint), api_key=str(api_key), provider=None)
         return await discover_models_service(request)
     except HTTPException:
         raise

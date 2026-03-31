@@ -66,4 +66,4 @@ useAdminSSE('article_changed', loadArticles);
 1. **SSE 连接**：需要管理员权限，自动携带 token
 2. **自动重连**：连接断开后指数退避重连（1s → 30s cap）
 3. **全局频道**：所有管理员共享同一频道，确保多用户协作时数据同步
-4. **单进程限制**：后端 pub/sub 为进程内实现，仅支持单 worker 部署
+4. **⚠️ 单进程限制（重要）**：后端 pub/sub 为进程内实现，`UVICORN_WORKERS` 必须设为 `1`。多 worker 时不同进程间无法共享 SSE 事件，会导致部分管理员收不到实时推送。未来如需多 worker 扩容，需将 pub/sub 迁移到 Redis Pub/Sub

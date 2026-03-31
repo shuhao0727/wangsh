@@ -1,6 +1,6 @@
 {
   "name": "wangsh-frontend",
-  "version": "1.5.0",
+  "version": "1.5.3",
   "private": true,
   "description": "WangSh 项目前端应用 - React + TypeScript + Ant Design",
   "author": "WangSh Team",
