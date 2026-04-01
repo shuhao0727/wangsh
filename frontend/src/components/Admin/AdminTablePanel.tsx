@@ -1,5 +1,6 @@
 import React from "react";
-import { Empty, Spin } from "antd";
+import { Skeleton } from "antd";
+import EmptyState from "@components/Common/EmptyState";
 
 type Props = {
   title?: React.ReactNode;
@@ -11,6 +12,15 @@ type Props = {
   children: React.ReactNode;
   pagination?: React.ReactNode;
 };
+
+const TableSkeleton: React.FC = () => (
+  <div className="px-6 py-4 space-y-4">
+    <Skeleton.Input active block size="small" />
+    {Array.from({ length: 5 }).map((_, i) => (
+      <Skeleton key={i} active title={false} paragraph={{ rows: 1, width: "100%" }} />
+    ))}
+  </div>
+);
 
 const AdminTablePanel: React.FC<Props> = ({
   title, extra, loading = false, isEmpty = false,
@@ -26,14 +36,10 @@ const AdminTablePanel: React.FC<Props> = ({
 
     <div className="flex-1 overflow-hidden flex flex-col">
       {loading ? (
-        <div className="flex items-center justify-center h-full">
-          <Spin size="large" />
-        </div>
+        <TableSkeleton />
       ) : isEmpty ? (
         <div className="flex items-center justify-center h-full">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription}>
-            {emptyAction}
-          </Empty>
+          <EmptyState description={emptyDescription as string} action={emptyAction} />
         </div>
       ) : (
         <div className="flex-1 overflow-auto">

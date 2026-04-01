@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Avatar, Button, Tag, Select, Tooltip, Typography } from "antd";
+import { Avatar, Button, Tag, Select, Tooltip, Typography, Skeleton } from "antd";
 import { SettingOutlined, MenuFoldOutlined, PlusOutlined, HistoryOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { AgentSidebarProps } from "./types";
@@ -54,8 +54,12 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
 
   if (!currentAgent) {
     return (
-      <div className="flex flex-col h-full p-4 items-center justify-center">
-        <Text type="secondary" className="text-sm">正在加载智能体...</Text>
+      <div className="flex flex-col h-full p-4">
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} active avatar={{ size: 36, shape: "square" }} paragraph={{ rows: 1 }} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -105,7 +109,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
               style={{ backgroundColor: currentAgent.color }} />
             <Text strong className="text-sm truncate">{currentAgent.name}</Text>
           </div>
-          <Tag color="success" className="!m-0 !text-[10px] !leading-4 !h-[18px] !border-0">
+          <Tag color="success" className="!m-0 !text-xs !leading-4 !h-[18px] !border-0">
             在线
           </Tag>
         </div>
@@ -151,7 +155,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                         <Text type="secondary" className="text-xs font-medium">
                           {label} <span className="text-text-tertiary">({data.length})</span>
                         </Text>
-                        {collapsed[key] ? <RightOutlined className="text-[10px]" /> : <DownOutlined className="text-[10px]" />}
+                        {collapsed[key] ? <RightOutlined className="text-xs" /> : <DownOutlined className="text-xs" />}
                       </div>
                       {!collapsed[key] && (
                         <div className="flex flex-col gap-1 mt-1">
@@ -164,10 +168,10 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1">
-                                <Tag color="blue" className="!m-0 !text-[10px] !leading-4 !h-[18px]">
+                                <Tag color="blue" className="!m-0 !text-xs !leading-4 !h-[18px]">
                                   {s.turns}轮
                                 </Tag>
-                                <span className="text-[10px] text-text-tertiary">
+                                <span className="text-xs text-text-tertiary">
                                   {formatTimestamp(s.last_at)}
                                 </span>
                               </div>

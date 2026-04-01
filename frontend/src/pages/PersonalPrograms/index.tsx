@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Button, Empty, Tag, Typography, Skeleton } from "antd";
+import { Card, Row, Col, Button, Tag, Typography, Skeleton } from "antd";
 import { ArrowRightOutlined } from "@ant-design/icons";
+import EmptyState from "@components/Common/EmptyState";
 import { xbkPublicConfigApi } from "@services";
-import "./PersonalPrograms.css";
 
 const { Text } = Typography;
 
@@ -31,10 +31,10 @@ const PersonalProgramsPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="personal-programs-page">
+    <div className="max-w-[var(--ws-page-max-width-wide)] mx-auto p-[var(--ws-space-3)] sm:p-[var(--ws-space-4)] md:p-[var(--ws-space-5)]">
       {loading ? (
-        <Card className="personal-programs-card">
-          <div className="personal-programs-loading">
+        <Card className="!rounded-xl !border-none !bg-surface-2">
+          <div className="py-7 text-center">
             <Skeleton active />
           </div>
         </Card>
@@ -42,12 +42,12 @@ const PersonalProgramsPage: React.FC = () => {
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} lg={8}>
             <Card
-              className="personal-programs-card"
+              className="!rounded-xl !border-none !bg-surface-2"
               styles={{ body: { padding: "var(--ws-space-3)" } }}
             >
-              <div className="personal-programs-card-body">
-                <div className="personal-programs-card-header">
-                  <Text strong className="personal-programs-card-title">
+              <div className="flex flex-col gap-2.5 w-full">
+                <div className="flex items-center justify-between">
+                  <Text strong className="!text-sm sm:!text-base">
                     校本课（XBK）处理系统
                   </Text>
                   <Tag color="orange">新</Tag>
@@ -69,11 +69,8 @@ const PersonalProgramsPage: React.FC = () => {
           </Col>
         </Row>
       ) : (
-        <Card className="personal-programs-card">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无公开的个人程序"
-          />
+        <Card className="!rounded-xl !border-none !bg-surface-2">
+          <EmptyState description="暂无公开的个人程序" />
         </Card>
       )}
     </div>

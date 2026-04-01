@@ -12,6 +12,7 @@ import {
   LeftOutlined, RightOutlined, CheckOutlined, CodeOutlined, CopyOutlined,
 } from "@ant-design/icons";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
+import EmptyState from "@components/Common/EmptyState";
 import {
   classroomApi, Activity, ActivityCreateRequest,
   ActivityStats, OptionItem, ActiveAgentOption,
@@ -81,7 +82,7 @@ const ANALYSIS_STATUS_MAP: Record<string, { color: string; text: string }> = {
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
   if (!text) return null;
   return (
-    <div className="leading-relaxed text-sm text-gray-700">
+    <div className="leading-relaxed text-sm text-text-secondary">
       {text.split(/\n{2}/).map((para, i) => {
         if (para.startsWith("```")) {
           const code = para.replace(/^```[^\n]*\n?/, "").replace(/```$/, "");
@@ -250,7 +251,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
       open={open}
       onCancel={handleClose}
       footer={footer}
-      width={580}
+      width="min(92vw, 580px)"
       destroyOnClose
     >
       <Steps
@@ -293,7 +294,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
               <Form.List name="options">
                 {(fields, { add, remove }) => (
                   <>
-                    <div className="text-xs text-gray-400 mb-2.5">至少2个选项，最多6个</div>
+                    <div className="text-xs text-text-tertiary mb-2.5">至少2个选项，最多6个</div>
                     {fields.map((field, idx) => (
                       <Space key={field.key} align="baseline" className="flex mb-2">
                         <Form.Item {...field} name={[field.name, "key"]} noStyle initialValue={String.fromCharCode(65 + idx)}>
@@ -322,7 +323,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
           {activityType === "fill_blank" && (
             <>
               <div className="mb-3">
-                <div className="text-xs text-gray-500 mb-1.5 flex items-center gap-1.5">
+                <div className="text-xs text-text-tertiary mb-1.5 flex items-center gap-1.5">
                   <CodeOutlined />
                   代码片段模板（可选）— 用 <Tag color="purple" className="!mx-0.5 font-mono">___</Tag> 标记需要填写的位置
                 </div>
@@ -334,12 +335,11 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
                   }}
                   placeholder={`// 示例：\ndef add(a, b):\n    return ___ + ___`}
                   rows={8}
-                  style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace", fontSize: 13 }}
-                  className="!bg-code-bg !text-[#d4d4d4] !rounded-md"
+                  className="!bg-code-bg !text-[#d4d4d4] !rounded-md text-sm font-mono"
                   spellCheck={false}
                 />
                 {codeTemplate && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-text-tertiary mt-1">
                     检测到 <strong className="text-purple">{countBlanksInCode(codeTemplate)}</strong> 个空位
                   </div>
                 )}
@@ -347,7 +347,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
               <Form.List name="blank_answers">
                 {(fields, { add, remove }) => (
                   <>
-                    <div className="text-xs text-gray-400 mb-2.5">
+                    <div className="text-xs text-text-tertiary mb-2.5">
                       {codeTemplate ? "每个 ___ 对应一个标准答案" : "在标题中使用（1）（2）... 标记空位位置，这里填写每个空位的标准答案"}
                     </div>
                     {fields.map((field, idx) => (
@@ -377,7 +377,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
             <InputNumber min={0} max={3600} style={{ width: 180 }} addonAfter="秒" />
           </Form.Item>
           <div className="mb-4">
-            <div className="text-xs text-gray-500 mb-1.5">快速设置</div>
+            <div className="text-xs text-text-tertiary mb-1.5">快速设置</div>
             <Space>
               {[30, 60, 120, 300, 0].map((v) => (
                 <Button key={v} size="small" type="dashed"
@@ -396,7 +396,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({
 
         {/* 步骤 4：AI 分析 */}
         <div className={step === 3 ? "block" : "hidden"}>
-          <div className="text-xs text-gray-500 mb-4">活动结束后自动触发 AI 分析（可选，跳过则不分析）</div>
+          <div className="text-xs text-text-tertiary mb-4">活动结束后自动触发 AI 分析（可选，跳过则不分析）</div>
           <Form.Item name="analysis_agent_id" label="分析智能体">
             <Select
               placeholder={activeAgents.length > 0 ? "选择智能体" : "暂无可用智能体"}
@@ -608,7 +608,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
               />
             }
           >
-            <Table dataSource={activities} rowKey="id" loading={loading} pagination={false} size="middle"
+            <Table dataSource={activities} rowKey="id" loading={loading} pagination={false} size="middle" scroll={{ x: 900 }}
               rowSelection={{
                 type: "checkbox",
                 selectedRowKeys,
@@ -627,7 +627,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                 } },
               { title: "分析", dataIndex: "analysis_status", width: 90,
                 render: (s: string) => {
-                  if (!s) return <span className="text-gray-300">—</span>;
+                  if (!s) return <span className="text-text-tertiary">—</span>;
                   const info = ANALYSIS_STATUS_MAP[s] || { color: "default", text: s };
                   return <Tag color={info.color} className="text-xs">{info.text}</Tag>;
                 } },
@@ -705,7 +705,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
         title={detailActivity?.title || "活动详情"}
         open={detailOpen}
         onCancel={closeDetail}
-        width={680}
+        width="min(92vw, 680px)"
         footer={null}
       >
         {detailActivity && (
@@ -739,7 +739,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                     <div key={opt.key} className="mb-2.5">
                       <div className="flex justify-between text-sm mb-0.5">
                         <span style={{ color: isCorrect ? "#52c41a" : "#333", fontWeight: isCorrect ? 600 : undefined }}>{opt.key}. {opt.text}</span>
-                        <span className="text-gray-400">{count} 票 ({pct}%)</span>
+                        <span className="text-text-tertiary">{count} 票 ({pct}%)</span>
                       </div>
                       <Progress percent={pct} showInfo={false} strokeColor={isCorrect ? "#52c41a" : "#4096ff"} size="small" />
                     </div>
@@ -750,9 +750,9 @@ const AdminClassroomInteractionPage: React.FC = () => {
                     {detailStats.correct_rate != null ? (
                       <div className="text-center p-5">
                         <Progress type="circle" percent={detailStats.correct_rate} size={100} format={(p) => `${p}%`} />
-                        <div className="mt-2 text-gray-400">整体正确率</div>
+                        <div className="mt-2 text-text-tertiary">整体正确率</div>
                       </div>
-                    ) : <div className="text-gray-400 text-xs">暂无作答数据</div>}
+                    ) : <EmptyState description="暂无作答数据" className="py-4" />}
                     {Array.isArray(detailStats.blank_slot_stats) && detailStats.blank_slot_stats.map((slot) => (
                       <div key={slot.slot_index} className="p-2 border border-gray-100 rounded-lg mb-2">
                         <div className="text-sm mb-1">
@@ -761,7 +761,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                         <Progress percent={slot.correct_rate ?? 0} size="small" format={(p) => `${p}% 正确`}
                           strokeColor={slot.correct_rate != null && slot.correct_rate >= 60 ? "#52c41a" : "#ff4d4f"} />
                         {slot.top_wrong_answers?.length > 0 && (
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="text-xs text-text-tertiary mt-1">
                             高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
                           </div>
                         )}
@@ -775,7 +775,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   <span className="text-sm font-semibold">AI 分析</span>
                   <Tag color={analysisStatus.color} className="text-xs">{analysisStatus.text}</Tag>
                   {detailActivity.analysis_updated_at && (
-                    <span className="text-gray-300 text-xs">{new Date(detailActivity.analysis_updated_at).toLocaleString()}</span>
+                    <span className="text-text-tertiary text-xs">{new Date(detailActivity.analysis_updated_at).toLocaleString()}</span>
                   )}
                 </div>
                 {detailActivity.analysis_status === "running" && (
@@ -788,7 +788,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   <div className="border border-gray-100 rounded-lg px-3.5 py-2.5 bg-surface-2">
                     <SimpleMarkdown text={detailActivity.analysis_result} />
                     {riskSlots.length > 0 && <div className="mt-2 text-xs" style={{ color: "#d46b08" }}>薄弱空位：{riskSlots.map((s: any) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}</div>}
-                    {commonMistakes.length > 0 && <div className="text-xs text-gray-600 mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
+                    {commonMistakes.length > 0 && <div className="text-xs text-text-secondary mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
                   </div>
                 )}
                 {detailActivity.analysis_status === "failed" && (
@@ -798,7 +798,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
                   <Alert type="warning" showIcon message="自动分析已跳过" description="作答数据不足，已跳过分析" />
                 )}
                 {(!detailActivity.analysis_status || detailActivity.analysis_status === "pending") && (
-                  <div className="text-gray-300 text-xs">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
+                  <div className="text-text-tertiary text-xs">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
                 )}
               </div>
             )}

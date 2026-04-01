@@ -14,7 +14,7 @@ const NodeCard: React.FC<{ tpl: FlowNodeTemplate; badge?: boolean; onClick: () =
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-1.5">
         <span className="font-semibold text-sm text-text-base">{tpl.title}</span>
-        {badge && <Tag color="gold" className="!m-0 !text-[10px] !leading-4 !h-[16px]">高级</Tag>}
+        {badge && <Tag color="gold" className="!m-0 !text-xs !leading-4 !h-[16px]">高级</Tag>}
       </div>
       <div className="text-xs text-text-tertiary truncate">{tpl.description}</div>
     </div>

@@ -117,4 +117,4 @@ Claude 会：
 ## 相关文档
 
 - [API 文档](./API.md)
-- [部署指南](./DEPLOY.md)
+- [部署指南](../deploy/DEPLOY.md)

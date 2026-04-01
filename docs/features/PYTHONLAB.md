@@ -50,7 +50,7 @@ Python 进程
 
 ### 容器配置
 
-**镜像**：`shuhao07/pythonlab-sandbox:1.5.1`
+**镜像**：`shuhao07/pythonlab-sandbox:1.5.3`
 
 **资源限制**：
 - CPU：50000 微秒/100ms（50%）
@@ -232,7 +232,7 @@ TIMEOUT_SECONDS=20 python backend/scripts/smoke_pythonlab_print_visibility_probe
 
 ## API 端点
 
-详见 [API.md](./API.md) 第十二章节：调试工具 / PythonLab（/debug）
+详见 [API.md](../development/API.md) 第十二章节：调试工具 / PythonLab（/debug）
 
 ### 核心端点
 

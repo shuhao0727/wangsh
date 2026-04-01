@@ -35,6 +35,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
+import EmptyState from "@components/Common/EmptyState";
 import RadarChart from "@components/RadarChart";
 import { BasicProfileView, AdvancedProfileView, AdvancedProfileEmpty } from "@components/ProfileView";
 import {
@@ -333,7 +334,7 @@ const StatisticsPage: React.FC = () => {
             {statItems.map((s, i) => (
               <Col xs={12} sm={8} md={4} key={i}>
                 <div className="bg-gray-50 rounded-lg px-4 py-2.5 flex items-center justify-between">
-                  <div className="text-xs text-gray-400">{s.icon && <span className="mr-1">{s.icon}</span>}{s.label}</div>
+                  <div className="text-xs text-text-tertiary">{s.icon && <span className="mr-1">{s.icon}</span>}{s.label}</div>
                   <div className="text-lg font-bold" style={{ color: s.color }}>{s.value}</div>
                 </div>
               </Col>
@@ -407,7 +408,7 @@ const StatisticsPage: React.FC = () => {
                 {radarSeries.length > 0 && radarSeries.some(s => Object.keys(s.data).length > 0) ? (
                   <RadarChart series={radarSeries} size={280} />
                 ) : (
-                  <div className="text-center text-gray-400 py-10">暂无知识点数据</div>
+                  <EmptyState description="暂无知识点数据" />
                 )}
               </Card>
             </Col>
@@ -464,7 +465,7 @@ const StatisticsPage: React.FC = () => {
                 <div className="pb-6">
                   <BasicProfileView data={profileData} />
                 </div>
-              ) : <div className="text-gray-400 py-10 text-center">暂无初级画像数据</div> },
+              ) : <EmptyState description="暂无初级画像数据" /> },
 
               { key: "advanced", label: "三维画像", children: advancedProfile ? (
                 <div className="pb-6">

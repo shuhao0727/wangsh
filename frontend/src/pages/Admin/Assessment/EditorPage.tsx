@@ -77,7 +77,7 @@ const EditorPage: React.FC = () => {
   }
 
   const fieldLabel = (text: string) => (
-    <span className="font-medium text-[13px]">{text}</span>
+    <span className="font-medium text-sm">{text}</span>
   );
 
   return (

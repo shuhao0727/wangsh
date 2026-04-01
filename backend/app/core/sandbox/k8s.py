@@ -36,7 +36,7 @@ class K8sProvider(SandboxProvider):
                 try:
                     config.load_incluster_config()
                     logger.info("Loaded in-cluster k8s config")
-                except:
+                except config.ConfigException:
                     config.load_kube_config()
                     logger.info("Loaded local kube-config")
                 self.api_core = client.CoreV1Api()
@@ -123,7 +123,7 @@ class K8sProvider(SandboxProvider):
              if e.status == 409:
                  try:
                     self.api_core.delete_namespaced_pod(name, self.namespace)
-                 except: pass
+                 except ApiException: pass
                  # We can't immediately recreate, K8s takes time to terminate. 
                  # For now, just fail.
                  raise RuntimeError(f"Pod {name} already exists. Please retry in a few seconds.")

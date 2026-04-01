@@ -166,14 +166,14 @@ class Settings(BaseSettings):
                         cgroup_content = f.read()
                         if "docker" in cgroup_content or "kubepods" in cgroup_content:
                             return True
-                except:
+                except (IOError, OSError):
                     pass
-                
+
                 # 方法3: 检查容器ID文件
                 if os.path.exists("/proc/self/cgroup") and "docker" in open("/proc/self/cgroup").read():
                     return True
-                    
-            except:
+
+            except (IOError, OSError):
                 pass
             return False
         

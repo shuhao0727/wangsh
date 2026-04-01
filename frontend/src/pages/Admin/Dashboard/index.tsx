@@ -18,7 +18,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, color = "#0EA5E
   <div className="rounded-xl p-5 bg-surface-2">
     <div className="flex items-center justify-between mb-3">
       <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">{label}</span>
-      {icon && <span style={{ color, fontSize: 16 }}>{icon}</span>}
+      {icon && <span className="text-base" style={{ color }}>{icon}</span>}
     </div>
     <div className="text-xl font-semibold text-text-base">{value ?? "-"}</div>
   </div>
@@ -87,8 +87,8 @@ const AdminDashboard: React.FC = () => {
           <div className="rounded-xl px-5 py-4 flex items-center gap-3"
             style={{ background: isHealthy ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)" }}>
             {isHealthy
-              ? <CheckCircleOutlined style={{ color: "#10B981", fontSize: 20 }} />
-              : <CloseCircleOutlined style={{ color: "#EF4444", fontSize: 20 }} />}
+              ? <CheckCircleOutlined className="text-lg" style={{ color: "#10B981" }} />
+              : <CloseCircleOutlined className="text-lg" style={{ color: "#EF4444" }} />}
             <div>
               <div className="text-sm font-semibold" style={{ color: isHealthy ? "#10B981" : "#EF4444" }}>
                 {isHealthy ? "系统运行正常" : "系统存在异常"}

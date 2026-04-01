@@ -1035,7 +1035,7 @@ async def rollback_optimization(
     if log_entry.type == "flow":
         try:
             content = json.loads(content)
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
             
     return {"original_content": content, "type": log_entry.type}

@@ -425,8 +425,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         type="primary"
         icon={<ThunderboltOutlined />}
         onClick={() => { if (!btnDragged.current) handleOpen(); }}
+        className="!rounded-l-none"
         style={{
-          borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
           background: "#8B5CF6", borderColor: "#8B5CF6",
           boxShadow: "2px 2px 8px rgba(139,92,246,0.4)",
         }}
@@ -441,9 +441,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const panel = (
     <div ref={floatingRef} onMouseUp={handleResizeUp} style={{
       position: "fixed", left: pos.x, top: pos.y, width: size.w, height: size.h,
-      background: "#fff", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
       zIndex: 1001, resize: "both",
-    }} className="flex flex-col overflow-hidden">
+    }} className="flex flex-col overflow-hidden bg-white rounded-xl">
       {/* 标题栏 */}
       <div
         onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}
@@ -527,7 +527,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {/* 倒计时 */}
           {remaining != null && remaining > 0 && (view === "vote" || view === "fill_blank" || view === "submitted") && (
             <div className="text-center mb-3">
-              <Tag color="orange" style={{ fontSize: 16, padding: "4px 12px" }}>{formatTime(remaining)}</Tag>
+              <Tag color="orange" className="text-base px-3 py-1">{formatTime(remaining)}</Tag>
             </div>
           )}
 
@@ -535,13 +535,13 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {view === "idle" && (
             <div className="flex flex-col items-center justify-center h-full pt-10">
               {activePlan ? (
-                <div className="text-center text-gray-400">
+                <div className="text-center text-text-tertiary">
                   <div className="text-4xl mb-3">⏳</div>
-                  <div className="text-sm font-medium text-gray-500 mb-1">等待下一题</div>
-                  <div className="text-xs text-gray-300">老师开始后将自动弹出题目</div>
+                  <div className="text-sm font-medium text-text-tertiary mb-1">等待下一题</div>
+                  <div className="text-xs text-text-tertiary">老师开始后将自动弹出题目</div>
                 </div>
               ) : (
-                <div className="text-center text-gray-400">
+                <div className="text-center text-text-tertiary">
                   <ThunderboltOutlined className="text-5xl text-gray-200 mb-3 block" />
                   <div className="text-sm">暂无进行中的活动</div>
                 </div>
@@ -586,7 +586,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                 <React.Fragment key={i}>
                   <span>{part}</span>
                   {i < parts.length - 1 && (
-                  <span style={{ background: "#722ed1", color: "#fff", borderRadius: 3, padding: "0 6px", fontSize: 12, fontFamily: "inherit", margin: "0 2px" }}>▢ {i + 1}</span>
+                  <span className="bg-[#722ed1] text-white rounded-[3px] px-1.5 text-xs font-[inherit] mx-0.5">▢ {i + 1}</span>
                   )}
                 </React.Fragment>
               ));
@@ -595,14 +595,14 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
               <div>
                 <div className="text-base font-semibold mb-3 leading-relaxed">{activity.title}</div>
                 {codeTemplate && (
-                  <pre className="bg-code-bg text-code-text rounded-lg overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ padding: "12px 14px", fontSize: 13, lineHeight: 1.6, fontFamily: "'JetBrains Mono','Fira Code',Consolas,monospace" }}>
+                  <pre className="bg-code-bg text-code-text rounded-lg overflow-auto mb-4 whitespace-pre-wrap break-all px-3.5 py-3 text-sm leading-[1.6] font-mono">
                     {renderCodeWithBlanks(codeTemplate)}
                   </pre>
                 )}
                 {Array.from({ length: blankCount }).map((_, idx) => (
                   <div key={idx} className="mb-2">
-                    <div className="text-xs text-gray-400 mb-1">空位 {idx + 1}</div>
-                    <Input value={fillAnswers[idx] || ""} onChange={e => { const a = [...fillAnswers]; a[idx] = e.target.value; setFillAnswers(a); }} placeholder={`填写第 ${idx + 1} 处答案`} maxLength={120} style={{ fontFamily: "'JetBrains Mono',Consolas,monospace" }} />
+                    <div className="text-xs text-text-tertiary mb-1">空位 {idx + 1}</div>
+                    <Input value={fillAnswers[idx] || ""} onChange={e => { const a = [...fillAnswers]; a[idx] = e.target.value; setFillAnswers(a); }} placeholder={`填写第 ${idx + 1} 处答案`} maxLength={120} className="font-mono" />
                   </div>
                 ))}
                 <Button type="primary" block className="!mt-4 !bg-purple !border-purple" onClick={handleSubmit} loading={submitting}>
@@ -616,9 +616,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {view === "submitted" && activity && (
             <div className="text-center py-8">
               <div className="text-5xl mb-3">✅</div>
-              <div className="text-base font-semibold mb-2 text-gray-700">已提交</div>
-              <div className="text-gray-400 text-sm mb-1">你的答案：{formatDisplayAnswer(myAnswer)}</div>
-              <div className="text-gray-300 text-xs">等待老师结束活动后查看结果…</div>
+              <div className="text-base font-semibold mb-2 text-text-secondary">已提交</div>
+              <div className="text-text-tertiary text-sm mb-1">你的答案：{formatDisplayAnswer(myAnswer)}</div>
+              <div className="text-text-tertiary text-xs">等待老师结束活动后查看结果…</div>
             </div>
           )}
 
@@ -627,17 +627,17 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             <div>
               <div className="text-base font-semibold mb-3 leading-relaxed">{activity.title}</div>
               <div className="px-4 py-3 rounded-lg mb-4" style={{ background: isCorrect === true ? "#f6ffed" : isCorrect === false ? "#fff2f0" : "#fafafa", border: `1px solid ${isCorrect === true ? "#b7eb8f" : isCorrect === false ? "#ffccc7" : "#f0f0f0"}` }}>
-                <div className="text-xs text-gray-400 mb-1">我的答案</div>
+                <div className="text-xs text-text-tertiary mb-1">我的答案</div>
                 <div className="text-base font-bold" style={{ color: isCorrect === true ? "#52c41a" : isCorrect === false ? "#ff4d4f" : "#333" }}>
                   {formatDisplayAnswer(myAnswer) || "未作答"}{isCorrect === true && " ✓ 正确"}{isCorrect === false && " ✗ 错误"}
                 </div>
                 {activity.correct_answer && (
-                  <div className="text-sm text-gray-500 mt-1">参考答案：{formatDisplayAnswer(activity.correct_answer)}</div>
+                  <div className="text-sm text-text-tertiary mt-1">参考答案：{formatDisplayAnswer(activity.correct_answer)}</div>
                 )}
               </div>
               {stats && activity.activity_type === "vote" && Array.isArray(activity.options) && (
                 <div>
-                  <div className="text-sm font-semibold mb-2.5 text-gray-700">班级投票结果 <span className="font-normal text-gray-400 text-xs">· {stats.total_responses} 人参与</span></div>
+                  <div className="text-sm font-semibold mb-2.5 text-text-secondary">班级投票结果 <span className="font-normal text-text-tertiary text-xs">· {stats.total_responses} 人参与</span></div>
                   {(activity.options as any[]).map((opt: any) => {
                     const count = stats.option_counts?.[opt.key] || 0;
                     const pct = stats.total_responses > 0 ? Math.round(count / stats.total_responses * 100) : 0;
@@ -650,7 +650,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                             {opt.key}. {opt.text}
                             {isMyAnswer && <Tag color="purple" className="ml-1.5 text-xs">我选的</Tag>}
                           </span>
-                          <span className="text-gray-400 text-xs">{count} ({pct}%)</span>
+                          <span className="text-text-tertiary text-xs">{count} ({pct}%)</span>
                         </div>
                         <Progress percent={pct} showInfo={false} strokeColor={isCorrectOpt ? "#52c41a" : isMyAnswer ? "#8B5CF6" : "#4096ff"} size="small" />
                       </div>
@@ -661,7 +661,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
               {stats && activity.activity_type === "fill_blank" && stats.correct_rate != null && (
                 <div className="text-center py-4">
                   <Progress type="circle" percent={stats.correct_rate} size={80} strokeColor="#8B5CF6" />
-                  <div className="mt-2 text-gray-400 text-xs">班级正确率 · {stats.total_responses} 人参与</div>
+                  <div className="mt-2 text-text-tertiary text-xs">班级正确率 · {stats.total_responses} 人参与</div>
                 </div>
               )}
             </div>
@@ -682,23 +682,23 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
               <div className="flex flex-col min-h-full">
                 <div className="flex items-center justify-between mb-3">
                   <Tag color="purple" className="text-xs">第 {globalIdx + 1} 题回顾</Tag>
-                  <Button type="text" size="small" className="!text-gray-400 !text-xs" onClick={() => { setView("idle"); setSelectedDoneActivityId(null); }}>关闭 ×</Button>
+                  <Button type="text" size="small" className="!text-text-tertiary !text-xs" onClick={() => { setView("idle"); setSelectedDoneActivityId(null); }}>关闭 ×</Button>
                 </div>
                 <div className="text-base font-semibold mb-3.5 leading-relaxed">{reviewActivity.title}</div>
                 <div className="px-3.5 py-2.5 rounded-lg mb-3.5" style={{ background: ans?.is_correct === true ? "#f6ffed" : ans?.is_correct === false ? "#fff2f0" : "#fafafa", border: `1px solid ${ans?.is_correct === true ? "#b7eb8f" : ans?.is_correct === false ? "#ffccc7" : "#f0f0f0"}` }}>
-                  <div className="text-xs text-gray-400 mb-0.5">我的答案</div>
+                  <div className="text-xs text-text-tertiary mb-0.5">我的答案</div>
                   <div className="text-sm font-bold" style={{ color: ans?.is_correct === true ? "#52c41a" : ans?.is_correct === false ? "#ff4d4f" : "#333" }}>
                     {formatDisplayAnswer(ans?.my_answer) || "未作答"}{ans?.is_correct === true && " ✓ 正确"}{ans?.is_correct === false && " ✗ 错误"}
                   </div>
                   {ans?.correct_answer && (
-                    <div className="text-xs text-gray-500 mt-0.5">参考答案：{formatDisplayAnswer(ans.correct_answer)}</div>
+                    <div className="text-xs text-text-tertiary mt-0.5">参考答案：{formatDisplayAnswer(ans.correct_answer)}</div>
                   )}
                   {ans?.is_correct == null && <div className="text-xs mt-0.5" style={{ color: "#faad14" }}>等待公布结果…</div>}
                 </div>
                 {reviewActivity.activity_type === "vote" && Array.isArray(reviewActivity.options) && (
                   <div className="mb-3.5">
-                    <div className="text-sm font-semibold mb-2 text-gray-700">班级投票结果
-                      {reviewStats && <span className="font-normal text-gray-400 text-xs"> · {reviewStats.total_responses} 人参与</span>}
+                    <div className="text-sm font-semibold mb-2 text-text-secondary">班级投票结果
+                      {reviewStats && <span className="font-normal text-text-tertiary text-xs"> · {reviewStats.total_responses} 人参与</span>}
                     </div>
                     {(reviewActivity.options as any[]).map((opt: any) => {
                       const isMyAns = ans?.my_answer?.split(",").includes(opt.key);
@@ -712,7 +712,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                               {opt.key}. {opt.text}
                               {isMyAns && <Tag color="purple" className="ml-1.5 text-xs">我选的</Tag>}
                             </span>
-                            {reviewStats && <span className="text-gray-400 text-xs">{count} ({pct}%)</span>}
+                            {reviewStats && <span className="text-text-tertiary text-xs">{count} ({pct}%)</span>}
                           </div>
                           {reviewStats ? (
                             <Progress percent={pct} showInfo={false} strokeColor={isCorrectOpt ? "#52c41a" : isMyAns ? "#8B5CF6" : "#4096ff"} size="small" />
@@ -727,10 +727,10 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                 {reviewActivity.activity_type === "fill_blank" && reviewStats && reviewStats.correct_rate != null && (
                   <div className="text-center py-3 mb-3.5">
                     <Progress type="circle" percent={reviewStats.correct_rate} size={80} strokeColor="#8B5CF6" />
-                    <div className="mt-2 text-gray-400 text-xs">班级正确率 · {reviewStats.total_responses} 人参与</div>
+                    <div className="mt-2 text-text-tertiary text-xs">班级正确率 · {reviewStats.total_responses} 人参与</div>
                   </div>
                 )}
-                {reviewStatsLoading && <div className="text-center text-gray-300 text-xs mb-3">加载班级数据中…</div>}
+                {reviewStatsLoading && <div className="text-center text-text-tertiary text-xs mb-3">加载班级数据中…</div>}
                 <div className="flex gap-2 pt-4 mt-2 border-t border-gray-100">
                   <Button block disabled={curIdx <= 0} onClick={() => doneItems[curIdx - 1] && openReview(doneItems[curIdx - 1].activity!.id)}>‹ 上一题</Button>
                   <Button block disabled={curIdx >= doneItems.length - 1} onClick={() => doneItems[curIdx + 1] && openReview(doneItems[curIdx + 1].activity!.id)} type="primary" className="!bg-purple !border-purple">下一题 ›</Button>

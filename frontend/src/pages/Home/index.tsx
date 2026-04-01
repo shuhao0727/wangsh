@@ -91,19 +91,15 @@ const HomePage: React.FC = () => {
 
         {/* Banner */}
         <div className="flex-none">
-          <div className="relative overflow-hidden rounded-2xl px-8 py-7 flex items-center justify-between gap-4"
-            style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.07) 0%, rgba(99,102,241,0.08) 100%)" }}>
+          <div className="relative overflow-hidden rounded-2xl px-8 py-7 flex items-center justify-between gap-4 bg-gradient-to-br from-[rgba(14,165,233,0.07)] to-[rgba(99,102,241,0.08)]">
             {/* 装饰圆 — 动态背景色保留 inline */}
-            <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full pointer-events-none"
-              style={{ background: "rgba(14,165,233,0.07)" }} />
-            <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full pointer-events-none"
-              style={{ background: "rgba(99,102,241,0.05)" }} />
+            <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full pointer-events-none bg-[rgba(14,165,233,0.07)]" />
+            <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full pointer-events-none bg-[rgba(99,102,241,0.05)]" />
 
             <div className="relative z-10">
               {isLoggedIn ? (
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-14 h-14 rounded-2xl flex-shrink-0 text-primary text-2xl"
-                    style={{ background: "rgba(14,165,233,0.15)" }}>
+                  <div className="flex items-center justify-center w-14 h-14 rounded-2xl flex-shrink-0 text-primary text-2xl bg-primary/[0.15]">
                     <UserOutlined />
                   </div>
                   <div>
@@ -137,7 +133,7 @@ const HomePage: React.FC = () => {
         {/* 平台模块 */}
         <div className="flex-none">
           <div className="text-sm font-medium mb-4 text-text-secondary">平台模块</div>
-          <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+          <div className="grid gap-4 grid-cols-5">
             {visibleModules.map((mod) => {
               const c = moduleColors[mod.id] ?? { icon: "#64748B", bg: "rgba(100,116,139,0.08)", ring: "rgba(100,116,139,0.18)" };
               return (
@@ -149,7 +145,7 @@ const HomePage: React.FC = () => {
                 >
                   <div className="module-icon flex items-center justify-center w-14 h-14 rounded-2xl mb-3"
                     style={{ background: c.bg }}>
-                    <span style={{ color: c.icon, fontSize: 28 }}>{mod.icon}</span>
+                    <span className="text-xl" style={{ color: c.icon }}>{mod.icon}</span>
                   </div>
                   <div className="font-semibold text-base mb-1.5 text-text-base">{mod.title}</div>
                   <div className="text-sm leading-relaxed text-text-secondary">{mod.description}</div>
@@ -172,8 +168,8 @@ const HomePage: React.FC = () => {
                   className="ext-card flex items-center gap-4 rounded-xl px-5 py-4 text-left border-0 cursor-pointer w-full bg-surface-2"
                   style={{ "--ec-bg": `rgba(${link.rgb},0.07)` } as React.CSSProperties}
                 >
-                  <div className="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0"
-                    style={{ background: `rgba(${link.rgb},0.1)`, color: link.color, fontSize: 20 }}>
+                  <div className="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0 text-xl"
+                    style={{ background: `rgba(${link.rgb},0.1)`, color: link.color }}>
                     {link.icon}
                   </div>
                   <div className="flex-1 min-w-0">

@@ -172,9 +172,8 @@ export const xbkDataApi = {
     const res = await api.client.put(`/xbk/data/students/${id}`, payload);
     return res.data as XbkStudentRow;
   },
-  deleteStudent: async (id: number): Promise<{ deleted: number }> => {
-    const res = await api.client.delete(`/xbk/data/students/${id}`);
-    return res.data as { deleted: number };
+  deleteStudent: async (id: number): Promise<void> => {
+    await api.client.delete(`/xbk/data/students/${id}`);
   },
 
   createCourse: async (payload: Omit<XbkCourseRow, "id">): Promise<XbkCourseRow> => {
@@ -185,9 +184,8 @@ export const xbkDataApi = {
     const res = await api.client.put(`/xbk/data/courses/${id}`, payload);
     return res.data as XbkCourseRow;
   },
-  deleteCourse: async (id: number): Promise<{ deleted: number }> => {
-    const res = await api.client.delete(`/xbk/data/courses/${id}`);
-    return res.data as { deleted: number };
+  deleteCourse: async (id: number): Promise<void> => {
+    await api.client.delete(`/xbk/data/courses/${id}`);
   },
 
   createSelection: async (payload: Omit<XbkSelectionRow, "id">): Promise<XbkSelectionRow> => {
@@ -198,9 +196,8 @@ export const xbkDataApi = {
     const res = await api.client.put(`/xbk/data/selections/${id}`, payload);
     return res.data as XbkSelectionRow;
   },
-  deleteSelection: async (id: number): Promise<{ deleted: number }> => {
-    const res = await api.client.delete(`/xbk/data/selections/${id}`);
-    return res.data as { deleted: number };
+  deleteSelection: async (id: number): Promise<void> => {
+    await api.client.delete(`/xbk/data/selections/${id}`);
   },
 
   listSelections: async (params: {

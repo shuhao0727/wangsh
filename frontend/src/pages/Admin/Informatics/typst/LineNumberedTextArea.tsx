@@ -54,11 +54,10 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
+          className="text-sm font-mono"
           style={{
             height: "100%",
             resize: "none",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            fontSize: 13,
             lineHeight: "22px",
           }}
         />

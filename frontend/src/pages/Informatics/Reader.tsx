@@ -1,7 +1,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Empty, Input, Tree, Typography, message, Skeleton, Tabs, Drawer, Grid } from "antd";
+import { Alert, Button, Input, Tree, Typography, message, Skeleton, Tabs, Drawer, Grid } from "antd";
 import { ReloadOutlined, SearchOutlined, MenuOutlined, ArrowLeftOutlined, FileTextOutlined, UnorderedListOutlined, FolderOutlined, RightOutlined } from "@ant-design/icons";
+import EmptyState from "@components/Common/EmptyState";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNoteListItem } from "@services";
 import PdfCanvasVirtualViewer, { type PdfCanvasVirtualViewerHandle } from "@components/Pdf/PdfCanvasVirtualViewer";
@@ -183,16 +184,16 @@ const InformaticsReaderPage: React.FC = () => {
         icon: <FileTextOutlined className="text-text-tertiary" />,
         title: (
           <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <Text strong style={{ display: "block", fontSize: 13 }} ellipsis={{ tooltip: sourceStem || it.title }}>
+            <Text strong className="text-sm" style={{ display: "block" }} ellipsis={{ tooltip: sourceStem || it.title }}>
               {sourceStem || it.title}
             </Text>
             {it.title && sourceStem && it.title !== sourceStem ? (
-              <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.title }}>
+              <Text type="secondary" className="text-xs" style={{ display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.title }}>
                 {it.title}
               </Text>
             ) : null}
             {it.summary ? (
-              <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.summary }}>
+              <Text type="secondary" className="text-xs" style={{ display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.summary }}>
                 {it.summary}
               </Text>
             ) : null}
@@ -236,7 +237,7 @@ const InformaticsReaderPage: React.FC = () => {
         key,
         title: (
           <Text ellipsis={{ tooltip: it.title }} className="block text-sm">
-            {it.title} <Text type="secondary" className="text-[10px]">p{it.pageNumber}</Text>
+            {it.title} <Text type="secondary" className="text-xs">p{it.pageNumber}</Text>
           </Text>
         ),
       };
@@ -369,10 +370,10 @@ const InformaticsReaderPage: React.FC = () => {
             showIcon
             showLine={{ showLeafIcon: false }}
             switcherIcon={({ expanded }: any) => (
-              <MenuOutlined className={`text-[10px] opacity-40 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
+              <MenuOutlined className={`text-xs opacity-40 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
             )}
           />
-          {items.length === 0 ? <Empty description="暂无已发布内容" className="mt-3" /> : null}
+          {items.length === 0 ? <EmptyState description="暂无已发布内容" className="mt-3" /> : null}
         </>
       )}
     </div>
@@ -388,7 +389,7 @@ const InformaticsReaderPage: React.FC = () => {
           blockNode
           showLine={{ showLeafIcon: false }}
           switcherIcon={({ expanded }: any) => (
-            <RightOutlined className={`text-[10px] opacity-50 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
+            <RightOutlined className={`text-xs opacity-50 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
           )}
           onSelect={(keys) => {
             const key = String(keys?.[0] || "");

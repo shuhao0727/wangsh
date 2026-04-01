@@ -12,6 +12,7 @@ from app.core.deps import require_super_admin, require_user
 from app.schemas.articles import CategoryCreate, CategoryUpdate, CategoryResponse
 from app.services.articles.category import CategoryService
 from app.core.config import settings
+from app.utils.errors import safe_error_detail
 
 router = APIRouter()
 
@@ -72,7 +73,7 @@ async def create_category(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建分类失败: {str(e)}"
+            detail=safe_error_detail("创建分类失败", e)
         )
 
 
@@ -155,7 +156,7 @@ async def update_category(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新分类失败: {str(e)}"
+            detail=safe_error_detail("更新分类失败", e)
         )
 
 
@@ -246,7 +247,7 @@ async def get_or_create_category(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取或创建分类失败: {str(e)}"
+            detail=safe_error_detail("获取或创建分类失败", e)
         )
 
 
@@ -277,7 +278,7 @@ async def get_category_stats(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取分类统计信息失败: {str(e)}"
+            detail=safe_error_detail("获取分类统计信息失败", e)
         )
 
 

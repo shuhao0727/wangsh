@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import { Button, Card, Empty, Input, Modal, Space, Spin, Typography, message } from "antd";
+import { Button, Card, Input, Modal, Space, Spin, Typography, message } from "antd";
 import { DeleteOutlined, DownloadOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import EmptyState from "@components/Common/EmptyState";
 import { typstNotesApi } from "@services";
 import type { TypstNote, TypstNoteListItem } from "@services";
 
@@ -221,8 +222,8 @@ const TypstNotesPanel: React.FC = () => {
   const activeItem = useMemo(() => items.find((it) => it.id === selectedId) || null, [items, selectedId]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
-      <div style={{ position: "sticky", top: 72 }}>
+    <div className="grid grid-cols-[320px_1fr] gap-4 items-start">
+      <div className="sticky top-[72px]">
         <Card
           size="small"
           title="Typst 笔记"
@@ -233,7 +234,7 @@ const TypstNotesPanel: React.FC = () => {
               </Button>
             </Space>
           }
-          style={{ borderRadius: 10, border: "none" }}
+          className="!border-none !rounded-[10px]"
           styles={{ body: { padding: 12 } }}
         >
           <Input.Search
@@ -242,32 +243,27 @@ const TypstNotesPanel: React.FC = () => {
             onSearch={loadList}
             placeholder="搜索标题"
             allowClear
-            style={{ marginBottom: 10 }}
+            className="mb-2.5"
           />
           {listLoading ? (
             <div className="text-center p-4">
               <Spin />
             </div>
           ) : items.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无笔记" />
+            <EmptyState description="暂无笔记" />
           ) : (
             <div className="flex flex-col gap-2 max-h-[calc(100vh-220px)] overflow-auto">
               {items.map((it) => (
                 <div
                   key={it.id}
                   onClick={() => setSelectedId(it.id)}
+                  className="cursor-pointer p-2.5 rounded-[10px] flex flex-col gap-1"
                   style={{
-                    cursor: "pointer",
-                    padding: "10px 10px",
-                    borderRadius: 10,
                     border:
                       it.id === selectedId
                         ? "1px solid #0EA5E9"
                         : "1px solid rgba(0,0,0,0.08)",
                     background: it.id === selectedId ? "rgba(14, 165, 233, 0.08)" : "#FFFFFF",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
                   }}
                 >
                   <Text strong ellipsis>
@@ -308,7 +304,7 @@ const TypstNotesPanel: React.FC = () => {
               </Button>
             </Space>
           }
-          style={{ borderRadius: 10, border: "none" }}
+          className="!border-none !rounded-[10px]"
           styles={{ body: { padding: 12 } }}
         >
           {noteLoading ? (
@@ -316,10 +312,10 @@ const TypstNotesPanel: React.FC = () => {
               <Spin />
             </div>
           ) : !selectedId ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择或新建一个笔记" />
+            <EmptyState description="请选择或新建一个笔记" />
           ) : (
             <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Text type="secondary">标题</Text>
                   <Input
@@ -337,8 +333,8 @@ const TypstNotesPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-                <Card size="small" title="编辑" style={{ borderRadius: 10, border: "none" }} styles={{ body: { padding: 10 } }}>
+              <div className="grid grid-cols-2 gap-3 items-start">
+                <Card size="small" title="编辑" className="!border-none !rounded-[10px]" styles={{ body: { padding: 10 } }}>
                   <TextArea
                     value={content}
                     onChange={(e) => {
@@ -346,11 +342,11 @@ const TypstNotesPanel: React.FC = () => {
                       setContent(e.target.value);
                     }}
                     autoSize={{ minRows: 18, maxRows: 32 }}
-                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                    className="font-mono"
                   />
                 </Card>
 
-                <Card size="small" title="实时预览（WASM）" style={{ borderRadius: 10, border: "none" }} styles={{ body: { padding: 10 } }}>
+                <Card size="small" title="实时预览（WASM）" className="!border-none !rounded-[10px]" styles={{ body: { padding: 10 } }}>
                   <div
                     className="min-h-[420px] rounded-xl border border-black/[0.04] bg-surface-2 overflow-auto p-2.5"
                   >

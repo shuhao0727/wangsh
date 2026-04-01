@@ -20,6 +20,7 @@ from app.services.articles.article import ArticleService
 from app.core.config import settings
 from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
 from app.core.pubsub import publish
+from app.utils.errors import safe_error_detail
 from .markdown_styles import router as markdown_styles_router
 
 router = APIRouter()
@@ -208,7 +209,7 @@ async def create_article(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建文章失败: {str(e)}"
+            detail=safe_error_detail("创建文章失败", e)
         )
 
 
@@ -452,7 +453,7 @@ async def update_article(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新文章失败: {str(e)}"
+            detail=safe_error_detail("更新文章失败", e)
         )
 
 

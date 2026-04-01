@@ -373,7 +373,7 @@ export const RightPanel = React.memo(function RightPanel() {
                 type="text"
                 htmlType="button"
                 loading={runner.status === "starting"}
-                icon={runner.status === "starting" ? null : <PlayCircleOutlined style={{ color: !controlMatrix.run ? undefined : "var(--ws-color-success)", fontSize: 18 }} />}
+                icon={runner.status === "starting" ? null : <PlayCircleOutlined className="text-lg" style={{ color: !controlMatrix.run ? undefined : "var(--ws-color-success)" }} />}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -394,7 +394,7 @@ export const RightPanel = React.memo(function RightPanel() {
             }>
               <Button
                 type="text"
-                icon={<BugOutlined style={{ color: !controlMatrix.debug ? undefined : runner.sourceMismatch ? "var(--ws-color-warning)" : runner.breakpoints.filter(b => b.enabled).length === 0 ? "var(--ws-color-text-tertiary)" : "var(--ws-color-primary)", fontSize: 18 }} />}
+                icon={<BugOutlined className="text-lg" style={{ color: !controlMatrix.debug ? undefined : runner.sourceMismatch ? "var(--ws-color-warning)" : runner.breakpoints.filter(b => b.enabled).length === 0 ? "var(--ws-color-text-tertiary)" : "var(--ws-color-primary)" }} />}
                 onClick={handleDebugClick}
                 disabled={!controlMatrix.debug}
                 style={toolButtonStyle}
@@ -404,7 +404,7 @@ export const RightPanel = React.memo(function RightPanel() {
               <Tooltip title={runner.sourceMismatchMessage || "流程图与运行代码版本不一致，请重建流程图映射"}>
                 <Button
                   type="text"
-                  icon={<ReloadOutlined style={{ color: "var(--ws-color-warning)", fontSize: 18 }} />}
+                  icon={<ReloadOutlined className="text-lg" style={{ color: "var(--ws-color-warning)" }} />}
                   onClick={async () => {
                     setRebuildError(null);
                     try {
@@ -420,14 +420,14 @@ export const RightPanel = React.memo(function RightPanel() {
             <Tooltip title="暂停 (Pause)">
               <Button
                 type="text"
-                icon={<PauseCircleOutlined style={{ color: runner.status === "running" ? "var(--ws-color-warning)" : undefined, fontSize: 18 }} />}
+                icon={<PauseCircleOutlined className="text-lg" style={{ color: runner.status === "running" ? "var(--ws-color-warning)" : undefined }} />}
                 onClick={onPause}
                 disabled={!controlMatrix.pause}
                 style={toolButtonStyle}
               />
             </Tooltip>
             <Tooltip title="继续 (Continue)">
-              <Button type="text" icon={<FastForwardOutlined style={{ fontSize: 18 }} />} onClick={onContinue} disabled={!controlMatrix.continue} style={toolButtonStyle} />
+              <Button type="text" icon={<FastForwardOutlined className="text-lg" />} onClick={onContinue} disabled={!controlMatrix.continue} style={toolButtonStyle} />
             </Tooltip>
             <div className="w-px h-4 bg-black/[0.08] mx-2" />
             <Tooltip title="单步跳过 (Step Over)">
@@ -448,7 +448,7 @@ export const RightPanel = React.memo(function RightPanel() {
         {visibleWarnings.length > 0 && (
           <div style={softNoticeStyle.info}>
             {visibleWarnings.slice(0, 3).map((w, i) => (
-              <div key={i} style={{ fontSize: 12, color: "var(--ws-color-text-secondary)" }}>
+              <div key={i} className="text-xs text-text-secondary">
                 {w}
               </div>
             ))}

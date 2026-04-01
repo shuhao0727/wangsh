@@ -2,6 +2,49 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.3（2026-03-31）
+
+### 1. 变更范围
+
+- 生产镜像版本升级 `1.5.2` → `1.5.3`
+- 代码质量提升 + 认证修复 + 架构优化
+
+### 2. 包含修复
+
+- **认证系统**：访客不再触发无谓 401/refresh，文章搜索改用公开 API
+- **架构优化**：pub/sub 从 classroom.py 提取到独立模块 `app/core/pubsub.py`，main.py lifespan 拆分到 `app/core/startup.py`
+- **代码清理**：celery_app 合并、database.py 死代码移除、deps.py 清理
+- **文档修复**：README deploy.sh 引用、版本号同步、CLAUDE_MEMORY 引用清理
+- **新增测试**：课堂计划 12 个测试用例（`backend/tests/classroom/test_classroom_plan.py`）
+- **前端修复**：Monaco CDN 改本地加载、App.tsx 路由重定向 bug
+- **SSE 安全**：docker-compose/env 添加单 worker 警告注释
+- **新增分析文档**：5 个 plans 分析文件（项目深度分析、模块分析、认证分析、代码质量审计、响应式分析）
+
+关键改动文件（37 files changed, +1958, -435）：
+- `backend/app/core/pubsub.py` — 新增，独立 pub/sub 模块
+- `backend/app/core/startup.py` — 新增，lifespan 拆分
+- `backend/main.py` — 大幅精简（-246 行）
+- `backend/tests/classroom/test_classroom_plan.py` — 新增 12 个测试
+- `frontend/src/hooks/useAuth.ts` — 访客 401 修复
+- `frontend/src/services/wz/articles.ts` — 文章搜索改用公开 API
+- `docker-compose.dev.yml` / `docker-compose.yml` — 版本升级 + SSE 警告
+
+### 3. 构建与部署
+
+```bash
+./build_images.sh 1.5.3
+docker compose push
+docker compose pull && docker compose up -d
+curl http://localhost:6608/health
+```
+
+### 4. 配置影响
+
+- 无新增配置项，沿用 v1.5.2 全部配置。
+- docker-compose.yml 新增注释警告：SSE pub/sub 为进程内实现，多 worker 时推送会失效。
+
+---
+
 ## v1.5.2（2026-03-26）
 
 ### 1. 变更范围

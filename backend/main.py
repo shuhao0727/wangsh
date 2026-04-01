@@ -56,7 +56,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="WangSh 项目后端 API 服务",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
@@ -76,7 +76,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; "
+                "script-src 'self' 'unsafe-inline' blob:; "
                 "style-src 'self' 'unsafe-inline'; "
                 "img-src 'self' data: blob:; "
                 "font-src 'self' data:; "

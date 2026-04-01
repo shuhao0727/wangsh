@@ -5,7 +5,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前版本**: 1.5.1
+- **当前版本**: 1.5.3
 
 ### 快速连接
 ```bash
@@ -71,9 +71,9 @@ docker compose up -d
 版本号统一在 `.env` 中的 `APP_VERSION` 定义：
 
 ```bash
-APP_VERSION=1.5.1
-IMAGE_TAG=1.5.1
-REACT_APP_VERSION=1.5.1
+APP_VERSION=1.5.3
+IMAGE_TAG=1.5.3
+REACT_APP_VERSION=1.5.3
 ```
 
 修改版本号后，其他相关变量会自动同步。
@@ -103,11 +103,11 @@ REACT_APP_VERSION=1.5.1
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:1.5.1` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:1.5.1` - 前端静态文件
-- `shuhao07/wangsh-gateway:1.5.1` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:1.5.1` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:1.5.1` - PythonLab 调试 worker
+- `shuhao07/wangsh-backend:1.5.3` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:1.5.3` - 前端静态文件
+- `shuhao07/wangsh-gateway:1.5.3` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:1.5.3` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:1.5.3` - PythonLab 调试 worker
 
 ### 2. 测试镜像
 
@@ -185,9 +185,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=1.5.1          # 应用版本号
-IMAGE_TAG=1.5.1            # Docker 镜像标签
-REACT_APP_VERSION=1.5.1    # 前端版本号
+APP_VERSION=1.5.3          # 应用版本号
+IMAGE_TAG=1.5.3            # Docker 镜像标签
+REACT_APP_VERSION=1.5.3    # 前端版本号
 ```
 
 ### 安全配置（生产环境必须修改）

@@ -216,19 +216,19 @@ async def update_student(
     return XbkStudentOut.model_validate(row).model_dump()
 
 
-@router.delete("/students/{student_id}", status_code=200)
+@router.delete("/students/{student_id}", status_code=204)
 async def delete_student(
     student_id: int,
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
-) -> Dict[str, Any]:
+):
     row = (await db.execute(select(XbkStudent).where(XbkStudent.id == student_id))).scalar_one_or_none()
     if not row or row.is_deleted:
         raise HTTPException(status_code=404, detail="学生不存在")
     row.is_deleted = True
     row.updated_at = datetime.utcnow()
     await db.commit()
-    return {"deleted": 1}
+    return None
 
 
 @router.post("/courses", response_model=XbkCourseOut)
@@ -292,19 +292,19 @@ async def update_course(
     return XbkCourseOut.model_validate(row).model_dump()
 
 
-@router.delete("/courses/{course_id}", status_code=200)
+@router.delete("/courses/{course_id}", status_code=204)
 async def delete_course(
     course_id: int,
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
-) -> Dict[str, Any]:
+):
     row = (await db.execute(select(XbkCourse).where(XbkCourse.id == course_id))).scalar_one_or_none()
     if not row or row.is_deleted:
         raise HTTPException(status_code=404, detail="课程不存在")
     row.is_deleted = True
     row.updated_at = datetime.utcnow()
     await db.commit()
-    return {"deleted": 1}
+    return None
 
 
 @router.post("/selections", response_model=XbkSelectionOut)
@@ -379,19 +379,19 @@ async def update_selection(
     return XbkSelectionOut.model_validate(row).model_dump()
 
 
-@router.delete("/selections/{selection_id}", status_code=200)
+@router.delete("/selections/{selection_id}", status_code=204)
 async def delete_selection(
     selection_id: int,
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
-) -> Dict[str, Any]:
+):
     row = (await db.execute(select(XbkSelection).where(XbkSelection.id == selection_id))).scalar_one_or_none()
     if not row or row.is_deleted:
         raise HTTPException(status_code=404, detail="选课记录不存在")
     row.is_deleted = True
     row.updated_at = datetime.utcnow()
     await db.commit()
-    return {"deleted": 1}
+    return None
 
 @router.get("/selections", response_model=XbkListResponse)
 async def list_selections(

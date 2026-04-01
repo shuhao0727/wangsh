@@ -60,13 +60,13 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
         <Progress type="circle" percent={pct} size={64} strokeColor={pct >= 60 ? "#52c41a" : "#ff4d4f"} format={() => `${pct}%`} />
         <div className="flex-1 min-w-0">
           <div className="text-xl font-semibold">
-            {data.earned_score} <span className="text-sm text-gray-400 font-normal">/ {data.total_score}</span>
+            {data.earned_score} <span className="text-sm text-text-tertiary font-normal">/ {data.total_score}</span>
           </div>
-          <div className="text-xs text-gray-400 mt-0.5">{new Date(data.created_at).toLocaleString("zh-CN")}</div>
+          <div className="text-xs text-text-tertiary mt-0.5">{new Date(data.created_at).toLocaleString("zh-CN")}</div>
         </div>
         {weakPoints.length > 0 && (
           <div className="text-right flex-shrink-0">
-            <div className="text-xs text-gray-400 mb-1">薄弱知识点</div>
+            <div className="text-xs text-text-tertiary mb-1">薄弱知识点</div>
             <div className="flex flex-wrap gap-1 justify-end">
               {weakPoints.map(p => <Tag key={p} color="warning" className="!m-0">{p}</Tag>)}
             </div>
@@ -97,7 +97,7 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
               <div key={kp.name} className="mb-1.5">
                 <div className="flex justify-between text-xs mb-0.5">
                   <span style={{ color: weakPoints.includes(kp.name) ? "#ff4d4f" : "#333" }}>{kp.name}</span>
-                  <span className="text-gray-400">
+                  <span className="text-text-tertiary">
                     {kp.earned}/{kp.total}
                     {kp.classPct != null && <span className="ml-1.5" style={{ color: "#ff7a45" }}>班均{kp.classPct}%</span>}
                   </span>
@@ -112,8 +112,8 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
       {/* AI 评语 */}
       {data.ai_summary && (
         <div className="px-5 py-3.5 bg-gray-50 rounded-lg" style={{ borderLeft: "3px solid #4096ff" }}>
-          <div className="text-xs text-gray-400 mb-2">AI 评语</div>
-          <div className="text-sm leading-loose text-gray-700">
+          <div className="text-xs text-text-tertiary mb-2">AI 评语</div>
+          <div className="text-sm leading-loose text-text-secondary">
             <ReactMarkdown>{data.ai_summary}</ReactMarkdown>
           </div>
         </div>
@@ -164,7 +164,7 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
             return <Tag key={s} color={m?.color}>{m?.label || s}</Tag>;
           })}
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-text-tertiary">
           {new Date(profile.created_at).toLocaleString("zh-CN")}
           {profile.config_title && ` · ${profile.config_title}`}
         </span>
@@ -179,7 +179,7 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
 
       {/* 画像内容 */}
       {profile.result_text && (
-        <div className="advanced-profile-md px-5 py-4 bg-gray-50 rounded-lg text-sm leading-loose text-gray-700">
+        <div className="advanced-profile-md px-5 py-4 bg-gray-50 rounded-lg text-sm leading-loose text-text-secondary">
           <style>{`
             .advanced-profile-md h1, .advanced-profile-md h2, .advanced-profile-md h3,
             .advanced-profile-md h4, .advanced-profile-md h5, .advanced-profile-md h6 {
@@ -206,7 +206,7 @@ interface AdvancedProfileEmptyProps {
 export const AdvancedProfileEmpty: React.FC<AdvancedProfileEmptyProps> = ({ onGenerate, loading }) => (
   <div className="text-center py-10">
     <div className="text-5xl text-gray-200 mb-3"><ExperimentOutlined /></div>
-    <div className="text-gray-400 mb-4">尚未生成三维画像</div>
+    <div className="text-text-tertiary mb-4">尚未生成三维画像</div>
     {onGenerate && (
       <Button type="primary" icon={<ExperimentOutlined />} onClick={onGenerate} loading={loading}>
         生成三维画像

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Breadcrumb, Alert, Button, Empty, Skeleton } from 'antd';
+import { Breadcrumb, Alert, Button, Skeleton } from 'antd';
 import {
   HomeOutlined, ReloadOutlined, ArrowRightOutlined,
   SoundOutlined, CodeOutlined, FormOutlined, BranchesOutlined
@@ -10,6 +10,7 @@ import ClassSelector from './ClassSelector';
 import { DianmingClass } from '@/services/xxjs/dianming';
 import { featureFlagsApi } from '@/services/system/featureFlags';
 import { logger } from '@services/logger';
+import EmptyState from "@components/Common/EmptyState";
 import './ITTechnology.css';
 
 type ViewState = 'launcher' | 'rollcall-selector' | 'rollcall-player';
@@ -142,7 +143,7 @@ const ITTechnologyPage: React.FC = () => {
         <>
           {visibleApps.length === 0 ? (
             <div className="flex items-center justify-center flex-1">
-              <Empty description="暂无可用应用，请联系管理员在后台开启。" />
+              <EmptyState description="暂无可用应用，请联系管理员在后台开启。" />
             </div>
           ) : (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
@@ -158,8 +159,8 @@ const ITTechnologyPage: React.FC = () => {
                   }}
                 >
                   {/* 图标 */}
-                  <div className="it-app-icon flex items-center justify-center w-14 h-14 rounded-2xl mb-3 transition-transform duration-150"
-                    style={{ background: app.bg, color: app.color, fontSize: 28 }}>
+                  <div className="it-app-icon flex items-center justify-center w-14 h-14 rounded-2xl mb-3 transition-transform duration-150 text-xl"
+                    style={{ background: app.bg, color: app.color }}>
                     {app.icon}
                   </div>
                   {/* 标题 */}

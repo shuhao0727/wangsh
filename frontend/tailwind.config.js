@@ -39,6 +39,14 @@ module.exports = {
       },
       fontFamily: {
         sans: "var(--ws-font-family)",
+        mono: "var(--ws-font-mono)",
+      },
+      fontSize: {
+        xs: "var(--ws-text-xs)",
+        sm: "var(--ws-text-sm)",
+        base: "var(--ws-text-md)",
+        lg: "var(--ws-text-lg)",
+        xl: "var(--ws-text-xl)",
       },
       boxShadow: {
         lg: "var(--ws-shadow-lg)",

@@ -38,7 +38,7 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
             </span>
           )}
           {categoryName && (
-            <Tag bordered={false} className="!m-0 !text-[11px] !bg-primary-soft !text-primary">
+            <Tag bordered={false} className="!m-0 !text-xs !bg-primary-soft !text-primary">
               {categoryName}
             </Tag>
           )}

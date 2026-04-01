@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin, require_user
+from app.utils.errors import safe_error_detail
 from app.schemas.agents import (
     AgentUsageCreate,
     AgentUsageResponse,
@@ -51,7 +52,7 @@ async def read_agent_usage(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取智能体使用数据失败: {str(e)}",
+            detail=safe_error_detail("获取智能体使用数据失败", e),
         )
 
 
@@ -83,7 +84,7 @@ async def read_agent_usage_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取智能体使用统计失败: {str(e)}",
+            detail=safe_error_detail("获取智能体使用统计失败", e),
         )
 
 
@@ -128,5 +129,5 @@ async def create_usage_record(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建智能体使用记录失败: {str(e)}",
+            detail=safe_error_detail("创建智能体使用记录失败", e),
         )

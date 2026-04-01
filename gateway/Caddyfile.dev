@@ -1,6 +1,15 @@
 :80 {
     # 开发环境 Caddy 配置
 
+    # 安全响应头
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
     # 后端 API 反向代理
     handle /api/* {
         reverse_proxy backend:8000

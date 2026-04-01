@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Empty, Typography, Skeleton } from 'antd';
+import { Typography, Skeleton } from 'antd';
 import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
 import { logger } from '@/services/logger';
 import { TeamOutlined } from '@ant-design/icons';
+import EmptyState from "@components/Common/EmptyState";
 
 const { Text } = Typography;
 
@@ -41,7 +42,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
   }
 
   if (classes.length === 0) {
-    return <Empty description="暂无班级数据，请联系管理员添加" />;
+    return <EmptyState description="暂无班级数据，请联系管理员添加" />;
   }
 
   return (

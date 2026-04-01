@@ -157,7 +157,7 @@ function handleDragEnd(event) {
 
 ## API 端点
 
-详见 [API.md](./API.md) 第十四章节：课堂互动（/classroom）
+详见 [API.md](../development/API.md) 第十四章节：课堂互动（/classroom）
 
 ### 管理端核心端点
 

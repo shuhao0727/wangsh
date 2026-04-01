@@ -911,7 +911,7 @@ const TypstNoteEditorInner: React.FC<{
           value={styleDraft?.content || ""}
           onChange={(e) => setStyleDraft((p) => (p ? { ...p, content: e.target.value } : p))}
           autoSize={{ minRows: 18, maxRows: 28 }}
-          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+          className="font-mono"
         />
       </Modal>
     </>

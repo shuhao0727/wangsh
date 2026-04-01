@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Button, Empty, Input, Spin } from "antd";
+import { Button, Input, Spin } from "antd";
 import { CodeOutlined, RightOutlined, SearchOutlined, ClockCircleOutlined } from "@ant-design/icons";
+import EmptyState from "@components/Common/EmptyState";
 import { useNavigate } from "react-router-dom";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNoteListItem } from "@services";
@@ -59,7 +60,7 @@ const InformaticsNotesPage: React.FC = () => {
           </div>
         ) : items.length === 0 ? (
           <div className="flex items-center justify-center py-16">
-            <Empty description="暂无已发布内容" />
+            <EmptyState description="暂无已发布内容" />
           </div>
         ) : (
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>

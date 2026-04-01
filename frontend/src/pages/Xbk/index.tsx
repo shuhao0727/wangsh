@@ -4,7 +4,7 @@ import {
   Space,
   Button,
   Result,
-  Spin,
+  Skeleton,
   Tag,
   Form,
   Select,
@@ -353,7 +353,16 @@ const XbkPage: React.FC = () => {
   }, [suspendedAll]);
 /* PLACEHOLDER_XBK_TSX_5 */
 
-  if (loading) return <div className="xbk-page"><div className="text-center py-20"><Spin size="large" /></div></div>;
+  if (loading) return (
+    <div className="xbk-page">
+      <div className="p-6 space-y-4">
+        <Skeleton.Input active block size="small" />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} active title={false} paragraph={{ rows: 1, width: "100%" }} />
+        ))}
+      </div>
+    </div>
+  );
   if (!enabled) return <div className="xbk-page"><Result status="403" title="未开放" subTitle="XBK 处理系统当前未对前台开放，请联系管理员开启。" extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>} /></div>;
 
   const years = meta.years.length > 0 ? meta.years : [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];

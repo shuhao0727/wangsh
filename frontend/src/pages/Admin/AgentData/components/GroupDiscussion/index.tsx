@@ -538,7 +538,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           <Space>
             <Text>班级</Text>
             <Input
-              style={{ width: 180 }}
+              className="w-[180px]"
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               placeholder="如：高一(1)班"
@@ -547,7 +547,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           <Space>
             <Text>组号</Text>
             <Input
-              style={{ width: 140 }}
+              className="w-[140px]"
               value={groupNo}
               onChange={(e) => setGroupNo(e.target.value)}
               placeholder="如：1"
@@ -556,7 +556,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           <Space>
             <Text>组名</Text>
             <Input
-              style={{ width: 180 }}
+              className="w-[180px]"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="如：学习小组"
@@ -565,7 +565,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
           <Space>
             <Text>姓名</Text>
             <Input
-              style={{ width: 160 }}
+              className="w-[160px]"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="如：张三"
@@ -719,7 +719,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             开始分析
           </Button>,
         ]}
-        width={980}
+        width="min(92vw, 980px)"
         styles={{ body: { paddingTop: 8 } }}
       >
         <Tabs
@@ -731,14 +731,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               label: "消息",
               children: (
                 <div
-                  style={{
-                    height: 520,
-                    overflow: "auto",
-                    borderRadius: 10,
-                    padding: 12,
-                    background: "var(--ws-color-surface)",
-                    border: "1px solid var(--ws-color-border)",
-                  }}
+                  className="h-[520px] overflow-auto rounded-[10px] p-3 bg-surface border border-border"
                 >
                   {messagesLoading ? (
                     <Text type="secondary">加载中...</Text>
@@ -758,11 +751,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                               </Text>
                             </div>
                             <div
-                              className="px-2.5 py-2 rounded-xl whitespace-pre-wrap break-words"
-                              style={{
-                                background: "var(--ws-color-surface)",
-                                border: "1px solid var(--ws-color-border)",
-                              }}
+                              className="px-2.5 py-2 rounded-xl whitespace-pre-wrap break-words bg-surface border border-border"
                             >
                               <Text className="text-text-base">{m.content}</Text>
                             </div>
@@ -797,7 +786,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                     dataSource={members}
                     rowKey="user_id"
                     pagination={false}
-                    scroll={{ y: 400 }}
+                    scroll={{ x: 800, y: 400 }}
                     columns={[
                         { title: "ID", dataIndex: "user_id", width: 80 },
                         { title: "姓名", dataIndex: "full_name", width: 100 },
@@ -834,7 +823,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                                   const res = await groupDiscussionApi.adminStudentProfile({ sessionId: currentSession.id, userId: r.user_id, agentId: selectedAgentId });
                                   message.destroy("profile");
                                   if (res.success) {
-                                    Modal.info({ title: `${r.full_name || r.username || "学生"} 学习画像`, width: 760, content: <pre style={{ whiteSpace: "pre-wrap", maxHeight: 500, overflow: "auto", fontSize: 13 }}>{res.data.result_text}</pre> });
+                                    Modal.info({ title: `${r.full_name || r.username || "学生"} 学习画像`, width: 760, content: <pre className="whitespace-pre-wrap max-h-[500px] overflow-auto text-sm">{res.data.result_text}</pre> });
                                   } else { message.error(res.message || "学习画像生成失败"); }
                                 }}>
                                   画像
@@ -980,11 +969,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                         {analyses.map((a) => (
                           <div
                             key={a.id}
-                            className="p-2.5 rounded-lg cursor-pointer"
-                            style={{
-                              border: "1px solid var(--ws-color-border)",
-                              background: "var(--ws-color-surface)",
-                            }}
+                            className="p-2.5 rounded-lg cursor-pointer border border-border bg-surface"
                             onClick={() => setAnalysisResult(a.result_text)}
                           >
                             <div className="flex justify-between gap-2.5">
@@ -1038,7 +1023,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
         }}
         confirmLoading={compareState.loading}
         okText="开始分析"
-        width={980}
+        width="min(92vw, 980px)"
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Card size="small" styles={{ body: { background: "#ffffff" } }}>
@@ -1105,7 +1090,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
         onCancel={() => setMuteState((s) => ({ ...s, visible: false }))}
         onOk={handleConfirmMute}
         confirmLoading={muteState.loading}
-        width={400}
+        width="min(92vw, 400px)"
       >
         <div className="py-5">
           <Text className="block mb-3">请选择禁言时长：</Text>
@@ -1144,7 +1129,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
         onCancel={() => setAddMemberVisible(false)}
         onOk={handleAddMember}
         confirmLoading={addMemberLoading}
-        width={500}
+        width="min(92vw, 500px)"
       >
         <div className="py-5">
           <Text className="block mb-2">搜索用户：</Text>

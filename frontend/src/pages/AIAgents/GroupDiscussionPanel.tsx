@@ -17,7 +17,6 @@ import {
   Tag,
   Tooltip,
   Form,
-  Empty,
   Drawer,
   Modal,
   Avatar
@@ -43,6 +42,7 @@ import type { GroupDiscussionGroup, GroupDiscussionMember, GroupDiscussionPublic
 import type { User } from "@services/users";
 import { logger } from "@services/logger";
 import { getJoinLockRemainingSeconds, parseJoinLockHint, type JoinLockHint } from "./groupDiscussionJoinLock";
+import EmptyState from "@components/Common/EmptyState";
 import dayjs from "dayjs";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 
@@ -738,7 +738,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                         <div className="mt-1.5">
                           <Space
                             size={0}
-                            separator={<Divider orientation="vertical" style={{ margin: "0 8px" }} />}
+                            separator={<Divider orientation="vertical" className="!mx-2 !my-0" />}
                           >
                             <Text type="secondary" className="text-xs">
                               <UserOutlined /> {item.member_count}人
@@ -769,7 +769,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               </div>
             ) : (
               <div className="p-6">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无小组，快去新建一个吧" />
+                <EmptyState description="暂无小组，快去新建一个吧" />
               </div>
             )}
           </div>
@@ -887,7 +887,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             发送
           </Button>
         </Space.Compact>
-        <Text type="secondary" className="text-[10px] mt-1 block text-center">
+        <Text type="secondary" className="text-xs mt-1 block text-center">
           每 {config.rate_limit_seconds} 秒可发送一条消息
         </Text>
       </div>
@@ -911,8 +911,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             type="primary"
             icon={<TeamOutlined />}
             onClick={() => { if (!btnDragged.current) setOpen(true); }}
+            className="!rounded-l-none"
             style={{
-              borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
               background: '#0EA5E9', borderColor: '#0EA5E9',
               boxShadow: '2px 2px 8px rgba(14,165,233,0.4)',
             }}
@@ -926,6 +926,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {open && (
         <div
           ref={floatingRef}
+          className="flex flex-col overflow-hidden bg-white rounded-xl border border-black/[0.08]"
           style={{
             position: "fixed",
             left: floatingRenderLeft,
@@ -934,13 +935,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             height: floatingRenderHeight,
             zIndex: 1050,
             resize: isCompactViewport ? "none" : "both",
-            overflow: "hidden",
             boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-            borderRadius: 12,
-            background: "#FFFFFF",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
-            display: 'flex',
-            flexDirection: 'column'
           }}
           onMouseUp={handleResizeUp}
         >
@@ -1022,7 +1017,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               >
                 <div className="flex justify-between gap-3">
                   <div className="flex gap-3 min-w-0">
-                    <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#0EA5E9" }} />
+                    <Avatar icon={<UserOutlined />} className="bg-primary" />
                     <div className="min-w-0">
                       <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                         {item.full_name || item.username || `User ${item.user_id}`}
@@ -1049,7 +1044,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             ))}
           </div>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无成员" />
+          <EmptyState description="暂无成员" />
         )}
       </Drawer>
 
@@ -1108,7 +1103,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               })}
             </div>
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={inviteKeyword ? "未找到用户" : "请输入关键词搜索"} />
+            <EmptyState variant={inviteKeyword ? "no-results" : "no-data"} description={inviteKeyword ? "未找到用户" : "请输入关键词搜索"} />
           )}
         </div>
       </Modal>

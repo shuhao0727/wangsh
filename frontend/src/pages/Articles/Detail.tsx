@@ -259,7 +259,8 @@ const ArticleDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-[1560px] mx-auto px-6 py-10">
-        <Skeleton active paragraph={{ rows: 10 }} />
+        <Skeleton active title={{ width: "60%" }} paragraph={{ rows: 1, width: "40%" }} className="mb-6" />
+        <Skeleton active title={false} paragraph={{ rows: 8 }} />
       </div>
     );
   }

@@ -32,7 +32,6 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from "@ant-design/icons";
-import "./AdminLayout.css";
 import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 
@@ -153,7 +152,7 @@ const AdminLayout: React.FC = () => {
     auth.user?.role_code === "student" ? "学生用户" : "访客";
 
   return (
-    <Layout className="admin-layout">
+    <Layout className="admin-layout min-h-screen bg-white">
       <Modal
         title="管理员登录"
         open={isLoginModalVisible}

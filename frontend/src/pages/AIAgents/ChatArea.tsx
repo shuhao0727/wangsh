@@ -214,7 +214,8 @@ const MessageBubble = React.memo<{
                               ? "error"
                               : "processing"
                         }
-                        style={{ margin: 0, minWidth: 48, textAlign: "center", border: "none" }}
+                        style={{ margin: 0, minWidth: 48, textAlign: "center" }}
+                        className="!border-none"
                         variant="filled"
                       >
                         {n.status === "finished"
@@ -224,7 +225,7 @@ const MessageBubble = React.memo<{
                             : "执行中"}
                       </Tag>
 
-                      <Text strong style={{ minWidth: 100 }}>
+                      <Text strong className="min-w-[100px]">
                         {n.name}
                       </Text>
 
@@ -251,11 +252,11 @@ const MessageBubble = React.memo<{
           size={32}
           icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent?.icon)}
           aria-label={isUser ? "用户头像" : `${currentAgent?.name || "智能体"}头像`}
+          className="flex-shrink-0"
           style={{
             backgroundColor: isUser
               ? "#0EA5E9"
               : (wf ? wf.color : currentAgent?.color),
-            flexShrink: 0,
           }}
         />
         <div className={`message-bubble ${isUser ? 'user' : 'agent'}`}>
@@ -270,7 +271,7 @@ const MessageBubble = React.memo<{
               {isUser ? displayName : (wf ? wf.label : currentAgent?.name)}
             </Text>
             <Text
-              className="text-[10px] text-gray-400 ml-2"
+              className="text-xs text-text-tertiary ml-2"
             >
               <ClockCircleOutlined /> {formatTimestamp(message.timestamp)}
             </Text>
@@ -378,13 +379,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   if (!currentAgent) {
     return (
       <Card
-        style={{
-          height: "100%",
-          minHeight: 0,
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-        }}
+        className="h-full min-h-0 flex-1 flex flex-col"
         styles={{
           body: {
             flex: 1,
@@ -396,13 +391,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         }}
       >
         <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-          }}
+          className="flex-1 flex items-center justify-center flex-col"
         >
           <Spin size="large" />
           <Text className="mt-4 block">正在加载智能体...</Text>
@@ -463,7 +452,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <Avatar size={32} icon={currentAgent?.icon} aria-label={`${currentAgent?.name || "智能体"}头像`}
             style={{ backgroundColor: currentAgent?.color }} />
           <div className="flex items-center gap-2 ml-1">
-            <Text strong style={{ fontSize: 15, color: currentAgent?.color }}>
+            <Text strong className="text-base" style={{ color: currentAgent?.color }}>
               {currentAgent?.name}
             </Text>
             <Text type="secondary" className="text-xs hidden sm:inline">
@@ -471,7 +460,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             </Text>
           </div>
           <Tag color={currentAgent?.status === "online" ? "success" : "default"}
-            className="ml-1 text-[10px] leading-[18px]" variant="filled">
+            className="ml-1 text-xs leading-[18px]" variant="filled">
             {currentAgent?.status === "online" ? "在线" : "离线"}
           </Tag>
         </div>

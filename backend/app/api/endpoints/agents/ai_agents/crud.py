@@ -31,6 +31,7 @@ from app.services.agents import (
 from app.core.pubsub import publish
 from app.utils.agent_secrets import last4, try_decrypt_api_key
 from app.services.auth import authenticate_user
+from app.utils.errors import safe_error_detail
 
 router = APIRouter()
 
@@ -106,7 +107,7 @@ async def read_agents(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取智能体列表失败: {str(e)}",
+            detail=safe_error_detail("获取智能体列表失败", e),
         )
 
 
@@ -125,7 +126,7 @@ async def read_active_agents(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取启用智能体列表失败: {str(e)}",
+            detail=safe_error_detail("获取启用智能体列表失败", e),
         )
 
 
@@ -139,7 +140,7 @@ async def get_agents_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取智能体统计数据失败: {str(e)}",
+            detail=safe_error_detail("获取智能体统计数据失败", e),
         )
 
 
@@ -163,7 +164,7 @@ async def read_agent(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取智能体详情失败: {str(e)}",
+            detail=safe_error_detail("获取智能体详情失败", e),
         )
 
 
@@ -188,7 +189,7 @@ async def create_new_agent(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建智能体失败: {str(e)}",
+            detail=safe_error_detail("创建智能体失败", e),
         )
 
 
@@ -223,7 +224,7 @@ async def update_existing_agent(
         traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新智能体失败: {str(e)}",
+            detail=safe_error_detail("更新智能体失败", e),
         )
 
 
@@ -251,7 +252,7 @@ async def delete_existing_agent(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"删除智能体失败: {str(e)}",
+            detail=safe_error_detail("删除智能体失败", e),
         )
 
 
@@ -266,7 +267,7 @@ async def test_agent_connection(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"测试智能体失败: {str(e)}",
+            detail=safe_error_detail("测试智能体失败", e),
         )
 
 
@@ -304,7 +305,7 @@ async def discover_agent_models(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"发现模型失败: {str(e)}",
+            detail=safe_error_detail("发现模型失败", e),
         )
 
 

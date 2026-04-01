@@ -122,7 +122,7 @@ export function DebugTab(props: {
           locale={{ emptyText: "暂无表达式" }}
         />
         {!runner.watchResults.length && runner.watchExprs.length > 0 && (
-          <div style={{ padding: "8px 0", color: "rgba(0,0,0,0.45)", fontSize: 12, textAlign: "center" }}>等待下次暂停时计算...</div>
+          <div className="text-xs" style={{ padding: "8px 0", color: "rgba(0,0,0,0.45)", textAlign: "center" }}>等待下次暂停时计算...</div>
         )}
       </div>
     </div>

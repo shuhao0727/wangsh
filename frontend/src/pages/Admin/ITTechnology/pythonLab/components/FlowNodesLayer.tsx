@@ -410,6 +410,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                     commitNoteEdit(n.id, editingText);
                   }
                 }}
+                className="text-xs"
                 style={{
                   position: "absolute",
                   left: "15%",
@@ -421,7 +422,6 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   background: "transparent",
                   resize: "none",
                   textAlign: "center",
-                  fontSize: 12,
                   fontWeight: 700,
                   color: "#262626",
                   lineHeight: 1.25,

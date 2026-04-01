@@ -40,6 +40,7 @@ import {
   type StudentProfile,
 } from "@services/assessment";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
+import EmptyState from "@components/Common/EmptyState";
 
 const { TextArea } = Input;
 
@@ -487,8 +488,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         type="primary"
         icon={<FormOutlined />}
         onClick={() => { if (!btnDragged.current) handleOpen(); }}
+        className="!rounded-l-none"
         style={{
-          borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
           background: "#6366F1", borderColor: "#6366F1",
           boxShadow: "2px 2px 8px rgba(99,102,241,0.4)",
         }}
@@ -504,7 +505,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       {loading ? (
         <div className="text-center py-10"><Spin /></div>
       ) : availableList.length === 0 ? (
-        <div className="text-center text-gray-400 py-10">暂无可用检测</div>
+        <div className="text-center text-text-tertiary py-10">暂无可用检测</div>
       ) : (
         availableList.map((item) => (
           <div
@@ -512,7 +513,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
             className="border border-gray-100 rounded-lg p-3 mb-2 bg-surface-2"
           >
             <div className="font-semibold mb-1">{item.title}</div>
-            <div className="text-xs text-gray-500 mb-2">
+            <div className="text-xs text-text-tertiary mb-2">
               总分 {item.total_score}
               {item.time_limit_minutes > 0 && <span> · {item.time_limit_minutes}分钟</span>}
             </div>
@@ -673,19 +674,19 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               {result.is_correct !== null && (
                 <div className="mb-1">
                   {result.is_correct
-                    ? <span style={{ color: "#10B981" }}><CheckCircleFilled /> 正确 +{result.earned_score}分</span>
-                    : <span style={{ color: "#EF4444" }}><CloseCircleFilled /> 错误 +{result.earned_score || 0}分</span>}
+                    ? <span className="text-emerald-500"><CheckCircleFilled /> 正确 +{result.earned_score}分</span>
+                    : <span className="text-red-500"><CloseCircleFilled /> 错误 +{result.earned_score || 0}分</span>}
                 </div>
               )}
-              {result.explanation && <div className="text-xs text-gray-500">解析：{result.explanation}</div>}
-              {result.ai_feedback && <div className="text-xs text-gray-500">AI 反馈：{result.ai_feedback}</div>}
+              {result.explanation && <div className="text-xs text-text-tertiary">解析：{result.explanation}</div>}
+              {result.ai_feedback && <div className="text-xs text-text-tertiary">AI 反馈：{result.ai_feedback}</div>}
               {result.next_question && (
-                <div className="mt-1.5 text-xs" style={{ color: "#A855F7" }}>
+                <div className="mt-1.5 text-xs text-purple">
                   知识点「{result.next_question.knowledge_point}」已追加练习题，请继续作答
                 </div>
               )}
               {result.mastery_status === "mastered" && (
-                <div className="mt-1.5 text-xs" style={{ color: "#10B981" }}>
+                <div className="mt-1.5 text-xs text-emerald-500">
                   该知识点已掌握
                 </div>
               )}
@@ -718,7 +719,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     return (
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* 顶部得分条 */}
-        <div className="flex items-center gap-3.5 px-5 py-4" style={{ background: "linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 100%)" }}>
+        <div className="flex items-center gap-3.5 px-5 py-4 bg-gradient-to-br from-[#f5f7fa] to-[#e4e8ee]">
           <Progress type="circle" percent={pct} size={56}
             strokeColor={pct >= 60 ? "#10B981" : "#EF4444"}
             format={() => <span className="text-base font-bold" style={{ color: pct >= 60 ? "#10B981" : "#EF4444" }}>{pct}%</span>}
@@ -726,9 +727,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           <div>
             <div className="text-2xl font-bold">
               {r.earned_score ?? 0}
-              <span className="text-sm text-gray-400 font-normal"> / {r.total_score}</span>
+              <span className="text-sm text-text-tertiary font-normal"> / {r.total_score}</span>
             </div>
-            <div className="text-xs text-gray-400 mt-0.5">
+            <div className="text-xs text-text-tertiary mt-0.5">
               {r.submitted_at ? new Date(r.submitted_at).toLocaleString("zh-CN") : ""}
             </div>
           </div>
@@ -761,9 +762,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                     label: (
                       <span>
                         第{i + 1}题
-                        {a.is_correct === true && <CheckCircleFilled className="ml-1" style={{ color: "#10B981" }} />}
-                        {a.is_correct === false && <CloseCircleFilled className="ml-1" style={{ color: "#EF4444" }} />}
-                        <span className="ml-1 text-xs text-gray-400">+{a.earned_score || 0}/{a.max_score}</span>
+                        {a.is_correct === true && <CheckCircleFilled className="ml-1 text-emerald-500" />}
+                        {a.is_correct === false && <CloseCircleFilled className="ml-1 text-red-500" />}
+                        <span className="ml-1 text-xs text-text-tertiary">+{a.earned_score || 0}/{a.max_score}</span>
                       </span>
                     ),
                     children: (
@@ -771,8 +772,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                         <div className="mb-1">{a.content}</div>
                         <div>我的答案：<span style={{ color: a.is_correct ? "#10B981" : "#EF4444" }}>{a.student_answer || "未作答"}</span></div>
                         <div>正确答案：{a.correct_answer}</div>
-                        {a.explanation && <div className="text-gray-500 mt-1">解析：{a.explanation}</div>}
-                        {a.ai_feedback && <div className="text-gray-500 mt-0.5">AI 反馈：{a.ai_feedback}</div>}
+                        {a.explanation && <div className="text-text-tertiary mt-1">解析：{a.explanation}</div>}
+                        {a.ai_feedback && <div className="text-text-tertiary mt-0.5">AI 反馈：{a.ai_feedback}</div>}
                       </div>
                     ),
                   }))} />
@@ -787,7 +788,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                   {basicProfile ? (
                     <BasicProfileView data={basicProfile} />
                   ) : (
-                    <div className="text-gray-400 text-center py-10">暂无画像数据</div>
+                    <EmptyState description="暂无画像数据" />
                   )}
                 </div>
               ),
@@ -816,11 +817,10 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 渲染窗口 ───
   const renderWindow = () => (
     <div
-      className="flex flex-col overflow-hidden"
+      className="flex flex-col overflow-hidden bg-white rounded-xl"
       style={{
         position: "fixed", left: pos.x, top: pos.y,
         width: size.w, height: size.h,
-        background: "#fff", borderRadius: 12,
         boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
         zIndex: 1001,
         resize: "both", minWidth: 320, minHeight: 400,
@@ -873,7 +873,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     <>
       {/* 答题时遮罩：模糊背景 + 禁止交互 */}
       {isQuizzing && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 999, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", background: "rgba(0,0,0,0.15)" }} />
+        <div className="fixed inset-0 z-[999] backdrop-blur-[8px]" style={{ background: "rgba(0,0,0,0.15)" }} />
       )}
       {floatingBtn}
       {open && renderWindow()}

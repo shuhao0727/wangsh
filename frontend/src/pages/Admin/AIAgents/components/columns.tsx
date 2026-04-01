@@ -93,17 +93,16 @@ export const getAgentColumns = (
           alignItems: 'center',
           justifyContent: 'center',
           color: '#0EA5E9',
-          fontSize: 18,
           flexShrink: 0
         }}>
-          {record.agent_type === 'dify' ? <CloudOutlined /> : <ThunderboltOutlined />}
+          {record.agent_type === 'dify' ? <CloudOutlined className="text-lg" /> : <ThunderboltOutlined className="text-lg" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="font-semibold text-sm text-text-base mb-0.5">
             {agentName || record.name}
           </div>
           {record.model_name && (
-            <div style={{ fontSize: 12, color: "#7f8c8d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div className="text-xs" style={{ color: "#7f8c8d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {record.model_name}
             </div>
           )}

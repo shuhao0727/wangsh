@@ -10,6 +10,7 @@ from urllib.parse import quote
 from datetime import datetime
 
 from loguru import logger
+from app.utils.errors import safe_error_detail
 
 from app.db.database import get_db
 from app.core.deps import get_current_user, require_super_admin
@@ -273,7 +274,7 @@ async def api_generate_questions(
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.exception("AI 生成题目失败")
-        raise HTTPException(status_code=500, detail=f"AI 生成题目失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_error_detail("AI 生成题目失败", e))
 
 
 @router.get("/configs/{config_id}/questions", response_model=QuestionListResponse, dependencies=[Depends(require_super_admin)])
@@ -600,7 +601,7 @@ async def api_generate_profile(
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.exception("生成画像失败")
-        raise HTTPException(status_code=500, detail=f"生成画像失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_error_detail("生成画像失败", e))
 
 
 @router.post("/profiles/batch-generate", dependencies=[Depends(require_super_admin)])
@@ -622,7 +623,7 @@ async def api_batch_generate_profiles(
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.exception("批量生成画像失败")
-        raise HTTPException(status_code=500, detail=f"批量生成画像失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_error_detail("批量生成画像失败", e))
 
 
 @router.get("/profiles", response_model=ProfileListResponse, dependencies=[Depends(require_super_admin)])

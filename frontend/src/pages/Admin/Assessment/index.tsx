@@ -265,7 +265,7 @@ const AdminAssessment: React.FC = () => {
 
       {/* 新建测评弹窗 */}
       <Modal title="新建测评" open={createOpen} onCancel={() => setCreateOpen(false)}
-        onOk={handleCreate} confirmLoading={creating} okText="创建" cancelText="取消" width={520} destroyOnHidden>
+        onOk={handleCreate} confirmLoading={creating} okText="创建" cancelText="取消" width="min(92vw, 520px)" destroyOnHidden>
         <Form form={createForm} layout="vertical" className="mt-3">
           <Form.Item name="title" label="测评标题" rules={[{ required: true, message: "请输入标题" }]}>
             <Input placeholder="如：Python循环结构课堂检测" maxLength={200} />

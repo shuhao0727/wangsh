@@ -172,7 +172,7 @@ Typst 样式模板示例：
 
 ## API 端点
 
-详见 [API.md](./API.md) 第九章节：信息学笔记
+详见 [API.md](../development/API.md) 第九章节：信息学笔记
 
 ### 核心端点
 

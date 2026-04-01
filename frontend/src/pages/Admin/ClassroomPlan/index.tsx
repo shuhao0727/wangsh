@@ -102,7 +102,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
           {editing ? "保存" : "创建计划"}
         </Button>,
       ]}
-      width={700}
+      width="min(92vw, 700px)"
       destroyOnClose
     >
       <Steps current={step} size="small" className="mb-5"
@@ -130,7 +130,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
               <Select.Option value="active">进行中</Select.Option>
               <Select.Option value="ended">已结束</Select.Option>
             </Select>
-            <span className="text-xs text-gray-400">已选 {selectedIds.length} 个</span>
+            <span className="text-xs text-text-tertiary">已选 {selectedIds.length} 个</span>
           </Space>
           <Spin spinning={loadingActs}>
             <div className="max-h-[320px] overflow-auto border border-gray-100 rounded-md">
@@ -160,7 +160,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
                 );
               })}
               {filtered.length === 0 && !loadingActs && (
-                <div className="text-center p-6 text-gray-400">暂无活动</div>
+                <div className="text-center p-6 text-text-tertiary">暂无活动</div>
               )}
             </div>
           </Spin>
@@ -173,7 +173,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
             const act = actMap[id];
             return (
               <div key={id} className={`flex items-center px-3 py-2 ${idx < selectedIds.length - 1 ? 'border-b border-gray-100' : ''} ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-                <span className="text-gray-400 text-xs" style={{ minWidth: 28 }}>{idx + 1}.</span>
+                <span className="text-text-tertiary text-xs" style={{ minWidth: 28 }}>{idx + 1}.</span>
                 <Tag color={act?.activity_type === "vote" ? "blue" : "green"} className="mr-2 flex-shrink-0">
                   {act?.activity_type === "vote" ? "投票" : "填空"}
                 </Tag>
@@ -247,7 +247,7 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
         ),
         <Button key="close" onClick={onClose}>关闭</Button>,
       ].filter(Boolean)}
-      width={560}
+      width="min(92vw, 560px)"
     >
       <div className="mb-3 flex gap-2 items-center">
         <Badge
@@ -272,7 +272,7 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
           const endKey = `end-${item.id}`;
           return (
             <div key={item.id} className={`flex items-center gap-2 px-3 py-2.5 ${idx < items.length - 1 ? 'border-b border-gray-100' : ''} ${isActive ? 'bg-purple-soft' : idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-              <span className="text-gray-400 text-xs" style={{ minWidth: 24 }}>{idx + 1}.</span>
+              <span className="text-text-tertiary text-xs" style={{ minWidth: 24 }}>{idx + 1}.</span>
               <Tag color={item.activity?.activity_type === "vote" ? "blue" : "green"} className="flex-shrink-0">
                 {item.activity?.activity_type === "vote" ? "投票" : "填空"}
               </Tag>
@@ -361,7 +361,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
         title="课堂计划管理"
         onCancel={onClose}
         footer={<Button onClick={onClose}>关闭</Button>}
-        width={760}
+        width="min(92vw, 760px)"
       >
         <div className="flex justify-between mb-3">
           <Button icon={<ReloadOutlined />} onClick={fetchList} loading={loading}>刷新</Button>
@@ -374,6 +374,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
           loading={loading}
           pagination={false}
           size="middle"
+          scroll={{ x: 800 }}
           columns={[
             { title: "ID", dataIndex: "id", width: 60 },
             { title: "计划标题", dataIndex: "title", ellipsis: true },

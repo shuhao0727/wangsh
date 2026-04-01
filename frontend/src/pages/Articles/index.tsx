@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Tag, Button, Empty, Spin, Pagination, Menu, Input, Grid, Skeleton } from "antd";
+import { Tag, Button, Empty, Pagination, Menu, Input, Grid, Skeleton } from "antd";
 import {
   ReloadOutlined,
   SearchOutlined,
@@ -506,8 +506,10 @@ const ArticlesPage: React.FC = () => {
 
                   <div className="articles-left-menu">
                     {categoriesLoading ? (
-                      <div style={{ textAlign: "center", padding: 18 }}>
-                        <Spin />
+                      <div className="px-3 py-2 space-y-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Skeleton key={i} active title={false} paragraph={{ rows: 1, width: "80%" }} />
+                        ))}
                       </div>
                     ) : null}
                     <Menu

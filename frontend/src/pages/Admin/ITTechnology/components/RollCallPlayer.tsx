@@ -91,7 +91,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
         </Button>
       </div>
       
-      <div style={{ position: 'absolute', top: 20, right: 20, fontSize: 16, opacity: 0.8 }}>
+      <div className="text-base" style={{ position: 'absolute', top: 20, right: 20, opacity: 0.8 }}>
         {record.year} - {record.class_name} ({students.length}人)
       </div>
 
@@ -122,10 +122,10 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
             shape="round"
             size="large"
             icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
+            className="text-xl"
             style={{
               height: 80,
               width: 200,
-              fontSize: 24,
               backgroundColor: isRunning ? '#EF4444' : '#0EA5E9',
               borderColor: isRunning ? '#EF4444' : '#0EA5E9',
             }}

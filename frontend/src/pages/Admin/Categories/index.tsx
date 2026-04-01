@@ -90,7 +90,7 @@ const getCategoryColumns = (
         <div className="text-xs">
           {dayjs(date).format("YYYY-MM-DD")}
         </div>
-        <div className="text-[10px] text-text-secondary">
+        <div className="text-xs text-text-secondary">
           {dayjs(date).format("HH:mm")}
         </div>
       </div>

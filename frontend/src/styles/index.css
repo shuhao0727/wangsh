@@ -130,6 +130,7 @@
 
   /* 字体 */
   --ws-font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ws-font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --ws-font-size-base: var(--ws-text-md);
   --ws-font-size-sm: var(--ws-text-xs);
   --ws-line-height-base: 1.6;
@@ -298,9 +299,39 @@ a:active {
 .admin-user-menu { transition: background 0.15s; }
 .admin-user-menu:hover { background: rgba(0,0,0,0.03); }
 
+/* AdminLayout 侧边栏 — antd 深层选择器覆盖 */
+.admin-layout .ant-layout-sider {
+  background: #FFFFFF !important;
+  border-right: none !important;
+  box-shadow: none !important;
+}
+
 /* 响应式断点 */
 @media (max-width: 768px) {
   .hidden-mobile { display: none !important; }
+  .admin-layout .ant-layout-sider {
+    position: fixed !important;
+    height: 100vh;
+    z-index: 1100;
+  }
+  .admin-layout .ant-layout {
+    margin-left: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-layout .ant-layout-sider {
+    width: min(82vw, 260px) !important;
+    max-width: min(82vw, 260px) !important;
+    min-width: min(82vw, 260px) !important;
+  }
+  .admin-layout .ant-layout-sider-collapsed {
+    transform: translateX(-100%);
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    overflow: hidden;
+  }
 }
 
 @media (min-width: 769px) {

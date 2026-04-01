@@ -88,8 +88,10 @@ USER root
 
 ARG TYPST_VERSION=0.14.2
 
-RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
-    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null; \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null; \
+    apt-get update \
+    && apt-get install -y --no-install-recommends \
     ca-certificates curl wget xz-utils fontconfig \
     fonts-noto-cjk fonts-noto-core \
     fonts-liberation fonts-dejavu-core \
@@ -118,8 +120,8 @@ RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::http
     '  </alias>' \
     '</fontconfig>' \
     > /etc/fonts/local.conf \
-    && fc-cache -f || true \
-    && echo "Cache buster 1"
+    && fc-cache -f \
+    && echo "Cache buster 2"
 
 RUN ARCH="$(uname -m)" \
     && if [ "$ARCH" = "x86_64" ]; then PKG="typst-x86_64-unknown-linux-musl.tar.xz"; elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then PKG="typst-aarch64-unknown-linux-musl.tar.xz"; else echo "unsupported arch: $ARCH" && exit 1; fi \

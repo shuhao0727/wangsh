@@ -105,7 +105,7 @@ const DianmingManager: React.FC<Props> = ({ onStartRollCall, onBack }) => {
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
         <Space>
           <Button onClick={onBack}>返回应用列表</Button>
-          <span style={{ fontSize: 18, fontWeight: 'bold' }}>班级点名管理</span>
+          <span className="text-lg font-bold">班级点名管理</span>
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>
           新建/导入班级

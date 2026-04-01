@@ -28,7 +28,6 @@ import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
 import { roleOptions, statusOptions } from "./data";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
-import "./index.css";
 
 const { Search } = Input;
 const { Option } = Select;

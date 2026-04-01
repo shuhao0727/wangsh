@@ -44,7 +44,7 @@ const SortableItem: React.FC<{ id: number; act: any; onRemove: () => void }> = (
       }}
     >
       <span {...attributes} {...listeners}
-        className="cursor-grab text-gray-300 text-base leading-none">
+        className="cursor-grab text-text-tertiary text-base leading-none">
         <HolderOutlined />
       </span>
       <Tag color={act?.activity_type === "vote" ? "blue" : "green"} className="flex-shrink-0">
@@ -163,7 +163,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({ editing, onCancel, onSucc
       <Row gutter={16}>
         {/* 左：活动列表 */}
         <Col span={12}>
-          <div className="font-semibold mb-2">选择活动 <span className="font-normal text-xs text-gray-400">（点击勾选）</span></div>
+          <div className="font-semibold mb-2">选择活动 <span className="font-normal text-xs text-text-tertiary">（点击勾选）</span></div>
           <Space className="mb-2" wrap>
             <Input.Search placeholder="搜索" allowClear value={search}
               onChange={e => setSearch(e.target.value)} style={{ width: 150 }} />
@@ -202,7 +202,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({ editing, onCancel, onSucc
                 );
               })}
               {filtered.length === 0 && !loadingActs && (
-                <div className="text-center p-6 text-gray-400">暂无活动</div>
+                <div className="text-center p-6 text-text-tertiary">暂无活动</div>
               )}
             </div>
           </Spin>
@@ -210,10 +210,10 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({ editing, onCancel, onSucc
 
         {/* 右：已选 + 拖拽排序 */}
         <Col span={12}>
-          <div className="font-semibold mb-2">已选活动 <span className="font-normal text-xs text-gray-400">（拖动 <HolderOutlined /> 调整顺序，共 {selectedIds.length} 个）</span></div>
+          <div className="font-semibold mb-2">已选活动 <span className="font-normal text-xs text-text-tertiary">（拖动 <HolderOutlined /> 调整顺序，共 {selectedIds.length} 个）</span></div>
           <div className="border border-gray-100 rounded-md min-h-[100px] max-h-[360px] overflow-auto">
             {selectedIds.length === 0 ? (
-              <div className="text-center py-8 text-gray-300">从左侧勾选活动</div>
+              <div className="text-center py-8 text-text-tertiary">从左侧勾选活动</div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={selectedIds} strategy={verticalListSortingStrategy}>
@@ -231,7 +231,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({ editing, onCancel, onSucc
       {/* AI 分析配置 */}
       <div className="border border-gray-100 rounded-md p-3">
         <div className="font-semibold mb-2 flex items-center gap-1.5">
-          <RobotOutlined className="text-purple" /> AI 分析配置 <span className="font-normal text-xs text-gray-400">（可选，计划结束后自动分析各题）</span>
+          <RobotOutlined className="text-purple" /> AI 分析配置 <span className="font-normal text-xs text-text-tertiary">（可选，计划结束后自动分析各题）</span>
         </div>
         <Row gutter={12}>
           <Col span={10}>
@@ -343,14 +343,14 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
           return (
             <div key={item.id} className={`px-3.5 py-2.5 ${idx < items.length - 1 ? 'border-b border-gray-100' : ''} ${isActive ? 'bg-blue-50' : idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 min-w-[24px] text-xs">{idx + 1}.</span>
+                <span className="text-text-tertiary min-w-[24px] text-xs">{idx + 1}.</span>
                 <Tag color={item.activity?.activity_type === "vote" ? "blue" : "green"} className="flex-shrink-0">
                   {item.activity?.activity_type === "vote" ? "投票" : "填空"}
                 </Tag>
                 <span className={`flex-1 text-sm ${isActive ? 'font-semibold' : 'font-normal'}`}>
                   {item.activity?.title || `活动 ${item.activity_id}`}
                 </span>
-                <span className="text-gray-400 text-xs mr-1">
+                <span className="text-text-tertiary text-xs mr-1">
                   {item.activity?.time_limit ? `${item.activity.time_limit}s` : "无限"}
                 </span>
                 <Badge
@@ -406,7 +406,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({ plan, onRefresh }) => {
           );
         })}
         {items.length === 0 && (
-          <div className="text-center py-10 text-gray-400">该计划暂无题目</div>
+          <div className="text-center py-10 text-text-tertiary">该计划暂无题目</div>
         )}
       </div>
       {/* 活动详情 Drawer */}

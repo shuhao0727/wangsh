@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
+from app.utils.errors import safe_error_detail
 from app.schemas.agents import (
     AIServiceProvider,
     ModelDiscoveryRequest,
@@ -39,7 +40,7 @@ async def discover_models(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"模型发现失败: {str(e)}",
+            detail=safe_error_detail("模型发现失败", e),
         )
 
 
@@ -83,7 +84,7 @@ async def discover_models_by_agent(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"模型发现失败: {str(e)}",
+            detail=safe_error_detail("模型发现失败", e),
         )
 
 
@@ -116,7 +117,7 @@ async def get_preset_models(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取预设模型失败: {str(e)}",
+            detail=safe_error_detail("获取预设模型失败", e),
         )
 
 
@@ -169,7 +170,7 @@ async def detect_provider_from_endpoint(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"服务商检测失败: {str(e)}",
+            detail=safe_error_detail("服务商检测失败", e),
         )
 
 

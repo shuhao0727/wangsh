@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.core.deps import require_admin, get_db
+from app.utils.errors import safe_error_detail
 from app.models import User
 from app.core.pubsub import publish
 
@@ -225,7 +226,7 @@ async def list_users(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取用户列表失败: {str(e)}"
+            detail=safe_error_detail("获取用户列表失败", e)
         )
 
 
@@ -261,7 +262,7 @@ async def get_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取用户详情失败: {str(e)}"
+            detail=safe_error_detail("获取用户详情失败", e)
         )
 
 
@@ -335,7 +336,7 @@ async def create_user(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建用户失败: {str(e)}"
+            detail=safe_error_detail("创建用户失败", e)
         )
 
 
@@ -440,7 +441,7 @@ async def update_user(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新用户失败: {str(e)}"
+            detail=safe_error_detail("更新用户失败", e)
         )
 
 
@@ -488,7 +489,7 @@ async def delete_user(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"删除用户失败: {str(e)}"
+            detail=safe_error_detail("删除用户失败", e)
         )
 
 
@@ -539,7 +540,7 @@ async def batch_delete_users(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"批量删除用户失败: {str(e)}"
+            detail=safe_error_detail("批量删除用户失败", e)
         )
 
 
@@ -660,6 +661,8 @@ async def import_users(
                 # 跳过注释行
                 if any(str(value).startswith('#') for value in row.values() if value):
                     continue
+
+                savepoint = await db.begin_nested()
                 
                 # 提取数据
                 student_id = row.get('学号', '').strip()
@@ -708,10 +711,9 @@ async def import_users(
                         if username_result.scalar_one_or_none():
                             raise ValueError(f"用户名 '{username}' 已被其他用户使用")
                         existing_user.username = username  # type: ignore[assignment]
-                    
-                    await db.commit()
-                    await db.refresh(existing_user)
-                    
+
+                    await db.flush()
+
                     results.append(ImportUserResponse(
                         row_number=i,
                         student_id=student_id,
@@ -744,9 +746,8 @@ async def import_users(
                     )
                     
                     db.add(new_user)
-                    await db.commit()
-                    await db.refresh(new_user)
-                    
+                    await db.flush()
+
                     results.append(ImportUserResponse(
                         row_number=i,
                         student_id=student_id,
@@ -767,8 +768,7 @@ async def import_users(
                     message=error_msg
                 ))
                 error_count += 1
-                # 回滚当前事务（如果有）
-                await db.rollback()
+                await savepoint.rollback()
         
         # 最终提交
         await db.commit()
@@ -789,5 +789,5 @@ async def import_users(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入用户失败: {str(e)}"
+            detail=safe_error_detail("导入用户失败", e)
         )

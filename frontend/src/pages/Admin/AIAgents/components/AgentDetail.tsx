@@ -67,7 +67,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
           关闭
         </Button>,
       ]}
-      width={600}
+      width="min(92vw, 600px)"
       styles={{ body: { padding: 24 } }}
     >
       <div>

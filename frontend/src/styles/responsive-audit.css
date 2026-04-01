@@ -119,8 +119,7 @@
 .xbk-page,
 .articles-page,
 .article-page-wrapper,
-.it-technology-page,
-.personal-programs-page {
+.it-technology-page {
   font-size: var(--ws-text-sm);
 }
 

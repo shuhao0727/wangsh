@@ -37,7 +37,7 @@ const formatCorrectAnswer = (raw?: string | null): string => {
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
   if (!text) return null;
   return (
-    <div className="leading-relaxed text-sm text-gray-700">
+    <div className="leading-relaxed text-sm text-text-secondary">
       {text.split(/\n{2}/).map((para, i) => {
         if (para.startsWith("```")) {
           const code = para.replace(/^```[^\n]*\n?/, "").replace(/```$/, "");
@@ -77,7 +77,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
 
       {activity.activity_type === "vote" && Array.isArray(activity.options) && activity.options.length > 0 && (
         <div className="mb-3">
-          <div className="text-xs text-gray-400 mb-1">选项</div>
+          <div className="text-xs text-text-tertiary mb-1">选项</div>
           {(activity.options as any[]).map((opt: any) => (
             <div key={opt.key} className="px-2.5 py-1 mb-1 rounded text-sm" style={{
               background: activity.correct_answer?.includes(opt.key) ? "#f6ffed" : "#fafafa",
@@ -99,7 +99,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
 
       {codeOpt && (
         <div className="mb-3">
-          <div className="text-xs text-gray-400 mb-1">代码模板</div>
+          <div className="text-xs text-text-tertiary mb-1">代码模板</div>
           <pre className="bg-code-bg text-code-text rounded-md px-3 py-2.5 text-xs overflow-x-auto !m-0">{codeOpt.text}</pre>
         </div>
       )}
@@ -116,7 +116,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
               <div key={opt.key} className="mb-2.5">
                 <div className="flex justify-between text-sm mb-0.5">
                   <span style={{ color: isCorrect ? "#52c41a" : "#333", fontWeight: isCorrect ? 600 : undefined }}>{opt.key}. {opt.text}</span>
-                  <span className="text-gray-400">{count} 票 ({pct}%)</span>
+                  <span className="text-text-tertiary">{count} 票 ({pct}%)</span>
                 </div>
                 <Progress percent={pct} showInfo={false} strokeColor={isCorrect ? "#52c41a" : "#4096ff"} size="small" />
               </div>
@@ -127,9 +127,9 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
               {stats.correct_rate != null ? (
                 <div className="text-center p-5">
                   <Progress type="circle" percent={stats.correct_rate} size={100} format={(p) => `${p}%`} />
-                  <div className="mt-2 text-gray-400">整体正确率</div>
+                  <div className="mt-2 text-text-tertiary">整体正确率</div>
                 </div>
-              ) : <div className="text-xs text-gray-400">暂无作答数据</div>}
+              ) : <div className="text-xs text-text-tertiary">暂无作答数据</div>}
               {Array.isArray(stats.blank_slot_stats) && stats.blank_slot_stats.map((slot: any) => (
                 <div key={slot.slot_index} className="p-2 border border-gray-100 rounded-lg mb-2">
                   <div className="text-sm mb-1">
@@ -138,7 +138,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
                   <Progress percent={slot.correct_rate ?? 0} size="small" format={(p) => `${p}% 正确`}
                     strokeColor={slot.correct_rate != null && slot.correct_rate >= 60 ? "#52c41a" : "#ff4d4f"} />
                   {slot.top_wrong_answers?.length > 0 && (
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-text-tertiary mt-1">
                       高频错答：{slot.top_wrong_answers.slice(0, 3).map((x: any) => `${x.answer}(${x.count})`).join("、")}
                     </div>
                   )}
@@ -160,7 +160,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
             <div>
               <SimpleMarkdown text={activity.analysis_result} />
               {riskSlots.length > 0 && <div className="mt-2 text-xs" style={{ color: "#d46b08" }}>薄弱空位：{riskSlots.map((s: any) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}</div>}
-              {commonMistakes.length > 0 && <div className="text-xs text-gray-600 mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
+              {commonMistakes.length > 0 && <div className="text-xs text-text-secondary mt-1">高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}</div>}
             </div>
           )}
           {activity.analysis_status === "failed" && (
@@ -170,7 +170,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
             <Alert type="warning" showIcon message="自动分析已跳过" description="作答数据不足，已跳过分析" />
           )}
           {(!activity.analysis_status || activity.analysis_status === "pending") && (
-            <div className="text-xs text-gray-300">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
+            <div className="text-xs text-text-tertiary">活动结束后将自动触发分析（需在活动中配置分析智能体）</div>
           )}
         </div>
       )}

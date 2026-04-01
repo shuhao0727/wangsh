@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { config, getStoredAccessToken } from '@services';
+import { config } from '@services';
 
 export function useAdminSSE(
   eventType: string,
@@ -21,9 +21,8 @@ export function useAdminSSE(
     const connect = () => {
       if (stopped) return;
 
-      const token = getStoredAccessToken();
-      const query = token ? `?token=${encodeURIComponent(token)}` : '';
-      const streamUrl = `${config.apiUrl}/admin/stream${query}`;
+      // 使用 HttpOnly cookie 认证（withCredentials: true），不再通过 URL 传递 token
+      const streamUrl = `${config.apiUrl}/admin/stream`;
 
       try {
         stream = new EventSource(streamUrl, { withCredentials: true });

@@ -172,7 +172,7 @@ const AgentForm: React.FC<AgentFormProps> = ({ visible, editingAgent, onSubmit, 
       title={editingAgent ? "编辑智能体" : "添加智能体"}
       open={visible} onOk={handleSubmit} onCancel={onCancel}
       okText={editingAgent ? "保存" : "添加"} cancelText="取消"
-      width={640}
+      width="min(92vw, 640px)"
       footer={[
         <Button key="cancel" onClick={onCancel}>取消</Button>,
         <Tooltip key="test" title={canTest ? "测试连接并发现模型" : "请先填写名称和API地址"}>

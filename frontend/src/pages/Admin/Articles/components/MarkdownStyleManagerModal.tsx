@@ -196,9 +196,7 @@ export default function MarkdownStyleManagerModal({
                   onChange={(e) => setStyleDraft((p) => (p ? { ...p, content: e.target.value } : p))}
                   rows={18}
                   spellCheck={false}
-                  style={{
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                  }}
+                  className="font-mono"
                 />
                 <div
                   className="border border-black/[0.04] rounded-lg bg-surface-2 overflow-auto p-3"

@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_user
+from app.utils.errors import safe_error_detail
 from app.schemas.agents import AgentChatRequest
 from app.schemas.user_info import UserInfo
 
@@ -45,6 +46,6 @@ async def stream_agent_chat_endpoint(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"流式对话失败: {str(e)}",
+            detail=safe_error_detail("流式对话失败", e),
         )
 

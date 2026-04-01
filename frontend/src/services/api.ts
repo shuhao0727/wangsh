@@ -70,6 +70,7 @@ export const authTokenStorage = {
     try {
       if (accessToken) {
         sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        // localStorage 用于跨 tab 共享登录状态（实际认证靠 HttpOnly cookie）
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
       }
       if (refreshToken) {

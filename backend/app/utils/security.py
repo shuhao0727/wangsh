@@ -19,9 +19,9 @@ def get_password_hash(password: str) -> str:
     使用 bcrypt 算法，直接调用 bcrypt 库
     """
     try:
-        # bcrypt 哈希密码
-        # 密码会被自动处理为字节，长度限制由 bcrypt 内部处理
         password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            raise ValueError("密码超过 bcrypt 72 字节限制")
         
         # 生成 salt 并哈希密码
         salt = bcrypt.gensalt()
@@ -71,9 +71,8 @@ def hash_super_admin_password() -> str:
     if not admin_password:
         raise ValueError("超级管理员密码未配置，请检查 .env 文件中的 SUPER_ADMIN_PASSWORD 设置")
     
-    # 确保密码不超过 bcrypt 的 72 字节限制
+    # bcrypt 有 72 字节限制，超过应拒绝而非静默截断
     if len(admin_password.encode('utf-8')) > 72:
-        logger.warning("超级管理员密码超过72字节，自动截断")
-        admin_password = admin_password[:72]  # 简单截断，实际项目中应该提示用户修改
-    
+        raise ValueError("超级管理员密码超过 bcrypt 72 字节限制，请缩短密码")
+
     return get_password_hash(admin_password)

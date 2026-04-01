@@ -84,7 +84,7 @@ const LoginPage: React.FC = () => {
               rules={[{ required: true, message: requireAdmin ? "请输入管理员账号" : "请输入用户名" }]}
             >
               <Input
-                prefix={<UserOutlined className="text-gray-300" />}
+                prefix={<UserOutlined className="text-text-tertiary" />}
                 placeholder={requireAdmin ? "请输入管理员账号" : "请输入用户名"}
                 size="large"
               />
@@ -99,7 +99,7 @@ const LoginPage: React.FC = () => {
               ]}
             >
               <Input.Password
-                prefix={<LockOutlined className="text-gray-300" />}
+                prefix={<LockOutlined className="text-text-tertiary" />}
                 placeholder="请输入密码"
                 size="large"
               />
@@ -112,7 +112,8 @@ const LoginPage: React.FC = () => {
                 block
                 size="large"
                 loading={auth.isLoading}
-                style={{ height: 44, fontWeight: 600, fontSize: 15 }}
+                className="text-base"
+                style={{ height: 44, fontWeight: 600 }}
               >
                 {requireAdmin ? "管理员登录" : "登录"}
               </Button>
