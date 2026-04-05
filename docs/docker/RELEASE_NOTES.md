@@ -2,6 +2,53 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.5（2026-04-05）
+
+### 1. 变更范围
+
+- 生产镜像默认版本升级 `1.5.3` → `1.5.5`
+- 完成一轮大规模平台更新：系统接口拆分、XBK 实数据信链路、点名与测评收口、生产烟测体系落地、文档与脚本目录重组
+
+### 2. 包含更新
+
+- **系统接口重组**：`system/admin.py` 拆分为 `overview.py`、`feature_flags.py`、`metrics.py`
+- **XBK 真数据化**：后端拆分 `students/courses/selections/bulk_ops` 端点，补齐导入导出规则与结构测试，前端移除 mock 兜底并改为真实空态
+- **点名与课堂链路**：点名数据模型、接口和烟测脚本补齐；group discussion 成员识别与生产烟测覆盖增强
+- **生产烟测收口**：新增/完善 `scripts/prod-smoke/`、`backend/scripts/smoke_*`、`frontend/scripts/prod-smoke-ui.mjs`，产出统一 API/UI/worker 验证链
+- **前端工程升级**：前端脚本、路由页、管理后台组件和公共 UI 基础设施完成一轮收口整理
+- **文档结构整理**：部署、前端、计划、测试治理、历史归档统一迁移到 `docs/docker/` 分层维护
+- **测试与脚本整理**：补齐 `backend/scripts/README.md`、`scripts/README.md`、`frontend/scripts/README.md`、`docs/docker/testing/README.md`
+
+### 3. 构建与部署
+
+```bash
+./build_images.sh 1.5.5
+docker compose push
+docker compose pull && docker compose up -d
+curl http://localhost:6608/api/health
+```
+
+### 4. 验证建议
+
+- 生产 API/UI/worker 全链路烟测：
+
+```bash
+./scripts/prod-smoke/run.sh
+```
+
+- 前端基础校验：
+
+```bash
+cd frontend && npm run type-check
+```
+
+### 5. 配置影响
+
+- `.env.example`、`docker-compose.yml`、`docker-compose.dev.yml`、`frontend/package.json` 默认版本号已同步到 `1.5.5`
+- 如生产环境仍显式写死旧 `IMAGE_TAG` / `APP_VERSION` / `REACT_APP_VERSION` / `PYTHONLAB_SANDBOX_IMAGE`，需要同步改为 `1.5.5`
+
+---
+
 ## v1.5.3（2026-03-31）
 
 ### 1. 变更范围
