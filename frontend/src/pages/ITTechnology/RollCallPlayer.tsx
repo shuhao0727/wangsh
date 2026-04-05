@@ -1,7 +1,9 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Spin, message } from 'antd';
+
+import { Button } from '@/components/ui/button';
 import { dianmingApi, DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
-import { PlayCircleOutlined, StopOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { PlayCircle, Square, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface Props {
   record: DianmingClass;
@@ -26,7 +28,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
           setCurrentName('暂无学生');
         }
       } catch (_error) {
-        message.error('获取学生名单失败');
+        showMessage.error('获取学生名单失败');
       } finally {
         setLoading(false);
       }
@@ -68,7 +70,8 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
   return (
     <div className="it-player-container">
       <div className="it-player-header">
-        <Button onClick={onBack} ghost icon={<ArrowLeftOutlined />}>
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" />
           返回选择
         </Button>
         <div className="it-player-info">
@@ -78,7 +81,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
 
       <div className="it-player-main">
         {loading ? (
-          <Spin size="large" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         ) : (
           <div style={{ textAlign: 'center' }}>
              <h1 
@@ -101,12 +104,11 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
 
       <div className="it-player-controls">
         <Button
-          type="primary"
           className={`it-player-btn ${isRunning ? 'it-player-btn-stop' : 'it-player-btn-start'}`}
-          icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
           onClick={toggle}
           disabled={students.length === 0}
         >
+          {isRunning ? <Square className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
           {isRunning ? '停止' : '开始点名'}
         </Button>
       </div>

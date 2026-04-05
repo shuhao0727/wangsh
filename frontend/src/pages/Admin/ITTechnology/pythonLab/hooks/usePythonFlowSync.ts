@@ -69,6 +69,7 @@ export function usePythonFlowSync(params: {
   const [debugForIns, setDebugForIns] = useState<DebugForInEntry[] | null>(null);
   const [debugMapCodeSha, setDebugMapCodeSha] = useState<string | null>(null);
   const [flowRebuildToken, setFlowRebuildToken] = useState(0);
+  const lastNonEmptyCodeRef = useRef((starterCode || "").trim() ? (starterCode || "") : "print('Hello, Python')\n");
   const pendingRebuildRef = useRef<{ token: number; resolve: () => void; reject: (reason?: unknown) => void } | null>(null);
   const aiCodeTokenRef = useRef(0);
   const lastAiSemanticKeyRef = useRef<string | null>(null);
@@ -221,8 +222,20 @@ export function usePythonFlowSync(params: {
   ]);
 
   useEffect(() => {
+    if (code.trim()) {
+      lastNonEmptyCodeRef.current = code;
+    }
+  }, [code]);
+
+  useEffect(() => {
     if (codeMode === "auto") {
-      setCode(generated.python);
+      const nextCode = generated.python;
+      // 防止“有流程图但生成代码临时为空”时把现有代码清空
+      if (nodes.length > 0 && !nextCode.trim() && lastNonEmptyCodeRef.current.trim()) {
+        setCode(lastNonEmptyCodeRef.current);
+      } else {
+        setCode(nextCode);
+      }
       setCodeIr(generated.ir);
       setDebugForRanges(null);
       setDebugForIns(null);
@@ -242,7 +255,7 @@ export function usePythonFlowSync(params: {
         });
       }
     }
-  }, [codeMode, generated.ir, generated.nodeLineMap, generated.python, setNodes]);
+  }, [codeMode, generated.ir, generated.nodeLineMap, generated.python, nodes.length, setNodes]);
 
   useEffect(() => {
     if (codeMode !== "auto") return;

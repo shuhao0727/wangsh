@@ -1,0 +1,234 @@
+{
+  "generated_at": "2026-04-03T16:55:39.001Z",
+  "scope": {
+    "root": "/Users/wsh/wangsh/frontend",
+    "src": "src",
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".css"
+    ],
+    "files_scanned": 358,
+    "files_with_hits": 100
+  },
+  "totals": {
+    "hits_total": 734
+  },
+  "reference": {
+    "legacy_baseline_hits": 1605,
+    "target_hits_le_50pct": 802
+  },
+  "thresholds": {
+    "max_total_hits": 734,
+    "max_route_hits": {
+      "/home": 0,
+      "/ai-agents": 6,
+      "/articles": 50,
+      "/informatics": 10,
+      "/it-technology": 12,
+      "/admin/dashboard": 0,
+      "/admin/ai-agents": 12,
+      "/admin/informatics": 48,
+      "/admin/it-technology": 137,
+      "/admin/articles": 73
+    }
+  },
+  "by_type": {
+    "tailwind_arbitrary_px": 319,
+    "css_px_declaration": 261,
+    "inline_style_numeric": 178,
+    "inline_style_px_string": 6
+  },
+  "by_route": {
+    "shared": 386,
+    "/admin/it-technology": 137,
+    "/admin/articles": 73,
+    "/articles": 50,
+    "/admin/informatics": 48,
+    "/ai-agents": 36,
+    "/admin/ai-agents": 12,
+    "/it-technology": 12,
+    "/informatics": 10
+  },
+  "by_route_files": {
+    "shared": 51,
+    "/admin/it-technology": 19,
+    "/admin/articles": 8,
+    "/ai-agents": 6,
+    "/admin/informatics": 6,
+    "/admin/ai-agents": 4,
+    "/articles": 3,
+    "/informatics": 2,
+    "/it-technology": 1
+  },
+  "key_route_hits": {
+    "/home": 0,
+    "/ai-agents": 36,
+    "/articles": 50,
+    "/informatics": 10,
+    "/it-technology": 12,
+    "/admin/dashboard": 0,
+    "/admin/ai-agents": 12,
+    "/admin/informatics": 48,
+    "/admin/it-technology": 137,
+    "/admin/articles": 73
+  },
+  "top_files": [
+    {
+      "file": "src/pages/Admin/Articles/EditForm.css",
+      "hits": 50
+    },
+    {
+      "file": "src/styles/index.css",
+      "hits": 44
+    },
+    {
+      "file": "src/pages/Admin/AgentData/components/GroupDiscussion/index.tsx",
+      "hits": 40
+    },
+    {
+      "file": "src/pages/Articles/Detail.css",
+      "hits": 33
+    },
+    {
+      "file": "src/pages/Admin/Informatics/typstEditor.css",
+      "hits": 26
+    },
+    {
+      "file": "src/pages/Xbk/Xbk.css",
+      "hits": 26
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/components/rightPanel/RightPanelView.tsx",
+      "hits": 25
+    },
+    {
+      "file": "src/pages/Admin/AgentData/components/columns.tsx",
+      "hits": 17
+    },
+    {
+      "file": "src/pages/Admin/ClassroomPlan/PlanPage.tsx",
+      "hits": 17
+    },
+    {
+      "file": "src/pages/Admin/ClassroomPlan/index.tsx",
+      "hits": 16
+    },
+    {
+      "file": "src/styles/markdown.css",
+      "hits": 16
+    },
+    {
+      "file": "src/layouts/BasicLayout.css",
+      "hits": 15
+    },
+    {
+      "file": "src/pages/Admin/ClassroomInteraction/index.tsx",
+      "hits": 15
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/components/MonacoPythonEditor.tsx",
+      "hits": 15
+    },
+    {
+      "file": "src/pages/Admin/Assessment/StatisticsPage.tsx",
+      "hits": 14
+    },
+    {
+      "file": "src/pages/Admin/Assessment/QuestionsPage.tsx",
+      "hits": 13
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/components/rightPanel/PipelineTab.tsx",
+      "hits": 13
+    },
+    {
+      "file": "src/pages/Articles/Articles.css",
+      "hits": 13
+    },
+    {
+      "file": "src/pages/Admin/Categories/index.tsx",
+      "hits": 12
+    },
+    {
+      "file": "src/pages/ITTechnology/ITTechnology.css",
+      "hits": 12
+    },
+    {
+      "file": "src/styles/responsive-audit.css",
+      "hits": 12
+    },
+    {
+      "file": "src/pages/Admin/AgentData/components/AnalysisPanel.tsx",
+      "hits": 11
+    },
+    {
+      "file": "src/pages/Admin/Assessment/index.tsx",
+      "hits": 11
+    },
+    {
+      "file": "src/pages/Xbk/index.tsx",
+      "hits": 11
+    },
+    {
+      "file": "src/pages/Admin/Articles/CategoryManageModal.tsx",
+      "hits": 10
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/PythonLabStudio.tsx",
+      "hits": 10
+    },
+    {
+      "file": "src/pages/Xbk/components/XbkAnalysisModal.tsx",
+      "hits": 10
+    },
+    {
+      "file": "src/pages/Admin/index.tsx",
+      "hits": 9
+    },
+    {
+      "file": "src/pages/AIAgents/ClassroomPanel.tsx",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/AIAgents/GroupDiscussionPanel.tsx",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/components/AIAssistantModal.tsx",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/pythonLab/components/EdgeToolbar.tsx",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/Admin/Informatics/TypstNotesPanel.tsx",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/Informatics/Informatics.css",
+      "hits": 8
+    },
+    {
+      "file": "src/pages/AIAgents/ChatArea.tsx",
+      "hits": 7
+    },
+    {
+      "file": "src/pages/Admin/ITTechnology/DianmingManager.tsx",
+      "hits": 7
+    },
+    {
+      "file": "src/pages/Admin/Users/columns.tsx",
+      "hits": 7
+    },
+    {
+      "file": "src/styles/ui-polish.css",
+      "hits": 7
+    },
+    {
+      "file": "src/components/ui/button.tsx",
+      "hits": 6
+    }
+  ]
+}

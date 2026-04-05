@@ -2,17 +2,19 @@
  * AI智能体管理页面 - 真实数据版
  * 连接后端数据库，支持完整的CRUD操作和测试功能
  */
-import React, { useCallback, useEffect, useState } from "react";
-import { useAdminSSE } from "@hooks/useAdminSSE";
+import { showMessage } from "@/lib/toast";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Table,
-  Modal,
-  message,
-  Pagination,
-  Input,
-} from "antd";
-import { DeleteOutlined, ThunderboltOutlined } from "@ant-design/icons";
+  type ColumnDef,
+  type RowSelectionState,
+  type Updater,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useAdminSSE } from "@hooks/useAdminSSE";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable, DataTablePagination } from "@/components/ui/data-table";
 
 // 导入组件
 import { getAgentColumns } from "./components/columns";
@@ -26,6 +28,7 @@ import type { AIAgent, AgentStatisticsData } from "@services/znt/types";
 import { aiAgentsApi } from "@services/agents";
 import { logger } from "@services/logger";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
 const AdminAIAgents: React.FC = () => {
   // 状态管理
@@ -33,10 +36,10 @@ const AdminAIAgents: React.FC = () => {
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [statisticsData, setStatisticsData] = useState<AgentStatisticsData | null>(null);
 
   // 弹窗状态
@@ -63,13 +66,13 @@ const AdminAIAgents: React.FC = () => {
         setTotal(response.data.total);
         setSelectedRowKeys([]);
       } else {
-        message.error(response.message || "加载智能体列表失败");
+        showMessage.error(response.message || "加载智能体列表失败");
         setAgents([]);
         setTotal(0);
       }
     } catch (error) {
       logger.error("加载智能体列表失败:", error);
-      message.error("加载智能体列表失败");
+      showMessage.error("加载智能体列表失败");
       setAgents([]);
       setTotal(0);
     } finally {
@@ -92,7 +95,7 @@ const AdminAIAgents: React.FC = () => {
 
   // 处理分页变化
   const handlePageChange = (page: number, size?: number) => {
-    setCurrentPage(page);
+    setCurrentPage(Math.max(1, page));
     if (size) setPageSize(size);
   };
 
@@ -119,13 +122,13 @@ const AdminAIAgents: React.FC = () => {
       if (response.success) {
         // 重新加载列表
         await loadAgents();
-        message.success("智能体删除成功");
+        showMessage.success("智能体删除成功");
       } else {
-        message.error(response.message || "删除智能体失败");
+        showMessage.error(response.message || "删除智能体失败");
       }
     } catch (error) {
       logger.error("删除智能体失败:", error);
-      message.error("删除智能体失败");
+      showMessage.error("删除智能体失败");
     } finally {
       setLoading(false);
     }
@@ -142,13 +145,13 @@ const AdminAIAgents: React.FC = () => {
       if (response.success) {
         // 重新加载列表
         await loadAgents();
-        message.success(`智能体已${isActive ? "启用" : "停用"}`);
+        showMessage.success(`智能体已${isActive ? "启用" : "停用"}`);
       } else {
-        message.error(response.message || "更新智能体状态失败");
+        showMessage.error(response.message || "更新智能体状态失败");
       }
     } catch (error) {
       logger.error("更新智能体状态失败:", error);
-      message.error("更新智能体状态失败");
+      showMessage.error("更新智能体状态失败");
     } finally {
       setLoading(false);
     }
@@ -179,9 +182,9 @@ const AdminAIAgents: React.FC = () => {
         if (response.success) {
           // 重新加载列表
           await loadAgents();
-          message.success("智能体信息更新成功");
+          showMessage.success("智能体信息更新成功");
         } else {
-          message.error(response.message || "更新智能体信息失败");
+          showMessage.error(response.message || "更新智能体信息失败");
           return;
         }
       } else {
@@ -203,9 +206,9 @@ const AdminAIAgents: React.FC = () => {
         if (response.success) {
           // 重新加载列表
           await loadAgents();
-          message.success("智能体添加成功");
+          showMessage.success("智能体添加成功");
         } else {
-          message.error(response.message || "创建智能体失败");
+          showMessage.error(response.message || "创建智能体失败");
           return;
         }
       }
@@ -213,7 +216,7 @@ const AdminAIAgents: React.FC = () => {
       setFormVisible(false);
     } catch (error) {
       logger.error("保存智能体信息失败:", error);
-      message.error("保存智能体信息失败");
+      showMessage.error("保存智能体信息失败");
     } finally {
       setLoading(false);
     }
@@ -228,125 +231,83 @@ const AdminAIAgents: React.FC = () => {
   // 处理测试智能体
   const handleTestAgent = async (id: number, name: string) => {
     try {
-      // 弹出测试对话框
-      Modal.confirm({
-        title: `测试智能体: ${name}`,
-        content: (
-          <div>
-            <p>请输入测试消息:</p>
-            <Input.TextArea
-              placeholder="例如: 你好，请介绍一下你自己"
-              rows={4}
-              id="test-message-input"
-            />
-          </div>
-        ),
-        icon: <ThunderboltOutlined />,
-        okText: "发送测试",
-        cancelText: "取消",
-        async onOk() {
-          const testMessageInput = document.getElementById("test-message-input") as HTMLTextAreaElement;
-          const testMessage = testMessageInput?.value?.trim();
-          
-          if (!testMessage) {
-            message.warning("请输入测试消息");
-            return Promise.reject();
-          }
+      const input = window.prompt(
+        `测试智能体: ${name}\n请输入测试消息`,
+        "你好，请介绍一下你自己",
+      );
+      if (input == null) return;
 
-          try {
-            const response = await aiAgentsApi.testAgent(id, testMessage);
-            if (response.success) {
-              const testData = response.data as { message?: string; response_time?: number };
-              Modal.success({
-                title: "测试成功",
-                content: (
-                  <div>
-                    <p>{testData.message}</p>
-                    {testData.response_time && (
-                      <p>响应时间: {testData.response_time.toFixed(2)}ms</p>
-                    )}
-                  </div>
-                ),
-              });
-            } else {
-              Modal.error({
-                title: "测试失败",
-                content: response.message,
-              });
-            }
-          } catch (error: any) {
-            Modal.error({
-              title: "测试失败",
-              content: error.message || "智能体测试失败",
-            });
-          }
-        },
-      });
+      const testMessage = input.trim();
+      if (!testMessage) {
+        showMessage.warning("请输入测试消息");
+        return;
+      }
+
+      const response = await aiAgentsApi.testAgent(id, testMessage);
+      if (!response.success) {
+        showMessage.error(response.message || "测试失败");
+        return;
+      }
+      const testData = response.data as { message?: string; response_time?: number };
+      showMessage.success(`测试成功${testData.response_time ? `（${testData.response_time.toFixed(2)}ms）` : ""}`);
+      if (testData.message) {
+        showMessage.info(testData.message);
+      }
     } catch (error) {
       logger.error("测试智能体失败:", error);
-      message.error("测试智能体失败");
+      showMessage.error("测试智能体失败");
     }
   };
 
   // 批量删除
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      message.warning("请选择要删除的智能体");
+      showMessage.warning("请选择要删除的智能体");
+      return;
+    }
+    if (!window.confirm(`确定要删除选中的 ${selectedRowKeys.length} 个智能体吗？此操作不可恢复。`)) {
       return;
     }
 
-    Modal.confirm({
-      title: "确认批量删除",
-      content: `确定要删除选中的 ${selectedRowKeys.length} 个智能体吗？此操作不可恢复。`,
-      okText: "确认删除",
-      okType: "danger",
-      cancelText: "取消",
-      async onOk() {
-        try {
-          setLoading(true);
-          
-          // 循环删除每个选中的智能体
-          let successCount = 0;
-          let errorCount = 0;
-          
-          for (const id of selectedRowKeys) {
-            try {
-              const response = await aiAgentsApi.deleteAgent(id as number);
-              if (response.success) {
-                successCount++;
-              } else {
-                errorCount++;
-              }
-            } catch {
+    const run = async () => {
+      try {
+        setLoading(true);
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const id of selectedRowKeys) {
+          try {
+            const response = await aiAgentsApi.deleteAgent(id);
+            if (response.success) {
+              successCount++;
+            } else {
               errorCount++;
             }
+          } catch {
+            errorCount++;
           }
-          
-          // 重新加载列表
-          await loadAgents();
-          setSelectedRowKeys([]);
-          
-          if (errorCount === 0) {
-            message.success(`成功删除 ${successCount} 个智能体`);
-          } else if (successCount > 0) {
-            message.warning(`成功删除 ${successCount} 个智能体，${errorCount} 个删除失败`);
-          } else {
-            message.error(`批量删除失败，所有 ${errorCount} 个智能体删除失败`);
-          }
-        } catch (error) {
-          logger.error("批量删除失败:", error);
-          message.error("批量删除失败");
-        } finally {
-          setLoading(false);
         }
-      },
-    });
-  };
 
-  // 表格行选择
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+        await loadAgents();
+        setSelectedRowKeys([]);
+
+        if (errorCount === 0) {
+          showMessage.success(`成功删除 ${successCount} 个智能体`);
+        } else if (successCount > 0) {
+          showMessage.warning(`成功删除 ${successCount} 个智能体，${errorCount} 个删除失败`);
+        } else {
+          showMessage.error(`批量删除失败，所有 ${errorCount} 个智能体删除失败`);
+        }
+      } catch (error) {
+        logger.error("批量删除失败:", error);
+        showMessage.error("批量删除失败");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void run();
   };
 
   // 加载统计数据
@@ -369,6 +330,90 @@ const AdminAIAgents: React.FC = () => {
 
   // SSE 实时更新
   useAdminSSE('agent_changed', loadAgents);
+
+  const baseColumns = useMemo(
+    () =>
+      getAgentColumns(
+        handleEdit,
+        handleDelete,
+        handleToggleActive,
+        handleViewDetails,
+        handleTestAgent,
+      ),
+    [handleDelete, handleEdit, handleTestAgent, handleToggleActive],
+  );
+
+  const rowSelection = useMemo<RowSelectionState>(() => {
+    const selectedIds = new Set(selectedRowKeys.map((id) => String(id)));
+    return agents.reduce<RowSelectionState>((acc, agent) => {
+      const id = String(agent.id);
+      if (selectedIds.has(id)) {
+        acc[id] = true;
+      }
+      return acc;
+    }, {});
+  }, [agents, selectedRowKeys]);
+
+  const handleRowSelectionChange = useCallback(
+    (updater: Updater<RowSelectionState>) => {
+      const nextSelection =
+        typeof updater === "function" ? updater(rowSelection) : updater;
+      const nextKeys = Object.keys(nextSelection)
+        .filter((key) => nextSelection[key])
+        .map((key) => Number(key));
+      setSelectedRowKeys(nextKeys);
+    },
+    [rowSelection],
+  );
+
+  const columns = useMemo<ColumnDef<AIAgent>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              aria-label="选择当前页全部智能体"
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() ? "indeterminate" : false)
+              }
+              onCheckedChange={(checked) =>
+                table.toggleAllPageRowsSelected(checked === true)
+              }
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              aria-label={`选择智能体 ${row.original.name}`}
+              checked={row.getIsSelected()}
+              onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+            />
+          </div>
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        size: 44,
+        meta: { className: "w-11 align-middle" },
+      },
+      ...baseColumns,
+    ],
+    [baseColumns],
+  );
+
+  const table = useReactTable({
+    data: agents,
+    columns,
+    state: { rowSelection },
+    getRowId: (row) => String(row.id),
+    enableRowSelection: true,
+    onRowSelectionChange: handleRowSelectionChange,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <AdminPage scrollable={false}>
@@ -400,43 +445,33 @@ const AdminAIAgents: React.FC = () => {
       />
 
       {/* 智能体表格 */}
-      <div style={{ flex: 1, minHeight: 0, marginTop: 12 }}>
-        <AdminTablePanel
-          loading={loading}
-          isEmpty={agents.length === 0}
-          emptyDescription={searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"}
-          emptyAction={
-            <Button type="primary" onClick={handleAddAgent}>
-              添加第一个智能体
-            </Button>
-          }
-          pagination={
-              <Pagination
-                current={currentPage}
-                pageSize={pageSize}
-                total={total}
-                onChange={handlePageChange}
-                showSizeChanger
-                showTotal={(total) => `共 ${total} 条`}
-              />
-          }
-        >
-          <Table
-            rowKey="id"
-            columns={getAgentColumns(
-              handleEdit,
-              handleDelete,
-              handleToggleActive,
-              handleViewDetails,
-              handleTestAgent,
-            )}
-            dataSource={agents}
-            rowSelection={rowSelection}
-            pagination={false}
-            scroll={{ x: 1200 }}
-            size="middle"
-          />
-        </AdminTablePanel>
+      <div className="mt-3 flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <AdminTablePanel
+            loading={loading}
+            isEmpty={agents.length === 0}
+            emptyDescription={searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"}
+            emptyAction={
+              <Button onClick={handleAddAgent}>
+                添加第一个智能体
+              </Button>
+            }
+          >
+            <DataTable table={table} className="h-full" />
+          </AdminTablePanel>
+        </div>
+        {agents.length > 0 ? (
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* 智能体表单弹窗 */}

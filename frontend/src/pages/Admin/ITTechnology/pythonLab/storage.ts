@@ -144,8 +144,10 @@ function normalizeExperiment(raw: any, defaultsById: Map<string, PythonLabExperi
       ? scenarioRaw
       : d?.scenario ?? "循环";
 
-  if (!id || !title || !starterCode) return null;
-  const enforcedStarterCode = id === "loops" ? FOR_TEACHING_EXAMPLE_CODE : starterCode;
+  const fallbackStarterCode = d?.starterCode ?? "";
+  const normalizedStarterCode = starterCode.trim() ? starterCode : fallbackStarterCode;
+  if (!id || !title || !normalizedStarterCode.trim()) return null;
+  const enforcedStarterCode = id === "loops" ? FOR_TEACHING_EXAMPLE_CODE : normalizedStarterCode;
   return { id, title, level, tags, scenario, starterCode: enforcedStarterCode };
 }
 

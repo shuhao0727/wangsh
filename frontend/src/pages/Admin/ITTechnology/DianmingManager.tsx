@@ -1,16 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Space, Popconfirm, Pagination } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { showMessage } from "@/lib/toast";
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  type ColumnDef,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Button } from "@/components/ui/button";
+import { DataTable, DataTablePagination } from "@/components/ui/data-table";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, Trash2, Pencil, RefreshCw, Loader2 } from 'lucide-react';
 import { AdminTablePanel } from '@/components/Admin';
 import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+
+const formSchema = z.object({
+  year: z.string().trim().min(1, "请输入年份，如 2024级"),
+  class_name: z.string().trim().min(1, "请输入班级名称"),
+  names_text: z.string().trim().min(1, "请输入学生名单"),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 const DianmingManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DianmingClass[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<DianmingClass | null>(null);
-  const [form] = Form.useForm();
-
+  const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      year: "",
+      class_name: "",
+      names_text: "",
+    },
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -18,7 +61,7 @@ const DianmingManager: React.FC = () => {
       const res = await dianmingApi.listClasses();
       setData(res);
     } catch (_error) {
-      message.error('获取班级列表失败');
+      showMessage.error('获取班级列表失败');
     } finally {
       setLoading(false);
     }
@@ -28,7 +71,17 @@ const DianmingManager: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleImport = async (values: any) => {
+  const displayedData = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return data;
+    return data.filter((item) => {
+      const year = String(item.year || "").toLowerCase();
+      const className = String(item.class_name || "").toLowerCase();
+      return year.includes(kw) || className.includes(kw);
+    });
+  }, [data, keyword]);
+
+  const handleImport = async (values: FormValues) => {
     try {
       if (editingRecord) {
         // 编辑模式：调用更新接口（覆盖名单）
@@ -37,7 +90,7 @@ const DianmingManager: React.FC = () => {
           class_name: values.class_name,
           names_text: values.names_text,
         });
-        message.success('更新成功');
+        showMessage.success('更新成功');
       } else {
         // 新建模式：调用导入接口（追加名单）
         await dianmingApi.importStudents({
@@ -45,25 +98,26 @@ const DianmingManager: React.FC = () => {
           class_name: values.class_name,
           names_text: values.names_text,
         });
-        message.success('导入成功');
+        showMessage.success('导入成功');
       }
       
       setIsModalVisible(false);
       setEditingRecord(null);
-      form.resetFields();
+      reset();
       fetchData();
     } catch (_error) {
-      message.error(editingRecord ? '更新失败' : '导入失败');
+      showMessage.error(editingRecord ? '更新失败' : '导入失败');
     }
   };
 
   const handleDelete = async (record: DianmingClass) => {
+    if (!window.confirm("确定要删除该班级及其所有学生吗？")) return;
     try {
       await dianmingApi.deleteClass(record.year, record.class_name);
-      message.success('删除成功');
+      showMessage.success('删除成功');
       fetchData();
     } catch (_error) {
-      message.error('删除失败');
+      showMessage.error('删除失败');
     }
   };
 
@@ -73,143 +127,192 @@ const DianmingManager: React.FC = () => {
       const students = await dianmingApi.listStudents(record.year, record.class_name);
       const namesText = students.map(s => s.student_name).join('\n');
       
-      form.setFieldsValue({
+      reset({
         year: record.year,
         class_name: record.class_name,
         names_text: namesText,
       });
       setIsModalVisible(true);
     } catch (_error) {
-      message.error('获取学生名单失败');
+      showMessage.error('获取学生名单失败');
     }
   };
 
-  const columns = [
+  const total = displayedData.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageSafe = Math.min(page, totalPages);
+  const start = (pageSafe - 1) * pageSize;
+  const pageRows = displayedData.slice(start, start + pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const columns: ColumnDef<DianmingClass>[] = [
     {
-      title: '年份/届别',
-      dataIndex: 'year',
-      key: 'year',
-      width: 120,
-      ellipsis: true as const,
+      id: "year",
+      header: "年份/届别",
+      accessorKey: "year",
+      size: 120,
+      meta: { className: "w-[120px]" },
+      cell: ({ row }) => <span className="truncate">{row.original.year}</span>,
     },
     {
-      title: '班级名称',
-      dataIndex: 'class_name',
-      key: 'class_name',
-      width: 180,
-      ellipsis: true as const,
+      id: "class_name",
+      header: "班级名称",
+      accessorKey: "class_name",
+      size: 180,
+      meta: { className: "w-[180px]" },
+      cell: ({ row }) => <span className="truncate">{row.original.class_name}</span>,
     },
     {
-      title: '学生人数',
-      dataIndex: 'count',
-      key: 'count',
-      width: 100,
-      align: 'right' as const,
+      id: "count",
+      header: "学生人数",
+      accessorKey: "count",
+      size: 120,
+      meta: { className: "w-[120px] text-text-tertiary" },
+      cell: ({ row }) => <span>{row.original.count}</span>,
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 140,
-      align: 'center' as const,
-      render: (_: any, record: DianmingClass) => (
-        <Space>
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+      id: "actions",
+      header: "操作",
+      size: 240,
+      meta: { className: "w-[240px]" },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => handleEdit(row.original)}>
+            <Pencil className="h-3.5 w-3.5" />
             编辑
           </Button>
-          <Popconfirm
-            title="确定要删除该班级及其所有学生吗？"
-            onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => handleDelete(row.original)}
           >
-            <Button danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
-        </Space>
+            <Trash2 className="h-3.5 w-3.5" />
+            删除
+          </Button>
+        </div>
       ),
     },
   ];
 
+  const table = useReactTable({
+    data: pageRows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setEditingRecord(null);
-            form.resetFields();
-            setIsModalVisible(true);
-          }}
-        >
-          新建/导入班级
-        </Button>
-      </div>
-
-      <div className="flex-1 min-h-0">
-        <AdminTablePanel
-        loading={loading}
-        isEmpty={data.length === 0}
-        emptyDescription="暂无班级数据"
-        pagination={
-          <Pagination
-            pageSize={10}
-            showSizeChanger
-            showTotal={(total) => `共 ${total} 条`}
-            total={data.length}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex flex-wrap justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Input
+            value={keyword}
+            placeholder="搜索年份或班级名称..."
+            className="w-64"
+            onChange={(event) => {
+              setKeyword(event.target.value);
+              setPage(1);
+            }}
           />
-        }
-      >
-        <Table
-          loading={loading}
-          dataSource={data}
-          columns={columns}
-          size="middle"
-          rowKey={(record) => `${record.year}-${record.class_name}`}
-          pagination={false}
-        />
-      </AdminTablePanel>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => void fetchData()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            刷新
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingRecord(null);
+              reset();
+              setIsModalVisible(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> 新建/导入班级
+          </Button>
+        </div>
       </div>
 
-      <Modal
-        title={editingRecord ? "编辑班级名单" : "新建/导入班级"}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <AdminTablePanel
+            loading={loading}
+            isEmpty={displayedData.length === 0}
+            emptyDescription="暂无班级数据"
+          >
+            <DataTable table={table} className="h-full" tableClassName="min-w-full" />
+          </AdminTablePanel>
+        </div>
+        {total > 0 ? (
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+            <DataTablePagination
+              currentPage={pageSafe}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              onPageChange={(nextPage, nextPageSize) => {
+                if (nextPageSize && nextPageSize !== pageSize) {
+                  setPageSize(nextPageSize);
+                }
+                setPage(nextPage);
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <Dialog
         open={isModalVisible}
-        onCancel={() => {
-          setIsModalVisible(false);
-          setEditingRecord(null);
-          form.resetFields();
+        onOpenChange={(next) => {
+          setIsModalVisible(next);
+          if (!next) {
+            setEditingRecord(null);
+            reset();
+          }
         }}
-        onOk={() => form.submit()}
-        width={600}
-        styles={{ body: { padding: 24 } }}
-        destroyOnHidden
       >
-        <Form form={form} onFinish={handleImport} layout="vertical">
-          <Form.Item
-            name="year"
-            label="年份/届别"
-            rules={[{ required: true, message: '请输入年份，如 2024级' }]}
-          >
-            <Input placeholder="例如：2024级" />
-          </Form.Item>
-          <Form.Item
-            name="class_name"
-            label="班级名称"
-            rules={[{ required: true, message: '请输入班级名称' }]}
-          >
-            <Input placeholder="例如：软件工程1班" />
-          </Form.Item>
-          <Form.Item
-            name="names_text"
-            label={editingRecord ? "学生名单 (修改后将覆盖原名单，一行一个姓名)" : "学生名单 (直接粘贴，一行一个姓名)"}
-            rules={[{ required: true, message: '请输入学生名单' }]}
-          >
-            <Input.TextArea rows={15} placeholder="张三&#10;李四&#10;王五" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>{editingRecord ? "编辑班级名单" : "新建/导入班级"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(handleImport)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="dm-admin-year">年份/届别</Label>
+              <Input id="dm-admin-year" placeholder="例如：2024级" {...register("year")} />
+              {errors.year?.message ? <p className="text-xs text-destructive">{errors.year.message}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dm-admin-class">班级名称</Label>
+              <Input id="dm-admin-class" placeholder="例如：软件工程1班" {...register("class_name")} />
+              {errors.class_name?.message ? <p className="text-xs text-destructive">{errors.class_name.message}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dm-admin-names">{editingRecord ? "学生名单 (修改后将覆盖原名单，一行一个姓名)" : "学生名单 (直接粘贴，一行一个姓名)"}</Label>
+              <Textarea id="dm-admin-names" rows={15} placeholder={"张三\n李四\n王五"} {...register("names_text")} />
+              {errors.names_text?.message ? <p className="text-xs text-destructive">{errors.names_text.message}</p> : null}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsModalVisible(false);
+                  setEditingRecord(null);
+                  reset();
+                }}
+              >
+                取消
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                保存
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

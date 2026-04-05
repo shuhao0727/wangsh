@@ -1,11 +1,9 @@
 import React, { useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import { Button, Space, Typography } from "antd";
-import { ExpandOutlined } from "@ant-design/icons";
+import { Maximize2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { FlowBeautifyResult } from "../../flow/beautify";
 import { FloatingPopup } from "../FloatingPopup";
-
-const { Text } = Typography;
 
 export function PipelineTab(props: {
   beautifyResult?: FlowBeautifyResult | null;
@@ -45,35 +43,36 @@ export function PipelineTab(props: {
       <div style={{ height: "100%", overflow: "auto", padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexShrink: 0 }}>
           <div className="font-semibold">完整流程图参考</div>
-          <Space>
-            <Button size="small" onClick={() => onRefreshBeautify?.()}>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => onRefreshBeautify?.()}>
               刷新
             </Button>
             <Button
-              size="small"
-              icon={<ExpandOutlined />}
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setViewerScale(1);
                 setViewerOpen(true);
               }}
             >
+              <Maximize2 className="h-4 w-4" />
               放大查看
             </Button>
-          </Space>
+          </div>
         </div>
         {beautifyLoading ? (
-          <Text type="secondary">渲染中…（首次加载 wasm 可能较慢）</Text>
+          <span className="text-sm text-text-secondary">渲染中…（首次加载 wasm 可能较慢）</span>
         ) : beautifyError ? (
           <div style={{ display: "grid", gap: 6 }}>
-            <Text type="danger">Graphviz 渲染失败：{beautifyError}</Text>
-            <Text type="secondary">可尝试：点击“刷新”，或刷新页面后重试。</Text>
+            <span className="text-sm text-destructive">Graphviz 渲染失败：{beautifyError}</span>
+            <span className="text-sm text-text-secondary">可尝试：点击“刷新”，或刷新页面后重试。</span>
           </div>
         ) : beautifyResult ? (
           <div style={{ border: "1px solid var(--ws-color-border-secondary)", borderRadius: 8, padding: 8, background: "var(--ws-color-surface)", overflow: "auto", maxHeight: 540 }}>
             <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(beautifyResult.svg, { USE_PROFILES: { svg: true }, ADD_TAGS: ["use"] }) }} />
           </div>
         ) : (
-          <Text type="secondary">暂无 Graphviz 数据（请先在画布上构建流程）</Text>
+          <span className="text-sm text-text-secondary">暂无 Graphviz 数据（请先在画布上构建流程）</span>
         )}
       </div>
 
@@ -96,21 +95,21 @@ export function PipelineTab(props: {
               flexShrink: 0,
             }}
           >
-            <Space>
-              <Button size="small" onClick={() => setViewerScale((s) => Math.max(0.02, Number((s - 0.1).toFixed(2))))}>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setViewerScale((s) => Math.max(0.02, Number((s - 0.1).toFixed(2))))}>
                 -
               </Button>
-              <Text type="secondary">{Math.round(viewerScale * 100)}%</Text>
-              <Button size="small" onClick={() => setViewerScale((s) => Math.min(6, Number((s + 0.1).toFixed(2))))}>
+              <span className="text-sm text-text-secondary">{Math.round(viewerScale * 100)}%</span>
+              <Button variant="outline" size="sm" onClick={() => setViewerScale((s) => Math.min(6, Number((s + 0.1).toFixed(2))))}>
                 +
               </Button>
-              <Button size="small" onClick={fitFullGraph}>
+              <Button variant="outline" size="sm" onClick={fitFullGraph}>
                 适配全图
               </Button>
-              <Button size="small" onClick={() => setViewerScale(1)}>
+              <Button variant="outline" size="sm" onClick={() => setViewerScale(1)}>
                 重置
               </Button>
-            </Space>
+            </div>
           </div>
           <div
             ref={viewerBoxRef}
@@ -135,7 +134,7 @@ export function PipelineTab(props: {
             {beautifyResult ? (
               <div style={{ transform: `scale(${viewerScale})`, transformOrigin: "0 0" }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(beautifyResult.svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_TAGS: ["use"] }) }} />
             ) : (
-              <Text type="secondary">暂无 Graphviz 数据（请先在画布上构建流程）</Text>
+              <span className="text-sm text-text-secondary">暂无 Graphviz 数据（请先在画布上构建流程）</span>
             )}
           </div>
         </div>

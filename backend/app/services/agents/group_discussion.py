@@ -215,7 +215,7 @@ async def get_or_create_today_session(
         # 用户已在目标组中，直接返回
         return row
 
-    if last_member:
+    if last_member and user_role not in ["admin", "super_admin"]:
         prev_session = (
             await db.execute(
                 select(GroupDiscussionSession).where(GroupDiscussionSession.id == last_member.session_id)

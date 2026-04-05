@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Skeleton } from 'antd';
+import { Skeleton } from '@/components/ui/skeleton';
 import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
 import { logger } from '@/services/logger';
-import { TeamOutlined } from '@ant-design/icons';
+import { Users } from 'lucide-react';
 import EmptyState from "@components/Common/EmptyState";
-
-const { Text } = Typography;
 
 interface Props {
   onSelect: (record: DianmingClass) => void;
@@ -34,7 +32,11 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="rounded-2xl p-6 bg-surface-2 h-40 flex flex-col justify-center">
-            <Skeleton active paragraph={{ rows: 2 }} />
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
           </div>
         ))}
       </div>
@@ -53,16 +55,14 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
           onClick={() => onSelect(cls)}
           className="it-class-card rounded-2xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer bg-surface-2 transition-all duration-150"
         >
-          <div className="flex items-center justify-center w-14 h-14 rounded-full text-3xl text-primary"
-            style={{ background: 'rgba(14,165,233,0.1)' }}>
-            <TeamOutlined />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft text-3xl text-primary">
+            <Users className="h-8 w-8" />
           </div>
           <div className="text-center">
             <div className="font-semibold text-base text-text-base">{cls.class_name}</div>
-            <Text type="secondary" className="text-sm">{cls.year}级</Text>
+            <span className="text-sm text-text-secondary">{cls.year}级</span>
           </div>
-          <div className="px-3 py-1 rounded-full text-xs text-text-secondary bg-surface-2"
-            style={{ background: 'rgba(0,0,0,0.04)' }}>
+          <div className="rounded-full bg-[var(--ws-color-hover-bg)] px-3 py-1 text-xs text-text-secondary">
             共 {cls.count} 人
           </div>
         </div>

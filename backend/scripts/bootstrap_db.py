@@ -12,6 +12,26 @@ from app.models import Base
 async def main() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, checkfirst=True))
+        # 兼容历史库：早期 xxjs_dianming 缺少 updated_at，导致 ORM 查询报 UndefinedColumnError
+        await conn.execute(
+            text(
+                "ALTER TABLE xxjs_dianming "
+                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"
+            )
+        )
+        await conn.execute(
+            text(
+                "UPDATE xxjs_dianming "
+                "SET updated_at = created_at "
+                "WHERE updated_at IS NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE xxjs_dianming "
+                "ALTER COLUMN updated_at SET NOT NULL"
+            )
+        )
         # 创建功能必需的视图（不受 AUTO_CREATE_TABLES 控制）
         await conn.execute(text("""
             CREATE OR REPLACE VIEW v_conversations_with_deleted AS

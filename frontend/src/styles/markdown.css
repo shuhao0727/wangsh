@@ -1,7 +1,7 @@
 .ws-markdown {
   color: var(--ws-color-text);
   line-height: 1.85;
-  font-size: 16px;
+  font-size: var(--ws-text-md);
 }
 
 .ws-markdown h1,
@@ -20,13 +20,13 @@
 .ws-markdown h1 {
   font-size: 2em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid var(--ws-color-border);
 }
 
 .ws-markdown h2 {
   font-size: 1.5em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid var(--ws-color-border);
 }
 
 .ws-markdown h3 {
@@ -79,8 +79,8 @@
 /* 代码块 — 干净无边框 */
 .ws-markdown pre {
   background: var(--ws-color-surface-2);
-  padding: 16px 20px;
-  border-radius: 10px;
+  padding: var(--ws-space-3) var(--ws-space-4);
+  border-radius: var(--ws-radius-md);
   overflow: auto;
   margin: 1.5em 0;
   border: none;
@@ -93,7 +93,7 @@
   padding: 0;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.9em;
-  color: #24292f;
+  color: var(--ws-color-text);
   line-height: 1.6;
 }
 
@@ -101,7 +101,7 @@
 .ws-markdown code {
   background: var(--ws-color-primary-soft);
   padding: 0.15em 0.4em;
-  border-radius: 5px;
+  border-radius: var(--ws-radius-sm);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.85em;
   color: var(--ws-color-primary-active);
@@ -119,8 +119,8 @@
 .ws-markdown th,
 .ws-markdown td {
   border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-  padding: 10px 14px;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
+  padding: var(--ws-space-2) var(--ws-space-3);
 }
 
 .ws-markdown th {
@@ -152,25 +152,25 @@
 .ws-markdown hr {
   border: none;
   height: 1px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ws-color-border);
   margin: 2em 0;
 }
 
 /* 终端风格代码块 */
 .ws-markdown pre.terminal {
-  background: #1a1b26;
-  color: #a9b1d6;
+  background: var(--ws-color-code-bg);
+  color: var(--ws-color-code-text);
   border: none;
 }
 
 .ws-markdown pre.terminal code {
-  color: #a9b1d6;
+  color: var(--ws-color-code-text);
 }
 
 /* 移动端适配 */
 @media (max-width: 576px) {
   .ws-markdown {
-    font-size: 14px;
+    font-size: var(--ws-text-sm);
     line-height: 1.75;
   }
 

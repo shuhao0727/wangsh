@@ -197,7 +197,7 @@ async def create_article(
             # 清理缓存
             await clear_article_cache(article_id=article_id_val, slug=article_slug)
             # 发布事件到全局管理员频道
-            publish("admin_global", {"type": "article_changed", "action": "create", "id": article_id_val})
+            await publish("admin_global", {"type": "article_changed", "action": "create", "id": article_id_val})
 
         return article
         
@@ -439,7 +439,7 @@ async def update_article(
             new_slug = cast(Optional[str], getattr(article, "slug", None))
             await clear_article_cache(article_id=article_id_val, slug=old_slug or new_slug)
             # 发布事件到全局管理员频道
-            publish("admin_global", {"type": "article_changed", "action": "update", "id": article_id_val})
+            await publish("admin_global", {"type": "article_changed", "action": "update", "id": article_id_val})
         except Exception:
             pass
 
@@ -499,7 +499,7 @@ async def delete_article(
         )
 
     # 发布事件到全局管理员频道
-    publish("admin_global", {"type": "article_changed", "action": "delete", "id": article_id})
+    await publish("admin_global", {"type": "article_changed", "action": "delete", "id": article_id})
 
 
 @router.post("/{article_id}/publish", response_model=ArticleResponse)

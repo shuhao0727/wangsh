@@ -1,6 +1,7 @@
+import { showMessage } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Spin, message } from "antd";
+import { Loader2 } from "lucide-react";
 import TypstNoteEditor from "./TypstNoteEditor";
 import { typstNotesApi } from "@services";
 import type { TypstNote } from "@services";
@@ -34,7 +35,7 @@ const AdminTypstEditorPage: React.FC = () => {
         setNote(n);
       } catch (e: any) {
         const d = e?.response?.data?.detail;
-        message.error(typeof d === "string" ? d : (e?.message || "加载笔记失败"));
+        showMessage.error(typeof d === "string" ? d : (e?.message || "加载笔记失败"));
         navigate("/admin/informatics");
       } finally {
         setLoading(false);
@@ -45,8 +46,8 @@ const AdminTypstEditorPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="text-center p-10">
-        <Spin size="large" />
+      <div className="flex items-center justify-center p-10">
+        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
       </div>
     );
   }

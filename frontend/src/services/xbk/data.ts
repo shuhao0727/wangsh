@@ -111,7 +111,7 @@ export interface XbkImportResult {
 }
 
 export const xbkDataApi = {
-  getMeta: async (params: { year?: number; term?: string } = {}): Promise<XbkMeta> => {
+  getMeta: async (params: { year?: number; term?: string; grade?: string } = {}): Promise<XbkMeta> => {
     const res = await api.client.get("/xbk/data/meta", { params });
     return res.data as XbkMeta;
   },

@@ -1,7 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
-import { Spin, Layout } from "antd";
-import { LoadingOutlined } from "@ant-design/icons";
+import { Loader2 } from "lucide-react";
 import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
@@ -50,19 +49,17 @@ const AdminClassroomInteractionPage = lazy(() => import("./pages/Admin/Classroom
 const AdminClassroomPlanPage = lazy(() => import("./pages/Admin/ClassroomPlan/PlanPage"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
 
-const { Content } = Layout;
-
 // 加载中组件
 const LoadingIndicator = (
-  <div className="text-center p-12">
-    <Spin indicator={<LoadingOutlined className="text-4xl" spin />} />
+  <div className="p-12 text-center">
+    <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
   </div>
 );
 
 function App() {
   return (
-    <Layout className="full-height">
-      <Content className="full-height">
+    <div className="full-height">
+      <div className="full-height">
         <GlobalErrorBoundary>
           <Suspense fallback={LoadingIndicator}>
             <Routes>
@@ -129,8 +126,8 @@ function App() {
           </Routes>
           </Suspense>
         </GlobalErrorBoundary>
-      </Content>
-    </Layout>
+      </div>
+    </div>
   );
 }
 

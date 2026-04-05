@@ -10,17 +10,24 @@
 
 /* 顶部导航栏 — 干净无缝 */
 .top-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--ws-space-4);
-  background: #FFFFFF;
+  background: var(--ws-color-surface);
   border-bottom: none;
   height: var(--ws-header-height);
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: none;
+}
+
+.top-header-inner {
+  width: min(var(--ws-shell-max-width), 100%);
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-2);
+  padding: 0 var(--ws-space-3);
 }
 
 /* 头部底部装饰线 — 极淡分隔 */
@@ -46,7 +53,7 @@
 .logo {
   display: flex;
   align-items: center;
-  margin-right: var(--ws-space-5);
+  margin-right: var(--ws-space-3);
   cursor: pointer;
   transition: var(--ws-transition-base);
 }
@@ -57,18 +64,18 @@
 }
 
 .logo-icon {
-  width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
-  height: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
-  min-width: clamp(32px, calc(34px * var(--ws-density-scale)), 40px);
+  width: clamp(28px, calc(30px * var(--ws-density-scale)), 34px);
+  height: clamp(28px, calc(30px * var(--ws-density-scale)), 34px);
+  min-width: clamp(28px, calc(30px * var(--ws-density-scale)), 34px);
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--ws-color-primary);
   color: white;
-  font-size: var(--ws-text-lg);
+  font-size: var(--ws-text-md);
   font-weight: 700;
   border-radius: var(--ws-radius-md);
-  margin-right: var(--ws-space-2);
+  margin-right: var(--ws-space-1);
   line-height: 1;
   flex-shrink: 0;
   overflow: hidden;
@@ -77,65 +84,60 @@
 .logo-text {
   margin: 0 !important;
   color: var(--ws-color-text);
-  font-size: var(--ws-text-lg);
+  font-size: var(--ws-text-nav-brand);
   font-weight: 700;
   white-space: nowrap;
   letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 /* 横向导航菜单 */
 .horizontal-menu {
+  display: flex;
+  align-items: center;
   flex: 1;
-  border-bottom: none;
-  background: transparent;
-  line-height: calc(var(--ws-header-height) - 2px);
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  gap: var(--ws-space-1);
 }
 
-.horizontal-menu.ant-menu-horizontal {
-  border-bottom: none !important;
-  white-space: nowrap;
-}
-
-.horizontal-menu .ant-menu-item {
-  padding: 0 var(--ws-space-3);
-  font-size: var(--ws-text-sm);
+/* 导航项 */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-1);
+  padding: 0 calc(var(--ws-space-2) + var(--ws-space-1) * 0.3);
+  height: calc(var(--ws-header-height) - 8px);
+  font-size: calc(var(--ws-text-nav) + 0.02rem);
   font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
   color: var(--ws-color-text-secondary);
-  transition: var(--ws-transition-base);
+  background: transparent;
+  border: none;
   border-bottom: 2px solid transparent;
-  position: relative;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--ws-transition-base);
 }
 
-.horizontal-menu .ant-menu-item::after {
-  display: none !important;
-}
-
-.horizontal-menu .ant-menu-item:hover {
+.nav-item:hover {
   color: var(--ws-color-primary);
-  border-bottom: 2px solid var(--ws-color-primary-hover);
-  background: transparent !important;
+  border-bottom-color: var(--ws-color-primary-hover);
 }
 
-.horizontal-menu .ant-menu-item-selected {
+.nav-item-active {
   color: var(--ws-color-primary);
   font-weight: 600;
-  border-bottom: 2px solid var(--ws-color-primary);
-  background: transparent !important;
+  border-bottom-color: var(--ws-color-primary);
 }
 
-.horizontal-menu .ant-menu-item-selected::after {
-  display: none !important;
-  border-bottom: none !important;
-  content: none !important;
-}
-
-.horizontal-menu .ant-menu-item .anticon {
-  margin-right: var(--ws-space-1);
-  font-size: var(--ws-text-md);
+.nav-icon {
+  width: calc(var(--ws-text-nav) + 0.02rem);
+  height: calc(var(--ws-text-nav) + 0.02rem);
+  flex-shrink: 0;
 }
 
 /* 右侧用户信息 */
@@ -161,7 +163,7 @@
 }
 
 .username {
-  font-size: var(--ws-text-sm);
+  font-size: var(--ws-text-nav);
   font-weight: 500;
   color: var(--ws-color-text);
 }
@@ -169,7 +171,7 @@
 /* 主内容区域 */
 .main-content {
   margin: 0;
-  padding: var(--ws-space-4);
+  padding: var(--ws-panel-padding-lg);
   flex: 1;
   min-height: 0;
   background: transparent;
@@ -179,22 +181,19 @@
 /* 移动端菜单按钮 */
 .mobile-menu-btn {
   color: var(--ws-color-text);
-  font-size: 18px;
-  padding: 4px 8px;
-  height: auto;
 }
 
 /* 响应式 */
 @media (max-width: 1024px) {
-  .horizontal-menu .ant-menu-item {
-    padding: 0 16px;
-    font-size: 14px;
+  .nav-item {
+    padding: 0 var(--ws-space-2);
+    font-size: calc(var(--ws-text-sm) + 0.01rem);
   }
 }
 
 @media (max-width: 768px) {
-  .top-header {
-    padding: 0 var(--ws-space-3);
+  .top-header-inner {
+    padding: 0 var(--ws-space-2);
   }
 
   .header-left {
@@ -216,15 +215,15 @@
 
   .main-content {
     margin: 0;
-    padding: var(--ws-space-3);
+    padding: var(--ws-panel-padding);
   }
 }
 
 @media (max-width: 480px) {
   .logo-icon {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
     font-size: var(--ws-text-sm);
   }
 

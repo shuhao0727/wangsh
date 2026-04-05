@@ -124,7 +124,7 @@ async def api_create_config(
         config = await get_config(db, config.id)  # type: ignore[arg-type]
 
         # 发布事件
-        publish("admin_global", {"type": "assessment_changed", "action": "create", "id": config.id})  # type: ignore[union-attr]
+        await publish("admin_global", {"type": "assessment_changed", "action": "create", "id": config.id})  # type: ignore[union-attr]
 
         return _format_config_response(config)
     except ValueError as e:
@@ -200,7 +200,7 @@ async def api_update_config(
         scount = await get_config_session_count(db, config_id)
 
         # 发布事件
-        publish("admin_global", {"type": "assessment_changed", "action": "update", "id": config_id})
+        await publish("admin_global", {"type": "assessment_changed", "action": "update", "id": config_id})
 
         return _format_config_response(config, qcount, scount)
     except ValueError as e:
@@ -223,7 +223,7 @@ async def api_delete_config(
         raise HTTPException(status_code=404, detail="测评配置不存在")
 
     # 发布事件
-    publish("admin_global", {"type": "assessment_changed", "action": "delete", "id": config_id})
+    await publish("admin_global", {"type": "assessment_changed", "action": "delete", "id": config_id})
 
     return {"message": "删除成功"}
 

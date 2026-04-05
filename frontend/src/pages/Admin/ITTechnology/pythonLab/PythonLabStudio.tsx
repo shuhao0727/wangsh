@@ -1,5 +1,8 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Card, Grid, Input, Layout, Space, Tag, Typography } from "antd";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import type { FlowNodeTemplate, PythonLabExperiment } from "./types";
 import { normalizeFlowImport, type FlowEdge, type FlowNode, type PortSide } from "./flow/model";
 import { calculateFitView, calculateFitViewCenter } from "./flow/viewUtils";
@@ -42,9 +45,7 @@ import type { VariableRow } from "./stores/UIStore";
 import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
 import { OptimizationDialog } from "./components/OptimizationDialog";
 import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabDebugApi";
-
-const { Sider, Content } = Layout;
-const { Text } = Typography;
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 function nextId(prefix: string) {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
@@ -53,9 +54,8 @@ function nextId(prefix: string) {
 const PythonLabStudioInner: React.FC<{
   experiment?: PythonLabExperiment;
 }> = ({ experiment }) => {
-  const screens = Grid.useBreakpoint();
+  const screens = useBreakpoint();
   const isCompactViewport = !screens.sm;
-  const { message } = App.useApp();
   const prewarmOnceRef = useRef(false);
   const readyMsgShownRef = useRef(false);
 
@@ -63,7 +63,7 @@ const PythonLabStudioInner: React.FC<{
     logger.debug("PythonLabStudio mounted - HMR Check");
     if (!readyMsgShownRef.current) {
       readyMsgShownRef.current = true;
-      message.info("PythonLab环境已就绪");
+      showMessage.info("PythonLab环境已就绪");
     }
     ensurePythonLabStorageCompatible();
   }, []);
@@ -310,23 +310,23 @@ const PythonLabStudioInner: React.FC<{
       setOptimizedContent(res.optimized_code);
       setOptimizationLogId(res.log_id);
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : "优化请求失败");
+      showMessage.error(e instanceof Error ? e.message : "优化请求失败");
       setOptimizationVisible(false);
     } finally {
       setOptimizationLoading(false);
     }
-  }, [code, message, setOptimizationVisible, setOriginalContent, setOptimizedContent, setOptimizationFeedback, setOptimizationLoading, setOptimizationLogId]);
+  }, [code, setOptimizationVisible, setOriginalContent, setOptimizedContent, setOptimizationFeedback, setOptimizationLoading, setOptimizationLogId]);
 
   const handleApplyOptimization = async () => {
     const nextCode = typeof optimizedContent === "string" ? optimizedContent : "";
     if (!nextCode.trim()) {
-      message.error("优化结果为空，无法应用");
+      showMessage.error("优化结果为空，无法应用");
       return;
     }
     try {
       const syntax = await pythonlabSyntaxApi.checkSyntax(nextCode);
       if (!syntax.ok) {
-        message.error("优化后的代码未通过语法校验，已拒绝应用");
+        showMessage.error("优化后的代码未通过语法校验，已拒绝应用");
         return;
       }
     } catch {}
@@ -335,7 +335,7 @@ const PythonLabStudioInner: React.FC<{
     try {
       await rebuildFlowFromCode();
     } catch {}
-    message.success("代码优化已应用");
+    showMessage.success("代码优化已应用");
     if (optimizationLogId) {
       try {
         await pythonlabFlowApi.applyOptimization(optimizationLogId);
@@ -556,9 +556,11 @@ const PythonLabStudioInner: React.FC<{
     setFollowMode(true);
     setNodeInspectorOpen(false);
 
-    if (typeof experiment?.starterCode === "string") {
+    if (typeof experiment?.starterCode === "string" && experiment.starterCode.trim()) {
       setCodeMode("manual");
       setCode(experiment.starterCode);
+    } else {
+      setCodeMode("auto");
     }
   }, [experiment?.id, experiment?.starterCode, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
 
@@ -568,7 +570,7 @@ const PythonLabStudioInner: React.FC<{
       // but lock is good for debounce.
       const now = Date.now();
       if (now < runClickLockUntilRef.current) {
-        message.info("操作过快，请稍候再试");
+        showMessage.info("操作过快，请稍候再试");
         return;
       }
       
@@ -599,7 +601,7 @@ const PythonLabStudioInner: React.FC<{
         pyApiRef.current.reset?.();
         const run = dapApiRef.current.runPlain;
         if (typeof run !== "function") {
-          message.error("运行器未就绪，请刷新页面后重试");
+          showMessage.error("运行器未就绪，请刷新页面后重试");
           return;
         }
         // No need for extra Promise wrapper, but catching is good practice
@@ -610,9 +612,9 @@ const PythonLabStudioInner: React.FC<{
           const msg = e instanceof Error ? e.message : "启动运行失败";
           if (msg.includes("会话正在启动中")) {
              // If we just triggered a restart, this might happen if user spam clicks
-             message.info(msg);
+             showMessage.info(msg);
           } else {
-             message.error(msg);
+             showMessage.error(msg);
           }
         });
         return;
@@ -625,19 +627,19 @@ const PythonLabStudioInner: React.FC<{
       }
       const run = pyApiRef.current.runPlain;
       if (typeof run !== "function") {
-        message.error("前端运行器未就绪，请刷新页面后重试");
+        showMessage.error("前端运行器未就绪，请刷新页面后重试");
         return;
       }
       Promise.resolve(run()).catch((e: unknown) => {
           const msg = e instanceof Error ? e.message : "启动运行失败";
           if (msg.includes("会话正在启动中")) {
-             message.info(msg);
+             showMessage.info(msg);
           } else {
-             message.error(msg);
+             showMessage.error(msg);
           }
       });
     },
-    [canFrontendDebug, needsStdin, pythonlabRuntime, runner.sessionId, runner.status, message]
+    [canFrontendDebug, needsStdin, pythonlabRuntime, runner.sessionId, runner.status]
   );
 
   const onDebug = useCallback(() => {
@@ -647,26 +649,45 @@ const PythonLabStudioInner: React.FC<{
     runClickLockUntilRef.current = now + 800;
 
     if (enabledBreakpointCount <= 0) {
-      message.warning("请先设置断点");
+      showMessage.warning("请先设置断点");
       return;
     }
 
     const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin });
     if (plan.mode !== "debug" && plan.debugFallbackReason) {
-      message.warning(plan.debugFallbackReason);
+      showMessage.warning(plan.debugFallbackReason);
       return;
     }
 
     setLastLaunchMode("debug");
-    setLastDebugFallback(null);
+    setLastDebugFallback(plan.debugFallbackReason ?? null);
+    if (plan.debugFallbackReason) {
+      showMessage.warning(plan.debugFallbackReason);
+    }
 
-    // Force DAP for debug
-    setActiveRunnerKind("dap");
-    pyApiRef.current.reset?.();
-    Promise.resolve(dapApiRef.current.startDebug?.()).catch((e: unknown) => {
-      message.error(e instanceof Error ? e.message : "启动调试失败");
+    if (plan.runnerKind === "dap") {
+      setActiveRunnerKind("dap");
+      pyApiRef.current.reset?.();
+      Promise.resolve(dapApiRef.current.startDebug?.()).catch((e: unknown) => {
+        showMessage.error(e instanceof Error ? e.message : "启动调试失败");
+      });
+      return;
+    }
+
+    setActiveRunnerKind("pyodide");
+    const dapStatus = dapApiRef.current?.state?.status;
+    if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
+      Promise.resolve(dapApiRef.current.stopDebug?.()).catch(() => {});
+    }
+    const start = pyApiRef.current.startDebug;
+    if (typeof start !== "function") {
+      showMessage.error("前端调试器未就绪，请刷新页面后重试");
+      return;
+    }
+    Promise.resolve(start()).catch((e: unknown) => {
+      showMessage.error(e instanceof Error ? e.message : "启动调试失败");
     });
-  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, runner.status, message]);
+  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, runner.status]);
 
   const onContinue = useCallback(() => { unifiedRef.current.continueRun(); }, []);
   const onPause = useCallback(() => { unifiedRef.current.pause(); }, []);
@@ -1007,7 +1028,7 @@ const PythonLabStudioInner: React.FC<{
       title: "注释内容",
       x: Math.round(noteX),
       y: Math.round(noteY),
-      style: { backgroundColor: "#FFF9C4", opacity: 1, dashed: true },
+      style: { backgroundColor: "var(--ws-color-warning-soft)", opacity: 1, dashed: true },
       arrow: {
         target: { x: targetCx, y: targetCy },
         sourceAnchor: "center",
@@ -1066,40 +1087,72 @@ const PythonLabStudioInner: React.FC<{
     <CodeCtxProvider value={codeApi}>
     <RunnerActionsProvider value={runnerActionsApi}>
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Layout style={{ background: "transparent", height: "100%", flexDirection: isCompactViewport ? "column" : "row" }}>
-        <Sider
-          width={isCompactViewport ? "100%" : 250}
-          collapsedWidth={0}
-          collapsible
-          collapsed={leftCollapsed}
-          trigger={null}
-          theme="light"
-          style={{
-            background: "transparent",
-            height: isCompactViewport ? "auto" : "100%",
-            overflow: "hidden",
-            borderRight: isCompactViewport ? "none" : "1px solid var(--ws-color-border-secondary)",
-            borderBottom: isCompactViewport && !leftCollapsed ? "1px solid var(--ws-color-border-secondary)" : "none",
-          }}
-        >
-          <div className="h-full">
-            <TemplatePalette basic={basicTemplates} advanced={advancedTemplates} onAddNode={addNode} />
+      <div
+        style={{
+          background: "transparent",
+          height: "100%",
+          display: "flex",
+          flexDirection: isCompactViewport ? "column" : "row",
+          transition: "var(--ws-transition-base)",
+        }}
+      >
+        {!leftCollapsed && (
+          <div
+            className={isCompactViewport
+              ? "overflow-hidden border-b border-[var(--ws-color-border-secondary)]"
+              : "overflow-hidden border-r border-[var(--ws-color-border-secondary)]"}
+            style={{
+              width: isCompactViewport ? "100%" : "clamp(196px, 13.5vw, 220px)",
+              flexShrink: 0,
+              background: "transparent",
+              height: isCompactViewport ? "auto" : "100%",
+            }}
+          >
+            <div className="h-full">
+              <TemplatePalette basic={basicTemplates} advanced={advancedTemplates} onAddNode={addNode} />
+            </div>
           </div>
-        </Sider>
+        )}
 
-        <Content style={{ padding: isCompactViewport ? "8px 0 0 0" : "0 0 0 16px", height: "100%", overflow: "hidden" }}>
-          <Card
-            title={
-              <Space>
-                <span className="text-base font-semibold">画布</span>
-                {experiment?.title ? <Tag color="blue">{experiment.title}</Tag> : <Tag color="blue">UI</Tag>}
+        <div style={{ padding: isCompactViewport ? "var(--ws-space-1) 0 0 0" : "0 0 0 var(--ws-space-2)", height: "100%", overflow: "hidden", flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              borderRadius: "var(--ws-radius-lg)",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "none",
+              border: "1px solid var(--ws-color-border)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="border-b border-[var(--ws-color-border-secondary)]"
+              style={{
+                padding: "0 var(--ws-space-2)",
+                minHeight: "var(--ws-control-height)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--ws-space-1)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--ws-text-md)] font-semibold">画布</span>
+                {experiment?.title ? (
+                  <Badge variant="sky">
+                    {experiment.title}
+                  </Badge>
+                ) : (
+                  <Badge variant="sky">
+                    UI
+                  </Badge>
+                )}
                 {experiment?.scenario && experiment.scenario !== experiment.title ? (
-                  <Tag variant="filled">{experiment.scenario}</Tag>
+                  <Badge variant="outline">{experiment.scenario}</Badge>
                 ) : null}
-              </Space>
-            }
-            extra={
-              <Space size={10}>
+              </div>
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-[var(--ws-space-1)]">
                 <CanvasToolbar
                   leftCollapsed={leftCollapsed}
                   toggleLeft={() => setLeftCollapsed((v) => !v)}
@@ -1162,164 +1215,166 @@ const PythonLabStudioInner: React.FC<{
                   scale={scale}
                   setScale={setScale}
                 />
-              </Space>
-            }
-            variant="borderless"
-            style={{ borderRadius: "var(--ws-radius-lg)", height: "100%", display: "flex", flexDirection: "column", boxShadow: "none", border: "1px solid var(--ws-color-border)" }}
-            styles={{ body: { padding: 0, flex: 1, minHeight: 0 }, header: { padding: "0 16px", minHeight: 48, borderBottom: "1px solid var(--ws-color-border-secondary)" } }}
-          >
-            <div
-              ref={canvasRef}
-              style={{
-                height: "100%",
-                minHeight: 0,
-                position: "relative",
-                background:
-                  "linear-gradient(0deg, rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
-                overflow: "hidden",
-                cursor: panMode ? (panning ? "grabbing" : "grab") : "default",
-              }}
-              onPointerDown={(e) => onCanvasPointerDown(e)}
-              onClick={() => {
-                if (consumePanClick()) return;
-                setSelectedNodeId(null);
-                setSelectedEdgeId(null);
-                if (connectMode) {
-                  resetConnectSelection();
-                }
-              }}
-            >
-              {canvasBusy && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background: "rgba(255,255,255,0.65)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 5,
-                    userSelect: "none",
-                    cursor: "wait",
-                  }}
-                >
-                  <span style={{ color: "rgba(0,0,0,0.55)" }}>布局计算中…</span>
-                </div>
-              )}
-              <FlowEdgesSvg
-                canvasRef={canvasRef}
-                canvasMetrics={canvasMetrics}
-                edges={edges}
-                edgeGeometries={edgeGeometries}
-                scale={scale}
-                offsetX={offsetX}
-                offsetY={offsetY}
-                selectedEdgeId={selectedEdgeId}
-                setSelectedEdgeId={setSelectedEdgeId}
-                setSelectedNodeId={setSelectedNodeId}
-                connectMode={connectMode}
-                connectFromId={connectFromId}
-                connectFromPort={connectFromPort}
-                setConnectFromId={setConnectFromId}
-                setConnectFromPort={setConnectFromPort}
-                setEdges={setEdgesAuto}
-                nextId={nextId}
-                onSourcePointerDown={onSourcePointerDown}
-                onTargetPointerDown={onTargetPointerDown}
-                onAnchorPointerDown={onAnchorPointerDown}
-                activeEdgeIds={activeEdgeIds}
-              />
-              <FlowAnnotationsSvg
-                nodes={nodes}
-                scale={scale}
-                offsetX={offsetX}
-                offsetY={offsetY}
-                selectedNodeId={selectedNodeId}
-                onNodePointerDown={onNodePointerDown}
-                onNodeClick={handleNodeClick}
-                onNodeDoubleClick={handleNodeClick}
-                onResizeStart={onResizeStart}
-                onArrowTargetDragStart={onArrowTargetDragStart}
-                onArrowRotateStart={onArrowRotateStart}
-                onUpdateNodeTitle={updateNodeTitle}
-              />
-              {selectedEdge && (
-                <EdgeToolbar
+              </div>
+            </div>
+            <div style={{ padding: 0, flex: 1, minHeight: 0 }}>
+              <div
+                ref={canvasRef}
+                style={{
+                  height: "100%",
+                  minHeight: 0,
+                  position: "relative",
+                  background:
+                    "linear-gradient(0deg, color-mix(in srgb, var(--ws-color-border-secondary) 75%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ws-color-border-secondary) 75%, transparent) 1px, transparent 1px)",
+                  backgroundSize: "20px 20px",
+                  overflow: "hidden",
+                  cursor: panMode ? (panning ? "grabbing" : "grab") : "default",
+                }}
+                onPointerDown={(e) => onCanvasPointerDown(e)}
+                onClick={() => {
+                  if (consumePanClick()) return;
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                  if (connectMode) {
+                    resetConnectSelection();
+                  }
+                }}
+              >
+                {canvasBusy && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(255,255,255,0.65)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: "var(--ws-z-sticky)",
+                      userSelect: "none",
+                      cursor: "wait",
+                    }}
+                  >
+                    <span style={{ color: "var(--ws-color-text-secondary)" }}>布局计算中…</span>
+                  </div>
+                )}
+                <FlowEdgesSvg
                   canvasRef={canvasRef}
-                  selectedEdge={selectedEdge}
-                  anchorPoint={selectedEdgePosition}
+                  canvasMetrics={canvasMetrics}
+                  edges={edges}
+                  edgeGeometries={edgeGeometries}
                   scale={scale}
                   offsetX={offsetX}
                   offsetY={offsetY}
-                  onDelete={removeSelected}
-                  onReverse={reverseSelectedEdge}
-                  onSetLabel={(v) => {
-                    setEdgesAuto((prev) =>
-                      prev.map((x) => {
-                        if (x.id !== selectedEdge.id) return x;
-                        const trimmed = v.trim();
-                        return { ...x, label: trimmed ? v : undefined };
-                      })
-                    );
-                  }}
-                  onSetStraight={setSelectedEdgeStraight}
-                  onSetPolyline={setSelectedEdgePolyline}
-                  onAddAnchor={addSelectedEdgeAnchor}
-                  onClearAnchors={clearSelectedEdgeAnchors}
+                  selectedEdgeId={selectedEdgeId}
+                  setSelectedEdgeId={setSelectedEdgeId}
+                  setSelectedNodeId={setSelectedNodeId}
+                  connectMode={connectMode}
+                  connectFromId={connectFromId}
+                  connectFromPort={connectFromPort}
+                  setConnectFromId={setConnectFromId}
+                  setConnectFromPort={setConnectFromPort}
+                  setEdges={setEdgesAuto}
+                  nextId={nextId}
+                  onSourcePointerDown={onSourcePointerDown}
+                  onTargetPointerDown={onTargetPointerDown}
+                  onAnchorPointerDown={onAnchorPointerDown}
+                  activeEdgeIds={activeEdgeIds}
                 />
-              )}
-              {nodes.length === 0 && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "rgba(0,0,0,0.45)",
-                    pointerEvents: "none",
-                    padding: 24,
-                    textAlign: "center",
-                  }}
-                >
-                  从左侧选择一个模块开始搭建流程图
-                </div>
-              )}
-              <FlowNodesLayer
-                nodes={nodes}
-                scale={scale}
-                offsetX={offsetX}
-                offsetY={offsetY}
-                selectedNodeId={selectedNodeId}
-                selectedEdgeId={selectedEdgeId}
-                selectedEdge={selectedEdge}
-                activeNodeId={flowActivation.activeNodeId}
-                activeLine={flowActivation.activeLine}
-                activeFocusRole={flowActivation.activeFocusRole}
-                activeEnabled={flowActivation.activeEnabled}
-                followMode={followMode}
-                followTick={followTick}
-                connectMode={connectMode}
-                connectFromId={connectFromId}
-                connectFromPort={connectFromPort}
-                onNodePointerDown={onNodePointerDown}
-                onNodeClick={handleNodeClick}
-                onPortClick={onPortClick}
-                onUpdateNodeTitle={updateNodeTitle}
-              />
+                <FlowAnnotationsSvg
+                  nodes={nodes}
+                  scale={scale}
+                  offsetX={offsetX}
+                  offsetY={offsetY}
+                  selectedNodeId={selectedNodeId}
+                  onNodePointerDown={onNodePointerDown}
+                  onNodeClick={handleNodeClick}
+                  onNodeDoubleClick={handleNodeClick}
+                  onResizeStart={onResizeStart}
+                  onArrowTargetDragStart={onArrowTargetDragStart}
+                  onArrowRotateStart={onArrowRotateStart}
+                  onUpdateNodeTitle={updateNodeTitle}
+                />
+                {selectedEdge && (
+                  <EdgeToolbar
+                    canvasRef={canvasRef}
+                    selectedEdge={selectedEdge}
+                    anchorPoint={selectedEdgePosition}
+                    scale={scale}
+                    offsetX={offsetX}
+                    offsetY={offsetY}
+                    onDelete={removeSelected}
+                    onReverse={reverseSelectedEdge}
+                    onSetLabel={(v) => {
+                      setEdgesAuto((prev) =>
+                        prev.map((x) => {
+                          if (x.id !== selectedEdge.id) return x;
+                          const trimmed = v.trim();
+                          return { ...x, label: trimmed ? v : undefined };
+                        })
+                      );
+                    }}
+                    onSetStraight={setSelectedEdgeStraight}
+                    onSetPolyline={setSelectedEdgePolyline}
+                    onAddAnchor={addSelectedEdgeAnchor}
+                    onClearAnchors={clearSelectedEdgeAnchors}
+                  />
+                )}
+                {nodes.length === 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--ws-color-text-secondary)",
+                      pointerEvents: "none",
+                      padding: "var(--ws-space-4)",
+                      textAlign: "center",
+                    }}
+                  >
+                    从左侧选择一个模块开始搭建流程图
+                  </div>
+                )}
+                <FlowNodesLayer
+                  nodes={nodes}
+                  scale={scale}
+                  offsetX={offsetX}
+                  offsetY={offsetY}
+                  selectedNodeId={selectedNodeId}
+                  selectedEdgeId={selectedEdgeId}
+                  selectedEdge={selectedEdge}
+                  activeNodeId={flowActivation.activeNodeId}
+                  activeLine={flowActivation.activeLine}
+                  activeFocusRole={flowActivation.activeFocusRole}
+                  activeEnabled={flowActivation.activeEnabled}
+                  followMode={followMode}
+                  followTick={followTick}
+                  connectMode={connectMode}
+                  connectFromId={connectFromId}
+                  connectFromPort={connectFromPort}
+                  onNodePointerDown={onNodePointerDown}
+                  onNodeClick={handleNodeClick}
+                  onPortClick={onPortClick}
+                  onUpdateNodeTitle={updateNodeTitle}
+                />
+              </div>
             </div>
-          </Card>
-        </Content>
+          </div>
+        </div>
 
-        <Sider
-          width={isCompactViewport ? "100%" : 440}
-          theme="light"
-          style={{ background: "transparent", height: isCompactViewport ? "42vh" : "100%", overflow: "hidden" }}
+        <div
+          style={{
+            width: isCompactViewport ? "100%" : "clamp(380px, 28vw, 460px)",
+            flexShrink: 0,
+            background: "transparent",
+            height: isCompactViewport ? "42vh" : "100%",
+            overflow: "hidden",
+          }}
         >
           <RightPanel />
-        </Sider>
-      </Layout>
+        </div>
+      </div>
 
       <OptimizationDialog
         visible={optimizationVisible}
@@ -1347,28 +1402,28 @@ const PythonLabStudioInner: React.FC<{
         {selectedNode ? (
           <div className="flex flex-col gap-3">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <Text type="secondary">标题</Text>
+              <span className="text-sm text-text-tertiary">标题</span>
               <Input
                 id="pythonlab-node-title-input"
                 name="pythonlab-node-title-input"
                 aria-label="节点标题"
-                size="small"
                 value={selectedNode.title}
+                className="h-8 w-44"
                 onChange={(e) => {
                   updateNodeTitle(selectedNode.id, e.target.value);
                 }}
               />
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <Text type="secondary">代码行</Text>
-              <Space size={8}>
-                <Tag color="default" style={{ marginInlineEnd: 0 }}>
+              <span className="text-sm text-text-tertiary">代码行</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="whitespace-nowrap">
                   {selectedNode.sourceLine ? `第${selectedNode.sourceLine}行` : "（无）"}
-                </Tag>
-                <Button size="small" disabled={!selectedNode.sourceLine} onClick={() => setRevealLine(selectedNode.sourceLine ?? null)}>
+                </Badge>
+                <Button variant="outline" size="sm" disabled={!selectedNode.sourceLine} onClick={() => setRevealLine(selectedNode.sourceLine ?? null)}>
                   跳到代码
                 </Button>
-              </Space>
+              </div>
             </div>
           </div>
         ) : null}

@@ -3,26 +3,23 @@
  */
 
 import React from "react";
-import { Typography } from "antd";
 import {
-  BarChartOutlined,
-  UserOutlined,
-  RobotOutlined,
-  ClockCircleOutlined,
-} from "@ant-design/icons";
+  BarChart3,
+  User,
+  Bot,
+  Clock,
+} from "lucide-react";
 import type { StatisticsData } from "@services/znt/types";
-
-const { Text } = Typography;
 
 interface StatisticsCardsProps {
   data: StatisticsData;
 }
 
 const items = [
-  { key: "total_usage", label: "总使用量", field: "total_usage", icon: <BarChartOutlined />, color: "#0EA5E9", bg: "rgba(14, 165, 233, 0.06)" },
-  { key: "active_students", label: "活跃学生", field: "active_students", icon: <UserOutlined />, color: "#10B981", bg: "rgba(16, 185, 129, 0.06)" },
-  { key: "active_agents", label: "活跃智能体", field: "active_agents", icon: <RobotOutlined />, color: "#6366F1", bg: "rgba(99, 102, 241, 0.06)" },
-  { key: "avg_response_time", label: "平均响应", field: "avg_response_time", icon: <ClockCircleOutlined />, color: "#F59E0B", bg: "rgba(245, 158, 11, 0.06)" },
+  { key: "total_usage", label: "总使用量", field: "total_usage", icon: <BarChart3 className="h-4 w-4" />, color: "var(--ws-color-primary)", bg: "rgba(14, 165, 233, 0.06)" },
+  { key: "active_students", label: "活跃学生", field: "active_students", icon: <User className="h-4 w-4" />, color: "var(--ws-color-success)", bg: "rgba(16, 185, 129, 0.06)" },
+  { key: "active_agents", label: "活跃智能体", field: "active_agents", icon: <Bot className="h-4 w-4" />, color: "var(--ws-color-secondary)", bg: "rgba(99, 102, 241, 0.06)" },
+  { key: "avg_response_time", label: "平均响应", field: "avg_response_time", icon: <Clock className="h-4 w-4" />, color: "var(--ws-color-warning)", bg: "rgba(245, 158, 11, 0.06)" },
 ] as const;
 
 const formatValue = (field: string, value: number) => {
@@ -47,12 +44,12 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => (
           {item.icon}
         </div>
         <div className="min-w-0 flex-1">
-          <Text type="secondary" className="!text-xs !block !leading-4">
+          <span className="text-xs block leading-4 text-text-secondary">
             {item.label}
-          </Text>
-          <Text className="!text-lg !font-semibold !leading-6" style={{ color: item.color }}>
+          </span>
+          <span className="text-lg font-semibold leading-6" style={{ color: item.color }}>
             {formatValue(item.field, (data as any)[item.field])}
-          </Text>
+          </span>
         </div>
       </div>
     ))}

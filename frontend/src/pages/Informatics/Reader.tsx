@@ -1,7 +1,23 @@
-
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Input, Tree, Typography, message, Skeleton, Tabs, Drawer, Grid } from "antd";
-import { ReloadOutlined, SearchOutlined, MenuOutlined, ArrowLeftOutlined, FileTextOutlined, UnorderedListOutlined, FolderOutlined, RightOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  RotateCcw,
+  Search,
+  Menu,
+  ArrowLeft,
+  FileText,
+  List,
+  Folder,
+  ChevronRight,
+  Loader2,
+  TriangleAlert,
+} from "lucide-react";
 import EmptyState from "@components/Common/EmptyState";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNoteListItem } from "@services";
@@ -9,9 +25,8 @@ import PdfCanvasVirtualViewer, { type PdfCanvasVirtualViewerHandle } from "@comp
 import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
 import { useDebounce } from "@hooks/useDebounce";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import "./Informatics.css";
-
-const { Text } = Typography;
 
 type PdfOutlineItem = {
   title: string;
@@ -27,8 +42,69 @@ type TreeNode = {
   icon?: React.ReactNode;
 };
 
+type TreeOptions = {
+  expandedKeys: string[];
+  selectedKeys?: string[];
+  onToggle: (key: string) => void;
+  onSelect: (key: string) => void;
+  className?: string;
+};
+
+const toPlainText = (node: React.ReactNode): string => {
+  if (node == null) return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(toPlainText).join("");
+  if (React.isValidElement(node)) return toPlainText((node as any).props?.children);
+  return "";
+};
+
+const renderTreeNodes = (
+  nodes: TreeNode[],
+  options: TreeOptions,
+  depth = 0,
+): React.ReactNode => {
+  return nodes.map((node) => {
+    const key = String(node.key);
+    const hasChildren = Boolean(node.children?.length);
+    const expanded = hasChildren && options.expandedKeys.includes(key);
+    const selected = options.selectedKeys?.includes(key);
+    const nodeAriaLabel = toPlainText(node.title).trim() || "文档节点";
+
+    return (
+      <div key={key}>
+        <button
+          type="button"
+          className={`appearance-none border-0 informatics-tree-row ${selected ? "informatics-tree-row-selected" : ""}`}
+          style={{ paddingLeft: `calc(var(--ws-space-1) + ${depth} * var(--ws-space-2))` }}
+          aria-label={nodeAriaLabel}
+          aria-expanded={hasChildren ? expanded : undefined}
+          onClick={() => {
+            if (hasChildren && !node.isLeaf) {
+              options.onToggle(key);
+            } else {
+              options.onSelect(key);
+            }
+          }}
+        >
+          <span className="informatics-tree-switcher">
+            {hasChildren ? (
+              <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
+            ) : (
+              <span className="h-3.5 w-3.5" />
+            )}
+          </span>
+          {node.icon ? <span className="text-primary">{node.icon}</span> : null}
+          <span className="min-w-0 flex-1">{node.title}</span>
+        </button>
+
+        {hasChildren && expanded ? renderTreeNodes(node.children || [], options, depth + 1) : null}
+      </div>
+    );
+  });
+};
+
 const InformaticsReaderPage: React.FC = () => {
-  const screens = Grid.useBreakpoint();
+  const screens = useBreakpoint();
   const isMobile = !screens.md;
 
   const [listLoading, setListLoading] = useState(false);
@@ -49,6 +125,7 @@ const InformaticsReaderPage: React.FC = () => {
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [docExpandedKeys, setDocExpandedKeys] = useState<string[]>([]);
+  const [outlineExpandedKeys, setOutlineExpandedKeys] = useState<string[]>([]);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
@@ -61,7 +138,7 @@ const InformaticsReaderPage: React.FC = () => {
     } catch (e: any) {
       const detail = e?.response?.data?.detail;
       const msg = typeof detail === "string" ? detail : (e?.message || "加载目录失败");
-      message.error(msg);
+      showMessage.error(msg);
     } finally {
       setListLoading(false);
     }
@@ -90,7 +167,7 @@ const InformaticsReaderPage: React.FC = () => {
       if (renderTokenRef.current !== token) return;
       const msg = e?.message || e?.response?.data?.detail || "加载内容失败";
       setPdfError(msg);
-      message.error(msg);
+      showMessage.error(msg);
     } finally {
       if (renderTokenRef.current === token) setPdfLoading(false);
     }
@@ -146,13 +223,11 @@ const InformaticsReaderPage: React.FC = () => {
       for (const p of parts) {
         curPath = curPath ? `${curPath}/${p}` : p;
         if (!catMap.has(curPath)) {
-          const node: TreeNode = { 
-            title: (
-              <span className="font-medium text-text-secondary">{p}</span>
-            ),
+          const node: TreeNode = {
+            title: <span className="font-medium text-text-secondary">{p}</span>,
             key: `cat:${curPath}`,
             children: [],
-            icon: <FolderOutlined className="text-primary" />
+            icon: <Folder className="h-4 w-4" />,
           };
           cur.children = cur.children || [];
           cur.children.push(node);
@@ -181,21 +256,21 @@ const InformaticsReaderPage: React.FC = () => {
       catNode.children.push({
         key: `note:${it.id}`,
         isLeaf: true,
-        icon: <FileTextOutlined className="text-text-tertiary" />,
+        icon: <FileText className="h-4 w-4 text-text-tertiary" />,
         title: (
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <Text strong className="text-sm" style={{ display: "block" }} ellipsis={{ tooltip: sourceStem || it.title }}>
+          <div className="flex min-w-0 flex-col text-left">
+            <span className="block truncate text-sm font-medium text-text-base" title={sourceStem || it.title}>
               {sourceStem || it.title}
-            </Text>
+            </span>
             {it.title && sourceStem && it.title !== sourceStem ? (
-              <Text type="secondary" className="text-xs" style={{ display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.title }}>
+              <span className="block truncate text-xs text-text-tertiary" title={it.title}>
                 {it.title}
-              </Text>
+              </span>
             ) : null}
             {it.summary ? (
-              <Text type="secondary" className="text-xs" style={{ display: "block", marginTop: -2 }} ellipsis={{ tooltip: it.summary }}>
+              <span className="block truncate text-xs text-text-tertiary" title={it.summary}>
                 {it.summary}
-              </Text>
+              </span>
             ) : null}
           </div>
         ),
@@ -215,6 +290,7 @@ const InformaticsReaderPage: React.FC = () => {
       });
       node.children.forEach(sortTree);
     };
+
     sortTree(root);
     return root.children || [];
   }, [items]);
@@ -235,10 +311,12 @@ const InformaticsReaderPage: React.FC = () => {
       const key = `outline:${idx}`;
       const node: TreeNode = {
         key,
+        isLeaf: true,
         title: (
-          <Text ellipsis={{ tooltip: it.title }} className="block text-sm">
-            {it.title} <Text type="secondary" className="text-xs">p{it.pageNumber}</Text>
-          </Text>
+          <div className="flex items-center gap-[var(--ws-space-1)] text-left">
+            <span className="truncate text-sm" title={it.title}>{it.title}</span>
+            <span className="text-xs text-text-tertiary">p{it.pageNumber}</span>
+          </div>
         ),
       };
       while (stack.length && stack[stack.length - 1].level >= level) {
@@ -255,6 +333,24 @@ const InformaticsReaderPage: React.FC = () => {
     });
     return roots;
   }, [outline]);
+
+  const collectBranchKeys = useCallback((nodes: TreeNode[]) => {
+    const keys: string[] = [];
+    const walk = (arr: TreeNode[]) => {
+      arr.forEach((node) => {
+        if (node.children?.length) {
+          keys.push(String(node.key));
+          walk(node.children);
+        }
+      });
+    };
+    walk(nodes);
+    return keys;
+  }, []);
+
+  useEffect(() => {
+    setOutlineExpandedKeys(collectBranchKeys(outlineTreeData));
+  }, [outlineTreeData, collectBranchKeys]);
 
   const outlinePageMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -277,8 +373,8 @@ const InformaticsReaderPage: React.FC = () => {
       try {
         const rawOutline = await pdf.getOutline();
         const flat: PdfOutlineItem[] = [];
-        const walk = async (items: any[], level: number) => {
-          for (const it of items || []) {
+        const walk = async (list: any[], level: number) => {
+          for (const it of list || []) {
             let pageNumber = 1;
             try {
               let dest = it?.dest;
@@ -311,68 +407,81 @@ const InformaticsReaderPage: React.FC = () => {
     })();
   }, []);
 
-  // --- Render Helpers ---
+  const handleDocSelect = useCallback((key: string) => {
+    if (!key.startsWith("note:")) return;
+    const noteId = Number(key.slice("note:".length));
+    setSelectedId(noteId);
+    const current = items.find((x) => x.id === noteId);
+    const cat = String(current?.category_path || "").trim();
+    if (cat) {
+      const parts = cat.split("/").map((x) => x.trim()).filter(Boolean);
+      let cur = "";
+      const keysToOpen: string[] = [];
+      for (const p of parts) {
+        cur = cur ? `${cur}/${p}` : p;
+        keysToOpen.push(`cat:${cur}`);
+      }
+      setDocExpandedKeys((prev) => Array.from(new Set([...prev, ...keysToOpen])));
+    }
+    if (isMobile) {
+      setMobileDrawerOpen(false);
+    }
+  }, [isMobile, items]);
 
   const renderSearch = () => (
-    <div className="flex gap-2 mb-2">
-      <Input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onPressEnter={loadList}
-        placeholder="搜索文档..."
-        allowClear
-        prefix={<SearchOutlined className="text-text-tertiary" />}
-        size="middle"
-        className="flex-1"
-      />
-      <Button icon={<ReloadOutlined />} onClick={() => { void handleManualRefresh(); }} loading={listLoading || pdfLoading}
-        size="middle" type="text" className="text-text-secondary" />
+    <div className="mb-[var(--ws-space-2)] flex items-center gap-[var(--ws-space-1)]">
+      <div className="relative flex-1 min-w-0">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && loadList()}
+          placeholder="搜索文档..."
+          aria-label="搜索文档"
+          className="pl-[var(--ws-search-input-padding-start)]"
+        />
+      </div>
+      <Button
+        onClick={() => {
+          void handleManualRefresh();
+        }}
+        disabled={listLoading || pdfLoading}
+        variant="outline"
+        size="sm"
+        className="h-9 w-9 shrink-0 px-0"
+        aria-busy={listLoading || pdfLoading}
+        aria-label="刷新文档列表"
+      >
+        {(listLoading || pdfLoading)
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <RotateCcw className="h-4 w-4" />}
+      </Button>
     </div>
   );
 
   const renderDocTree = () => (
     <div className="informatics-scroll-container">
       {listLoading ? (
-        <div className="p-4">
-          <Skeleton active paragraph={{ rows: 6 }} />
+        <div className="space-y-[var(--ws-space-1)] p-[var(--ws-panel-padding)]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
         </div>
       ) : (
         <>
-          <Tree
-            treeData={treeData as any}
-            className="informatics-tree"
-            selectedKeys={selectedId ? [`note:${selectedId}`] : []}
-            expandedKeys={docExpandedKeys}
-            onExpand={(keys) => setDocExpandedKeys(keys.map((k) => String(k)))}
-            onSelect={(keys) => {
-              const k = String(keys?.[0] || "");
-              if (k.startsWith("note:")) {
-                const noteId = Number(k.slice("note:".length));
-                setSelectedId(noteId);
-                const current = items.find((x) => x.id === noteId);
-                const cat = String(current?.category_path || "").trim();
-                if (cat) {
-                  const parts = cat.split("/").map((x) => x.trim()).filter(Boolean);
-                  let cur = "";
-                  const keysToOpen: string[] = [];
-                  for (const p of parts) {
-                    cur = cur ? `${cur}/${p}` : p;
-                    keysToOpen.push(`cat:${cur}`);
-                  }
-                  setDocExpandedKeys((prev) => Array.from(new Set([...prev, ...keysToOpen])));
-                }
-                if (isMobile) {
-                  setMobileDrawerOpen(false);
-                }
-              }
-            }}
-            blockNode
-            showIcon
-            showLine={{ showLeafIcon: false }}
-            switcherIcon={({ expanded }: any) => (
-              <MenuOutlined className={`text-xs opacity-40 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
-            )}
-          />
+          <div className="informatics-tree">
+            {renderTreeNodes(treeData, {
+              expandedKeys: docExpandedKeys,
+              selectedKeys: selectedId ? [`note:${selectedId}`] : [],
+              onToggle: (key) => {
+                setDocExpandedKeys((prev) => {
+                  if (prev.includes(key)) return prev.filter((it) => it !== key);
+                  return [...prev, key];
+                });
+              },
+              onSelect: handleDocSelect,
+            })}
+          </div>
           {items.length === 0 ? <EmptyState description="暂无已发布内容" className="mt-3" /> : null}
         </>
       )}
@@ -382,50 +491,48 @@ const InformaticsReaderPage: React.FC = () => {
   const renderOutline = () => (
     <div className="informatics-scroll-container">
       {outline.length ? (
-        <Tree
-          treeData={outlineTreeData as any}
-          className="informatics-tree informatics-outline-tree"
-          defaultExpandAll
-          blockNode
-          showLine={{ showLeafIcon: false }}
-          switcherIcon={({ expanded }: any) => (
-            <RightOutlined className={`text-xs opacity-50 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
-          )}
-          onSelect={(keys) => {
-            const key = String(keys?.[0] || "");
-            const page = outlinePageMap.get(key);
-            if (page) {
-              scrollToPage(page);
-            }
-          }}
-        />
-      ) : (
-        <div className="p-4 text-center">
-          <Text type="secondary">暂无目录</Text>
+        <div className="informatics-tree informatics-outline-tree">
+          {renderTreeNodes(outlineTreeData, {
+            expandedKeys: outlineExpandedKeys,
+            onToggle: (key) => {
+              setOutlineExpandedKeys((prev) => {
+                if (prev.includes(key)) return prev.filter((it) => it !== key);
+                return [...prev, key];
+              });
+            },
+            onSelect: (key) => {
+              const page = outlinePageMap.get(key);
+              if (page) {
+                scrollToPage(page);
+              }
+            },
+          })}
         </div>
+      ) : (
+        <div className="p-4 text-center text-sm text-text-tertiary">暂无目录</div>
       )}
     </div>
   );
 
   const renderLeftContent = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {renderSearch()}
-      <Tabs
-        defaultActiveKey="docs"
-        className="informatics-full-height-tabs"
-        items={[
-          { 
-            key: 'docs', 
-            label: <span><FileTextOutlined />文档列表</span>, 
-            children: renderDocTree() 
-          },
-          { 
-            key: 'outline', 
-            label: <span><UnorderedListOutlined />目录大纲</span>, 
-            children: renderOutline() 
-          }
-        ]}
-      />
+        <Tabs defaultValue="docs" className="informatics-full-height-tabs">
+          <TabsList className="grid w-full grid-cols-2 gap-[calc(var(--ws-space-1)/2)] rounded-lg bg-surface-2 p-[calc(var(--ws-space-1)/2)]">
+          <TabsTrigger value="docs" className="w-full justify-center gap-[var(--ws-space-1)] text-[var(--ws-text-sm)] data-[state=active]:bg-primary-soft data-[state=active]:text-primary">
+            <FileText className="h-4 w-4" />文档列表
+          </TabsTrigger>
+          <TabsTrigger value="outline" className="w-full justify-center gap-[var(--ws-space-1)] text-[var(--ws-text-sm)] data-[state=active]:bg-primary-soft data-[state=active]:text-primary">
+            <List className="h-4 w-4" />目录大纲
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="docs" className="informatics-tab-content">
+          {renderDocTree()}
+        </TabsContent>
+        <TabsContent value="outline" className="informatics-tab-content">
+          {renderOutline()}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 
@@ -436,86 +543,89 @@ const InformaticsReaderPage: React.FC = () => {
       style={{ userSelect: "none", WebkitUserSelect: "none" } as any}
     >
       {pdfLoading ? (
-        <div className="p-8">
-          <Skeleton active avatar paragraph={{ rows: 8 }} />
-          <div className="h-8" />
-          <Skeleton active avatar paragraph={{ rows: 8 }} />
+        <div className="space-y-[var(--ws-layout-gap)] p-[var(--ws-panel-padding)]">
+          <div className="space-y-[var(--ws-space-1)]">
+            <Skeleton className="h-6 w-2/5" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-10/12" />
+          </div>
+          <div className="space-y-[var(--ws-space-1)]">
+            <Skeleton className="h-6 w-1/3" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-10/12" />
+          </div>
         </div>
       ) : null}
       {!pdfLoading && pdfError ? (
         <div className="p-3">
-          <Alert
-            type="error"
-            showIcon
-            message="文档编译失败"
-            description={<pre className="!m-0 whitespace-pre-wrap">{pdfError}</pre>}
-          />
+          <Alert variant="destructive">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>文档编译失败</AlertTitle>
+            <AlertDescription>
+              <pre className="mb-0 whitespace-pre-wrap">{pdfError}</pre>
+            </AlertDescription>
+          </Alert>
           <div className="h-2.5" />
-          <Text type="secondary">提示：通常是缺少图片资源（例如 images/a.png）或导入路径不正确，请在管理端上传资源或修正文档引用。</Text>
+          <div className="text-sm text-text-secondary">
+            提示：通常是缺少图片资源（例如 images/a.png）或导入路径不正确，请在管理端上传资源或修正文档引用。
+          </div>
         </div>
       ) : null}
-      <div className={pdfLoading ? 'hidden' : 'block'}>
+      <div className={pdfLoading ? "hidden" : "block"}>
         <PdfCanvasVirtualViewer ref={viewerRef} data={pdfData} rootRef={rightScrollRef} onPdfLoaded={handlePdfLoaded} />
       </div>
     </div>
   );
 
-  // --- Mobile Layout ---
   if (isMobile) {
     return (
-      <div className="w-full flex-1 min-h-0 flex flex-col mx-auto p-4" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
+      <div className="mx-auto flex min-h-0 w-full flex-1 flex-col p-3" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
         {selectedId ? (
-          // Mobile Reader View
-          <div className="h-full flex flex-col">
-            <div className="flex items-center gap-2 px-3 py-3 flex-shrink-0 bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-              <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setSelectedId(null)} />
-              <Text ellipsis strong className="flex-1">
+          <div className="flex h-full flex-col">
+            <div className="sticky top-0 z-sticky flex flex-shrink-0 items-center gap-[var(--ws-space-1)] bg-surface border-b border-[var(--ws-color-border-secondary)] px-[var(--ws-space-2)] py-[var(--ws-space-1)]">
+              <Button variant="ghost" onClick={() => setSelectedId(null)}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="flex-1 truncate text-base font-semibold text-text-base" title={items.find((x) => x.id === selectedId)?.title || "内容"}>
                 {items.find((x) => x.id === selectedId)?.title || "内容"}
-              </Text>
-              <Button type="text" icon={<MenuOutlined />} onClick={() => setMobileDrawerOpen(true)} />
+              </span>
+              <Button variant="ghost" onClick={() => setMobileDrawerOpen(true)}>
+                <Menu className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="informatics-mobile-content">
-              {renderReader()}
-            </div>
-            <Drawer 
-              open={mobileDrawerOpen} 
-              onClose={() => setMobileDrawerOpen(false)} 
-              placement="left" 
-              width="85%"
-              title="导航"
-              styles={{ body: { padding: 12 } }}
-            >
-              {renderLeftContent()}
-            </Drawer>
+            <div className="informatics-mobile-content">{renderReader()}</div>
+
+            <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+              <SheetContent side="left" className="w-[min(85%,22rem)] p-0 sm:max-w-none">
+                <SheetHeader className="border-b border-border px-4 py-3">
+                  <SheetTitle className="text-left text-lg">导航</SheetTitle>
+                </SheetHeader>
+                <div className="h-full min-h-0 p-[var(--ws-space-2)]">{renderLeftContent()}</div>
+              </SheetContent>
+            </Sheet>
           </div>
         ) : (
-          // Mobile List View
-          <div className="h-full p-3 flex flex-col">
-            {renderLeftContent()}
-          </div>
+          <div className="flex h-full flex-col p-[var(--ws-space-2)]">{renderLeftContent()}</div>
         )}
       </div>
     );
   }
 
-  // --- Desktop Layout ---
   return (
-    <div className="w-full flex-1 min-h-0 flex flex-col mx-auto p-4" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
+    <div className="mx-auto flex min-h-0 w-full flex-1 flex-col p-3" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
       <SplitPanePage
         leftWidth={320}
         alignItems="stretch"
         left={
-          <PanelCard bodyPadding={12}>
+          <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
             {renderLeftContent()}
           </PanelCard>
         }
         right={
           <PanelCard
-            title={
-              <span className="text-lg font-semibold text-text-base">
-                {selectedId ? items.find((x) => x.id === selectedId)?.title || "内容" : "内容"}
-              </span>
-            }
+            title={<span className="text-base font-semibold text-text-base">{selectedId ? items.find((x) => x.id === selectedId)?.title || "内容" : "内容"}</span>}
+            bodyPadding="var(--ws-panel-padding-sm)"
           >
             {renderReader()}
           </PanelCard>

@@ -13,13 +13,20 @@ interface RadarChartProps {
   color?: string;
 }
 
-const COLORS = ["#4096ff", "#ff7a45", "#36cfc9", "#9254de", "#f759ab", "#fadb14"];
+const COLORS = [
+  "var(--ws-color-primary)",
+  "var(--ws-color-warning)",
+  "var(--ws-color-accent)",
+  "var(--ws-color-purple)",
+  "var(--ws-color-error-light)",
+  "var(--ws-color-info)",
+];
 
 const RadarChart: React.FC<RadarChartProps> = ({
   dimensions,
   series,
   size = 280,
-  color = "#4096ff",
+  color = "var(--ws-color-primary)",
 }) => {
   const option = useMemo(() => {
     // 收集所有维度 key
@@ -68,8 +75,8 @@ const RadarChart: React.FC<RadarChartProps> = ({
       radar: {
         indicator,
         radius: "55%",
-        axisName: { fontSize: 12, color: "#666" },
-        splitArea: { areaStyle: { color: ["#fff", "#f5f5f5"] } },
+        axisName: { fontSize: 12, color: "var(--ws-color-text-secondary)" },
+        splitArea: { areaStyle: { color: ["var(--ws-color-surface)", "var(--ws-color-surface-2)"] } },
       },
       legend: series && series.length > 1 ? {
         data: series.map(s => s.name),

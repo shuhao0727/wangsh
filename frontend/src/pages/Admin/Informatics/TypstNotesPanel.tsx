@@ -1,13 +1,14 @@
+import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import { Button, Card, Input, Modal, Space, Spin, Typography, message } from "antd";
-import { DeleteOutlined, DownloadOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Trash2, Download, Plus, Save, Search, Loader2 } from "lucide-react";
 import EmptyState from "@components/Common/EmptyState";
 import { typstNotesApi } from "@services";
 import type { TypstNote, TypstNoteListItem } from "@services";
-
-const { Text } = Typography;
-const { TextArea } = Input;
 
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
@@ -49,7 +50,7 @@ const TypstNotesPanel: React.FC = () => {
       setItems(res || []);
       if (!selectedId && res?.length) setSelectedId(res[0].id);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "加载笔记失败");
+      showMessage.error(e?.response?.data?.detail || e?.message || "加载笔记失败");
     } finally {
       setListLoading(false);
     }
@@ -65,7 +66,7 @@ const TypstNotesPanel: React.FC = () => {
       dirtyRef.current = false;
       setSvg("");
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "加载笔记详情失败");
+      showMessage.error(e?.response?.data?.detail || e?.message || "加载笔记详情失败");
       setNote(null);
       setTitle("");
       setContent("");
@@ -85,7 +86,7 @@ const TypstNotesPanel: React.FC = () => {
       dirtyRef.current = false;
       setItems((prev) => prev.map((it) => (it.id === updated.id ? { ...it, title: updated.title, updated_at: updated.updated_at } : it)));
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "保存失败");
+      showMessage.error(e?.response?.data?.detail || e?.message || "保存失败");
     } finally {
       setSaving(false);
     }
@@ -111,7 +112,7 @@ const TypstNotesPanel: React.FC = () => {
         dirtyRef.current = false;
         setItems((prev) => prev.map((it) => (it.id === updated.id ? { ...it, title: updated.title, updated_at: updated.updated_at } : it)));
       } catch (e: any) {
-        message.error(e?.response?.data?.detail || e?.message || "自动保存失败");
+        showMessage.error(e?.response?.data?.detail || e?.message || "自动保存失败");
       } finally {
         setSaving(false);
       }
@@ -144,26 +145,7 @@ const TypstNotesPanel: React.FC = () => {
   }, [content, selectedId]);
 
   const createNote = async () => {
-    const titleInput = await new Promise<string | null>((resolve) => {
-      let v = "";
-      Modal.confirm({
-        title: "新建 Typst 笔记",
-        content: (
-          <Input
-            autoFocus
-            placeholder="请输入标题"
-            onChange={(e) => {
-              v = e.target.value;
-            }}
-            onPressEnter={() => resolve(v)}
-          />
-        ),
-        okText: "创建",
-        cancelText: "取消",
-        onOk: () => resolve(v),
-        onCancel: () => resolve(null),
-      });
-    });
+    const titleInput = window.prompt("新建 Typst 笔记：请输入标题", "");
     if (titleInput === null) return;
     const t = titleInput.trim() || "未命名";
     try {
@@ -171,29 +153,21 @@ const TypstNotesPanel: React.FC = () => {
       setItems((prev) => [{ id: n.id, title: n.title, updated_at: n.updated_at, compiled_at: n.compiled_at }, ...prev]);
       setSelectedId(n.id);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "创建失败");
+      showMessage.error(e?.response?.data?.detail || e?.message || "创建失败");
     }
   };
 
   const removeNote = async () => {
     if (!selectedId) return;
-    Modal.confirm({
-      title: "删除笔记",
-      content: "确认删除当前笔记？删除后不可恢复。",
-      okText: "删除",
-      okButtonProps: { danger: true },
-      cancelText: "取消",
-      onOk: async () => {
-        try {
-          await typstNotesApi.remove(selectedId);
-          const next = items.filter((it) => it.id !== selectedId);
-          setItems(next);
-          setSelectedId(next[0]?.id ?? null);
-        } catch (e: any) {
-          message.error(e?.response?.data?.detail || e?.message || "删除失败");
-        }
-      },
-    });
+    if (!window.confirm("确认删除当前笔记？删除后不可恢复。")) return;
+    try {
+      await typstNotesApi.remove(selectedId);
+      const next = items.filter((it) => it.id !== selectedId);
+      setItems(next);
+      setSelectedId(next[0]?.id ?? null);
+    } catch (e: any) {
+      showMessage.error(e?.response?.data?.detail || e?.message || "删除失败");
+    }
   };
 
   const exportTyp = () => {
@@ -213,7 +187,7 @@ const TypstNotesPanel: React.FC = () => {
       const blob = await typstNotesApi.compilePdf(selectedId);
       downloadBlob(blob, `${(title.trim() || "typst-note").replaceAll("/", "-")}.pdf`);
     } catch (e: any) {
-      message.error(e?.response?.data?.detail || e?.message || "导出PDF失败");
+      showMessage.error(e?.response?.data?.detail || e?.message || "导出PDF失败");
     } finally {
       setSaving(false);
     }
@@ -224,30 +198,32 @@ const TypstNotesPanel: React.FC = () => {
   return (
     <div className="grid grid-cols-[320px_1fr] gap-4 items-start">
       <div className="sticky top-[72px]">
-        <Card
-          size="small"
-          title="Typst 笔记"
-          extra={
-            <Space>
-              <Button size="small" icon={<PlusOutlined />} onClick={createNote}>
-                新建
+        <Card className="!border-none !rounded-[10px]">
+          <div className="flex items-center justify-between border-b border-border-secondary p-3">
+            <span className="text-sm font-semibold">Typst 笔记</span>
+            <Button size="sm" variant="outline" onClick={createNote}>
+              <Plus className="h-4 w-4" /> 新建
+            </Button>
+          </div>
+          <div className="p-3">
+            <div className="mb-2.5 flex items-center gap-2">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void loadList();
+                  }
+                }}
+                placeholder="搜索标题"
+              />
+              <Button size="sm" variant="outline" onClick={() => void loadList()}>
+                <Search className="h-4 w-4" />
               </Button>
-            </Space>
-          }
-          className="!border-none !rounded-[10px]"
-          styles={{ body: { padding: 12 } }}
-        >
-          <Input.Search
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onSearch={loadList}
-            placeholder="搜索标题"
-            allowClear
-            className="mb-2.5"
-          />
+            </div>
           {listLoading ? (
-            <div className="text-center p-4">
-              <Spin />
+            <div className="flex items-center justify-center p-4 text-text-tertiary">
+              <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : items.length === 0 ? (
             <EmptyState description="暂无笔记" />
@@ -257,67 +233,62 @@ const TypstNotesPanel: React.FC = () => {
                 <div
                   key={it.id}
                   onClick={() => setSelectedId(it.id)}
-                  className="cursor-pointer p-2.5 rounded-[10px] flex flex-col gap-1"
-                  style={{
-                    border:
-                      it.id === selectedId
-                        ? "1px solid #0EA5E9"
-                        : "1px solid rgba(0,0,0,0.08)",
-                    background: it.id === selectedId ? "rgba(14, 165, 233, 0.08)" : "#FFFFFF",
-                  }}
+                  className={`cursor-pointer rounded-[10px] border p-2.5 flex flex-col gap-1 ${
+                    it.id === selectedId
+                      ? "border-[color:var(--ws-color-primary)] bg-primary-soft"
+                      : "border-border bg-surface"
+                  }`}
                 >
-                  <Text strong ellipsis>
+                  <p className="truncate text-sm font-semibold">
                     {it.title}
-                  </Text>
-                  <Text type="secondary" className="text-xs">
+                  </p>
+                  <p className="text-xs text-text-tertiary">
                     更新：{new Date(it.updated_at).toLocaleString()}
-                  </Text>
+                  </p>
                 </div>
               ))}
             </div>
           )}
+          </div>
         </Card>
       </div>
 
       <div className="min-w-0 flex flex-col gap-4">
-        <Card
-          size="small"
-          title={
-            <Space size={10}>
-              <Text strong>{activeItem?.title || "未选择笔记"}</Text>
-              {saving ? <Text type="secondary">保存中…</Text> : dirtyRef.current ? <Text type="secondary">未保存</Text> : <Text type="secondary">已保存</Text>}
-            </Space>
-          }
-          extra={
-            <Space>
-              <Button icon={<SaveOutlined />} onClick={saveNow} disabled={!selectedId || saving || !dirtyRef.current}>
-                保存
+        <Card className="!border-none !rounded-[10px]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-secondary p-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{activeItem?.title || "未选择笔记"}</p>
+              <p className="text-xs text-text-tertiary">
+                {saving ? "保存中…" : dirtyRef.current ? "未保存" : "已保存"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={saveNow} disabled={!selectedId || saving || !dirtyRef.current}>
+                <Save className="h-4 w-4" /> 保存
               </Button>
-              <Button icon={<DownloadOutlined />} onClick={exportTyp} disabled={!selectedId}>
-                导出 .typ
+              <Button variant="outline" onClick={exportTyp} disabled={!selectedId}>
+                <Download className="h-4 w-4" /> 导出 .typ
               </Button>
-              <Button type="primary" icon={<DownloadOutlined />} onClick={exportPdf} disabled={!selectedId}>
-                导出 PDF
+              <Button onClick={exportPdf} disabled={!selectedId}>
+                <Download className="h-4 w-4" /> 导出 PDF
               </Button>
-              <Button danger icon={<DeleteOutlined />} onClick={removeNote} disabled={!selectedId}>
-                删除
+              <Button variant="destructive" onClick={removeNote} disabled={!selectedId}>
+                <Trash2 className="h-4 w-4" /> 删除
               </Button>
-            </Space>
-          }
-          className="!border-none !rounded-[10px]"
-          styles={{ body: { padding: 12 } }}
-        >
+            </div>
+          </div>
+          <div className="p-3">
           {noteLoading ? (
-            <div className="text-center p-6">
-              <Spin />
+            <div className="flex items-center justify-center p-6 text-text-tertiary">
+              <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : !selectedId ? (
             <EmptyState description="请选择或新建一个笔记" />
           ) : (
-            <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+            <div className="flex w-full flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Text type="secondary">标题</Text>
+                  <p className="mb-1 text-xs text-text-tertiary">标题</p>
                   <Input
                     value={title}
                     onChange={(e) => {
@@ -328,42 +299,48 @@ const TypstNotesPanel: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <Text type="secondary">状态</Text>
+                  <p className="mb-1 text-xs text-text-tertiary">状态</p>
                   <Input value={note?.compiled_at ? `已编译：${new Date(note.compiled_at).toLocaleString()}` : "未编译"} readOnly />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 items-start">
-                <Card size="small" title="编辑" className="!border-none !rounded-[10px]" styles={{ body: { padding: 10 } }}>
-                  <TextArea
+                <Card className="!border-none !rounded-[10px]">
+                  <div className="border-b border-border-secondary p-2.5 text-sm font-semibold">编辑</div>
+                  <div className="p-2.5">
+                  <Textarea
                     value={content}
                     onChange={(e) => {
                       dirtyRef.current = true;
                       setContent(e.target.value);
                     }}
-                    autoSize={{ minRows: 18, maxRows: 32 }}
-                    className="font-mono"
+                    className="min-h-[420px] resize-y font-mono leading-6"
                   />
+                  </div>
                 </Card>
 
-                <Card size="small" title="实时预览（WASM）" className="!border-none !rounded-[10px]" styles={{ body: { padding: 10 } }}>
+                <Card className="!border-none !rounded-[10px]">
+                  <div className="border-b border-border-secondary p-2.5 text-sm font-semibold">实时预览（WASM）</div>
+                  <div className="p-2.5">
                   <div
-                    className="min-h-[420px] rounded-xl border border-black/[0.04] bg-surface-2 overflow-auto p-2.5"
+                    className="min-h-[420px] rounded-xl border border-border-secondary bg-surface-2 overflow-auto p-2.5"
                   >
                     {svgLoading ? (
-                      <div className="text-center p-6">
-                        <Spin />
+                      <div className="flex items-center justify-center p-6 text-text-tertiary">
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       </div>
                     ) : svg ? (
                       <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true }, ADD_TAGS: ["use"] }) }} />
                     ) : (
-                      <Text type="secondary">暂无预览（可能是 Typst 语法错误或初始化中）</Text>
+                      <p className="text-sm text-text-tertiary">暂无预览（可能是 Typst 语法错误或初始化中）</p>
                     )}
+                  </div>
                   </div>
                 </Card>
               </div>
-            </Space>
+            </div>
           )}
+          </div>
         </Card>
       </div>
     </div>

@@ -8,6 +8,7 @@ import httpx
 @dataclass(frozen=True)
 class Env:
     base_url: str
+    health_url: str
     admin_username: str
     admin_password: str
     openrouter_api_key: str | None
@@ -17,6 +18,7 @@ class Env:
 def env() -> Env:
     return Env(
         base_url=os.environ.get("BASE_URL", "http://localhost:6608/api/v1").rstrip("/"),
+        health_url=os.environ.get("HEALTH_URL", "http://localhost:6608/api/health").rstrip("/"),
         admin_username=os.environ.get("ADMIN_USERNAME", "admin"),
         admin_password=os.environ.get("ADMIN_PASSWORD", ""),
         openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
@@ -33,7 +35,7 @@ def wait_health(client: httpx.Client, url: str, timeout_s: int = 60):
     last_err: Exception | None = None
     while time.time() < deadline:
         try:
-            r = client.get(f"{url}/health", timeout=10)
+            r = client.get(url, timeout=10)
             r.raise_for_status()
             ok("health")
             return
@@ -62,8 +64,8 @@ def me(client: httpx.Client, url: str):
     return r.json()
 
 
-def verify_refresh(client: httpx.Client, url: str):
-    r = client.post(f"{url}/auth/refresh", json={}, timeout=20)
+def verify_refresh(client: httpx.Client, url: str, refresh_token: str):
+    r = client.post(f"{url}/auth/refresh", json={"refresh_token": refresh_token}, timeout=20)
     r.raise_for_status()
     ok("auth/refresh")
     return r.json()
@@ -137,7 +139,7 @@ def agents_smoke(client: httpx.Client, url: str, openrouter_api_url: str, openro
     ok("model-discovery/preset-models")
 
     if not openrouter_api_key:
-        print("[SKIP] openrouter agent test (OPENROUTER_API_KEY not set)", flush=True)
+        ok("openrouter agent test disabled (OPENROUTER_API_KEY not set)")
         return
 
     discover_payload = {
@@ -192,18 +194,21 @@ def main():
         raise SystemExit("missing ADMIN_PASSWORD")
 
     with httpx.Client(follow_redirects=True) as client:
-        wait_health(client, e.base_url)
+        wait_health(client, e.health_url)
         token_payload = login(client, e.base_url, e.admin_username, e.admin_password)
         access_token = token_payload.get("access_token")
+        refresh_token = token_payload.get("refresh_token")
         if not access_token:
             raise RuntimeError("login response missing access_token")
+        if not refresh_token:
+            raise RuntimeError("login response missing refresh_token")
         client.headers.update({"Authorization": f"Bearer {access_token}"})
 
         me_payload = me(client, e.base_url)
         user_id = int(me_payload.get("id") or 0)
         if user_id <= 0:
             raise RuntimeError(f"auth/me missing user id: {me_payload}")
-        verify_refresh(client, e.base_url)
+        verify_refresh(client, e.base_url, str(refresh_token))
         typst_note_smoke(client, e.base_url)
         articles_smoke(client, e.base_url, user_id)
         agents_smoke(client, e.base_url, e.openrouter_api_url, e.openrouter_api_key)

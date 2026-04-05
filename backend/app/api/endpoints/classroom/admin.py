@@ -97,7 +97,7 @@ async def bulk_delete_activities(
     if not ids:
         raise HTTPException(status_code=400, detail="请提供要删除的活动 ID 列表")
     result = await svc.bulk_delete_activities(db, ids)
-    svc.publish("admin_global", {"type": "activity_changed", "action": "bulk_delete"})
+    await svc.publish("admin_global", {"type": "activity_changed", "action": "bulk_delete"})
     return result
 
 
@@ -183,7 +183,7 @@ async def admin_stream(
     sub_id = str(uuid.uuid4())
 
     async def gen():
-        q = svc.subscribe(channel, sub_id)
+        q = await svc.subscribe(channel, sub_id)
         try:
             yield f"data: {json.dumps({'type': 'connected'})}\n\n"
             while True:
@@ -195,7 +195,7 @@ async def admin_stream(
                 except asyncio.CancelledError:
                     break
         finally:
-            svc.unsubscribe(channel, sub_id)
+            await svc.unsubscribe(channel, sub_id)
 
     return StreamingResponse(
         gen(),

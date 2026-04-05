@@ -1,9 +1,25 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState } from "react";
-import { Modal, Select, InputNumber, Space, message } from "antd";
 import { xbkDataApi } from "@services";
 import type { XbkExportType } from "@services";
-
-const { Option } = Select;
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 interface XbkExportModalProps {
   open: boolean;
@@ -31,23 +47,23 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
 
   const handleExport = async () => {
     if (!yearStart || !yearEnd) {
-      message.warning("请填写学年（起止年份）");
+      showMessage.warning("请填写学年（起止年份）");
       return;
     }
     if (!Number.isInteger(yearStart) || !Number.isInteger(yearEnd)) {
-      message.warning("学年必须为整数年份");
+      showMessage.warning("学年必须为整数年份");
       return;
     }
     if (yearStart < 2000 || yearStart > 2100 || yearEnd < 2000 || yearEnd > 2100) {
-      message.warning("学年年份范围不正确（建议填写4位年份，如 2025-2026）");
+      showMessage.warning("学年年份范围不正确（建议填写4位年份，如 2025-2026）");
       return;
     }
     if (yearEnd <= yearStart) {
-      message.warning("学年结束年份必须大于开始年份");
+      showMessage.warning("学年结束年份必须大于开始年份");
       return;
     }
     if (exportType === "distribution" && !filters.grade) {
-      message.warning("请先选择年级（用于各班分发表表头）");
+      showMessage.warning("请先选择年级（用于各班分发表表头）");
       return;
     }
 
@@ -71,64 +87,87 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      message.success("导出成功");
+      showMessage.success("导出成功");
       onCancel();
     } catch (e: any) {
-      message.error(getErrorMsg(e, "导出失败（需要管理员登录）"));
+      showMessage.error(getErrorMsg(e, "导出失败（需要管理员登录）"));
     } finally {
       setExporting(false);
     }
   };
 
   return (
-    <Modal
-      title="导出数据"
-      open={open}
-      confirmLoading={exporting}
-      onCancel={onCancel}
-      onOk={handleExport}
-      okText="导出"
-    >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-        <div>
-          <div className="ws-modal-label">导出类型</div>
-          <Select value={exportType} style={{ width: "100%" }} onChange={setExportType}>
-            <Option value="course-selection">学生选课表</Option>
-            <Option value="teacher-distribution">教师分发表</Option>
-            <Option value="distribution">各班分发表</Option>
-          </Select>
-        </div>
-        
-        <div>
-          <div className="ws-modal-label">学年 (如 2025-2026)</div>
-          <Space>
-            <InputNumber
-              placeholder="起"
-              style={{ width: 120 }}
-              value={yearStart}
-              min={2000}
-              max={2100}
-              precision={0}
-              onChange={(v) => setYearStart(typeof v === "number" ? v : undefined)}
-            />
-            <span>-</span>
-            <InputNumber
-              placeholder="止"
-              style={{ width: 120 }}
-              value={yearEnd}
-              min={2000}
-              max={2100}
-              precision={0}
-              onChange={(v) => setYearEnd(typeof v === "number" ? v : undefined)}
-            />
-          </Space>
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>导出数据</DialogTitle>
+          <DialogDescription className="sr-only">
+            选择导出类型和学年范围，生成当前筛选条件下的 XBK 导出文件。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <div className="ws-modal-label">导出类型</div>
+            <Select value={exportType} onValueChange={(v) => setExportType(v as XbkExportType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="course-selection">学生选课表</SelectItem>
+                <SelectItem value="teacher-distribution">教师分发表</SelectItem>
+                <SelectItem value="distribution">各班分发表</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <div className="ws-modal-label">学年 (如 2025-2026)</div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                placeholder="起"
+                min={2000}
+                max={2100}
+                step={1}
+                value={yearStart ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setYearStart(v ? Number(v) : undefined);
+                }}
+              />
+              <span>-</span>
+              <Input
+                type="number"
+                placeholder="止"
+                min={2000}
+                max={2100}
+                step={1}
+                value={yearEnd ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setYearEnd(v ? Number(v) : undefined);
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="ws-modal-hint">
+            <p>• 将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}{filters.class_name ? ` · ${filters.class_name}` : ""}</p>
+            <p>• 学期将按当前筛选的学期写入导出文件标题。</p>
+          </div>
         </div>
 
-        <div className="ws-modal-hint">
-          <p>• 将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}{filters.class_name ? ` · ${filters.class_name}` : ""}</p>
-          <p>• 学期将按当前筛选的学期写入导出文件标题。</p>
-        </div>
-      </Space>
-    </Modal>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={exporting}>
+            取消
+          </Button>
+          <Button type="button" onClick={handleExport} disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            导出
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

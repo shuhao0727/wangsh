@@ -2,13 +2,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--ws-space-4);
+  margin-bottom: var(--ws-space-3);
   background: transparent;
-  padding: var(--ws-space-4);
+  padding: var(--ws-space-3);
   border-radius: var(--ws-radius-lg);
   box-shadow: none;
   flex-wrap: wrap;
-  gap: var(--ws-space-3);
+  gap: var(--ws-space-2);
 }
 
 .informatics-hero-left h2 {
@@ -25,14 +25,14 @@
 
 .informatics-card {
   height: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--ws-transition-smooth);
   border-radius: var(--ws-radius-lg);
   border: 1px solid transparent;
   display: flex;
   flex-direction: column;
 }
 
-.informatics-card .ant-card-body {
+.informatics-card .panel-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -48,58 +48,53 @@
 
 .informatics-tree {
   background: transparent;
-  font-size: 14px;
+  font-size: var(--ws-text-sm);
 }
 
-.informatics-tree .ant-tree-tbn {
-  display: none;
-}
-
-.informatics-tree .ant-tree-node-content-wrapper {
-  padding: 4px 6px;
-  border-radius: var(--ws-radius-md);
-  transition: var(--ws-transition-base);
-  min-height: 34px;
-  display: flex;
-  align-items: flex-start;
-}
-
-.informatics-tree .ant-tree-title {
-  display: flex;
-  align-items: center;
+.informatics-tree-row {
   width: 100%;
-}
-
-.informatics-tree .ant-tree-iconEle {
-  line-height: 32px;
-  display: inline-flex;
+  min-height: 34px;
+  border: none;
+  border-radius: var(--ws-radius-md);
+  background: transparent;
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--ws-space-1);
+  padding: calc(var(--ws-space-1) * 0.8) var(--ws-space-2);
+  color: var(--ws-color-text);
+  cursor: pointer;
+  transition: var(--ws-transition-base);
+  text-align: left;
+  font-size: var(--ws-text-sm);
 }
 
-.informatics-tree .ant-tree-node-content-wrapper:hover {
+.informatics-tree-row:hover {
   background-color: var(--ws-color-hover-bg);
 }
 
-.informatics-tree .ant-tree-node-selected {
-  background-color: var(--ws-color-primary-soft) !important;
-  color: var(--ws-color-primary);
-  font-weight: 500;
+.informatics-tree-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ws-color-focus-ring);
 }
 
-.informatics-tree .ant-tree-switcher {
-  width: 16px;
-  display: flex;
+.informatics-tree-row-selected {
+  background-color: var(--ws-color-primary-light);
+  color: var(--ws-color-primary-active);
+  font-weight: 600;
+}
+
+.informatics-tree-switcher {
+  width: 18px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.informatics-tree .ant-tree-indent-unit {
-  width: 12px;
+  color: var(--ws-color-text-tertiary);
+  flex-shrink: 0;
+  margin-top: 0;
 }
 
 .informatics-outline-item {
-  padding: 6px 8px;
+  padding: var(--ws-space-1);
   border-radius: var(--ws-radius-sm);
   transition: all 0.2s;
   color: var(--ws-color-text);
@@ -115,13 +110,10 @@
   color: var(--ws-color-primary);
 }
 
-.informatics-outline-tree .ant-tree-switcher {
-  width: 16px;
-}
-
-.informatics-outline-tree .ant-tree-node-content-wrapper {
-  padding: 2px 4px;
-  min-height: 28px;
+.informatics-outline-tree .informatics-tree-row {
+  min-height: 32px;
+  padding-top: calc(var(--ws-space-1) * 0.8);
+  padding-bottom: calc(var(--ws-space-1) * 0.8);
 }
 
 .informatics-typst-viewer {
@@ -129,57 +121,32 @@
   overflow-y: auto;
   background: var(--ws-color-surface-2);
   border-radius: var(--ws-radius-md);
-  padding: var(--ws-space-3);
+  padding: var(--ws-space-2);
   scroll-behavior: smooth;
   height: 100%;
 }
 
-/* Tabs Full Height Fix */
 .informatics-full-height-tabs {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.informatics-full-height-tabs .ant-tabs-nav {
-  margin-bottom: 8px; /* Reduced from 12px to 8px */
-  flex-shrink: 0;
-}
-
-.informatics-full-height-tabs .ant-tabs-content-holder {
-  flex: 1;
-  overflow: hidden;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
-.informatics-full-height-tabs .ant-tabs-content {
-  height: 100%;
+.informatics-tab-content {
+  margin-top: var(--ws-space-1);
   flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.informatics-full-height-tabs .ant-tabs-tabpane {
-  height: 100%;
-  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
-.informatics-full-height-tabs .ant-tabs-tabpane-active {
-  display: flex !important;
-}
-
-/* Scrollable Container */
 .informatics-scroll-container {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  padding-right: 4px;
-  /* Add padding bottom to avoid content touching edge */
-  padding-bottom: 8px; 
+  padding-right: var(--ws-space-1);
+  padding-bottom: var(--ws-space-1);
 }
 
 .informatics-mobile-content {
@@ -188,11 +155,10 @@
   overflow: hidden;
 }
 
-/* Mobile Specific Styles */
 @media (max-width: 768px) {
   .informatics-page {
     padding: 0;
-    background: #FFFFFF;
+    background: var(--ws-color-surface);
   }
 
   .informatics-card {
@@ -216,11 +182,11 @@
   }
 
   .informatics-hero-left h2 {
-    font-size: 16px;
+    font-size: var(--ws-text-lg);
   }
 
-  .informatics-tree .ant-tree-node-content-wrapper {
+  .informatics-tree-row {
     min-height: 30px;
-    padding: 2px 4px;
+    padding: var(--ws-space-1) var(--ws-space-1);
   }
 }

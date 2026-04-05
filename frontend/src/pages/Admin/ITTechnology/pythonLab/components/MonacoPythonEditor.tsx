@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
 import * as monaco from "monaco-editor";
@@ -6,12 +6,6 @@ import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
 
 // 使用本地 npm 包中的 Monaco，避免从 CDN (jsdelivr) 加载失败
 loader.config({ monaco });
-
-// 异步加载 monaco 实例，避免将整个 monaco-editor 打入主 chunk
-let monacoInstance: typeof MonacoType | null = null;
-loader.init().then((m) => {
-  monacoInstance = m as unknown as typeof MonacoType;
-});
 
 export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: {
   value: string;
@@ -29,6 +23,19 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
   const bpDecoIdsRef = useRef<string[]>([]);
   const activeDecoIdsRef = useRef<string[]>([]);
   const lastRevealLineRef = useRef<number | null>(null);
+  const [editorMounted, setEditorMounted] = useState(false);
+  const [fallbackMode, setFallbackMode] = useState(false);
+
+  useEffect(() => {
+    if (editorMounted) {
+      setFallbackMode(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setFallbackMode(true);
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [editorMounted]);
 
   const bpMap = useMemo(() => new Map((breakpoints ?? []).map((b) => [b.line, b.enabled] as const)), [breakpoints]);
   const focusLine = revealLine ?? activeLine ?? null;
@@ -41,7 +48,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
     for (const [line, enabled] of Array.from(bpMap.entries())) {
       if (!Number.isFinite(line) || line < 1) continue;
       next.push({
-        range: new (monacoInstance as typeof MonacoType).Range(line, 1, line, 1),
+        range: new monaco.Range(line, 1, line, 1),
         options: {
           isWholeLine: false,
           glyphMarginClassName: enabled ? "wsMonacoBp" : "wsMonacoBpDisabled",
@@ -58,7 +65,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
     const next: MonacoType.editor.IModelDeltaDecoration[] = [];
     if (activeLine && Number.isFinite(activeLine) && activeLine >= 1) {
       next.push({
-        range: new (monacoInstance as typeof MonacoType).Range(activeLine, 1, activeLine, 1),
+        range: new monaco.Range(activeLine, 1, activeLine, 1),
         options: {
           isWholeLine: true,
           className: "wsMonacoActiveLine",
@@ -83,12 +90,12 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
         endLineNumber: err.endLine || err.line,
         endColumn: (err.endCol || err.col) + 1,
         message: err.message,
-        severity: monacoInstance!.MarkerSeverity.Error,
+        severity: monaco.MarkerSeverity.Error,
         source: err.source || "syntax"
       }));
-      monacoInstance!.editor.setModelMarkers(model, "owner", markers);
+      monaco.editor.setModelMarkers(model, "owner", markers);
     } else {
-      monacoInstance!.editor.setModelMarkers(model, "owner", []);
+      monaco.editor.setModelMarkers(model, "owner", []);
     }
   }, [syntaxErrors]);
 
@@ -102,19 +109,31 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
   }, [focusLine]);
 
   return (
-    <div className="wsMonacoRoot" style={{ display: "flex", flex: 1, minHeight: 240, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)" }}>
+    <div
+      className="wsMonacoRoot"
+      style={{
+        position: "relative",
+        display: "flex",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        borderRadius: 0,
+        overflow: "hidden",
+        border: "none",
+        background: "#ffffff",
+      }}
+    >
       <style>{`
         .wsMonacoRoot .monaco-editor .margin-view-overlays .glyph-margin {
-          width: 6px !important;
+          width: 5px !important;
         }
         .wsMonacoRoot .monaco-editor .margin-view-overlays .line-numbers {
-          left: 6px !important;
-          width: 24px !important;
+          left: 5px !important;
+          width: 20px !important;
           text-align: right !important;
           padding-right: 2px !important;
           color: rgba(35, 120, 147, 0.6) !important;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-          transform: translateY(2px) !important;
         }
         .wsMonacoRoot .monaco-editor .margin {
           background-color: #ffffff !important;
@@ -160,10 +179,40 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           background: rgba(22,119,255,0.10);
         }
       `}</style>
+      {fallbackMode && (
+        <textarea
+          aria-label="python-code-fallback"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          spellCheck={false}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            border: "none",
+            outline: "none",
+            resize: "none",
+            padding: "12px",
+            fontSize: `${fontSize}px`,
+            lineHeight: `${Math.round(fontSize * 1.35)}px`,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            background: "#fff",
+            color: "var(--ws-color-text)",
+            zIndex: 2,
+          }}
+        />
+      )}
       <Editor
+        height="100%"
         defaultLanguage="python"
         theme="vs"
         value={value}
+        loading={
+          <div className="flex h-full items-center justify-center text-xs text-text-secondary">
+            正在加载编辑器...
+          </div>
+        }
         onChange={(v) => onChange(v ?? "")}
         options={{
           glyphMargin: true,
@@ -173,11 +222,11 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           insertSpaces: true,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           fontSize: fontSize,
-          lineHeight: Math.round(fontSize * 1.5),
+          lineHeight: Math.round(fontSize * 1.35),
           padding: { top: 12, bottom: 12 },
           fixedOverflowWidgets: true,
           renderLineHighlight: "none",
-          lineNumbersMinChars: 2,
+          lineNumbersMinChars: 1,
           lineDecorationsWidth: 0,
           automaticLayout: true,
           quickSuggestions: { other: true, comments: false, strings: false },
@@ -185,9 +234,10 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           acceptSuggestionOnEnter: "off",
         }}
         onMount={(editor) => {
+          setEditorMounted(true);
           editorRef.current = editor;
           const model = editor.getModel();
-          if (model) monacoInstance!.editor.setModelLanguage(model, "python");
+          if (model) monaco.editor.setModelLanguage(model, "python");
           editor.onKeyDown((event) => {
             const browserEvent = event.browserEvent;
             if (!browserEvent) return;
@@ -204,8 +254,8 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           editor.onMouseDown((e) => {
             const type = e.target.type;
             const isGutter =
-              type === monacoInstance!.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
-              type === monacoInstance!.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
+              type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+              type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
             if (!isGutter) return;
             const line = e.target.position?.lineNumber;
             if (!line) return;

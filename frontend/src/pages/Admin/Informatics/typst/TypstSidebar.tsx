@@ -1,10 +1,34 @@
 import React from "react";
-import { Button, Card, Input, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
-import { EditOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SettingOutlined, UnorderedListOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Pencil,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  RefreshCw,
+  Save,
+  Settings,
+  Upload,
+} from "lucide-react";
 import type { TypstAssetListItem, TypstCategoryListItem } from "@services";
-
-const { Text } = Typography;
-const { TextArea } = Input;
 
 type Props = {
   sideCollapsed: boolean;
@@ -47,6 +71,25 @@ type Props = {
   onSetAssetSearch: (v: string) => void;
   assetInputRef: React.RefObject<HTMLInputElement | null>;
 };
+
+function PanelCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="typst-editor-card typst-card rounded-lg bg-card text-card-foreground">
+      <div className="typst-card-head">
+        <div className="typst-card-head-wrapper">
+          <div className="typst-card-head-title">{title}</div>
+        </div>
+      </div>
+      <div className="typst-card-body">
+        <div className="flex flex-col gap-2">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-1 text-xs font-medium text-text-tertiary">{children}</p>;
+}
 
 export default function TypstSidebar({
   sideCollapsed,
@@ -92,169 +135,248 @@ export default function TypstSidebar({
     return String(a.path || "").toLowerCase().includes(q);
   });
 
-  return (
-    <div className={`typst-editor-side ${sideCollapsed ? "typst-editor-side-collapsed" : ""}`}>
-      <div className="typst-editor-side-toolbar" style={sideCollapsed ? { justifyContent: "center", padding: "4px 0" } : undefined}>
-        {!sideCollapsed && (
-          <Space size={0}>
-            <Tooltip title="目录">
-              <Button type="text" icon={<UnorderedListOutlined />} onClick={onOpenToc} />
-            </Tooltip>
-            <Tooltip title="刷新预览">
-              <Button type="text" icon={<ReloadOutlined />} onClick={onRefreshPreview} disabled={!noteId} />
-            </Tooltip>
-            <Tooltip title="保存">
-              <Button type="text" icon={<SaveOutlined />} onClick={onSave} loading={submitting} />
-            </Tooltip>
-          </Space>
-        )}
-        <Tooltip title={sideCollapsed ? "展开侧边栏" : "收起侧边栏"}>
-          <Button type="text" icon={sideCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={onToggleCollapsed} />
-        </Tooltip>
-      </div>
+  const categoryListId = React.useId();
+  const mergedStyleOptions =
+    styleKey && !styleOptions.includes(styleKey)
+      ? [styleKey, ...styleOptions]
+      : styleOptions;
 
-      {sideCollapsed ? null : (
-        <>
-          <Card title="基本信息" size="small" className="typst-editor-card">
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+  return (
+    <TooltipProvider delayDuration={120}>
+      <div className={`typst-editor-side ${sideCollapsed ? "typst-editor-side-collapsed" : ""}`}>
+        <div className={`typst-editor-side-toolbar ${sideCollapsed ? "justify-center py-1" : ""}`}>
+          {!sideCollapsed && (
+            <div className="flex items-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={onOpenToc}>
+                    <List className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>目录</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={onRefreshPreview} disabled={!noteId}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>刷新预览</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={onSave} disabled={submitting}>
+                    <Save className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>保存</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleCollapsed}
+                aria-label={sideCollapsed ? "展开侧边栏" : "收起侧边栏"}
+              >
+                {sideCollapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{sideCollapsed ? "展开侧边栏" : "收起侧边栏"}</TooltipContent>
+          </Tooltip>
+        </div>
+
+        {sideCollapsed ? null : (
+          <>
+            <PanelCard title="基本信息">
               <div>
-                <Text type="secondary">标题</Text>
+                <FieldLabel>标题</FieldLabel>
                 <Input value={title} onChange={(e) => onSetTitle(e.target.value)} placeholder="请输入标题" />
               </div>
+
               <div>
-                <Text type="secondary">摘要</Text>
-                <TextArea value={summary} onChange={(e) => onSetSummary(e.target.value)} rows={3} placeholder="用于前台列表展示" />
-              </div>
-              <div>
-                <Text type="secondary">分类</Text>
-                <Select
-                  value={categoryPath || undefined}
-                  allowClear
-                  showSearch
-                  placeholder="选择或输入，例如：竞赛/CSP/基础"
-                  options={categoryOptions.map((c) => ({ value: c.path, label: c.path }))}
-                  onChange={(v) => onSetCategoryPath(v || "")}
-                  onSearch={(v) => onSetCategoryPath(v)}
-                  popupRender={(menu) => (
-                    <div>
-                      {menu}
-                      <div className="flex justify-between p-2">
-                        <Button icon={<SettingOutlined />} onClick={onOpenCategoryManage} size="small">
-                          管理分类
-                        </Button>
-                        <Button icon={<PlusOutlined />} onClick={onAddCategory} size="small" type="primary">
-                          添加
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  className="w-full"
+                <FieldLabel>摘要</FieldLabel>
+                <Textarea
+                  value={summary}
+                  onChange={(e) => onSetSummary(e.target.value)}
+                  rows={3}
+                  placeholder="用于前台列表展示"
                 />
               </div>
-              <div className="flex justify-between items-center">
-                <Text type="secondary">发布</Text>
-                <Switch checked={published} onChange={onSetPublished} checkedChildren="已发布" unCheckedChildren="未发布" />
-              </div>
+
               <div>
-                <Text type="secondary">样式</Text>
-                <div className="flex gap-2">
-                  <Select value={styleKey} onChange={(v) => onSetStyleKey(v)} options={styleOptions.map((k) => ({ value: k, label: k }))} className="flex-1" />
-                  <Button icon={<EditOutlined />} onClick={onOpenStyleEditor} />
+                <FieldLabel>分类</FieldLabel>
+                <Input
+                  value={categoryPath}
+                  list={categoryListId}
+                  onChange={(e) => onSetCategoryPath(e.target.value)}
+                  placeholder="选择或输入，例如：竞赛/CSP/基础"
+                />
+                <datalist id={categoryListId}>
+                  {categoryOptions.map((c) => (
+                    <option key={c.path} value={c.path} />
+                  ))}
+                </datalist>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <Button variant="outline" onClick={onOpenCategoryManage} size="sm" className="h-8">
+                    <Settings className="h-4 w-4" /> 管理分类
+                  </Button>
+                  <Button onClick={onAddCategory} size="sm" className="h-8">
+                    <Plus className="h-4 w-4" /> 添加
+                  </Button>
                 </div>
               </div>
+
+              <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
+                <p className="text-sm text-text-tertiary">发布</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-tertiary">
+                    {published ? "已发布" : "未发布"}
+                  </span>
+                  <Switch checked={published} onCheckedChange={onSetPublished} />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>样式</FieldLabel>
+                <div className="flex gap-2">
+                  <Select
+                    value={styleKey || "__none__"}
+                    onValueChange={(v) => onSetStyleKey(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="选择样式" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">默认样式</SelectItem>
+                      {mergedStyleOptions.map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {k}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={onOpenStyleEditor} className="h-9 w-9 p-0">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex justify-between gap-3">
                 <div className="flex-1">
-                  <Text type="secondary">编译</Text>
-                  <div>{compiledAt ? <Tag color="blue">已编译</Tag> : <Tag>未编译</Tag>}</div>
+                  <FieldLabel>编译</FieldLabel>
+                  {compiledAt ? (
+                    <Badge variant="sky">
+                      已编译
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">未编译</Badge>
+                  )}
                 </div>
                 <div className="flex-1">
-                  <Text type="secondary">模式</Text>
-                  <div>{isCreateMode ? <Tag color="blue">新建</Tag> : <Tag color="green">编辑</Tag>}</div>
+                  <FieldLabel>模式</FieldLabel>
+                  {isCreateMode ? (
+                    <Badge variant="sky">
+                      新建
+                    </Badge>
+                  ) : (
+                    <Badge variant="success">
+                      编辑
+                    </Badge>
+                  )}
                 </div>
               </div>
-            </Space>
-          </Card>
+            </PanelCard>
 
-          <Card title="写作面板" size="small" className="typst-editor-card">
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <PanelCard title="写作面板">
               <div className="flex justify-between gap-2.5">
-                <Text type="secondary">快捷</Text>
-                <Text>Ctrl/⌘ + Enter 保存</Text>
+                <span className="text-sm text-text-tertiary">快捷</span>
+                <span className="text-sm">Ctrl/⌘ + Enter 保存</span>
               </div>
               <div className="flex justify-between gap-2.5">
-                <Text type="secondary">建议</Text>
-                <Text>分屏更利于排版</Text>
+                <span className="text-sm text-text-tertiary">建议</span>
+                <span className="text-sm">分屏更利于排版</span>
               </div>
-              <div className="flex justify-between items-center">
-                <Text type="secondary">自动预览</Text>
-                <Switch checked={autoPreview} onChange={onSetAutoPreview} checkedChildren="开" unCheckedChildren="关" />
+              <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
+                <span className="text-sm text-text-tertiary">自动预览</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-tertiary">
+                    {autoPreview ? "开" : "关"}
+                  </span>
+                  <Switch checked={autoPreview} onCheckedChange={onSetAutoPreview} />
+                </div>
               </div>
-            </Space>
-          </Card>
+            </PanelCard>
 
-          <Card title="图片/资源" size="small" className="typst-editor-card">
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <PanelCard title="图片/资源">
               <div>
-                <Text type="secondary">上传到目录</Text>
+                <FieldLabel>上传到目录</FieldLabel>
                 <Input value={assetPrefix} onChange={(e) => onSetAssetPrefix(e.target.value)} placeholder="images" />
               </div>
+
               <div className="flex gap-2">
-                <Button icon={<UploadOutlined />} onClick={onUploadClick} disabled={submitting}>
-                  上传资源
+                <Button variant="outline" onClick={onUploadClick} disabled={submitting} className="h-8">
+                  <Upload className="h-4 w-4" /> 上传资源
                 </Button>
-                <Button onClick={onRefreshAssets} disabled={submitting || !noteId}>
+                <Button variant="outline" onClick={onRefreshAssets} disabled={submitting || !noteId} className="h-8">
                   刷新列表
                 </Button>
-                <input id="typst-asset-upload" name="typst-asset-upload" aria-label="上传资源" ref={assetInputRef} type="file" multiple className="hidden" onChange={(e) => onUploadFiles(e.target.files)} />
+                <input
+                  id="typst-asset-upload"
+                  name="typst-asset-upload"
+                  aria-label="上传资源"
+                  ref={assetInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => onUploadFiles(e.target.files)}
+                />
               </div>
+
               <Input value={assetSearch} onChange={(e) => onSetAssetSearch(e.target.value)} placeholder="搜索资源" />
-              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "var(--ws-radius-md)" }}>
+
+              <div className="max-h-[220px] overflow-y-auto rounded-md border border-border bg-surface">
                 {assetsShown.length === 0 ? (
                   <div className="p-2.5">
-                    <Text type="secondary">暂无资源</Text>
+                    <span className="text-sm text-text-tertiary">暂无资源</span>
                   </div>
                 ) : (
                   assetsShown.map((a) => (
                     <div
                       key={a.id}
-                      style={{
-                        padding: "8px 10px",
-                        borderBottom: "1px solid rgba(0,0,0,0.04)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        alignItems: "center",
-                      }}
+                      className="flex items-center justify-between gap-[var(--ws-space-1)] border-b border-border-secondary px-[10px] py-2 last:border-b-0"
                     >
                       <div className="min-w-0">
-                        <Text ellipsis style={{ maxWidth: 220, display: "inline-block" }}>
-                          {a.path}
-                        </Text>
-                        <div>
-                          <Text type="secondary" className="text-xs">
-                            {a.mime}
-                          </Text>
-                          <Text type="secondary" className="text-xs ml-2">
+                        <p className="max-w-[220px] truncate text-sm">{a.path}</p>
+                        <div className="text-xs text-text-tertiary">
+                          <span>{a.mime}</span>
+                          <span className="ml-2">
                             {(a.size_bytes ? `${a.size_bytes}B` : "-") + (a.uploaded_by_id ? ` · u${a.uploaded_by_id}` : "")}
-                          </Text>
+                          </span>
                           {a.sha256 ? (
-                            <Text type="secondary" className="text-xs ml-2">
+                            <span className="ml-2">
                               {a.sha256.slice(0, 10)}
-                            </Text>
+                            </span>
                           ) : null}
                         </div>
                       </div>
-                      <Button danger size="small" onClick={() => onDeleteAsset(a)} disabled={!noteId}>
+                      <Button variant="destructive" size="sm" onClick={() => onDeleteAsset(a)} disabled={!noteId}>
                         删除
                       </Button>
                     </div>
                   ))
                 )}
               </div>
-            </Space>
-          </Card>
-        </>
-      )}
-    </div>
+            </PanelCard>
+          </>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }

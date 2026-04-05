@@ -319,7 +319,7 @@ async def create_user(
         await db.refresh(new_user)
 
         # 发布事件
-        publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
+        await publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(new_user)
@@ -424,7 +424,7 @@ async def update_user(
         await db.refresh(user)
 
         # 发布事件
-        publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
+        await publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(user)
@@ -475,7 +475,7 @@ async def delete_user(
         await db.commit()
 
         # 发布事件
-        publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
+        await publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
 
         return {
             "success": True,
@@ -526,7 +526,7 @@ async def batch_delete_users(
         
         await db.commit()
 
-        publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
+        await publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
 
         return {
             "success": True,
@@ -657,6 +657,7 @@ async def import_users(
         
         # 按行处理
         for i, row in enumerate(reader, start=1):
+            savepoint = None
             try:
                 # 跳过注释行
                 if any(str(value).startswith('#') for value in row.values() if value):
@@ -768,7 +769,8 @@ async def import_users(
                     message=error_msg
                 ))
                 error_count += 1
-                await savepoint.rollback()
+                if savepoint is not None:
+                    await savepoint.rollback()
         
         # 最终提交
         await db.commit()

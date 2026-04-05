@@ -1,6 +1,6 @@
 import React from "react";
-import { Tag } from "antd";
-import { CalendarOutlined } from "@ant-design/icons";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "lucide-react";
 import dayjs from "dayjs";
 import type { ArticleWithRelations } from "@services";
 
@@ -34,13 +34,13 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
         <div className="flex items-center gap-2 flex-shrink-0 text-xs text-text-tertiary">
           {date && (
             <span className="flex items-center gap-1">
-              <CalendarOutlined />{date}
+              <Calendar className="h-3 w-3" />{date}
             </span>
           )}
           {categoryName && (
-            <Tag bordered={false} className="!m-0 !text-xs !bg-primary-soft !text-primary">
+            <Badge variant="primarySubtle" className="!m-0 text-xs">
               {categoryName}
-            </Tag>
+            </Badge>
           )}
           {authorName && <span>{authorName}</span>}
         </div>

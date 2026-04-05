@@ -3,8 +3,7 @@ API 路由注册
 """
 
 from fastapi import APIRouter
-from app.api.endpoints.system.health import router as health_router
-from app.api.endpoints.system.admin import router as system_admin_router
+from app.api.endpoints.system import router as system_router
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.content.articles import router as articles_router
 from app.api.endpoints.content.categories import router as categories_router
@@ -26,8 +25,7 @@ from app.api.endpoints.admin_stream import router as admin_stream_router
 api_router = APIRouter()
 
 # 注册各个模块的路由
-api_router.include_router(health_router, tags=["health"])
-api_router.include_router(system_admin_router, tags=["system"])
+api_router.include_router(system_router)  # health + feature_flags + overview + metrics
 api_router.include_router(auth_router, tags=["authentication"], prefix="/auth")
 api_router.include_router(articles_router, tags=["articles"], prefix="/articles")
 api_router.include_router(categories_router, tags=["categories"], prefix="/categories")

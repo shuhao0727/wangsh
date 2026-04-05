@@ -2,460 +2,1427 @@
  * 测评管理页 - /admin/assessment/:id/questions
  * 三个板块：基本设置 → 固定题 → 自适应知识点题
  */
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Button, Table, Tag, Pagination, Select, Popconfirm, Modal, Form, Input,
-  InputNumber, message, Space, Spin, Divider, Card, Tooltip, Radio, DatePicker, Progress,
-} from "antd";
-import {
-  ArrowLeftOutlined, PlusOutlined, RobotOutlined, EditOutlined,
-  DeleteOutlined, EyeOutlined, SaveOutlined,
-} from "@ant-design/icons";
+  type ColumnDef,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import { useNavigate, useParams } from "react-router-dom";
+import dayjs from "dayjs";
+import {
+  ArrowLeft,
+  Eye,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { AdminPage } from "@components/Admin";
 import {
-  assessmentQuestionApi, assessmentConfigApi,
+  assessmentQuestionApi,
+  assessmentConfigApi,
   type AssessmentQuestion,
 } from "@services/assessment";
 import { aiAgentsApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
 import { logger } from "@services/logger";
-import dayjs from "dayjs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DataTable, DataTablePagination } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
-const { TextArea } = Input;
-const TYPE_MAP: Record<string, { label: string; color: string }> = {
-  choice: { label: "选择题", color: "blue" },
-  fill: { label: "填空题", color: "green" },
-  short_answer: { label: "简答题", color: "orange" },
-};
-const DIFF_MAP: Record<string, { label: string; color: string }> = {
-  easy: { label: "简单", color: "green" },
-  medium: { label: "中等", color: "orange" },
-  hard: { label: "困难", color: "red" },
-};
-const GRADE_OPTIONS = ["高一","高二","高三","初一","初二","初三","七年级","八年级","九年级"];
+const FILTER_ALL = "__all__";
 
-interface AdaptiveKP {
-  key: string; knowledge_point: string; question_type: "choice" | "fill";
-  score: number; prompt_hint: string; mastery_streak: number; max_attempts: number;
-}
-// COMPONENT_START
+const TYPE_MAP: Record<
+  string,
+  { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }
+> = {
+  choice: { label: "选择题", variant: "sky" },
+  fill: { label: "填空题", variant: "success" },
+  short_answer: { label: "简答题", variant: "warning" },
+};
+
+const DIFF_MAP: Record<
+  string,
+  { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }
+> = {
+  easy: { label: "简单", variant: "success" },
+  medium: { label: "中等", variant: "warning" },
+  hard: { label: "困难", variant: "danger" },
+};
+
+const GRADE_OPTIONS = [
+  "高一",
+  "高二",
+  "高三",
+  "初一",
+  "初二",
+  "初三",
+  "七年级",
+  "八年级",
+  "九年级",
+];
+
+type QuestionType = "choice" | "fill" | "short_answer";
+type Difficulty = "easy" | "medium" | "hard";
+
+type AdaptiveKP = {
+  key: string;
+  knowledge_point: string;
+  question_type: "choice" | "fill";
+  score: number;
+  prompt_hint: string;
+  mastery_streak: number;
+  max_attempts: number;
+};
+
+type ConfigDraft = {
+  title: string;
+  grade: string;
+  total_score: number;
+  available_start: string;
+  available_end: string;
+  agent_id: string;
+  knowledge_points: string;
+  teaching_objectives: string;
+  ai_prompt: string;
+};
+
+type QuestionDraft = {
+  question_type: QuestionType;
+  content: string;
+  options_A: string;
+  options_B: string;
+  options_C: string;
+  options_D: string;
+  correct_answer: string;
+  score: number;
+  difficulty: Difficulty;
+  knowledge_point: string;
+  explanation: string;
+};
+
+type GenerateDraft = {
+  count: number;
+  question_type: "" | QuestionType;
+  difficulty: "" | Difficulty;
+  knowledge_points_text: string;
+};
+
+const initialConfigDraft: ConfigDraft = {
+  title: "",
+  grade: "",
+  total_score: 100,
+  available_start: "",
+  available_end: "",
+  agent_id: "",
+  knowledge_points: "",
+  teaching_objectives: "",
+  ai_prompt: "",
+};
+
+const initialQuestionDraft: QuestionDraft = {
+  question_type: "choice",
+  content: "",
+  options_A: "",
+  options_B: "",
+  options_C: "",
+  options_D: "",
+  correct_answer: "",
+  score: 10,
+  difficulty: "medium",
+  knowledge_point: "",
+  explanation: "",
+};
+
+const initialGenerateDraft: GenerateDraft = {
+  count: 5,
+  question_type: "",
+  difficulty: "",
+  knowledge_points_text: "",
+};
+
+const toDateTimeLocal = (value: string | null | undefined) => {
+  if (!value) return "";
+  const d = dayjs(value);
+  if (!d.isValid()) return "";
+  return d.format("YYYY-MM-DDTHH:mm");
+};
+
+const parseKnowledgePoints = (value: string | null | undefined) => {
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item) => typeof item === "string").join("、");
+    }
+  } catch {}
+  return "";
+};
+
+const parseOptionsRecord = (value: string | null) => {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const parseOptionsList = (value: string | null) => {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed as string[];
+    if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+  } catch {}
+  return null;
+};
+
+const asPositiveNumber = (value: string, fallback: number) => {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return fallback;
+  return next;
+};
+
 const QuestionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const configId = Number(id);
 
-  // 基本设置
-  const [configForm] = Form.useForm();
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
+  const [configDraft, setConfigDraft] = useState<ConfigDraft>(initialConfigDraft);
   const [agents, setAgents] = useState<AIAgent[]>([]);
 
-  // 固定题
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<AssessmentQuestion[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterType, setFilterType] = useState<string | undefined>();
   const [filterDiff, setFilterDiff] = useState<string | undefined>();
-  const [qForm] = Form.useForm();
-  const [qModalOpen, setQModalOpen] = useState(false);
+
+  const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [editingQ, setEditingQ] = useState<AssessmentQuestion | null>(null);
+  const [questionDraft, setQuestionDraft] = useState<QuestionDraft>(initialQuestionDraft);
   const [qSaving, setQSaving] = useState(false);
   const [previewQ, setPreviewQ] = useState<AssessmentQuestion | null>(null);
+
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
-  const [genModalOpen, setGenModalOpen] = useState(false);
-  const [genForm] = Form.useForm();
-  const qType = Form.useWatch("question_type", qForm);
+  const [genDialogOpen, setGenDialogOpen] = useState(false);
+  const [genDraft, setGenDraft] = useState<GenerateDraft>(initialGenerateDraft);
 
-  // 自适应
   const [adaptiveKPs, setAdaptiveKPs] = useState<AdaptiveKP[]>([]);
   const [adaptiveLoading, setAdaptiveLoading] = useState(false);
 
-  /* ── 数据加载 ── */
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   const loadQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const resp = await assessmentQuestionApi.list(configId, {
-        skip: (page - 1) * pageSize, limit: pageSize, question_type: filterType, difficulty: filterDiff,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        question_type: filterType,
+        difficulty: filterDiff,
       });
-      const fixed: AssessmentQuestion[] = [], adaptive: AdaptiveKP[] = [];
+      const fixed: AssessmentQuestion[] = [];
+      const adaptive: AdaptiveKP[] = [];
       for (const q of resp.items) {
         if (q.mode === "adaptive") {
-          let ac = { mastery_streak: 2, max_attempts: 5, prompt_hint: "" };
-          if (q.adaptive_config) { try { ac = { ...ac, ...JSON.parse(q.adaptive_config) }; } catch {} }
-          adaptive.push({ key: String(q.id), knowledge_point: q.knowledge_point || "",
-            question_type: q.question_type as "choice"|"fill", score: q.score,
-            prompt_hint: ac.prompt_hint, mastery_streak: ac.mastery_streak, max_attempts: ac.max_attempts });
-        } else { fixed.push(q); }
+          let adaptiveConfig = {
+            mastery_streak: 2,
+            max_attempts: 5,
+            prompt_hint: "",
+          };
+          if (q.adaptive_config) {
+            try {
+              adaptiveConfig = { ...adaptiveConfig, ...JSON.parse(q.adaptive_config) };
+            } catch {}
+          }
+          adaptive.push({
+            key: String(q.id),
+            knowledge_point: q.knowledge_point || "",
+            question_type: q.question_type as "choice" | "fill",
+            score: q.score,
+            prompt_hint: adaptiveConfig.prompt_hint,
+            mastery_streak: adaptiveConfig.mastery_streak,
+            max_attempts: adaptiveConfig.max_attempts,
+          });
+        } else {
+          fixed.push(q);
+        }
       }
-      setItems(fixed); setAdaptiveKPs(adaptive); setTotal(resp.total);
-    } catch (e: any) { message.error(e.message || "加载失败"); } finally { setLoading(false); }
+      setItems(fixed);
+      setAdaptiveKPs(adaptive);
+      setTotal(resp.total);
+    } catch (e: any) {
+      showMessage.error(e.message || "加载失败");
+    } finally {
+      setLoading(false);
+    }
   }, [configId, page, pageSize, filterType, filterDiff]);
 
   const loadConfig = useCallback(async () => {
     try {
       setConfigLoading(true);
-      const c = await assessmentConfigApi.get(configId);
-      configForm.setFieldsValue({
-        title: c.title, grade: c.grade,
-        total_score: c.total_score,
-        available_range: c.available_start && c.available_end ? [dayjs(c.available_start), dayjs(c.available_end)] : undefined,
-        agent_id: c.agent_id,
-        agent_ids: c.config_agents?.map((a: any) => a.id) || [],
-        teaching_objectives: c.teaching_objectives, ai_prompt: c.ai_prompt,
-        knowledge_points: c.knowledge_points ? (() => { try { return JSON.parse(c.knowledge_points).join("、"); } catch { return ""; } })() : "",
+      const config = await assessmentConfigApi.get(configId);
+      setConfigDraft({
+        title: config.title || "",
+        grade: config.grade || "",
+        total_score: config.total_score || 100,
+        available_start: toDateTimeLocal(config.available_start),
+        available_end: toDateTimeLocal(config.available_end),
+        agent_id: config.agent_id ? String(config.agent_id) : "",
+        knowledge_points: parseKnowledgePoints(config.knowledge_points),
+        teaching_objectives: config.teaching_objectives || "",
+        ai_prompt: config.ai_prompt || "",
       });
-    } catch (e: any) { message.error(e.message || "加载配置失败"); } finally { setConfigLoading(false); }
-  }, [configId, configForm]);
+    } catch (e: any) {
+      showMessage.error(e.message || "加载配置失败");
+    } finally {
+      setConfigLoading(false);
+    }
+  }, [configId]);
 
   const loadAgents = useCallback(async () => {
-    try { const r = await aiAgentsApi.getAgents({ limit: 100 }); if (r.success) setAgents(r.data.items); }
-    catch (e) { logger.error("加载智能体失败:", e); }
+    try {
+      const response = await aiAgentsApi.getAgents({ limit: 100 });
+      if (response.success) setAgents(response.data.items || []);
+    } catch (e) {
+      logger.error("加载智能体失败:", e);
+    }
   }, []);
 
-  useEffect(() => { loadQuestions(); loadConfig(); loadAgents(); }, [loadQuestions, loadConfig, loadAgents]);
+  useEffect(() => {
+    void loadQuestions();
+    void loadConfig();
+    void loadAgents();
+  }, [loadQuestions, loadConfig, loadAgents]);
 
-  /* ── 保存配置 ── */
   const handleSaveConfig = async () => {
+    if (!configDraft.title.trim()) {
+      showMessage.warning("请输入标题");
+      return;
+    }
+    if (!configDraft.agent_id) {
+      showMessage.warning("请选择智能体");
+      return;
+    }
     try {
-      const v = await configForm.validateFields(); setConfigSaving(true);
-      const kpStr = (v.knowledge_points || "").trim();
+      setConfigSaving(true);
+      const kpStr = configDraft.knowledge_points.trim();
       const kps = kpStr ? kpStr.split(/[,，、\s]+/).filter(Boolean) : [];
       await assessmentConfigApi.update(configId, {
-        title: v.title, grade: v.grade,
-        total_score: v.total_score,
-        available_start: v.available_range?.[0]?.toISOString() || undefined,
-        available_end: v.available_range?.[1]?.toISOString() || undefined,
-        agent_id: v.agent_id, agent_ids: v.agent_ids,
-        teaching_objectives: v.teaching_objectives, ai_prompt: v.ai_prompt,
-        knowledge_points: JSON.stringify(kps), question_config: JSON.stringify({}),
+        title: configDraft.title.trim(),
+        grade: configDraft.grade || undefined,
+        total_score: configDraft.total_score,
+        available_start: configDraft.available_start
+          ? dayjs(configDraft.available_start).toISOString()
+          : undefined,
+        available_end: configDraft.available_end
+          ? dayjs(configDraft.available_end).toISOString()
+          : undefined,
+        agent_id: Number(configDraft.agent_id),
+        agent_ids: [Number(configDraft.agent_id)],
+        teaching_objectives: configDraft.teaching_objectives || undefined,
+        ai_prompt: configDraft.ai_prompt || undefined,
+        knowledge_points: JSON.stringify(kps),
+        question_config: JSON.stringify({}),
       });
-      message.success("已保存");
-    } catch (e: any) { if (e?.errorFields) return; message.error(e.message || "保存失败"); }
-    finally { setConfigSaving(false); }
+      showMessage.success("已保存");
+    } catch (e: any) {
+      showMessage.error(e.message || "保存失败");
+    } finally {
+      setConfigSaving(false);
+    }
   };
 
-  /* ── 固定题 CRUD ── */
-  const openAddQ = () => { setEditingQ(null); qForm.resetFields(); qForm.setFieldsValue({ question_type: "choice", score: 10, difficulty: "medium" }); setQModalOpen(true); };
-  const openEditQ = (q: AssessmentQuestion) => {
-    setEditingQ(q); let opts: Record<string, string> = {};
-    if (q.options) { try { opts = JSON.parse(q.options); } catch {} }
-    qForm.setFieldsValue({ question_type: q.question_type, content: q.content,
-      options_A: opts.A || "", options_B: opts.B || "", options_C: opts.C || "", options_D: opts.D || "",
-      correct_answer: q.correct_answer, score: q.score, difficulty: q.difficulty,
-      knowledge_point: q.knowledge_point || "", explanation: q.explanation || "" });
-    setQModalOpen(true);
+  const openAddQ = () => {
+    setEditingQ(null);
+    setQuestionDraft(initialQuestionDraft);
+    setQuestionDialogOpen(true);
   };
-  const handleSaveQ = async () => {
-    try {
-      const v = await qForm.validateFields(); setQSaving(true);
-      const options = v.question_type === "choice" ? JSON.stringify({ A: v.options_A, B: v.options_B, C: v.options_C, D: v.options_D }) : undefined;
-      if (editingQ) {
-        await assessmentQuestionApi.update(editingQ.id, { question_type: v.question_type, content: v.content, options,
-          correct_answer: v.correct_answer, score: v.score, difficulty: v.difficulty,
-          knowledge_point: v.knowledge_point, explanation: v.explanation, mode: "fixed" });
-        message.success("已更新");
-      } else {
-        await assessmentQuestionApi.create({ config_id: configId, question_type: v.question_type, content: v.content, options,
-          correct_answer: v.correct_answer, score: v.score, difficulty: v.difficulty,
-          knowledge_point: v.knowledge_point, explanation: v.explanation, source: "manual", mode: "fixed" });
-        message.success("已添加");
+
+  const openEditQ = (question: AssessmentQuestion) => {
+    const options = parseOptionsRecord(question.options);
+    setEditingQ(question);
+    setQuestionDraft({
+      question_type: question.question_type,
+      content: question.content,
+      options_A: options.A || "",
+      options_B: options.B || "",
+      options_C: options.C || "",
+      options_D: options.D || "",
+      correct_answer: question.correct_answer,
+      score: question.score,
+      difficulty: question.difficulty,
+      knowledge_point: question.knowledge_point || "",
+      explanation: question.explanation || "",
+    });
+    setQuestionDialogOpen(true);
+  };
+
+  const validateQuestionDraft = () => {
+    if (!questionDraft.content.trim()) {
+      showMessage.warning("请输入题目内容");
+      return false;
+    }
+    if (!questionDraft.correct_answer.trim()) {
+      showMessage.warning("请输入正确答案");
+      return false;
+    }
+    if (questionDraft.question_type === "choice") {
+      const requiredOptions = [
+        questionDraft.options_A,
+        questionDraft.options_B,
+        questionDraft.options_C,
+        questionDraft.options_D,
+      ];
+      if (requiredOptions.some((item) => !item.trim())) {
+        showMessage.warning("选择题必须填写 A/B/C/D 四个选项");
+        return false;
       }
-      setQModalOpen(false); await loadQuestions();
-    } catch (e: any) { if (e?.errorFields) return; message.error(e.message || "保存失败"); } finally { setQSaving(false); }
-  };
-  const handleDeleteQ = async (qid: number) => {
-    try { await assessmentQuestionApi.delete(qid); message.success("已删除"); await loadQuestions(); }
-    catch (e: any) { message.error(e.message || "删除失败"); }
-  };
-  const handleGenerate = async () => {
-    try {
-      const v = await genForm.validateFields();
-      setGenerating(true); setGenModalOpen(false); setGenProgress(0);
-      // 模拟进度
-      const timer = setInterval(() => {
-        setGenProgress(prev => prev >= 90 ? 90 : prev + Math.random() * 15);
-      }, 800);
-      const kps: string[] = v.knowledge_points?.length > 0 ? v.knowledge_points : undefined;
-      const r = await assessmentQuestionApi.generate(configId, {
-        count: v.count,
-        question_type: v.question_type || undefined,
-        difficulty: v.difficulty || undefined,
-        knowledge_points: kps,
-      });
-      clearInterval(timer); setGenProgress(100);
-      message.success(r.message || `生成了 ${r.count} 道题`);
-      setTimeout(() => { setGenerating(false); setGenProgress(0); }, 600);
-      await loadQuestions();
-    } catch (e: any) { if (e?.errorFields) return; setGenerating(false); setGenProgress(0); message.error(e.message || "AI 生成失败"); }
+    }
+    if (!Number.isFinite(questionDraft.score) || questionDraft.score < 1) {
+      showMessage.warning("分值必须大于 0");
+      return false;
+    }
+    return true;
   };
 
-  /* ── 自适应题 CRUD ── */
-  const handleAddAdaptive = () => { setAdaptiveKPs([...adaptiveKPs, { key: `new_${Date.now()}`, knowledge_point: "", question_type: "choice", score: 10, prompt_hint: "", mastery_streak: 2, max_attempts: 5 }]); };
-  const updateAdaptive = (key: string, field: string, value: any) => { setAdaptiveKPs(adaptiveKPs.map(k => k.key === key ? { ...k, [field]: value } : k)); };
-  const removeAdaptive = async (kp: AdaptiveKP) => {
-    if (!kp.key.startsWith("new_")) { try { await assessmentQuestionApi.delete(Number(kp.key)); } catch {} }
-    setAdaptiveKPs(adaptiveKPs.filter(k => k.key !== kp.key));
+  const handleSaveQuestion = async () => {
+    if (!validateQuestionDraft()) return;
+    try {
+      setQSaving(true);
+      const options =
+        questionDraft.question_type === "choice"
+          ? JSON.stringify({
+              A: questionDraft.options_A,
+              B: questionDraft.options_B,
+              C: questionDraft.options_C,
+              D: questionDraft.options_D,
+            })
+          : undefined;
+      if (editingQ) {
+        await assessmentQuestionApi.update(editingQ.id, {
+          question_type: questionDraft.question_type,
+          content: questionDraft.content.trim(),
+          options,
+          correct_answer: questionDraft.correct_answer.trim(),
+          score: questionDraft.score,
+          difficulty: questionDraft.difficulty,
+          knowledge_point: questionDraft.knowledge_point.trim() || undefined,
+          explanation: questionDraft.explanation.trim() || undefined,
+          mode: "fixed",
+        });
+        showMessage.success("已更新");
+      } else {
+        await assessmentQuestionApi.create({
+          config_id: configId,
+          question_type: questionDraft.question_type,
+          content: questionDraft.content.trim(),
+          options,
+          correct_answer: questionDraft.correct_answer.trim(),
+          score: questionDraft.score,
+          difficulty: questionDraft.difficulty,
+          knowledge_point: questionDraft.knowledge_point.trim() || undefined,
+          explanation: questionDraft.explanation.trim() || undefined,
+          source: "manual",
+          mode: "fixed",
+        });
+        showMessage.success("已添加");
+      }
+      setQuestionDialogOpen(false);
+      await loadQuestions();
+    } catch (e: any) {
+      showMessage.error(e.message || "保存失败");
+    } finally {
+      setQSaving(false);
+    }
   };
+
+  const handleDeleteQ = async (questionId: number) => {
+    if (!window.confirm("确认删除该题目？")) return;
+    try {
+      await assessmentQuestionApi.delete(questionId);
+      showMessage.success("已删除");
+      await loadQuestions();
+    } catch (e: any) {
+      showMessage.error(e.message || "删除失败");
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!Number.isFinite(genDraft.count) || genDraft.count < 1 || genDraft.count > 50) {
+      showMessage.warning("生成数量需在 1 - 50 之间");
+      return;
+    }
+    try {
+      setGenerating(true);
+      setGenDialogOpen(false);
+      setGenProgress(0);
+      const timer = window.setInterval(() => {
+        setGenProgress((prev) => (prev >= 90 ? 90 : prev + Math.random() * 15));
+      }, 800);
+      const knowledgePoints = genDraft.knowledge_points_text
+        .split(/[,，、\s]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const result = await assessmentQuestionApi.generate(configId, {
+        count: genDraft.count,
+        question_type: genDraft.question_type || undefined,
+        difficulty: genDraft.difficulty || undefined,
+        knowledge_points: knowledgePoints.length > 0 ? knowledgePoints : undefined,
+      });
+      window.clearInterval(timer);
+      setGenProgress(100);
+      showMessage.success(result.message || `生成了 ${result.count} 道题`);
+      window.setTimeout(() => {
+        setGenerating(false);
+        setGenProgress(0);
+      }, 600);
+      await loadQuestions();
+    } catch (e: any) {
+      setGenerating(false);
+      setGenProgress(0);
+      showMessage.error(e.message || "AI 生成失败");
+    }
+  };
+
+  const handleAddAdaptive = () => {
+    setAdaptiveKPs((prev) => [
+      ...prev,
+      {
+        key: `new_${Date.now()}`,
+        knowledge_point: "",
+        question_type: "choice",
+        score: 10,
+        prompt_hint: "",
+        mastery_streak: 2,
+        max_attempts: 5,
+      },
+    ]);
+  };
+
+  const updateAdaptive = (key: string, field: keyof AdaptiveKP, value: string | number) => {
+    setAdaptiveKPs((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, [field]: value } : item)),
+    );
+  };
+
+  const removeAdaptive = async (kp: AdaptiveKP) => {
+    if (!window.confirm("确认删除该知识点？")) return;
+    if (!kp.key.startsWith("new_")) {
+      try {
+        await assessmentQuestionApi.delete(Number(kp.key));
+      } catch {}
+    }
+    setAdaptiveKPs((prev) => prev.filter((item) => item.key !== kp.key));
+  };
+
   const saveAllAdaptive = async () => {
-    try { setAdaptiveLoading(true);
+    try {
+      setAdaptiveLoading(true);
       for (const kp of adaptiveKPs) {
-        if (!kp.knowledge_point.trim()) { message.warning("知识点名称不能为空"); return; }
-        const ac = JSON.stringify({ mastery_streak: kp.mastery_streak, max_attempts: kp.max_attempts, prompt_hint: kp.prompt_hint });
+        if (!kp.knowledge_point.trim()) {
+          showMessage.warning("知识点名称不能为空");
+          return;
+        }
+        const adaptiveConfig = JSON.stringify({
+          mastery_streak: kp.mastery_streak,
+          max_attempts: kp.max_attempts,
+          prompt_hint: kp.prompt_hint,
+        });
         if (kp.key.startsWith("new_")) {
-          await assessmentQuestionApi.create({ config_id: configId, question_type: kp.question_type,
-            content: `[自适应] ${kp.knowledge_point}`, correct_answer: "AI_GENERATED",
-            score: kp.score, knowledge_point: kp.knowledge_point, source: "manual", mode: "adaptive", adaptive_config: ac });
+          await assessmentQuestionApi.create({
+            config_id: configId,
+            question_type: kp.question_type,
+            content: `[自适应] ${kp.knowledge_point}`,
+            correct_answer: "AI_GENERATED",
+            score: kp.score,
+            knowledge_point: kp.knowledge_point,
+            source: "manual",
+            mode: "adaptive",
+            adaptive_config: adaptiveConfig,
+          });
         } else {
-          await assessmentQuestionApi.update(Number(kp.key), { question_type: kp.question_type, score: kp.score,
-            knowledge_point: kp.knowledge_point, mode: "adaptive", adaptive_config: ac });
+          await assessmentQuestionApi.update(Number(kp.key), {
+            question_type: kp.question_type,
+            score: kp.score,
+            knowledge_point: kp.knowledge_point,
+            mode: "adaptive",
+            adaptive_config: adaptiveConfig,
+          });
         }
       }
-      message.success("已保存"); await loadQuestions();
-    } catch (e: any) { message.error(e.message || "保存失败"); } finally { setAdaptiveLoading(false); }
+      showMessage.success("已保存");
+      await loadQuestions();
+    } catch (e: any) {
+      showMessage.error(e.message || "保存失败");
+    } finally {
+      setAdaptiveLoading(false);
+    }
   };
 
-  const columns = [
-    { title: "#", width: 50, render: (_: any, __: any, i: number) => (page - 1) * pageSize + i + 1 },
-    { title: "题型", dataIndex: "question_type", width: 80, render: (v: string) => { const t = TYPE_MAP[v]; return t ? <Tag color={t.color}>{t.label}</Tag> : v; } },
-    { title: "内容", dataIndex: "content", ellipsis: true },
-    { title: "分值", dataIndex: "score", width: 60 },
-    { title: "难度", dataIndex: "difficulty", width: 80, render: (v: string) => { const d = DIFF_MAP[v]; return d ? <Tag color={d.color}>{d.label}</Tag> : v; } },
-    { title: "知识点", dataIndex: "knowledge_point", width: 120, render: (v: string | null) => v || "-" },
-    { title: "操作", width: 130, render: (_: any, r: AssessmentQuestion) => (
-      <Space size="small">
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreviewQ(r)} />
-        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditQ(r)} />
-        <Popconfirm title="确认删除？" onConfirm={() => handleDeleteQ(r.id)}><Button type="link" size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
-      </Space>) },
+  const fixedQuestionColumns: ColumnDef<AssessmentQuestion>[] = [
+      {
+        id: "index",
+        header: "#",
+        size: 56,
+        meta: { className: "w-[56px]" },
+        cell: ({ row }) => (page - 1) * pageSize + row.index + 1,
+      },
+      {
+        id: "question_type",
+        header: "题型",
+        accessorKey: "question_type",
+        size: 100,
+        meta: { className: "w-[100px]" },
+        cell: ({ row }) => (
+          <Badge variant={TYPE_MAP[row.original.question_type]?.variant || "neutral"}>
+            {TYPE_MAP[row.original.question_type]?.label || row.original.question_type}
+          </Badge>
+        ),
+      },
+      {
+        id: "content",
+        header: "内容",
+        accessorKey: "content",
+        cell: ({ row }) => <div className="max-w-[420px] truncate">{row.original.content}</div>,
+      },
+      {
+        id: "score",
+        header: "分值",
+        accessorKey: "score",
+        size: 80,
+        meta: { className: "w-[80px]" },
+      },
+      {
+        id: "difficulty",
+        header: "难度",
+        accessorKey: "difficulty",
+        size: 100,
+        meta: { className: "w-[100px]" },
+        cell: ({ row }) => (
+          <Badge variant={DIFF_MAP[row.original.difficulty]?.variant || "neutral"}>
+            {DIFF_MAP[row.original.difficulty]?.label || row.original.difficulty}
+          </Badge>
+        ),
+      },
+      {
+        id: "knowledge_point",
+        header: "知识点",
+        accessorKey: "knowledge_point",
+        size: 130,
+        meta: { className: "w-[130px]" },
+        cell: ({ row }) => row.original.knowledge_point || "-",
+      },
+      {
+        id: "actions",
+        header: "操作",
+        size: 160,
+        meta: { className: "w-[160px]" },
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-1.5"
+              onClick={() => setPreviewQ(row.original)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-1.5"
+              onClick={() => openEditQ(row.original)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-1.5 text-destructive hover:text-destructive"
+              onClick={() => void handleDeleteQ(row.original.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ),
+      },
   ];
 
-  if (configLoading) return <AdminPage><div className="flex justify-center p-24"><Spin size="large" /></div></AdminPage>;
-  // RENDER_START
-  const sectionTitle = (text: string) => (
-    <div className="text-base font-semibold mb-4 text-text-base">{text}</div>
-  );
-  const fieldLabel = (text: string) => <span className="font-medium text-sm">{text}</span>;
+  const fixedQuestionTable = useReactTable({
+    data: loading ? [] : items,
+    columns: fixedQuestionColumns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  if (configLoading) {
+    return (
+      <AdminPage>
+        <div className="flex justify-center p-24">
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+        </div>
+      </AdminPage>
+    );
+  }
 
   return (
     <AdminPage scrollable>
-      <div className="flex items-center mb-5">
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate("/admin/assessment")}
-          className="text-sm text-text-secondary">返回列表</Button>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/admin/assessment")}>
+          <ArrowLeft className="h-4 w-4" />
+          返回列表
+        </Button>
       </div>
 
-      {/* ═══ 1. 基本设置 ═══ */}
-      <Card variant="borderless" size="small"
-        className="mb-5 px-6 py-4 rounded-md bg-surface">
-        <div className="flex justify-between items-center mb-4">
-          {sectionTitle("基本设置")}
-          <Button type="primary" icon={<SaveOutlined />} loading={configSaving} onClick={handleSaveConfig} size="small">保存设置</Button>
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-text-base">基本设置</h3>
+          <Button size="sm" disabled={configSaving} onClick={() => void handleSaveConfig()}>
+            {configSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            保存设置
+          </Button>
         </div>
-        <Form form={configForm} layout="vertical">
-          <div className="grid grid-cols-[2fr_1fr_1fr] gap-4">
-            <Form.Item name="title" label={fieldLabel("测评标题")} rules={[{ required: true, message: "请输入标题" }]} className="mb-3">
-              <Input placeholder="如：Python循环结构课堂检测" maxLength={200} />
-            </Form.Item>
-            <Form.Item name="grade" label={fieldLabel("年级")} className="mb-3">
-              <Select placeholder="选择年级" allowClear>{GRADE_OPTIONS.map(g => <Select.Option key={g} value={g}>{g}</Select.Option>)}</Select>
-            </Form.Item>
-            <Form.Item name="agent_id" label={fieldLabel("智能体")} rules={[{ required: true, message: "请选择" }]}
-              tooltip="用于 AI 出题和评分" className="mb-3">
-              <Select placeholder="选择智能体" allowClear showSearch optionFilterProp="label">
-                {agents.map(a => <Select.Option key={a.id} value={a.id} label={a.name}>{a.name}</Select.Option>)}
-              </Select>
-            </Form.Item>
+
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+          <div className="lg:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium">测评标题</label>
+            <Input
+              maxLength={200}
+              placeholder="如：Python循环结构课堂检测"
+              value={configDraft.title}
+              onChange={(e) => setConfigDraft((prev) => ({ ...prev, title: e.target.value }))}
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="available_range" label={fieldLabel("开放时段")} className="mb-3"
-              tooltip="学生在此时间段内可以看到并参加测评，留空表示始终开放">
-              <DatePicker.RangePicker showTime={{ format: "HH:mm" }} format="YYYY-MM-DD HH:mm"
-                placeholder={["开始时间", "结束时间"]} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="knowledge_points" label={fieldLabel("知识点")} tooltip="用逗号或顿号分隔" className="mb-3">
-              <Input placeholder="如：for循环、while循环、递归" />
-            </Form.Item>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">年级</label>
+            <Select
+              value={configDraft.grade || FILTER_ALL}
+              onValueChange={(value) =>
+                setConfigDraft((prev) => ({ ...prev, grade: value === FILTER_ALL ? "" : value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择年级" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>未设置</SelectItem>
+                {GRADE_OPTIONS.map((grade) => (
+                  <SelectItem key={grade} value={grade}>
+                    {grade}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="teaching_objectives" label={fieldLabel("教学目标")} className="!mb-0">
-              <TextArea rows={2} placeholder="可选，AI 出题时会参考" />
-            </Form.Item>
-            <Form.Item name="ai_prompt" label={fieldLabel("出题提示")} tooltip="追加给 AI 的自定义要求" className="!mb-0">
-              <TextArea rows={2} placeholder="可选，如：侧重实际应用场景" />
-            </Form.Item>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">智能体</label>
+            <Select
+              value={configDraft.agent_id || FILTER_ALL}
+              onValueChange={(value) =>
+                setConfigDraft((prev) => ({ ...prev, agent_id: value === FILTER_ALL ? "" : value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择智能体" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>请选择</SelectItem>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={String(agent.id)}>
+                    {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </Form>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">开放开始时间</label>
+            <Input
+              type="datetime-local"
+              value={configDraft.available_start}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, available_start: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">开放结束时间</label>
+            <Input
+              type="datetime-local"
+              value={configDraft.available_end}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, available_end: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">知识点</label>
+            <Input
+              placeholder="如：for循环、while循环、递归"
+              value={configDraft.knowledge_points}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, knowledge_points: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">总分</label>
+            <Input
+              type="number"
+              min={1}
+              max={1000}
+              value={configDraft.total_score}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({
+                  ...prev,
+                  total_score: asPositiveNumber(e.target.value, prev.total_score),
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">教学目标</label>
+            <Textarea
+              rows={3}
+              placeholder="可选，AI 出题时会参考"
+              value={configDraft.teaching_objectives}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, teaching_objectives: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">出题提示</label>
+            <Textarea
+              rows={3}
+              placeholder="可选，如：侧重实际应用场景"
+              value={configDraft.ai_prompt}
+              onChange={(e) => setConfigDraft((prev) => ({ ...prev, ai_prompt: e.target.value }))}
+            />
+          </div>
+        </div>
       </Card>
 
-      {/* ═══ 2. 固定题 ═══ */}
-      <Card variant="borderless" size="small"
-        className="mb-5 px-6 py-4 rounded-md bg-surface">
-        <div className="flex justify-between items-center mb-3">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {sectionTitle("固定题")}
-            <Tag color="blue" className="mb-5">{items.length}</Tag>
+            <h3 className="text-base font-semibold text-text-base">固定题</h3>
+            <Badge variant="sky">{items.length}</Badge>
           </div>
-          <Space>
-            <Select placeholder="题型" allowClear style={{ width: 110 }} value={filterType} onChange={v => { setFilterType(v); setPage(1); }}>
-              {Object.entries(TYPE_MAP).map(([k, v]) => <Select.Option key={k} value={k}>{v.label}</Select.Option>)}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={filterType || FILTER_ALL}
+              onValueChange={(value) => {
+                setFilterType(value === FILTER_ALL ? undefined : value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[110px]">
+                <SelectValue placeholder="题型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>全部题型</SelectItem>
+                {Object.entries(TYPE_MAP).map(([value, item]) => (
+                  <SelectItem key={value} value={value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
-            <Select placeholder="难度" allowClear style={{ width: 110 }} value={filterDiff} onChange={v => { setFilterDiff(v); setPage(1); }}>
-              {Object.entries(DIFF_MAP).map(([k, v]) => <Select.Option key={k} value={k}>{v.label}</Select.Option>)}
+
+            <Select
+              value={filterDiff || FILTER_ALL}
+              onValueChange={(value) => {
+                setFilterDiff(value === FILTER_ALL ? undefined : value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[110px]">
+                <SelectValue placeholder="难度" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>全部难度</SelectItem>
+                {Object.entries(DIFF_MAP).map(([value, item]) => (
+                  <SelectItem key={value} value={value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
-            <Button icon={<PlusOutlined />} onClick={openAddQ}>添加</Button>
-            <Button type="primary" icon={<RobotOutlined />} loading={generating}
-              onClick={() => { genForm.resetFields(); genForm.setFieldsValue({ count: 5, question_type: "", difficulty: "", knowledge_points: [] }); setGenModalOpen(true); }}>AI 生成</Button>
-          </Space>
+
+            <Button size="sm" variant="outline" onClick={openAddQ}>
+              <Plus className="h-4 w-4" />
+              添加
+            </Button>
+            <Button
+              size="sm"
+              disabled={generating}
+              onClick={() => {
+                setGenDraft(initialGenerateDraft);
+                setGenDialogOpen(true);
+              }}
+            >
+              <Sparkles className="h-4 w-4" />
+              AI 生成
+            </Button>
+          </div>
         </div>
-        {generating && (
-          <div className="mb-4 px-4 py-3 bg-surface-2 rounded-md">
-            <div className="flex justify-between mb-1.5 text-sm text-text-secondary">
-              <span><RobotOutlined className="mr-1.5" />AI 正在生成题目...</span>
+
+        {generating ? (
+          <div className="mb-3 rounded-md bg-surface-2 px-3 py-2.5">
+            <div className="mb-1 flex items-center justify-between text-sm text-text-secondary">
+              <span className="inline-flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5" />
+                AI 正在生成题目...
+              </span>
               <span>{Math.round(genProgress)}%</span>
             </div>
-            <Progress percent={Math.round(genProgress)} showInfo={false} strokeColor={{ from: "#4F46E5", to: "#7C3AED" }} size="small" />
+            <div className="h-1.5 rounded-full bg-[var(--ws-color-border-secondary)]">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.min(100, Math.max(0, genProgress))}%` }}
+              />
+            </div>
           </div>
-        )}
-        <Table rowKey="id" columns={columns} dataSource={items} loading={loading} pagination={false}
-          scroll={{ x: 800 }} size="middle" locale={{ emptyText: "暂无固定题，可手动添加或 AI 生成" }} />
-        {total > pageSize && <div className="mt-4 text-right">
-          <Pagination current={page} pageSize={pageSize} total={total} onChange={(p, s) => { setPage(p); if (s) setPageSize(s); }} showSizeChanger showTotal={t => `共 ${t} 条`} />
-        </div>}
+        ) : null}
+
+        <DataTable
+          table={fixedQuestionTable}
+          className="border-0"
+          tableClassName="min-w-[840px]"
+          emptyState={
+            loading ? (
+              <div className="py-10 text-center text-sm text-text-tertiary">
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  正在加载...
+                </span>
+              </div>
+            ) : (
+              <div className="py-10 text-center text-sm text-text-tertiary">
+                暂无固定题，可手动添加或 AI 生成
+              </div>
+            )
+          }
+        />
+
+        {total > pageSize ? (
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+            <DataTablePagination
+              currentPage={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              onPageChange={(nextPage, nextPageSize) => {
+                if (nextPageSize && nextPageSize !== pageSize) {
+                  setPageSize(nextPageSize);
+                }
+                setPage(nextPage);
+              }}
+            />
+          </div>
+        ) : null}
       </Card>
 
-      {/* ═══ 3. 自适应知识点题 ═══ */}
-      <Card variant="borderless" size="small"
-        className="mb-5 px-6 py-4 rounded-md bg-surface">
-        <div className="flex justify-between items-center mb-3">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
-              {sectionTitle("自适应知识点题")}
-              <Tag color="green" className="mb-5">{adaptiveKPs.length}</Tag>
+              <h3 className="text-base font-semibold text-text-base">自适应知识点题</h3>
+              <Badge variant="success">{adaptiveKPs.length}</Badge>
             </div>
-            <div className="text-xs -mt-3.5 text-text-tertiary">答题时 AI 实时出题，答错追加，连续答对即掌握</div>
+            <div className="mt-0.5 text-xs text-text-tertiary">
+              答题时 AI 实时出题，答错追加，连续答对即掌握
+            </div>
           </div>
-          <Space>
-            <Button icon={<PlusOutlined />} onClick={handleAddAdaptive}>添加</Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={adaptiveLoading} onClick={saveAllAdaptive}>保存</Button>
-          </Space>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={handleAddAdaptive}>
+              <Plus className="h-4 w-4" />
+              添加
+            </Button>
+            <Button size="sm" disabled={adaptiveLoading} onClick={() => void saveAllAdaptive()}>
+              {adaptiveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              保存
+            </Button>
+          </div>
         </div>
+
         {adaptiveKPs.length === 0 ? (
-          <div className="text-center py-10">
-            <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddAdaptive}>添加知识点</Button>
+          <div className="py-10 text-center">
+            <Button size="sm" variant="outline" onClick={handleAddAdaptive}>
+              <Plus className="h-4 w-4" />
+              添加知识点
+            </Button>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
-            {/* 表头 */}
-            <div className="grid gap-2.5 px-3.5 text-xs font-medium text-text-tertiary" style={{ gridTemplateColumns: "32px 1fr 2fr 100px 80px 80px 80px 40px" }}>
-              <span>#</span><span>知识点</span><span>考察内容</span><span>题型</span><span>分值</span>
-              <Tooltip title="连续答对几题判定掌握"><span>掌握</span></Tooltip>
-              <Tooltip title="最多尝试几次"><span>上限</span></Tooltip>
+          <div className="space-y-2">
+            <div
+              className="grid gap-2 px-2 text-xs font-medium text-text-tertiary"
+              style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
+            >
+              <span>#</span>
+              <span>知识点</span>
+              <span>考察内容</span>
+              <span>题型</span>
+              <span>分值</span>
+              <span title="连续答对几题判定掌握">掌握</span>
+              <span title="最多尝试几次">上限</span>
               <span />
             </div>
-            {adaptiveKPs.map((kp, idx) => (
-              <div key={kp.key} className="grid gap-2.5 items-center px-3.5 py-2.5 bg-surface-2 rounded-md" style={{ gridTemplateColumns: "32px 1fr 2fr 100px 80px 80px 80px 40px" }}>
-                <span className="font-medium text-sm text-text-secondary">{idx + 1}</span>
-                <Input value={kp.knowledge_point} onChange={e => updateAdaptive(kp.key, "knowledge_point", e.target.value)} placeholder="如：for循环" />
-                <Input value={kp.prompt_hint} onChange={e => updateAdaptive(kp.key, "prompt_hint", e.target.value)} placeholder="给 AI 的出题提示" />
-                <Select value={kp.question_type} onChange={v => updateAdaptive(kp.key, "question_type", v)}>
-                  <Select.Option value="choice">选择题</Select.Option><Select.Option value="fill">填空题</Select.Option>
+            {adaptiveKPs.map((kp, index) => (
+              <div
+                key={kp.key}
+                className="grid items-center gap-2 rounded-md bg-surface-2 px-2 py-2"
+                style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
+              >
+                <span className="text-sm font-medium text-text-secondary">{index + 1}</span>
+                <Input
+                  value={kp.knowledge_point}
+                  placeholder="如：for循环"
+                  onChange={(e) => updateAdaptive(kp.key, "knowledge_point", e.target.value)}
+                />
+                <Input
+                  value={kp.prompt_hint}
+                  placeholder="给 AI 的出题提示"
+                  onChange={(e) => updateAdaptive(kp.key, "prompt_hint", e.target.value)}
+                />
+                <Select
+                  value={kp.question_type}
+                  onValueChange={(value) =>
+                    updateAdaptive(kp.key, "question_type", value as "choice" | "fill")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="choice">选择题</SelectItem>
+                    <SelectItem value="fill">填空题</SelectItem>
+                  </SelectContent>
                 </Select>
-                <InputNumber value={kp.score} onChange={v => updateAdaptive(kp.key, "score", v || 10)} min={1} max={100} className="w-full" />
-                <InputNumber value={kp.mastery_streak} onChange={v => updateAdaptive(kp.key, "mastery_streak", v || 2)} min={1} max={10} className="w-full" />
-                <InputNumber value={kp.max_attempts} onChange={v => updateAdaptive(kp.key, "max_attempts", v || 5)} min={1} max={20} className="w-full" />
-                <Popconfirm title="确认删除？" onConfirm={() => removeAdaptive(kp)}>
-                  <Button type="text" danger icon={<DeleteOutlined />} className="!p-1" />
-                </Popconfirm>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={kp.score}
+                  onChange={(e) =>
+                    updateAdaptive(kp.key, "score", asPositiveNumber(e.target.value, kp.score))
+                  }
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={kp.mastery_streak}
+                  onChange={(e) =>
+                    updateAdaptive(
+                      kp.key,
+                      "mastery_streak",
+                      asPositiveNumber(e.target.value, kp.mastery_streak),
+                    )
+                  }
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={kp.max_attempts}
+                  onChange={(e) =>
+                    updateAdaptive(
+                      kp.key,
+                      "max_attempts",
+                      asPositiveNumber(e.target.value, kp.max_attempts),
+                    )
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                  onClick={() => void removeAdaptive(kp)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      {/* 固定题编辑弹窗 */}
-      <Modal title={editingQ ? "编辑题目" : "添加题目"} open={qModalOpen} onCancel={() => setQModalOpen(false)} onOk={handleSaveQ} confirmLoading={qSaving} width={640} destroyOnHidden>
-        <Form form={qForm} layout="vertical" className="mt-2">
-          <Form.Item name="question_type" label={fieldLabel("题型")} rules={[{ required: true }]}>
-            <Radio.Group><Radio.Button value="choice">选择题</Radio.Button><Radio.Button value="fill">填空题</Radio.Button><Radio.Button value="short_answer">简答题</Radio.Button></Radio.Group>
-          </Form.Item>
-          <Form.Item name="content" label={fieldLabel("题目内容")} rules={[{ required: true, message: "请输入题目" }]}><TextArea rows={3} /></Form.Item>
-          {qType === "choice" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Form.Item name="options_A" label={fieldLabel("选项 A")} rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item name="options_B" label={fieldLabel("选项 B")} rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item name="options_C" label={fieldLabel("选项 C")} rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item name="options_D" label={fieldLabel("选项 D")} rules={[{ required: true }]}><Input /></Form.Item>
+      <Dialog
+        open={questionDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQuestionDialogOpen(false);
+            setEditingQ(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[780px]">
+          <DialogHeader>
+            <DialogTitle>{editingQ ? "编辑题目" : "添加题目"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">题型</label>
+              <div className="flex flex-wrap gap-2">
+                {(["choice", "fill", "short_answer"] as QuestionType[]).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={questionDraft.question_type === value ? "default" : "outline"}
+                    onClick={() =>
+                      setQuestionDraft((prev) => ({ ...prev, question_type: value }))
+                    }
+                  >
+                    {TYPE_MAP[value].label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          )}
-          <Form.Item name="correct_answer" label={fieldLabel("正确答案")} rules={[{ required: true }]}><Input placeholder={qType === "choice" ? "如：A" : "输入正确答案"} /></Form.Item>
-          <div className="grid grid-cols-3 gap-3">
-            <Form.Item name="score" label={fieldLabel("分值")}><InputNumber min={1} max={100} style={{ width: "100%" }} /></Form.Item>
-            <Form.Item name="difficulty" label={fieldLabel("难度")}><Select>
-              <Select.Option value="easy">简单</Select.Option><Select.Option value="medium">中等</Select.Option><Select.Option value="hard">困难</Select.Option>
-            </Select></Form.Item>
-            <Form.Item name="knowledge_point" label={fieldLabel("知识点")}><Input placeholder="可选" /></Form.Item>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">题目内容</label>
+              <Textarea
+                rows={3}
+                value={questionDraft.content}
+                onChange={(e) =>
+                  setQuestionDraft((prev) => ({ ...prev, content: e.target.value }))
+                }
+              />
+            </div>
+
+            {questionDraft.question_type === "choice" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">选项 A</label>
+                  <Input
+                    value={questionDraft.options_A}
+                    onChange={(e) =>
+                      setQuestionDraft((prev) => ({ ...prev, options_A: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">选项 B</label>
+                  <Input
+                    value={questionDraft.options_B}
+                    onChange={(e) =>
+                      setQuestionDraft((prev) => ({ ...prev, options_B: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">选项 C</label>
+                  <Input
+                    value={questionDraft.options_C}
+                    onChange={(e) =>
+                      setQuestionDraft((prev) => ({ ...prev, options_C: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">选项 D</label>
+                  <Input
+                    value={questionDraft.options_D}
+                    onChange={(e) =>
+                      setQuestionDraft((prev) => ({ ...prev, options_D: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">正确答案</label>
+              <Input
+                placeholder={questionDraft.question_type === "choice" ? "如：A" : "输入正确答案"}
+                value={questionDraft.correct_answer}
+                onChange={(e) =>
+                  setQuestionDraft((prev) => ({ ...prev, correct_answer: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">分值</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={questionDraft.score}
+                  onChange={(e) =>
+                    setQuestionDraft((prev) => ({
+                      ...prev,
+                      score: asPositiveNumber(e.target.value, prev.score),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">难度</label>
+                <Select
+                  value={questionDraft.difficulty}
+                  onValueChange={(value) =>
+                    setQuestionDraft((prev) => ({
+                      ...prev,
+                      difficulty: value as Difficulty,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="easy">简单</SelectItem>
+                    <SelectItem value="medium">中等</SelectItem>
+                    <SelectItem value="hard">困难</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">知识点</label>
+                <Input
+                  placeholder="可选"
+                  value={questionDraft.knowledge_point}
+                  onChange={(e) =>
+                    setQuestionDraft((prev) => ({ ...prev, knowledge_point: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">解析</label>
+              <Textarea
+                rows={2}
+                placeholder="可选"
+                value={questionDraft.explanation}
+                onChange={(e) =>
+                  setQuestionDraft((prev) => ({ ...prev, explanation: e.target.value }))
+                }
+              />
+            </div>
           </div>
-          <Form.Item name="explanation" label={fieldLabel("解析")} className="!mb-0"><TextArea rows={2} placeholder="可选" /></Form.Item>
-        </Form>
-      </Modal>
 
-      {/* 题目预览弹窗 */}
-      <Modal title="题目预览" open={!!previewQ} onCancel={() => setPreviewQ(null)} footer={null} width={560}>
-        {previewQ && (<div className="py-1">
-          <Space className="mb-4">
-            <Tag color={TYPE_MAP[previewQ.question_type]?.color}>{TYPE_MAP[previewQ.question_type]?.label}</Tag>
-            <Tag color={DIFF_MAP[previewQ.difficulty]?.color}>{DIFF_MAP[previewQ.difficulty]?.label}</Tag>
-            <Tag>{previewQ.score} 分</Tag>
-            {previewQ.knowledge_point && <Tag>{previewQ.knowledge_point}</Tag>}
-          </Space>
-          <div className="text-base leading-loose mb-5 whitespace-pre-wrap">{previewQ.content}</div>
-          {previewQ.options && (() => { try {
-            const opts = JSON.parse(previewQ.options);
-            if (Array.isArray(opts)) return <div className="mb-5">{opts.map((o: string, i: number) => <div key={i} className="py-1.5 text-sm">{o}</div>)}</div>;
-            if (opts && typeof opts === "object") return <div className="mb-5">{Object.entries(opts).map(([k, v]) => <div key={k} className="py-1.5 text-sm">{k}. {v as string}</div>)}</div>;
-          } catch {} return null; })()}
-          <Divider className="!my-4" />
-          <div className="font-medium text-sm text-success">正确答案：{previewQ.correct_answer}</div>
-          {previewQ.explanation && <div className="mt-2.5 text-sm leading-relaxed text-text-secondary">解析：{previewQ.explanation}</div>}
-        </div>)}
-      </Modal>
-      {/* AI 生成配置弹窗 */}
-      <Modal title="AI 生成题目" open={genModalOpen} onCancel={() => setGenModalOpen(false)}
-        onOk={handleGenerate} confirmLoading={generating} okText="开始生成" width={440} forceRender>
-        <Form form={genForm} layout="vertical" className="mt-2">
-          <Form.Item name="count" label={fieldLabel("生成数量")} rules={[{ required: true, message: "请输入数量" }]}>
-            <InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="如：5" />
-          </Form.Item>
-          <Form.Item name="question_type" label={fieldLabel("题型")}>
-            <Select allowClear placeholder="不限（混合出题）">
-              <Select.Option value="choice">选择题</Select.Option>
-              <Select.Option value="fill">填空题</Select.Option>
-              <Select.Option value="short_answer">简答题</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="difficulty" label={fieldLabel("难度")}>
-            <Select allowClear placeholder="不限（自动分布）">
-              <Select.Option value="easy">简单</Select.Option>
-              <Select.Option value="medium">中等</Select.Option>
-              <Select.Option value="hard">困难</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="knowledge_points" label={fieldLabel("知识点范围")}
-            tooltip="可从已配置的知识点中选择，也可手动输入新的，留空表示不限定">
-            <Select mode="tags" allowClear placeholder="不限定（可选择或手动输入）"
-              tokenSeparators={[",", "，", "、"]}
-              options={(() => {
-                const kpStr: string = configForm.getFieldValue("knowledge_points") || "";
-                return kpStr.split(/[,，、\s]+/).filter(Boolean).map(k => ({ label: k, value: k }));
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setQuestionDialogOpen(false)}>
+              取消
+            </Button>
+            <Button disabled={qSaving} onClick={() => void handleSaveQuestion()}>
+              {qSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {editingQ ? "保存修改" : "添加题目"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(previewQ)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewQ(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>题目预览</DialogTitle>
+          </DialogHeader>
+
+          {previewQ ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={TYPE_MAP[previewQ.question_type]?.variant || "neutral"}>
+                  {TYPE_MAP[previewQ.question_type]?.label || previewQ.question_type}
+                </Badge>
+                <Badge variant={DIFF_MAP[previewQ.difficulty]?.variant || "neutral"}>
+                  {DIFF_MAP[previewQ.difficulty]?.label || previewQ.difficulty}
+                </Badge>
+                <Badge variant="secondary">{previewQ.score} 分</Badge>
+                {previewQ.knowledge_point ? (
+                  <Badge variant="secondary">{previewQ.knowledge_point}</Badge>
+                ) : null}
+              </div>
+
+              <div className="whitespace-pre-wrap text-base leading-loose">{previewQ.content}</div>
+
+              {(() => {
+                const options = parseOptionsList(previewQ.options);
+                if (!options) return null;
+                if (Array.isArray(options)) {
+                  return (
+                    <div className="space-y-1 text-sm">
+                      {options.map((item, index) => (
+                        <div key={index}>{item}</div>
+                      ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1 text-sm">
+                    {Object.entries(options).map(([key, value]) => (
+                      <div key={key}>
+                        {key}. {String(value)}
+                      </div>
+                    ))}
+                  </div>
+                );
               })()}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
 
+              <div className="border-t border-border pt-3">
+                <div className="text-sm font-medium text-[var(--ws-color-success)]">
+                  正确答案：{previewQ.correct_answer}
+                </div>
+                {previewQ.explanation ? (
+                  <div className="mt-2 text-sm leading-relaxed text-text-secondary">
+                    解析：{previewQ.explanation}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={genDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setGenDialogOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>AI 生成题目</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">生成数量</label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={genDraft.count}
+                onChange={(e) =>
+                  setGenDraft((prev) => ({
+                    ...prev,
+                    count: asPositiveNumber(e.target.value, prev.count),
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">题型</label>
+              <Select
+                value={genDraft.question_type || FILTER_ALL}
+                onValueChange={(value) =>
+                  setGenDraft((prev) => ({
+                    ...prev,
+                    question_type: value === FILTER_ALL ? "" : (value as QuestionType),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="不限（混合出题）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>不限</SelectItem>
+                  <SelectItem value="choice">选择题</SelectItem>
+                  <SelectItem value="fill">填空题</SelectItem>
+                  <SelectItem value="short_answer">简答题</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">难度</label>
+              <Select
+                value={genDraft.difficulty || FILTER_ALL}
+                onValueChange={(value) =>
+                  setGenDraft((prev) => ({
+                    ...prev,
+                    difficulty: value === FILTER_ALL ? "" : (value as Difficulty),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="不限（自动分布）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>不限</SelectItem>
+                  <SelectItem value="easy">简单</SelectItem>
+                  <SelectItem value="medium">中等</SelectItem>
+                  <SelectItem value="hard">困难</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">知识点范围</label>
+              <Textarea
+                rows={3}
+                placeholder="可填多个，用逗号/顿号/空格分隔，留空表示不限制"
+                value={genDraft.knowledge_points_text}
+                onChange={(e) =>
+                  setGenDraft((prev) => ({
+                    ...prev,
+                    knowledge_points_text: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setGenDialogOpen(false)}>
+              取消
+            </Button>
+            <Button disabled={generating} onClick={() => void handleGenerate()}>
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              开始生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminPage>
   );
 };

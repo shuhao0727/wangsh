@@ -10,7 +10,7 @@ def test_list_courses_success(monkeypatch):
     async def mock_list():
         return fake_courses, 1
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.list_courses", mock_list)
+    monkeypatch.setattr("app.api.endpoints.xbk.courses.list_courses", mock_list)
     result = asyncio.run(mock_list())
     assert len(result[0]) == 1
 
@@ -22,7 +22,7 @@ def test_create_course_success(monkeypatch):
     async def mock_create():
         return fake_course
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.create_course", mock_create)
+    monkeypatch.setattr("app.api.endpoints.xbk.courses.create_course", mock_create)
     result = asyncio.run(mock_create())
     assert result.id == 1
 
@@ -34,6 +34,6 @@ def test_update_course_success(monkeypatch):
     async def mock_update():
         return fake_course
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.update_course", mock_update)
+    monkeypatch.setattr("app.api.endpoints.xbk.courses.update_course", mock_update)
     result = asyncio.run(mock_update())
     assert result.name == "新课程名"

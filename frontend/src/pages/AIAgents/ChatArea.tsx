@@ -5,17 +5,23 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css"; // Import KaTeX CSS
-import { Card, Avatar, Button, Tag, Tooltip, Typography, Input, Spin, Collapse } from "antd";
-import { HistoryOutlined, SendOutlined, UserOutlined, ClockCircleOutlined, BranchesOutlined, SettingOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { History, SendHorizonal, User, Clock, GitBranch, Settings, CircleCheck, CircleX, Loader2 } from "lucide-react";
 import dayjs from "dayjs";
 import type { ChatAreaProps, Message, WorkflowGroup, Agent } from "./types";
 import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
 import "./ChatArea.css";
-
-const { Text } = Typography;
-const { TextArea } = Input;
 
 const ThinkingBubble = () => (
   <div className="thinking-bubble">
@@ -34,17 +40,17 @@ const markdownComponents: Components = {
     <div className="!m-0 leading-relaxed">{children}</div>
   ),
   h1: ({ children }) => (
-    <div className="text-base font-semibold !m-0 leading-relaxed">
+    <div className="text-lg font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
   h2: ({ children }) => (
-    <div className="text-sm font-semibold !m-0 leading-relaxed">
+    <div className="text-base font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
   h3: ({ children }) => (
-    <div className="text-xs font-semibold !m-0 leading-relaxed">
+    <div className="text-sm font-semibold !m-0 leading-relaxed">
       {children}
     </div>
   ),
@@ -125,23 +131,23 @@ const MessageBubble = React.memo<{
 
     const color =
       type === "start"
-        ? "#0EA5E9"
+        ? "var(--ws-color-primary)"
         : type === "node"
-          ? "#6366F1"
+          ? "var(--ws-color-purple)"
           : type === "finish"
-            ? "#10B981"
+            ? "var(--ws-color-success)"
             : type === "error"
-              ? "#EF4444"
+              ? "var(--ws-color-error)"
               : currentAgent?.color;
     const icon =
       type === "start"
-        ? <BranchesOutlined />
+        ? <GitBranch className="h-4 w-4" />
         : type === "node"
-          ? <SettingOutlined />
+          ? <Settings className="h-4 w-4" />
         : type === "finish"
-            ? <CheckCircleOutlined />
+            ? <CircleCheck className="h-4 w-4" />
             : type === "error"
-              ? <CloseCircleOutlined />
+              ? <CircleX className="h-4 w-4" />
               : currentAgent?.icon;
     const label =
       type === "start"
@@ -158,89 +164,80 @@ const MessageBubble = React.memo<{
   const renderWorkflowGroups = () => {
     if (!workflowGroups || workflowGroups.length === 0) return null;
     return (
-      <div className="mt-2 mb-3">
-        <Collapse
-          ghost
-          defaultActiveKey={workflowGroups.map((g) => g.id)}
-          expandIconPosition="end"
-          items={workflowGroups.map((group) => ({
-            key: group.id,
-            label: (() => {
-              const nodes = group.nodes || [];
-              const count = nodes.length;
-              const times = nodes
-                .flatMap((n) => [n.startedAt, n.finishedAt])
-                .filter(Boolean)
-                .map((t) => dayjs(String(t)));
-              let durationText = "--";
-              if (times.length > 0) {
-                const minTime = times.reduce(
-                  (min, t) => (t.isBefore(min) ? t : min),
-                  times[0],
-                );
-                const maxTime = times.reduce(
-                  (max, t) => (t.isAfter(max) ? t : max),
-                  times[0],
-                );
-                const seconds = Math.max(0, maxTime.diff(minTime, "second"));
-                durationText = `${seconds}s`;
-              }
-              return (
-                <div className="flex items-center gap-2">
-                  <BranchesOutlined />
-                  <Text type="secondary">{group.label}</Text>
-                  <Text type="secondary">节点 {count}</Text>
-                  <Text type="secondary">耗时 {durationText}</Text>
-                </div>
-              );
-            })(),
-            children:
-              group.nodes.length === 0 ? (
-                <Text type="secondary" className="text-xs">
-                  暂无节点
-                </Text>
-              ) : (
-                <div className="pl-3 border-l-2 border-black/5">
-                  {group.nodes.map((n) => (
-                    <div
-                      key={n.id}
-                      className="flex items-center gap-3 py-1 text-sm"
-                    >
-                      <Tag
-                        color={
-                          n.status === "finished"
-                            ? "success"
-                            : n.status === "error"
-                              ? "error"
-                              : "processing"
-                        }
-                        style={{ margin: 0, minWidth: 48, textAlign: "center" }}
-                        className="!border-none"
-                        variant="filled"
+      <div className="mt-2 mb-3 space-y-2">
+        {workflowGroups.map((group) => {
+          const nodes = group.nodes || [];
+          const count = nodes.length;
+          const times = nodes
+            .flatMap((n) => [n.startedAt, n.finishedAt])
+            .filter(Boolean)
+            .map((t) => dayjs(String(t)));
+          let durationText = "--";
+          if (times.length > 0) {
+            const minTime = times.reduce(
+              (min, t) => (t.isBefore(min) ? t : min),
+              times[0],
+            );
+            const maxTime = times.reduce(
+              (max, t) => (t.isAfter(max) ? t : max),
+              times[0],
+            );
+            const seconds = Math.max(0, maxTime.diff(minTime, "second"));
+            durationText = `${seconds}s`;
+          }
+          return (
+            <details key={group.id} open className="overflow-hidden rounded-md border border-[var(--ws-color-border-secondary)] bg-surface">
+              <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-text-tertiary">
+                <GitBranch className="h-4 w-4" />
+                <span>{group.label}</span>
+                <span>节点 {count}</span>
+                <span>耗时 {durationText}</span>
+              </summary>
+              <div className="px-3 pb-2">
+                {nodes.length === 0 ? (
+                  <p className="text-sm text-text-tertiary">暂无节点</p>
+                ) : (
+                  <div className="pl-3 border-l-2 border-[var(--ws-color-border-secondary)]">
+                    {nodes.map((n) => (
+                      <div
+                        key={n.id}
+                        className="flex items-center gap-3 py-1 text-sm"
                       >
-                        {n.status === "finished"
-                          ? "完成"
-                          : n.status === "error"
-                            ? "错误"
-                            : "执行中"}
-                      </Tag>
+                        <Badge
+                          variant={
+                            n.status === "finished"
+                              ? "success"
+                              : n.status === "error"
+                                ? "danger"
+                                : "sky"
+                          }
+                          className="min-w-12 justify-center border-none"
+                        >
+                          {n.status === "finished"
+                            ? "完成"
+                            : n.status === "error"
+                              ? "错误"
+                              : "执行中"}
+                        </Badge>
 
-                      <Text strong className="min-w-[100px]">
-                        {n.name}
-                      </Text>
+                        <span className="min-w-24 text-sm font-semibold">
+                          {n.name}
+                        </span>
 
-                      <Text type="secondary" className="text-xs">
-                        {n.startedAt ? dayjs(n.startedAt).format("HH:mm:ss") : ""}
-                        {n.finishedAt
-                          ? ` → ${dayjs(n.finishedAt).format("HH:mm:ss")}`
-                          : ""}
-                      </Text>
-                    </div>
-                  ))}
-                </div>
-              ),
-          }))}
-        />
+                        <span className="text-sm text-text-tertiary">
+                          {n.startedAt ? dayjs(n.startedAt).format("HH:mm:ss") : ""}
+                          {n.finishedAt
+                            ? ` → ${dayjs(n.finishedAt).format("HH:mm:ss")}`
+                            : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+          );
+        })}
       </div>
     );
   };
@@ -248,53 +245,52 @@ const MessageBubble = React.memo<{
   return (
     <div className={`message-bubble-container ${isUser ? 'user' : 'agent'}`}>
       <div className={`message-content-wrapper ${isUser ? 'user' : 'agent'}`}>
-        <Avatar
-          size={32}
-          icon={isUser ? <UserOutlined /> : (wf ? wf.icon : currentAgent?.icon)}
-          aria-label={isUser ? "用户头像" : `${currentAgent?.name || "智能体"}头像`}
-          className="flex-shrink-0"
-          style={{
-            backgroundColor: isUser
-              ? "#0EA5E9"
-              : (wf ? wf.color : currentAgent?.color),
-          }}
-        />
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          <AvatarFallback
+            aria-label={isUser ? "用户头像" : `${currentAgent?.name || "智能体"}头像`}
+            className="text-white"
+            style={{
+              backgroundColor: isUser
+                ? "var(--ws-color-primary)"
+                : (wf ? wf.color : currentAgent?.color),
+            }}
+          >
+            {isUser ? <User className="h-4 w-4" /> : (wf ? wf.icon : currentAgent?.icon)}
+          </AvatarFallback>
+        </Avatar>
         <div className={`message-bubble ${isUser ? 'user' : 'agent'}`}>
           <div className="mb-1">
-            <Text
-              strong
+            <span
+              className="text-sm font-semibold"
               style={{
-                fontSize: "12px",
-                color: isUser ? "#0EA5E9" : (wf ? wf.color : currentAgent?.color),
+                color: isUser ? "var(--ws-color-primary)" : (wf ? wf.color : currentAgent?.color),
               }}
             >
               {isUser ? displayName : (wf ? wf.label : currentAgent?.name)}
-            </Text>
-            <Text
-              className="text-xs text-text-tertiary ml-2"
-            >
-              <ClockCircleOutlined /> {formatTimestamp(message.timestamp)}
-            </Text>
+            </span>
+            <span className="text-sm text-text-tertiary ml-[var(--ws-space-1)]">
+              <Clock className="h-4 w-4 inline" /> {formatTimestamp(message.timestamp)}
+            </span>
           </div>
           {wf ? (
             <div>
               {wf.detail ? (
                 <>
                   <div
-                    className="text-xs whitespace-pre-wrap break-words text-text-secondary"
+                    className="text-sm whitespace-pre-wrap break-words text-text-secondary"
                   >
                     <Button
-                      type="link"
-                      size="small"
+                      variant="link"
+                      size="sm"
                       onClick={() => setExpanded(!expanded)}
-                      className="!p-0"
+                      className="h-auto p-0"
                     >
                       {expanded ? "收起详情" : "查看详情"}
                     </Button>
                   </div>
                   {expanded && (
                     <div
-                      className="mt-2 px-3 py-2 rounded-lg text-xs whitespace-pre-wrap break-words"
+                      className="mt-2 px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words"
                       style={{
                         background: "var(--ws-color-surface-2)",
                         border: `1px solid ${wf.color}`,
@@ -306,7 +302,7 @@ const MessageBubble = React.memo<{
                 </>
               ) : (
                 <div
-                  className="text-xs whitespace-pre-wrap break-words text-text-secondary"
+                  className="text-sm whitespace-pre-wrap break-words text-text-secondary"
                 >
                   {message.content}
                 </div>
@@ -378,25 +374,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 如果当前智能体为null，显示加载状态或空状态
   if (!currentAgent) {
     return (
-      <Card
-        className="h-full min-h-0 flex-1 flex flex-col"
-        styles={{
-          body: {
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            padding: 0,
-            overflow: "hidden",
-          },
-        }}
-      >
+      <div className="h-full min-h-0 flex-1 flex flex-col">
         <div
           className="flex-1 flex items-center justify-center flex-col"
         >
-          <Spin size="large" />
-          <Text className="mt-4 block">正在加载智能体...</Text>
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+          <span className="mt-4 block text-sm text-text-secondary">正在加载智能体...</span>
         </div>
-      </Card>
+      </div>
     );
   }
 
@@ -440,85 +425,100 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* 对话头部 */}
-      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0 bg-white border-b border-black/[0.04] min-h-[56px]">
-        <div className="flex items-center gap-2">
-          {!historyVisible && (
-            <Tooltip title="显示侧边栏">
-              <Button icon={<HistoryOutlined />} onClick={onToggleSidebar} type="text" />
-            </Tooltip>
-          )}
-          <Avatar size={32} icon={currentAgent?.icon} aria-label={`${currentAgent?.name || "智能体"}头像`}
-            style={{ backgroundColor: currentAgent?.color }} />
-          <div className="flex items-center gap-2 ml-1">
-            <Text strong className="text-base" style={{ color: currentAgent?.color }}>
-              {currentAgent?.name}
-            </Text>
-            <Text type="secondary" className="text-xs hidden sm:inline">
-              {currentAgent?.description}
-            </Text>
+    <TooltipProvider delayDuration={120}>
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* 对话头部 */}
+        <div className="flex items-center justify-between px-[var(--ws-space-3)] py-[var(--ws-space-2)] flex-shrink-0 bg-surface border-b border-[var(--ws-color-border-secondary)] min-h-14">
+          <div className="flex items-center gap-2">
+            {!historyVisible && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" onClick={onToggleSidebar}>
+                    <History className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>显示侧边栏</TooltipContent>
+              </Tooltip>
+            )}
+            <Avatar className="h-8 w-8">
+              <AvatarFallback
+                aria-label={`${currentAgent?.name || "智能体"}头像`}
+                className="text-white"
+                style={{ backgroundColor: currentAgent?.color }}
+              >
+                {currentAgent?.icon}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex items-center gap-2 ml-[var(--ws-space-1)]">
+              <span className="text-base font-semibold" style={{ color: currentAgent?.color }}>
+                {currentAgent?.name}
+              </span>
+              <span className="text-sm text-text-tertiary hidden sm:inline">
+                {currentAgent?.description}
+              </span>
+            </div>
+            <Badge
+              variant={currentAgent?.status === "online" ? "success" : "neutral"}
+              className="ml-1"
+            >
+              {currentAgent?.status === "online" ? "在线" : "离线"}
+            </Badge>
           </div>
-          <Tag color={currentAgent?.status === "online" ? "success" : "default"}
-            className="ml-1 text-xs leading-[18px]" variant="filled">
-            {currentAgent?.status === "online" ? "在线" : "离线"}
-          </Tag>
+          <div className="flex items-center gap-2">
+            {isStreaming && (
+              <>
+                <Badge variant="sky">
+                  <TimerDisplay startTime={streamStartTime || null} isRunning={true} prefix="执行中 " />
+                </Badge>
+                <Button size="sm" variant="destructive" onClick={onStopStream}>停止</Button>
+              </>
+            )}
+            <span className="text-sm text-text-tertiary">{visibleMessages.length} 条消息</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* 消息列表 */}
+        <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-[var(--ws-space-3)] py-[var(--ws-space-3)] bg-surface-2">
+          {visibleMessages.map((message) => {
+            const messageWorkflows = workflowGroups?.filter((group) => group.messageId === message.id) || [];
+            return (
+              <MessageBubble key={message.id} message={message} currentAgent={currentAgent}
+                workflowGroups={messageWorkflows} userDisplayName={userDisplayName} />
+            );
+          })}
           {isStreaming && (
-            <>
-              <Tag color="processing">
-                <TimerDisplay startTime={streamStartTime || null} isRunning={true} prefix="执行中 " />
-              </Tag>
-              <Button size="small" danger onClick={onStopStream}>停止</Button>
-            </>
+            <MessageBubble
+              message={{ id: 'streaming-temp', content: streamingContent || "", sender: 'agent', timestamp: new Date().toISOString(), agentId: currentAgent?.id }}
+              currentAgent={currentAgent}
+              workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
+              userDisplayName={userDisplayName}
+              isThinking={!streamingContent && workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId && group.nodes.length > 0).length === 0}
+            />
           )}
-          <Text type="secondary" className="text-xs">{visibleMessages.length} 条消息</Text>
         </div>
-      </div>
 
-      {/* 消息列表 */}
-      <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-6 py-5 bg-surface-2">
-        {visibleMessages.map((message) => {
-          const messageWorkflows = workflowGroups?.filter((group) => group.messageId === message.id) || [];
-          return (
-            <MessageBubble key={message.id} message={message} currentAgent={currentAgent}
-              workflowGroups={messageWorkflows} userDisplayName={userDisplayName} />
-          );
-        })}
-        {isStreaming && (
-          <MessageBubble
-            message={{ id: 'streaming-temp', content: streamingContent || "", sender: 'agent', timestamp: new Date().toISOString(), agentId: currentAgent?.id }}
-            currentAgent={currentAgent}
-            workflowGroups={workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId)}
-            userDisplayName={userDisplayName}
-            isThinking={!streamingContent && workflowGroups?.filter((group) => group.messageId === currentStreamingMessageId && group.nodes.length > 0).length === 0}
+        {/* 输入区域 */}
+        <div className="flex-shrink-0 px-[var(--ws-space-3)] pt-[var(--ws-space-2)] pb-[var(--ws-space-3)] bg-surface border-t border-[var(--ws-color-border-secondary)]">
+          <Textarea
+            id="message-input"
+            aria-label="输入消息"
+            value={inputMessage}
+            onChange={(e) => onInputChange(e.target.value)}
+            placeholder={`向${currentAgent?.name}发送消息...`}
+            rows={2}
+            onKeyDown={handleKeyPress}
+            className="mb-2 min-h-[calc(var(--ws-control-height)*1.8)] max-h-[calc(var(--ws-control-height)*4)] resize-y"
           />
-        )}
-      </div>
-
-      {/* 输入区域 */}
-      <div className="flex-shrink-0 px-5 pt-3 pb-4 bg-white border-t border-black/[0.04]">
-        <TextArea
-          id="message-input"
-          aria-label="输入消息"
-          value={inputMessage}
-          onChange={(e) => onInputChange(e.target.value)}
-          placeholder={`向${currentAgent?.name}发送消息...`}
-          autoSize={{ minRows: 2, maxRows: 6 }}
-          onKeyDown={handleKeyPress}
-          style={{ width: "100%" }}
-          className="mb-2"
-        />
-        <div className="flex items-center justify-between">
-          <Text type="secondary" className="text-xs">Enter 发送，Shift+Enter 换行</Text>
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSendMessageWithAuth}
-            disabled={!inputMessage.trim() || isStreaming}>
-            发送
-          </Button>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-text-tertiary">Enter 发送，Shift+Enter 换行</span>
+            <Button size="sm" onClick={handleSendMessageWithAuth}
+              disabled={!inputMessage.trim() || isStreaming}>
+              <SendHorizonal className="h-4 w-4" />发送
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 

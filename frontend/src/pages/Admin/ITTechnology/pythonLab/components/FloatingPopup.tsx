@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Space, Typography } from "antd";
-import { CloseOutlined } from "@ant-design/icons";
-
-const { Text } = Typography;
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function FloatingPopup(props: {
   open: boolean;
@@ -141,7 +139,7 @@ export function FloatingPopup(props: {
         top: pos.y,
         width: size.w,
         height: size.h,
-        zIndex: 1000,
+        zIndex: "var(--ws-z-floating-panel)",
         borderRadius: 12,
         overflow: "hidden",
         boxShadow: "var(--ws-shadow-lg)",
@@ -162,8 +160,16 @@ export function FloatingPopup(props: {
           touchAction: "none",
         }}
       >
-        <Text className="font-semibold text-sm">{title}</Text>
-        <Button type="text" size="small" icon={<CloseOutlined />} onPointerDown={(e) => e.stopPropagation()} onClick={onClose} />
+        <span className="text-sm font-semibold text-text-base">{title}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="关闭"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
       <div className="flex flex-col gap-2 p-2 flex-1 min-h-0" style={{ overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
       {resizable ? (
@@ -179,7 +185,7 @@ export function FloatingPopup(props: {
             cursor: "nwse-resize",
             touchAction: "none",
             background:
-              "linear-gradient(135deg, transparent 0 55%, rgba(0,0,0,0.16) 55% 62%, transparent 62% 70%, rgba(0,0,0,0.16) 70% 77%, transparent 77% 85%, rgba(0,0,0,0.16) 85% 92%, transparent 92% 100%)",
+              "linear-gradient(135deg, transparent 0 55%, var(--ws-color-text-tertiary) 55% 62%, transparent 62% 70%, var(--ws-color-text-tertiary) 70% 77%, transparent 77% 85%, var(--ws-color-text-tertiary) 85% 92%, transparent 92% 100%)",
             borderBottomRightRadius: 12,
           }}
         />

@@ -50,6 +50,7 @@ def build_probe_code(run_id: str) -> str:
     end = f"PHASEC_PROBE_{run_id}_END"
     lines = [
         "import sys, time",
+        "time.sleep(2.0)",
         f"print('{start}', flush=True)",
         "for i in range(1, 6):",
         f"    print('PHASEC_PROBE_{run_id}_STEP_' + str(i), flush=True)",
@@ -152,6 +153,45 @@ async def wait_for_initialized(ws: aiohttp.ClientWebSocketResponse, timeout_s: f
         if data.get("type") == "event" and data.get("event") == "initialized":
             return
     raise TimeoutError("initialized event timeout")
+
+
+async def wait_for_event(
+    ws: aiohttp.ClientWebSocketResponse,
+    event_name: str,
+    timeout_s: float,
+    observed_outputs: list[str] | None = None,
+    category_count: dict[str, int] | None = None,
+) -> dict:
+    started = time.time()
+    while time.time() - started < timeout_s:
+        remain = max(0.5, timeout_s - (time.time() - started))
+        msg = await ws.receive(timeout=remain)
+        if msg.type in {aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR}:
+            raise SmokeFailure(EXIT_DETECT, "detect", f"ws closed before {event_name}")
+        if msg.type != aiohttp.WSMsgType.TEXT:
+            continue
+        data = json.loads(msg.data)
+        if data.get("type") == "event":
+            ev = str(data.get("event") or "")
+            log(f"event while waiting {event_name}: {ev}")
+            if ev == "output":
+                body = data.get("body") if isinstance(data.get("body"), dict) else {}
+                category = str(body.get("category") or "unknown")
+                out = str(body.get("output") or "").strip()
+                if observed_outputs is not None and out:
+                    observed_outputs.append(out)
+                if category_count is not None:
+                    category_count[category] = category_count.get(category, 0) + 1
+            if ev == event_name:
+                return data
+            continue
+        if data.get("type") == "response":
+            log(
+                f"response while waiting {event_name}: "
+                f"command={data.get('command')} success={data.get('success')}"
+            )
+    raise TimeoutError(f"{event_name} event timeout")
+
 
 async def wait_for_attach_ready(ws: aiohttp.ClientWebSocketResponse, timeout_s: float) -> bool:
     started = time.time()
@@ -273,8 +313,23 @@ async def run_probe(token: str, sid: str, run_id: str) -> None:
             if not initialized_seen:
                 await wait_for_initialized(ws, 20)
                 log("initialized event observed")
-            config_req = {
+            set_breakpoints_req = {
                 "seq": 3,
+                "type": "request",
+                "command": "setBreakpoints",
+                "arguments": {
+                    "source": {"path": "/workspace/main.py"},
+                    "breakpoints": [{"line": 3}],
+                },
+            }
+            await ws.send_str(json.dumps(set_breakpoints_req))
+            log("sent setBreakpoints")
+            bp_resp = await wait_for_response(ws, "setBreakpoints", 20, observed_early, category_early)
+            if not bp_resp.get("success"):
+                raise SmokeFailure(EXIT_DETECT, "detect", "setBreakpoints failed")
+            log("setBreakpoints ok")
+            config_req = {
+                "seq": 4,
                 "type": "request",
                 "command": "configurationDone",
                 "arguments": {},
@@ -285,24 +340,19 @@ async def run_probe(token: str, sid: str, run_id: str) -> None:
             if not config_resp.get("success"):
                 raise SmokeFailure(EXIT_DETECT, "detect", "configurationDone failed")
             log("configurationDone ok")
-            threads_req = {"seq": 4, "type": "request", "command": "threads", "arguments": {}}
-            await ws.send_str(json.dumps(threads_req))
-            log("sent threads")
-            threads_resp = await wait_for_response(ws, "threads", 10, observed_early, category_early)
-            if threads_resp.get("success"):
-                for th in (threads_resp.get("body") or {}).get("threads") or []:
-                    tid = int(th.get("id") or 0)
-                    if tid <= 0:
-                        continue
-                    continue_req = {
-                        "seq": 100 + tid,
-                        "type": "request",
-                        "command": "continue",
-                        "arguments": {"threadId": tid},
-                    }
-                    await ws.send_str(json.dumps(continue_req))
-                    log(f"sent continue thread={tid}")
-                    await wait_for_response(ws, "continue", 10, observed_early, category_early)
+            stopped = await wait_for_event(ws, "stopped", 20, observed_early, category_early)
+            thread_id = int((stopped.get("body") or {}).get("threadId") or 0)
+            if thread_id <= 0:
+                raise SmokeFailure(EXIT_DETECT, "detect", "stopped event missing threadId")
+            continue_req = {
+                "seq": 100 + thread_id,
+                "type": "request",
+                "command": "continue",
+                "arguments": {"threadId": thread_id},
+            }
+            await ws.send_str(json.dumps(continue_req))
+            log(f"sent continue thread={thread_id}")
+            await wait_for_response(ws, "continue", 10, observed_early, category_early)
             observed, category_count = await collect_output_events(
                 ws,
                 run_id,

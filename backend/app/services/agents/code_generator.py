@@ -34,6 +34,34 @@ class CodeGeneratorClient:
             return f"HTTP {status}: {e}"
         return str(e)
 
+    @staticmethod
+    def _normalize_chat_completions_url(raw_url: str) -> str:
+        """将用户配置的 base URL 归一化为 chat/completions 端点。"""
+        base = (raw_url or "").strip().rstrip("/")
+        lower = base.lower()
+        if lower.endswith("/chat/completions"):
+            return base
+        if lower.endswith("/v1"):
+            return f"{base}/chat/completions"
+        if any(x in lower for x in ("siliconflow", "openai", "deepseek", "aliyun")):
+            return f"{base}/v1/chat/completions"
+        return f"{base}/v1/chat/completions"
+
+    @staticmethod
+    def _resolve_model_name(api_url: str, model: Optional[str]) -> str:
+        """按服务商兜底模型名，并修正常见误配（DeepSeek + gpt-*）。"""
+        provided = (model or "").strip()
+        lower = (api_url or "").lower()
+        if "deepseek" in lower:
+            if provided and provided.lower().startswith("gpt-"):
+                logger.warning(
+                    "Detected DeepSeek endpoint with incompatible model '{}', auto-fallback to deepseek-chat",
+                    provided,
+                )
+                return "deepseek-chat"
+            return provided or "deepseek-chat"
+        return provided or "gpt-3.5-turbo"
+
     async def generate_code(self, flow_json: Dict[str, Any], api_url: Optional[str] = None, api_key: Optional[str] = None, prompt_template: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
         """
         调用 Agent API 生成代码
@@ -51,18 +79,8 @@ class CodeGeneratorClient:
             logger.warning("Agent API 未配置，跳过智能生成")
             return {"success": False, "error": "Agent API not configured", "python_code": ""}
 
-        # Robust URL Normalization (Shared with chat_completion)
-        base = target_url.strip().rstrip("/")
-        if base.endswith("/chat/completions"):
-            target_url = base
-        elif base.endswith("/v1"):
-            target_url = f"{base}/chat/completions"
-        elif "siliconflow" in base or "openai" in base or "deepseek" in base or "aliyun" in base:
-             # Common providers that need /v1
-             target_url = f"{base}/v1/chat/completions"
-        else:
-             # Fallback for others, assume direct or append v1
-             target_url = f"{base}/v1/chat/completions"
+        target_url = self._normalize_chat_completions_url(target_url)
+        model_name = self._resolve_model_name(target_url, model)
 
         headers = {
             "Authorization": f"Bearer {target_key}",
@@ -78,7 +96,7 @@ class CodeGeneratorClient:
             user_content = json.dumps(flow_json, ensure_ascii=False)
             
             payload = {
-                "model": model or "gpt-3.5-turbo", # Default fallback
+                "model": model_name,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
@@ -161,18 +179,8 @@ class CodeGeneratorClient:
         if not target_url or not target_key:
             return {"success": False, "error": "Agent API not configured", "message": ""}
 
-        # Robust URL Normalization
-        base = target_url.strip().rstrip("/")
-        if base.endswith("/chat/completions"):
-            target_url = base
-        elif base.endswith("/v1"):
-            target_url = f"{base}/chat/completions"
-        elif "siliconflow" in base or "openai" in base or "deepseek" in base or "aliyun" in base:
-             # Common providers that need /v1
-             target_url = f"{base}/v1/chat/completions"
-        else:
-             # Fallback for others, assume direct or append v1
-             target_url = f"{base}/v1/chat/completions"
+        target_url = self._normalize_chat_completions_url(target_url)
+        model_name = self._resolve_model_name(target_url, model)
 
         headers = {
             "Authorization": f"Bearer {target_key}",
@@ -180,7 +188,7 @@ class CodeGeneratorClient:
         }
 
         payload = {
-            "model": model or "gpt-3.5-turbo",
+            "model": model_name,
             "messages": messages,
             "stream": False,
             "temperature": 0.7

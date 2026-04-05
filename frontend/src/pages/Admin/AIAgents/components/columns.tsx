@@ -2,63 +2,75 @@
  * AI智能体表格列配置 - 适配后端API
  */
 import React from "react";
-import { Space, Tag, Tooltip, Button, Switch } from "antd";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
-  KeyOutlined,
-  EyeOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  ThunderboltOutlined,
-  CloudOutlined,
-  ApiOutlined,
-} from "@ant-design/icons";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  KeyRound,
+  Eye,
+  Pencil,
+  Trash2,
+  Zap,
+  Cloud,
+  Cable,
+} from "lucide-react";
 import dayjs from "dayjs";
-import { AIAgent } from "@services/znt/types";
+import type { AIAgent } from "@services/znt/types";
 
-// 类型标签配置 - 适配后端agent_type
 const typeConfig: Record<
   string,
-  { color: string; text: string; icon: React.ReactNode }
+  {
+    text: string;
+    icon: React.ReactNode;
+    variant?: React.ComponentProps<typeof Badge>["variant"];
+    className?: string;
+  }
 > = {
   openai: {
-    color: "blue",
     text: "OpenAI",
-    icon: <ThunderboltOutlined />,
+    icon: <Zap className="h-3 w-3" />,
+    variant: "primarySubtle",
   },
   dify: {
-    color: "purple",
     text: "Dify",
-    icon: <CloudOutlined />,
+    icon: <Cloud className="h-3 w-3" />,
+    variant: "violet",
   },
   custom: {
-    color: "green",
     text: "自定义",
-    icon: <ApiOutlined />,
+    icon: <Cable className="h-3 w-3" />,
+    variant: "success",
   },
   azure: {
-    color: "cyan",
     text: "Azure",
-    icon: <CloudOutlined />,
+    icon: <Cloud className="h-3 w-3" />,
+    variant: "cyan",
   },
   anthropic: {
-    color: "orange",
     text: "Anthropic",
-    icon: <ThunderboltOutlined />,
+    icon: <Zap className="h-3 w-3" />,
+    variant: "warning",
   },
   system: {
-    color: "magenta",
     text: "系统",
-    icon: <ApiOutlined />,
+    icon: <Cable className="h-3 w-3" />,
+    className: "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-600",
   },
 };
 
-// 获取类型配置，如果未知类型使用默认配置
 const getTypeConfig = (agentType: string) => {
   return (
     typeConfig[agentType] || {
-      color: "default",
       text: agentType,
-      icon: <ApiOutlined />,
+      icon: <Cable className="h-3 w-3" />,
+      variant: "outline" as const,
     }
   );
 };
@@ -69,157 +81,179 @@ const formatApiKey = (agent: AIAgent): string => {
   return "已配置";
 };
 
-// 表格列配置函数
+const HoverTip: React.FC<{ title: React.ReactNode; children: React.ReactElement }> = ({
+  title,
+  children,
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipContent>{title}</TooltipContent>
+  </Tooltip>
+);
+
 export const getAgentColumns = (
   handleEdit: (record: AIAgent) => void,
   handleDelete: (id: number) => void,
   handleToggleActive: (id: number, isActive: boolean) => void,
   handleViewDetails: (record: AIAgent) => void,
   handleTestAgent: (id: number, name: string) => void,
-) => [
+): ColumnDef<AIAgent>[] => [
   {
-    title: "名称",
-    dataIndex: "agent_name",
-    key: "agent_name",
-    width: 280,
-    render: (agentName: string, record: AIAgent) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: 36,
-          height: 36,
-          borderRadius: 6,
-          background: '#f0f5ff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#0EA5E9',
-          flexShrink: 0
-        }}>
-          {record.agent_type === 'dify' ? <CloudOutlined className="text-lg" /> : <ThunderboltOutlined className="text-lg" />}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="font-semibold text-sm text-text-base mb-0.5">
-            {agentName || record.name}
-          </div>
-          {record.model_name && (
-            <div className="text-xs" style={{ color: "#7f8c8d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {record.model_name}
-            </div>
-          )}
-        </div>
-      </div>
-    ),
-    sorter: (a: AIAgent, b: AIAgent) => {
-      const nameA = a.agent_name || a.name || "";
-      const nameB = b.agent_name || b.name || "";
-      return nameA.localeCompare(nameB);
-    },
-  },
-  {
-    title: "类型",
-    dataIndex: "agent_type",
-    key: "agent_type",
-    width: 100,
-    render: (agentType: string) => {
-      const config = getTypeConfig(agentType);
+    id: "name",
+    header: "名称",
+    accessorFn: (row) => row.agent_name || row.name,
+    size: 280,
+    meta: { headerClassName: "w-[280px]", cellClassName: "w-[280px] align-top" },
+    cell: ({ row }) => {
+      const record = row.original;
+      const displayName = record.agent_name || record.name;
       return (
-        <Tag color={config.color} icon={config.icon}>
-          {config.text}
-        </Tag>
+        <div className="flex items-center gap-3">
+          <div className="grid h-9 w-9 place-content-center rounded-md bg-primary/10 text-primary">
+            {record.agent_type === "dify" ? (
+              <Cloud className="h-5 w-5" />
+            ) : (
+              <Zap className="h-5 w-5" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-0.5 text-sm font-semibold text-text-base">
+              {displayName}
+            </div>
+          </div>
+        </div>
       );
     },
   },
   {
-    title: "描述",
-    dataIndex: "description",
-    key: "description",
-    width: undefined, // Let description take remaining space
-    render: (text: string | undefined) => {
-      const v = (text || "").trim();
-      if (!v) return <span style={{ color: '#bfbfbf' }}>无</span>;
-      return <span title={v} style={{ display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>;
+    id: "agent_type",
+    header: "类型",
+    accessorKey: "agent_type",
+    size: 120,
+    meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
+    cell: ({ row }) => {
+      const config = getTypeConfig(row.original.agent_type);
+      return (
+        <Badge variant={config.variant} className={config.className}>
+          {config.icon}
+          {config.text}
+        </Badge>
+      );
     },
   },
   {
-    title: "API密钥",
-    dataIndex: "api_key",
-    key: "api_key",
-    width: 180,
-    render: (_: string | undefined, record: AIAgent) => (
-      <Tooltip title={record.has_api_key ? "已保存API密钥" : "未配置API密钥"}>
-        <Tag
-          icon={<KeyOutlined />}
-          color={record.has_api_key ? "orange" : "default"}
+    id: "description",
+    header: "描述",
+    accessorKey: "description",
+    meta: { cellClassName: "align-top" },
+    cell: ({ row }) => {
+      const value = (row.original.description || "").trim();
+      if (!value) return <span className="text-text-tertiary">无</span>;
+      return (
+        <span
+          title={value}
+          className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap"
         >
-          {formatApiKey(record)}
-        </Tag>
-      </Tooltip>
-    ),
+          {value}
+        </span>
+      );
+    },
   },
   {
-    title: "状态",
-    dataIndex: "status",
-    key: "status",
-    width: 100,
-    render: (status: boolean, record: AIAgent) => (
-      <Switch
-        checked={status}
-        checkedChildren="启用"
-        unCheckedChildren="停用"
-        onChange={(checked) => handleToggleActive(record.id, checked)}
-      />
-    ),
+    id: "api_key",
+    header: "API密钥",
+    accessorKey: "api_key",
+    size: 180,
+    meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] align-top" },
+    cell: ({ row }) => {
+      const record = row.original;
+      return (
+        <HoverTip title={record.has_api_key ? "已保存API密钥" : "未配置API密钥"}>
+          <div>
+            <Badge
+              variant={record.has_api_key ? "warning" : "outline"}
+            >
+              <KeyRound className="h-3 w-3" />
+              {formatApiKey(record)}
+            </Badge>
+          </div>
+        </HoverTip>
+      );
+    },
   },
   {
-    title: "创建时间",
-    dataIndex: "created_at",
-    key: "created_at",
-    width: 150,
-    render: (date: string) => dayjs(date).format("YYYY-MM-DD"),
-    sorter: (a: AIAgent, b: AIAgent) =>
-      dayjs(a.created_at).unix() - dayjs(b.created_at).unix(),
+    id: "status",
+    header: "状态",
+    accessorFn: (row) => row.status ?? row.is_active,
+    size: 120,
+    meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
+    cell: ({ row }) => {
+      const record = row.original;
+      const isActive = record.status ?? record.is_active;
+      return (
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={isActive}
+            onCheckedChange={(checked) => handleToggleActive(record.id, checked)}
+          />
+          <span className="text-xs text-text-tertiary">{isActive ? "启用" : "停用"}</span>
+        </div>
+      );
+    },
   },
   {
-    title: "操作",
-    key: "action",
-    width: 180,
-    fixed: "right" as const,
-    render: (_: any, record: AIAgent) => (
-      <Space size={4}> {/* Tighter spacing */}
-        <Tooltip title="查看详情">
-          <Button
-            type="text"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetails(record)}
-          />
-        </Tooltip>
-        <Tooltip title="编辑">
-          <Button
-            type="text"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          />
-        </Tooltip>
-        <Tooltip title="测试连接">
-          <Button
-            type="text"
-            size="small"
-            icon={<ThunderboltOutlined style={{ color: '#F59E0B' }} />}
-            onClick={() => handleTestAgent(record.id, record.name)}
-          />
-        </Tooltip>
-        <Tooltip title="删除">
-          <Button
-            type="text"
-            size="small"
-            icon={<DeleteOutlined />}
-            danger
-            onClick={() => handleDelete(record.id)}
-          />
-        </Tooltip>
-      </Space>
-    ),
+    id: "created_at",
+    header: "创建时间",
+    accessorKey: "created_at",
+    size: 150,
+    meta: { headerClassName: "w-[150px]", cellClassName: "w-[150px] align-top" },
+    cell: ({ row }) => dayjs(row.original.created_at).format("YYYY-MM-DD"),
+  },
+  {
+    id: "action",
+    header: "操作",
+    size: 180,
+    meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] align-top" },
+    cell: ({ row }) => {
+      const record = row.original;
+      return (
+        <TooltipProvider delayDuration={120}>
+          <div className="flex items-center gap-1">
+            <HoverTip title="查看详情">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleViewDetails(record)}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </HoverTip>
+            <HoverTip title="编辑">
+              <Button variant="ghost" size="sm" onClick={() => handleEdit(record)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </HoverTip>
+            <HoverTip title="测试连接">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleTestAgent(record.id, record.name)}
+              >
+                <Zap className="h-4 w-4 text-[var(--ws-color-warning)]" />
+              </Button>
+            </HoverTip>
+            <HoverTip title="删除">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(record.id)}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </HoverTip>
+          </div>
+        </TooltipProvider>
+      );
+    },
   },
 ];

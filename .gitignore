@@ -170,6 +170,7 @@ frontend/.pnp.js
 frontend/coverage/
 frontend/build/
 frontend/dist/
+frontend/test-results/
 
 # misc
 frontend/.DS_Store
@@ -222,6 +223,10 @@ frontend/.cursor/
 # ==================== Docker ====================
 # Docker构建缓存
 **/target/
+
+# ==================== 自动化临时产物 ====================
+.playwright-cli/
+test-results/
 
 # ==================== IDE配置 ====================
 # Trae

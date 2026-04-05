@@ -44,7 +44,7 @@ export interface UsersState {
   currentPage: number;
   pageSize: number;
   searchKeyword: string;
-  selectedRowKeys: React.Key[];
+  selectedRowKeys: number[];
   formVisible: boolean;
   editingUser: User | null;
   detailVisible: boolean;
@@ -65,7 +65,7 @@ export interface UserActions {
   handleBatchDelete: () => void;
   handleDownloadTemplate: (format?: "xlsx" | "csv") => Promise<void>;
   handleFileUpload: (file: File) => Promise<boolean>;
-  setSelectedRowKeys: (keys: React.Key[]) => void;
+  setSelectedRowKeys: (keys: number[]) => void;
   handleRoleFilter: (roleCode: string | undefined) => void;
   handleStatusFilter: (isActive: boolean | undefined) => void;
 }

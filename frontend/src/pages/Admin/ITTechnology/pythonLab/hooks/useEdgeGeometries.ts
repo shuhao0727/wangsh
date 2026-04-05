@@ -551,7 +551,6 @@ export function useEdgeGeometries(nodes: FlowNode[], edges: FlowEdge[], routingS
         obstaclesHash = hashRect(obstaclesHash, id, r);
       });
 
-
       const key =
         `${qualityMode}|${routingStyle}|${e.id}|${e.style}|${e.routeMode || ""}|${e.routeShape || ""}|` +
         `${e.from}|${e.to}|${e.toEdge || ""}|${q1(e.toEdgeT ?? 0)}|` +

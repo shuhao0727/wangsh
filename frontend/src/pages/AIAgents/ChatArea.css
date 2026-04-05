@@ -1,7 +1,7 @@
 /* 消息气泡容器 */
 .message-bubble-container {
   display: flex;
-  margin-bottom: 16px;
+  margin-bottom: var(--ws-space-2);
 }
 
 .message-bubble-container.user {
@@ -15,7 +15,7 @@
 .message-content-wrapper {
   max-width: 80%;
   display: flex;
-  gap: 10px;
+  gap: var(--ws-space-1);
 }
 
 .message-content-wrapper.user {
@@ -24,29 +24,29 @@
 
 /* 聊天气泡 */
 .message-bubble {
-  padding: 12px 16px;
+  padding: var(--ws-space-2) var(--ws-space-2);
   box-shadow: none;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--ws-text-sm);
+  line-height: var(--ws-line-height-base);
 }
 
 .message-bubble.user {
-  background: rgba(14, 165, 233, 0.1);
+  background: var(--ws-color-primary-soft);
   color: var(--ws-color-text);
-  border-radius: 16px 16px 4px 16px;
+  border-radius: var(--ws-radius-lg) var(--ws-radius-lg) var(--ws-radius-sm) var(--ws-radius-lg);
   border: none;
 }
 
 .message-bubble.agent {
-  background: #FFFFFF;
+  background: var(--ws-color-surface);
   color: var(--ws-color-text);
-  border-radius: 16px 16px 16px 4px;
+  border-radius: var(--ws-radius-lg) var(--ws-radius-lg) var(--ws-radius-lg) var(--ws-radius-sm);
   border: none;
 }
 
 /* Markdown 内容 */
 .markdown-body p {
-  margin-bottom: 0.6em;
+  margin-bottom: var(--ws-space-1);
 }
 
 .markdown-body p:last-child {
@@ -54,19 +54,19 @@
 }
 
 .markdown-body pre {
-  background: rgba(0, 0, 0, 0.03);
-  padding: 12px 14px;
-  border-radius: 8px;
+  background: var(--ws-color-surface-2);
+  padding: var(--ws-space-2) var(--ws-space-2);
+  border-radius: var(--ws-radius-md);
   overflow-x: auto;
-  margin: 8px 0;
+  margin: var(--ws-space-1) 0;
   border: none;
-  font-size: 13px;
+  font-size: var(--ws-text-xs);
 }
 
 .markdown-body code {
-  background: rgba(0, 0, 0, 0.04);
-  padding: 1px 5px;
-  border-radius: 4px;
+  background: var(--ws-color-surface-2);
+  padding: 1px var(--ws-space-1);
+  border-radius: var(--ws-radius-sm);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.88em;
 }
@@ -80,20 +80,20 @@
 .thinking-bubble {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ws-space-1);
   color: var(--ws-color-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ws-text-sm);
 }
 
 .thinking-dots {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: calc(var(--ws-space-1) / 2);
 }
 
 .thinking-dot {
-  width: 5px;
-  height: 5px;
+  width: 0.25rem;
+  height: 0.25rem;
   background: var(--ws-color-primary);
   border-radius: 50%;
   animation: jump 1s infinite;
@@ -103,10 +103,10 @@
 @media (max-width: 768px) {
   .message-content-wrapper {
     max-width: 92%;
-    gap: 8px;
+    gap: var(--ws-space-1);
   }
   .message-bubble {
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: var(--ws-space-2);
+    font-size: var(--ws-text-sm);
   }
 }

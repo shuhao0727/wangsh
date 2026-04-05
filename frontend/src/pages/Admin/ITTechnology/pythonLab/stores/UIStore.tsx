@@ -35,7 +35,7 @@ export interface UIApi {
 const UICtx = createContext<UIApi | null>(null);
 
 export function UIProvider({ children }: { children: React.ReactNode }) {
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(true);
   const [nodeInspectorOpen, setNodeInspectorOpen] = useState(false);
   const [optimizationVisible, setOptimizationVisible] = useState(false);
   const [originalContent, setOriginalContent] = useState<string | null>(null);

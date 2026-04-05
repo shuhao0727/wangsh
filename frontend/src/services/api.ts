@@ -29,7 +29,8 @@ const notifyAuthExpired = (reason?: string) => {
 export const getStoredAccessToken = () => {
   if (typeof window === "undefined") return null;
   try {
-    return sessionStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(ACCESS_TOKEN_KEY);
+    // 跨 tab 刷新 token 以 localStorage 为准，避免旧 sessionStorage 覆盖新令牌
+    return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -38,11 +39,27 @@ export const getStoredAccessToken = () => {
 export const getStoredRefreshToken = () => {
   if (typeof window === "undefined") return null;
   try {
-    return sessionStorage.getItem(REFRESH_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY);
+    // 跨 tab 刷新 token 以 localStorage 为准，避免旧 sessionStorage 覆盖新令牌
+    return localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY);
   } catch {
     return null;
   }
 };
+
+const parseBearerToken = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  const m = raw.match(/^Bearer\s+(.+)$/i);
+  return (m?.[1] || raw).trim() || null;
+};
+
+const readRequestToken = (requestConfig?: InternalAxiosRequestConfig | any): string | null => {
+  const headers = (requestConfig?.headers || {}) as Record<string, unknown>;
+  return parseBearerToken(headers.Authorization ?? headers.authorization);
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const getCookieToken = () => {
   if (typeof document === "undefined") return null;
@@ -246,7 +263,18 @@ const createApiClient = (): AxiosInstance => {
       const originalRequest = error.config;
       
       // 防止无限重试
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+        if (!isAuthEndpoint(originalRequest.url)) {
+          const latestToken = getStoredAccessToken() || getCookieToken();
+          const requestToken = readRequestToken(originalRequest);
+          // 若该请求携带了旧 token，优先用最新 token 重试一次，减少不必要 refresh
+          if (latestToken && latestToken !== requestToken) {
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${latestToken}`;
+            return instance(originalRequest);
+          }
+        }
+
         const hadAuthContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
         originalRequest._retry = true;
 
@@ -289,6 +317,17 @@ const createApiClient = (): AxiosInstance => {
                   applyTokens(resp2);
                   return;
                 }
+                // refresh 接口存在 5s 速率限制，跨 tab 并发时先等待再补一次
+                if (status === 429) {
+                  await sleep(5200);
+                  const latestRefreshToken = getStoredRefreshToken();
+                  const resp3 = await instance.post(
+                    "/auth/refresh",
+                    latestRefreshToken ? { refresh_token: latestRefreshToken } : {},
+                  );
+                  applyTokens(resp3);
+                  return;
+                }
                 throw e;
               }
             })().finally(() => {
@@ -314,6 +353,9 @@ const createApiClient = (): AxiosInstance => {
                 (err.response.data as Record<string, unknown>)?.message
               : err?.message;
           logger.debug("⚠️ API: 会话刷新失败", detail);
+          if (err?.response?.status === 429) {
+            return Promise.reject(error);
+          }
           authTokenStorage.clear();
           if (hadAuthContext) {
             notifyAuthExpired(typeof detail === "string" ? detail : undefined);

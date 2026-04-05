@@ -1,10 +1,20 @@
 # 文档维护规范
 
-> 最后更新：2026-03-26
+> 最后更新：2026-04-05
 
 ## 核心原则
 
 **每次代码变更必须同步更新相关文档，确保文档与代码保持一致。**
+
+---
+
+## 文档分层与落位
+
+- `docs/`：稳定、长期维护的项目文档，例如 API、功能设计、全局文档规则。
+- `docs/docker/`：Docker 部署、发布记录、测试治理、阶段计划、前端专项文档和历史归档。
+- 模块专用说明优先就近放置，例如 `backend/tests/README.md`、`scripts/xbk/README.md`。
+- 新增文档前先查看 `docs/README.md`，不要把临时分析和正式文档混放。
+- 统计项目文档时应排除 `venv`、`node_modules`、构建产物目录中的第三方 Markdown 文件。
 
 ---
 
@@ -18,9 +28,9 @@
 3. 确认修改不会与现有设计冲突
 
 **示例**：
-- 修改 API 端点 → 先读 `docs/API.md`
-- 修改数据库模型 → 先读 `docs/assessment/ASSESSMENT_DATABASE.md`（如果是 assessment 模块）
-- 修改部署配置 → 先读 `docs/DEPLOY.md`
+- 修改 API 端点 → 先读 `docs/development/API.md`
+- 修改数据库模型 → 先读 `docs/features/assessment/ASSESSMENT_DATABASE.md`（如果是 assessment 模块）
+- 修改部署配置 → 先读 `docs/docker/deploy/DEPLOY.md`
 
 ### 规则 2：修改后立即更新文档
 
@@ -28,14 +38,15 @@
 
 | 代码变更类型 | 需要更新的文档 |
 |-------------|---------------|
-| 新增/修改 API 端点 | `docs/API.md` |
+| 新增/修改 API 端点 | `docs/development/API.md` |
 | 新增/修改数据库表 | 对应模块的 DATABASE.md |
-| 修改部署配置 | `docs/DEPLOY.md` |
-| 修改 CI/CD 工作流 | `docs/CICD.md` |
+| 修改部署配置 | `docs/docker/deploy/DEPLOY.md` |
+| 修改 CI/CD 工作流 | `docs/docker/deploy/CICD.md` |
+| 调整测试脚本/烟测入口/测试治理规则 | `docs/docker/testing/README.md` 或对应测试治理文档 |
 | 新增功能模块 | 创建对应的模块文档 |
-| 修改环境变量 | `docs/DEPLOY.md` + `.env.example` |
-| 修复重要 Bug | `docs/RELEASE_NOTES.md` |
-| 修改 Docker 配置 | `docs/DEPLOY.md` |
+| 修改环境变量 | `docs/docker/deploy/DEPLOY.md` + `.env.example` |
+| 修复重要 Bug | `docs/docker/RELEASE_NOTES.md` |
+| 修改 Docker 配置 | `docs/docker/deploy/DEPLOY.md` |
 
 ### 规则 3：文档更新检查清单
 
@@ -44,7 +55,7 @@
 - [ ] 文档是否已更新？
 - [ ] 文档中的示例代码是否正确？
 - [ ] 文档中的文件路径是否准确？
-- [ ] 是否需要更新 README.md 的文档索引？
+- [ ] 是否需要更新 `README.md` 或 `docs/README.md` 的文档索引？
 
 ---
 
@@ -53,10 +64,10 @@
 ### 场景 1：新增 API 端点
 
 **步骤**：
-1. 读取 `docs/API.md`，了解现有 API 结构
+1. 读取 `docs/development/API.md`，了解现有 API 结构
 2. 编写新的 API 端点代码
-3. 在 `docs/API.md` 对应章节添加新端点
-4. 更新 `docs/API.md` 顶部的"最后更新"时间
+3. 在 `docs/development/API.md` 对应章节添加新端点
+4. 更新 `docs/development/API.md` 顶部的"最后更新"时间
 
 **示例**：
 ```markdown
@@ -70,7 +81,7 @@
 ### 场景 2：修改数据库模型
 
 **步骤**：
-1. 读取对应模块的 DATABASE.md（如 `docs/assessment/ASSESSMENT_DATABASE.md`）
+1. 读取对应模块的 DATABASE.md（如 `docs/features/assessment/ASSESSMENT_DATABASE.md`）
 2. 修改数据库模型代码
 3. 创建 Alembic 迁移文件
 4. 更新 DATABASE.md 中的表结构说明
@@ -79,26 +90,27 @@
 ### 场景 3：新增功能模块
 
 **步骤**：
-1. 创建模块文档（如 `docs/NEW_MODULE.md`）
+1. 创建模块文档（如 `docs/features/NEW_MODULE.md`）
 2. 编写模块代码
-3. 在 `README.md` 的"文档索引"中添加链接
-4. 在 `docs/API.md` 中添加对应的 API 章节
+3. 在 `docs/README.md` 的"功能模块"章节添加链接
+4. 在 `README.md` 的"文档索引"中补充入口（如有必要）
+5. 在 `docs/development/API.md` 中添加对应的 API 章节
 
 ### 场景 4：修改配置
 
 **步骤**：
-1. 读取 `docs/DEPLOY.md`
+1. 读取 `docs/docker/deploy/DEPLOY.md`
 2. 修改配置文件（`.env.example`、`docker-compose.yml` 等）
-3. 更新 `docs/DEPLOY.md` 中的配置说明
+3. 更新 `docs/docker/deploy/DEPLOY.md` 中的配置说明
 4. 如果是新增环境变量，在"环境变量配置"章节添加说明
 
 ### 场景 5：修复重要 Bug
 
 **步骤**：
 1. 修复 Bug
-2. 在 `docs/RELEASE_NOTES.md` 顶部添加新版本记录
+2. 在 `docs/docker/RELEASE_NOTES.md` 顶部添加新版本记录
 3. 说明修复的问题、根因、影响范围
-4. 如果涉及配置变更，同步更新 `docs/DEPLOY.md`
+4. 如果涉及配置变更，同步更新 `docs/docker/deploy/DEPLOY.md`
 
 ---
 
@@ -256,20 +268,30 @@ Claude 会自动：
 ## 附录：文档清单
 
 ### 核心文档
+- `docs/README.md` - 总索引
 - `README.md` - 项目入口
-- `docs/API.md` - API 接口清单
-- `docs/DEPLOY.md` - 部署指南
-- `docs/CICD.md` - CI/CD 说明
-- `docs/RELEASE_NOTES.md` - 版本记录
+- `docs/development/API.md` - API 接口清单
+- `docs/docker/deploy/DEPLOY.md` - 部署指南
+- `docs/docker/deploy/CICD.md` - CI/CD 说明
+- `docs/docker/testing/README.md` - 测试与验证入口
+- `docs/docker/RELEASE_NOTES.md` - 版本记录
 
 ### 功能模块文档
-- `docs/AI_AGENTS.md` - AI 智能体
-- `docs/CLASSROOM.md` - 课堂互动
-- `docs/INFORMATICS.md` - 信息学笔记
-- `docs/PYTHONLAB.md` - 调试环境
-- `docs/assessment/` - 自主检测系统（6个文件）
+- `docs/features/AI_AGENTS.md` - AI 智能体
+- `docs/features/CLASSROOM.md` - 课堂互动
+- `docs/features/INFORMATICS.md` - 信息学笔记
+- `docs/features/PYTHONLAB.md` - 调试环境
+- `docs/features/assessment/` - 自主检测系统（6 个文件）
 
 ### 其他文档
-- `docs/CLAUDE_GUIDE.md` - Claude 使用指南
-- `docs/database-migration-fix.md` - 数据库迁移
-- `docs/migration_analysis.md` - 迁移链分析
+- `docs/development/CLAUDE_GUIDE.md` - Claude 使用指南
+- `docs/docker/archive/deploy/database-migration-fix.md` - 数据库迁移
+- `docs/docker/archive/deploy/migration_analysis.md` - 迁移链分析
+- `docs/docker/plans/README.md` - 计划与分析索引
+- `docs/docker/testing/README.md` - 测试与验证索引
+- `docs/docker/frontend/README.md` - 前端 UI 文档索引
+- `backend/tests/README.md` - 后端测试说明
+- `backend/scripts/README.md` - 后端 smoke/soak 脚本说明
+- `scripts/README.md` - 根层脚本说明
+- `frontend/scripts/README.md` - 前端脚本说明
+- `scripts/xbk/README.md` - 脚本使用说明

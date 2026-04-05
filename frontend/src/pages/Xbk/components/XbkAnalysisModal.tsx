@@ -1,10 +1,32 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect, useMemo } from "react";
-import { Modal, Row, Col, Card, Statistic, Tabs, Table, Input, Space, Tag, Spin, Typography, message, Button } from "antd";
+import {
+  type ColumnDef,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2 } from "lucide-react";
 import { xbkDataApi } from "@services";
-import type { XbkSummary, XbkCourseStatItem, XbkClassStatItem, XbkStudentRow } from "@services";
-import type { ColumnsType } from "antd/es/table";
-
-const { Text } = Typography;
+import type {
+  XbkSummary,
+  XbkCourseStatItem,
+  XbkClassStatItem,
+  XbkStudentRow,
+} from "@services";
+import { cn } from "@/lib/utils";
 
 interface XbkAnalysisModalProps {
   open: boolean;
@@ -16,6 +38,167 @@ interface XbkAnalysisModalProps {
     class_name?: string;
   };
 }
+
+const StatCard: React.FC<{ title: string; value: number; valueClassName?: string }> = ({
+  title,
+  value,
+  valueClassName,
+}) => (
+  <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2">
+    <div className="text-sm text-text-tertiary">{title}：</div>
+    <div className={`text-3xl font-semibold leading-none ${valueClassName || ""}`}>{value}</div>
+  </div>
+);
+
+type ModalTableProps<TData extends object> = {
+  data: TData[];
+  columns: ColumnDef<TData>[];
+  className?: string;
+  getRowId?: (row: TData, index: number) => string;
+};
+
+const ModalDataTable = <TData extends object>({
+  data,
+  columns,
+  className,
+  getRowId,
+}: ModalTableProps<TData>) => {
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    ...(getRowId ? { getRowId } : {}),
+  });
+
+  return (
+    <DataTable
+      table={table}
+      className={cn("h-full", className)}
+      tableClassName="min-w-full"
+    />
+  );
+};
+
+const CourseTable: React.FC<{ data: XbkCourseStatItem[]; className?: string }> = ({
+  data,
+  className,
+}) => {
+  const columns = useMemo<ColumnDef<XbkCourseStatItem>[]>(
+    () => [
+      {
+        accessorFn: (row) => `${row.course_code} · ${row.course_name || "-"}`,
+        id: "course",
+        header: "课程",
+      },
+      {
+        accessorKey: "count",
+        header: "人数",
+        meta: { className: "text-right" },
+        cell: ({ row }) => {
+          const record = row.original;
+          if (typeof record.allowed_total === "number" && record.allowed_total > 0) {
+            return (
+              <Badge variant={record.count > record.allowed_total ? "danger" : "warning"}>
+                {record.count}/{record.allowed_total}
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="warning">
+              {record.count}
+            </Badge>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  return (
+    <ModalDataTable
+      data={data}
+      columns={columns}
+      className={className}
+      getRowId={(row, index) => `${row.course_code || "course"}-${index}`}
+    />
+  );
+};
+
+const ClassTable: React.FC<{ data: XbkClassStatItem[]; className?: string }> = ({
+  data,
+  className,
+}) => {
+  const columns = useMemo<ColumnDef<XbkClassStatItem>[]>(
+    () => [
+      {
+        accessorFn: (row) => row.class_name,
+        id: "class_name",
+        header: "班级",
+      },
+      {
+        accessorKey: "count",
+        header: "人数",
+        meta: { className: "text-right" },
+        cell: ({ row }) => (
+          <Badge variant="warning">
+            {row.original.count}
+          </Badge>
+        ),
+      },
+    ],
+    [],
+  );
+
+  return (
+    <ModalDataTable
+      data={data}
+      columns={columns}
+      className={className}
+      getRowId={(row, index) => `${row.class_name || "class"}-${index}`}
+    />
+  );
+};
+
+const NoSelectionTable: React.FC<{ data: XbkStudentRow[]; className?: string }> = ({
+  data,
+  className,
+}) => {
+  const columns = useMemo<ColumnDef<XbkStudentRow>[]>(
+    () => [
+      {
+        accessorFn: (row) => row.class_name || "-",
+        id: "class_name",
+        header: "班级",
+        size: 160,
+        meta: { className: "w-[160px] max-w-[160px] truncate" },
+      },
+      {
+        accessorFn: (row) => row.student_no || "-",
+        id: "student_no",
+        header: "学号",
+        size: 160,
+        meta: { className: "w-[160px] max-w-[160px] truncate" },
+      },
+      {
+        accessorFn: (row) => row.name || "-",
+        id: "name",
+        header: "姓名",
+        size: 140,
+        meta: { className: "w-[140px] max-w-[140px] truncate" },
+      },
+    ],
+    [],
+  );
+
+  return (
+    <ModalDataTable
+      data={data}
+      columns={columns}
+      className={className}
+      getRowId={(row, index) => `${row.id ?? "student"}-${row.student_no}-${index}`}
+    />
+  );
+};
 
 export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCancel, filters }) => {
   const [loading, setLoading] = useState(false);
@@ -52,7 +235,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
         setClassStats(classes.items || []);
         setNoSelection(noSel.items || []);
       } catch (_e: any) {
-        message.error("加载分析数据失败");
+        showMessage.error("加载分析数据失败");
       } finally {
         setLoading(false);
       }
@@ -81,199 +264,125 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
     });
   }, [studentQuery, noSelection]);
 
-  const courseColumns: ColumnsType<XbkCourseStatItem> = [
-    {
-      title: "课程",
-      dataIndex: "course",
-      render: (_: any, r: XbkCourseStatItem) => (
-        <Text>
-          {r.course_code} · {r.course_name || "-"}
-        </Text>
-      ),
-    },
-    {
-      title: "人数",
-      dataIndex: "count",
-      width: 120,
-      align: "right",
-      render: (v: number, r: XbkCourseStatItem) =>
-        typeof r.allowed_total === "number" && r.allowed_total > 0 ? (
-          <Tag color={v > r.allowed_total ? "red" : "orange"}>
-            {v}/{r.allowed_total}
-          </Tag>
-        ) : (
-          <Tag color="orange">{v}</Tag>
-        ),
-    },
-  ];
-
-  const classColumns: ColumnsType<XbkClassStatItem> = [
-    { title: "班级", dataIndex: "class_name" },
-    {
-      title: "人数",
-      dataIndex: "count",
-      width: 120,
-      align: "right",
-      render: (v: number) => <Tag color="orange">{v}</Tag>,
-    },
-  ];
-
-  const noSelectionColumns: ColumnsType<XbkStudentRow> = [
-    { title: "班级", dataIndex: "class_name", width: 140, ellipsis: true },
-    { title: "学号", dataIndex: "student_no", width: 140, ellipsis: true },
-    { title: "姓名", dataIndex: "name", width: 120, ellipsis: true },
-  ];
-
   return (
-    <Modal
-      title="数据分析"
-      open={open}
-      onCancel={onCancel}
-      footer={[
-        <Button key="close" onClick={onCancel}>
-          关闭
-        </Button>,
-      ]}
-      width={980}
-      styles={{ body: { maxHeight: '75vh', overflow: 'auto' } }}
-    >
-      {loading ? (
-        <div className="ws-modal-loading">
-          <Spin />
-        </div>
-      ) : (
-        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-          <div className="ws-modal-filter-info">
-            当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
-            {filters.class_name ? ` · ${filters.class_name}` : ""}
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="h-[86vh] max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-[1100px]">
+        <DialogHeader>
+          <DialogTitle>数据分析</DialogTitle>
+          <DialogDescription className="sr-only">
+            查看当前筛选条件下的学生、课程与选课统计明细。
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
           </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+            <div className="ws-modal-filter-info flex flex-wrap items-center gap-x-2 gap-y-1">
+              当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+              {filters.class_name ? ` · ${filters.class_name}` : ""}
+              <span>·</span>
+              <span className="font-medium text-text">学生数：{summary?.students ?? 0}</span>
+            </div>
 
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={6}>
-              <Card size="small" bordered={false} className="ws-stat-card">
-                <Statistic title="学生数" value={summary?.students ?? 0} />
-              </Card>
-            </Col>
-            <Col xs={24} md={6}>
-              <Card size="small" bordered={false} className="ws-stat-card">
-                <Statistic title="课程数" value={summary?.courses ?? 0} />
-              </Card>
-            </Col>
-            <Col xs={24} md={6}>
-              <Card size="small" bordered={false} className="ws-stat-card">
-                <Statistic title="选课条目" value={summary?.selections ?? 0} />
-              </Card>
-            </Col>
-            <Col xs={24} md={3}>
-              <Card size="small" bordered={false} className="ws-stat-card">
-                <Statistic title="未选课" value={summary?.unselected_count ?? 0} valueStyle={{ color: 'var(--ws-color-warning)' }} />
-              </Card>
-            </Col>
-            <Col xs={24} md={3}>
-              <Card size="small" bordered={false} className="ws-stat-card">
-                <Statistic title="休学/其他" value={summary?.suspended_count ?? 0} valueStyle={{ color: 'var(--ws-color-text-tertiary)' }} />
-              </Card>
-            </Col>
-          </Row>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+              <div>
+                <StatCard title="学生数" value={summary?.students ?? 0} />
+              </div>
+              <div>
+                <StatCard title="课程数" value={summary?.courses ?? 0} />
+              </div>
+              <div>
+                <StatCard title="选课条目" value={summary?.selections ?? 0} />
+              </div>
+              <div>
+                <StatCard
+                  title="未选课"
+                  value={summary?.unselected_count ?? 0}
+                  valueClassName="text-[var(--ws-color-warning)]"
+                />
+              </div>
+              <div>
+                <StatCard
+                  title="休学/其他"
+                  value={summary?.suspended_count ?? 0}
+                  valueClassName="text-text-tertiary"
+                />
+              </div>
+            </div>
 
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={[
-              {
-                key: "overview",
-                label: "概览",
-                children: (
-                  <Row gutter={[24, 24]}>
-                    <Col xs={24} md={12}>
-                      <Text strong className="ws-section-title">课程统计（按课程代码）</Text>
-                      <Table
-                        rowKey="course_code"
-                        size="small"
-                        columns={courseColumns}
-                        dataSource={courseStats}
-                        pagination={false}
-                        scroll={{ y: 420 }}
-                      />
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Text strong className="ws-section-title">班级统计</Text>
-                      <Table
-                        rowKey="class_name"
-                        size="small"
-                        columns={classColumns}
-                        dataSource={classStats}
-                        pagination={false}
-                        scroll={{ y: 420 }}
-                      />
-                    </Col>
-                  </Row>
-                ),
-              },
-              {
-                key: "courses",
-                label: "课程统计详情",
-                children: (
-                  <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                    <Input
-                      placeholder="搜索课程代码/名称"
-                      allowClear
-                      value={courseQuery}
-                      onChange={(e) => setCourseQuery(e.target.value)}
-                      style={{ maxWidth: 300 }}
-                    />
-                    <Table
-                      rowKey="course_code"
-                      size="small"
-                      columns={courseColumns}
-                      dataSource={filteredCourseStats}
-                      pagination={false}
-                      scroll={{ y: 520 }}
-                    />
-                  </Space>
-                ),
-              },
-              {
-                key: "classes",
-                label: "班级统计详情",
-                children: (
-                  <Table
-                    rowKey="class_name"
-                    size="small"
-                    columns={classColumns}
-                    dataSource={classStats}
-                    pagination={false}
-                    scroll={{ y: 560 }}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+              <TabsList className="w-full justify-start overflow-x-auto">
+                <TabsTrigger value="overview">概览</TabsTrigger>
+                <TabsTrigger value="courses">课程统计详情</TabsTrigger>
+                <TabsTrigger value="classes">班级统计详情</TabsTrigger>
+                <TabsTrigger value="no_selection">未选课学生 ({noSelection.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent
+                value="overview"
+                className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
+              >
+                <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
+                    <div className="ws-section-title font-semibold">课程统计（按课程代码）</div>
+                    <CourseTable data={courseStats} className="min-h-0 flex-1" />
+                  </div>
+                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
+                    <div className="ws-section-title font-semibold">班级统计</div>
+                    <ClassTable data={classStats} className="min-h-0 flex-1" />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent
+                value="courses"
+                className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
+              >
+                <div className="flex min-h-0 flex-1 flex-col space-y-3">
+                  <Input
+                    placeholder="搜索课程代码/名称"
+                    value={courseQuery}
+                    onChange={(e) => setCourseQuery(e.target.value)}
+                    className="max-w-[300px]"
                   />
-                ),
-              },
-              {
-                key: "no_selection",
-                label: `未选课学生 (${noSelection.length})`,
-                children: (
-                  <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-                    <Input
-                      placeholder="搜索班级/姓名/学号"
-                      allowClear
-                      value={studentQuery}
-                      onChange={(e) => setStudentQuery(e.target.value)}
-                      style={{ maxWidth: 300 }}
-                    />
-                    <Table
-                      rowKey="id"
-                      size="small"
-                      columns={noSelectionColumns}
-                      dataSource={filteredNoSelection}
-                      pagination={false}
-                      scroll={{ y: 520 }}
-                    />
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </Space>
-      )}
-    </Modal>
+                  <CourseTable data={filteredCourseStats} className="min-h-0 flex-1" />
+                </div>
+              </TabsContent>
+
+              <TabsContent
+                value="classes"
+                className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
+              >
+                <ClassTable data={classStats} className="min-h-0 flex-1" />
+              </TabsContent>
+
+              <TabsContent
+                value="no_selection"
+                className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
+              >
+                <div className="flex min-h-0 flex-1 flex-col space-y-3">
+                  <Input
+                    placeholder="搜索班级/姓名/学号"
+                    value={studentQuery}
+                    onChange={(e) => setStudentQuery(e.target.value)}
+                    className="max-w-[300px]"
+                  />
+                  <NoSelectionTable data={filteredNoSelection} className="min-h-0 flex-1" />
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

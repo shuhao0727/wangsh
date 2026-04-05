@@ -155,9 +155,13 @@ function readEvalExpr(): string {
 }
 
 async function loadPyodideFrom(baseUrl: string) {
-  (self as any).importScripts(`${baseUrl.replace(/\/+$/, "")}/pyodide.js`);
-  const loadPyodide = (self as any).loadPyodide;
-  pyodide = await loadPyodide({ indexURL: baseUrl.replace(/\/+$/, "") + "/" });
+  const normalizedBase = `${baseUrl.replace(/\/+$/, "")}/`;
+  const pyodideMod = await import(/* @vite-ignore */ `${normalizedBase}pyodide.mjs`);
+  const loadPyodide = pyodideMod?.loadPyodide || (self as any).loadPyodide;
+  if (typeof loadPyodide !== "function") {
+    throw new Error("loadPyodide not found in pyodide.mjs");
+  }
+  pyodide = await loadPyodide({ indexURL: normalizedBase });
   const pyDbgBootstrap = `
 import sys, json, traceback, builtins
 from pyodide.ffi import to_js
@@ -234,17 +238,30 @@ def __pydbg_run(code, hooks):
     _breakpoints = _hget("breakpoints")
 
     bp = {}
+    def _bp_get(obj, key, default=None):
+        try:
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+        except Exception:
+            pass
+        try:
+            return obj[key]
+        except Exception:
+            pass
+        try:
+            return getattr(obj, key)
+        except Exception:
+            return default
     try:
         for it in ((_breakpoints() if _breakpoints else None) or []):
-            if not isinstance(it, dict):
-                continue
-            ln = int(it.get("line") or 0)
+            ln = int(_bp_get(it, "line", 0) or 0)
             if ln <= 0:
                 continue
+            hit_count_raw = _bp_get(it, "hitCount", 0)
             bp[ln] = {
-                "enabled": bool(it.get("enabled", True)),
-                "condition": str(it.get("condition") or "").strip(),
-                "hitCount": int(it.get("hitCount") or 0) if it.get("hitCount") else 0,
+                "enabled": bool(_bp_get(it, "enabled", True)),
+                "condition": str(_bp_get(it, "condition", "") or "").strip(),
+                "hitCount": int(hit_count_raw or 0) if hit_count_raw else 0,
                 "hits": 0,
             }
     except Exception:

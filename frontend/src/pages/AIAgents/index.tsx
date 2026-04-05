@@ -1,20 +1,28 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  App,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Grid,
-  Drawer,
-} from "antd";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  RobotOutlined,
-  MessageOutlined,
-  CodeOutlined,
-  BookOutlined,
-  UserOutlined,
-} from "@ant-design/icons";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Bot,
+  BookOpen,
+  Code2,
+  MessageSquare,
+  User,
+} from "lucide-react";
 import AgentSidebar from "./AgentSidebar";
 import ChatArea from "./ChatArea";
 import GroupDiscussionPanel from "./GroupDiscussionPanel";
@@ -22,6 +30,7 @@ import AssessmentPanel from "./AssessmentPanel";
 import ClassroomPanel from "./ClassroomPanel";
 import AgentErrorBoundary from "./AgentErrorBoundary";
 import useAuth from "@hooks/useAuth";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type {
   Agent,
   Message,
@@ -43,8 +52,7 @@ const generateSessionId = (): string =>
     : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const AIAgentsPage: React.FC = () => {
-  const { message } = App.useApp();
-  const screens = Grid.useBreakpoint();
+  const screens = useBreakpoint();
   const isMobile = !screens.md;
 
   // 统一认证状态
@@ -53,7 +61,8 @@ const AIAgentsPage: React.FC = () => {
   // 登录模态框状态
   const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
-  const [loginForm] = Form.useForm();
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   // 智能体列表
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -94,12 +103,17 @@ const AIAgentsPage: React.FC = () => {
         const mappedAgents: Agent[] = activeAgents.map((agent, index) => {
           // 根据索引分配图标和颜色
           const icons = [
-            <BookOutlined />,
-            <CodeOutlined />,
-            <RobotOutlined />,
-            <MessageOutlined />,
+            <BookOpen className="h-4 w-4" />,
+            <Code2 className="h-4 w-4" />,
+            <Bot className="h-4 w-4" />,
+            <MessageSquare className="h-4 w-4" />,
           ];
-          const colors = ["#0EA5E9", "#10B981", "#6366F1", "#F59E0B"];
+          const colors = [
+            "var(--ws-color-primary)",
+            "var(--ws-color-success)",
+            "var(--ws-color-secondary)",
+            "var(--ws-color-warning)",
+          ];
 
           const iconIndex = index % icons.length;
 
@@ -124,32 +138,32 @@ const AIAgentsPage: React.FC = () => {
               id: "study-assistant",
               name: "学习助手",
               description: "帮助你解决学习问题，提供学习建议",
-              icon: <BookOutlined />,
-              color: "#0EA5E9",
+              icon: <BookOpen className="h-4 w-4" />,
+              color: "var(--ws-color-primary)",
               status: "online",
             },
             {
               id: "code-tutor",
               name: "代码导师",
               description: "编程问题解答，代码审查与优化",
-              icon: <CodeOutlined />,
-              color: "#10B981",
+              icon: <Code2 className="h-4 w-4" />,
+              color: "var(--ws-color-success)",
               status: "online",
             },
             {
               id: "contest-guide",
               name: "竞赛指导",
               description: "信息学竞赛题目解析与训练指导",
-              icon: <RobotOutlined />,
-              color: "#6366F1",
+              icon: <Bot className="h-4 w-4" />,
+              color: "var(--ws-color-secondary)",
               status: "offline",
             },
             {
               id: "document-analyzer",
               name: "文档分析",
               description: "文档内容提取、总结与分析",
-              icon: <MessageOutlined />,
-              color: "#F59E0B",
+              icon: <MessageSquare className="h-4 w-4" />,
+              color: "var(--ws-color-warning)",
               status: "online",
             },
           ];
@@ -161,7 +175,7 @@ const AIAgentsPage: React.FC = () => {
         }
       } catch (error) {
         logger.error("加载智能体列表失败:", error);
-        message.error("加载智能体列表失败，使用默认智能体");
+        showMessage.error("加载智能体列表失败，使用默认智能体");
 
         // 失败时使用默认智能体
         const defaultAgents: Agent[] = [
@@ -169,16 +183,16 @@ const AIAgentsPage: React.FC = () => {
             id: "study-assistant",
             name: "学习助手",
             description: "帮助你解决学习问题，提供学习建议",
-            icon: <BookOutlined />,
-            color: "#0EA5E9",
+            icon: <BookOpen className="h-4 w-4" />,
+            color: "var(--ws-color-primary)",
             status: "online",
           },
           {
             id: "code-tutor",
             name: "代码导师",
             description: "编程问题解答，代码审查与优化",
-            icon: <CodeOutlined />,
-            color: "#10B981",
+            icon: <Code2 className="h-4 w-4" />,
+            color: "var(--ws-color-success)",
             status: "online",
           },
         ];
@@ -300,7 +314,7 @@ const AIAgentsPage: React.FC = () => {
     const agent = agents.find((a) => a.id === agentId);
     if (agent) {
       setCurrentAgent(agent);
-      message.success(`已切换到 ${agent.name}`);
+      showMessage.success(`已切换到 ${agent.name}`);
       setWorkflowGroups([]);
       setMessages([]);
       setSessions([]);
@@ -328,21 +342,21 @@ const AIAgentsPage: React.FC = () => {
     });
 
     if (!content) {
-      message.warning("请输入消息内容");
+      showMessage.warning("请输入消息内容");
       return;
     }
 
     // 检查是否还在加载状态
     if (auth.isLoading) {
       logger.debug("⏳ 系统正在加载中，阻止发送");
-      message.info("系统正在初始化，请稍后再试");
+      showMessage.info("系统正在初始化，请稍后再试");
       return;
     }
 
     // 检查智能体是否已加载
     if (!currentAgent) {
       logger.debug("⚠️ 智能体未加载，阻止发送");
-      message.error("智能体未加载，请刷新页面");
+      showMessage.error("智能体未加载，请刷新页面");
       return;
     }
 
@@ -554,7 +568,6 @@ const AIAgentsPage: React.FC = () => {
     setCurrentStreamingMessageId(null);
   };
 
-
   // 聚焦输入框
   const handleFocusInput = () => {
     const input = document.getElementById("message-input");
@@ -615,16 +628,24 @@ const AIAgentsPage: React.FC = () => {
   }, [stopStream]);
 
   // 登录处理函数
-  const handleLogin = async (values: {
-    username: string;
-    password: string;
-  }) => {
+  const handleLogin = async () => {
+    const username = loginUsername.trim();
+    const password = loginPassword.trim();
+    if (username.length < 2) {
+      showMessage.warning("请输入至少2个字符的用户名/姓名");
+      return;
+    }
+    if (password.length < 2) {
+      showMessage.warning("请输入至少2个字符的密码/学号");
+      return;
+    }
     try {
-      const result = await auth.login(values.username, values.password);
+      const result = await auth.login(username, password);
       if (result.success) {
-        message.success("登录成功！");
+        showMessage.success("登录成功！");
         setLoginModalVisible(false);
-        loginForm.resetFields();
+        setLoginUsername("");
+        setLoginPassword("");
 
         // 登录成功后自动发送草稿消息
         if (draftMessage && currentAgent && result.user) {
@@ -638,10 +659,10 @@ const AIAgentsPage: React.FC = () => {
           }
         }
       } else {
-        message.error(result.error || "登录失败");
+        showMessage.error(result.error || "登录失败");
       }
     } catch (_error) {
-      message.error("登录过程中发生错误");
+      showMessage.error("登录过程中发生错误");
     }
   };
 
@@ -649,11 +670,13 @@ const AIAgentsPage: React.FC = () => {
   const handleCloseLoginModal = () => {
     setLoginModalVisible(false);
     setDraftMessage("");
+    setLoginUsername("");
+    setLoginPassword("");
   };
 
   return (
     <AgentErrorBoundary>
-    <div className="w-full h-full flex flex-col overflow-hidden bg-white">
+    <div className="ai-agents-page w-full h-full flex flex-col overflow-hidden bg-surface">
       <GroupDiscussionPanel
         isAuthenticated={auth.isAuthenticated}
         isStudent={auth.isStudent()}
@@ -674,31 +697,34 @@ const AIAgentsPage: React.FC = () => {
         userId={auth.user?.id}
       />
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Mobile Drawer */}
-        <Drawer
-          title="智能体列表"
-          placement="left"
-          onClose={() => setHistoryVisible(false)}
+        {/* Mobile Sidebar Sheet */}
+        <Sheet
           open={isMobile && historyVisible}
-          width={280}
-          styles={{ body: { padding: 0 } }}
+          onOpenChange={(open) => setHistoryVisible(open)}
         >
-          <AgentSidebar
-            agents={agents}
-            currentAgent={currentAgent}
-            sessions={sessions}
-            currentSessionId={currentSessionId}
-            historyVisible={true}
-            onAgentChange={(id) => { handleAgentChange(id); if (isMobile) setHistoryVisible(false); }}
-            onToggleSidebar={() => setHistoryVisible(false)}
-            onStartNewConversation={() => { handleStartNewConversation(); if (isMobile) setHistoryVisible(false); }}
-            onSelectSession={(id) => { handleSelectSession(id); if (isMobile) setHistoryVisible(false); }}
-          />
-        </Drawer>
+          <SheetContent side="left" className="w-72 p-0 sm:max-w-72">
+            <SheetHeader className="border-b border-[var(--ws-color-border-secondary)] px-4 py-3">
+              <SheetTitle className="text-base">智能体列表</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 min-h-0">
+              <AgentSidebar
+                agents={agents}
+                currentAgent={currentAgent}
+                sessions={sessions}
+                currentSessionId={currentSessionId}
+                historyVisible={true}
+                onAgentChange={(id) => { handleAgentChange(id); if (isMobile) setHistoryVisible(false); }}
+                onToggleSidebar={() => setHistoryVisible(false)}
+                onStartNewConversation={() => { handleStartNewConversation(); if (isMobile) setHistoryVisible(false); }}
+                onSelectSession={(id) => { handleSelectSession(id); if (isMobile) setHistoryVisible(false); }}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Desktop Sidebar */}
         {!isMobile && historyVisible && (
-          <div className="w-[280px] flex-shrink-0 flex flex-col h-full bg-white border-r border-black/[0.04]">
+          <div className="w-72 flex-shrink-0 flex flex-col h-full bg-surface border-r border-[var(--ws-color-border-secondary)]">
             <AgentSidebar
               agents={agents}
               currentAgent={currentAgent}
@@ -739,59 +765,66 @@ const AIAgentsPage: React.FC = () => {
       </div>
 
       {/* 登录弹窗 */}
-      <Modal
-        title={
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm"
-              style={{ background: "linear-gradient(135deg, #0EA5E9 0%, #6366F1 100%)" }}>
-              W
-            </div>
-            <span>登录</span>
-          </div>
-        }
+      <Dialog
         open={loginModalVisible}
-        onCancel={handleCloseLoginModal}
-        footer={null}
-        destroyOnHidden
-        width={400}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseLoginModal();
+          }
+        }}
       >
-        <div className="pt-2">
-          <Form
-            form={loginForm}
-            name="login"
-            onFinish={handleLogin}
-            layout="vertical"
-            autoComplete="off"
-          >
-            <Form.Item
-              label="用户名/姓名"
-              name="username"
-              rules={[
-                { required: true, message: "请输入用户名/姓名" },
-                { min: 2, message: "至少2个字符" },
-              ]}
+        <DialogContent className="w-full sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm"
+                  style={{ background: "var(--ws-gradient-primary)" }}>
+                  W
+                </div>
+                <span>登录</span>
+              </div>
+            </DialogTitle>
+            <DialogDescription>登录后可继续与智能体对话。</DialogDescription>
+          </DialogHeader>
+          <div className="pt-[var(--ws-space-1)] space-y-[var(--ws-space-2)]">
+            <div className="space-y-2">
+              <Label htmlFor="login-username">用户名/姓名</Label>
+              <Input
+                id="login-username"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="管理员账号 或 学生姓名"
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">密码/学号</Label>
+              <Input
+                id="login-password"
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void handleLogin();
+                  }
+                }}
+                placeholder="管理员密码 或 学号"
+                autoComplete="current-password"
+              />
+            </div>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => void handleLogin()}
+              disabled={auth.isLoading}
             >
-              <Input placeholder="管理员账号 或 学生姓名" size="large" />
-            </Form.Item>
-            <Form.Item
-              label="密码/学号"
-              name="password"
-              rules={[
-                { required: true, message: "请输入密码/学号" },
-                { min: 2, message: "至少2个字符" },
-              ]}
-            >
-              <Input.Password placeholder="管理员密码 或 学号" size="large" />
-            </Form.Item>
-            <Form.Item className="mb-0">
-              <Button type="primary" htmlType="submit" block size="large"
-                loading={auth.isLoading} icon={<UserOutlined />}>
-                登录
-              </Button>
-            </Form.Item>
-          </Form>
-        </div>
-      </Modal>
+              <User className="h-4 w-4" />
+              {auth.isLoading ? "登录中..." : "登录"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
     </AgentErrorBoundary>
   );

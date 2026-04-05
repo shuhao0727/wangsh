@@ -2,15 +2,25 @@
  * 课堂互动浮动窗口 - 学生端
  * 视图：idle → vote/fill_blank → submitted → result
  */
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
-import { Button, Radio, Checkbox, Input, Tag, Progress, message, Tooltip } from "antd";
-import { CloseOutlined, PushpinOutlined, PushpinFilled, ThunderboltOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { X, Pin, PinOff, Zap, RotateCcw, Loader2 } from "lucide-react";
 import { classroomApi, Activity, ActivityStats } from "@services/classroom";
 import { planApi, Plan } from "@services/classroomPlan";
 import { config as appConfig } from "@services";
 import { getStoredAccessToken } from "@services/api";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEYS = {
   POS: "ci_floating_pos",
@@ -70,6 +80,86 @@ const formatDisplayAnswer = (raw?: string | null): string => {
   return blanks.map((v, i) => `(${i + 1}) ${v}`).join("；");
 };
 
+const clampPercent = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+};
+
+const InlineTooltip = ({
+  title,
+  children,
+}: {
+  title: React.ReactNode;
+  children: React.ReactElement;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipContent>{title}</TooltipContent>
+  </Tooltip>
+);
+
+const LineProgress = ({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) => {
+  const safePercent = clampPercent(percent);
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded bg-[var(--ws-color-border-secondary)]">
+      <div
+        className="h-full transition-all"
+        style={{ width: `${safePercent}%`, backgroundColor: color }}
+      />
+    </div>
+  );
+};
+
+const CircleProgress = ({
+  percent,
+  size = 80,
+  strokeColor = "var(--ws-color-purple)",
+}: {
+  percent: number;
+  size?: number;
+  strokeColor?: string;
+}) => {
+  const safePercent = clampPercent(percent);
+  const strokeWidth = Math.max(6, Math.round(size * 0.1));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (safePercent / 100) * circumference;
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--ws-color-border-secondary)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <span className="absolute text-xs font-semibold text-text-secondary">
+        {Math.round(safePercent)}%
+      </span>
+    </div>
+  );
+};
+
 const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(() => {
@@ -120,7 +210,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
 
   // 拖拽
   const handleDragStart = useCallback((e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button, input, textarea, .ant-radio-wrapper, .ant-checkbox-wrapper")) return;
+    if ((e.target as HTMLElement).closest("button, input, textarea, .ci-option-item")) return;
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [pos]);
@@ -158,7 +248,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const checkActive = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? true;
     if (!isAuthenticated) {
-      if (!silent) message.warning("请先登录后再刷新");
+      if (!silent) showMessage.warning("请先登录后再刷新");
       return false;
     }
     const activity = activityRef.current;
@@ -173,7 +263,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         const a = list[0];
         if (!activity || activity.id !== a.id || activity.status !== a.status || viewRef.current === "idle") {
           if (viewRef.current === "review" && activity && a.id !== activity.id) {
-            message.info("老师开始了新题目");
+            showMessage.info("老师开始了新题目");
           }
           setActivity(a);
           if (a.my_answer) {
@@ -217,7 +307,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       }
       return true;
     } catch {
-      if (!silent) message.error("刷新失败，请稍后重试");
+      if (!silent) showMessage.error("刷新失败，请稍后重试");
       return false;
     }
   }, [isAuthenticated, handleOpen]);
@@ -243,7 +333,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     setRefreshing(true);
     try {
       const ok = await checkActive({ silent: false });
-      if (ok) message.success("已刷新");
+      if (ok) showMessage.success("已刷新");
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
@@ -344,7 +434,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       const blankCount = getBlankCount(activity);
       answer = blankCount > 1 ? JSON.stringify(trimmed) : (trimmed[0] || "");
     }
-    if (!answer) { message.warning("请先作答"); return; }
+    if (!answer) { showMessage.warning("请先作答"); return; }
     setSubmitting(true);
     try {
       const resp = await classroomApi.respond(activity.id, answer);
@@ -352,8 +442,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       setIsCorrect(resp.is_correct);
       setItemAnswers(prev => ({ ...prev, [activity.id]: { my_answer: resp.answer, correct_answer: null, is_correct: resp.is_correct } }));
       setView("submitted");
-      message.success("已提交");
-    } catch (e: any) { message.error(e.message || "提交失败"); }
+      showMessage.success("已提交");
+    } catch (e: any) { showMessage.error(e.message || "提交失败"); }
     setSubmitting(false);
   };
 
@@ -373,7 +463,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     try {
       const s = await classroomApi.getStatistics(activityId);
       setReviewStats(s);
-    } catch { message.error("加载班级数据失败"); }
+    } catch { showMessage.error("加载班级数据失败"); }
     setReviewStatsLoading(false);
   }, []);
 
@@ -416,22 +506,16 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
 
   const floatingBtn = !open && (
     <div
-      style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: 1000, cursor: "grab", touchAction: "none" }}
+      style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: "var(--ws-z-floating-btn)", cursor: "grab", touchAction: "none" }}
       onPointerDown={handleBtnDragStart}
       onPointerMove={handleBtnDragMove}
       onPointerUp={handleBtnDragEnd}
     >
       <Button
-        type="primary"
-        icon={<ThunderboltOutlined />}
         onClick={() => { if (!btnDragged.current) handleOpen(); }}
-        className="!rounded-l-none"
-        style={{
-          background: "#8B5CF6", borderColor: "#8B5CF6",
-          boxShadow: "2px 2px 8px rgba(139,92,246,0.4)",
-        }}
+        className="ws-floating-entry-btn ws-floating-entry-btn--classroom"
       >
-        课堂互动
+        <Zap className="h-4 w-4" />课堂互动
       </Button>
     </div>
   );
@@ -441,29 +525,33 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const panel = (
     <div ref={floatingRef} onMouseUp={handleResizeUp} style={{
       position: "fixed", left: pos.x, top: pos.y, width: size.w, height: size.h,
-      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-      zIndex: 1001, resize: "both",
-    }} className="flex flex-col overflow-hidden bg-white rounded-xl">
+      zIndex: "var(--ws-z-floating-panel)", resize: "both",
+    }} className="ws-floating-panel flex flex-col">
       {/* 标题栏 */}
       <div
         onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}
-        className="flex justify-between items-center flex-shrink-0 px-3 py-2 bg-purple text-white cursor-move select-none"
+        className="ws-floating-panel-header ws-floating-panel-header--classroom flex-shrink-0 cursor-move select-none"
       >
         <span className="font-semibold text-sm flex items-center gap-1.5">
-          <ThunderboltOutlined /> 课堂互动
+          <Zap className="h-4 w-4" /> 课堂互动
         </span>
         <div className="flex gap-1" onPointerDown={e => e.stopPropagation()}>
-          <Tooltip title={pinned ? "取消固定" : "固定窗口"}>
-            <Button type="text" size="small" className="!text-white"
-              icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
+          <InlineTooltip title={pinned ? "取消固定" : "固定窗口"}>
+            <Button variant="ghost" size="sm" className="!text-[var(--ws-color-surface)]"
               onClick={() => { const v = !pinned; setPinned(v); try { localStorage.setItem(STORAGE_KEYS.PINNED, String(v)); } catch {} }}
-            />
-          </Tooltip>
-          <Button type="text" size="small" icon={<ReloadOutlined />} className="!text-white"
-            loading={refreshing}
-            onClick={() => { void handleManualRefresh(); }} />
-          <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white"
-            onClick={() => setOpen(false)} />
+            >
+              {pinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+            </Button>
+          </InlineTooltip>
+          <Button variant="ghost" size="sm" className="!text-[var(--ws-color-surface)]"
+            disabled={refreshing}
+            onClick={() => { void handleManualRefresh(); }}>
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="sm" className="!text-[var(--ws-color-surface)]"
+            onClick={() => setOpen(false)}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -473,8 +561,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         {activePlan && (() => {
           const sortedItems = [...activePlan.items].sort((a, b) => a.order_index - b.order_index);
           return (
-            <div className="px-4 pt-2.5 pb-2 border-b border-gray-100 bg-gray-50">
-              <div className="text-xs text-purple font-semibold mb-1.5 tracking-wide">{activePlan.title}</div>
+            <div className="px-[var(--ws-space-3)] pt-[var(--ws-space-2)] pb-[var(--ws-space-1)] border-b border-[var(--ws-color-border)] bg-surface-2">
+              <div className="text-xs text-[var(--ws-color-purple)] font-semibold mb-1.5 tracking-wide">{activePlan.title}</div>
               {/* 横排题号进度 */}
               <div className="flex gap-1.5 flex-wrap">
                 {sortedItems.map((item, idx) => {
@@ -483,11 +571,11 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                   const isPending = item.status === "pending";
                   const ans = item.activity?.id != null ? itemAnswers[item.activity.id] : undefined;
                   const isReviewing = view === "review" && item.activity?.id === selectedDoneActivityId;
-                  const dotColor = isItemActive ? "#8B5CF6"
-                    : isItemDone ? (ans?.is_correct === true ? "#52c41a" : ans?.is_correct === false ? "#ff4d4f" : "#faad14")
-                    : "#e0e0e0";
+                  const dotColor = isItemActive ? "var(--ws-color-purple)"
+                    : isItemDone ? (ans?.is_correct === true ? "var(--ws-color-success)" : ans?.is_correct === false ? "var(--ws-color-error)" : "var(--ws-color-warning)")
+                    : "var(--ws-color-surface-2)";
                   return (
-                    <Tooltip key={item.id} title={isPending ? "未开始" : isItemActive ? "进行中" : item.activity?.title}>
+                    <InlineTooltip key={item.id} title={isPending ? "未开始" : isItemActive ? "进行中" : item.activity?.title}>
                       <div
                         onClick={() => {
                           if (isPending) return;
@@ -502,19 +590,18 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                           }
                         }}
                         style={{
-                          width: 28, height: 28,
                           background: dotColor,
-                          color: isPending ? "#bbb" : "#fff",
-                          boxShadow: isReviewing ? "0 0 0 3px #8B5CF640" : isItemActive ? "0 0 0 3px #8B5CF630" : "none",
-                          outline: isReviewing ? "2px solid #8B5CF6" : isItemActive ? "2px solid #8B5CF6" : "none",
+                          color: isPending ? "var(--ws-color-text-tertiary)" : "var(--ws-color-surface)",
+                          boxShadow: isReviewing ? "0 0 0 3px var(--ws-color-purple)40" : isItemActive ? "0 0 0 3px var(--ws-color-purple)30" : "none",
+                          outline: isReviewing ? "2px solid var(--ws-color-purple)" : isItemActive ? "2px solid var(--ws-color-purple)" : "none",
                           outlineOffset: 1,
                           opacity: isPending ? 0.4 : 1,
                         }}
-                        className={`rounded-full flex items-center justify-center text-xs font-semibold transition-all flex-shrink-0 ${isPending ? "cursor-not-allowed" : "cursor-pointer"}`}
+                        className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all flex-shrink-0 ${isPending ? "cursor-not-allowed" : "cursor-pointer"}`}
                       >
                         {idx + 1}
                       </div>
-                    </Tooltip>
+                    </InlineTooltip>
                   );
                 })}
               </div>
@@ -523,11 +610,13 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         })()}
 
         {/* 主内容区 */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-auto p-[var(--ws-panel-padding)]">
           {/* 倒计时 */}
           {remaining != null && remaining > 0 && (view === "vote" || view === "fill_blank" || view === "submitted") && (
             <div className="text-center mb-3">
-              <Tag color="orange" className="text-base px-3 py-1">{formatTime(remaining)}</Tag>
+              <Badge variant="warning" className="px-[var(--ws-space-2)] py-[calc(var(--ws-space-1)/2)] text-[var(--ws-text-md)] font-semibold">
+                {formatTime(remaining)}
+              </Badge>
             </div>
           )}
 
@@ -542,7 +631,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                 </div>
               ) : (
                 <div className="text-center text-text-tertiary">
-                  <ThunderboltOutlined className="text-5xl text-gray-200 mb-3 block" />
+                  <Zap className="text-5xl text-border-secondary mb-3 block h-12 w-12" />
                   <div className="text-sm">暂无进行中的活动</div>
                 </div>
               )}
@@ -552,26 +641,55 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {/* VOTE */}
           {view === "vote" && activity && (
             <div>
-              <div className="text-base font-semibold mb-4 leading-relaxed">{activity.title}</div>
+              <div className="text-[var(--ws-text-md)] font-semibold mb-4 leading-relaxed">{activity.title}</div>
               {activity.allow_multiple ? (
-                <Checkbox.Group value={multiSelected} onChange={(v) => setMultiSelected(v as string[])} className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-[var(--ws-space-2)]">
                   {(activity.options || []).map(opt => (
-                    <Checkbox key={opt.key} value={opt.key} className="text-sm">
-                      <Tag color="blue" className="mr-1.5">{opt.key}</Tag>{opt.text}
-                    </Checkbox>
+                    <label key={opt.key} className="ci-option-item flex cursor-pointer items-center gap-[var(--ws-space-2)] text-sm">
+                      <input
+                        type="checkbox"
+                        checked={multiSelected.includes(opt.key)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setMultiSelected((prev) => {
+                            if (checked) return prev.includes(opt.key) ? prev : [...prev, opt.key];
+                            return prev.filter((key) => key !== opt.key);
+                          });
+                        }}
+                        className="h-4 w-4 accent-[var(--ws-color-primary)]"
+                      />
+                      <span>
+                        <Badge variant="sky" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                          {opt.key}
+                        </Badge>
+                        {opt.text}
+                      </span>
+                    </label>
                   ))}
-                </Checkbox.Group>
+                </div>
               ) : (
-                <Radio.Group value={selectedAnswer} onChange={e => setSelectedAnswer(e.target.value)} className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-[var(--ws-space-2)]">
                   {(activity.options || []).map(opt => (
-                    <Radio key={opt.key} value={opt.key} className="text-sm">
-                      <Tag color="blue" className="mr-1.5">{opt.key}</Tag>{opt.text}
-                    </Radio>
+                    <label key={opt.key} className="ci-option-item flex cursor-pointer items-center gap-[var(--ws-space-2)] text-sm">
+                      <input
+                        type="radio"
+                        name={`classroom-vote-${activity.id}`}
+                        checked={selectedAnswer === opt.key}
+                        onChange={() => setSelectedAnswer(opt.key)}
+                        className="h-4 w-4 accent-[var(--ws-color-primary)]"
+                      />
+                      <span>
+                        <Badge variant="sky" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                          {opt.key}
+                        </Badge>
+                        {opt.text}
+                      </span>
+                    </label>
                   ))}
-                </Radio.Group>
+                </div>
               )}
-              <Button type="primary" block className="mt-5 !bg-purple !border-purple" onClick={handleSubmit} loading={submitting}>
-                提交答案
+              <Button className="w-full mt-5 !bg-[var(--ws-color-purple)] !border-[var(--ws-color-purple)]" onClick={handleSubmit} disabled={submitting}>
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}提交答案
               </Button>
             </div>
           )}
@@ -586,16 +704,16 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                 <React.Fragment key={i}>
                   <span>{part}</span>
                   {i < parts.length - 1 && (
-                  <span className="bg-[#722ed1] text-white rounded-[3px] px-1.5 text-xs font-[inherit] mx-0.5">▢ {i + 1}</span>
+                  <span className="mx-[calc(var(--ws-space-1)/2)] rounded-sm bg-[var(--ws-color-code-purple)] px-[var(--ws-space-1)] text-xs font-[inherit] text-white">▢ {i + 1}</span>
                   )}
                 </React.Fragment>
               ));
             };
             return (
               <div>
-                <div className="text-base font-semibold mb-3 leading-relaxed">{activity.title}</div>
+                <div className="text-[var(--ws-text-md)] font-semibold mb-3 leading-relaxed">{activity.title}</div>
                 {codeTemplate && (
-                  <pre className="bg-code-bg text-code-text rounded-lg overflow-auto mb-4 whitespace-pre-wrap break-all px-3.5 py-3 text-sm leading-[1.6] font-mono">
+                  <pre className="bg-code-bg text-code-text rounded-lg overflow-auto mb-4 whitespace-pre-wrap break-all px-[var(--ws-space-2)] py-[var(--ws-space-2)] text-sm leading-[1.6] font-mono">
                     {renderCodeWithBlanks(codeTemplate)}
                   </pre>
                 )}
@@ -605,8 +723,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                     <Input value={fillAnswers[idx] || ""} onChange={e => { const a = [...fillAnswers]; a[idx] = e.target.value; setFillAnswers(a); }} placeholder={`填写第 ${idx + 1} 处答案`} maxLength={120} className="font-mono" />
                   </div>
                 ))}
-                <Button type="primary" block className="!mt-4 !bg-purple !border-purple" onClick={handleSubmit} loading={submitting}>
-                  提交答案
+                <Button className="w-full !mt-4 !bg-[var(--ws-color-purple)] !border-[var(--ws-color-purple)]" onClick={handleSubmit} disabled={submitting}>
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}提交答案
                 </Button>
               </div>
             );
@@ -616,7 +734,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {view === "submitted" && activity && (
             <div className="text-center py-8">
               <div className="text-5xl mb-3">✅</div>
-              <div className="text-base font-semibold mb-2 text-text-secondary">已提交</div>
+              <div className="text-[var(--ws-text-md)] font-semibold mb-2 text-text-secondary">已提交</div>
               <div className="text-text-tertiary text-sm mb-1">你的答案：{formatDisplayAnswer(myAnswer)}</div>
               <div className="text-text-tertiary text-xs">等待老师结束活动后查看结果…</div>
             </div>
@@ -625,10 +743,28 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
           {/* RESULT */}
           {view === "result" && activity && (
             <div>
-              <div className="text-base font-semibold mb-3 leading-relaxed">{activity.title}</div>
-              <div className="px-4 py-3 rounded-lg mb-4" style={{ background: isCorrect === true ? "#f6ffed" : isCorrect === false ? "#fff2f0" : "#fafafa", border: `1px solid ${isCorrect === true ? "#b7eb8f" : isCorrect === false ? "#ffccc7" : "#f0f0f0"}` }}>
+              <div className="text-[var(--ws-text-md)] font-semibold mb-3 leading-relaxed">{activity.title}</div>
+              <div
+                className={cn(
+                  "px-4 py-3 rounded-lg mb-4 border",
+                  isCorrect === true
+                    ? "bg-[var(--ws-color-success-soft)] border-[var(--ws-color-success)]"
+                    : isCorrect === false
+                      ? "bg-[var(--ws-color-error-soft)] border-[var(--ws-color-error-light)]"
+                      : "bg-surface-2 border-border-secondary"
+                )}
+              >
                 <div className="text-xs text-text-tertiary mb-1">我的答案</div>
-                <div className="text-base font-bold" style={{ color: isCorrect === true ? "#52c41a" : isCorrect === false ? "#ff4d4f" : "#333" }}>
+                <div
+                  className={cn(
+                    "text-base font-bold",
+                    isCorrect === true
+                      ? "text-[var(--ws-color-success)]"
+                      : isCorrect === false
+                        ? "text-[var(--ws-color-error)]"
+                        : "text-text"
+                  )}
+                >
                   {formatDisplayAnswer(myAnswer) || "未作答"}{isCorrect === true && " ✓ 正确"}{isCorrect === false && " ✗ 错误"}
                 </div>
                 {activity.correct_answer && (
@@ -646,13 +782,17 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                     return (
                       <div key={opt.key} className="mb-2.5">
                         <div className="flex justify-between text-sm mb-1 items-center">
-                          <span style={{ color: isCorrectOpt ? "#52c41a" : "#333", fontWeight: isCorrectOpt ? 600 : undefined }}>
-                            {opt.key}. {opt.text}
-                            {isMyAnswer && <Tag color="purple" className="ml-1.5 text-xs">我选的</Tag>}
+                            <span className={cn(isCorrectOpt ? "font-semibold text-[var(--ws-color-success)]" : "text-text")}>
+                              {opt.key}. {opt.text}
+                              {isMyAnswer && (
+                              <Badge variant="purple" className="ml-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                                我选的
+                              </Badge>
+                            )}
                           </span>
                           <span className="text-text-tertiary text-xs">{count} ({pct}%)</span>
                         </div>
-                        <Progress percent={pct} showInfo={false} strokeColor={isCorrectOpt ? "#52c41a" : isMyAnswer ? "#8B5CF6" : "#4096ff"} size="small" />
+                        <LineProgress percent={pct} color={isCorrectOpt ? "var(--ws-color-success)" : isMyAnswer ? "var(--ws-color-purple)" : "var(--ws-color-primary)"} />
                       </div>
                     );
                   })}
@@ -660,7 +800,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
               )}
               {stats && activity.activity_type === "fill_blank" && stats.correct_rate != null && (
                 <div className="text-center py-4">
-                  <Progress type="circle" percent={stats.correct_rate} size={80} strokeColor="#8B5CF6" />
+                  <CircleProgress percent={stats.correct_rate} size={80} strokeColor="var(--ws-color-purple)" />
                   <div className="mt-2 text-text-tertiary text-xs">班级正确率 · {stats.total_responses} 人参与</div>
                 </div>
               )}
@@ -679,21 +819,41 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             if (!item || !reviewActivity) return null;
             const globalIdx = sortedItems.indexOf(item);
             return (
-              <div className="flex flex-col min-h-full">
-                <div className="flex items-center justify-between mb-3">
-                  <Tag color="purple" className="text-xs">第 {globalIdx + 1} 题回顾</Tag>
-                  <Button type="text" size="small" className="!text-text-tertiary !text-xs" onClick={() => { setView("idle"); setSelectedDoneActivityId(null); }}>关闭 ×</Button>
+                <div className="flex flex-col min-h-full">
+                  <div className="flex items-center justify-between mb-3">
+                    <Badge variant="purple" className="px-2 py-0.5 text-xs">
+                      第 {globalIdx + 1} 题回顾
+                    </Badge>
+                  <Button variant="ghost" size="sm" className="!text-text-tertiary !text-xs" onClick={() => { setView("idle"); setSelectedDoneActivityId(null); }}>关闭 x</Button>
                 </div>
-                <div className="text-base font-semibold mb-3.5 leading-relaxed">{reviewActivity.title}</div>
-                <div className="px-3.5 py-2.5 rounded-lg mb-3.5" style={{ background: ans?.is_correct === true ? "#f6ffed" : ans?.is_correct === false ? "#fff2f0" : "#fafafa", border: `1px solid ${ans?.is_correct === true ? "#b7eb8f" : ans?.is_correct === false ? "#ffccc7" : "#f0f0f0"}` }}>
+                <div className="text-[var(--ws-text-md)] font-semibold mb-3.5 leading-relaxed">{reviewActivity.title}</div>
+                <div
+                  className={cn(
+                    "px-3.5 py-2.5 rounded-lg mb-3.5 border",
+                    ans?.is_correct === true
+                      ? "bg-[var(--ws-color-success-soft)] border-[var(--ws-color-success)]"
+                      : ans?.is_correct === false
+                        ? "bg-[var(--ws-color-error-soft)] border-[var(--ws-color-error-light)]"
+                        : "bg-surface-2 border-border-secondary"
+                  )}
+                >
                   <div className="text-xs text-text-tertiary mb-0.5">我的答案</div>
-                  <div className="text-sm font-bold" style={{ color: ans?.is_correct === true ? "#52c41a" : ans?.is_correct === false ? "#ff4d4f" : "#333" }}>
+                  <div
+                    className={cn(
+                      "text-sm font-bold",
+                      ans?.is_correct === true
+                        ? "text-[var(--ws-color-success)]"
+                        : ans?.is_correct === false
+                          ? "text-[var(--ws-color-error)]"
+                          : "text-text"
+                    )}
+                  >
                     {formatDisplayAnswer(ans?.my_answer) || "未作答"}{ans?.is_correct === true && " ✓ 正确"}{ans?.is_correct === false && " ✗ 错误"}
                   </div>
                   {ans?.correct_answer && (
                     <div className="text-xs text-text-tertiary mt-0.5">参考答案：{formatDisplayAnswer(ans.correct_answer)}</div>
                   )}
-                  {ans?.is_correct == null && <div className="text-xs mt-0.5" style={{ color: "#faad14" }}>等待公布结果…</div>}
+                  {ans?.is_correct == null && <div className="text-xs mt-0.5 text-[var(--ws-color-warning)]">等待公布结果…</div>}
                 </div>
                 {reviewActivity.activity_type === "vote" && Array.isArray(reviewActivity.options) && (
                   <div className="mb-3.5">
@@ -708,16 +868,20 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                       return (
                         <div key={opt.key} className="mb-2.5">
                           <div className="flex justify-between text-sm mb-0.5 items-center">
-                            <span style={{ color: isCorrectOpt ? "#52c41a" : "#333", fontWeight: isCorrectOpt ? 600 : undefined }}>
+                            <span className={cn(isCorrectOpt ? "font-semibold text-[var(--ws-color-success)]" : "text-text")}>
                               {opt.key}. {opt.text}
-                              {isMyAns && <Tag color="purple" className="ml-1.5 text-xs">我选的</Tag>}
+                              {isMyAns && (
+                                <Badge variant="purple" className="ml-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                                  我选的
+                                </Badge>
+                              )}
                             </span>
                             {reviewStats && <span className="text-text-tertiary text-xs">{count} ({pct}%)</span>}
                           </div>
                           {reviewStats ? (
-                            <Progress percent={pct} showInfo={false} strokeColor={isCorrectOpt ? "#52c41a" : isMyAns ? "#8B5CF6" : "#4096ff"} size="small" />
+                            <LineProgress percent={pct} color={isCorrectOpt ? "var(--ws-color-success)" : isMyAns ? "var(--ws-color-purple)" : "var(--ws-color-primary)"} />
                           ) : reviewStatsLoading ? (
-                            <div className="h-1.5 bg-gray-100 rounded" />
+                            <div className="h-1.5 bg-surface-2 rounded" />
                           ) : null}
                         </div>
                       );
@@ -726,14 +890,14 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                 )}
                 {reviewActivity.activity_type === "fill_blank" && reviewStats && reviewStats.correct_rate != null && (
                   <div className="text-center py-3 mb-3.5">
-                    <Progress type="circle" percent={reviewStats.correct_rate} size={80} strokeColor="#8B5CF6" />
+                    <CircleProgress percent={reviewStats.correct_rate} size={80} strokeColor="var(--ws-color-purple)" />
                     <div className="mt-2 text-text-tertiary text-xs">班级正确率 · {reviewStats.total_responses} 人参与</div>
                   </div>
                 )}
                 {reviewStatsLoading && <div className="text-center text-text-tertiary text-xs mb-3">加载班级数据中…</div>}
-                <div className="flex gap-2 pt-4 mt-2 border-t border-gray-100">
-                  <Button block disabled={curIdx <= 0} onClick={() => doneItems[curIdx - 1] && openReview(doneItems[curIdx - 1].activity!.id)}>‹ 上一题</Button>
-                  <Button block disabled={curIdx >= doneItems.length - 1} onClick={() => doneItems[curIdx + 1] && openReview(doneItems[curIdx + 1].activity!.id)} type="primary" className="!bg-purple !border-purple">下一题 ›</Button>
+                <div className="flex gap-2 pt-4 mt-2 border-t border-[var(--ws-color-border)]">
+                  <Button variant="outline" className="flex-1" disabled={curIdx <= 0} onClick={() => doneItems[curIdx - 1] && openReview(doneItems[curIdx - 1].activity!.id)}>&#8249; 上一题</Button>
+                  <Button className="flex-1 !bg-[var(--ws-color-purple)] !border-[var(--ws-color-purple)]" disabled={curIdx >= doneItems.length - 1} onClick={() => doneItems[curIdx + 1] && openReview(doneItems[curIdx + 1].activity!.id)}>下一题 &#8250;</Button>
                 </div>
               </div>
             );
@@ -743,7 +907,10 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     </div>
   );
 
-  return ReactDOM.createPortal(<>{panel}</>, document.body);
+  return ReactDOM.createPortal(
+    <TooltipProvider delayDuration={120}>{panel}</TooltipProvider>,
+    document.body,
+  );
 };
 
 export default ClassroomPanel;

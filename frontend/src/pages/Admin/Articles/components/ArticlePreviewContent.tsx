@@ -1,12 +1,9 @@
 import React from "react";
 import DOMPurify from "dompurify";
-import { Typography } from "antd";
-import { FileTextOutlined } from "@ant-design/icons";
+import { FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toScopedCss } from "@utils/scopedCss";
-
-const { Text } = Typography;
 
 type Props = {
   content: string;
@@ -28,13 +25,13 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
           color: "var(--ws-color-text-secondary)",
         }}
       >
-        <FileTextOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-        <Text type="secondary" className="text-base">
+        <FileText style={{ width: 48, height: 48, marginBottom: 16 }} />
+        <span className="text-base text-text-secondary">
           开始输入内容，预览将在此处显示
-        </Text>
-        <Text type="secondary" style={{ fontSize: "12px", marginTop: "8px" }}>
+        </span>
+        <span className="text-xs text-text-secondary mt-2">
           支持Markdown语法：标题、列表、代码块、链接等
-        </Text>
+        </span>
       </div>
     );
   }

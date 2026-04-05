@@ -1,5 +1,5 @@
 import React from "react";
-import { Skeleton } from "antd";
+import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@components/Common/EmptyState";
 
 type Props = {
@@ -14,10 +14,10 @@ type Props = {
 };
 
 const TableSkeleton: React.FC = () => (
-  <div className="px-6 py-4 space-y-4">
-    <Skeleton.Input active block size="small" />
+  <div className="space-y-3 px-4 py-4">
+    <Skeleton className="h-8 w-full" />
     {Array.from({ length: 5 }).map((_, i) => (
-      <Skeleton key={i} active title={false} paragraph={{ rows: 1, width: "100%" }} />
+      <Skeleton key={i} className="h-9 w-full" />
     ))}
   </div>
 );
@@ -28,8 +28,8 @@ const AdminTablePanel: React.FC<Props> = ({
 }) => (
   <div className="flex flex-col h-full overflow-hidden">
     {(title || extra) && (
-      <div className="flex items-center justify-between px-6 py-3">
-        {title && <div className="text-base font-semibold">{title}</div>}
+      <div className="flex items-center justify-between px-4 py-3">
+        {title && <div className="text-base font-semibold text-text-base">{title}</div>}
         {extra && <div>{extra}</div>}
       </div>
     )}
@@ -49,7 +49,7 @@ const AdminTablePanel: React.FC<Props> = ({
     </div>
 
     {pagination && (
-      <div className="flex justify-end px-6 py-3 border-t border-black/[0.04]">
+      <div className="flex justify-end border-t border-border-secondary px-4 py-3">
         {pagination}
       </div>
     )}

@@ -1,28 +1,22 @@
 /**
  * 文章编辑表单组件
- * 支持创建和编辑文章，集成Markdown编辑器和标签选择器
+ * 支持创建和编辑文章，集成 Markdown 编辑器和样式方案
  */
 
-import React, { useState, useEffect } from "react";
+import { showMessage } from "@/lib/toast";
+import React, { useEffect, useState } from "react";
+import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
-  Form,
-  Input,
-  Select,
-  Button,
-  Card,
-  Space,
-  Switch,
-  message,
-  Typography,
-  Row,
-  Col,
   Tooltip,
-  Grid,
-} from "antd";
-import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-} from "@ant-design/icons";
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { articleApi, markdownStylesApi } from "@services";
 import type {
   ArticleWithRelations,
@@ -37,9 +31,17 @@ import MarkdownStyleManagerModal from "./components/MarkdownStyleManagerModal";
 import "./EditForm.css";
 import "../../../styles/markdown.css";
 
-const { TextArea } = Input;
-const { Text } = Typography;
-const { Option } = Select;
+const formSchema = z.object({
+  title: z.string().trim().min(1, "请输入文章标题").max(200, "标题不能超过200个字符"),
+  summary: z.string().max(500, "摘要不能超过500个字符"),
+  content: z.string().trim().min(10, "内容不能少于10个字符"),
+  custom_css: z.string(),
+  style_key: z.string().nullable(),
+  category_id: z.string(),
+  published: z.boolean(),
+});
+
+export type ArticleFormValues = z.infer<typeof formSchema>;
 
 interface ArticleEditFormProps {
   article: ArticleWithRelations | null;
@@ -50,6 +52,45 @@ interface ArticleEditFormProps {
   onCancel: () => void;
 }
 
+const toInitialValues = (article: ArticleWithRelations | null): ArticleFormValues => ({
+  title: article?.title || "",
+  summary: article?.summary || "",
+  content: article?.content || "",
+  custom_css: article?.custom_css || "",
+  style_key: article?.style_key || null,
+  category_id: article?.category_id ? String(article.category_id) : "",
+  published: article?.published ?? false,
+});
+
+const buildSlug = (raw: string): string => {
+  const base = raw
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return base || `article-${Date.now()}`;
+};
+
+const parseErrorMessage = (error: any): string => {
+  if (error?.response?.data?.detail) {
+    const detail = error.response.data.detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((err: any) => {
+          if (err?.loc && err?.msg) return `${err.loc.join(".")}: ${err.msg}`;
+          return err?.msg || JSON.stringify(err);
+        })
+        .join(", ");
+    }
+    if (typeof detail === "string") return detail;
+    return JSON.stringify(detail);
+  }
+  if (error?.response?.data?.message) return String(error.response.data.message);
+  if (error?.message) return String(error.message);
+  return "保存文章失败，请检查表单数据";
+};
+
 const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
   article,
   categories,
@@ -58,15 +99,23 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
   onSave,
   onCancel,
 }) => {
-  const [form] = Form.useForm();
-  const watchedContent = Form.useWatch("content", form) || "";
-  const watchedCustomCss = Form.useWatch("custom_css", form) || "";
-  const screens = Grid.useBreakpoint();
-  const [loading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [styleKey, setStyleKey] = useState<string | null>(
-    article?.style_key || null,
-  );
+  const screens = useBreakpoint();
+  const methods = useForm<ArticleFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: toInitialValues(article),
+  });
+
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { isSubmitting },
+  } = methods;
+
+  const watchedContent = watch("content") || "";
+  const watchedCustomCss = watch("custom_css") || "";
+  const [styleKey, setStyleKey] = useState<string | null>(article?.style_key || null);
   const [styleCss, setStyleCss] = useState<string>("");
   const [styleOptions, setStyleOptions] = useState<MarkdownStyleListItem[]>([]);
   const [stylesManageOpen, setStylesManageOpen] = useState(false);
@@ -84,26 +133,37 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
     if (!screens.lg && sideCollapsed) setSideCollapsed(false);
   }, [screens.lg, sideCollapsed]);
 
-  const switchViewMode = (next: "split" | "edit" | "preview") => {
-    setViewMode(next);
-  };
-
   useEffect(() => {
-    markdownStylesApi
+    void markdownStylesApi
       .list()
       .then((items) => setStyleOptions(items || []))
       .catch(() => setStyleOptions([]));
   }, []);
 
   useEffect(() => {
+    const values = toInitialValues(article);
+    reset(values);
+    setStyleKey(values.style_key || null);
+    setStyleCss(article?.style?.content || "");
+  }, [article, reset]);
+
+  useEffect(() => {
+    let mounted = true;
     if (!styleKey) {
       setStyleCss("");
-      return;
+      return undefined;
     }
-    markdownStylesApi
+    void markdownStylesApi
       .get(styleKey)
-      .then((s) => setStyleCss(s?.content || ""))
-      .catch(() => setStyleCss(""));
+      .then((s) => {
+        if (mounted) setStyleCss(s?.content || "");
+      })
+      .catch(() => {
+        if (mounted) setStyleCss("");
+      });
+    return () => {
+      mounted = false;
+    };
   }, [styleKey]);
 
   const refreshStyles = async () => {
@@ -112,87 +172,39 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
     return items || [];
   };
 
-  // 标签功能已移除，删除相关函数
-
-  // 初始化表单数据
-  useEffect(() => {
-    if (article) {
-      // 编辑模式：填充表单
-      form.setFieldsValue({
-        title: article.title,
-        summary: article.summary,
-        content: article.content,
-        custom_css: article.custom_css || "",
-        style_key: article.style_key || null,
-        category_id: article.category_id,
-        published: article.published,
-      });
-      setStyleKey(article.style_key || null);
-      setStyleCss(article.style?.content || "");
-    } else {
-      form.resetFields();
-      setStyleKey(null);
-      setStyleCss("");
-    }
-  }, [article, form]);
-
-  // 标签功能已移除，删除加载标签的useEffect
-
-  // 处理表单提交
-  const handleSubmit = async (values: any) => {
+  const handleFormSubmit = async (values: ArticleFormValues) => {
     try {
-      setSubmitting(true);
-
-      // 生成slug：创建模式从标题生成，编辑模式使用原有的slug
-      let slug;
+      let slug: string;
       if (isCreateMode) {
-        slug = values.title
-          .toLowerCase()
-          .replace(/\s+/g, "-")
-          .replace(/[^a-z0-9-]/g, "");
-        // 如果slug为空，使用默认值
-        if (!slug || slug.trim() === "") {
-          slug = "article-" + Date.now();
-        }
+        slug = buildSlug(values.title);
       } else {
-        // 编辑模式下使用原有的slug
-        slug =
-          article?.slug ||
-          values.title
-            .toLowerCase()
-            .replace(/\s+/g, "-")
-            .replace(/[^a-z0-9-]/g, "");
-        if (!slug || slug.trim() === "") {
-          slug = "article-" + Date.now();
-        }
+        slug = buildSlug(article?.slug || values.title);
       }
 
-      // 确保slug符合格式要求（只包含字母、数字、破折号和下划线）
-      slug = slug
-        .replace(/[^a-z0-9-_]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "");
+      const categoryIdNum = Number(values.category_id);
+      const categoryId =
+        values.category_id && Number.isFinite(categoryIdNum)
+          ? categoryIdNum
+          : null;
 
       const articleData = {
         title: values.title || "",
-        slug: slug,
+        slug,
         content: values.content || "",
         summary:
-          values.summary ||
+          values.summary?.trim() ||
           (values.content || "").substring(0, 200) ||
           "文章摘要",
         custom_css: (values.custom_css || "").trim() || null,
         style_key: values.style_key || null,
         published: values.published !== undefined ? values.published : false,
-        author_id: 1, // 后端会从token获取当前用户ID，这里只是为了符合schema
-        category_id: values.category_id || null,
-        // 标签功能已移除，删除了tag_ids字段
+        author_id: 1,
+        category_id: categoryId,
       };
 
       logger.debug("提交的文章数据:", articleData);
 
       if (isCreateMode) {
-        // 创建文章
         const response = await articleApi.createArticle(articleData);
         const saved = response.data;
         const payload = {
@@ -212,13 +224,9 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           } catch {}
         }
         logger.debug("创建文章响应:", response.data);
-        message.success("文章创建成功");
+        showMessage.success("文章创建成功");
       } else {
-        // 更新文章
-        const response = await articleApi.updateArticle(
-          article!.id,
-          articleData,
-        );
+        const response = await articleApi.updateArticle(article!.id, articleData);
         const saved = response.data;
         const oldSlug = article?.slug;
         const newSlug = saved.slug;
@@ -244,252 +252,151 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
           } catch {}
         }
         logger.debug("更新文章响应:", response.data);
-        message.success("文章更新成功");
+        showMessage.success("文章更新成功");
       }
 
       onSave();
     } catch (error: any) {
       logger.error("保存文章失败 - 完整错误对象:", error);
-      logger.error("保存文章失败 - 响应数据:", error.response?.data);
-      logger.error("保存文章失败 - 请求配置:", error.config);
-      logger.error("保存文章失败 - 错误详情:", error.response?.data?.detail);
-
-      // 显示更详细的错误信息
-      if (error.response?.data?.detail) {
-        if (Array.isArray(error.response.data.detail)) {
-          // 如果是验证错误数组
-          const errorMessages = error.response.data.detail
-            .map((err: any) => {
-              if (err.loc && err.msg) {
-                return `${err.loc.join(".")}: ${err.msg}`;
-              }
-              return err.msg || JSON.stringify(err);
-            })
-            .join(", ");
-          message.error(`保存失败: ${errorMessages}`);
-        } else if (typeof error.response.data.detail === "string") {
-          // 如果是字符串错误
-          message.error(`保存失败: ${error.response.data.detail}`);
-        } else {
-          // 其他格式的错误
-          message.error(
-            `保存失败: ${JSON.stringify(error.response.data.detail)}`,
-          );
-        }
-      } else if (error.response?.data?.message) {
-        message.error(`保存失败: ${error.response.data.message}`);
-      } else if (error.message) {
-        message.error(`保存失败: ${error.message}`);
-      } else {
-        message.error("保存文章失败，请检查表单数据");
-      }
-    } finally {
-      setSubmitting(false);
+      logger.error("保存文章失败 - 响应数据:", error?.response?.data);
+      logger.error("保存文章失败 - 请求配置:", error?.config);
+      logger.error("保存文章失败 - 错误详情:", error?.response?.data?.detail);
+      showMessage.error(`保存失败: ${parseErrorMessage(error)}`);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleFormFailed = (errors: FieldErrors<ArticleFormValues>) => {
+    logger.warn("表单验证失败:", errors);
+    showMessage.error("请检查表单数据是否正确");
+  };
+
+  const submitForm = handleSubmit(handleFormSubmit, handleFormFailed);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      form.submit();
+      void submitForm();
     }
   };
 
-  // 处理表单验证失败
-  const handleFormFailed = (errorInfo: any) => {
-    logger.warn("表单验证失败:", errorInfo);
-    message.error("请检查表单数据是否正确");
-  };
+  const isSplit = viewMode === "split" && screens.lg;
+
+  const renderContentPanel = () => (
+    <Card className="article-edit-content-card">
+      <div className="article-edit-content-card-body">
+        <div className="article-edit-content-row">
+          {viewMode !== "preview" ? (
+            <div className="article-edit-panel-col" style={{ flex: isSplit ? "0 0 42%" : "1 1 auto" }}>
+              <div className="article-edit-panel">
+                <ArticleMarkdownEditorCard
+                  viewMode={viewMode}
+                  canSplit={!!screens.lg}
+                  onViewModeChange={setViewMode}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {viewMode !== "edit" ? (
+            <div className="article-edit-panel-col" style={{ flex: isSplit ? "0 0 58%" : "1 1 auto" }}>
+              <div className="article-edit-panel">
+                <ArticleMarkdownPreviewCard
+                  content={watchedContent}
+                  scopeId={articleScopeId}
+                  styleCss={styleCss}
+                  customCss={watchedCustomCss}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+
+  const renderActions = () => (
+    <Card className="article-edit-actions-card">
+      <div className="article-edit-actions-inner">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            className="min-w-[80px]"
+          >
+            取消
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="min-w-[100px]">
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isCreateMode ? "创建文章" : "保存修改"}
+          </Button>
+        </div>
+        {isCreateMode ? (
+          <div className="mt-3 text-center text-xs text-text-tertiary">
+            保存后文章将出现在文章列表中
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  );
 
   return (
     <div className={`article-edit-form ${layout === "editor" ? "is-editor-layout" : ""}`}>
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleSubmit}
-        onFinishFailed={handleFormFailed}
-        onKeyDown={handleKeyDown}
-        initialValues={{
-          published: false,
-        }}
-      >
-        {layout === "editor" ? (
-          <div className={`article-edit-editor-grid ${sideCollapsed ? "article-edit-editor-grid-collapsed" : ""}`}>
-            <div className={`article-edit-editor-side ${sideCollapsed ? "article-edit-editor-side-collapsed" : ""}`}>
-              <div className={`article-edit-side-toggle ${sideCollapsed ? "collapsed" : ""}`}>
-                <Tooltip title={sideCollapsed ? "展开左侧栏" : "折叠左侧栏"}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={sideCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                    onClick={() => setSideCollapsed((v) => !v)}
-                  />
-                </Tooltip>
-              </div>
-              {sideCollapsed ? null : (
-                <ArticleEditorSidebar
-                  categories={categories}
-                  loading={loading}
-                  isCreateMode={isCreateMode}
-                  articleSlug={article?.slug || null}
-                  styleOptions={styleOptions}
-                  styleKey={styleKey}
-                  onStyleKeyChange={setStyleKey}
-                  onOpenStyleManager={() => setStylesManageOpen(true)}
-                />
-              )}
-            </div>
-
-            <div className="article-edit-editor-main">
-              <Card
-                size="small"
-                className="article-edit-content-card"
-              >
-                <Row gutter={16} className="article-edit-content-row">
-                  <Col
-                    xs={24}
-                    lg={viewMode === "preview" ? 0 : viewMode === "split" && screens.lg ? 10 : 24}
-                    style={{ display: viewMode === "preview" ? "none" : "block" }}
-                  >
-                    <div className="article-edit-panel">
-                      <ArticleMarkdownEditorCard viewMode={viewMode} canSplit={!!screens.lg} onViewModeChange={switchViewMode} />
-                    </div>
-                  </Col>
-                  <Col
-                    xs={24}
-                    lg={viewMode === "edit" ? 0 : viewMode === "split" && screens.lg ? 14 : 24}
-                    style={{ display: viewMode === "edit" ? "none" : "block" }}
-                  >
-                    <div className="article-edit-panel">
-                      <ArticleMarkdownPreviewCard
-                        content={watchedContent}
-                        scopeId={articleScopeId}
-                        styleCss={styleCss}
-                        customCss={watchedCustomCss}
-                      />
-                    </div>
-                  </Col>
-                </Row>
-              </Card>
-
-              <Card size="small" className="article-edit-actions-card">
-                <Row align="middle" justify="end">
-                  <Col>
-                    <Space>
-                      <Button onClick={onCancel} style={{ minWidth: 80 }}>
-                        取消
+      <FormProvider {...methods}>
+        <form className="article-edit-form-root" onSubmit={submitForm} onKeyDown={handleKeyDown}>
+          {layout === "editor" ? (
+            <div className={`article-edit-editor-grid ${sideCollapsed ? "article-edit-editor-grid-collapsed" : ""}`}>
+              <div className={`article-edit-editor-side ${sideCollapsed ? "article-edit-editor-side-collapsed" : ""}`}>
+                <div className={`article-edit-side-toggle ${sideCollapsed ? "collapsed" : ""}`}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSideCollapsed((v) => !v)}
+                        aria-label={sideCollapsed ? "展开左侧栏" : "折叠左侧栏"}
+                      >
+                        {sideCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
                       </Button>
-                      <Button type="primary" htmlType="submit" loading={submitting} style={{ minWidth: 100 }}>
-                        {isCreateMode ? "创建文章" : "保存修改"}
-                      </Button>
-                    </Space>
-                  </Col>
-                </Row>
-                {isCreateMode && (
-                  <div className="text-center mt-3">
-                    <Text type="secondary" className="text-xs">
-                      保存后文章将出现在文章列表中
-                    </Text>
-                  </div>
-                )}
-              </Card>
-            </div>
-          </div>
-        ) : (
-          <>
-            <Card title="基本信息" size="small" className="article-edit-basic-card">
-              <Row gutter={16}>
-                <Col xs={24} lg={12}>
-                  <Form.Item
-                    label={<span className="font-medium">文章标题</span>}
-                    name="title"
-                    rules={[
-                      { required: true, message: "请输入文章标题" },
-                      { max: 200, message: "标题不能超过200个字符" },
-                    ]}
-                  >
-                    <Input placeholder="请输入文章标题" size="large" allowClear />
-                  </Form.Item>
-                </Col>
-
-                <Col xs={12} lg={6}>
-                  <Form.Item name="published" label={<span className="font-medium">发布状态</span>} valuePropName="checked">
-                    <Switch checkedChildren="发布" unCheckedChildren="草稿" />
-                  </Form.Item>
-                </Col>
-
-                <Col xs={12} lg={6}>
-                  <Form.Item label={<span className="font-medium">分类</span>} name="category_id">
-                    <Select placeholder="选择分类" allowClear loading={loading} style={{ width: "100%" }}>
-                      {categories.map((category) => (
-                        <Option key={category.id} value={category.id}>
-                          {category.name}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                </Col>
-
-                <Col span={24}>
-                  <Form.Item label={<span className="font-medium">文章摘要</span>} name="summary" rules={[{ max: 500, message: "摘要不能超过500个字符" }]}>
-                    <TextArea placeholder="请输入文章摘要" rows={2} maxLength={500} showCount />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card size="small" className="article-edit-content-card">
-              <Row gutter={16} className="article-edit-content-row">
-                <Col
-                  xs={24}
-                  lg={viewMode === "preview" ? 0 : viewMode === "split" && screens.lg ? 10 : 24}
-                  style={{ display: viewMode === "preview" ? "none" : "block" }}
-                >
-                  <div className="article-edit-panel">
-                    <ArticleMarkdownEditorCard viewMode={viewMode} canSplit={!!screens.lg} onViewModeChange={switchViewMode} />
-                  </div>
-                </Col>
-                <Col
-                  xs={24}
-                  lg={viewMode === "edit" ? 0 : viewMode === "split" && screens.lg ? 14 : 24}
-                  style={{ display: viewMode === "edit" ? "none" : "block" }}
-                >
-                  <div className="article-edit-panel">
-                    <ArticleMarkdownPreviewCard
-                      content={watchedContent}
-                      scopeId={articleScopeId}
-                      styleCss={styleCss}
-                      customCss={watchedCustomCss}
-                    />
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card size="small" className="article-edit-actions-card">
-              <Row align="middle" justify="end">
-                <Col>
-                  <Space>
-                    <Button onClick={onCancel} style={{ minWidth: 80 }}>
-                      取消
-                    </Button>
-                    <Button type="primary" htmlType="submit" loading={submitting} style={{ minWidth: 100 }}>
-                      {isCreateMode ? "创建文章" : "保存修改"}
-                    </Button>
-                  </Space>
-                </Col>
-              </Row>
-              {isCreateMode && (
-                <div className="text-center mt-3">
-                  <Text type="secondary" className="text-xs">
-                    保存后文章将出现在文章列表中
-                  </Text>
+                    </TooltipTrigger>
+                    <TooltipContent>{sideCollapsed ? "展开左侧栏" : "折叠左侧栏"}</TooltipContent>
+                  </Tooltip>
                 </div>
-              )}
-            </Card>
-          </>
-        )}
-      </Form>
+                {sideCollapsed ? null : (
+                  <ArticleEditorSidebar
+                    categories={categories}
+                    loading={false}
+                    styleOptions={styleOptions}
+                    styleKey={styleKey}
+                    onStyleKeyChange={setStyleKey}
+                    onOpenStyleManager={() => setStylesManageOpen(true)}
+                  />
+                )}
+              </div>
+
+              <div className="article-edit-editor-main">
+                {renderContentPanel()}
+                {renderActions()}
+              </div>
+            </div>
+          ) : (
+            <div className="article-edit-default-layout">
+              <ArticleEditorSidebar
+                categories={categories}
+                loading={false}
+                styleOptions={styleOptions}
+                styleKey={styleKey}
+                onStyleKeyChange={setStyleKey}
+                onOpenStyleManager={() => setStylesManageOpen(true)}
+              />
+              {renderContentPanel()}
+              {renderActions()}
+            </div>
+          )}
+        </form>
+      </FormProvider>
+
       <MarkdownStyleManagerModal
         open={stylesManageOpen}
         onClose={() => setStylesManageOpen(false)}
@@ -497,7 +404,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
         refreshStyles={refreshStyles}
         activeStyleKey={styleKey}
         onActiveStyleKeyChange={(next) => {
-          form.setFieldValue("style_key", next || null);
+          setValue("style_key", next, { shouldDirty: true, shouldValidate: true });
           setStyleKey(next);
         }}
         onStyleCssChange={setStyleCss}

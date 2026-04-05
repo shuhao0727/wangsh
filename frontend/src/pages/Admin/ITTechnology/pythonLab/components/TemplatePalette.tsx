@@ -1,20 +1,22 @@
 import React from "react";
-import { Collapse, Tag } from "antd";
+import { Badge } from "@/components/ui/badge";
 import type { FlowNodeTemplate } from "../types";
 import { ShapeIcon } from "./ShapeIcon";
 
 const NodeCard: React.FC<{ tpl: FlowNodeTemplate; badge?: boolean; onClick: () => void }> = ({ tpl, badge, onClick }) => (
   <div
     onClick={onClick}
-    className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-150 hover:bg-primary-soft"
+    className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all duration-150 hover:bg-primary-soft"
   >
-    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-surface-2 text-text-base flex-shrink-0">
+    <div className="flex items-center justify-center w-8 h-8 rounded-md bg-surface-2 text-text-base flex-shrink-0">
       <ShapeIcon shape={tpl.key} />
     </div>
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-1.5">
         <span className="font-semibold text-sm text-text-base">{tpl.title}</span>
-        {badge && <Tag color="gold" className="!m-0 !text-xs !leading-4 !h-[16px]">高级</Tag>}
+        {badge ? (
+          <Badge className="h-4 border-0 bg-amber-100 px-1.5 text-[11px] leading-4 text-amber-700">高级</Badge>
+        ) : null}
       </div>
       <div className="text-xs text-text-tertiary truncate">{tpl.description}</div>
     </div>
@@ -30,8 +32,7 @@ export function TemplatePalette(props: {
   return (
     <div className="flex flex-col h-full">
       {/* 标题 */}
-      <div className="px-3 py-2.5 text-sm font-semibold text-text-base flex-shrink-0"
-        style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+      <div className="flex-shrink-0 border-b border-border px-3 py-2.5 text-sm font-semibold text-text-base">
         流程图模块
       </div>
 
@@ -46,21 +47,16 @@ export function TemplatePalette(props: {
 
         {/* 高级模块 */}
         {advanced.length > 0 && (
-          <Collapse
-            ghost
-            className="!px-0"
-            items={[{
-              key: "advanced",
-              label: <span className="text-xs font-medium text-text-secondary">高级模块</span>,
-              children: (
-                <div className="flex flex-col -mx-2">
-                  {advanced.map((tpl) => (
-                    <NodeCard key={tpl.key} tpl={tpl} badge onClick={() => onAddNode(tpl)} />
-                  ))}
-                </div>
-              ),
-            }]}
-          />
+          <details className="group mt-2 rounded-lg border border-border bg-surface-2/40">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-text-secondary">
+              高级模块
+            </summary>
+            <div className="flex flex-col -mx-2 pb-1">
+              {advanced.map((tpl) => (
+                <NodeCard key={tpl.key} tpl={tpl} badge onClick={() => onAddNode(tpl)} />
+              ))}
+            </div>
+          </details>
         )}
       </div>
     </div>

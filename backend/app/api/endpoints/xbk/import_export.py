@@ -51,18 +51,31 @@ async def _read_excel(file: UploadFile) -> pd.DataFrame:
         raise HTTPException(status_code=400, detail=f"读取Excel失败: {e}")
 
 
-def _get_year_term(row: pd.Series) -> Tuple[int, str]:
+def _get_year_term(
+    row: pd.Series,
+    default_year: Optional[int] = None,
+    default_term: Optional[str] = None,
+) -> Tuple[int, str]:
     y = row.get("年份")
     t = row.get("学期")
     final_year = _normalize_str(y) if pd.notna(y) else None
     final_term = _normalize_str(t) if pd.notna(t) else None
-    
+    if final_year is None and default_year is not None:
+        final_year = str(default_year)
+    if not final_term and default_term:
+        final_term = str(default_term)
+
     if final_year is None or not final_term:
         raise HTTPException(status_code=422, detail="缺少年份/学期")
     try:
         return int(float(str(final_year))), str(final_term)
     except Exception:
         raise HTTPException(status_code=422, detail="年份格式不正确")
+
+
+def _normalize_selection_course_code(value: Any) -> str:
+    code = _normalize_str(value)
+    return code if code else "未选"
 
 
 def _remap_columns(df: pd.DataFrame, mapping: Dict[str, List[str]]) -> pd.DataFrame:
@@ -122,6 +135,7 @@ def _students_mapping() -> Dict[str, List[str]]:
     return {
         "年份": ["year"],
         "学期": ["term"],
+        "年级": ["grade"],
         "班级": ["班别", "班级名称", "class", "class_name"],
         "学号": ["学生学号", "student_no", "studentId", "student_id"],
         "姓名": ["学生姓名", "name", "student_name"],
@@ -133,6 +147,7 @@ def _courses_mapping() -> Dict[str, List[str]]:
     return {
         "年份": ["year"],
         "学期": ["term"],
+        "年级": ["grade"],
         "课程代码": ["代码", "course_code", "courseId", "course_id"],
         "课程名称": ["名称", "course_name"],
         "课程负责人": ["教师", "任课老师", "teacher"],
@@ -145,6 +160,7 @@ def _selections_mapping() -> Dict[str, List[str]]:
     return {
         "年份": ["year"],
         "学期": ["term"],
+        "年级": ["grade"],
         "学号": ["学生学号", "student_no", "studentId", "student_id"],
         "姓名": ["学生姓名", "name", "student_name"],
         "课程代码": ["代码", "course_code", "courseId", "course_id"],
@@ -161,38 +177,31 @@ def _row_errors(idx: int, messages: List[str]) -> Dict[str, Any]:
     return {"row": idx, "errors": messages}
 
 
+def _template_columns(scope: str) -> List[str]:
+    if scope == "students":
+        return ["年份", "学期", "年级", "班级", "学号", "姓名", "性别"]
+    if scope == "courses":
+        return ["年份", "学期", "年级", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]
+    return ["年份", "学期", "年级", "学号", "姓名", "课程代码"]
+
+
+def _drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    mask = df.apply(
+        lambda row: any(_normalize_str(v) for v in row.values),
+        axis=1,
+    )
+    return df[mask].copy()
+
+
 @router.get("/import/template")
 async def download_template(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> StreamingResponse:
-    if scope == "students":
-        df = pd.DataFrame(
-            [
-                {"年份": 2026, "学期": "上学期", "班级": "高一(1)班", "学号": "20260001", "姓名": "张三", "性别": "男"},
-            ]
-        )
-    elif scope == "courses":
-        df = pd.DataFrame(
-            [
-                {
-                    "年份": 2026,
-                    "学期": "上学期",
-                    "课程代码": "12",
-                    "课程名称": "Python 基础与应用",
-                    "课程负责人": "王老师",
-                    "各班限报人数": 3,
-                    "上课地点": "艺术中心1楼舞蹈教室2",
-                },
-            ]
-        )
-    else:
-        df = pd.DataFrame(
-            [
-                {"年份": 2026, "学期": "上学期", "学号": "20260001", "姓名": "张三", "课程代码": "12"},
-            ]
-        )
+    df = pd.DataFrame(columns=_template_columns(scope))
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -209,6 +218,9 @@ async def download_template(
 @router.post("/import/preview")
 async def preview_import(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
+    year: Optional[int] = Query(None),
+    term: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
@@ -218,6 +230,7 @@ async def preview_import(
 
     mapping = _students_mapping() if scope == "students" else _courses_mapping() if scope == "courses" else _selections_mapping()
     df = _remap_columns(df, mapping)
+    df = _drop_empty_rows(df)
 
     if scope == "students":
         required = ["班级", "学号", "姓名"]
@@ -234,9 +247,11 @@ async def preview_import(
 
     for i, (_, row) in enumerate(df.iterrows(), start=2):
         row_dict = {k: _normalize_str(row.get(k)) for k in df.columns}
+        if grade and not row_dict.get("年级"):
+            row_dict["年级"] = grade
         messages: List[str] = []
         try:
-            _get_year_term(row)
+            _get_year_term(row, default_year=year, default_term=term)
         except HTTPException as e:
             messages.append(str(e.detail))
         if scope == "students":
@@ -255,10 +270,9 @@ async def preview_import(
             if row_dict.get("各班限报人数") and quota is None:
                 messages.append("限报人数格式不正确（应为数字）")
         else:
+            row_dict["课程代码"] = _normalize_selection_course_code(row_dict.get("课程代码"))
             if not row_dict.get("学号"):
                 messages.append("学号不能为空")
-            if not row_dict.get("课程代码"):
-                messages.append("课程代码不能为空")
 
         if messages:
             invalid += 1
@@ -279,6 +293,8 @@ async def preview_import(
 @router.post("/import", status_code=200)
 async def import_data(
     scope: str = Query(..., pattern="^(students|courses|selections)$"),
+    year: Optional[int] = Query(None),
+    term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     skip_invalid: bool = Query(True),
     file: UploadFile = File(...),
@@ -293,6 +309,9 @@ async def import_data(
     now = datetime.utcnow()
     mapping = _students_mapping() if scope == "students" else _courses_mapping() if scope == "courses" else _selections_mapping()
     df = _remap_columns(df, mapping)
+    df = _drop_empty_rows(df)
+    if df.empty:
+        return {"total_rows": 0, "processed": 0, "inserted": 0, "updated": 0, "skipped": 0, "invalid": 0, "errors": []}
 
     # 优先读取 Excel 中的年级列，如果没有则使用 Query 参数
     def _get_row_grade(row, default_grade):
@@ -305,7 +324,7 @@ async def import_data(
         keys = []
         for _, row in df.iterrows():
             try:
-                y, t = _get_year_term(row)
+                y, t = _get_year_term(row, default_year=year, default_term=term)
             except HTTPException:
                 continue
             student_no = _normalize_str(row.get("学号"))
@@ -327,7 +346,7 @@ async def import_data(
         for i, (_, row) in enumerate(df.iterrows(), start=2):
             row_errors: List[str] = []
             try:
-                y, t = _get_year_term(row)
+                y, t = _get_year_term(row, default_year=year, default_term=term)
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
@@ -400,7 +419,7 @@ async def import_data(
         keys = []
         for _, row in df.iterrows():
             try:
-                y, t = _get_year_term(row)
+                y, t = _get_year_term(row, default_year=year, default_term=term)
             except HTTPException:
                 continue
             course_code = _normalize_str(row.get("课程代码"))
@@ -422,7 +441,7 @@ async def import_data(
         for i, (_, row) in enumerate(df.iterrows(), start=2):
             row_errors: List[str] = []
             try:
-                y, t = _get_year_term(row)
+                y, t = _get_year_term(row, default_year=year, default_term=term)
             except HTTPException as e:
                 row_errors.append(str(e.detail))
                 y = t = None
@@ -499,11 +518,11 @@ async def import_data(
     keys = []
     for _, row in df.iterrows():
         try:
-            y, t = _get_year_term(row)
+            y, t = _get_year_term(row, default_year=year, default_term=term)
         except HTTPException:
             continue
         student_no = _normalize_str(row.get("学号"))
-        course_code = _normalize_str(row.get("课程代码"))
+        course_code = _normalize_selection_course_code(row.get("课程代码"))
         if student_no and course_code:
             keys.append((y, t, student_no, course_code))
     existing: set[Tuple[int, str, str, str]] = set()
@@ -522,7 +541,7 @@ async def import_data(
     for i, (_, row) in enumerate(df.iterrows(), start=2):
         row_errors: List[str] = []
         try:
-            y, t = _get_year_term(row)
+            y, t = _get_year_term(row, default_year=year, default_term=term)
         except HTTPException as e:
             row_errors.append(str(e.detail))
             y = t = None
@@ -530,10 +549,9 @@ async def import_data(
         row_grade = _get_row_grade(row, grade)
         student_no = _normalize_str(row.get("学号"))
         name = _normalize_str(row.get("姓名"))
-        course_code = _normalize_str(row.get("课程代码")) or "" # Allow empty course code
+        course_code = _normalize_selection_course_code(row.get("课程代码"))
         if not student_no:
             row_errors.append("学号不能为空")
-        # Removed course_code check to allow "Unselected" status
         if row_errors:
             invalid += 1
             if not skip_invalid:

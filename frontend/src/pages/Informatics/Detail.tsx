@@ -1,14 +1,14 @@
+import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Space, Spin, Typography, message } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useNavigate, useParams } from "react-router-dom";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNote } from "@services";
 import PdfCanvasVirtualViewer from "@components/Pdf/PdfCanvasVirtualViewer";
 import PanelCard from "@components/Layout/PanelCard";
 import "./Informatics.css";
-
-const { Title, Text } = Typography;
 
 const extractHeadingText = (h: any) => {
   if (!h) return "";
@@ -42,7 +42,7 @@ const InformaticsDetailPage: React.FC = () => {
         const n = await publicTypstNotesApi.get(noteId);
         setNote(n);
       } catch (e: any) {
-        message.error(e?.response?.data?.detail || e?.message || "内容不存在");
+        showMessage.error(e?.response?.data?.detail || e?.message || "内容不存在");
         navigate("/informatics");
       } finally {
         setLoading(false);
@@ -63,7 +63,7 @@ const InformaticsDetailPage: React.FC = () => {
         setPdfData(data);
       } catch (e: any) {
         if (renderTokenRef.current !== token) return;
-        message.error(e?.message || "渲染失败");
+        showMessage.error(e?.message || "渲染失败");
       } finally {
         if (renderTokenRef.current === token) setPdfLoading(false);
       }
@@ -96,42 +96,48 @@ const InformaticsDetailPage: React.FC = () => {
   return (
     <div className="informatics-page">
       <div className="informatics-detail-top">
-        <Space size={10}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/informatics")}>
+        <div className="flex items-center gap-2.5">
+          <Button variant="outline" onClick={() => navigate("/informatics")}>
+            <ArrowLeft className="h-4 w-4" />
             返回
           </Button>
-          <Title level={3} className="!m-0">
+          <h3 className="text-lg font-semibold m-0">
             {title}
-          </Title>
-        </Space>
+          </h3>
+        </div>
       </div>
 
       <div className="informatics-content">
         {loading ? (
-          <div className="text-center p-12">
-            <Spin size="large" />
+          <div className="text-center p-8">
+            <Loader2 className="mx-auto h-7 w-7 animate-spin text-primary" />
           </div>
         ) : (
           <PanelCard>
             {note?.summary ? (
               <div className="mb-3">
-                <Text type="secondary">{note.summary}</Text>
+                <span className="text-text-secondary">{note.summary}</span>
               </div>
             ) : null}
             <div className="mb-3">
-              <Text type="secondary" className="text-xs">
+              <span className="text-xs text-text-secondary">
                 更新：{note?.updated_at ? new Date(note.updated_at).toLocaleString("zh-CN") : "-"}
-              </Text>
+              </span>
             </div>
             {note?.toc?.length ? (
-              <Card size="small" title="目录" className="mb-3 rounded-xl">
-                <div className="flex flex-col gap-1.5">
-                  {note.toc.map((it: any, idx: number) => (
-                    <div key={idx} style={{ paddingLeft: Math.max(0, (it.level || 1) - 1) * 12 }}>
-                      <Text>{extractHeadingText(it.text || it)}</Text>
-                    </div>
-                  ))}
-                </div>
+              <Card className="mb-3 rounded-xl border-border bg-surface-2">
+                <CardHeader className="pb-2 pt-3">
+                  <CardTitle className="text-sm font-semibold">目录</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-col gap-1.5">
+                    {note.toc.map((it: any, idx: number) => (
+                      <div key={idx} style={{ paddingLeft: Math.max(0, (it.level || 1) - 1) * 12 }}>
+                        <span>{extractHeadingText(it.text || it)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
               </Card>
             ) : null}
             <div
@@ -141,7 +147,7 @@ const InformaticsDetailPage: React.FC = () => {
             >
               {pdfLoading ? (
                 <div className="text-center p-6">
-                  <Spin />
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
                 </div>
               ) : null}
               <PdfCanvasVirtualViewer data={pdfData} />

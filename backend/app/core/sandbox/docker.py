@@ -92,6 +92,7 @@ class DockerProvider(SandboxProvider):
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
         self.readiness_timeout = float(os.getenv("PYTHONLAB_READINESS_TIMEOUT_SECONDS", None) or getattr(settings, "PYTHONLAB_READINESS_TIMEOUT_SECONDS", 60) or 60)
         self._available_runtimes = None
+        self._bind_mount_cache: Optional[List[Tuple[Path, Path]]] = None
 
     async def _get_available_runtimes(self) -> List[str]:
         if self._available_runtimes is not None:
@@ -108,6 +109,130 @@ class DockerProvider(SandboxProvider):
             logger.warning(f"Failed to detect docker runtimes: {e}")
             self._available_runtimes = ["runc"]
         return self._available_runtimes
+
+    async def _get_current_container_bind_mounts(self) -> List[Tuple[Path, Path]]:
+        if self._bind_mount_cache is not None:
+            return self._bind_mount_cache
+
+        container_id = str(os.getenv("HOSTNAME") or "").strip()
+        if not container_id:
+            try:
+                container_id = Path("/etc/hostname").read_text(encoding="utf-8").strip()
+            except Exception:
+                container_id = ""
+        if not container_id:
+            self._bind_mount_cache = []
+            return self._bind_mount_cache
+
+        try:
+            rc, out, _ = await _run_async(
+                ["docker", "inspect", container_id, "--format", "{{json .Mounts}}"],
+                timeout_s=10,
+            )
+            if rc != 0 or not out:
+                self._bind_mount_cache = []
+                return self._bind_mount_cache
+
+            mounts = json.loads(out)
+            bind_mounts: List[Tuple[Path, Path]] = []
+            for mount in mounts:
+                if str(mount.get("Type") or "") != "bind":
+                    continue
+                source = str(mount.get("Source") or "").strip()
+                destination = str(mount.get("Destination") or "").strip()
+                if not source or not destination:
+                    continue
+                bind_mounts.append((Path(source), Path(destination)))
+            bind_mounts.sort(key=lambda item: len(str(item[1])), reverse=True)
+            self._bind_mount_cache = bind_mounts
+        except Exception as e:
+            logger.warning(f"Failed to inspect current container mounts: {e}")
+            self._bind_mount_cache = []
+        return self._bind_mount_cache
+
+    def _resolve_host_mount_path_from_mountinfo(self, container_path: Path) -> Optional[Path]:
+        mountinfo = Path("/proc/self/mountinfo")
+        if not mountinfo.exists():
+            return None
+
+        best_match: Optional[Tuple[Path, str, str]] = None
+        try:
+            for raw_line in mountinfo.read_text(encoding="utf-8").splitlines():
+                if " - " not in raw_line:
+                    continue
+                left, right = raw_line.split(" - ", 1)
+                left_fields = left.split()
+                right_fields = right.split()
+                if len(left_fields) < 5 or len(right_fields) < 2:
+                    continue
+                root = left_fields[3]
+                mount_point = Path(left_fields[4])
+                mount_source = right_fields[1]
+                try:
+                    container_path.relative_to(mount_point)
+                except ValueError:
+                    continue
+                if best_match is None or len(str(mount_point)) > len(str(best_match[0])):
+                    best_match = (mount_point, root, mount_source)
+        except Exception as e:
+            logger.warning(f"Failed to parse /proc/self/mountinfo: {e}")
+            return None
+
+        if best_match is None:
+            return None
+
+        mount_point, root, mount_source = best_match
+        relative = container_path.relative_to(mount_point)
+        root_clean = str(root or "").strip()
+        source_clean = str(mount_source or "").strip()
+        root_rel = root_clean.lstrip("/")
+
+        if source_clean.startswith("/run/host_mark/"):
+            host_anchor = Path("/") / Path(source_clean).name
+            base = host_anchor / root_rel if root_rel else host_anchor
+            resolved = base / relative
+            logger.info("Resolved host path %s via mountinfo host_mark -> %s", container_path, resolved)
+            return resolved
+
+        if source_clean.startswith("/host_mnt/"):
+            base = Path(source_clean)
+            if root_clean not in {"", "/"}:
+                base = base / root_rel
+            resolved = base / relative
+            logger.info("Resolved host path %s via mountinfo host_mnt -> %s", container_path, resolved)
+            return resolved
+
+        if source_clean.startswith("/") and not source_clean.startswith("/run/"):
+            base = Path(source_clean)
+            if root_clean not in {"", "/"}:
+                base = base / root_rel
+            resolved = base / relative
+            logger.info("Resolved host path %s via mountinfo absolute source -> %s", container_path, resolved)
+            return resolved
+
+        return None
+
+    async def _resolve_host_mount_path(self, container_path: Path) -> Path:
+        mountinfo_resolved = self._resolve_host_mount_path_from_mountinfo(container_path)
+        if mountinfo_resolved is not None:
+            return mountinfo_resolved
+
+        for source, destination in await self._get_current_container_bind_mounts():
+            try:
+                relative = container_path.relative_to(destination)
+            except ValueError:
+                continue
+            resolved = source / relative
+            logger.info("Resolved host path %s via bind mount %s -> %s", container_path, destination, source)
+            return resolved
+
+        host_ws_root_str = str(os.getenv("HOST_WORKSPACE_ROOT") or "").strip()
+        if host_ws_root_str:
+            resolved = Path(host_ws_root_str) / container_path.name
+            logger.info("Resolved host path %s via HOST_WORKSPACE_ROOT -> %s", container_path, resolved)
+            return resolved
+
+        return container_path
 
     def _container_name(self, meta: Dict[str, Any]) -> str:
         user_id = meta.get("owner_user_id")
@@ -157,22 +282,7 @@ class DockerProvider(SandboxProvider):
             if await self._docker_is_running(name):
                 logger.info(f"Reusing existing container: {name}")
                 if runtime_mode == "debug":
-                    try:
-                        await self._kill_debugpy_in_container(name)
-                    except Exception:
-                        pass
-                    host_port = await self._get_dynamic_port(name)
-                    if host_port > 0:
-                        try:
-                            await self._wait_for_readiness(name, host_port, runtime_mode)
-                            return {
-                                "docker_container_id": name,
-                                "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
-                                "dap_port": host_port,
-                                "workspace_path": str(ws_path)
-                            }
-                        except Exception as e:
-                            logger.warning(f"Reuse failed readiness check: {e}, recreating...")
+                    logger.info(f"Recreating debug container for clean attach cycle: {name}")
                     await _run_async(["docker", "rm", "-f", name], timeout_s=30)
                 else:
                     return {
@@ -189,12 +299,7 @@ class DockerProvider(SandboxProvider):
                 pass
 
             # 3. Build Command
-            host_ws_root_str = os.getenv("HOST_WORKSPACE_ROOT")
-            if host_ws_root_str:
-                # Map logic: /var/lib/pythonlab/workspaces/u123 -> $HOST_ROOT/u123
-                mount_path = Path(host_ws_root_str) / ws_path.name
-            else:
-                mount_path = ws_path
+            mount_path = await self._resolve_host_mount_path(ws_path)
 
             # Check workspace disk usage
             quota_mb = settings.PYTHONLAB_WORKSPACE_DISK_QUOTA_MB

@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Button, Tag, Typography, Skeleton } from "antd";
-import { ArrowRightOutlined } from "@ant-design/icons";
+import { LayoutGrid } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import EmptyState from "@components/Common/EmptyState";
+import AppLauncherCard from "@components/Common/AppLauncherCard";
 import { xbkPublicConfigApi } from "@services";
-
-const { Text } = Typography;
+import { useNavigate } from "react-router-dom";
 
 const PersonalProgramsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [xbkEnabled, setXbkEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -31,46 +34,45 @@ const PersonalProgramsPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-[var(--ws-page-max-width-wide)] mx-auto p-[var(--ws-space-3)] sm:p-[var(--ws-space-4)] md:p-[var(--ws-space-5)]">
+    <div
+      className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]"
+      style={{ maxWidth: "var(--ws-shell-max-width)" }}
+    >
       {loading ? (
-        <Card className="!rounded-xl !border-none !bg-surface-2">
-          <div className="py-7 text-center">
-            <Skeleton active />
-          </div>
-        </Card>
+        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+          {[1, 2].map((i) => (
+            <div key={i} className="rounded-xl bg-surface-2 p-[var(--ws-panel-padding)] space-y-[var(--ws-space-2)]">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-8/12" />
+            </div>
+          ))}
+        </div>
       ) : xbkEnabled ? (
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={12} lg={8}>
-            <Card
-              className="!rounded-xl !border-none !bg-surface-2"
-              styles={{ body: { padding: "var(--ws-space-3)" } }}
-            >
-              <div className="flex flex-col gap-2.5 w-full">
-                <div className="flex items-center justify-between">
-                  <Text strong className="!text-sm sm:!text-base">
-                    校本课（XBK）处理系统
-                  </Text>
-                  <Tag color="orange">新</Tag>
-                </div>
-                <Text type="secondary">
-                  第一阶段：页面与流程框架；数据处理将在下一阶段上线
-                </Text>
-                <div>
-                  <Button
-                    type="primary"
-                    icon={<ArrowRightOutlined />}
-                    onClick={() => window.open("/xbk", "_blank")}
-                  >
-                    进入
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </Col>
-        </Row>
+        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+          <AppLauncherCard
+            title="校本课（XBK）处理系统"
+            description="校本课数据处理与管理。"
+            icon={<LayoutGrid className="h-5 w-5" />}
+            color="var(--ws-color-success)"
+            bg="color-mix(in srgb, var(--ws-color-success) 8%, transparent)"
+            ring="color-mix(in srgb, var(--ws-color-success) 22%, transparent)"
+            onClick={() => window.open("/xbk", "_blank")}
+          />
+        </div>
       ) : (
-        <Card className="!rounded-xl !border-none !bg-surface-2">
-          <EmptyState description="暂无公开的个人程序" />
+        <Card className="rounded-xl border-none bg-surface-2">
+          <CardContent>
+            <EmptyState
+              description="暂无公开的个人程序"
+              action={
+                <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+                  返回首页
+                </Button>
+              }
+            />
+          </CardContent>
         </Card>
       )}
     </div>

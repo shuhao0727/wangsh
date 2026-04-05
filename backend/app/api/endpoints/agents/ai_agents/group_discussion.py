@@ -508,7 +508,7 @@ async def admin_delete_session_api(
     await admin_delete_session(db, session_id=session_id)
 
     # 发布事件
-    svc.publish("admin_global", {"type": "discussion_changed", "action": "delete", "id": session_id})
+    await svc.publish("admin_global", {"type": "discussion_changed", "action": "delete", "id": session_id})
 
     return {"success": True}
 
@@ -520,7 +520,7 @@ async def admin_batch_delete_sessions_api(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Any:
     deleted = await admin_delete_sessions(db, session_ids=payload.session_ids)
-    svc.publish("admin_global", {"type": "discussion_changed", "action": "batch_delete"})
+    await svc.publish("admin_global", {"type": "discussion_changed", "action": "batch_delete"})
     return {"success": True, "deleted": deleted}
 
 

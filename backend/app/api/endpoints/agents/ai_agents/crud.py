@@ -178,7 +178,7 @@ async def create_new_agent(
         agent = await create_agent(db, agent_in=agent_in)
 
         # 发布事件
-        publish("admin_global", {"type": "agent_changed", "action": "create", "id": agent.id})
+        await publish("admin_global", {"type": "agent_changed", "action": "create", "id": agent.id})
 
         return _format_agent_response(agent)
     except ValueError as e:
@@ -209,7 +209,7 @@ async def update_existing_agent(
             )
 
         # 发布事件
-        publish("admin_global", {"type": "agent_changed", "action": "update", "id": agent_id})
+        await publish("admin_global", {"type": "agent_changed", "action": "update", "id": agent_id})
 
         return _format_agent_response(agent)
     except ValueError as e:
@@ -244,7 +244,7 @@ async def delete_existing_agent(
             )
 
         # 发布事件
-        publish("admin_global", {"type": "agent_changed", "action": "delete", "id": agent_id})
+        await publish("admin_global", {"type": "agent_changed", "action": "delete", "id": agent_id})
 
         return {"success": True, "message": "智能体删除成功"}
     except HTTPException:

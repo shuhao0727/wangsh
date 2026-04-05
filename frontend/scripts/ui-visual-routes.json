@@ -1,0 +1,14 @@
+{
+  "routes": [
+    "/home",
+    "/ai-agents",
+    "/articles",
+    "/informatics",
+    "/it-technology",
+    "/admin/dashboard",
+    "/admin/ai-agents",
+    "/admin/informatics",
+    "/admin/it-technology",
+    "/admin/articles"
+  ]
+}

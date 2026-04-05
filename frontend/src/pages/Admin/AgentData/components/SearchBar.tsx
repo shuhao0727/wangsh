@@ -2,14 +2,18 @@
  * 搜索栏 — 紧凑单行，展开高级筛选
  */
 
-import React, { useState, useEffect } from "react";
-import { Input, Select, Button, Space, Row, Col, DatePicker, Form } from "antd";
-import { SearchOutlined, ReloadOutlined, FilterOutlined, DownloadOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import React, { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Download, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import type { SearchFilterParams } from "@services/znt/types";
-
-const { RangePicker } = DatePicker;
-const { Option } = Select;
 
 interface SearchBarProps {
   searchParams: SearchFilterParams;
@@ -25,121 +29,219 @@ const filterOptions = {
   agentNames: ["DeepSeek Chat", "硅基流动 - 文生图", "OpenAI GPT-4", "客户服务助手", "文档分析助手"],
 };
 
+type FormState = {
+  keyword: string;
+  student_id: string;
+  student_name: string;
+  class_name: string;
+  grade: string;
+  agent_name: string;
+  start_date: string;
+  end_date: string;
+};
+
+const EMPTY_FORM: FormState = {
+  keyword: "",
+  student_id: "",
+  student_name: "",
+  class_name: "",
+  grade: "",
+  agent_name: "",
+  start_date: "",
+  end_date: "",
+};
+
 const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, onExport, exportDisabled }) => {
-  const [form] = Form.useForm();
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   useEffect(() => {
-    form.setFieldsValue({
+    setForm({
       keyword: searchParams.keyword || "",
       student_id: searchParams.student_id || "",
       student_name: searchParams.student_name || "",
       class_name: searchParams.class_name || "",
       grade: searchParams.grade || "",
       agent_name: searchParams.agent_name || "",
-      date_range: searchParams.start_date && searchParams.end_date
-        ? [dayjs(searchParams.start_date), dayjs(searchParams.end_date)]
-        : null,
+      start_date: searchParams.start_date || "",
+      end_date: searchParams.end_date || "",
     });
-  }, [searchParams, form]);
+  }, [searchParams]);
 
-  const handleSearch = () => {
-    form.validateFields().then((values) => {
-      const params: SearchFilterParams = {
-        keyword: values.keyword,
-        student_id: values.student_id,
-        student_name: values.student_name,
-        class_name: values.class_name,
-        grade: values.grade,
-        agent_name: values.agent_name,
-        page: 1,
-        page_size: searchParams.page_size || 20,
-      };
-      if (values.date_range?.length === 2) {
-        params.start_date = values.date_range[0].format("YYYY-MM-DD");
-        params.end_date = values.date_range[1].format("YYYY-MM-DD");
-      }
-      onSearch(params);
-    });
+  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleReset = () => { form.resetFields(); onReset(); };
+  const handleSearch = () => {
+    const params: SearchFilterParams = {
+      keyword: form.keyword || undefined,
+      student_id: form.student_id || undefined,
+      student_name: form.student_name || undefined,
+      class_name: form.class_name || undefined,
+      grade: form.grade || undefined,
+      agent_name: form.agent_name || undefined,
+      page: 1,
+      page_size: searchParams.page_size || 20,
+    };
+
+    if (form.start_date && form.end_date) {
+      params.start_date = form.start_date;
+      params.end_date = form.end_date;
+    }
+
+    onSearch(params);
+  };
+
+  const handleReset = () => {
+    setForm(EMPTY_FORM);
+    onReset();
+  };
 
   return (
-    <div style={{ flex: "none", padding: "12px 0", marginBottom: 8 }}>
-      <Form form={form} layout="vertical">
-        <Row gutter={12} align="middle" wrap={false}>
-          <Col flex="auto">
-            <Row gutter={12}>
-              <Col span={8}>
-                <Form.Item name="keyword" noStyle>
-                  <Input
-                    placeholder="搜索问题或回答..."
-                    allowClear
-                    prefix={<SearchOutlined style={{ color: "rgba(0,0,0,0.25)" }} />}
-                    onPressEnter={handleSearch}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={5}>
-                <Form.Item name="student_id" noStyle>
-                  <Input placeholder="学号" allowClear />
-                </Form.Item>
-              </Col>
-              <Col span={5}>
-                <Form.Item name="student_name" noStyle>
-                  <Input placeholder="学生姓名" allowClear />
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Space>
-                  <Button type="primary" onClick={handleSearch}>查询</Button>
-                  <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
-                  <Button type="text" icon={<FilterOutlined />} onClick={() => setShowAdvanced(!showAdvanced)}>
-                    {showAdvanced ? "收起" : "筛选"}
-                  </Button>
-                  {onExport && (
-                    <Button icon={<DownloadOutlined />} onClick={onExport} disabled={exportDisabled}>导出</Button>
-                  )}
-                </Space>
-              </Col>
-            </Row>
-          </Col>
-        </Row>
-
-        {showAdvanced && (
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.04)" }}>
-            <Row gutter={12}>
-              <Col span={6}>
-                <Form.Item label="班级" name="class_name" className="mb-2">
-                  <Select placeholder="选择班级" allowClear>
-                    {filterOptions.classNames.map((c) => <Option key={c} value={c}>{c}</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="学年" name="grade" className="mb-2">
-                  <Select placeholder="选择学年" allowClear>
-                    {filterOptions.grades.map((g) => <Option key={g} value={g}>{g}级</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="智能体" name="agent_name" className="mb-2">
-                  <Select placeholder="选择智能体" allowClear>
-                    {filterOptions.agentNames.map((a) => <Option key={a} value={a}>{a}</Option>)}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="时间范围" name="date_range" className="mb-2">
-                  <RangePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
-                </Form.Item>
-              </Col>
-            </Row>
+    <div className="mb-2 flex-none py-3">
+      <div className="flex flex-nowrap items-center gap-3">
+        <div className="grid flex-1 grid-cols-12 gap-3">
+          <div className="col-span-4">
+            <Input
+              placeholder="搜索问题或回答..."
+              value={form.keyword}
+              onChange={(e) => setField("keyword", e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+            />
           </div>
-        )}
-      </Form>
+          <div className="col-span-2">
+            <Input
+              placeholder="学号"
+              value={form.student_id}
+              onChange={(e) => setField("student_id", e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+            />
+          </div>
+          <div className="col-span-2">
+            <Input
+              placeholder="学生姓名"
+              value={form.student_name}
+              onChange={(e) => setField("student_name", e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+            />
+          </div>
+          <div className="col-span-4 flex items-center gap-2">
+            <Button type="button" onClick={handleSearch}>
+              <Search className="h-4 w-4" />
+              查询
+            </Button>
+            <Button type="button" variant="outline" onClick={handleReset}>
+              <RotateCcw className="h-4 w-4" />
+              重置
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowAdvanced((v) => !v)}>
+              <SlidersHorizontal className="h-4 w-4" />
+              {showAdvanced ? "收起" : "筛选"}
+            </Button>
+            {onExport ? (
+              <Button type="button" variant="outline" onClick={onExport} disabled={exportDisabled}>
+                <Download className="h-4 w-4" />
+                导出
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {showAdvanced ? (
+        <div className="mt-3 border-t border-border-secondary pt-3">
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-3 space-y-1">
+              <div className="text-xs text-text-tertiary">班级</div>
+              <Select
+                value={form.class_name || "__none__"}
+                onValueChange={(v) => setField("class_name", v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择班级" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">全部</SelectItem>
+                  {filterOptions.classNames.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-3 space-y-1">
+              <div className="text-xs text-text-tertiary">学年</div>
+              <Select
+                value={form.grade || "__none__"}
+                onValueChange={(v) => setField("grade", v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择学年" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">全部</SelectItem>
+                  {filterOptions.grades.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}级
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-3 space-y-1">
+              <div className="text-xs text-text-tertiary">智能体</div>
+              <Select
+                value={form.agent_name || "__none__"}
+                onValueChange={(v) => setField("agent_name", v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择智能体" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">全部</SelectItem>
+                  {filterOptions.agentNames.map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {a}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-3 space-y-1">
+              <div className="text-xs text-text-tertiary">时间范围</div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setField("start_date", e.target.value)}
+                />
+                <span className="text-text-tertiary">-</span>
+                <Input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setField("end_date", e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

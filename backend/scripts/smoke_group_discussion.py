@@ -7,6 +7,9 @@ import urllib.request
 import urllib.error
 import uuid
 
+LOGIN_RETRY_ATTEMPTS = max(int(os.environ.get("LOGIN_RETRY_ATTEMPTS", "4") or "4"), 1)
+LOGIN_RETRY_SLEEP_SECONDS = max(float(os.environ.get("LOGIN_RETRY_SLEEP_SECONDS", "2.2") or "2.2"), 0.5)
+
 
 def _http_json(method: str, url: str, *, headers: dict | None = None, body: dict | None = None, timeout: int = 12):
     data = None
@@ -190,17 +193,55 @@ def _extract_access_token(payload: object) -> str:
     return ""
 
 
+def _is_rate_limited(code: int, payload: object) -> bool:
+    if code == 429:
+        return True
+    if isinstance(payload, dict):
+        text = json.dumps(payload, ensure_ascii=False).lower()
+        return "too many requests" in text or "rate limit" in text
+    return False
+
+
+def _login_with_backoff(base_url: str, *, username: str, password: str, login_label: str) -> tuple[int, object]:
+    last_code = 0
+    last_payload: object = None
+    for attempt in range(1, LOGIN_RETRY_ATTEMPTS + 1):
+        code, payload = _http_form(
+            "POST",
+            f"{base_url}/auth/login",
+            fields={"username": username, "password": password},
+        )
+        last_code, last_payload = code, payload
+        if code == 200:
+            return code, payload
+        if not _is_rate_limited(code, payload):
+            return code, payload
+        if attempt < LOGIN_RETRY_ATTEMPTS:
+            time.sleep(LOGIN_RETRY_SLEEP_SECONDS)
+            continue
+        _die(
+            f"{login_label} rate limited after {LOGIN_RETRY_ATTEMPTS} attempts: "
+            f"http {code} payload={payload}"
+        )
+    return last_code, last_payload
+
+
 def _today_iso() -> str:
     return time.strftime("%Y-%m-%d")
 
 
-def _ensure_active_agent(base_url: str, *, prefer_agent_id: str | None = None) -> int:
+def _ensure_active_agent(
+    base_url: str,
+    *,
+    auth_headers: dict[str, str] | None = None,
+    prefer_agent_id: str | None = None,
+) -> int:
     if prefer_agent_id and str(prefer_agent_id).strip():
         try:
             return int(str(prefer_agent_id).strip())
         except Exception:
             pass
-    code, active_agents = _http_json("GET", f"{base_url}/ai-agents/active", timeout=12)
+    code, active_agents = _http_json("GET", f"{base_url}/ai-agents/active", headers=auth_headers, timeout=12)
     if code == 200 and isinstance(active_agents, list):
         for a in active_agents:
             if isinstance(a, dict) and a.get("is_active") is not False:
@@ -212,6 +253,7 @@ def _ensure_active_agent(base_url: str, *, prefer_agent_id: str | None = None) -
     code, created = _http_json(
         "POST",
         f"{base_url}/ai-agents/",
+        headers=auth_headers,
         body={
             "name": f"smoke-agent-{suffix}",
             "agent_type": "general",
@@ -232,6 +274,7 @@ def _ensure_active_agent(base_url: str, *, prefer_agent_id: str | None = None) -
 
 def _admin_login(base_url: str, *, username: str, password_candidates: list[str]) -> str:
     tried: list[str] = []
+    unexpected_errors: list[str] = []
     for pw in password_candidates:
         p = (pw or "").strip()
         if not p:
@@ -239,25 +282,28 @@ def _admin_login(base_url: str, *, username: str, password_candidates: list[str]
         if p in tried:
             continue
         tried.append(p)
-        code, payload = _http_form(
-            "POST",
-            f"{base_url}/auth/login",
-            fields={"username": username, "password": p},
-        )
+        code, payload = _login_with_backoff(base_url, username=username, password=p, login_label="admin login")
+        if code in {401, 403}:
+            continue
         if code != 200:
+            unexpected_errors.append(f"http {code} payload={payload}")
             continue
         token = _extract_access_token(payload)
         if token:
             return token
+        unexpected_errors.append(f"http {code} payload={payload}")
+    if unexpected_errors:
+        _die(f"admin login failed: {'; '.join(unexpected_errors[:3])}")
     _die("admin login failed (all password candidates rejected)")
     return ""
 
 
 def _student_login(base_url: str, *, full_name: str, student_id: str) -> str:
-    code, payload = _http_form(
-        "POST",
-        f"{base_url}/auth/login",
-        fields={"username": full_name, "password": student_id},
+    code, payload = _login_with_backoff(
+        base_url,
+        username=full_name,
+        password=student_id,
+        login_label="student login",
     )
     if code != 200:
         _die(f"student login failed: http {code} payload={payload}")
@@ -565,10 +611,14 @@ def main() -> int:
     print("[OK] health")
 
     admin_password_candidates = [admin_password, "dev_admin_password", "change_me", "wangshuhao0727"]
-    _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
     print("[OK] admin login")
 
-    agent_id = _ensure_active_agent(base_url, prefer_agent_id=analysis_agent_id or None)
+    agent_id = _ensure_active_agent(
+        base_url,
+        auth_headers={"Authorization": f"Bearer {admin_token}"},
+        prefer_agent_id=analysis_agent_id or None,
+    )
     print(f"[OK] analysis agent resolved: agent_id={agent_id}")
 
     for i in [1, 2, 3]:

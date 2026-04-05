@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import logging
 import mimetypes
@@ -25,6 +26,7 @@ from app.utils.typst_asset_validation import normalize_asset_path
 from app.utils.typst_pdf_storage import abs_pdf_path
 
 logger = logging.getLogger(__name__)
+_LOCAL_SYNC_LOCKS: Dict[str, asyncio.Lock] = {}
 
 
 def parse_repo_from_url(repo_url: str) -> Tuple[str, str]:
@@ -279,13 +281,35 @@ class SyncStats:
     skipped: int = 0
 
 
-async def _acquire_lock(lock_key: str, ttl_sec: int = 3600) -> bool:
-    client = await cache.get_client()
-    return bool(await client.set(lock_key, "1", ex=ttl_sec, nx=True))
+async def _acquire_lock(lock_key: str, ttl_sec: int = 3600) -> Tuple[bool, str]:
+    try:
+        client = await cache.get_client()
+        return bool(await client.set(lock_key, "1", ex=ttl_sec, nx=True)), "redis"
+    except Exception as e:
+        # Redis 连接池打满/暂时不可用时，降级为进程内锁，避免接口直接 500
+        logger.warning("GitHub 同步 Redis 锁不可用，降级为本地锁: %s", e)
+        lock = _LOCAL_SYNC_LOCKS.get(lock_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _LOCAL_SYNC_LOCKS[lock_key] = lock
+        if lock.locked():
+            return False, "local"
+        await lock.acquire()
+        return True, "local"
 
 
-async def _release_lock(lock_key: str) -> None:
-    await cache.delete(lock_key)
+async def _release_lock(lock_key: str, mode: str = "redis") -> None:
+    if mode == "local":
+        lock = _LOCAL_SYNC_LOCKS.get(lock_key)
+        if lock and lock.locked():
+            lock.release()
+        if lock and not lock.locked():
+            _LOCAL_SYNC_LOCKS.pop(lock_key, None)
+        return
+    try:
+        await cache.delete(lock_key)
+    except Exception as e:
+        logger.warning("GitHub 同步释放 Redis 锁失败: %s", e)
 
 
 async def run_github_sync(
@@ -318,11 +342,14 @@ async def run_github_sync(
         raise RuntimeError("尚未配置可用的 GitHub Token（缺少加密密钥或Token）")
     owner, repo, branch = setting.repo_owner, setting.repo_name, setting.branch or "main"
     lock_key = f"inf:github-sync:{owner}:{repo}:{branch}"
-    if not await _acquire_lock(lock_key):
+    lock_mode = "redis"
+    acquired, lock_mode = await _acquire_lock(lock_key)
+    if not acquired and lock_mode == "redis":
         # 锁可能是残留的，强制释放后重试一次
-        await _release_lock(lock_key)
-        if not await _acquire_lock(lock_key):
-            raise RuntimeError("同步任务已在运行中，请稍后重试")
+        await _release_lock(lock_key, mode="redis")
+        acquired, lock_mode = await _acquire_lock(lock_key)
+    if not acquired:
+        raise RuntimeError("同步任务已在运行中，请稍后重试")
     run = InformaticsGithubSyncRun(
         trigger_type=trigger_type,
         status="running",
@@ -571,4 +598,4 @@ async def run_github_sync(
         await db.refresh(run)
         raise
     finally:
-        await _release_lock(lock_key)
+        await _release_lock(lock_key, mode=lock_mode)

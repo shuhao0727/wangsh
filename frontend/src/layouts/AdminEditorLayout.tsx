@@ -1,11 +1,9 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Button, Layout, Space, Typography } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import useAuth from "@hooks/useAuth";
-
-const { Header, Content } = Layout;
-const { Text } = Typography;
 
 const AdminEditorLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -31,54 +29,35 @@ const AdminEditorLayout: React.FC = () => {
   })();
 
   return (
-    <Layout style={{ height: "100vh", background: "var(--ws-color-bg)" }}>
-      <Header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
-          height: 56,
-          padding: "0 16px",
-          background: "var(--ws-color-surface)",
-          borderBottom: "1px solid var(--ws-color-border)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Space size={10}>
-          <Button icon={<ArrowLeftOutlined />} onClick={backToList}>
+    <div className="h-screen bg-surface">
+      <header className="sticky top-0 z-[var(--ws-z-floating-panel)] flex h-14 items-center justify-between border-b border-border bg-surface px-4">
+        <div className="flex items-center gap-2.5">
+          <Button variant="outline" onClick={backToList}>
+            <ArrowLeft className="h-4 w-4" />
             返回列表
           </Button>
-          <Text strong className="text-base">
+          <span className="text-base font-semibold">
             {title}
-          </Text>
-        </Space>
-      </Header>
-      <Content
-        style={{
-          padding: isFullscreenEditor ? 0 : 16,
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
+          </span>
+        </div>
+      </header>
+      <main
+        className={cn(
+          "flex flex-1 flex-col overflow-hidden",
+          isFullscreenEditor ? "p-0" : "p-4"
+        )}
+        style={{ height: "calc(100vh - 56px)" }}
       >
         <div
-          style={{
-            maxWidth: isFullscreenEditor ? "none" : 1600,
-            margin: isFullscreenEditor ? 0 : "0 auto",
-            flex: isFullscreenEditor ? 1 : undefined,
-            minHeight: isFullscreenEditor ? 0 : undefined,
-            display: isFullscreenEditor ? "flex" : undefined,
-            flexDirection: isFullscreenEditor ? "column" : undefined,
-          }}
+          className={cn(
+            "w-full",
+            isFullscreenEditor ? "flex min-h-0 flex-1 flex-col" : "mx-auto max-w-[1600px]"
+          )}
         >
           <Outlet />
         </div>
-      </Content>
-    </Layout>
+      </main>
+    </div>
   );
 };
 

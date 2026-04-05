@@ -40,7 +40,7 @@ async def student_stream(
     sub_id = str(uuid.uuid4())
 
     async def gen():
-        q = svc.subscribe("student", sub_id)
+        q = await svc.subscribe("student", sub_id)
         try:
             yield f"data: {json.dumps({'type': 'connected'})}\n\n"
             while True:
@@ -52,7 +52,7 @@ async def student_stream(
                 except asyncio.CancelledError:
                     break
         finally:
-            svc.unsubscribe("student", sub_id)
+            await svc.unsubscribe("student", sub_id)
 
     return StreamingResponse(
         gen(),

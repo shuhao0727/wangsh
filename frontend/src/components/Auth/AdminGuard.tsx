@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Result, Spin } from "antd";
-import { LoadingOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Loader2, ShieldX } from "lucide-react";
 import useAuth from "@hooks/useAuth";
 
 type Props = {
@@ -25,7 +25,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
   if (auth.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
+        <Loader2 className="h-9 w-9 animate-spin text-primary" />
       </div>
     );
   }
@@ -37,26 +37,25 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
   if (!auth.isAdmin()) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Result
-          status="403"
-          title="权限不足"
-          subTitle="需要管理员权限才能访问管理后台"
-          extra={[
-            <Button key="home" type="primary" onClick={() => navigate("/home", { replace: true })}>
+        <div className="text-center">
+          <ShieldX className="h-16 w-16 text-error mx-auto mb-4" />
+          <div className="text-2xl font-bold text-text-base mb-2">权限不足</div>
+          <div className="text-base text-text-secondary mb-6">需要管理员权限才能访问管理后台</div>
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={() => navigate("/home", { replace: true })}>
               返回首页
-            </Button>,
+            </Button>
             <Button
-              key="logout"
-              danger
+              variant="destructive"
               onClick={async () => {
                 await auth.logout();
                 navigate("/login?redirect=%2Fadmin%2Fdashboard", { replace: true });
               }}
             >
               退出并切换账号
-            </Button>,
-          ]}
-        />
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

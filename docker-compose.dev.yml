@@ -233,7 +233,7 @@ services:
     command: >
       sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab"
 
-  # 前端服务 (React craco dev server，热加载)
+  # 前端服务 (Vite dev server，热加载)
   frontend:
     build:
       context: ./frontend
@@ -258,7 +258,7 @@ services:
       - backend
 
   # Caddy 服务 (仅用于生产/模拟生产，开发时可不启动)
-  # 开发时直接访问 http://localhost:6608，API 通过 craco proxy 转发
+  # 开发时直接访问 http://localhost:6608，API 通过 Vite proxy 转发
   caddy:
     image: public.ecr.aws/docker/library/caddy:2-alpine
     container_name: wangsh-caddy

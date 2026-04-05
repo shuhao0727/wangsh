@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Input } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Trash2 } from "lucide-react";
 import type { FlowEdge } from "../flow/model";
 import { clampBetween } from "../flow/math";
 
@@ -65,10 +66,10 @@ export function EdgeToolbar(props: {
         left: pos.x,
         top: pos.y,
         zIndex: 4,
-        background: "#fff",
-        border: "1px solid rgba(0,0,0,0.10)",
+        background: "var(--ws-color-surface)",
+        border: "1px solid var(--ws-color-border)",
         borderRadius: 10,
-        boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
+        boxShadow: "var(--ws-shadow-lg)",
         padding: 8,
         display: "flex",
         gap: 8,
@@ -81,7 +82,7 @@ export function EdgeToolbar(props: {
           width: 18,
           height: 18,
           borderRadius: 6,
-          background: "rgba(0,0,0,0.04)",
+          background: "var(--ws-color-hover-bg)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -98,35 +99,35 @@ export function EdgeToolbar(props: {
       >
         ⋮
       </div>
-      <Button size="small" danger icon={<DeleteOutlined />} onClick={onDelete}>
+      <Button size="sm" variant="destructive" onClick={onDelete}>
+        <Trash2 className="h-3.5 w-3.5" />
         删除
       </Button>
-      <Button size="small" onClick={onReverse}>
+      <Button size="sm" variant="outline" onClick={onReverse}>
         反向
       </Button>
       <Input
         id="pythonlab-edge-label-input"
         name="pythonlab-edge-label-input"
         aria-label="连线标注"
-        size="small"
-        style={{ width: 90 }}
+        className="w-[90px] h-[28px] text-xs"
         placeholder="标注"
         value={selectedEdge.label ?? ""}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onSetLabel(e.target.value)}
       />
-      <Button size="small" type={selectedEdge.style === "straight" ? "primary" : "default"} onClick={onSetStraight}>
+      <Button size="sm" variant={selectedEdge.style === "straight" ? "default" : "outline"} onClick={onSetStraight}>
         直线
       </Button>
-      <Button size="small" type={selectedEdge.style === "polyline" ? "primary" : "default"} onClick={onSetPolyline}>
+      <Button size="sm" variant={selectedEdge.style === "polyline" ? "default" : "outline"} onClick={onSetPolyline}>
         折线
       </Button>
       {selectedEdge.style === "polyline" && (
         <>
-          <Button size="small" onClick={onAddAnchor}>
+          <Button size="sm" variant="outline" onClick={onAddAnchor}>
             加拐点
           </Button>
-          <Button size="small" onClick={onClearAnchors}>
+          <Button size="sm" variant="outline" onClick={onClearAnchors}>
             清拐点
           </Button>
         </>

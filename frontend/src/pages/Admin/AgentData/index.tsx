@@ -5,7 +5,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Tabs } from "antd";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import StatisticsCards from "./components/StatisticsCards";
 import UsageRecordPanel from "./components/UsageRecordPanel";
@@ -54,8 +54,8 @@ const AdminAgentData: React.FC = () => {
   };
 
   return (
-    <AdminPage padding={24} scrollable={false}>
-      <div className="flex flex-col h-full min-h-0">
+    <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* 统计卡片 */}
         <div className="flex-none">
           <StatisticsCards data={statistics} />
@@ -64,15 +64,16 @@ const AdminAgentData: React.FC = () => {
         {/* Tab 导航 */}
         <div className="flex-none">
           <Tabs
-            activeKey={activeTabKey}
-            onChange={handleTabChange}
-            items={[
-              { key: "usage", label: "使用记录" },
-              { key: "hot", label: "热点问题" },
-              { key: "chains", label: "学生提问链条" },
-            ]}
-            className="!mb-0"
-          />
+            value={activeTabKey}
+            onValueChange={handleTabChange}
+            className="w-full"
+          >
+            <TabsList className="inline-flex h-10">
+              <TabsTrigger value="usage">使用记录</TabsTrigger>
+              <TabsTrigger value="hot">热点问题</TabsTrigger>
+              <TabsTrigger value="chains">学生提问链条</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {/* 内容面板 — 占满剩余空间 */}

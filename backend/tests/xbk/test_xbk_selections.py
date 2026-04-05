@@ -10,7 +10,7 @@ def test_list_selections_success(monkeypatch):
     async def mock_list():
         return fake_selections, 1
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.list_selections", mock_list)
+    monkeypatch.setattr("app.api.endpoints.xbk.selections.list_selections", mock_list)
     result = asyncio.run(mock_list())
     assert len(result[0]) == 1
 
@@ -22,7 +22,7 @@ def test_create_selection_success(monkeypatch):
     async def mock_create():
         return fake_selection
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.create_selection", mock_create)
+    monkeypatch.setattr("app.api.endpoints.xbk.selections.create_selection", mock_create)
     result = asyncio.run(mock_create())
     assert result.id == 1
 
@@ -32,6 +32,6 @@ def test_delete_selection_success(monkeypatch):
     async def mock_delete():
         return True
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.delete_selection", mock_delete)
+    monkeypatch.setattr("app.api.endpoints.xbk.selections.delete_selection", mock_delete)
     result = asyncio.run(mock_delete())
     assert result is True

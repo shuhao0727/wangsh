@@ -679,7 +679,6 @@ export function useDapRunner(params: { code: string; debugMap: DebugMap | null }
 
       // Removed redundant dispatch calls here since we did them above
 
-
       // No more pre-check for input() requirements since we support runtime stdin
       // But we can still keep extractInputPrompts if we want to visualize something?
       // Actually, with runtime stdin, we just run the code.

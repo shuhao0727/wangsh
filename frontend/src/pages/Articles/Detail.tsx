@@ -5,24 +5,20 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import DOMPurify from "dompurify";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Typography,
-  Button,
-  Skeleton,
-  Alert,
-  Empty,
-  Space,
-  Divider,
-  Tag,
-} from "antd";
-import {
-  ArrowLeftOutlined,
-  CalendarOutlined,
-  UserOutlined,
-  FolderOutlined,
-  ClockCircleOutlined,
-  BookOutlined,
-} from "@ant-design/icons";
+  ArrowLeft,
+  Calendar,
+  User,
+  FolderOpen,
+  Clock3,
+  BookOpen,
+  TriangleAlert,
+} from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import dayjs from "dayjs";
 import ReactMarkdown from "react-markdown";
@@ -34,19 +30,16 @@ import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import { toScopedCss } from "@utils/scopedCss";
 import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
+import EmptyState from "@components/Common/EmptyState";
 import "./Detail.css";
 import "../../styles/markdown.css";
 
-const { Title, Text, Paragraph } = Typography;
-
-// 目录项接口
 interface TableOfContentsItem {
   id: string;
   text: string;
   level: number;
 }
 
-// 辅助函数：将文本转换为有效的ID
 const textToId = (text: string): string => {
   return text
     .toLowerCase()
@@ -78,7 +71,6 @@ const ArticleDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
 
-  // 状态管理
   const [article, setArticle] = useState<ArticleWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +104,6 @@ const ArticleDetailPage: React.FC = () => {
     }, minInterval - since);
   }, []);
 
-  // 加载文章详情
   useEffect(() => {
     let isMounted = true;
 
@@ -153,7 +144,6 @@ const ArticleDetailPage: React.FC = () => {
 
     fetchArticle();
 
-    // 清理函数
     return () => {
       isMounted = false;
     };
@@ -199,7 +189,6 @@ const ArticleDetailPage: React.FC = () => {
     };
   }, [navigate, requestRefresh, slug]);
 
-  // 生成文章目录 - 从文章内容中提取标题
   useEffect(() => {
     const content = article?.content || "";
     const tocItems: TableOfContentsItem[] = [];
@@ -242,12 +231,10 @@ const ArticleDetailPage: React.FC = () => {
     setTableOfContents(tocItems);
   }, [article?.content, article?.title]);
 
-  // 处理返回
   const handleBack = () => {
     navigate("/articles");
   };
 
-  // 滚动到目录项
   const scrollToTocItem = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
@@ -255,47 +242,45 @@ const ArticleDetailPage: React.FC = () => {
     }
   };
 
-  // 加载状态
   if (loading) {
     return (
-      <div className="max-w-[1560px] mx-auto px-6 py-10">
-        <Skeleton active title={{ width: "60%" }} paragraph={{ rows: 1, width: "40%" }} className="mb-6" />
-        <Skeleton active title={false} paragraph={{ rows: 8 }} />
+      <div className="max-w-[1560px] mx-auto px-[var(--ws-space-4)] py-[var(--ws-space-5)]">
+        <div className="mb-6 space-y-3">
+          <Skeleton className="h-8 w-3/5" />
+          <Skeleton className="h-4 w-2/5" />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
+        </div>
       </div>
     );
   }
 
-  // 错误状态
   if (error) {
     return (
-      <div className="max-w-[1560px] mx-auto px-6 py-10">
-        <Alert
-          title="文章加载失败"
-          description={error}
-          type="error"
-          showIcon
-          action={
-            <Space>
-              <Button onClick={handleBack}>返回文章列表</Button>
-            </Space>
-          }
-        />
+      <div className="max-w-[1560px] mx-auto px-[var(--ws-space-4)] py-[var(--ws-space-5)]">
+        <Alert variant="destructive" className="border border-destructive/20 bg-destructive/5">
+          <TriangleAlert className="h-4 w-4" />
+          <AlertTitle>文章加载失败</AlertTitle>
+          <AlertDescription className="mt-1 flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
+            <span>{error}</span>
+            <Button onClick={handleBack}>返回文章列表</Button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
-  // 文章不存在
   if (!article) {
     return (
       <div className="article-detail-container article-detail-empty">
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        <EmptyState
+          variant="no-data"
           description="文章不存在或已被删除"
-        >
-          <Button type="primary" onClick={handleBack}>
-            返回文章列表
-          </Button>
-        </Empty>
+          action={<Button onClick={handleBack}>返回文章列表</Button>}
+        />
       </div>
     );
   }
@@ -317,137 +302,125 @@ const ArticleDetailPage: React.FC = () => {
 
     return (
       <div className="article-content-wrapper">
-      {/* 文章标题 */}
-      <div className="article-detail-hero">
-        <div className="article-detail-title" id={textToId(article.title)}>
-          {article.title}
+        <div className="article-detail-hero">
+          <div className="article-detail-title" id={textToId(article.title)}>
+            {article.title}
+          </div>
+          {article.summary && (
+            <p className="article-detail-summary">{article.summary}</p>
+          )}
         </div>
-        {article.summary && (
-          <Paragraph className="article-detail-summary">
-            {article.summary}
-          </Paragraph>
-        )}
-      </div>
 
-      {/* 文章元信息 */}
-      <div className="article-meta-row">
-        <Space wrap size="large" style={{ width: "100%" }}>
-          <div className="flex items-center gap-2">
-            <UserOutlined className="text-primary" />
-            <Text>
-              {article.author?.full_name ||
-                article.author?.username ||
-                "匿名作者"}
-            </Text>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <CalendarOutlined className="text-success" />
-            <Text>
-              {dayjs(article.created_at).format("YYYY年MM月DD日")}
-            </Text>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <ClockCircleOutlined className="text-primary" />
-            <Text>发布于 {dayjs(article.created_at).fromNow()}</Text>
-          </div>
-
-          {article.category && (
+        <div className="article-meta-row">
+          <div className="flex w-full flex-wrap items-center gap-[var(--ws-layout-gap)]">
             <div className="flex items-center gap-2">
-              <FolderOutlined className="text-warning" />
-              <Tag color="orange">
-                <Link to={`/articles?category=${article.category.id}`}>
-                  {article.category.name}
-                </Link>
-              </Tag>
+              <User className="h-4 w-4 text-text-tertiary" />
+              <span>
+                {article.author?.full_name ||
+                  article.author?.username ||
+                  "匿名作者"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-text-tertiary" />
+              <span>{dayjs(article.created_at).format("YYYY年MM月DD日")}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-4 w-4 text-text-tertiary" />
+              <span>发布于 {dayjs(article.created_at).fromNow()}</span>
+            </div>
+
+            {article.category && (
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-text-tertiary" />
+                <Badge variant="warning">
+                  <Link to={`/articles?category=${article.category.id}`}>
+                    {article.category.name}
+                  </Link>
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Separator className="my-6" />
+
+        <div className="min-h-[400px]">
+          {article.content ? (
+            <div className="article-content ws-markdown" data-article-scope={scopeId}>
+              {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h1 id={id} {...props}>
+                        {props.children}
+                      </h1>
+                    );
+                  },
+                  h2: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h2 id={id} {...props}>
+                        {props.children}
+                      </h2>
+                    );
+                  },
+                  h3: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h3 id={id} {...props}>
+                        {props.children}
+                      </h3>
+                    );
+                  },
+                  h4: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h4 id={id} {...props}>
+                        {props.children}
+                      </h4>
+                    );
+                  },
+                  a: ({ node: _node, ...props }) => (
+                    <a target="_blank" rel="noopener noreferrer" {...props}>
+                      {props.children}
+                    </a>
+                  ),
+                  img: ({ node: _node, ...props }) => (
+                    <img alt={(props as any).alt ?? "文章配图"} loading="lazy" decoding="async" {...props} />
+                  ),
+                }}
+              >
+                {article.content}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <div className="text-center px-5 py-16">
+              <div className="mb-6 text-5xl text-text-secondary">📝</div>
+              <h3 className="mb-4 text-2xl font-semibold text-text-secondary">文章内容正在建设中</h3>
+              <p className="mx-auto max-w-[500px] text-sm text-text-secondary">
+                这篇文章的详细内容正在编写中，敬请期待。
+              </p>
             </div>
           )}
-        </Space>
-      </div>
+        </div>
 
-      <Divider className="!mt-3 !mb-6" />
+        <Separator className="my-6" />
 
-      {/* 文章内容 */}
-      <div className="min-h-[400px]">
-        {article.content ? (
-          <div className="article-content ws-markdown" data-article-scope={scopeId}>
-            {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                h1: ({ node: _node, ...props }) => {
-                  const text = headingText(props.children);
-                  const id = text ? makeId(text) : undefined;
-                  return (
-                    <h1 id={id} {...props}>
-                      {props.children}
-                    </h1>
-                  );
-                },
-                h2: ({ node: _node, ...props }) => {
-                  const text = headingText(props.children);
-                  const id = text ? makeId(text) : undefined;
-                  return (
-                    <h2 id={id} {...props}>
-                      {props.children}
-                    </h2>
-                  );
-                },
-                h3: ({ node: _node, ...props }) => {
-                  const text = headingText(props.children);
-                  const id = text ? makeId(text) : undefined;
-                  return (
-                    <h3 id={id} {...props}>
-                      {props.children}
-                    </h3>
-                  );
-                },
-                h4: ({ node: _node, ...props }) => {
-                  const text = headingText(props.children);
-                  const id = text ? makeId(text) : undefined;
-                  return (
-                    <h4 id={id} {...props}>
-                      {props.children}
-                    </h4>
-                  );
-                },
-                a: ({ node: _node, ...props }) => (
-                  <a target="_blank" rel="noopener noreferrer" {...props}>
-                    {props.children}
-                  </a>
-                ),
-                img: ({ node: _node, ...props }) => (
-                  <img alt={(props as any).alt ?? ""} {...props} />
-                ),
-              }}
-            >
-              {article.content}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <div className="text-center px-5 py-16">
-            <div className="text-5xl mb-6 text-text-secondary">
-              📝
-            </div>
-            <Title level={3} className="mb-4 text-text-secondary">
-              文章内容正在建设中
-            </Title>
-            <Paragraph className="max-w-[500px] mx-auto text-text-secondary">
-              这篇文章的详细内容正在编写中，敬请期待。
-            </Paragraph>
-          </div>
-        )}
-      </div>
-
-      <Divider />
-
-      {/* 文章底部信息 */}
-      <div className="flex justify-between items-center pt-4">
-        <Text type="secondary">
-          最后更新：{dayjs(article.updated_at).format("YYYY-MM-DD HH:mm")}
-        </Text>
-      </div>
+        <div className="flex items-center justify-between pt-4">
+          <span className="text-sm text-text-secondary">
+            最后更新：{dayjs(article.updated_at).format("YYYY-MM-DD HH:mm")}
+          </span>
+        </div>
       </div>
     );
   };
@@ -456,11 +429,11 @@ const ArticleDetailPage: React.FC = () => {
     <div className="article-page-wrapper">
       <div className="article-header">
         <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
+          variant="ghost"
           onClick={handleBack}
           className="article-back-btn"
         >
+          <ArrowLeft className="h-4 w-4" />
           返回文章列表
         </Button>
       </div>
@@ -475,7 +448,7 @@ const ArticleDetailPage: React.FC = () => {
               <PanelCard
                 title={
                   <div className="flex items-center gap-2">
-                    <BookOutlined />
+                    <BookOpen className="h-4 w-4" />
                     <span>文章目录</span>
                   </div>
                 }
@@ -484,24 +457,18 @@ const ArticleDetailPage: React.FC = () => {
                 <div className="article-toc-list border-none">
                   {tableOfContents.length > 0 ? (
                     tableOfContents.map((item) => (
-                      <div
+                      <button
+                        type="button"
                         key={item.id}
                         onClick={() => scrollToTocItem(item.id)}
-                        className="article-toc-item"
-                        style={{ paddingLeft: `${(item.level - 1) * 16 + 12}px` }}
+                        className="appearance-none border-0 article-toc-item text-left"
+                        style={{ paddingLeft: `calc(var(--ws-space-2) * ${Math.max(item.level - 1, 0)} + var(--ws-space-2))` }}
                       >
-                          <Text
-                          ellipsis={{ tooltip: item.text }}
-                          className="text-sm"
-                        >
-                          {item.text}
-                        </Text>
-                      </div>
+                        {item.text}
+                      </button>
                     ))
                   ) : (
-                          <div className="p-4 text-center">
-                      <Text type="secondary">暂无目录</Text>
-                    </div>
+                    <div className="p-4 text-center text-sm text-text-tertiary">暂无目录</div>
                   )}
                 </div>
               </PanelCard>
@@ -509,7 +476,7 @@ const ArticleDetailPage: React.FC = () => {
           }
           right={
             <div className="article-right-pane">
-              <PanelCard bodyPadding={24}>
+              <PanelCard bodyPadding="var(--ws-space-4)">
                 {renderContent()}
               </PanelCard>
             </div>

@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { Input } from "antd";
-
-const { TextArea } = Input;
+import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   id?: string;
@@ -13,7 +11,7 @@ type Props = {
 
 export default function LineNumberedMarkdownTextArea({ id, value, placeholder, onChange, onKeyDown }: Props) {
   const gutterRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<any>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const lines = useMemo(() => {
     const n = Math.max(1, (value || "").split("\n").length);
@@ -26,7 +24,7 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
   }, [lines.length]);
 
   useEffect(() => {
-    const ta: HTMLTextAreaElement | null = textareaRef.current?.resizableTextArea?.textArea || null;
+    const ta = textareaRef.current;
     if (!ta) return;
     const sync = () => {
       if (!gutterRef.current) return;
@@ -47,17 +45,16 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
         ))}
       </div>
       <div className="md-ln-editor">
-        <TextArea
+        <Textarea
           ref={textareaRef}
           id={id}
           value={value || ""}
           onChange={(e) => onChange?.(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="text-sm font-mono"
+          className="h-full min-h-0 resize-none border-0 bg-transparent text-sm font-mono shadow-none focus-visible:ring-0"
           style={{
             height: "100%",
-            resize: "none",
             lineHeight: "24px",
           }}
         />

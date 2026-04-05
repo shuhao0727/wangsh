@@ -13,6 +13,7 @@ from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.core.http_client import HttpClientManager
 from app.utils.cache import shutdown_cache
+from app.core.pubsub import shutdown_pubsub
 from app.models import User
 from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
@@ -153,6 +154,11 @@ async def shutdown(cleanup_task: "asyncio.Task[None] | None"):
             pass
 
     try:
+        await shutdown_pubsub()
+    except Exception as e:
+        logger.error(f"pubsub 关闭失败: {e}")
+
+    try:
         await shutdown_cache()
         logger.info("缓存服务已关闭")
     except Exception as e:
@@ -169,6 +175,27 @@ async def shutdown(cleanup_task: "asyncio.Task[None] | None"):
 
 async def _ensure_dev_schema(conn):
     try:
+        # 兼容历史库：早期 xxjs_dianming 缺少 updated_at，查询会触发 UndefinedColumnError
+        await conn.execute(
+            text(
+                "ALTER TABLE xxjs_dianming "
+                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"
+            )
+        )
+        await conn.execute(
+            text(
+                "UPDATE xxjs_dianming "
+                "SET updated_at = created_at "
+                "WHERE updated_at IS NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE xxjs_dianming "
+                "ALTER COLUMN updated_at SET NOT NULL"
+            )
+        )
+
         await conn.execute(
             text(
                 "ALTER TABLE znt_group_discussion_sessions "

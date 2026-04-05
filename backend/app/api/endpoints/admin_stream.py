@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.deps import require_admin
 from app.schemas.user_info import UserInfo
-from app.services import classroom as svc
+from app.core.pubsub import subscribe, unsubscribe
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ async def admin_stream(
     channel = "admin_global"  # 全局管理员频道
 
     async def gen():
-        q = svc.subscribe(channel, sub_id)
+        q = await subscribe(channel, sub_id)
         try:
             yield f"data: {json.dumps({'type': 'connected'})}\n\n"
             while True:
@@ -33,7 +33,7 @@ async def admin_stream(
                 except asyncio.CancelledError:
                     break
         finally:
-            svc.unsubscribe(channel, sub_id)
+            await unsubscribe(channel, sub_id)
 
     return StreamingResponse(
         gen(),

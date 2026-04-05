@@ -122,8 +122,9 @@ services:
         max-file: "3"
     environment:
       <<: *common-with-pythonlab-env
-      # ⚠️ SSE pub/sub 为进程内实现，多 worker 时 SSE 推送会失效
-      # 如需多 worker，请先将 SSE 改为 Redis pub/sub
+      # SSE pub/sub 已支持 Redis 模式（多 worker 安全）
+      # 如需禁用 Redis pub/sub 回退到进程内模式，设置 SSE_REDIS_PUBSUB_ENABLED=false
+      SSE_REDIS_PUBSUB_ENABLED: ${SSE_REDIS_PUBSUB_ENABLED:-true}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
       AUTH_TRUST_X_FORWARDED_FOR: ${AUTH_TRUST_X_FORWARDED_FOR:-true}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { XbkTab, XbkPagination } from "../types";
 
 export const DEFAULT_PAGINATION: Record<XbkTab, XbkPagination> = {
@@ -13,13 +13,24 @@ export const DEFAULT_PAGINATION: Record<XbkTab, XbkPagination> = {
 export const useXbkPagination = () => {
   const [pg, setPg] = useState<Record<XbkTab, XbkPagination>>({ ...DEFAULT_PAGINATION });
 
-  const updatePg = (tab: XbkTab, updates: Partial<XbkPagination>) => {
-    setPg(prev => ({ ...prev, [tab]: { ...prev[tab], ...updates } }));
-  };
+  const updatePg = useCallback((tab: XbkTab, updates: Partial<XbkPagination>) => {
+    setPg((prev) => {
+      const nextTab = { ...prev[tab], ...updates };
+      const prevTab = prev[tab];
+      if (
+        nextTab.page === prevTab.page &&
+        nextTab.size === prevTab.size &&
+        nextTab.total === prevTab.total
+      ) {
+        return prev;
+      }
+      return { ...prev, [tab]: nextTab };
+    });
+  }, []);
 
-  const resetPg = (tab: XbkTab) => {
-    setPg(prev => ({ ...prev, [tab]: { ...DEFAULT_PAGINATION[tab] } }));
-  };
+  const resetPg = useCallback((tab: XbkTab) => {
+    setPg((prev) => ({ ...prev, [tab]: { ...DEFAULT_PAGINATION[tab] } }));
+  }, []);
 
   return { pg, setPg, updatePg, resetPg };
 };

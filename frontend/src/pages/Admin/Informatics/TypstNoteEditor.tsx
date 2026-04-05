@@ -1,6 +1,24 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { App as AntdApp, Alert, Button, Card, Col, Input, Modal, Radio, Row, Select, Space, Spin, Typography } from "antd";
-import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { Trash2, Plus, RefreshCw, Save } from "lucide-react";
 import { publicTypstNotesApi, typstCategoriesApi, typstNotesApi, typstStylesApi } from "@services";
 import type { TypstAssetListItem, TypstCategoryListItem, TypstNote, TypstStyleListItem, TypstStyleResponse } from "@services";
 import PdfCanvasVirtualViewer from "@components/Pdf/PdfCanvasVirtualViewer";
@@ -8,9 +26,6 @@ import LineNumberedTextArea from "./typst/LineNumberedTextArea";
 import TypstSidebar from "./typst/TypstSidebar";
 import TypstTocDrawer from "./typst/TypstTocDrawer";
 import "./typstEditor.css";
-
-const { Text } = Typography;
-const { TextArea } = Input;
 
 type ViewMode = "split" | "edit" | "preview";
 
@@ -54,7 +69,6 @@ const TypstNoteEditorInner: React.FC<{
   onCreated: (note: TypstNote) => void;
   onBack: () => void;
 }> = ({ note, isCreateMode, onCreated, onBack }) => {
-  const { message } = AntdApp.useApp();
   const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [sideCollapsed, setSideCollapsed] = useState(false);
@@ -416,7 +430,7 @@ const TypstNoteEditorInner: React.FC<{
           toc,
           content_typst: nextFiles["main.typ"] || "",
         });
-        message.success("创建成功");
+        showMessage.success("创建成功");
         onCreated(created);
         if (previewVisible) queuePreviewRefresh(created.id);
         return created;
@@ -433,11 +447,11 @@ const TypstNoteEditorInner: React.FC<{
         toc,
         content_typst: nextFiles["main.typ"] || "",
       });
-      message.success("保存成功");
+      showMessage.success("保存成功");
       if (previewVisible) queuePreviewRefresh(note.id);
       return updated;
     } catch (e: any) {
-      message.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
+      showMessage.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
       return null;
     } finally {
       setSubmitting(false);
@@ -478,9 +492,9 @@ const TypstNoteEditorInner: React.FC<{
         return id;
       });
       await refreshAssetsCache(id);
-      message.success("资源上传成功");
+      showMessage.success("资源上传成功");
     } catch (e: any) {
-      message.error(e?.message || "上传失败");
+      showMessage.error(e?.message || "上传失败");
     } finally {
       setSubmitting(false);
       if (assetInputRef.current) assetInputRef.current.value = "";
@@ -489,18 +503,10 @@ const TypstNoteEditorInner: React.FC<{
 
   const deleteAsset = async (asset: TypstAssetListItem) => {
     if (!note?.id) return;
-    Modal.confirm({
-      title: "删除资源",
-      content: `确认删除 ${asset.path}？`,
-      okText: "删除",
-      okButtonProps: { danger: true },
-      cancelText: "取消",
-      onOk: async () => {
-        await typstNotesApi.deleteAsset(note.id, asset.id);
-        await refreshAssetsCache();
-        message.success("已删除");
-      },
-    });
+    if (!window.confirm(`确认删除 ${asset.path}？`)) return;
+    await typstNotesApi.deleteAsset(note.id, asset.id);
+    await refreshAssetsCache();
+    showMessage.success("已删除");
   };
 
   const renderEditor = () => (
@@ -550,7 +556,7 @@ const TypstNoteEditorInner: React.FC<{
       ta.focus();
       ta.setSelectionRange(foundAt, foundAt);
     } else {
-      message.warning("未在正文中找到对应标题");
+      showMessage.warning("未在正文中找到对应标题");
     }
     if (viewMode === "preview") {
       switchViewMode("split");
@@ -561,24 +567,29 @@ const TypstNoteEditorInner: React.FC<{
   const renderPreviewCanvas = () => (
     <div className="typst-preview-box">
       {renderLoading ? (
-        <div className="text-center p-6">
-          <Spin />
+        <div className="flex items-center justify-center p-6">
+          <RefreshCw className="h-5 w-5 animate-spin text-text-tertiary" />
         </div>
       ) : null}
       {renderError ? (
         <div className="p-3">
-          <Alert type="error" showIcon message="Typst 预览失败" description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{renderError}</pre>} />
+          <Alert variant="destructive">
+            <AlertTitle>Typst 预览失败</AlertTitle>
+            <AlertDescription>
+              <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{renderError}</pre>
+            </AlertDescription>
+          </Alert>
         </div>
       ) : null}
       <PdfCanvasVirtualViewer data={previewPdfData} />
       {!renderLoading && !renderError && !previewPdfData ? (
         <div className="p-3">
-          <Space orientation="vertical">
-            <Text type="secondary">暂无预览</Text>
-            <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
-              刷新预览
+          <div className="flex flex-col gap-2">
+            <span className="text-sm text-text-tertiary">暂无预览</span>
+            <Button variant="outline" onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
+              <RefreshCw className="h-4 w-4" /> 刷新预览
             </Button>
-          </Space>
+          </div>
         </div>
       ) : null}
     </div>
@@ -623,7 +634,7 @@ const TypstNoteEditorInner: React.FC<{
                 setStylesManageOpen(true);
               } catch (e: any) {
                 const d = e?.response?.data?.detail;
-                message.error(typeof d === "string" ? d : (e?.message || "加载样式失败"));
+                showMessage.error(typeof d === "string" ? d : (e?.message || "加载样式失败"));
               }
             }}
             onOpenCategoryManage={() => setCategoryManageOpen(true)}
@@ -633,10 +644,10 @@ const TypstNoteEditorInner: React.FC<{
               try {
                 await typstCategoriesApi.create({ path: v });
                 await refreshCategories();
-                message.success("已添加分类");
+                showMessage.success("已添加分类");
               } catch (e: any) {
                 const d = e?.response?.data?.detail;
-                message.error(typeof d === "string" ? d : (e?.message || "添加失败"));
+                showMessage.error(typeof d === "string" ? d : (e?.message || "添加失败"));
               }
             }}
             onSetAutoPreview={setAutoPreview}
@@ -649,104 +660,138 @@ const TypstNoteEditorInner: React.FC<{
             assetInputRef={assetInputRef}
           />
 
-      <div className="typst-editor-main">
-        <Card
-          size="small"
-          title={
-            <div className="flex justify-between items-center">
-              <span>内容</span>
-              <Radio.Group
-                value={viewMode}
-                onChange={(e) => switchViewMode(e.target.value)}
-                optionType="button"
-                buttonStyle="solid"
-                size="small"
-              >
-                {canSplit && <Radio.Button value="split">分屏</Radio.Button>}
-                <Radio.Button value="edit">编辑</Radio.Button>
-                <Radio.Button value="preview">预览</Radio.Button>
-              </Radio.Group>
+          <div className="typst-editor-main">
+            <div className="typst-editor-card typst-card">
+              <div className="typst-card-head">
+                <div className="typst-card-head-wrapper">
+                  <div className="typst-card-head-title">
+                    <div className="flex items-center justify-between">
+                      <span>内容</span>
+                      <div className="inline-flex items-center rounded-md border border-border bg-surface p-0.5">
+                        {canSplit ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "rounded px-2.5 py-1 text-xs transition-colors",
+                              viewMode === "split"
+                                ? "bg-surface text-text shadow-sm"
+                                : "text-text-tertiary hover:text-text",
+                            )}
+                            onClick={() => switchViewMode("split")}
+                          >
+                            分屏
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={cn(
+                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            viewMode === "edit"
+                              ? "bg-surface text-text shadow-sm"
+                              : "text-text-tertiary hover:text-text",
+                          )}
+                          onClick={() => switchViewMode("edit")}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          className={cn(
+                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            viewMode === "preview"
+                              ? "bg-surface text-text shadow-sm"
+                              : "text-text-tertiary hover:text-text",
+                          )}
+                          onClick={() => switchViewMode("preview")}
+                        >
+                          预览
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="typst-card-body">
+                <div className="typst-editor-content-row">
+                  {viewMode !== "preview" ? (
+                    <div
+                      className="typst-editor-content-col"
+                      style={{ flex: viewMode === "split" && canSplit ? "0 0 41.6667%" : "1 1 auto" }}
+                    >
+                      <div className="typst-editor-panel">{renderEditor()}</div>
+                    </div>
+                  ) : null}
+                  {viewMode !== "edit" ? (
+                    <div
+                      className="typst-editor-content-col"
+                      style={{ flex: viewMode === "split" && canSplit ? "0 0 58.3333%" : "1 1 auto" }}
+                    >
+                      <div className="typst-editor-panel">{renderPreviewCanvas()}</div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
-          }
-          className="typst-editor-card"
-        >
-          <Row gutter={16}>
-            <Col
-              xs={24}
-              lg={viewMode === "preview" ? 0 : viewMode === "split" && canSplit ? 10 : 24}
-              style={{ display: viewMode === "preview" ? "none" : "block" }}
-            >
-              <div className="typst-editor-panel">
-                {renderEditor()}
-              </div>
-            </Col>
-            <Col
-              xs={24}
-              lg={viewMode === "edit" ? 0 : viewMode === "split" && canSplit ? 14 : 24}
-              style={{ display: viewMode === "edit" ? "none" : "block" }}
-            >
-              <div className="typst-editor-panel">
-                {renderPreviewCanvas()}
-              </div>
-            </Col>
-          </Row>
-        </Card>
 
-        <Card size="small" className="typst-editor-card typst-editor-footer">
-          <Row align="middle" justify="space-between">
-            <Col>
-              <Button onClick={onBack}>返回列表</Button>
-            </Col>
-            <Col>
-              <Space>
-                <Button icon={<ReloadOutlined />} onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
-                  刷新预览
-                </Button>
-                <Button type="primary" icon={<SaveOutlined />} loading={submitting} onClick={save}>
-                  保存
-                </Button>
-              </Space>
-            </Col>
-          </Row>
-        </Card>
-      </div>
-    </div>
+            <div className="typst-editor-card typst-card typst-editor-footer">
+              <div className="typst-card-body">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Button variant="outline" onClick={onBack}>
+                    返回列表
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => queuePreviewRefresh(note?.id, { force: true })}
+                      disabled={!note?.id}
+                    >
+                      <RefreshCw className="h-4 w-4" /> 刷新预览
+                    </Button>
+                    <Button disabled={submitting} onClick={save}>
+                      <Save className="h-4 w-4" /> 保存
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <TypstTocDrawer open={tocOpen} toc={toc} onClose={() => setTocOpen(false)} onJump={jumpToTocItem} />
+      <TypstTocDrawer
+        open={tocOpen}
+        toc={toc}
+        onClose={() => setTocOpen(false)}
+        onJump={jumpToTocItem}
+      />
 
-      <Modal
-        open={categoryManageOpen}
-        onCancel={() => setCategoryManageOpen(false)}
-        title="管理分类"
-        width={760}
-        footer={null}
-        styles={{ body: { padding: 24 } }}
-      >
+      <Dialog open={categoryManageOpen} onOpenChange={setCategoryManageOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-[780px]">
+          <DialogHeader>
+            <DialogTitle>管理分类</DialogTitle>
+          </DialogHeader>
         <div className="flex justify-between mb-3">
-          <Button icon={<ReloadOutlined />} onClick={refreshCategories}>
-            刷新
+          <Button variant="outline" onClick={refreshCategories}>
+            <RefreshCw className="h-4 w-4" /> 刷新
           </Button>
           <div className="flex gap-2">
             <Input value={newCategoryPath} onChange={(e) => setNewCategoryPath(e.target.value)} placeholder="例如：竞赛/CSP/基础" />
             <Button
-              type="primary"
-              icon={<PlusOutlined />}
               onClick={async () => {
                 const v = (newCategoryPath || "").trim();
                 if (!v) return;
                 try {
                   await typstCategoriesApi.create({ path: v });
-                  message.success("已添加");
+                  showMessage.success("已添加");
                   await refreshCategories();
                   setNewCategoryPath("");
                   setCategoryDrafts([...(await typstCategoriesApi.list())]);
                 } catch (e: any) {
-                  message.error(e?.response?.data?.detail || e?.message || "添加失败");
+                  showMessage.error(e?.response?.data?.detail || e?.message || "添加失败");
                 }
               }}
             >
-              添加
+              <Plus className="h-4 w-4" /> 添加
             </Button>
           </div>
         </div>
@@ -777,65 +822,77 @@ const TypstNoteEditorInner: React.FC<{
                 placeholder="排序"
               />
               <Button
-                icon={<SaveOutlined />}
+                variant="outline"
                 onClick={async () => {
                   try {
                     await typstCategoriesApi.update(c.id, { path: c.path.trim(), sort_order: c.sort_order });
-                    message.success("已保存");
+                    showMessage.success("已保存");
                     await refreshCategories();
                   } catch (e: any) {
-                    message.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
+                    showMessage.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : (e?.message || "保存失败"));
                   }
                 }}
               >
-                保存
+                <Save className="h-4 w-4" /> 保存
               </Button>
               <Button
-                danger
-                icon={<DeleteOutlined />}
+                variant="destructive"
                 onClick={async () => {
                   try {
                     await typstCategoriesApi.remove(c.id);
-                    message.success("已删除");
+                    showMessage.success("已删除");
                     await refreshCategories();
                     setCategoryDrafts((prev) => prev.filter((x) => x.id !== c.id));
                   } catch (e: any) {
-                    message.error(e?.response?.data?.detail || e?.message || "删除失败");
+                    showMessage.error(e?.response?.data?.detail || e?.message || "删除失败");
                   }
                 }}
-              />
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           ))}
-          {categoryDrafts.length === 0 ? <Text type="secondary">暂无分类</Text> : null}
+          {categoryDrafts.length === 0 ? (
+            <span className="text-sm text-text-tertiary">暂无分类</span>
+          ) : null}
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
-      <Modal
-        open={stylesManageOpen}
-        onCancel={() => setStylesManageOpen(false)}
-        title="编辑样式"
-        width={980}
-        footer={null}
-        styles={{ body: { padding: 24 } }}
-      >
+      <Dialog open={stylesManageOpen} onOpenChange={setStylesManageOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-[1100px]">
+          <DialogHeader>
+            <DialogTitle>编辑样式</DialogTitle>
+          </DialogHeader>
         <div className="flex gap-2.5 items-center mb-3">
           <Select
             value={styleEditingKey}
-            options={styleList.map((s) => ({ value: s.key, label: s.key }))}
-            style={{ width: 240 }}
-            onChange={async (k) => {
+            onValueChange={(k) => {
               setStyleEditingKey(k);
-              try {
-                const s = await typstStylesApi.get(k);
-                setStyleEditing(s);
-                setStyleDraft({ ...s });
-              } catch (e: any) {
-                message.error(e?.response?.data?.detail || e?.message || "加载失败");
-              }
+              void (async () => {
+                try {
+                  const s = await typstStylesApi.get(k);
+                  setStyleEditing(s);
+                  setStyleDraft({ ...s });
+                } catch (e: any) {
+                  showMessage.error(e?.response?.data?.detail || e?.message || "加载失败");
+                }
+              })();
             }}
-          />
+          >
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder="选择样式" />
+            </SelectTrigger>
+            <SelectContent>
+              {styleList.map((s) => (
+                <SelectItem key={s.key} value={s.key}>
+                  {s.key}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
-            icon={<ReloadOutlined />}
+            variant="outline"
             onClick={async () => {
               await refreshStyles();
               try {
@@ -843,14 +900,14 @@ const TypstNoteEditorInner: React.FC<{
                 setStyleEditing(s);
                 setStyleDraft({ ...s });
               } catch (e: any) {
-                message.error(e?.response?.data?.detail || e?.message || "加载失败");
+                showMessage.error(e?.response?.data?.detail || e?.message || "加载失败");
               }
             }}
           >
-            刷新
+            <RefreshCw className="h-4 w-4" /> 刷新
           </Button>
           <Button
-            icon={<ReloadOutlined />}
+            variant="outline"
             onClick={async () => {
               try {
                 const s = await typstStylesApi.seedFromResource(styleEditingKey);
@@ -858,18 +915,16 @@ const TypstNoteEditorInner: React.FC<{
                 setStyleDraft({ ...s });
                 await refreshStyles();
                 setStylesVersion((v) => v + 1);
-                message.success("已从资源重置");
+                showMessage.success("已从资源重置");
               } catch (e: any) {
-                message.error(e?.response?.data?.detail || e?.message || "重置失败");
+                showMessage.error(e?.response?.data?.detail || e?.message || "重置失败");
               }
             }}
           >
-            从资源重置
+            <RefreshCw className="h-4 w-4" /> 从资源重置
           </Button>
           <div className="flex-1" />
           <Button
-            type="primary"
-            icon={<SaveOutlined />}
             onClick={async () => {
               if (!styleDraft) return;
               try {
@@ -884,12 +939,12 @@ const TypstNoteEditorInner: React.FC<{
                 const keys = await publicTypstNotesApi.listStyles();
                 setStyleOptions((keys && keys.length ? keys : ["my_style"]).filter(Boolean));
                 setStylesVersion((v) => v + 1);
-                message.success("已保存");
+                showMessage.success("已保存");
               } catch (_e: any) {
               }
             }}
           >
-            保存
+            <Save className="h-4 w-4" /> 保存
           </Button>
         </div>
 
@@ -907,26 +962,16 @@ const TypstNoteEditorInner: React.FC<{
           </div>
         ) : null}
 
-        <TextArea
+        <Textarea
           value={styleDraft?.content || ""}
           onChange={(e) => setStyleDraft((p) => (p ? { ...p, content: e.target.value } : p))}
-          autoSize={{ minRows: 18, maxRows: 28 }}
+          rows={18}
           className="font-mono"
         />
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
 
-const TypstNoteEditor: React.FC<{
-  note: TypstNote | null;
-  isCreateMode: boolean;
-  onCreated: (note: TypstNote) => void;
-  onBack: () => void;
-}> = (props) => (
-  <AntdApp>
-    <TypstNoteEditorInner {...props} />
-  </AntdApp>
-);
-
-export default TypstNoteEditor;
+export default TypstNoteEditorInner;

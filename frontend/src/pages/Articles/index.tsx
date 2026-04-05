@@ -1,34 +1,32 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Tag, Button, Empty, Pagination, Menu, Input, Grid, Skeleton } from "antd";
-import {
-  ReloadOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RotateCcw, Search, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import dayjs from "dayjs";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import { useDebounce } from "@hooks/useDebounce";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type {
   ArticleWithRelations,
   CategoryWithUsage,
 } from "@services";
 import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
+import EmptyState from "@components/Common/EmptyState";
 import ArticleItem from "./components/ArticleItem";
-import "./Articles.css"; // 导入样式文件
+import "./Articles.css";
 
-// 工具函数：检测对象是否是验证错误对象 - 更严格的检查
+const PAGE_SIZE_OPTIONS = [12, 24, 48];
+
 const isValidationError = (obj: any): boolean => {
   if (!obj || typeof obj !== "object") return false;
 
-  // 检查是否是验证错误对象（包含type、loc、msg等字段）
-  // 错误消息中提到的键：{type, loc, msg, input, ctx}
   const validationErrorKeys = ["type", "loc", "msg", "input", "ctx"];
   const hasValidationErrorKeys = validationErrorKeys.some((key) => key in obj);
 
-  // 检查对象是否看起来像验证错误（有错误消息结构）
   const looksLikeValidationError =
     hasValidationErrorKeys ||
     (obj.detail &&
@@ -38,7 +36,6 @@ const isValidationError = (obj: any): boolean => {
     (obj.error && typeof obj.error === "string") ||
     (obj.message && typeof obj.message === "string" && obj.status_code);
 
-  // 特别检查：如果对象只有这些键，没有正常的数据键，就认为是验证错误
   const normalDataKeys = [
     "id",
     "name",
@@ -51,7 +48,6 @@ const isValidationError = (obj: any): boolean => {
   ];
   const hasNormalDataKeys = normalDataKeys.some((key) => key in obj);
 
-  // 如果是验证错误对象，且没有正常的数据键，就返回true
   if (looksLikeValidationError && !hasNormalDataKeys) {
     return true;
   }
@@ -59,25 +55,21 @@ const isValidationError = (obj: any): boolean => {
   return looksLikeValidationError;
 };
 
-// 工具函数：清理和验证数据数组
 const cleanAndValidateDataArray = <T,>(
   data: any,
   expectedKeys: string[] = [],
 ): T[] => {
   if (!data) return [];
 
-  // 如果是验证错误对象，返回空数组
   if (isValidationError(data)) {
     logger.warn("检测到验证错误对象，返回空数组:", data);
     return [];
   }
 
-  // 确保是数组
   let array: any[] = [];
   if (Array.isArray(data)) {
     array = data;
   } else if (data && typeof data === "object") {
-    // 尝试从常见属性中提取数组
     if (Array.isArray(data.categories)) array = data.categories;
     else if (Array.isArray(data.articles)) array = data.articles;
     else if (Array.isArray(data.items)) array = data.items;
@@ -85,12 +77,10 @@ const cleanAndValidateDataArray = <T,>(
     else if (Array.isArray(data.list)) array = data.list;
   }
 
-  // 过滤掉无效对象和验证错误对象
   const cleanedArray = array.filter((item) => {
     if (!item || typeof item !== "object") return false;
     if (isValidationError(item)) return false;
 
-    // 如果有预期键，检查对象是否包含这些键
     if (expectedKeys.length > 0) {
       return expectedKeys.some((key) => key in item);
     }
@@ -102,12 +92,11 @@ const cleanAndValidateDataArray = <T,>(
 };
 
 const ArticlesPage: React.FC = () => {
-  const screens = Grid.useBreakpoint();
+  const screens = useBreakpoint();
   const isCompactViewport = !screens.sm;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // 状态管理
   const [articles, setArticles] = useState<ArticleWithRelations[]>([]);
   const [categories, setCategories] = useState<CategoryWithUsage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,16 +129,16 @@ const ArticlesPage: React.FC = () => {
     }, minInterval - since);
   }, []);
 
-  // 从URL参数初始化状态
   useEffect(() => {
-    const page = parseInt(searchParams.get("page") || "1");
+    const page = parseInt(searchParams.get("page") || "1", 10);
     const category = searchParams.get("category");
 
     setCurrentPage(page);
-    if (category) setSelectedCategory(parseInt(category));
+    if (category) {
+      setSelectedCategory(parseInt(category, 10));
+    }
   }, [searchParams]);
 
-  // 获取分类列表 - 使用工具函数清理数据
   useEffect(() => {
     let isMounted = true;
 
@@ -162,20 +151,14 @@ const ArticlesPage: React.FC = () => {
           include_usage_count: true,
         });
 
-        // 只有组件仍然挂载时才更新状态
         if (!isMounted) return;
-
-        logger.debug("分类API原始响应:", response.data);
 
         const categoriesData = cleanAndValidateDataArray<CategoryWithUsage>(
           response.data,
           ["id", "name"],
         );
 
-        logger.debug("清理后的分类数据:", categoriesData);
-
-        // 格式化分类数据 - 确保符合CategoryWithUsage接口
-        const categories = categoriesData.map((category) => ({
+        const mappedCategories = categoriesData.map((category) => ({
           id: category.id || 0,
           name: category.name || "未知分类",
           slug: category.slug || "",
@@ -186,7 +169,7 @@ const ArticlesPage: React.FC = () => {
         }));
 
         if (isMounted) {
-          setCategories(categories);
+          setCategories(mappedCategories);
         }
       } catch (error) {
         logger.error("获取分类失败:", error);
@@ -202,15 +185,11 @@ const ArticlesPage: React.FC = () => {
 
     fetchCategories();
 
-    // 清理函数
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // 热门标签功能已移除，删除相关代码
-
-  // 获取文章列表 - 完全重写，使用工具函数彻底清理数据
   useEffect(() => {
     let isMounted = true;
     let abortController: AbortController | null = null;
@@ -221,43 +200,32 @@ const ArticlesPage: React.FC = () => {
           setLoading(true);
         }
 
-        // 创建AbortController来取消请求
         abortController = new AbortController();
 
         let response;
         if (debouncedKeyword.trim()) {
-           // 如果有搜索关键词，使用搜索接口
-           response = await articleApi.searchArticles(
-             debouncedKeyword.trim(),
-             currentPage,
-             pageSize
-           );
+          response = await articleApi.searchArticles(
+            debouncedKeyword.trim(),
+            currentPage,
+            pageSize,
+          );
         } else {
-           // 否则使用列表接口
-           response = await articleApi.listPublicArticles({
-             page: currentPage,
-             size: pageSize,
-             category_id: selectedCategory || undefined,
-           });
+          response = await articleApi.listPublicArticles({
+            page: currentPage,
+            size: pageSize,
+            category_id: selectedCategory || undefined,
+          });
         }
 
-        // 只有组件仍然挂载时才更新状态
         if (!isMounted) return;
 
-        logger.debug("文章API原始响应:", response.data);
-
-        // 使用工具函数清理和验证文章数据
         const articlesData = cleanAndValidateDataArray<ArticleWithRelations>(
           response.data,
-          ["id", "title", "slug"], // 文章对象应至少包含id、title、slug属性
+          ["id", "title", "slug"],
         );
 
-        logger.debug("清理后的文章数据:", articlesData);
-
-        // 获取总数
         let totalCount = 0;
         if (response.data && typeof response.data === "object") {
-          // 检查是否有total字段
           if (
             "total" in response.data &&
             typeof response.data.total === "number"
@@ -268,7 +236,6 @@ const ArticlesPage: React.FC = () => {
             response.data.data &&
             typeof response.data.data === "object"
           ) {
-            // 标准ApiResponse格式：检查data.total
             const data = response.data.data;
             if (
               data &&
@@ -281,19 +248,15 @@ const ArticlesPage: React.FC = () => {
           }
         }
 
-        // 如果没有从响应中获取到总数，使用数组长度
         if (totalCount === 0) {
           totalCount = articlesData.length;
         }
-
-        logger.debug("文章总数:", totalCount);
 
         if (isMounted) {
           setArticles(articlesData);
           setTotal(totalCount);
         }
       } catch (error: any) {
-        // 忽略被取消的请求的错误
         if (error.name === "AbortError" || error.name === "CanceledError") {
           return;
         }
@@ -311,7 +274,6 @@ const ArticlesPage: React.FC = () => {
 
     fetchArticles();
 
-    // 清理函数
     return () => {
       isMounted = false;
       if (abortController) {
@@ -341,7 +303,6 @@ const ArticlesPage: React.FC = () => {
     };
   }, [requestRefresh]);
 
-  // 更新URL参数
   const updateUrlParams = (updates: {
     page?: number;
     category?: number | null;
@@ -368,14 +329,14 @@ const ArticlesPage: React.FC = () => {
     setSearchParams(newParams);
   };
 
-  // 处理分页变化
-  const handlePageChange = (page: number, pageSize?: number) => {
+  const handlePageChange = (page: number, nextPageSize?: number) => {
     setCurrentPage(page);
-    if (pageSize) setPageSize(pageSize);
+    if (nextPageSize && nextPageSize !== pageSize) {
+      setPageSize(nextPageSize);
+    }
     updateUrlParams({ page });
   };
 
-  // 处理分类选择
   const handleCategorySelect = useCallback(
     (categoryId: number | null) => {
       setSelectedCategory(categoryId);
@@ -392,7 +353,6 @@ const ArticlesPage: React.FC = () => {
     [searchParams, setSearchParams],
   );
 
-  // 跳转到文章详情
   const navigateToArticle = useCallback(
     (slug: string) => {
       navigate(`/articles/${slug}`);
@@ -400,17 +360,14 @@ const ArticlesPage: React.FC = () => {
     [navigate],
   );
 
-  // 处理搜索
   const handleSearch = useCallback(() => {
-    setCurrentPage(1); // 搜索时重置到第一页
+    setCurrentPage(1);
   }, []);
 
-  // 当搜索关键词变化时，自动重置页码（可选，或者让useEffect处理）
   useEffect(() => {
     if (debouncedKeyword) setCurrentPage(1);
   }, [debouncedKeyword]);
 
-  // 处理搜索输入变化
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSearchKeyword(e.target.value);
@@ -418,7 +375,6 @@ const ArticlesPage: React.FC = () => {
     [],
   );
 
-  // 处理搜索输入回车键
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") {
@@ -428,39 +384,6 @@ const ArticlesPage: React.FC = () => {
     [handleSearch],
   );
 
-  // 修复React内存泄漏：确保所有useEffect都有正确的依赖项
-  // 当前已经包含：categoriesLoading, selectedCategory, categoryMenuItems, handleCategorySelect
-
-  // 使用useMemo缓存
-  const categoryMenuItems = useMemo(() => {
-    return [
-      {
-        key: "all",
-        label: "全部文章",
-      },
-      {
-        type: "divider" as const,
-      },
-      ...categories.map((category) => ({
-        key: category.id.toString(),
-        label: (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              width: "100%",
-            }}
-          >
-            <span>{category.name}</span>
-            <span className="text-text-secondary text-sm">
-              ({category.article_count || 0})
-            </span>
-          </div>
-        ),
-      })),
-    ];
-  }, [categories]);
-
   const safeArticles = useMemo(() => {
     return articles.filter((article) => {
       if (!article || typeof article !== "object") return false;
@@ -469,58 +392,81 @@ const ArticlesPage: React.FC = () => {
     });
   }, [articles]);
 
-  // 移除 displayedArticles，直接使用 safeArticles
   const displayedArticles = safeArticles;
-
-  // 移除 renderArticleItem，改为使用 ArticleItem 组件
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="informatics-page articles-page">
+    <div className="articles-page">
       <div className="articles-split-pane">
         <SplitPanePage
           leftWidth={isCompactViewport ? 280 : 320}
           alignItems="stretch"
           left={
             <div className="articles-left-sticky">
-              <PanelCard bodyPadding={12}>
+              <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
                 <div className="articles-left">
                   <div className="articles-left-search">
-                    <Input
-                      placeholder="搜索文章..."
-                      value={searchKeyword}
-                      onChange={handleSearchInputChange}
-                      onKeyDown={handleSearchKeyDown}
-                      onPressEnter={handleSearch}
-                      allowClear
-                      prefix={<SearchOutlined />}
-                    />
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                      <Input
+                        className="pl-[var(--ws-search-input-padding-start)]"
+                        placeholder="搜索文章..."
+                        value={searchKeyword}
+                        onChange={handleSearchInputChange}
+                        onKeyDown={handleSearchKeyDown}
+                      />
+                    </div>
                     <Button
-                      icon={<ReloadOutlined />}
+                      variant="outline"
                       onClick={() => {
                         setSearchKeyword("");
                         handleCategorySelect(null);
                       }}
                       disabled={!selectedCategory && !searchKeyword.trim()}
-                    />
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
                   </div>
 
-                  <div className="articles-left-menu">
+                  <div className="articles-left-menu rounded-lg border border-[var(--ws-color-border-secondary)] bg-surface p-[var(--ws-space-1)]">
+                    <button
+                      type="button"
+                      className={`appearance-none border-0 articles-category-item ${!selectedCategory ? "articles-category-item-active" : ""}`}
+                      onClick={() => handleCategorySelect(null)}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <ListFilter className="h-4 w-4" />
+                        全部文章
+                      </span>
+                    </button>
+
                     {categoriesLoading ? (
-                      <div className="px-3 py-2 space-y-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Skeleton key={i} active title={false} paragraph={{ rows: 1, width: "80%" }} />
+                      <div className="space-y-[var(--ws-space-1)] p-[var(--ws-space-1)]">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <Skeleton key={i} className="h-8 w-full rounded-md" />
                         ))}
                       </div>
                     ) : null}
-                    <Menu
-                      mode="inline"
-                      className="category-menu"
-                      selectedKeys={selectedCategory ? [selectedCategory.toString()] : ["all"]}
-                      onClick={({ key }) => handleCategorySelect(key === "all" ? null : parseInt(key))}
-                      items={categoryMenuItems}
-                    />
-                    {categories.length === 0 && !categoriesLoading ? (
-                      <Empty description="暂无分类" className="mt-3" />
+
+                    {!categoriesLoading
+                      ? categories.map((category) => {
+                          const active = selectedCategory === category.id;
+                          return (
+                            <button
+                              type="button"
+                              key={category.id}
+                              className={`appearance-none border-0 articles-category-item ${active ? "articles-category-item-active" : ""}`}
+                              onClick={() => handleCategorySelect(category.id)}
+                            >
+                              <span className="truncate">{category.name}</span>
+                              <span className="text-sm text-text-tertiary">({category.article_count || 0})</span>
+                            </button>
+                          );
+                        })
+                      : null}
+
+                    {!categoriesLoading && categories.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-sm text-text-tertiary">暂无分类</div>
                     ) : null}
                   </div>
                 </div>
@@ -529,21 +475,26 @@ const ArticlesPage: React.FC = () => {
           }
           right={
             <div className="articles-right-shell">
-              <PanelCard
-                bodyPadding={12}
-              >
+              <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
                 <div className="articles-right-body">
                   <div className="articles-right-scroll">
                     {loading ? (
-                      <div className="loading-container p-6">
-                        <Skeleton active paragraph={{ rows: 4 }} />
-                        <Skeleton active paragraph={{ rows: 4 }} className="mt-6" />
-                        <Skeleton active paragraph={{ rows: 4 }} className="mt-6" />
+                      <div className="loading-container animate-in fade-in-0 duration-200 space-y-[var(--ws-space-2)] p-[var(--ws-space-3)]">
+                        <div className="space-y-[var(--ws-space-1)] rounded-lg border border-[var(--ws-color-border-secondary)] p-[var(--ws-space-2)]">
+                          <Skeleton className="h-5 w-1/2" />
+                          <Skeleton className="h-4 w-11/12" />
+                          <Skeleton className="h-4 w-2/3" />
+                        </div>
+                        <div className="space-y-[var(--ws-space-1)] rounded-lg border border-[var(--ws-color-border-secondary)] p-[var(--ws-space-2)]">
+                          <Skeleton className="h-5 w-2/5" />
+                          <Skeleton className="h-4 w-10/12" />
+                          <Skeleton className="h-4 w-1/2" />
+                        </div>
                       </div>
                     ) : displayedArticles.length === 0 ? (
-                      <div className="empty-container">
-                        <Empty
-                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      <div className="empty-container animate-in fade-in-0 duration-200">
+                        <EmptyState
+                          variant={debouncedKeyword.trim() ? "no-results" : "no-data"}
                           description={
                             debouncedKeyword.trim()
                               ? "未找到匹配的文章"
@@ -551,19 +502,19 @@ const ArticlesPage: React.FC = () => {
                                 ? "该分类下暂无文章"
                                 : "暂无文章"
                           }
-                        >
-                          {(selectedCategory || debouncedKeyword.trim()) && (
-                            <Button
-                              type="primary"
-                              onClick={() => {
-                                setSearchKeyword("");
-                                handleCategorySelect(null);
-                              }}
-                            >
-                              清除筛选
-                            </Button>
-                          )}
-                        </Empty>
+                          action={
+                            (selectedCategory || debouncedKeyword.trim()) && (
+                              <Button
+                                onClick={() => {
+                                  setSearchKeyword("");
+                                  handleCategorySelect(null);
+                                }}
+                              >
+                                清除筛选
+                              </Button>
+                            )
+                          }
+                        />
                       </div>
                     ) : (
                       <div>
@@ -580,16 +531,38 @@ const ArticlesPage: React.FC = () => {
 
                   {!searchKeyword.trim() && total > 0 ? (
                     <div className="articles-pagination-bar">
-                      <Pagination
-                        current={currentPage}
-                        pageSize={pageSize}
-                        total={total}
-                        onChange={handlePageChange}
-                        hideOnSinglePage={false}
-                        showSizeChanger
-                        responsive
-                        showTotal={(total) => `共 ${total} 条`}
-                      />
+                      <div className="flex flex-wrap items-center justify-end gap-[var(--ws-space-1)] text-sm text-text-secondary">
+                        <span>共 {total} 条</span>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => handlePageChange(1, Number(e.target.value))}
+                          aria-label="每页条数"
+                          className="h-8 rounded-md border border-[var(--ws-color-border)] bg-surface px-2 text-sm"
+                        >
+                          {PAGE_SIZE_OPTIONS.map((size) => (
+                            <option key={size} value={size}>{size} / 页</option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                          disabled={currentPage <= 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-center text-sm text-text-base tabular-nums">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                          disabled={currentPage >= totalPages}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ) : null}
                 </div>

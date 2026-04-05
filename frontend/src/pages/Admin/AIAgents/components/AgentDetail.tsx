@@ -2,17 +2,25 @@
  * AI智能体详情组件 - 模拟数据版
  */
 import React from "react";
-import { Row, Col, Tag, Typography, Modal, Button } from "antd";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
-  LinkOutlined,
-  KeyOutlined,
-  ThunderboltOutlined,
-  CloudOutlined,
-} from "@ant-design/icons";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Cloud,
+  Copy,
+  KeyRound,
+  Link,
+  Zap,
+} from "lucide-react";
 import dayjs from "dayjs";
+import { showMessage } from "@/lib/toast";
 import type { AIAgent } from "@services/znt/types";
-
-const { Text } = Typography;
 
 interface AgentDetailProps {
   visible: boolean;
@@ -26,26 +34,36 @@ const formatApiKey = (agent: AIAgent): string => {
   return "已设置";
 };
 
+const FieldItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
+    <div className="text-xs text-text-tertiary">{label}</div>
+    <div className="text-sm text-text-base">{value}</div>
+  </div>
+);
+
 // 智能体类型标签映射
 const getAgentTypeTag = (agentType: string) => {
   switch (agentType) {
     case "general":
       return (
-        <Tag color="blue" icon={<ThunderboltOutlined />}>
+        <Badge variant="primarySubtle">
+          <Zap className="h-3 w-3" />
           通用智能体
-        </Tag>
+        </Badge>
       );
     case "dify":
       return (
-        <Tag color="purple" icon={<CloudOutlined />}>
+        <Badge variant="violet">
+          <Cloud className="h-3 w-3" />
           Dify智能体
-        </Tag>
+        </Badge>
       );
     default:
       return (
-        <Tag color="default" icon={<ThunderboltOutlined />}>
+        <Badge variant="outline" className="border-border bg-surface-2 text-text-base">
+          <Zap className="h-3 w-3" />
           {agentType}
-        </Tag>
+        </Badge>
       );
   }
 };
@@ -58,129 +76,142 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
   if (!agent) return null;
 
   return (
-    <Modal
-      title="智能体详情"
-      open={visible}
-      onCancel={onClose}
-      footer={[
-        <Button key="close" onClick={onClose}>
-          关闭
-        </Button>,
-      ]}
-      width="min(92vw, 600px)"
-      styles={{ body: { padding: 24 } }}
-    >
-      <div>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>名称：</Text>
-            <Text>{agent.name || agent.agent_name}</Text>
-          </Col>
-          <Col span={12}>
-            <Text strong>类型：</Text>
-            {getAgentTypeTag(agent.agent_type)}
-          </Col>
-        </Row>
+    <Dialog open={visible} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>智能体详情</DialogTitle>
+        </DialogHeader>
 
-        {agent.model_name && (
-          <Row gutter={16} className="mb-4">
-            <Col span={12}>
-              <Text strong>模型名称：</Text>
-              <Text>{agent.model_name}</Text>
-            </Col>
-            <Col span={12}>
-              <Text strong>状态：</Text>
-              <Tag color={agent.is_active ? "success" : "error"}>
-                {agent.is_active ? "启用" : "停用"}
-              </Tag>
-            </Col>
-          </Row>
-        )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <FieldItem label="名称" value={agent.name || agent.agent_name} />
+          <FieldItem label="类型" value={getAgentTypeTag(agent.agent_type)} />
 
-        {agent.description && (
-          <Row gutter={16} className="mb-4">
-            <Col span={24}>
-              <Text strong>描述：</Text>
-              <Text>{agent.description}</Text>
-            </Col>
-          </Row>
-        )}
+          {agent.model_name ? (
+            <>
+              <FieldItem label="模型名称" value={agent.model_name} />
+              <FieldItem
+                label="状态"
+                value={
+                  <Badge variant={agent.is_active ? "success" : "danger"}>
+                    {agent.is_active ? "启用" : "停用"}
+                  </Badge>
+                }
+              />
+            </>
+          ) : null}
 
-        {agent.api_endpoint && (
-          <Row gutter={16} className="mb-4">
-            <Col span={24}>
-              <Text strong>API地址：</Text>
-              <div className="mt-1">
-                <LinkOutlined className="mr-1" style={{ color: "#0EA5E9" }} />
-                <Text copyable>{agent.api_endpoint}</Text>
-              </div>
-            </Col>
-          </Row>
-        )}
-
-        <Row gutter={16} className="mb-4">
-          <Col span={24}>
-            <Text strong>API密钥：</Text>
-            <div className="mt-1">
-              <KeyOutlined className="mr-1" style={{ color: "#F59E0B" }} />
-              <Tag color={agent.has_api_key ? "orange" : "default"}>{formatApiKey(agent)}</Tag>
-              <Text type="secondary" className="ml-2 text-xs">（部分隐藏）</Text>
+          {agent.description ? (
+            <div className="md:col-span-2">
+              <FieldItem label="描述" value={agent.description} />
             </div>
-          </Col>
-        </Row>
+          ) : null}
 
-        {!agent.model_name && (
-          <Row gutter={16} className="mb-4">
-            <Col span={12}>
-              <Text strong>状态：</Text>
-              <Tag color={agent.is_active ? "success" : "error"}>
-                {agent.is_active ? "启用" : "停用"}
-              </Tag>
-            </Col>
-            <Col span={12}>
-              <Text strong>创建时间：</Text>
-              <Text>{dayjs(agent.created_at).format("YYYY-MM-DD HH:mm")}</Text>
-            </Col>
-          </Row>
-        )}
+          {agent.api_endpoint ? (
+            <div className="md:col-span-2">
+              <FieldItem
+                label="API地址"
+                value={
+                  <div className="flex items-center gap-2">
+                    <Link className="h-4 w-4 text-primary" />
+                    <code className="max-w-[420px] overflow-hidden text-ellipsis whitespace-nowrap text-xs">
+                      {agent.api_endpoint}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(agent.api_endpoint || "");
+                          showMessage.success("API地址已复制");
+                        } catch {
+                          showMessage.error("复制失败");
+                        }
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                }
+              />
+            </div>
+          ) : null}
 
-        {agent.model_name && (
-          <Row gutter={16} className="mb-4">
-            <Col span={12}>
-              <Text strong>创建时间：</Text>
-              <Text>{dayjs(agent.created_at).format("YYYY-MM-DD HH:mm")}</Text>
-            </Col>
-            <Col span={12}>
-              <Text strong>状态显示：</Text>
-              <Tag color={agent.status ? "success" : "error"}>
-                {agent.status ? "在线" : "离线"}
-              </Tag>
-            </Col>
-          </Row>
-        )}
+          <div className="md:col-span-2">
+            <FieldItem
+              label="API密钥"
+              value={
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-[var(--ws-color-warning)]" />
+                  <Badge
+                    variant={agent.has_api_key ? "warning" : "outline"}
+                  >
+                    {formatApiKey(agent)}
+                  </Badge>
+                  <span className="text-xs text-text-tertiary">（部分隐藏）</span>
+                </div>
+              }
+            />
+          </div>
 
-        {agent.deleted_at && (
-          <Row gutter={16} className="mb-4">
-            <Col span={24}>
-              <Text strong>删除时间：</Text>
-              <Text>{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}</Text>
-            </Col>
-          </Row>
-        )}
+          {!agent.model_name ? (
+            <>
+              <FieldItem
+                label="状态"
+                value={
+                  <Badge variant={agent.is_active ? "success" : "danger"}>
+                    {agent.is_active ? "启用" : "停用"}
+                  </Badge>
+                }
+              />
+              <FieldItem label="创建时间" value={dayjs(agent.created_at).format("YYYY-MM-DD HH:mm")} />
+            </>
+          ) : (
+            <>
+              <FieldItem label="创建时间" value={dayjs(agent.created_at).format("YYYY-MM-DD HH:mm")} />
+              <FieldItem
+                label="状态显示"
+                value={
+                  <Badge variant={agent.status ? "success" : "danger"}>
+                    {agent.status ? "在线" : "离线"}
+                  </Badge>
+                }
+              />
+            </>
+          )}
 
-        {agent.is_deleted && (
-          <Row gutter={16}>
-            <Col span={24}>
-              <Text strong>已删除：</Text>
-              <Tag color="error">是</Tag>
-              {agent.deleted_at && (
-                <Text type="secondary" className="ml-2">（{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}）</Text>
-              )}
-            </Col>
-          </Row>
-        )}
-      </div>
-    </Modal>
+          {agent.deleted_at ? (
+            <div className="md:col-span-2">
+              <FieldItem label="删除时间" value={dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")} />
+            </div>
+          ) : null}
+
+          {agent.is_deleted ? (
+            <div className="md:col-span-2">
+              <FieldItem
+                label="已删除"
+                value={
+                  <div className="flex items-center gap-2">
+                    <Badge variant="danger">是</Badge>
+                    {agent.deleted_at ? (
+                      <span className="text-xs text-text-tertiary">
+                        （{dayjs(agent.deleted_at).format("YYYY-MM-DD HH:mm")}）
+                      </span>
+                    ) : null}
+                  </div>
+                }
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

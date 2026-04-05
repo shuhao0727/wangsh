@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Button, Input, Tabs, Spin, Typography } from "antd";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiffEditor } from "@monaco-editor/react";
 import { FlowNodesLayer } from "./FlowNodesLayer";
 import { FlowEdgesSvg } from "./FlowEdgesSvg";
@@ -11,8 +14,6 @@ import { FloatingPopup } from "./FloatingPopup";
 import { logger } from "@services/logger";
 import { normalizeAnnotationForTeaching } from "../flow/annotationTeaching";
 import { FlowAnnotationsSvg } from "./FlowAnnotationsSvg";
-
-const { Text } = Typography;
 
 interface OptimizationDialogProps {
   visible: boolean;
@@ -86,10 +87,16 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
   const offsetX = -bounds.minX * scale + 50;
   const offsetY = -bounds.minY * scale + 50;
 
-  if (loading) return <div className="h-[400px] flex items-center justify-center"><Spin /></div>;
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center text-text-secondary">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="h-[400px] relative overflow-hidden rounded bg-surface-2" style={{ border: "1px solid rgba(0,0,0,0.08)" }}>
+    <div className="relative h-[400px] overflow-hidden rounded border border-border bg-surface-2">
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
         <FlowEdgesSvg
           edges={layoutEdges}
@@ -158,6 +165,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
     feedback,
     setFeedback,
   } = props;
+  const [flowPreviewTab, setFlowPreviewTab] = useState<"original" | "optimized">("optimized");
 
   return (
     <FloatingPopup
@@ -172,7 +180,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
       <div className="flex flex-col gap-4 h-full">
         <>
           {type === "code" ? (
-              <div className="flex-1 relative rounded" style={{ minHeight: 360, border: "1px solid rgba(0,0,0,0.08)" }}>
+              <div className="relative min-h-[360px] flex-1 rounded border border-border">
                 <DiffEditor
                   original={typeof originalContent === "string" ? originalContent : ""}
                   modified={typeof optimizedContent === "string" ? optimizedContent : ""}
@@ -186,57 +194,69 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                   }}
                 />
                 {loading ? (
-                  <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "rgba(255,255,255,0.72)" }}>
-                    <Spin tip="AI 正在思考优化方案...">
-                      <div className="p-12" />
-                    </Spin>
+                  <div
+                    className="absolute inset-0 z-10 flex items-center justify-center"
+                    style={{
+                      background: "color-mix(in srgb, var(--ws-color-surface) 72%, transparent)",
+                    }}
+                  >
+                    <div className="inline-flex items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      AI 正在思考优化方案...
+                    </div>
                   </div>
                 ) : null}
               </div>
           ) : (
-            <div className="flex-1 relative" style={{ minHeight: 360 }}>
+            <div className="relative min-h-[360px] flex-1">
               <Tabs
-                defaultActiveKey="optimized"
+                value={flowPreviewTab}
+                onValueChange={(v) => setFlowPreviewTab(v as "original" | "optimized")}
                 className="h-full"
-                items={[
-                  {
-                    key: "original",
-                    label: "优化前",
-                    children: <FlowPreview nodes={originalContent?.nodes || []} edges={originalContent?.edges || []} />,
-                  },
-                  {
-                    key: "optimized",
-                    label: "优化后",
-                    children: <FlowPreview nodes={optimizedContent?.nodes || []} edges={optimizedContent?.edges || []} />,
-                  },
-                ]}
-              />
+              >
+                <TabsList>
+                  <TabsTrigger value="original">优化前</TabsTrigger>
+                  <TabsTrigger value="optimized">优化后</TabsTrigger>
+                </TabsList>
+                <TabsContent value="original" className="mt-2">
+                  <FlowPreview nodes={originalContent?.nodes || []} edges={originalContent?.edges || []} />
+                </TabsContent>
+                <TabsContent value="optimized" className="mt-2">
+                  <FlowPreview nodes={optimizedContent?.nodes || []} edges={optimizedContent?.edges || []} />
+                </TabsContent>
+              </Tabs>
               {loading ? (
-                <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "rgba(255,255,255,0.72)" }}>
-                  <Spin tip="AI 正在思考优化方案...">
-                    <div className="p-12" />
-                  </Spin>
+                <div
+                  className="absolute inset-0 z-10 flex items-center justify-center"
+                  style={{
+                    background: "color-mix(in srgb, var(--ws-color-surface) 72%, transparent)",
+                  }}
+                >
+                  <div className="inline-flex items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary shadow-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    AI 正在思考优化方案...
+                  </div>
                 </div>
               ) : null}
             </div>
           )}
 
           <div>
-            <Text type="secondary">反馈与调整（可选）：</Text>
-            <Input.TextArea
+            <div className="mb-1 text-sm text-text-secondary">反馈与调整（可选）：</div>
+            <Textarea
               rows={2}
               placeholder="例如：请保留原有的变量命名风格，或者减少循环嵌套..."
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               maxLength={280}
-              showCount
             />
+            <div className="mt-1 text-right text-xs text-text-tertiary">{feedback.length}/280</div>
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button onClick={onRegenerate}>重新生成</Button>
-            <Button onClick={onDiscard}>放弃</Button>
-            <Button type="primary" onClick={onApply}>
+            <Button variant="outline" onClick={onRegenerate}>重新生成</Button>
+            <Button variant="outline" onClick={onDiscard}>放弃</Button>
+            <Button onClick={onApply}>
               应用优化
             </Button>
           </div>

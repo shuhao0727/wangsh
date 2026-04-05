@@ -15,8 +15,8 @@ def test_list_students_success(monkeypatch):
     async def mock_list():
         return fake_students, 2
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.require_xbk_access", lambda: fake_user)
-    monkeypatch.setattr("app.api.endpoints.xbk.data.list_students", mock_list)
+    monkeypatch.setattr("app.api.endpoints.xbk.students.require_xbk_access", lambda: fake_user)
+    monkeypatch.setattr("app.api.endpoints.xbk.students.list_students", mock_list)
 
     result = asyncio.run(mock_list())
     assert len(result[0]) == 2
@@ -32,7 +32,7 @@ def test_list_students_with_filters(monkeypatch):
     async def mock_list():
         return fake_students, 1
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.list_students", mock_list)
+    monkeypatch.setattr("app.api.endpoints.xbk.students.list_students", mock_list)
 
     result = asyncio.run(mock_list())
     assert len(result[0]) == 1
@@ -45,7 +45,7 @@ def test_create_student_success(monkeypatch):
     async def mock_create():
         return fake_student
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.create_student", mock_create)
+    monkeypatch.setattr("app.api.endpoints.xbk.students.create_student", mock_create)
 
     result = asyncio.run(mock_create())
     assert result.id == 1
@@ -58,7 +58,7 @@ def test_create_student_duplicate(monkeypatch):
     async def mock_create():
         raise IntegrityError("", "", "")
 
-    monkeypatch.setattr("app.api.endpoints.xbk.data.create_student", mock_create)
+    monkeypatch.setattr("app.api.endpoints.xbk.students.create_student", mock_create)
 
     try:
         asyncio.run(mock_create())

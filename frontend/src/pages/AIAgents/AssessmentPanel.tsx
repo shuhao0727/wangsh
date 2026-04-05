@@ -2,32 +2,32 @@
  * 自主检测浮动窗口 - 学生端
  * 3 个视图：列表 → 答题 → 结果（含画像 Tab）
  */
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Button,
-  Radio,
-  Input,
-  Tag,
-  Spin,
-  Progress,
-  Collapse,
-  Tabs,
-  Popconfirm,
   Tooltip,
-  message,
-} from "antd";
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
-  CloseOutlined,
-  PushpinOutlined,
-  PushpinFilled,
-  FormOutlined,
-  ReloadOutlined,
-  LeftOutlined,
-  RightOutlined,
-  CheckCircleFilled,
-  CloseCircleFilled,
-} from "@ant-design/icons";
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  FilePenLine,
+  Loader2,
+  Pin,
+  PinOff,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import { BasicProfileView, AdvancedProfileView, AdvancedProfileEmpty } from "@components/ProfileView";
 import {
   assessmentSessionApi,
@@ -41,8 +41,6 @@ import {
 } from "@services/assessment";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 import EmptyState from "@components/Common/EmptyState";
-
-const { TextArea } = Input;
 
 const STORAGE_KEYS = {
   FLOATING_POS: "assessment_floating_pos",
@@ -75,6 +73,85 @@ function dedup(profiles: StudentProfile[]): StudentProfile[] {
   }
   return Array.from(map.values()).sort((a, b) => b.id - a.id);
 }
+
+const clampPercent = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+};
+
+const InlineTooltip = ({
+  title,
+  children,
+}: {
+  title: React.ReactNode;
+  children: React.ReactElement;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipContent>{title}</TooltipContent>
+  </Tooltip>
+);
+
+const LineProgress = ({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) => {
+  const safePercent = clampPercent(percent);
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded bg-[var(--ws-color-border-secondary)]">
+      <div className="h-full transition-all" style={{ width: `${safePercent}%`, backgroundColor: color }} />
+    </div>
+  );
+};
+
+const CircleProgress = ({
+  percent,
+  size = 56,
+  strokeColor = "var(--ws-color-purple)",
+  text,
+}: {
+  percent: number;
+  size?: number;
+  strokeColor?: string;
+  text?: React.ReactNode;
+}) => {
+  const safePercent = clampPercent(percent);
+  const strokeWidth = Math.max(6, Math.round(size * 0.1));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (safePercent / 100) * circumference;
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--ws-color-border-secondary)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <span className="absolute text-sm font-semibold" style={{ color: strokeColor }}>
+        {text ?? `${Math.round(safePercent)}%`}
+      </span>
+    </div>
+  );
+};
 
 const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 窗口状态 ───
@@ -137,7 +214,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
 
   const handleDragStart = useCallback((e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button, input, textarea, .ant-radio-wrapper")) return;
+    if ((e.target as HTMLElement).closest("button, input, textarea, .assessment-radio-option")) return;
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [pos]);
@@ -228,7 +305,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       const list = await assessmentSessionApi.available();
       setAvailableList(list);
     } catch (e: any) {
-      message.error(e.message || "加载失败");
+      showMessage.error(e.message || "加载失败");
     } finally {
       setLoading(false);
     }
@@ -254,7 +331,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setAnswerInput("");
       setView("quiz");
     } catch (e: any) {
-      message.error(e.message || "开始检测失败");
+      showMessage.error(e.message || "开始检测失败");
     } finally {
       setStartingConfigId(null);
     }
@@ -272,7 +349,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setAnswerInput("");
       setView("quiz");
     } catch (e: any) {
-      message.error(e.message || "加载题目失败");
+      showMessage.error(e.message || "加载题目失败");
     } finally {
       setLoading(false);
     }
@@ -324,7 +401,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setQuestions((prev) =>
         prev.map((q) => q.answer_id === answerId ? { ...q, student_answer: null } : q)
       );
-      message.error(e.message || "提交答案失败");
+      showMessage.error(e.message || "提交答案失败");
     } finally {
       submittingRef.current = false;
       setSubmittingAnswerId(null);
@@ -344,7 +421,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           pollingRef.current = null;
         }
         setProfileProgress(95);
-        message.warning("画像生成耗时较长，请稍后手动刷新结果查看");
+        showMessage.warning("画像生成耗时较长，请稍后手动刷新结果查看");
         return;
       }
       try {
@@ -380,9 +457,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     if (!sessionId) return;
     try {
       setSubmitting(true);
-      message.loading({ content: "正在提交并评分，请稍候...", key: "submit", duration: 0 });
+      showMessage.loading({ content: "正在提交并评分，请稍候...", key: "submit", duration: 0 });
       const _submitResult = await assessmentSessionApi.submit(sessionId);
-      message.success({ content: "提交成功", key: "submit" });
+      showMessage.success({ content: "提交成功", key: "submit" });
       // 立即加载答题详情
       const result = await assessmentSessionApi.getResult(sessionId);
       setSessionResult(result);
@@ -393,7 +470,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       // 启动后台画像轮询
       startProfilePolling(sessionId);
     } catch (e: any) {
-      message.error({ content: e.message || "提交失败", key: "submit" });
+      showMessage.error({ content: e.message || "提交失败", key: "submit" });
     } finally {
       setSubmitting(false);
     }
@@ -418,7 +495,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setResultTab("detail");
       setView("result");
     } catch (e: any) {
-      message.error(e.message || "加载结果失败");
+      showMessage.error(e.message || "加载结果失败");
     } finally {
       setLoading(false);
     }
@@ -435,10 +512,10 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       return;
     }
     if (view === "quiz") {
-      message.info("答题进行中，暂无可刷新的内容");
+      showMessage.info("答题进行中，暂无可刷新的内容");
       return;
     }
-    message.info("当前暂无可刷新的内容");
+    showMessage.info("当前暂无可刷新的内容");
   }, [view, sessionId, loadAvailable, handleViewResult]);
 
   // 清理轮询
@@ -479,21 +556,16 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // 浮动按钮
   const floatingBtn = !open && (
     <div
-      style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: 1000, cursor: "grab", touchAction: "none" }}
+      style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: "var(--ws-z-floating-btn)", cursor: "grab", touchAction: "none" }}
       onPointerDown={handleBtnDragStart}
       onPointerMove={handleBtnDragMove}
       onPointerUp={handleBtnDragEnd}
     >
       <Button
-        type="primary"
-        icon={<FormOutlined />}
         onClick={() => { if (!btnDragged.current) handleOpen(); }}
-        className="!rounded-l-none"
-        style={{
-          background: "#6366F1", borderColor: "#6366F1",
-          boxShadow: "2px 2px 8px rgba(99,102,241,0.4)",
-        }}
+        className="ws-floating-entry-btn ws-floating-entry-btn--assessment"
       >
+        <FilePenLine className="h-4 w-4" />
         自我评价
       </Button>
     </div>
@@ -503,14 +575,16 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   const renderList = () => (
     <div className="overflow-auto flex-1 p-3">
       {loading ? (
-        <div className="text-center py-10"><Spin /></div>
+        <div className="py-10 text-center">
+          <Loader2 className="mx-auto h-5 w-5 animate-spin text-text-tertiary" />
+        </div>
       ) : availableList.length === 0 ? (
         <div className="text-center text-text-tertiary py-10">暂无可用检测</div>
       ) : (
         availableList.map((item) => (
           <div
             key={item.id}
-            className="border border-gray-100 rounded-lg p-3 mb-2 bg-surface-2"
+            className="border border-[var(--ws-color-border)] rounded-lg p-[var(--ws-space-2)] mb-2 bg-surface-2"
           >
             <div className="font-semibold mb-1">{item.title}</div>
             <div className="text-xs text-text-tertiary mb-2">
@@ -520,20 +594,29 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
             {!item.session_status && (
               startingConfigId === item.id ? (
                 <div className="flex items-center gap-2">
-                  <Spin size="small" />
-                  <span className="text-xs text-purple">AI 正在出题，请稍候...</span>
+                  <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
+                  <span className="text-xs text-[var(--ws-color-purple)]">AI 正在出题，请稍候...</span>
                 </div>
               ) : (
-                <Button type="primary" size="small" onClick={() => handleStart(item.id)} disabled={startingConfigId !== null}>开始检测</Button>
+                <Button
+                  size="sm"
+                  className="!bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
+                  onClick={() => handleStart(item.id)}
+                  disabled={startingConfigId !== null}
+                >
+                  开始检测
+                </Button>
               )
             )}
             {item.session_status === "in_progress" && (
-              <Button size="small" onClick={() => handleContinue(item.session_id!, item.title)}>继续答题</Button>
+              <Button size="sm" onClick={() => handleContinue(item.session_id!, item.title)}>继续答题</Button>
             )}
             {item.session_status === "graded" && (
               <div className="flex items-center gap-2">
-                <Tag color="green">{item.earned_score}/{item.total_score} 分</Tag>
-                <Button type="link" size="small" onClick={() => handleViewResult(item.session_id!)}>查看结果</Button>
+                <Badge variant="success">
+                  {item.earned_score}/{item.total_score} 分
+                </Badge>
+                <Button variant="link" size="sm" onClick={() => handleViewResult(item.session_id!)}>查看结果</Button>
               </div>
             )}
           </div>
@@ -563,24 +646,35 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* 顶部进度 */}
-        <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center">
+        <div className="px-[var(--ws-space-2)] py-[var(--ws-space-1)] border-b border-[var(--ws-color-border)] flex justify-between items-center">
           <span className="font-semibold">第 {currentIdx + 1}/{questions.length} 题</span>
-          {countdown && <Tag color="red">{countdown}</Tag>}
+          {countdown && (
+            <Badge variant="danger">
+              {countdown}
+            </Badge>
+          )}
         </div>
         {/* 题号导航 */}
-        <div className="px-3 py-1.5 flex gap-1 flex-wrap border-b border-gray-100">
+        <div className="px-[var(--ws-space-2)] py-[var(--ws-space-1)] flex gap-[var(--ws-space-1)] flex-wrap border-b border-[var(--ws-color-border)]">
           {questions.map((qq, i) => {
             const done = answerResults.has(qq.answer_id) || qq.is_answered;
             return (
               <div
                 key={qq.answer_id}
                 onClick={() => { setCurrentIdx(i); setAnswerInput(""); }}
-                className="flex items-center justify-center rounded cursor-pointer text-xs"
+                className="flex h-6 w-6 items-center justify-center rounded text-xs"
                 style={{
-                  width: 24, height: 24,
-                  background: i === currentIdx ? "#6366F1" : done ? "#10B981" : "#e5e7eb",
-                  color: i === currentIdx || done ? "#fff" : "#666",
-                  border: qq.is_adaptive ? "2px solid #A855F7" : "none",
+                  background:
+                    i === currentIdx
+                      ? "var(--ws-color-purple)"
+                      : done
+                        ? "var(--ws-color-success)"
+                        : "var(--ws-color-surface-2)",
+                  color:
+                    i === currentIdx || done
+                      ? "var(--ws-color-surface)"
+                      : "var(--ws-color-text-secondary)",
+                  border: qq.is_adaptive ? "2px solid var(--ws-color-purple)" : "none",
                 }}
               >
                 {i + 1}
@@ -590,35 +684,49 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         </div>
         {/* 题目内容 */}
         <div className="flex-1 overflow-y-auto p-3">
-          <Tag color={q.question_type === "choice" ? "blue" : q.question_type === "fill" ? "green" : "orange"} className="mb-2">
+          <Badge
+            variant={q.question_type === "choice" ? "sky" : q.question_type === "fill" ? "success" : "warning"}
+            className="mb-2 border-none"
+          >
             {q.question_type === "choice" ? "选择题" : q.question_type === "fill" ? "填空题" : "简答题"} ({q.score}分)
-          </Tag>
+          </Badge>
           {q.is_adaptive && (
-            <Tag color="purple" className="mb-2">
+            <Badge variant="purple" className="mb-2">
               自适应练习{q.attempt_seq && q.attempt_seq > 1 ? ` · 第${q.attempt_seq}次` : ""}
-            </Tag>
+            </Badge>
           )}
           <div className="text-sm mb-3 whitespace-pre-wrap">{q.content}</div>
 
           {/* 选择题 */}
           {q.question_type === "choice" && (
-            <Radio.Group
-              value={q.student_answer || undefined}
-              onChange={(e) => {
-                if (!result && !submittingRef.current) handleSubmitAnswer(q.answer_id, e.target.value);
-              }}
-              className="flex flex-col gap-2"
-            >
+            <div className="flex flex-col gap-2">
               {options.map((opt, i) => {
                 const letter = opt.charAt(0);
                 let style: React.CSSProperties = {};
                 if (result) {
-                  if (letter === result.correct_answer?.charAt(0)) style = { color: "#10B981", fontWeight: 600 };
-                  if (letter === q.student_answer?.charAt(0) && !result.is_correct) style = { color: "#EF4444", textDecoration: "line-through" };
+                  if (letter === result.correct_answer?.charAt(0)) style = { color: "var(--ws-color-success)", fontWeight: 600 };
+                  if (letter === q.student_answer?.charAt(0) && !result.is_correct) style = { color: "var(--ws-color-error)", textDecoration: "line-through" };
                 }
-                return <Radio key={i} value={letter} disabled={!!result || submittingAnswerId === q.answer_id} style={style}>{opt}</Radio>;
+                return (
+                  <label key={i} className="assessment-radio-option flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name={`assessment-choice-${q.answer_id}`}
+                      value={letter}
+                      checked={(q.student_answer || undefined) === letter}
+                      disabled={!!result || submittingAnswerId === q.answer_id}
+                      onChange={() => {
+                        if (!result && !submittingRef.current) {
+                          void handleSubmitAnswer(q.answer_id, letter);
+                        }
+                      }}
+                      className="h-4 w-4 accent-[var(--ws-color-primary)]"
+                    />
+                    <span style={style}>{opt}</span>
+                  </label>
+                );
               })}
-            </Radio.Group>
+            </div>
           )}
 
           {/* 填空题 */}
@@ -629,12 +737,20 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                 onChange={(e) => !result && setAnswerInput(e.target.value)}
                 disabled={!!result || submittingAnswerId === q.answer_id}
                 placeholder="输入答案"
-                onPressEnter={() => !result && answerInput.trim() && handleSubmitAnswer(q.answer_id, answerInput)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !result && answerInput.trim()) {
+                    void handleSubmitAnswer(q.answer_id, answerInput);
+                  }
+                }}
               />
               {!result && submittingAnswerId !== q.answer_id && (
-                <Button size="small" type="primary" className="mt-2"
-                  onClick={() => answerInput.trim() && handleSubmitAnswer(q.answer_id, answerInput)}
-                >提交</Button>
+                <Button
+                  size="sm"
+                  className="mt-2 !bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
+                  onClick={() => answerInput.trim() && void handleSubmitAnswer(q.answer_id, answerInput)}
+                >
+                  提交
+                </Button>
               )}
             </div>
           )}
@@ -642,51 +758,55 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           {/* 简答题 */}
           {q.question_type === "short_answer" && (
             <div>
-              <TextArea
+              <Textarea
                 rows={4}
                 value={result ? (q.student_answer || "") : answerInput}
                 onChange={(e) => !result && setAnswerInput(e.target.value)}
                 disabled={!!result || submittingAnswerId === q.answer_id}
                 placeholder="输入答案"
                 onBlur={() => {
-                  if (!result && answerInput.trim()) handleSubmitAnswer(q.answer_id, answerInput);
+                  if (!result && answerInput.trim()) void handleSubmitAnswer(q.answer_id, answerInput);
                 }}
               />
               {!result && answerInput.trim() && (
-                <Button size="small" className="mt-2"
-                  onClick={() => handleSubmitAnswer(q.answer_id, answerInput)}
-                >保存</Button>
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void handleSubmitAnswer(q.answer_id, answerInput)}
+                >
+                  保存
+                </Button>
               )}
             </div>
           )}
 
           {/* 判题进度 */}
           {submittingAnswerId === q.answer_id && answerProgress && (
-            <div className="mt-3 p-2 bg-blue-50 rounded-md flex items-center gap-2">
-              <Spin size="small" />
-              <span className="text-sm text-purple">{answerProgress}</span>
+            <div className="mt-3 p-[var(--ws-space-1)] bg-[var(--ws-color-info-soft)] rounded-md flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
+              <span className="text-sm text-[var(--ws-color-purple)]">{answerProgress}</span>
             </div>
           )}
 
           {/* 反馈 */}
           {result && (
-            <div className="mt-3 p-2 rounded-md" style={{ background: result.is_correct ? "#f0fdf4" : "#fef2f2" }}>
+            <div className={`mt-3 rounded-md p-2 ${result.is_correct ? "bg-[var(--ws-color-success-soft)]" : "bg-[var(--ws-color-error-soft)]"}`}>
               {result.is_correct !== null && (
                 <div className="mb-1">
                   {result.is_correct
-                    ? <span className="text-emerald-500"><CheckCircleFilled /> 正确 +{result.earned_score}分</span>
-                    : <span className="text-red-500"><CloseCircleFilled /> 错误 +{result.earned_score || 0}分</span>}
+                    ? <span className="inline-flex items-center gap-1 text-[var(--ws-color-success)]"><CircleCheck className="h-4 w-4" /> 正确 +{result.earned_score}分</span>
+                    : <span className="inline-flex items-center gap-1 text-[var(--ws-color-error)]"><CircleX className="h-4 w-4" /> 错误 +{result.earned_score || 0}分</span>}
                 </div>
               )}
               {result.explanation && <div className="text-xs text-text-tertiary">解析：{result.explanation}</div>}
               {result.ai_feedback && <div className="text-xs text-text-tertiary">AI 反馈：{result.ai_feedback}</div>}
               {result.next_question && (
-                <div className="mt-1.5 text-xs text-purple">
+                <div className="mt-[var(--ws-space-1)] text-xs text-[var(--ws-color-purple)]">
                   知识点「{result.next_question.knowledge_point}」已追加练习题，请继续作答
                 </div>
               )}
               {result.mastery_status === "mastered" && (
-                <div className="mt-1.5 text-xs text-emerald-500">
+                <div className="mt-1.5 text-xs text-[var(--ws-color-success)]">
                   该知识点已掌握
                 </div>
               )}
@@ -694,16 +814,36 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           )}
         </div>
         {/* 底部导航 */}
-        <div className="px-3 py-2 border-t border-gray-100 flex justify-between">
-          <Button size="small" icon={<LeftOutlined />} disabled={currentIdx === 0}
-            onClick={() => { setCurrentIdx(currentIdx - 1); setAnswerInput(""); }}>上一题</Button>
+        <div className="px-[var(--ws-space-2)] py-[var(--ws-space-1)] border-t border-[var(--ws-color-border)] flex justify-between">
+          <Button
+            size="sm"
+            disabled={currentIdx === 0}
+            onClick={() => { setCurrentIdx(currentIdx - 1); setAnswerInput(""); }}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            上一题
+          </Button>
           {currentIdx < questions.length - 1 ? (
-            <Button size="small" icon={<RightOutlined />}
-              onClick={() => { setCurrentIdx(currentIdx + 1); setAnswerInput(""); }}>下一题</Button>
+            <Button
+              size="sm"
+              onClick={() => { setCurrentIdx(currentIdx + 1); setAnswerInput(""); }}
+            >
+              下一题
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           ) : (
-            <Popconfirm title="确定提交检测？" description="提交后无法修改答案" onConfirm={handleSubmitAll} okText="确定" cancelText="取消">
-              <Button size="small" type="primary" loading={submitting}>提交检测</Button>
-            </Popconfirm>
+            <Button
+              size="sm"
+              className="!bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
+              disabled={submitting}
+              onClick={() => {
+                if (!window.confirm("确定提交检测？提交后无法修改答案。")) return;
+                void handleSubmitAll();
+              }}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              提交检测
+            </Button>
           )}
         </div>
       </div>
@@ -712,24 +852,32 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
 
   // ─── 渲染结果视图 ───
   const renderResult = () => {
-    if (!sessionResult) return <div className="p-5 text-center"><Spin /></div>;
+    if (!sessionResult) {
+      return (
+        <div className="p-5 text-center">
+          <Loader2 className="mx-auto h-5 w-5 animate-spin text-text-tertiary" />
+        </div>
+      );
+    }
     const r = sessionResult;
     const pct = r.total_score > 0 ? Math.round(((r.earned_score || 0) / r.total_score) * 100) : 0;
 
     return (
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* 顶部得分条 */}
-        <div className="flex items-center gap-3.5 px-5 py-4 bg-gradient-to-br from-[#f5f7fa] to-[#e4e8ee]">
-          <Progress type="circle" percent={pct} size={56}
-            strokeColor={pct >= 60 ? "#10B981" : "#EF4444"}
-            format={() => <span className="text-base font-bold" style={{ color: pct >= 60 ? "#10B981" : "#EF4444" }}>{pct}%</span>}
+        <div className="flex items-center gap-3.5 bg-gradient-to-br from-surface-2 to-surface px-[var(--ws-space-3)] py-[var(--ws-space-2)]">
+          <CircleProgress
+            percent={pct}
+            size={56}
+            strokeColor={pct >= 60 ? "var(--ws-color-success)" : "var(--ws-color-error)"}
+            text={`${pct}%`}
           />
           <div>
             <div className="text-2xl font-bold">
               {r.earned_score ?? 0}
               <span className="text-sm text-text-tertiary font-normal"> / {r.total_score}</span>
             </div>
-            <div className="text-xs text-text-tertiary mt-0.5">
+            <div className="text-xs text-text-tertiary mt-[calc(var(--ws-space-1)/2)]">
               {r.submitted_at ? new Date(r.submitted_at).toLocaleString("zh-CN") : ""}
             </div>
           </div>
@@ -738,78 +886,60 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         {/* 画像生成进度条 */}
         {profileProgress > 0 && profileProgress < 100 && (
           <div className="px-5 pt-2">
-            <Progress
-              percent={profileProgress}
-              size="small"
-              status="active"
-              format={(pct) => pct! < 60 ? "生成初级画像..." : "生成三维画像..."}
-            />
+            <LineProgress percent={profileProgress} color="var(--ws-color-purple)" />
+            <div className="mt-1 text-xs text-text-tertiary">
+              {profileProgress < 60 ? "生成初级画像..." : "生成三维画像..."}
+            </div>
           </div>
         )}
 
         {/* Tab 区域 */}
-        <Tabs activeKey={resultTab} onChange={setResultTab}
-          className="flex-1 flex flex-col"
-          tabBarStyle={{ padding: "0 16px", marginBottom: 0 }}
-          items={[
-            {
-              key: "detail",
-              label: "答题详情",
-              children: (
-                <div className="px-4 py-3 overflow-y-auto">
-                  <Collapse size="small" items={r.answers.map((a, i) => ({
-                    key: a.id,
-                    label: (
-                      <span>
-                        第{i + 1}题
-                        {a.is_correct === true && <CheckCircleFilled className="ml-1 text-emerald-500" />}
-                        {a.is_correct === false && <CloseCircleFilled className="ml-1 text-red-500" />}
-                        <span className="ml-1 text-xs text-text-tertiary">+{a.earned_score || 0}/{a.max_score}</span>
-                      </span>
-                    ),
-                    children: (
-                      <div className="text-sm">
-                        <div className="mb-1">{a.content}</div>
-                        <div>我的答案：<span style={{ color: a.is_correct ? "#10B981" : "#EF4444" }}>{a.student_answer || "未作答"}</span></div>
-                        <div>正确答案：{a.correct_answer}</div>
-                        {a.explanation && <div className="text-text-tertiary mt-1">解析：{a.explanation}</div>}
-                        {a.ai_feedback && <div className="text-text-tertiary mt-0.5">AI 反馈：{a.ai_feedback}</div>}
-                      </div>
-                    ),
-                  }))} />
+        <Tabs value={resultTab} onValueChange={setResultTab} className="flex-1 flex flex-col">
+          <TabsList className="mx-4 mt-3 w-fit">
+            <TabsTrigger value="detail">答题详情</TabsTrigger>
+            <TabsTrigger value="basic">初级画像</TabsTrigger>
+            <TabsTrigger value="advanced">三维画像</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="detail" className="mt-2 flex-1 overflow-y-auto px-4 py-3">
+            {r.answers.map((a, i) => (
+              <details key={a.id} className="mb-2 overflow-hidden rounded-md border border-[var(--ws-color-border)] bg-surface">
+                <summary className="flex cursor-pointer items-center gap-1.5 px-[var(--ws-space-2)] py-[var(--ws-space-1)] text-sm">
+                  <span>第{i + 1}题</span>
+                  {a.is_correct === true && <CircleCheck className="h-4 w-4 text-[var(--ws-color-success)]" />}
+                  {a.is_correct === false && <CircleX className="h-4 w-4 text-[var(--ws-color-error)]" />}
+                  <span className="text-xs text-text-tertiary">+{a.earned_score || 0}/{a.max_score}</span>
+                </summary>
+                <div className="border-t border-[var(--ws-color-border-secondary)] px-[var(--ws-space-2)] py-[var(--ws-space-1)] text-sm">
+                  <div className="mb-1">{a.content}</div>
+                  <div>
+                    我的答案：
+                    <span className={a.is_correct ? "text-[var(--ws-color-success)]" : "text-[var(--ws-color-error)]"}>
+                      {a.student_answer || "未作答"}
+                    </span>
+                  </div>
+                  <div>正确答案：{a.correct_answer}</div>
+                  {a.explanation && <div className="mt-1 text-text-tertiary">解析：{a.explanation}</div>}
+                  {a.ai_feedback && <div className="mt-[calc(var(--ws-space-1)/2)] text-text-tertiary">AI 反馈：{a.ai_feedback}</div>}
                 </div>
-              ),
-            },
-            {
-              key: "basic",
-              label: "初级画像",
-              children: (
-                <div className="p-4 overflow-y-auto">
-                  {basicProfile ? (
-                    <BasicProfileView data={basicProfile} />
-                  ) : (
-                    <EmptyState description="暂无画像数据" />
-                  )}
-                </div>
-              ),
-            },
-            {
-              key: "advanced",
-              label: "三维画像",
-              children: (
-                <div className="p-4 overflow-y-auto">
-                  {advancedProfiles.length > 0 ? (
-                    <div className="mb-4">
-                      <AdvancedProfileView profile={advancedProfiles[0]} />
-                    </div>
-                  ) : (
-                    <AdvancedProfileEmpty />
-                  )}
-                </div>
-              ),
-            },
-          ]}
-        />
+              </details>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="basic" className="mt-2 flex-1 overflow-y-auto p-4">
+            {basicProfile ? <BasicProfileView data={basicProfile} /> : <EmptyState description="暂无画像数据" />}
+          </TabsContent>
+
+          <TabsContent value="advanced" className="mt-2 flex-1 overflow-y-auto p-4">
+            {advancedProfiles.length > 0 ? (
+              <div className="mb-4">
+                <AdvancedProfileView profile={advancedProfiles[0]} />
+              </div>
+            ) : (
+              <AdvancedProfileEmpty />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     );
   };
@@ -817,18 +947,17 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 渲染窗口 ───
   const renderWindow = () => (
     <div
-      className="flex flex-col overflow-hidden bg-white rounded-xl"
+      className="ws-floating-panel flex flex-col"
       style={{
         position: "fixed", left: pos.x, top: pos.y,
         width: size.w, height: size.h,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        zIndex: 1001,
-        resize: "both", minWidth: 320, minHeight: 400,
+        zIndex: "var(--ws-z-floating-panel)",
+        resize: "both", minWidth: "20rem", minHeight: "25rem",
       }}
     >
       {/* 头部 */}
       <div
-        className="flex justify-between items-center px-3 py-2 select-none text-white bg-purple"
+        className="ws-floating-panel-header ws-floating-panel-header--assessment select-none"
         style={{ cursor: pinned ? 'default' : 'move' }}
         onPointerDown={handleDragStart}
         onPointerMove={handleDragMove}
@@ -839,25 +968,38 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         </span>
         <div className="flex gap-1" onPointerDown={e => e.stopPropagation()}>
           {view !== "list" && view !== "quiz" && (
-            <Button type="text" size="small" icon={<LeftOutlined />} className="!text-white"
-              onClick={() => setView("list")} />
+            <Button variant="ghost" size="sm" className="ws-floating-panel-header-action" onClick={() => setView("list")}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           )}
-          <Button type="text" size="small" className="!text-white"
-            icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
-            onClick={() => { const v = !pinned; setPinned(v); try { localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, String(v)); } catch {} }} />
           <Button
-            type="text"
-            size="small"
-            icon={<ReloadOutlined />}
-            className="!text-white"
-            loading={loading}
+            variant="ghost"
+            size="sm"
+            className="ws-floating-panel-header-action"
+            onClick={() => { const v = !pinned; setPinned(v); try { localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, String(v)); } catch {} }}
+          >
+            {pinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ws-floating-panel-header-action"
+            disabled={loading}
             onClick={handleManualRefresh}
-          />
-          <Tooltip title={view === "quiz" ? "自我检查中不可关闭，请先提交" : ""}>
-            <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+          </Button>
+          <InlineTooltip title={view === "quiz" ? "自我检查中不可关闭，请先提交" : "关闭"}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ws-floating-panel-header-action"
               disabled={view === "quiz"}
-              onClick={() => setOpen(false)} />
-          </Tooltip>
+              onClick={() => setOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </InlineTooltip>
         </div>
       </div>
       {/* 内容 */}
@@ -870,14 +1012,16 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   const isQuizzing = open && view === "quiz";
 
   return ReactDOM.createPortal(
-    <>
-      {/* 答题时遮罩：模糊背景 + 禁止交互 */}
-      {isQuizzing && (
-        <div className="fixed inset-0 z-[999] backdrop-blur-[8px]" style={{ background: "rgba(0,0,0,0.15)" }} />
-      )}
-      {floatingBtn}
-      {open && renderWindow()}
-    </>,
+    <TooltipProvider delayDuration={120}>
+      <>
+        {/* 答题时遮罩：模糊背景 + 禁止交互 */}
+        {isQuizzing && (
+          <div className="fixed inset-0 z-[var(--ws-z-floating-btn)] backdrop-blur-sm" style={{ background: "var(--ws-color-overlay)" }} />
+        )}
+        {floatingBtn}
+        {open && renderWindow()}
+      </>
+    </TooltipProvider>,
     document.body,
   );
 };

@@ -31,8 +31,6 @@ RUN npm config set registry https://registry.npmmirror.com/
 # 设置环境变量
 ENV NODE_ENV=development
 ENV PORT=6608
-ENV CHOKIDAR_USEPOLLING=true
-ENV WATCHPACK_POLLING=true
 
 # 复制 package.json 和 package-lock.json（如果存在）
 COPY package*.json ./
@@ -47,7 +45,7 @@ COPY . .
 EXPOSE 6608
 
 # 启动开发服务器（热重载）
-CMD ["npm", "start"]
+CMD ["npx", "vite", "--mode", "development", "--host", "0.0.0.0", "--port", "6608"]
 
 # ============================================
 # 生产构建阶段

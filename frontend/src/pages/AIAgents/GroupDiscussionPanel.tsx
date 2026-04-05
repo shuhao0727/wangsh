@@ -1,39 +1,20 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
-  App,
-  Alert,
-  DatePicker,
-  Select,
-  Button,
-  Card,
-  Divider,
-  Input,
-  Segmented,
-  Space,
-  Spin,
-  Typography,
-  Popconfirm,
-  Tag,
-  Tooltip,
-  Form,
-  Drawer,
-  Modal,
-  Avatar
-} from "antd";
-import {
-  PushpinFilled,
-  PushpinOutlined,
-  TeamOutlined,
-  UserOutlined,
-  SearchOutlined,
-  PlusOutlined,
-  LogoutOutlined,
-  ReloadOutlined,
-  UserAddOutlined,
-  DeleteOutlined,
-  CloseOutlined,
-} from "@ant-design/icons";
+  Loader2,
+  LogOut,
+  Pin,
+  PinOff,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  User as UserIcon,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { groupDiscussionApi } from "@services/agents";
 import { config as appConfig } from "@services";
 import { userApi } from "@services";
@@ -45,8 +26,52 @@ import { getJoinLockRemainingSeconds, parseJoinLockHint, type JoinLockHint } fro
 import EmptyState from "@components/Common/EmptyState";
 import dayjs from "dayjs";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-const { Text } = Typography;
+const PushpinFilled = Pin;
+const PushpinOutlined = PinOff;
+const TeamOutlined = Users;
+const UserOutlined = UserIcon;
+const SearchOutlined = Search;
+const PlusOutlined = Plus;
+const LogoutOutlined = LogOut;
+const ReloadOutlined = RefreshCw;
+const UserAddOutlined = UserPlus;
+const DeleteOutlined = Trash2;
+const CloseOutlined = X;
 
 const STORAGE_KEYS = {
   SESSION_ID: "gd_session_id",
@@ -67,7 +92,6 @@ type Props = {
 };
 
 const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, userId, className }) => {
-  const { message } = App.useApp();
   // --- 窗口状态管理 ---
   const [open, setOpen] = useState(false);
   const [floatingPinned, setFloatingPinned] = useState(() => localStorage.getItem(STORAGE_KEYS.FLOATING_PINNED) === "1");
@@ -105,7 +129,9 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     const v = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
     return v ? Number(v) : null;
   });
-  const [createForm] = Form.useForm<{ groupNo: string; groupName?: string; className?: string }>();
+  const [createGroupNo, setCreateGroupNo] = useState("");
+  const [createGroupName, setCreateGroupName] = useState("");
+  const [createClassName, setCreateClassName] = useState("");
   const [currentGroup, setCurrentGroup] = useState<{ no: string; name: string }>(() => ({
     no: localStorage.getItem(STORAGE_KEYS.GROUP_NO) || "",
     name: localStorage.getItem(STORAGE_KEYS.GROUP_NAME) || "",
@@ -182,7 +208,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       if (res.success) {
         setMembers(res.data.items || []);
       } else {
-        message.error(res.message);
+        showMessage.error(res.message);
       }
     } finally {
       setMembersLoading(false);
@@ -200,14 +226,14 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     try {
       const res = await groupDiscussionApi.adminRemoveMember({ sessionId, userId });
       if (res.success) {
-        message.success("移除成功");
+        showMessage.success("移除成功");
         fetchMembers();
       } else {
-        message.error(res.message);
+        showMessage.error(res.message);
       }
     } catch (err) {
       logger.error(err);
-      message.error("移除成员失败，请重试");
+      showMessage.error("移除成员失败，请重试");
     }
   };
 
@@ -219,7 +245,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       setInviteUsers(res.users || []);
     } catch (err) {
       logger.error(err);
-      message.error("搜索用户失败");
+      showMessage.error("搜索用户失败");
     } finally {
       setInviteLoading(false);
     }
@@ -238,15 +264,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     try {
       const res = await groupDiscussionApi.adminAddMember({ sessionId, userId });
       if (res.success) {
-        message.success("邀请成功");
+        showMessage.success("邀请成功");
         setInviteModalOpen(false);
         fetchMembers();
       } else {
-        message.error(res.message);
+        showMessage.error(res.message);
       }
     } catch (err) {
       logger.error(err);
-      message.error("邀请失败，请重试");
+      showMessage.error("邀请失败，请重试");
     } finally {
       setInvitingUserId(null);
     }
@@ -345,13 +371,13 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   useEffect(() => {
     if (!isAdmin || introMode !== "create") return;
-    const existing = String(createForm.getFieldValue("className") || "").trim();
+    const existing = String(createClassName || "").trim();
     if (existing) return;
     const fallbackClass = String(filterClass || classList[0] || "").trim();
     if (fallbackClass) {
-      createForm.setFieldValue("className", fallbackClass);
+      setCreateClassName(fallbackClass);
     }
-  }, [isAdmin, introMode, filterClass, classList, createForm]);
+  }, [isAdmin, introMode, filterClass, classList, createClassName]);
 
   useEffect(() => {
     if (!joinLockHint) {
@@ -406,7 +432,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const handleJoinOrCreate = async (values: { groupNo: string; groupName?: string; className?: string }) => {
     try {
       if (isAdmin && !String(values.className || "").trim()) {
-        message.error("请先填写班级");
+        showMessage.error("请先填写班级");
         return;
       }
       const res = await groupDiscussionApi.join({
@@ -417,7 +443,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       
       if (!res.success) {
         setJoinLockHint(parseJoinLockHint(res.message));
-        message.error(res.message || "操作失败");
+        showMessage.error(res.message || "操作失败");
         return;
       }
 
@@ -433,7 +459,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       localStorage.setItem(STORAGE_KEYS.GROUP_NO, group_no);
       localStorage.setItem(STORAGE_KEYS.GROUP_NAME, group_name || "");
       
-      message.success(`成功加入 ${group_no} 组`);
+      showMessage.success(`成功加入 ${group_no} 组`);
       setMessages([]);
       afterIdRef.current = 0;
       setView("chat");
@@ -451,6 +477,33 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     }
   };
 
+  const handleCreateSubmit = async () => {
+    const groupNo = createGroupNo.trim();
+    const groupName = createGroupName.trim();
+    const targetClass = createClassName.trim();
+    if (isAdmin && !targetClass) {
+      showMessage.error("请先填写班级");
+      return;
+    }
+    if (!groupNo) {
+      showMessage.error("请输入组号");
+      return;
+    }
+    if (!/^\d+$/.test(groupNo)) {
+      showMessage.error("组号只能包含数字");
+      return;
+    }
+    if (!groupName) {
+      showMessage.error("请输入组名");
+      return;
+    }
+    await handleJoinOrCreate({
+      groupNo,
+      groupName,
+      className: targetClass || undefined,
+    });
+  };
+
   // --- 业务逻辑：发送消息 ---
   const handleSend = async () => {
     const text = draft.trim();
@@ -460,7 +513,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     const now = Date.now();
     const rateMs = (config.rate_limit_seconds || 5) * 1000;
     if (!isAdmin && now - lastSendTime < rateMs) {
-      message.warning(`请等待 ${Math.ceil((rateMs - (now - lastSendTime)) / 1000)} 秒后再发送`);
+      showMessage.warning(`请等待 ${Math.ceil((rateMs - (now - lastSendTime)) / 1000)} 秒后再发送`);
       return;
     }
 
@@ -482,7 +535,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         afterIdRef.current = Math.max(afterIdRef.current, res.data.id);
         scrollToBottom();
       } else {
-        message.error(res.message);
+        showMessage.error(res.message);
       }
     } finally {
       sendingRef.current = false;
@@ -528,7 +581,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       return;
     }
     if (!sessionId) {
-      message.warning("当前未加入小组");
+      showMessage.warning("当前未加入小组");
       return;
     }
     if (chatRefreshingRef.current) return;
@@ -541,7 +594,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         limit: 200,
       });
       if (!res.success) {
-        message.error(res.message || "刷新失败");
+        showMessage.error(res.message || "刷新失败");
         return;
       }
       const fullItems = (res.data.items || [])
@@ -552,7 +605,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       scrollToBottom();
     } catch (err) {
       logger.error(err);
-      message.error("刷新失败，请稍后重试");
+      showMessage.error("刷新失败，请稍后重试");
     } finally {
       chatRefreshingRef.current = false;
       setChatRefreshing(false);
@@ -652,119 +705,135 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   // --- 渲染组件 ---
 
   const renderIntro = () => (
-    <div className="flex flex-col h-full px-1">
-      <Segmented
-        block
-        value={introMode}
-        onChange={v => setIntroMode(v as any)}
-        options={[
-          { label: '加入小组', value: 'join', icon: <TeamOutlined /> },
-          { label: '新建小组', value: 'create', icon: <PlusOutlined /> },
-        ]}
-        className="mb-3"
-      />
-      {joinLockHint && joinLockRemaining > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          className="mb-3"
-          message={`组号已锁定为 ${joinLockHint.lockedGroupNo} 组`}
-          description={`请在 ${joinLockRemaining} 秒后切换到其他组，或直接加入 ${joinLockHint.lockedGroupNo} 组。`}
-        />
-      )}
+    <div className="flex h-full flex-col px-1">
+      <div className="mb-3 grid grid-cols-2 gap-[var(--ws-space-1)] rounded-md border border-[var(--ws-color-border)] bg-surface p-1">
+        {[
+          { key: "join", label: "加入小组", icon: <TeamOutlined className="h-4 w-4" /> },
+          { key: "create", label: "新建小组", icon: <PlusOutlined className="h-4 w-4" /> },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors",
+              introMode === item.key
+                ? "bg-surface text-text shadow-sm"
+                : "text-text-tertiary hover:text-text",
+            )}
+            onClick={() => setIntroMode(item.key as "join" | "create")}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </div>
 
-      {introMode === 'join' ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {isAdmin && (
-            <Space
-              wrap
-              className="flex w-full mb-3"
-            >
-              <DatePicker 
-                value={filterDate ? dayjs(filterDate, "YYYY-MM-DD") : null}
-                format="YYYY-MM-DD"
-                allowClear
-                onChange={(d) => setFilterDate(d ? d.format("YYYY-MM-DD") : null)} 
-                placeholder="日期" 
-                style={{ width: isCompactViewport ? "100%" : 130 }}
+      {joinLockHint && joinLockRemaining > 0 ? (
+        <Alert className="mb-3 border-warning/25 bg-warning-soft text-warning [&>svg]:text-warning">
+          <AlertTitle>{`组号已锁定为 ${joinLockHint.lockedGroupNo} 组`}</AlertTitle>
+          <AlertDescription>
+            {`请在 ${joinLockRemaining} 秒后切换到其他组，或直接加入 ${joinLockHint.lockedGroupNo} 组。`}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {introMode === "join" ? (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {isAdmin ? (
+            <div className="mb-3 flex w-full flex-wrap gap-2">
+              <Input
+                type="date"
+                value={filterDate || ""}
+                placeholder="日期"
+                className={isCompactViewport ? "w-full" : "w-36"}
+                onChange={(e) => setFilterDate(e.target.value || null)}
               />
               <Select
-                placeholder="班级"
-                value={filterClass}
-                onChange={setFilterClass}
-                allowClear
-                style={{ width: isCompactViewport ? "100%" : 110 }}
-                options={classList.map(c => ({ label: c, value: c }))}
-              />
+                value={filterClass || "__all__"}
+                onValueChange={(v) => setFilterClass(v === "__all__" ? null : v)}
+              >
+                <SelectTrigger className={isCompactViewport ? "w-full" : "w-32"}>
+                  <SelectValue placeholder="班级" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部班级</SelectItem>
+                  {classList.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className={cn("relative", isCompactViewport ? "w-full" : "min-w-44 flex-1")}>
+                <SearchOutlined className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                <Input
+                  value={searchKeyword}
+                  placeholder="搜索组号/组名"
+                  className="pl-[var(--ws-search-input-padding-start)]"
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="relative mb-3">
+              <SearchOutlined className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
               <Input
-                prefix={<SearchOutlined />}
-                placeholder="搜索组号/组名"
                 value={searchKeyword}
-                onChange={e => setSearchKeyword(e.target.value)}
-                allowClear
-                style={{ flex: 1, minWidth: isCompactViewport ? "100%" : 160 }}
+                placeholder="搜索组号或组名..."
+                className="pl-[var(--ws-search-input-padding-start)]"
+                onChange={(e) => setSearchKeyword(e.target.value)}
               />
-            </Space>
+            </div>
           )}
-          {!isAdmin && (
-            <Input
-              prefix={<SearchOutlined />}
-              placeholder="搜索组号或组名..."
-              value={searchKeyword}
-              onChange={e => setSearchKeyword(e.target.value)}
-              className="mb-3"
-              allowClear
-            />
-          )}
+
           <div className="flex-1 overflow-y-auto">
             {groupsLoading ? (
-              <div className="p-6 flex justify-center">
-                <Spin />
+              <div className="flex justify-center p-6">
+                <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
               </div>
             ) : groups.length ? (
               <div className="flex flex-col gap-2 px-0.5">
                 {groups.map((item) => (
-                  <Card
+                  <div
                     key={`${item.session_date}-${item.class_name || ""}-${item.group_no}`}
-                    size="small"
-                    styles={{ body: { padding: 12 } }}
+                    className="rounded-lg border border-[var(--ws-color-border)] bg-surface p-3"
                   >
                     <div className="flex justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Text strong>{item.group_no}组</Text>
-                          {item.group_name && <Tag>{item.group_name}</Tag>}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{item.group_no}组</span>
+                          {item.group_name ? (
+                            <Badge variant="outline">{item.group_name}</Badge>
+                          ) : null}
                         </div>
-                        <div className="mt-1.5">
-                          <Space
-                            size={0}
-                            separator={<Divider orientation="vertical" className="!mx-2 !my-0" />}
-                          >
-                            <Text type="secondary" className="text-xs">
-                              <UserOutlined /> {item.member_count}人
-                            </Text>
-                            <Text type="secondary" className="text-xs">
-                              {item.message_count}条消息
-                            </Text>
-                            <Text type="secondary" className="text-xs">
-                              {dayjs(item.session_date).format("MM-DD")}
-                            </Text>
-                          </Space>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                          <span className="inline-flex items-center gap-1">
+                            <UserOutlined className="h-4 w-4" />
+                            {item.member_count}人
+                          </span>
+                          <span className="text-text-tertiary/40">|</span>
+                          <span>{item.message_count}条消息</span>
+                          <span className="text-text-tertiary/40">|</span>
+                          <span>{dayjs(item.session_date).format("MM-DD")}</span>
                         </div>
                       </div>
                       <div className="flex-shrink-0">
                         <Button
-                          type="link"
-                          size="small"
+                          type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() =>
-                            handleJoinOrCreate({ groupNo: item.group_no, className: item.class_name })
+                            void handleJoinOrCreate({
+                              groupNo: item.group_no,
+                              className: item.class_name,
+                            })
                           }
                         >
                           加入
                         </Button>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -775,121 +844,148 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           </div>
         </div>
       ) : (
-        <div className="p-5">
-          <Form form={createForm} onFinish={handleJoinOrCreate} layout="vertical">
-            {isAdmin ? (
-              <Form.Item
-                label="班级 (必填)"
-                name="className"
-                rules={[{ required: true, message: "请输入班级" }]}
-                extra={classList.length > 0 ? `建议使用已有班级：${classList.slice(0, 3).join("、")}` : "请输入目标班级，例如：高一(1)班"}
-              >
-                <Input placeholder="例如: 高一(1)班" size="large" />
-              </Form.Item>
-            ) : className ? (
-              <Form.Item label="班级">
-                <Input value={className} disabled size="large" />
-              </Form.Item>
-            ) : null}
-            <Form.Item
-              label="组号 (必填)"
-              name="groupNo"
-              rules={[{ required: true, message: '请输入组号' }, { pattern: /^\d+$/, message: '组号只能包含数字' }]}
-              extra="请输入数字组号，如 101"
-            >
-              <Input placeholder="例如: 101" size="large" />
-            </Form.Item>
-            <Form.Item
-              label="组名 (必填)"
-              name="groupName"
-              rules={[{ required: true, message: '请输入组名' }]}
-              extra="给小组起个好听的名字"
-            >
-              <Input placeholder="例如: 飞跃小队" size="large" />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" block icon={<PlusOutlined />}>
-                立即创建并加入
-              </Button>
-            </Form.Item>
-            <div className="mt-5 p-3 bg-surface-2 rounded-lg">
-              <Text type="secondary" className="text-xs">
-                <div className="mb-1">⚠️ 注意事项：</div>
-                <div>1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。</div>
-                <div>2. 发送消息有 {config.rate_limit_seconds} 秒冷却限制。</div>
-              </Text>
+        <div className="space-y-[var(--ws-space-3)] p-[var(--ws-panel-padding)]">
+          {isAdmin ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">班级 (必填)</label>
+              <Input
+                value={createClassName}
+                placeholder="例如: 高一(1)班"
+                onChange={(e) => setCreateClassName(e.target.value)}
+              />
+              <p className="text-xs text-text-tertiary">
+                {classList.length > 0
+                  ? `建议使用已有班级：${classList.slice(0, 3).join("、")}`
+                  : "请输入目标班级，例如：高一(1)班"}
+              </p>
             </div>
-          </Form>
+          ) : className ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">班级</label>
+              <Input value={className} disabled />
+            </div>
+          ) : null}
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">组号 (必填)</label>
+            <Input
+              value={createGroupNo}
+              placeholder="例如: 101"
+              onChange={(e) => setCreateGroupNo(e.target.value)}
+            />
+            <p className="text-xs text-text-tertiary">请输入数字组号，如 101</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">组名 (必填)</label>
+            <Input
+              value={createGroupName}
+              placeholder="例如: 飞跃小队"
+              onChange={(e) => setCreateGroupName(e.target.value)}
+            />
+            <p className="text-xs text-text-tertiary">给小组起个好听的名字</p>
+          </div>
+
+          <Button type="button" className="w-full" onClick={() => void handleCreateSubmit()}>
+            <PlusOutlined className="h-4 w-4" />
+            立即创建并加入
+          </Button>
+
+          <div className="rounded-lg bg-surface-2 p-3 text-xs text-text-tertiary">
+            <div className="mb-1">注意事项：</div>
+            <div>
+              1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。
+            </div>
+            <div>2. 发送消息有 {config.rate_limit_seconds} 秒冷却限制。</div>
+          </div>
         </div>
       )}
     </div>
   );
 
   const renderChat = () => (
-    <div className="flex flex-col h-full">
-      {/* 聊天头部 */}
-      <div className="px-4 py-3 border-b border-black/5 flex justify-between items-center bg-white">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-[var(--ws-color-border-secondary)] bg-surface px-4 py-3">
         <div>
           <div className="flex items-center gap-2">
-            <Text strong className="text-base">{currentGroup.no}组</Text>
-            {currentGroup.name && <Tag color="blue">{currentGroup.name}</Tag>}
+            <span className="text-base font-semibold">{currentGroup.no}组</span>
+            {currentGroup.name ? (
+              <Badge variant="info">{currentGroup.name}</Badge>
+            ) : null}
           </div>
-          <Text type="secondary" className="text-xs">
-            <TeamOutlined /> 正在讨论中
-          </Text>
+          <div className="mt-0.5 text-xs text-text-tertiary">
+            <TeamOutlined className="mr-1 inline h-4 w-4" />
+            正在讨论中
+          </div>
         </div>
-        <Space>
-          <Button size="small" icon={<TeamOutlined />} onClick={() => setMembersDrawerOpen(true)}>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMembersDrawerOpen(true)}
+          >
+            <TeamOutlined className="h-4 w-4" />
             成员
           </Button>
-          <Button danger size="small" icon={<LogoutOutlined />} onClick={handleExit}>
+          <Button type="button" variant="outline" size="sm" onClick={handleExit}>
+            <LogoutOutlined className="h-4 w-4" />
             切换小组
           </Button>
-        </Space>
+        </div>
       </div>
 
-      {/* 消息列表 */}
-      <div
-        ref={listRef}
-        className="flex-1 overflow-y-auto p-4 bg-surface-2 flex flex-col gap-2.5"
-      >
-        {messages.map(msg => (
-          <div key={msg.id} className="max-w-[75%]" style={{
-            alignSelf: msg.is_mine ? 'flex-end' : 'flex-start',
-          }}>
-            <div className="text-xs text-text-tertiary mb-0.5 px-1.5" style={{
-              textAlign: msg.is_mine ? 'right' : 'left',
-            }}>
-              {msg.is_mine ? '' : msg.user_display_name + ' · '}{dayjs(msg.created_at).format("HH:mm")}
+      <div ref={listRef} className="flex flex-1 flex-col gap-[var(--ws-space-2)] overflow-y-auto bg-surface-2 p-4">
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`max-w-3/4 ${msg.is_mine ? "self-end" : "self-start"}`}
+          >
+            <div
+              className={`mb-0.5 px-[var(--ws-space-1)] text-xs text-text-tertiary ${msg.is_mine ? "text-right" : "text-left"}`}
+            >
+              {msg.is_mine ? "" : `${msg.user_display_name} · `}
+              {dayjs(msg.created_at).format("HH:mm")}
             </div>
-            <div className="px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap" style={{
-              background: msg.is_mine ? 'var(--ws-color-primary)' : '#FFFFFF',
-              color: msg.is_mine ? '#FFFFFF' : 'var(--ws-color-text)',
-              borderRadius: msg.is_mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-            }}>
+            <div
+              className={`break-words whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed ${
+                msg.is_mine
+                  ? "rounded-xl rounded-bl-[4px] bg-primary text-primary-foreground"
+                  : "rounded-xl rounded-br-[4px] bg-surface text-text-base"
+              }`}
+            >
               {msg.content}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 输入框 */}
-      <div className="p-3 bg-white border-t border-black/5">
-        <Space.Compact style={{ width: "100%" }}>
+      <div className="border-t border-[var(--ws-color-border-secondary)] bg-surface p-3">
+        <div className="flex w-full items-center gap-2">
           <Input
             value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onPressEnter={handleSend}
             placeholder="输入消息..."
             disabled={sending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
           />
-          <Button type="primary" onClick={handleSend} loading={sending} disabled={sending || !draft.trim()}>
+          <Button
+            type="button"
+            onClick={() => void handleSend()}
+            disabled={sending || !draft.trim()}
+          >
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             发送
           </Button>
-        </Space.Compact>
-        <Text type="secondary" className="text-xs mt-1 block text-center">
+        </div>
+        <div className="mt-1 text-center text-xs text-text-tertiary">
           每 {config.rate_limit_seconds} 秒可发送一条消息
-        </Text>
+        </div>
       </div>
     </div>
   );
@@ -902,21 +998,24 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {/* 悬浮按钮 */}
       {!open && (
         <div
-          style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: 1000, cursor: "grab", touchAction: "none" }}
+          style={{
+            position: "fixed",
+            left: 0,
+            top: `${btnTop}%`,
+            zIndex: "var(--ws-z-floating-btn)",
+            cursor: "grab",
+            touchAction: "none",
+          }}
           onPointerDown={handleBtnDragStart}
           onPointerMove={handleBtnDragMove}
           onPointerUp={handleBtnDragEnd}
         >
           <Button
-            type="primary"
-            icon={<TeamOutlined />}
+            type="button"
             onClick={() => { if (!btnDragged.current) setOpen(true); }}
-            className="!rounded-l-none"
-            style={{
-              background: '#0EA5E9', borderColor: '#0EA5E9',
-              boxShadow: '2px 2px 8px rgba(14,165,233,0.4)',
-            }}
+            className="ws-floating-entry-btn ws-floating-entry-btn--discussion"
           >
+            <TeamOutlined className="h-4 w-4" />
             小组讨论
           </Button>
         </div>
@@ -926,179 +1025,208 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {open && (
         <div
           ref={floatingRef}
-          className="flex flex-col overflow-hidden bg-white rounded-xl border border-black/[0.08]"
+          className="ws-floating-panel flex flex-col"
           style={{
             position: "fixed",
             left: floatingRenderLeft,
             top: floatingRenderTop,
             width: floatingRenderWidth,
             height: floatingRenderHeight,
-            zIndex: 1050,
+            zIndex: "var(--ws-z-floating-panel)",
             resize: isCompactViewport ? "none" : "both",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
           }}
           onMouseUp={handleResizeUp}
         >
           {/* 窗口标题栏 */}
           <div
-            className={`px-3 py-2 flex justify-between items-center select-none text-white bg-primary ${floatingPinned ? 'cursor-default' : 'cursor-move'}`}
+            className={`ws-floating-panel-header ws-floating-panel-header--discussion ${floatingPinned ? "cursor-default" : "cursor-move"}`}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
           >
             <span className="font-semibold text-sm flex items-center gap-1.5">
-              <TeamOutlined /> 小组讨论
+              <TeamOutlined className="h-4 w-4" /> 小组讨论
             </span>
             <div className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
-              <Tooltip title={floatingPinned ? "取消固定" : "固定窗口"}>
-                <Button
-                  type="text"
-                  size="small"
-                  className="!text-white"
-                  icon={floatingPinned ? <PushpinFilled /> : <PushpinOutlined />}
-                  onClick={() => {
-                    const next = !floatingPinned;
-                    setFloatingPinned(next);
-                    localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, next ? "1" : "0");
-                  }}
-                />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={floatingPinned ? "取消固定" : "固定窗口"}
+                    className="h-8 w-8 ws-floating-panel-header-action"
+                    onClick={() => {
+                      const next = !floatingPinned;
+                      setFloatingPinned(next);
+                      localStorage.setItem(STORAGE_KEYS.FLOATING_PINNED, next ? "1" : "0");
+                    }}
+                  >
+                    {floatingPinned ? <PushpinFilled className="h-4 w-4" /> : <PushpinOutlined className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{floatingPinned ? "取消固定" : "固定窗口"}</TooltipContent>
               </Tooltip>
               <Button
-                type="text"
-                size="small"
-                icon={<ReloadOutlined />}
-                className="!text-white"
-                loading={view === "intro" ? groupsLoading : chatRefreshing}
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="刷新"
+                className="h-8 w-8 ws-floating-panel-header-action"
                 disabled={view !== "intro" && (!sessionId || chatRefreshing)}
                 onClick={() => { void handleManualRefresh(); }}
-              />
-              <Button type="text" size="small" icon={<CloseOutlined />} className="!text-white" onClick={() => setOpen(false)} />
+              >
+                {(view === "intro" ? groupsLoading : chatRefreshing)
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <ReloadOutlined className="h-4 w-4" />}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="关闭窗口"
+                className="h-8 w-8 ws-floating-panel-header-action"
+                onClick={() => setOpen(false)}
+              >
+                <CloseOutlined className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 
           {/* 窗口内容区 */}
-          <div className="flex-1 overflow-hidden bg-white">
+          <div className="flex-1 overflow-hidden bg-surface">
             {view === 'intro' ? renderIntro() : renderChat()}
           </div>
         </div>
       )}
 
       {/* 成员列表抽屉 */}
-      <Drawer
-        title={
-          <div className="flex justify-between items-center">
-            <span>成员列表 ({members.length})</span>
-            {isAdmin && (
-              <Button type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setInviteModalOpen(true)}>
-                邀请
-              </Button>
-            )}
-          </div>
-        }
-        placement="right"
-        onClose={() => setMembersDrawerOpen(false)}
-        open={membersDrawerOpen}
-        getContainer={floatingRef.current || document.body}
-        size="default"
-        mask={false}
-        rootStyle={{ position: 'absolute' }}
-      >
+      <Sheet open={membersDrawerOpen} onOpenChange={setMembersDrawerOpen}>
+        <SheetContent side="right" className="w-[26rem] p-0 sm:max-w-[26rem]">
+          <SheetHeader className="border-b border-[var(--ws-color-border)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 pr-8">
+              <SheetTitle>{`成员列表 (${members.length})`}</SheetTitle>
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setInviteModalOpen(true)}
+                >
+                  <UserAddOutlined className="h-4 w-4" />
+                  邀请
+                </Button>
+              ) : null}
+            </div>
+          </SheetHeader>
+          <div className="h-[calc(100vh-4rem)] overflow-y-auto p-4">
         {membersLoading ? (
           <div className="p-6 flex justify-center">
-            <Spin />
+            <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
           </div>
         ) : members.length ? (
           <div className="flex flex-col gap-2">
             {members.map((item) => (
-              <Card
+              <div
                 key={String(item.user_id)}
-                size="small"
-                styles={{ body: { padding: 12 } }}
+                className="rounded-lg border border-[var(--ws-color-border)] bg-surface p-3"
               >
                 <div className="flex justify-between gap-3">
                   <div className="flex gap-3 min-w-0">
-                    <Avatar icon={<UserOutlined />} className="bg-primary" />
+                    <Avatar className="h-9 w-9 bg-primary text-white">
+                      <AvatarFallback>
+                        <UserOutlined className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="min-w-0">
                       <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                         {item.full_name || item.username || `User ${item.user_id}`}
                       </div>
-                      <Space orientation="vertical" size={0}>
-                        {item.student_id && (
-                          <Text type="secondary" className="text-xs">
-                            {item.student_id}
-                          </Text>
-                        )}
-                        <Text type="secondary" className="text-xs">
-                          {dayjs(item.joined_at).format("MM-DD HH:mm")}
-                        </Text>
-                      </Space>
+                      {item.student_id ? (
+                        <div className="text-xs text-text-tertiary">{item.student_id}</div>
+                      ) : null}
+                      <div className="text-xs text-text-tertiary">
+                        {dayjs(item.joined_at).format("MM-DD HH:mm")}
+                      </div>
                     </div>
                   </div>
                   {isAdmin && (
-                    <Popconfirm title="确认移除该成员吗？" onConfirm={() => handleKick(item.user_id)}>
-                      <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                    </Popconfirm>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (!window.confirm("确认移除该成员吗？")) return;
+                        void handleKick(item.user_id);
+                      }}
+                    >
+                      <DeleteOutlined className="h-4 w-4" />
+                    </Button>
                   )}
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         ) : (
           <EmptyState description="暂无成员" />
         )}
-      </Drawer>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* 邀请用户弹窗 */}
-      <Modal
-        title="邀请用户"
-        open={inviteModalOpen}
-        onCancel={() => setInviteModalOpen(false)}
-        footer={null}
-        destroyOnHidden
-        width={500}
-      >
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="搜索姓名、学号..."
-          value={inviteKeyword}
-          onChange={e => setInviteKeyword(e.target.value)}
-          className="mb-4"
-          autoFocus
-        />
-        <div className="max-h-[400px] overflow-y-auto">
+      <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+        <DialogContent className="w-[92vw] sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>邀请用户</DialogTitle>
+          </DialogHeader>
+        <div className="relative mb-4">
+          <SearchOutlined className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+          <Input
+            placeholder="搜索姓名、学号..."
+            value={inviteKeyword}
+            onChange={e => setInviteKeyword(e.target.value)}
+            className="pl-[var(--ws-search-input-padding-start)]"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-[25rem] overflow-y-auto">
           {inviteLoading ? (
             <div className="p-6 flex justify-center">
-              <Spin />
+              <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
             </div>
           ) : inviteUsers.length ? (
             <div className="flex flex-col gap-2">
               {inviteUsers.map((user) => {
                 const isMember = members.some((m) => m.user_id === user.id);
                 return (
-                  <Card key={String(user.id)} size="small" styles={{ body: { padding: 12 } }}>
+                  <div key={String(user.id)} className="rounded-lg border border-[var(--ws-color-border)] bg-surface p-3">
                     <div className="flex justify-between gap-3">
                       <div className="flex gap-3 min-w-0">
-                        <Avatar>{(user.full_name || user.username || "?")[0]}</Avatar>
+                        <Avatar>
+                          <AvatarImage />
+                          <AvatarFallback>{(user.full_name || user.username || "?")[0]}</AvatarFallback>
+                        </Avatar>
                         <div className="min-w-0">
                           <div className="font-medium overflow-hidden text-ellipsis whitespace-nowrap">
                             {user.full_name}
                           </div>
-                          <Text type="secondary" className="text-xs">
+                          <div className="text-xs text-text-tertiary">
                             {`${user.student_id || ""} ${user.class_name || ""}`.trim()}
-                          </Text>
+                          </div>
                         </div>
                       </div>
                       <Button
-                        type="primary"
-                        size="small"
+                        type="button"
+                        size="sm"
                         disabled={isMember}
-                        loading={invitingUserId === user.id}
-                        onClick={() => handleInvite(user.id)}
+                        onClick={() => void handleInvite(user.id)}
                       >
+                        {invitingUserId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {isMember ? "已加入" : "邀请"}
                       </Button>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </div>
@@ -1106,7 +1234,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             <EmptyState variant={inviteKeyword ? "no-results" : "no-data"} description={inviteKeyword ? "未找到用户" : "请输入关键词搜索"} />
           )}
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </>,
     document.body
   );

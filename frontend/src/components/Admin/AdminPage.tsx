@@ -10,7 +10,7 @@ type Props = {
 const AdminPage: React.FC<Props> = ({
   children,
   maxWidth,
-  padding = 24,
+  padding = "var(--ws-panel-padding)",
   scrollable = true,
 }) => {
   return (
@@ -19,7 +19,7 @@ const AdminPage: React.FC<Props> = ({
       style={{ 
         width: "100%",
         flex: 1,
-        maxWidth: maxWidth ? maxWidth : "1600px", // Increased max-width for "looser" layout
+        maxWidth: maxWidth ? maxWidth : "var(--ws-shell-max-width)",
         margin: "0 auto",
         padding,
         minHeight: 0,

@@ -3,8 +3,8 @@
  * 连接真实的后端 API，不使用模拟数据
  */
 
+import { showMessage } from "@/lib/toast";
 import { useState, useCallback, useEffect } from "react";
-import { message } from "antd";
 import {
   userApi,
   User,
@@ -78,7 +78,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
       }));
     } catch (error) {
       logger.error("加载用户列表失败:", error);
-      message.error("加载用户列表失败");
+      showMessage.error("加载用户列表失败");
       setState((prev) => ({ ...prev, loading: false }));
     }
   }, [
@@ -153,10 +153,10 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         // 重新加载用户列表
         await loadUsers();
 
-        message.success("用户删除成功");
+        showMessage.success("用户删除成功");
       } catch (error) {
         logger.error("删除用户失败:", error);
-        message.error("删除用户失败");
+        showMessage.error("删除用户失败");
         setState((prev) => ({ ...prev, loading: false }));
       }
     },
@@ -181,7 +181,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
           };
 
           await userApi.updateUser(state.editingUser.id, updateData);
-          message.success("用户信息更新成功");
+          showMessage.success("用户信息更新成功");
         } else {
           // 创建新用户
           const createData: UserCreateRequest = {
@@ -195,7 +195,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
           };
 
           await userApi.createUser(createData);
-          message.success("用户添加成功");
+          showMessage.success("用户添加成功");
         }
 
         // 关闭表单并重新加载数据
@@ -210,11 +210,11 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
         // 显示具体的错误信息
         if (error.response?.data?.detail) {
-          message.error(error.response.data.detail);
+          showMessage.error(error.response.data.detail);
         } else if (error.message) {
-          message.error(error.message);
+          showMessage.error(error.message);
         } else {
-          message.error("保存用户信息失败");
+          showMessage.error("保存用户信息失败");
         }
 
         setState((prev) => ({ ...prev, loading: false }));
@@ -235,7 +235,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
   // 批量删除
   const handleBatchDelete = useCallback(async () => {
     if (state.selectedRowKeys.length === 0) {
-      message.warning("请选择要删除的用户");
+      showMessage.warning("请选择要删除的用户");
       return;
     }
 
@@ -244,7 +244,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
       // 这里假设后端支持批量删除，如果不行就单个删除
       const deletePromises = state.selectedRowKeys.map((id) =>
-        userApi.deleteUser(id as number),
+        userApi.deleteUser(id),
       );
 
       await Promise.all(deletePromises);
@@ -257,10 +257,10 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         selectedRowKeys: [],
       }));
 
-      message.success(`成功删除 ${state.selectedRowKeys.length} 个用户`);
+      showMessage.success(`成功删除 ${state.selectedRowKeys.length} 个用户`);
     } catch (error) {
       logger.error("批量删除失败:", error);
-      message.error("批量删除失败");
+      showMessage.error("批量删除失败");
       setState((prev) => ({ ...prev, loading: false }));
     }
   }, [state.selectedRowKeys, loadUsers]);
@@ -279,10 +279,10 @@ export const useUsers = (initialParams: SearchParams = {}) => {
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      message.success(`模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`);
+      showMessage.success(`模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`);
     } catch (error) {
       logger.error("下载模板失败:", error);
-      message.error("下载模板失败");
+      showMessage.error("下载模板失败");
     } finally {
       setState((prev) => ({ ...prev, loading: false }));
     }
@@ -303,7 +303,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
           if (result.error_count > 0) {
             // 如果有错误，显示警告消息
-            message.warning(successMessage);
+            showMessage.warning(successMessage);
 
             // 可以在这里添加错误详情显示逻辑
             if (result.errors.length > 0) {
@@ -311,11 +311,11 @@ export const useUsers = (initialParams: SearchParams = {}) => {
               // 可以在这里将错误详情存储到状态中，以便在UI中显示
             }
           } else {
-            message.success(successMessage);
+            showMessage.success(successMessage);
           }
         } else {
           // 导入失败
-          message.error(result.message || "文件上传失败");
+          showMessage.error(result.message || "文件上传失败");
         }
 
         await loadUsers(); // 重新加载用户列表
@@ -325,11 +325,11 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
         // 显示具体的错误信息
         if (error.response?.data?.detail) {
-          message.error(`文件上传失败: ${error.response.data.detail}`);
+          showMessage.error(`文件上传失败: ${error.response.data.detail}`);
         } else if (error.message) {
-          message.error(`文件上传失败: ${error.message}`);
+          showMessage.error(`文件上传失败: ${error.message}`);
         } else {
-          message.error("文件上传失败");
+          showMessage.error("文件上传失败");
         }
 
         return false;
@@ -365,7 +365,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
   }, []);
 
   // 设置选中的行
-  const setSelectedRowKeys = useCallback((keys: React.Key[]) => {
+  const setSelectedRowKeys = useCallback((keys: number[]) => {
     setState((prev) => ({
       ...prev,
       selectedRowKeys: keys,

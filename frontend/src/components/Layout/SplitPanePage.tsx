@@ -1,5 +1,5 @@
 import React from "react";
-import { Grid } from "antd";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 type Props = {
   left: React.ReactNode;
@@ -11,8 +11,8 @@ type Props = {
   style?: React.CSSProperties;
 };
 
-const SplitPanePage: React.FC<Props> = ({ left, right, leftWidth = 420, gap = 24, alignItems = "start", className, style }) => {
-  const screens = Grid.useBreakpoint();
+const SplitPanePage: React.FC<Props> = ({ left, right, leftWidth = 420, gap = 18, alignItems = "start", className, style }) => {
+  const screens = useBreakpoint();
   const isStacked = !screens.md;
 
   return (

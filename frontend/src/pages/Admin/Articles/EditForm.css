@@ -2,44 +2,52 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Prevent scroll on the main container */
+  overflow: hidden;
 }
 
-/* Ensure the Form takes full height */
-.article-edit-form > .ant-form {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* Crucial for nested flex containers */
-}
-
-/* When in editor layout, remove bottom padding */
 .article-edit-form.is-editor-layout {
   padding-bottom: 0;
 }
 
-/* Grid Layout for Editor Mode */
+.article-edit-form-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.article-edit-default-layout {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
+}
+
 .article-edit-editor-grid {
   display: grid;
   grid-template-columns: 320px 1fr;
-  grid-template-rows: 1fr; /* Explicitly 1fr height */
-  gap: 16px;
+  grid-template-rows: 1fr;
+  gap: 12px;
   height: 100%;
-  min-height: 0; /* Prevent overflow */
-  overflow: hidden; /* Ensure content scrolls inside cards */
+  min-height: 0;
+  overflow: hidden;
 }
 
 .article-edit-editor-grid.article-edit-editor-grid-collapsed {
   grid-template-columns: 48px 1fr;
 }
 
-/* Sidebar */
 .article-edit-editor-side {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow-y: auto; /* Allow sidebar scrolling if needed */
-  padding-right: 4px; /* Space for scrollbar */
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
 }
 
 .article-edit-editor-side.article-edit-editor-side-collapsed {
@@ -50,74 +58,120 @@
 .article-edit-side-toggle {
   display: flex;
   justify-content: flex-end;
+  padding: 2px 4px;
+  border: 1px solid var(--ws-color-border-secondary);
+  border-radius: var(--ws-radius-md);
+  background: var(--ws-color-surface);
 }
 
 .article-edit-side-toggle.collapsed {
   justify-content: center;
 }
 
-/* Main Content Area */
 .article-edit-editor-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-/* Content Card Container */
+.article-edit-card {
+  border: 1px solid var(--ws-color-border);
+  background: var(--ws-color-surface);
+  border-radius: var(--ws-radius-lg);
+}
+
+.article-edit-card-header {
+  border-bottom: 1px solid var(--ws-color-border-secondary);
+  padding: 9px 12px;
+  font-size: var(--ws-text-sm);
+  font-weight: 600;
+  color: var(--ws-color-text);
+}
+
+.article-edit-card-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.article-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.article-form-label {
+  font-size: var(--ws-text-xs);
+  font-weight: 600;
+  color: var(--ws-color-text);
+}
+
+.article-form-error {
+  margin: 0;
+  font-size: var(--ws-text-xs);
+  color: var(--ws-color-error);
+}
+
+.article-side-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--ws-color-border-secondary);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-color-surface-2);
+}
+
+.article-side-row-label {
+  font-size: var(--ws-text-xs);
+  color: var(--ws-color-text-tertiary);
+}
+
+.article-side-row-value {
+  font-size: var(--ws-text-xs);
+  color: var(--ws-color-text-secondary);
+}
+
 .article-edit-content-card {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  border: 1px solid var(--ws-color-border);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-color-surface);
 }
 
-.article-edit-content-card > .ant-card-head {
-  padding: 0 12px;
-  min-height: 44px;
-}
-
-.article-edit-content-card > .ant-card-head .ant-card-head-title {
-  padding: 10px 0;
-}
-
-.article-edit-content-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Card Body - The Critical Middle Layer */
-.article-edit-content-card > .ant-card-body {
+.article-edit-content-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 !important; /* Reset padding for full control */
   overflow: hidden;
 }
 
-/* Content Row */
 .article-edit-content-row {
   flex: 1;
   display: flex;
-  flex-direction: row; /* Ensure row direction */
+  flex-direction: row;
+  gap: 12px;
   min-height: 0;
-  height: 100%; /* Force height */
+  padding: 10px;
+  background: var(--ws-color-surface);
 }
 
-/* Content Column */
-.article-edit-content-row > .ant-col {
+.article-edit-panel-col {
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
 }
 
-/* Editor Panel */
 .article-edit-panel {
   flex: 1;
   display: flex;
@@ -127,191 +181,69 @@
   overflow: hidden;
 }
 
-/* Inner Editor Card */
 .article-editor-card {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   height: 100%;
-  border: none !important; /* Optional: remove border inside panel */
 }
 
-.article-editor-card > .ant-card-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 0 !important;
-  overflow: hidden;
-}
-
-/* Editor Body (Toolbar below) */
 .article-editor-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 12px;
+  padding: 10px;
   overflow: hidden;
-  background: #FAFAFA;
+  background: var(--ws-color-surface);
 }
 
-/*
- * The Deep Flex Chain for Form.Item 
- * We must target Antd internals to pass height down 
- */
-
-/* 1. Form Item */
-.article-editor-body .ant-form-item {
-  flex: 1;
+.article-editor-toolbar {
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  min-height: 0;
-  margin-bottom: 0;
-  width: 100%; /* Ensure full width */
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
+  background: var(--ws-color-surface-2);
 }
 
-/* 2. Form Item Row (Antd wraps content in a row) */
-.article-editor-body .ant-form-item .ant-row {
-  flex: 1;
+.article-editor-toolbar-label {
+  font-size: var(--ws-text-xs);
+}
+
+.article-editor-toolbar-btn {
+  padding: 0 6px;
+}
+
+.article-editor-footer {
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-}
-
-/* 3. Form Item Control (The column containing the input) */
-.article-editor-body .ant-form-item .ant-col.ant-form-item-control {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-}
-
-/* 4. Form Item Control Input (Wrapper around input) */
-.article-editor-body .ant-form-item .ant-form-item-control-input {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-}
-
-/* 5. Form Item Control Input Content (Direct parent of Input) */
-.article-editor-body .ant-form-item .ant-form-item-control-input-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column; /* Changed to column to handle showCount */
-  min-height: 0;
-  height: 100%;
-  width: 100%;
-}
-
-/* 
- * TextArea Specifics - TARGETING GENERICALLY
- * We target ANY .ant-input-affix-wrapper inside .article-editor-body
- * to avoid issues with specific class names not being applied to the wrapper.
- */
-
-/* The Wrapper (ant-input-affix-wrapper) - usually a span */
-.article-editor-body .ant-input-affix-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  height: 100% !important;
-  width: 100% !important;
-  padding: 0; /* Let textarea handle padding */
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: var(--ws-radius-md);
-  box-sizing: border-box;
-}
-
-/* The actual Textarea element */
-.article-editor-body textarea.ant-input {
-  flex: 1;
-  min-height: 0;
-  height: 100% !important;
-  width: 100% !important;
-  resize: none;
-  border: none; /* Wrapper has border */
-  padding: 12px;
-  box-shadow: none !important; /* Remove focus shadow on textarea, wrapper handles it */
-  box-sizing: border-box;
-}
-
-/* If showCount is used, position the count nicely */
-.article-editor-body .ant-input-data-count {
-  text-align: right;
-  padding: 4px 12px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
-  background: #FFFFFF;
-  border-top: 1px solid rgba(0,0,0,0.04);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .article-edit-editor-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr; /* Sidebar auto height, Main 1fr */
-    overflow-y: auto; /* Allow full page scroll on smaller screens */
-  }
-
-  .article-edit-editor-side {
-    height: auto;
-    overflow: visible;
-  }
-
-  .article-edit-editor-main {
-    height: auto;
-    min-height: 500px; /* Minimum height for editor */
-  }
-}
-
-@media (max-width: 768px) {
-  .article-edit-editor-main {
-    min-height: 400px;
-  }
-
-  .article-editor-body {
-    padding: 8px;
-  }
-
-  .article-editor-toolbar {
-    gap: 4px;
-    padding: 8px;
-    flex-wrap: wrap;
-  }
-
-  .article-preview-toolbar {
-    gap: 4px;
-    padding: 8px;
-  }
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--ws-color-border-secondary);
+  background: var(--ws-color-surface-2);
 }
 
 .md-ln-wrap {
   display: flex;
   flex: 1;
-  height: 100%;
   min-height: 0;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--ws-color-border-secondary);
   border-radius: var(--ws-radius-md);
   overflow: hidden;
-  background: #FFFFFF;
+  background: var(--ws-color-surface);
 }
 
 .md-ln-gutter {
   overflow: hidden;
   padding: 12px 8px 12px 4px;
-  background: rgba(0, 0, 0, 0.02);
-  border-right: 1px solid rgba(0,0,0,0.04);
+  background: var(--ws-color-surface-2);
+  border-right: 1px solid var(--ws-color-border-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
+  font-size: var(--ws-text-sm);
   color: var(--ws-color-text-tertiary);
   user-select: none;
   transition: width 0.15s ease;
@@ -330,32 +262,17 @@
   min-height: 0;
 }
 
-.md-ln-editor .ant-input-textarea {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-}
-
-.md-ln-editor textarea.ant-input {
+.md-ln-editor textarea {
   flex: 1;
   min-height: 0;
   border: 0;
   border-radius: 0;
   padding: 12px;
   line-height: 24px;
-  font-size: 14px;
+  font-size: var(--ws-text-sm);
   height: 100% !important;
   box-shadow: none !important;
   background: transparent;
-}
-
-.md-ln-editor .ant-input-data-count {
-  display: none;
 }
 
 .article-preview-card {
@@ -366,13 +283,13 @@
   min-height: 0;
 }
 
-.article-preview-card > .ant-card-body {
+.article-preview-card > .article-preview-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 0 !important;
+  padding: 0;
 }
 
 .article-preview-toolbar {
@@ -380,57 +297,82 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-  background: #FAFAFA;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
+  background: var(--ws-color-surface-2);
 }
 
 .article-preview-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
-  background: #FAFAFA;
-}
-
-.article-editor-toolbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-  background: #FAFAFA;
+  background: var(--ws-color-surface);
 }
 
-.article-editor-toolbar-label {
-  font-size: 12px;
-}
-
-.article-editor-toolbar-btn {
-  padding: 0 6px;
-}
-
-.article-editor-footer {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(0,0,0,0.04);
-  background: #FAFAFA;
-}
-
-/* Actions card at bottom */
 .article-edit-actions-card {
   position: sticky;
   bottom: 0;
   z-index: 10;
-  background: var(--ws-color-surface-2) !important;
-  border-top: 1px solid rgba(0,0,0,0.04);
-  border-radius: 0 0 var(--ws-radius-lg) var(--ws-radius-lg);
+  border: 1px solid var(--ws-color-border);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-color-surface);
 }
 
-.article-edit-actions-card .ant-card-body {
-  padding: 10px 16px !important;
+.article-edit-actions-inner {
+  padding: 9px 14px;
+}
+
+@media (max-width: 1200px) {
+  .article-edit-editor-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    overflow-y: auto;
+  }
+
+  .article-edit-editor-grid.article-edit-editor-grid-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .article-edit-editor-side {
+    height: auto;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .article-edit-editor-main {
+    height: auto;
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 992px) {
+  .article-edit-content-row {
+    flex-direction: column;
+  }
+
+  .article-edit-panel-col {
+    flex: 1 1 auto !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .article-edit-editor-main {
+    min-height: 420px;
+  }
+
+  .article-editor-body {
+    padding: 8px;
+  }
+
+  .article-editor-toolbar {
+    gap: 4px;
+    padding: 8px;
+    flex-wrap: wrap;
+  }
+
+  .article-preview-toolbar {
+    gap: 4px;
+    padding: 8px;
+  }
 }

@@ -3,11 +3,24 @@
  */
 
 import React from "react";
-import { Modal, Row, Col, Tag, Button, Typography } from "antd";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import dayjs from "dayjs";
 import { UserDetailModalProps } from "../types";
 
-const { Text } = Typography;
+const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
+    <div className="text-xs text-text-tertiary">{label}</div>
+    <div className="text-sm text-text-base">{value}</div>
+  </div>
+);
 
 const UserDetailModal: React.FC<UserDetailModalProps> = ({
   visible,
@@ -17,106 +30,86 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
 }) => {
   if (!currentUser) return null;
 
-  const renderUserDetail = () => {
-    return (
-      <div>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>ID：</Text>
-            <Text>{currentUser.id}</Text>
-          </Col>
-          <Col span={12}>
-            <Text strong>用户名：</Text>
-            <Text>{currentUser.username || "无"}</Text>
-          </Col>
-        </Row>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>学号：</Text>
-            <Text>{currentUser.student_id || "无"}</Text>
-          </Col>
-          <Col span={12}>
-            <Text strong>姓名：</Text>
-            <Text>{currentUser.full_name}</Text>
-          </Col>
-        </Row>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>学年：</Text>
-            {currentUser.study_year ? (
-              <Tag color="blue">{currentUser.study_year}</Tag>
-            ) : (
-              <Text>无</Text>
-            )}
-          </Col>
-          <Col span={12}>
-            <Text strong>班级：</Text>
-            {currentUser.class_name ? (
-              <Tag color="green">{currentUser.class_name}</Tag>
-            ) : (
-              <Text>无</Text>
-            )}
-          </Col>
-        </Row>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>角色：</Text>
-            <Tag color="purple">{currentUser.role_code}</Tag>
-          </Col>
-          <Col span={12}>
-            <Text strong>状态：</Text>
-            <Tag color={currentUser.is_active ? "success" : "error"}>
-              {currentUser.is_active ? "活跃" : "停用"}
-            </Tag>
-          </Col>
-        </Row>
-        <Row gutter={16} className="mb-4">
-          <Col span={12}>
-            <Text strong>创建时间：</Text>
-            <Text>
-              {currentUser.created_at
-                ? dayjs(currentUser.created_at).format("YYYY-MM-DD HH:mm")
-                : "无"}
-            </Text>
-          </Col>
-          <Col span={12}>
-            <Text strong>更新时间：</Text>
-            <Text>
-              {currentUser.updated_at
-                ? dayjs(currentUser.updated_at).format("YYYY-MM-DD HH:mm")
-                : "无"}
-            </Text>
-          </Col>
-        </Row>
-      </div>
-    );
-  };
-
   return (
-    <Modal
-      title="用户详情"
-      open={visible}
-      onCancel={onCancel}
-      footer={[
-        <Button key="close" onClick={onCancel}>
-          关闭
-        </Button>,
-        <Button
-          key="edit"
-          type="primary"
-          onClick={() => {
-            onCancel();
-            onEdit(currentUser);
-          }}
-        >
-          编辑
-        </Button>,
-      ]}
-      width={600}
-      styles={{ body: { padding: 24 } }}
-    >
-      {renderUserDetail()}
-    </Modal>
+    <Dialog open={visible} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>用户详情</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <DetailItem label="ID" value={currentUser.id} />
+          <DetailItem label="用户名" value={currentUser.username || "无"} />
+          <DetailItem label="学号" value={currentUser.student_id || "无"} />
+          <DetailItem label="姓名" value={currentUser.full_name || "无"} />
+          <DetailItem
+            label="学年"
+            value={
+              currentUser.study_year ? (
+                <Badge variant="primarySubtle">
+                  {currentUser.study_year}
+                </Badge>
+              ) : (
+                "无"
+              )
+            }
+          />
+          <DetailItem
+            label="班级"
+            value={
+              currentUser.class_name ? (
+                <Badge variant="success">
+                  {currentUser.class_name}
+                </Badge>
+              ) : (
+                "无"
+              )
+            }
+          />
+          <DetailItem
+            label="角色"
+            value={
+              <Badge variant="violet">
+                {currentUser.role_code}
+              </Badge>
+            }
+          />
+          <DetailItem
+            label="状态"
+            value={
+              <Badge
+                variant={currentUser.is_active ? "success" : "danger"}
+              >
+                {currentUser.is_active ? "活跃" : "停用"}
+              </Badge>
+            }
+          />
+          <DetailItem
+            label="创建时间"
+            value={currentUser.created_at ? dayjs(currentUser.created_at).format("YYYY-MM-DD HH:mm") : "无"}
+          />
+          <DetailItem
+            label="更新时间"
+            value={currentUser.updated_at ? dayjs(currentUser.updated_at).format("YYYY-MM-DD HH:mm") : "无"}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            关闭
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              onCancel();
+              onEdit(currentUser);
+            }}
+          >
+            编辑
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

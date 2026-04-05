@@ -1,12 +1,14 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect } from "react";
-import { Row, Col, Button, message } from "antd";
+
+import { Button } from "@/components/ui/button";
 import {
-  ExperimentOutlined,
-  FormOutlined,
-  NodeIndexOutlined,
-  CodeOutlined,
-  SettingOutlined,
-} from "@ant-design/icons";
+  FlaskConical,
+  ClipboardEdit,
+  GitMerge,
+  Code,
+  Settings,
+} from "lucide-react";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
 import AgentConfigModal from "./components/AgentConfigModal";
@@ -26,7 +28,7 @@ const AdminITTechnology: React.FC = () => {
       key: 'it_dianming',
       title: '随机点名',
       description: '班级名单管理与随机抽取工具',
-      icon: <ExperimentOutlined />,
+      icon: <FlaskConical className="h-5 w-5" />,
       color: "var(--ws-color-primary)",
       hasManager: true,
     },
@@ -34,7 +36,7 @@ const AdminITTechnology: React.FC = () => {
       key: 'it_python_lab',
       title: 'Python 实验室',
       description: '实验模板管理与前台实验台入口',
-      icon: <CodeOutlined />,
+      icon: <Code className="h-5 w-5" />,
       color: "var(--ws-color-info)",
       hasManager: true,
       managerLabel: "管理智能体",
@@ -43,7 +45,7 @@ const AdminITTechnology: React.FC = () => {
       key: 'it_survey',
       title: '问卷调查',
       description: '在线问卷创建与数据收集分析',
-      icon: <FormOutlined />,
+      icon: <ClipboardEdit className="h-5 w-5" />,
       color: "var(--ws-color-warning)",
       hasManager: false, // 暂未实现
     },
@@ -51,7 +53,7 @@ const AdminITTechnology: React.FC = () => {
       key: 'it_mindmap',
       title: '思维导图',
       description: '在线脑图编辑与知识梳理',
-      icon: <NodeIndexOutlined />,
+      icon: <GitMerge className="h-5 w-5" />,
       color: "var(--ws-color-success)",
       hasManager: false, // 暂未实现
     },
@@ -82,9 +84,9 @@ const AdminITTechnology: React.FC = () => {
         value: { enabled: checked }
       });
       setFlags(prev => ({ ...prev, [`${key}_enabled`]: checked }));
-      message.success(`${checked ? '已启用' : '已禁用'}应用`);
+      showMessage.success(`${checked ? '已启用' : '已禁用'}应用`);
     } catch (_error) {
-      message.error("操作失败");
+      showMessage.error("操作失败");
     } finally {
       setLoading(prev => ({ ...prev, [key]: false }));
     }
@@ -92,9 +94,9 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'dianming-manager') {
     return (
-      <AdminPage padding={24} scrollable={false}>
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
         <div className="mb-4 shrink-0">
-          <Button type="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
+          <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
@@ -106,10 +108,10 @@ const AdminITTechnology: React.FC = () => {
   }
 
   return (
-    <AdminPage padding={24}>
-      <Row gutter={[16, 16]}>
+    <AdminPage padding="var(--ws-panel-padding)">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {appConfigs.map(app => (
-          <Col xs={24} sm={12} md={8} lg={6} key={app.key}>
+          <div key={app.key}>
             <AdminAppCard
               title={app.title}
               description={app.description}
@@ -119,7 +121,7 @@ const AdminITTechnology: React.FC = () => {
               onToggle={(checked) => handleToggle(app.key, checked)}
               color={app.color}
               actionLabel={(app as any).managerLabel || (app.hasManager ? "管理" : undefined)}
-              actionIcon={app.hasManager ? <SettingOutlined /> : undefined}
+              actionIcon={app.hasManager ? <Settings className="h-4 w-4" /> : undefined}
               onAction={
                 app.hasManager
                   ? () => {
@@ -129,9 +131,9 @@ const AdminITTechnology: React.FC = () => {
                   : undefined
               }
             />
-          </Col>
+          </div>
         ))}
-      </Row>
+      </div>
       <AgentConfigModal visible={agentConfigVisible} onClose={() => setAgentConfigVisible(false)} />
     </AdminPage>
   );

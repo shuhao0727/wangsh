@@ -1,13 +1,67 @@
 import React, { useMemo, useState } from "react";
-import { Button, Input, Table, Typography } from "antd";
-import { ExpandOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  type ColumnDef,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Maximize2, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Input } from "@/components/ui/input";
 import type { RunnerState } from "../../hooks/useDapRunner";
 
-const { Text } = Typography;
+type ColumnLike = {
+  title?: React.ReactNode;
+  dataIndex?: string;
+  key?: string;
+  width?: number | string;
+  ellipsis?: boolean;
+  render?: (value: any, record: any, index: number) => React.ReactNode;
+};
 
-function CloseXIcon(props: any) {
-  return <span {...props}>x</span>;
-}
+const CompactDataTable: React.FC<{
+  rows: any[];
+  columns: ColumnLike[];
+  rowKey: string;
+  emptyText: string;
+}> = ({ rows, columns, rowKey, emptyText }) => {
+  const tableColumns = useMemo<ColumnDef<any>[]>(
+    () =>
+      columns.map((col, index): ColumnDef<any> => ({
+        id: String(col.key || col.dataIndex || index),
+        header: () => <>{col.title ?? ""}</>,
+        accessorFn: (row: any) => (col.dataIndex ? row?.[col.dataIndex] : row),
+        size: typeof col.width === "number" ? col.width : undefined,
+        meta: {
+          className: col.ellipsis ? "max-w-[260px] truncate" : undefined,
+        },
+        cell: ({ row }) => {
+          const raw = col.dataIndex ? row.original?.[col.dataIndex] : undefined;
+          const rendered =
+            typeof col.render === "function"
+              ? col.render(raw, row.original, row.index)
+              : raw;
+          return rendered as React.ReactNode;
+        },
+      })),
+    [columns],
+  );
+
+  const table = useReactTable({
+    data: rows.map((row, index) => ({ ...row, __rowKey: String(row?.[rowKey] ?? index) })),
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => row.__rowKey,
+  });
+
+  return (
+    <DataTable
+      table={table}
+      tableClassName="text-xs"
+      emptyState={<div className="h-12 text-center text-text-tertiary">{emptyText}</div>}
+    />
+  );
+};
 
 export function DebugTab(props: {
   runner: RunnerState;
@@ -43,7 +97,7 @@ export function DebugTab(props: {
                 const name = String(r?.name ?? v ?? "");
                 const changed = changedSet.has(name);
                 const content = typeof baseRender === "function" ? baseRender(v, r, idx) : name;
-                return changed ? <span style={{ fontWeight: 700, color: "#0EA5E9" }}>{content}</span> : content;
+                return changed ? <span className="font-bold text-primary">{content}</span> : content;
               },
             };
           })
@@ -60,42 +114,45 @@ export function DebugTab(props: {
         title: "",
         key: "actions",
         width: 50,
-        render: (_: any, r: { expr: string }) => <Button size="small" type="text" danger icon={<CloseXIcon />} onClick={() => onRemoveWatch(r.expr)} />,
+        render: (_: any, r: { expr: string }) => (
+          <Button variant="destructive" size="sm" onClick={() => onRemoveWatch(r.expr)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        ),
       },
     ],
     [onRemoveWatch]
   );
 
   return (
-    <div style={{ height: "100%", overflowY: "auto" }}>
+    <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-3">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <Text className="font-semibold">变量</Text>
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-semibold">变量</span>
           {showExpandButton !== false ? (
-            <Button size="small" type="text" icon={<ExpandOutlined />} onClick={onExpand}>
+            <Button variant="ghost" size="sm" onClick={onExpand}>
+              <Maximize2 className="h-4 w-4" />
               调试器放大
             </Button>
           ) : null}
         </div>
-        <Table
-          size="small"
-          pagination={false}
-          dataSource={runner.variables}
-          columns={enhancedVariableColumns}
+        <CompactDataTable
+          rows={Array.isArray(runner.variables) ? runner.variables : []}
+          columns={Array.isArray(enhancedVariableColumns) ? (enhancedVariableColumns as ColumnLike[]) : []}
           rowKey="name"
-          locale={{ emptyText: "暂无变量" }}
+          emptyText="暂无变量"
         />
-        <Text className="font-semibold">表达式</Text>
+        <span className="font-semibold">表达式</span>
         <div className="flex gap-2">
           <Input
             id="pythonlab-watch-expression-input"
             name="pythonlab-watch-expression-input"
             aria-label="调试表达式输入框"
-            size="small"
             placeholder="添加表达式..."
             value={watchInput}
             onChange={(e) => setWatchInput(e.target.value)}
-            onPressEnter={() => {
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
               if (watchInput.trim()) {
                 onAddWatch(watchInput.trim());
                 setWatchInput("");
@@ -103,26 +160,26 @@ export function DebugTab(props: {
             }}
           />
           <Button
-            size="small"
-            icon={<PlusOutlined />}
+            variant="outline"
+            size="sm"
             onClick={() => {
               if (watchInput.trim()) {
                 onAddWatch(watchInput.trim());
                 setWatchInput("");
               }
             }}
-          />
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
-        <Table
-          size="small"
-          pagination={false}
-          dataSource={runner.watchResults}
-          columns={watchColumns}
+        <CompactDataTable
+          rows={Array.isArray(runner.watchResults) ? runner.watchResults : []}
+          columns={watchColumns as ColumnLike[]}
           rowKey="expr"
-          locale={{ emptyText: "暂无表达式" }}
+          emptyText="暂无表达式"
         />
         {!runner.watchResults.length && runner.watchExprs.length > 0 && (
-          <div className="text-xs" style={{ padding: "8px 0", color: "rgba(0,0,0,0.45)", textAlign: "center" }}>等待下次暂停时计算...</div>
+          <div className="py-2 text-center text-xs text-text-tertiary">等待下次暂停时计算...</div>
         )}
       </div>
     </div>

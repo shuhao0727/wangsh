@@ -1,8 +1,25 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState } from "react";
-import { Modal, Select, Alert, Space, message } from "antd";
 import { xbkDataApi } from "@services";
-
-const { Option } = Select;
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface XbkDeleteModalProps {
   open: boolean;
@@ -29,7 +46,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
 
   const handleDelete = async () => {
     if (!filters.year || !filters.term) {
-      message.error("删除操作必须先在上方筛选栏选择具体的年份和学期");
+      showMessage.error("删除操作必须先在上方筛选栏选择具体的年份和学期");
       return;
     }
     setDeleting(true);
@@ -41,47 +58,59 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
         grade: filters.grade,
         class_name: filters.class_name,
       });
-      message.success(`删除完成，共 ${res.deleted} 条`);
+      showMessage.success(`删除完成，共 ${res.deleted} 条`);
       onSuccess();
     } catch (e: any) {
-      message.error(getErrorMsg(e, "删除失败（需要管理员登录）"));
+      showMessage.error(getErrorMsg(e, "删除失败（需要管理员登录）"));
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <Modal
-      title="删除数据（彻底删除）"
-      open={open}
-      onCancel={onCancel}
-      onOk={handleDelete}
-      confirmLoading={deleting}
-      okButtonProps={{ danger: true }}
-      okText="确认删除"
-    >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-        <Alert
-          type="warning"
-          showIcon
-          message="该操作为物理删除，不可恢复"
-          description="删除“学生名单/选课目录”时会同时删除其关联的选课结果，避免出现孤立数据。"
-        />
-        
-        <div>
-          <div className="ws-modal-label">删除范围</div>
-          <Select value={deleteType} style={{ width: "100%" }} onChange={setDeleteType}>
-            <Option value="all">全部</Option>
-            <Option value="students">学生名单</Option>
-            <Option value="courses">选课目录</Option>
-            <Option value="selections">选课结果</Option>
-          </Select>
-        </div>
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>删除数据（彻底删除）</DialogTitle>
+          <DialogDescription className="sr-only">
+            根据当前筛选条件执行不可恢复的物理删除，请确认删除范围后再提交。
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Alert className="border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)] text-[var(--ws-color-warning)] [&>svg]:text-[var(--ws-color-warning)]">
+            <AlertTitle>该操作为物理删除，不可恢复</AlertTitle>
+            <AlertDescription>删除“学生名单/选课目录”时会同时删除其关联的选课结果，避免出现孤立数据。</AlertDescription>
+          </Alert>
 
-        <div className="ws-modal-hint">
-          将按当前筛选条件删除数据：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+          <div>
+            <Label className="ws-modal-label">删除范围</Label>
+            <Select value={deleteType} onValueChange={(v) => setDeleteType(v as typeof deleteType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="students">学生名单</SelectItem>
+                <SelectItem value="courses">选课目录</SelectItem>
+                <SelectItem value="selections">选课结果</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="ws-modal-hint">
+            将按当前筛选条件删除数据：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+          </div>
         </div>
-      </Space>
-    </Modal>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={deleting}>
+            取消
+          </Button>
+          <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            确认删除
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

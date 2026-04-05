@@ -7,19 +7,19 @@
 .it-player-container {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(circle at center, #1f1f1f 0%, #000000 100%);
-  z-index: 1000;
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--ws-color-code-bg) 88%, black) 0%, #000 100%);
+  z-index: var(--ws-z-modal);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 40px;
+  gap: var(--ws-space-5);
 }
 
 .it-player-name {
   font-size: clamp(64px, 12vw, 120px);
   font-weight: 900;
-  color: #FFFFFF;
+  color: var(--ws-color-surface);
   letter-spacing: -0.02em;
   text-align: center;
   text-shadow: 0 0 60px rgba(14, 165, 233, 0.6);
@@ -47,13 +47,13 @@
 .it-player-btn {
   height: 64px !important;
   padding: 0 48px !important;
-  font-size: 20px !important;
+  font-size: var(--ws-text-lg) !important;
   border-radius: 32px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   border: none !important;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ws-space-2);
 }
 
 .it-player-btn-start {
@@ -78,6 +78,6 @@
   .it-player-btn {
     height: 56px !important;
     padding: 0 32px !important;
-    font-size: 18px !important;
+    font-size: var(--ws-text-md) !important;
   }
 }

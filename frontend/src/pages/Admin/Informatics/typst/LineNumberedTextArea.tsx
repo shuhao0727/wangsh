@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { Input } from "antd";
-
-const { TextArea } = Input;
+import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   value: string;
@@ -13,6 +11,19 @@ type Props = {
 
 export default function LineNumberedTextArea({ value, placeholder, onChange, onKeyDown, textareaRef }: Props) {
   const gutterRef = useRef<HTMLDivElement | null>(null);
+  const localTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const bindTextareaRef = (node: HTMLTextAreaElement | null) => {
+    localTextareaRef.current = node;
+    if (textareaRef) {
+      textareaRef.current = node
+        ? {
+            textArea: node,
+            resizableTextArea: { textArea: node },
+          }
+        : null;
+    }
+  };
 
   const lines = useMemo(() => {
     const n = Math.max(1, (value || "").split("\n").length);
@@ -27,7 +38,7 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
   }, [lines.length]);
 
   useEffect(() => {
-    const ta: HTMLTextAreaElement | null = textareaRef?.current?.resizableTextArea?.textArea || null;
+    const ta = localTextareaRef.current;
     if (!ta) return;
     const sync = () => {
       if (!gutterRef.current) return;
@@ -48,16 +59,15 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
         ))}
       </div>
       <div className="typst-ln-editor">
-        <TextArea
-          ref={textareaRef as any}
+        <Textarea
+          ref={bindTextareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="text-sm font-mono"
+          className="h-full min-h-0 resize-none border-0 bg-transparent text-sm font-mono shadow-none focus-visible:ring-0"
           style={{
             height: "100%",
-            resize: "none",
             lineHeight: "22px",
           }}
         />
@@ -65,4 +75,3 @@ export default function LineNumberedTextArea({ value, placeholder, onChange, onK
     </div>
   );
 }
-

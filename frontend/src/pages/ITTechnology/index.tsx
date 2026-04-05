@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Breadcrumb, Alert, Button, Skeleton } from 'antd';
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  HomeOutlined, ReloadOutlined, ArrowRightOutlined,
-  SoundOutlined, CodeOutlined, FormOutlined, BranchesOutlined
-} from '@ant-design/icons';
+  Home, RotateCcw,
+  Volume2, Code, FileText, GitBranch, ChevronRight, TriangleAlert
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
 import ClassSelector from './ClassSelector';
@@ -11,6 +13,7 @@ import { DianmingClass } from '@/services/xxjs/dianming';
 import { featureFlagsApi } from '@/services/system/featureFlags';
 import { logger } from '@services/logger';
 import EmptyState from "@components/Common/EmptyState";
+import AppLauncherCard from "@components/Common/AppLauncherCard";
 import './ITTechnology.css';
 
 type ViewState = 'launcher' | 'rollcall-selector' | 'rollcall-player';
@@ -19,36 +22,36 @@ const APPS = [
   {
     key: 'it_dianming_enabled',
     title: '随机点名',
-    description: '公平公正的随机抽取工具，支持班级名单导入与特效展示。',
-    icon: <SoundOutlined />,
-    color: '#0EA5E9', bg: 'rgba(14,165,233,0.08)', ring: 'rgba(14,165,233,0.2)',
+    description: '随机抽取学生，支持名单导入。',
+    icon: <Volume2 className="h-5 w-5" />,
+    color: 'var(--ws-color-primary)', bg: 'color-mix(in srgb, var(--ws-color-primary) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-primary) 22%, transparent)',
     action: 'dianming',
     available: true,
   },
   {
     key: 'it_python_lab_enabled',
     title: 'Python 实验室',
-    description: '在线 Python 编程环境，可视化流程图与代码执行。',
-    icon: <CodeOutlined />,
-    color: '#10B981', bg: 'rgba(16,185,129,0.08)', ring: 'rgba(16,185,129,0.2)',
+    description: '在线编程与流程可视化。',
+    icon: <Code className="h-5 w-5" />,
+    color: 'var(--ws-color-success)', bg: 'color-mix(in srgb, var(--ws-color-success) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-success) 22%, transparent)',
     action: 'python',
     available: true,
   },
   {
     key: 'it_survey_enabled',
     title: '问卷调查',
-    description: '创建与分发在线问卷，实时收集学生反馈数据。',
-    icon: <FormOutlined />,
-    color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', ring: 'rgba(139,92,246,0.2)',
+    description: '在线发放问卷并收集反馈。',
+    icon: <FileText className="h-5 w-5" />,
+    color: 'var(--ws-color-purple)', bg: 'color-mix(in srgb, var(--ws-color-purple) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-purple) 22%, transparent)',
     action: 'survey',
     available: false,
   },
   {
     key: 'it_mindmap_enabled',
     title: '思维导图',
-    description: '结构化您的创意，在线绘制流程图与知识图谱。',
-    icon: <BranchesOutlined />,
-    color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', ring: 'rgba(245,158,11,0.2)',
+    description: '在线绘制导图与流程图。',
+    icon: <GitBranch className="h-5 w-5" />,
+    color: 'var(--ws-color-warning)', bg: 'color-mix(in srgb, var(--ws-color-warning) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-warning) 22%, transparent)',
     action: 'mindmap',
     available: false,
   },
@@ -94,22 +97,56 @@ const ITTechnologyPage: React.FC = () => {
     setCurrentClass(record); setView('rollcall-player');
   };
 
-  const renderBreadcrumb = () => (
-    <Breadcrumb className="mb-4"
-      items={[
-        {
-          title: <><HomeOutlined /> 首页</>,
-          href: "#",
-          onClick: (e) => { e.preventDefault(); setView('launcher'); setCurrentClass(null); }
+  const renderBreadcrumb = () => {
+    const crumbs = [
+      {
+        key: "home",
+        label: "首页",
+        onClick: () => {
+          setView('launcher');
+          setCurrentClass(null);
         },
-        ...(view !== 'launcher' ? [{
-          title: '随机点名', href: "#",
-          onClick: (e: React.MouseEvent) => { e.preventDefault(); setView('rollcall-selector'); setCurrentClass(null); }
-        }] : []),
-        ...(view === 'rollcall-player' && currentClass ? [{ title: currentClass.class_name }] : [])
-      ]}
-    />
-  );
+        icon: <Home className="h-4 w-4" />,
+      },
+      ...(view !== 'launcher'
+        ? [
+            {
+              key: "dianming",
+              label: "随机点名",
+              onClick: () => {
+                setView('rollcall-selector');
+                setCurrentClass(null);
+              },
+            },
+          ]
+        : []),
+      ...(view === 'rollcall-player' && currentClass
+        ? [{ key: "class", label: currentClass.class_name }]
+        : []),
+    ];
+
+    return (
+      <div className="mb-3 flex items-center gap-1 text-sm text-text-secondary">
+        {crumbs.map((item, idx) => (
+          <React.Fragment key={item.key}>
+            {idx > 0 ? <ChevronRight className="h-4 w-4 text-text-tertiary" /> : null}
+            {item.onClick ? (
+              <button
+                type="button"
+                onClick={item.onClick}
+                className="appearance-none border-0 inline-flex items-center gap-1 rounded-md px-[var(--ws-space-1)] py-[calc(var(--ws-space-1)/2)] text-sm transition-colors hover:bg-primary-soft hover:text-primary"
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-text-base">{item.icon}{item.label}</span>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
 
   if (view === 'rollcall-player' && currentClass) {
     return <RollCallPlayer record={currentClass} onBack={() => { setView('rollcall-selector'); setCurrentClass(null); }} />;
@@ -117,9 +154,16 @@ const ITTechnologyPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="w-full flex-1 mx-auto px-6 py-8" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-          {[1,2,3,4].map(i => <div key={i} className="rounded-2xl p-6 bg-surface-2"><Skeleton active /></div>)}
+      <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
+        <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} className="rounded-xl p-[var(--ws-panel-padding)] bg-surface-2 space-y-[var(--ws-space-2)]">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-8/12" />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -127,10 +171,18 @@ const ITTechnologyPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="w-full flex-1 mx-auto px-6 py-8" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
-        <Alert type="error" message="加载失败" description={error} showIcon
-          action={<Button size="small" type="primary" onClick={loadFlags} icon={<ReloadOutlined />}>重试</Button>}
-        />
+      <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)]" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
+        <Alert variant="destructive" className="border border-destructive/20 bg-destructive/5">
+          <TriangleAlert className="h-4 w-4" />
+          <AlertTitle>加载失败</AlertTitle>
+          <AlertDescription className="mt-1 flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
+            <span>{error}</span>
+            <Button size="sm" variant="outline" onClick={loadFlags}>
+              <RotateCcw className="h-4 w-4" />
+              重试
+            </Button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -138,7 +190,7 @@ const ITTechnologyPage: React.FC = () => {
   const visibleApps = APPS.filter(app => flags[app.key]);
 
   return (
-    <div className="w-full flex-1 mx-auto px-6 py-8 flex flex-col" style={{ maxWidth: "var(--ws-page-max-width-wide)" }}>
+    <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)] flex flex-col" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
       {view === 'launcher' ? (
         <>
           {visibleApps.length === 0 ? (
@@ -146,36 +198,22 @@ const ITTechnologyPage: React.FC = () => {
               <EmptyState description="暂无可用应用，请联系管理员在后台开启。" />
             </div>
           ) : (
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
               {visibleApps.map(app => (
-                <button
+                <AppLauncherCard
                   key={app.key}
-                  className="it-app-card relative flex flex-col items-center text-center rounded-2xl px-5 py-5 border-0 cursor-pointer w-full bg-surface-2"
-                  style={{ '--app-bg': app.bg, '--app-ring': app.ring } as React.CSSProperties}
+                  title={app.title}
+                  description={app.description}
+                  icon={app.icon}
+                  color={app.color}
+                  bg={app.bg}
+                  ring={app.ring}
+                  disabled={!app.available}
                   onClick={() => {
-                    if (!app.available) return;
                     if (app.action === 'dianming') setView('rollcall-selector');
                     if (app.action === 'python') navigate('/it-technology/python-lab');
                   }}
-                >
-                  {/* 图标 */}
-                  <div className="it-app-icon flex items-center justify-center w-14 h-14 rounded-2xl mb-3 transition-transform duration-150 text-xl"
-                    style={{ background: app.bg, color: app.color }}>
-                    {app.icon}
-                  </div>
-                  {/* 标题 */}
-                  <div className="font-semibold text-base text-text-base mb-2">{app.title}</div>
-                  {/* 描述 */}
-                  <div className="text-sm text-text-secondary leading-relaxed mb-3">{app.description}</div>
-                  {/* 按钮 */}
-                  {app.available ? (
-                    <div className="flex items-center gap-1 text-sm font-medium" style={{ color: app.color }}>
-                      立即使用 <ArrowRightOutlined className="it-app-arrow text-xs transition-transform duration-150" />
-                    </div>
-                  ) : (
-                    <div className="text-xs text-text-tertiary">敬请期待</div>
-                  )}
-                </button>
+                />
               ))}
             </div>
           )}
@@ -183,7 +221,7 @@ const ITTechnologyPage: React.FC = () => {
       ) : (
         <div className="flex flex-col flex-1">
           {renderBreadcrumb()}
-          <div className="flex-1 rounded-2xl bg-white p-6">
+          <div className="flex-1 rounded-xl bg-surface p-[var(--ws-panel-padding)]">
             <ClassSelector onSelect={handleSelectClass} />
           </div>
         </div>

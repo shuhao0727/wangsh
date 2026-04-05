@@ -17,12 +17,23 @@ export function decidePythonLabLaunchPlan(params: {
     needsStdin?: boolean;
 }): PythonLabLaunchPlan {
     const enabled = Number(params.enabledBreakpointCount || 0);
+    const runtime = String(params.pythonlabRuntime || "").toLowerCase();
 
     if (enabled > 0) {
-        return { mode: "debug", runnerKind: "dap", debugFallbackReason: null };
+        if (runtime === "dap") {
+            return { mode: "debug", runnerKind: "dap", debugFallbackReason: null };
+        }
+        if (params.canFrontendDebug) {
+            return { mode: "debug", runnerKind: "pyodide", debugFallbackReason: null };
+        }
+        return {
+            mode: "debug",
+            runnerKind: "dap",
+            debugFallbackReason: "当前环境不支持前端断点调试，已切换为后端调试",
+        };
     }
-    if (String(params.pythonlabRuntime || "").toLowerCase() === "pyodide") {
-        return { mode: "plain", runnerKind: "pyodide", debugFallbackReason: null };
+    if (runtime === "dap") {
+        return { mode: "plain", runnerKind: "dap", debugFallbackReason: null };
     }
-    return { mode: "plain", runnerKind: "dap", debugFallbackReason: null };
+    return { mode: "plain", runnerKind: "pyodide", debugFallbackReason: null };
 }

@@ -156,9 +156,9 @@ async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivit
     activity.started_at = now
     await db.commit()
     await db.refresh(activity)
-    publish("student", {"type": "activity_started", "activity_id": activity.id})
-    publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
-    publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
+    await publish("student", {"type": "activity_started", "activity_id": activity.id})
+    await publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    await publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
     return activity
 
 
@@ -186,9 +186,9 @@ async def end_activity(
             r.is_correct = _check_correct(r.answer, activity.correct_answer, activity.allow_multiple)
     await db.commit()
     await db.refresh(activity)
-    publish("student", {"type": "activity_ended", "activity_id": activity.id})
-    publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
-    publish("admin_global", {"type": "activity_ended", "activity_id": activity.id})
+    await publish("student", {"type": "activity_ended", "activity_id": activity.id})
+    await publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
+    await publish("admin_global", {"type": "activity_ended", "activity_id": activity.id})
     await _run_auto_analysis_for_ended_activity(db, activity.id)
     await db.refresh(activity)
     return activity
@@ -215,9 +215,9 @@ async def restart_activity(db: AsyncSession, activity_id: int) -> ClassroomActiv
     activity.analysis_error = None
     await db.commit()
     await db.refresh(activity)
-    publish("student", {"type": "activity_started", "activity_id": activity.id})
-    publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
-    publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
+    await publish("student", {"type": "activity_started", "activity_id": activity.id})
+    await publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
+    await publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
     return activity
 
 
@@ -259,10 +259,10 @@ async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answ
     db.add(resp)
     await db.commit()
     await db.refresh(resp)
-    publish(f"admin_{activity.created_by}", {
+    await publish(f"admin_{activity.created_by}", {
         "type": "new_response", "activity_id": activity_id,
     })
-    publish("admin_global", {"type": "new_response", "activity_id": activity_id})
+    await publish("admin_global", {"type": "new_response", "activity_id": activity_id})
     return resp
 
 

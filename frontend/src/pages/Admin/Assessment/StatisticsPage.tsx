@@ -1,43 +1,36 @@
 /**
  * 答题统计页 - /admin/assessment/:id/statistics
  */
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Table,
-  Tag,
-  Pagination,
-  Card,
-  Modal,
-  Descriptions,
-  Collapse,
-  Spin,
-  Select,
-  Input,
-  Popconfirm,
-  message,
-  Row,
-  Col,
-  Tabs,
-} from "antd";
+  type ColumnDef,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import {
-  ArrowLeftOutlined,
-  TeamOutlined,
-  CheckCircleOutlined,
-  TrophyOutlined,
-  BarChartOutlined,
-  EyeOutlined,
-  UserOutlined,
-  RedoOutlined,
-  SearchOutlined,
-  DownloadOutlined,
-  ExperimentOutlined,
-} from "@ant-design/icons";
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Download,
+  Eye,
+  FlaskConical,
+  Loader2,
+  Redo,
+  Search,
+  Trophy,
+  User,
+  Users,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
 import EmptyState from "@components/Common/EmptyState";
 import RadarChart from "@components/RadarChart";
-import { BasicProfileView, AdvancedProfileView, AdvancedProfileEmpty } from "@components/ProfileView";
+import {
+  BasicProfileView,
+  AdvancedProfileView,
+  AdvancedProfileEmpty,
+} from "@components/ProfileView";
 import {
   assessmentSessionApi,
   assessmentConfigApi,
@@ -52,6 +45,53 @@ import type {
   AnswerDetailResponse,
   BasicProfileResponse,
 } from "@services/assessment";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DataTable, DataTablePagination } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+
+const FILTER_ALL = "__all__";
+
+type RadarPick =
+  | { type: "all" }
+  | { type: "class"; value: string }
+  | { type: "student"; value: number };
+
+type RadarOption = {
+  label: string;
+  value: string;
+  group: string;
+};
+
+const statusMap: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }> = {
+  in_progress: { label: "答题中", variant: "sky" },
+  submitted: { label: "已提交", variant: "warning" },
+  graded: { label: "已评分", variant: "success" },
+};
+
+const StatusTag: React.FC<{ status: string }> = ({ status }) => {
+  const item = statusMap[status] || {
+    label: status,
+    variant: "neutral" as const,
+  };
+  return <Badge variant={item.variant}>{item.label}</Badge>;
+};
 
 const StatisticsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,34 +102,28 @@ const StatisticsPage: React.FC = () => {
   const [configTitle, setConfigTitle] = useState("");
   const [stats, setStats] = useState<StatisticsResponse | null>(null);
 
-  // 筛选
   const [classNames, setClassNames] = useState<string[]>([]);
   const [filterClass, setFilterClass] = useState<string | undefined>();
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [searchText, setSearchText] = useState("");
   const [searchValue, setSearchValue] = useState("");
 
-  // 雷达图
-  type RadarPick = { type: "all" } | { type: "class"; value: string } | { type: "student"; value: number };
   const [radarLeft, setRadarLeft] = useState<RadarPick>({ type: "all" });
   const [radarRight, setRadarRight] = useState<RadarPick | null>(null);
   const [radarLeftData, setRadarLeftData] = useState<{ name: string; data: Record<string, number> } | null>(null);
   const [radarRightData, setRadarRightData] = useState<{ name: string; data: Record<string, number> } | null>(null);
   const [allGradedStudents, setAllGradedStudents] = useState<{ id: number; user_name: string; class_name: string | null }[]>([]);
 
-  // 学生列表
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
 
-  // 批量选择
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [batchRetesting, setBatchRetesting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // 弹窗
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState<SessionResultResponse | null>(null);
@@ -99,10 +133,13 @@ const StatisticsPage: React.FC = () => {
   const [advancedProfile, setAdvancedProfile] = useState<StudentProfile | null>(null);
   const [profileTab, setProfileTab] = useState<"basic" | "advanced">("basic");
   const [generatingProfile, setGeneratingProfile] = useState(false);
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
   const [configAgentId, setConfigAgentId] = useState<number | null>(null);
 
-  useEffect(() => { assessmentSessionApi.getClassNames(configId).then(setClassNames); }, [configId]);
+  useEffect(() => {
+    assessmentSessionApi.getClassNames(configId).then(setClassNames).catch(() => setClassNames([]));
+  }, [configId]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -114,67 +151,145 @@ const StatisticsPage: React.FC = () => {
       setStats(statsResp);
       setConfigTitle(configResp.title);
       setConfigAgentId(configResp.agent_id ?? null);
-    } catch (e: any) { message.error(e.message || "加载统计数据失败"); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      showMessage.error(e.message || "加载统计数据失败");
+    } finally {
+      setLoading(false);
+    }
   }, [configId, filterClass]);
 
   const loadSessions = useCallback(async () => {
     try {
       setListLoading(true);
       const resp: SessionListResponse = await assessmentSessionApi.getConfigSessions(configId, {
-        skip: (page - 1) * pageSize, limit: pageSize,
-        class_name: filterClass, status: filterStatus, search: searchValue || undefined,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        class_name: filterClass,
+        status: filterStatus,
+        search: searchValue || undefined,
       });
       setSessions(resp.items);
       setTotal(resp.total);
-    } catch (e: any) { message.error(e.message || "加载答题列表失败"); }
-    finally { setListLoading(false); }
+    } catch (e: any) {
+      showMessage.error(e.message || "加载答题列表失败");
+    } finally {
+      setListLoading(false);
+    }
   }, [configId, page, pageSize, filterClass, filterStatus, searchValue]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-  useEffect(() => { loadSessions(); }, [loadSessions]);
-  useEffect(() => { setPage(1); setSelectedRowKeys([]); }, [filterClass, filterStatus, searchValue]);
-
-  // 雷达图数据
   useEffect(() => {
-    assessmentSessionApi.getConfigSessions(configId, { limit: 100, status: "graded" })
-      .then(r => setAllGradedStudents(
-        r.items.filter(s => s.user_name).map(s => ({ id: s.id, user_name: s.user_name!, class_name: s.class_name }))
-      )).catch(() => {});
+    void loadStats();
+  }, [loadStats]);
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedRowKeys([]);
+  }, [filterClass, filterStatus, searchValue]);
+
+  useEffect(() => {
+    assessmentSessionApi
+      .getConfigSessions(configId, { limit: 100, status: "graded" })
+      .then((resp) =>
+        setAllGradedStudents(
+          resp.items
+            .filter((session) => session.user_name)
+            .map((session) => ({
+              id: session.id,
+              user_name: session.user_name!,
+              class_name: session.class_name,
+            })),
+        ),
+      )
+      .catch(() => {
+        setAllGradedStudents([]);
+      });
   }, [configId]);
 
-  const loadRadarPick = useCallback(async (pick: RadarPick): Promise<{ name: string; data: Record<string, number> } | null> => {
-    if (pick.type === "all") {
-      const s = await assessmentSessionApi.getStatistics(configId, {});
-      return { name: "全部数据", data: (s.knowledge_rates || {}) as Record<string, number> };
-    }
-    if (pick.type === "class") {
-      const s = await assessmentSessionApi.getStatistics(configId, { class_name: pick.value });
-      return { name: pick.value, data: (s.knowledge_rates || {}) as Record<string, number> };
-    }
-    if (pick.type === "student") {
-      const p = await assessmentSessionApi.getAdminBasicProfile(pick.value);
-      const kp: Record<string, number> = {};
-      if (p.knowledge_scores) {
-        try {
-          const raw = JSON.parse(p.knowledge_scores);
-          for (const [k, v] of Object.entries(raw)) { const d = v as any; kp[k] = d.total > 0 ? Math.round(d.earned / d.total * 100) : 0; }
-        } catch {}
+  const loadRadarPick = useCallback(
+    async (pick: RadarPick): Promise<{ name: string; data: Record<string, number> } | null> => {
+      if (pick.type === "all") {
+        const response = await assessmentSessionApi.getStatistics(configId, {});
+        return {
+          name: "全部数据",
+          data: (response.knowledge_rates || {}) as Record<string, number>,
+        };
       }
-      const stu = allGradedStudents.find(x => x.id === pick.value);
-      return { name: stu?.user_name || `学生#${pick.value}`, data: kp };
+      if (pick.type === "class") {
+        const response = await assessmentSessionApi.getStatistics(configId, {
+          class_name: pick.value,
+        });
+        return {
+          name: pick.value,
+          data: (response.knowledge_rates || {}) as Record<string, number>,
+        };
+      }
+      if (pick.type === "student") {
+        const profile = await assessmentSessionApi.getAdminBasicProfile(pick.value);
+        const knowledgePoints: Record<string, number> = {};
+        if (profile.knowledge_scores) {
+          try {
+            const raw = JSON.parse(profile.knowledge_scores);
+            for (const [key, value] of Object.entries(raw)) {
+              const score = value as any;
+              knowledgePoints[key] = score.total > 0 ? Math.round((score.earned / score.total) * 100) : 0;
+            }
+          } catch {}
+        }
+        const student = allGradedStudents.find((item) => item.id === pick.value);
+        return {
+          name: student?.user_name || `学生#${pick.value}`,
+          data: knowledgePoints,
+        };
+      }
+      return null;
+    },
+    [configId, allGradedStudents],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRadarPick(radarLeft)
+      .then((data) => {
+        if (!cancelled) setRadarLeftData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [radarLeft, loadRadarPick]);
+
+  useEffect(() => {
+    if (!radarRight) {
+      setRadarRightData(null);
+      return;
     }
-    return null;
-  }, [configId, allGradedStudents]);
+    let cancelled = false;
+    void loadRadarPick(radarRight)
+      .then((data) => {
+        if (!cancelled) setRadarRightData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [radarRight, loadRadarPick]);
 
-  useEffect(() => { let c = false; loadRadarPick(radarLeft).then(d => { if (!c) setRadarLeftData(d); }).catch(() => {}); return () => { c = true; }; }, [radarLeft, loadRadarPick]);
-  useEffect(() => { if (!radarRight) { setRadarRightData(null); return; } let c = false; loadRadarPick(radarRight).then(d => { if (!c) setRadarRightData(d); }).catch(() => {}); return () => { c = true; }; }, [radarRight, loadRadarPick]);
-
-  // 操作 handlers
   const handleViewDetail = async (sessionId: number) => {
-    try { setDetailOpen(true); setDetailLoading(true); setDetailData(await assessmentSessionApi.getSessionDetail(sessionId)); }
-    catch (e: any) { message.error(e.message || "加载答题详情失败"); } finally { setDetailLoading(false); }
+    try {
+      setDetailOpen(true);
+      setDetailLoading(true);
+      setDetailData(await assessmentSessionApi.getSessionDetail(sessionId));
+    } catch (e: any) {
+      showMessage.error(e.message || "加载答题详情失败");
+    } finally {
+      setDetailLoading(false);
+    }
   };
+
   const handleViewProfile = async (sessionId: number, userId: number) => {
     try {
       setProfileOpen(true);
@@ -182,67 +297,120 @@ const StatisticsPage: React.FC = () => {
       setProfileTab("basic");
       setProfileUserId(userId);
       setAdvancedProfile(null);
-      const [basic, advResp] = await Promise.all([
+      const [basic, advancedResp] = await Promise.all([
         assessmentSessionApi.getAdminBasicProfile(sessionId),
         profileApi.list({ target_id: String(userId), limit: 1 }).catch(() => ({ items: [] })),
       ]);
       setProfileData(basic);
-      setAdvancedProfile(advResp.items.length > 0 ? advResp.items[0] : null);
+      setAdvancedProfile(advancedResp.items.length > 0 ? advancedResp.items[0] : null);
     } catch (e: any) {
-      message.error(e.message || "加载画像失败");
+      showMessage.error(e.message || "加载画像失败");
       setProfileOpen(false);
-    } finally { setProfileLoading(false); }
+    } finally {
+      setProfileLoading(false);
+    }
   };
+
   const handleAllowRetest = async (sessionId: number) => {
-    try { await assessmentSessionApi.allowRetest(sessionId); message.success("已允许重新测试"); await Promise.all([loadSessions(), loadStats()]); }
-    catch (e: any) { message.error(e.message || "操作失败"); }
+    if (!window.confirm("允许该学生重新测试？")) return;
+    try {
+      await assessmentSessionApi.allowRetest(sessionId);
+      showMessage.success("已允许重新测试");
+      await Promise.all([loadSessions(), loadStats()]);
+    } catch (e: any) {
+      showMessage.error(e.message || "操作失败");
+    }
   };
+
   const handleBatchRetest = async (mode: "class" | "selection") => {
     setBatchRetesting(true);
     try {
       const params = mode === "class" ? { class_name: filterClass! } : { session_ids: selectedRowKeys.map(Number) };
       const result = await assessmentSessionApi.batchRetest(configId, params);
-      message.success(result.message || `已删除 ${result.deleted_count} 条记录`);
+      showMessage.success(result.message || `已删除 ${result.deleted_count} 条记录`);
       setSelectedRowKeys([]);
       await Promise.all([loadSessions(), loadStats()]);
-    } catch (e: any) { message.error(e.message || "批量重测失败"); }
-    finally { setBatchRetesting(false); }
+    } catch (e: any) {
+      showMessage.error(e.message || "批量重测失败");
+    } finally {
+      setBatchRetesting(false);
+    }
   };
+
   const handleExport = async () => {
-    try { setExporting(true); await assessmentSessionApi.exportXlsx(configId, { class_name: filterClass, status: filterStatus, search: searchValue || undefined }); message.success("导出成功"); }
-    catch (e: any) { message.error(e.message || "导出失败"); } finally { setExporting(false); }
+    try {
+      setExporting(true);
+      await assessmentSessionApi.exportXlsx(configId, {
+        class_name: filterClass,
+        status: filterStatus,
+        search: searchValue || undefined,
+      });
+      showMessage.success("导出成功");
+    } catch (e: any) {
+      showMessage.error(e.message || "导出失败");
+    } finally {
+      setExporting(false);
+    }
   };
+
   const handleGenerateProfile = async () => {
-    if (!profileUserId || !configAgentId) { message.warning("缺少配置信息，无法生成画像"); return; }
+    if (!profileUserId || !configAgentId) {
+      showMessage.warning("缺少配置信息，无法生成画像");
+      return;
+    }
+
     setGeneratingProfile(true);
     try {
       const result = await profileApi.generate({
-        profile_type: "individual", target_id: String(profileUserId),
-        config_id: configId, agent_id: configAgentId,
+        profile_type: "individual",
+        target_id: String(profileUserId),
+        config_id: configId,
+        agent_id: configAgentId,
       });
       setAdvancedProfile(result);
       setProfileTab("advanced");
-      message.success("三维画像生成成功");
-    } catch (e: any) { message.error(e.message || "生成画像失败"); }
-    finally { setGeneratingProfile(false); }
+      showMessage.success("三维画像生成成功");
+    } catch (e: any) {
+      showMessage.error(e.message || "生成画像失败");
+    } finally {
+      setGeneratingProfile(false);
+    }
   };
-  const [batchGenerating, setBatchGenerating] = useState(false);
+
   const handleBatchGenerateProfiles = async () => {
-    if (!configAgentId) { message.warning("该测评未配置 AI 智能体，无法生成画像"); return; }
+    if (!configAgentId) {
+      showMessage.warning("该测评未配置 AI 智能体，无法生成画像");
+      return;
+    }
+
     setBatchGenerating(true);
     try {
       const gradedSessions = await assessmentSessionApi.getConfigSessions(configId, {
-        limit: 100, status: "graded", class_name: filterClass,
+        limit: 100,
+        status: "graded",
+        class_name: filterClass,
       });
-      const userIds = gradedSessions.items.map(s => s.user_id).filter((v, i, a) => a.indexOf(v) === i);
-      if (userIds.length === 0) { message.info("没有已评分的学生"); return; }
-      const result = await profileApi.batchGenerate({ user_ids: userIds, config_id: configId, agent_id: configAgentId });
-      message.success(`已为 ${result.count} 名学生生成画像`);
-    } catch (e: any) { message.error(e.message || "批量生成失败"); }
-    finally { setBatchGenerating(false); }
-  };
+      const userIds = gradedSessions.items
+        .map((session) => session.user_id)
+        .filter((value, index, arr) => arr.indexOf(value) === index);
 
-  // 画像雷达图
+      if (userIds.length === 0) {
+        showMessage.info("没有已评分的学生");
+        return;
+      }
+
+      const result = await profileApi.batchGenerate({
+        user_ids: userIds,
+        config_id: configId,
+        agent_id: configAgentId,
+      });
+      showMessage.success(`已为 ${result.count} 名学生生成画像`);
+    } catch (e: any) {
+      showMessage.error(e.message || "批量生成失败");
+    } finally {
+      setBatchGenerating(false);
+    }
+  };
 
   const radarSeries = useMemo(() => {
     const arr: { name: string; data: Record<string, number> }[] = [];
@@ -251,233 +419,487 @@ const StatisticsPage: React.FC = () => {
     return arr;
   }, [radarLeftData, radarRightData]);
 
-  const statusMap: Record<string, { color: string; text: string }> = {
-    in_progress: { color: "processing", text: "答题中" },
-    submitted: { color: "warning", text: "已提交" },
-    graded: { color: "success", text: "已评分" },
-  };
-
-  // 雷达图选择器
-  const radarPickerOptions = useMemo(() => {
-    const opts: { label: string; options: { label: string; value: string }[] }[] = [
-      { label: "汇总", options: [{ label: "全部数据", value: "all" }] },
-    ];
-    if (classNames.length > 0) opts.push({ label: "按班级", options: classNames.map(c => ({ label: c, value: `class:${c}` })) });
-    if (allGradedStudents.length > 0) opts.push({ label: "按学生", options: allGradedStudents.map(s => ({ label: `${s.user_name}${s.class_name ? ` (${s.class_name})` : ""}`, value: `student:${s.id}` })) });
-    return opts;
+  const radarOptions = useMemo<RadarOption[]>(() => {
+    const options: RadarOption[] = [{ group: "汇总", label: "全部数据", value: "all" }];
+    classNames.forEach((className) => {
+      options.push({ group: "按班级", label: className, value: `class:${className}` });
+    });
+    allGradedStudents.forEach((student) => {
+      options.push({
+        group: "按学生",
+        label: `${student.user_name}${student.class_name ? ` (${student.class_name})` : ""}`,
+        value: `student:${student.id}`,
+      });
+    });
+    return options;
   }, [classNames, allGradedStudents]);
-  const parsePickerValue = (v: string): RadarPick => {
-    if (v === "all") return { type: "all" };
-    if (v.startsWith("class:")) return { type: "class", value: v.slice(6) };
-    if (v.startsWith("student:")) return { type: "student", value: Number(v.slice(8)) };
+
+  const parsePickerValue = (value: string): RadarPick => {
+    if (value === "all") return { type: "all" };
+    if (value.startsWith("class:")) return { type: "class", value: value.slice(6) };
+    if (value.startsWith("student:")) return { type: "student", value: Number(value.slice(8)) };
     return { type: "all" };
   };
-  const pickToValue = (p: RadarPick | null): string | undefined => {
-    if (!p) return undefined;
-    if (p.type === "all") return "all";
-    if (p.type === "class") return `class:${p.value}`;
-    if (p.type === "student") return `student:${p.value}`;
+
+  const pickToValue = (pick: RadarPick | null): string | undefined => {
+    if (!pick) return undefined;
+    if (pick.type === "all") return "all";
+    if (pick.type === "class") return `class:${pick.value}`;
+    if (pick.type === "student") return `student:${pick.value}`;
     return undefined;
   };
 
-  const columns = [
-    { title: "学生", dataIndex: "user_name", key: "user_name", width: 100, render: (v: string | null) => v || "-" },
-    { title: "班级", dataIndex: "class_name", key: "class_name", width: 90, render: (v: string | null) => v || "-" },
-    { title: "状态", dataIndex: "status", key: "status", width: 80, render: (s: string) => { const m = statusMap[s]; return m ? <Tag color={m.color}>{m.text}</Tag> : <Tag>{s}</Tag>; } },
-    { title: "得分", key: "score", width: 100, render: (_: any, r: SessionListItem) => r.earned_score != null ? `${r.earned_score}/${r.total_score}` : "-" },
-    { title: "提交时间", dataIndex: "submitted_at", key: "submitted_at", width: 150, render: (v: string | null) => v ? new Date(v).toLocaleString("zh-CN") : "-" },
-    { title: "操作", key: "action", width: 200, render: (_: any, r: SessionListItem) => (
-      <div style={{ whiteSpace: "nowrap" }}>
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(r.id)}>详情</Button>
-        {(r.status === "graded" || r.status === "submitted") && (
-          <Button type="link" size="small" icon={<UserOutlined />} onClick={() => handleViewProfile(r.id, r.user_id)}>画像</Button>
-        )}
-        {(r.status === "graded" || r.status === "submitted") && (
-          <Popconfirm title="允许重新测试？" onConfirm={() => handleAllowRetest(r.id)} okText="确定" cancelText="取消">
-            <Button type="link" size="small" icon={<RedoOutlined />}>重测</Button>
-          </Popconfirm>
-        )}
-      </div>
-    ) },
-  ];
+  const statItems = stats
+    ? [
+        { icon: <Users className="h-3.5 w-3.5" />, label: "参与人数", value: stats.total_students, color: "var(--ws-color-primary)" },
+        { icon: <CheckCircle2 className="h-3.5 w-3.5" />, label: "已评分", value: stats.submitted_count, color: "var(--ws-color-success)" },
+        { icon: <BarChart3 className="h-3.5 w-3.5" />, label: "平均分", value: stats.avg_score != null ? stats.avg_score.toFixed(1) : "-", color: "var(--ws-color-secondary)" },
+        { icon: <Trophy className="h-3.5 w-3.5" />, label: "最高分", value: stats.max_score ?? "-", color: "var(--ws-color-warning)" },
+        { label: "最低分", value: stats.min_score ?? "-", color: "var(--ws-color-error)" },
+        { label: "通过率", value: stats.pass_rate != null ? `${(stats.pass_rate * 100).toFixed(0)}%` : "-", color: "var(--ws-color-success)" },
+      ]
+    : [];
 
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
-    getCheckboxProps: (r: SessionListItem) => ({ disabled: !["graded", "submitted"].includes(r.status) }),
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const selectableSessionIds = useMemo(
+    () => sessions.filter((s) => ["graded", "submitted"].includes(s.status)).map((s) => s.id),
+    [sessions],
+  );
+
+  const allSelectableChecked =
+    selectableSessionIds.length > 0 && selectableSessionIds.every((sessionId) => selectedRowKeys.includes(sessionId));
+
+  const toggleSelectAll = () => {
+    if (allSelectableChecked) {
+      setSelectedRowKeys([]);
+      return;
+    }
+    setSelectedRowKeys(selectableSessionIds);
   };
 
-  // 统计指标
-  const statItems = stats ? [
-    { icon: <TeamOutlined />, label: "参与人数", value: stats.total_students, color: "#0EA5E9" },
-    { icon: <CheckCircleOutlined />, label: "已评分", value: stats.submitted_count, color: "#10B981" },
-    { icon: <BarChartOutlined />, label: "平均分", value: stats.avg_score != null ? stats.avg_score.toFixed(1) : "-", color: "#6366F1" },
-    { icon: <TrophyOutlined />, label: "最高分", value: stats.max_score ?? "-", color: "#F59E0B" },
-    { label: "最低分", value: stats.min_score ?? "-", color: "#EF4444" },
-    { label: "通过率", value: stats.pass_rate != null ? `${(stats.pass_rate * 100).toFixed(0)}%` : "-", color: "#10B981" },
-  ] as { icon?: React.ReactNode; label: string; value: string | number; color: string }[] : [];
+  const toggleSelectOne = (sessionId: number, checked: boolean) => {
+    setSelectedRowKeys((prev) => {
+      if (checked) {
+        if (prev.includes(sessionId)) return prev;
+        return [...prev, sessionId];
+      }
+      return prev.filter((id) => id !== sessionId);
+    });
+  };
+
+  const sessionColumns: ColumnDef<SessionListItem>[] = [
+    {
+      id: "select",
+      header: () => (
+        <input
+          type="checkbox"
+          checked={allSelectableChecked}
+          onChange={toggleSelectAll}
+          disabled={selectableSessionIds.length === 0}
+          className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
+          aria-label="全选可重测学生"
+        />
+      ),
+      size: 36,
+      meta: { className: "w-[36px]" },
+      cell: ({ row }) => {
+        const selectable = ["graded", "submitted"].includes(row.original.status);
+        const checked = selectedRowKeys.includes(row.original.id);
+        return (
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={!selectable}
+            onChange={(event) => toggleSelectOne(row.original.id, event.target.checked)}
+            className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
+            aria-label={`选择学生 ${row.original.user_name || row.original.id}`}
+          />
+        );
+      },
+    },
+    {
+      id: "user_name",
+      header: "学生",
+      accessorKey: "user_name",
+      size: 120,
+      meta: { className: "w-[120px]" },
+      cell: ({ row }) => row.original.user_name || "-",
+    },
+    {
+      id: "class_name",
+      header: "班级",
+      accessorKey: "class_name",
+      size: 120,
+      meta: { className: "w-[120px]" },
+      cell: ({ row }) => row.original.class_name || "-",
+    },
+    {
+      id: "status",
+      header: "状态",
+      accessorKey: "status",
+      size: 100,
+      meta: { className: "w-[100px]" },
+      cell: ({ row }) => <StatusTag status={row.original.status} />,
+    },
+    {
+      id: "score",
+      header: "得分",
+      size: 120,
+      meta: { className: "w-[120px]" },
+      cell: ({ row }) =>
+        row.original.earned_score != null
+          ? `${row.original.earned_score}/${row.original.total_score}`
+          : "-",
+    },
+    {
+      id: "submitted_at",
+      header: "提交时间",
+      accessorKey: "submitted_at",
+      size: 190,
+      meta: { className: "w-[190px]" },
+      cell: ({ row }) =>
+        row.original.submitted_at
+          ? new Date(row.original.submitted_at).toLocaleString("zh-CN")
+          : "-",
+    },
+    {
+      id: "actions",
+      header: "操作",
+      size: 220,
+      meta: { className: "w-[220px]" },
+      cell: ({ row }) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            size="sm"
+            variant="link"
+            className="h-6 px-1.5"
+            onClick={() => {
+              void handleViewDetail(row.original.id);
+            }}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            详情
+          </Button>
+          {(row.original.status === "graded" || row.original.status === "submitted") && (
+            <Button
+              size="sm"
+              variant="link"
+              className="h-6 px-1.5"
+              onClick={() => {
+                void handleViewProfile(row.original.id, row.original.user_id);
+              }}
+            >
+              <User className="h-3.5 w-3.5" />
+              画像
+            </Button>
+          )}
+          {(row.original.status === "graded" || row.original.status === "submitted") && (
+            <Button
+              size="sm"
+              variant="link"
+              className="h-6 px-1.5"
+              onClick={() => {
+                void handleAllowRetest(row.original.id);
+              }}
+            >
+              <Redo className="h-3.5 w-3.5" />
+              重测
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const sessionTable = useReactTable({
+    data: listLoading ? [] : sessions,
+    columns: sessionColumns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const onSearchSubmit = () => {
+    setSearchValue(searchText.trim());
+  };
 
   return (
     <AdminPage scrollable>
-      {/* 页面标题 */}
-      <div className="flex items-center gap-3 mb-6">
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/admin/assessment")}>返回</Button>
+      <div className="mb-5 flex flex-wrap items-center gap-2.5">
+        <Button variant="outline" onClick={() => navigate("/admin/assessment")}>
+          <ArrowLeft className="h-4 w-4" />
+          返回
+        </Button>
         <span className="text-xl font-semibold">{configTitle || "答题统计"}</span>
       </div>
 
       {loading ? (
-        <div className="text-center py-20"><Spin size="large" /></div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+        </div>
       ) : stats ? (
         <>
-          {/* 统计卡片 */}
-          <Row gutter={[16, 16]} className="mb-6">
-            {statItems.map((s, i) => (
-              <Col xs={12} sm={8} md={4} key={i}>
-                <div className="bg-gray-50 rounded-lg px-4 py-2.5 flex items-center justify-between">
-                  <div className="text-xs text-text-tertiary">{s.icon && <span className="mr-1">{s.icon}</span>}{s.label}</div>
-                  <div className="text-lg font-bold" style={{ color: s.color }}>{s.value}</div>
+          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+            {statItems.map((item, index) => (
+              <div key={index} className="flex items-center justify-between rounded-lg bg-surface-2 px-3.5 py-2.5">
+                <div className="text-xs text-text-tertiary">
+                  {item.icon ? <span className="mr-1 inline-block align-middle">{item.icon}</span> : null}
+                  <span className="align-middle">{item.label}</span>
                 </div>
-              </Col>
+                <div className="text-lg font-bold" style={{ color: item.color }}>
+                  {item.value}
+                </div>
+              </div>
             ))}
-          </Row>
-
-          {/* 工具栏 */}
-          <div className="flex gap-2.5 mb-4 flex-wrap items-center">
-            <Select placeholder="班级" allowClear style={{ width: 130 }} value={filterClass}
-              onChange={v => setFilterClass(v)} options={classNames.map(c => ({ label: c, value: c }))} notFoundContent="暂无班级" />
-            <Select placeholder="状态" allowClear style={{ width: 110 }} value={filterStatus}
-              onChange={v => setFilterStatus(v)} options={[
-                { label: "答题中", value: "in_progress" }, { label: "已提交", value: "submitted" },
-                { label: "已评分", value: "graded" },
-              ]} />
-            <Input.Search placeholder="搜索学生" allowClear style={{ width: 180 }}
-              value={searchText} onChange={e => setSearchText(e.target.value)}
-              onSearch={v => setSearchValue(v.trim())} enterButton={<SearchOutlined />} />
-            <div className="flex-1" />
-            {filterClass && (
-              <Popconfirm title={`确定让「${filterClass}」全班重新测试？`} onConfirm={() => handleBatchRetest("class")} okText="确定" cancelText="取消">
-                <Button icon={<RedoOutlined />} loading={batchRetesting}>全班重测</Button>
-              </Popconfirm>
-            )}
-            <Popconfirm title={filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？"} onConfirm={handleBatchGenerateProfiles} okText="确定" cancelText="取消">
-              <Button icon={<ExperimentOutlined />} loading={batchGenerating}>批量生成画像</Button>
-            </Popconfirm>
-            <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exporting}>导出</Button>
           </div>
 
-          {/* 主体：表格 + 雷达图 */}
-          <Row gutter={16}>
-            <Col xs={24} lg={16}>
-              <Card size="small" bodyStyle={{ padding: 0 }}
-                title={
-                  <div className="flex items-center gap-2">
-                    <span>学生答题列表{total > 0 ? ` (${total})` : ""}</span>
-                    {selectedRowKeys.length > 0 && (
-                      <>
-                        <Tag color="blue">{selectedRowKeys.length} 已选</Tag>
-                        <Popconfirm title={`确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`} onConfirm={() => handleBatchRetest("selection")} okText="确定" cancelText="取消">
-                          <Button type="link" size="small" loading={batchRetesting}>批量重测</Button>
-                        </Popconfirm>
-                        <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>取消</Button>
-                      </>
-                    )}
-                  </div>
-                }
+          <div className="mb-4 flex flex-wrap items-center gap-2.5">
+            <Select value={filterClass || FILTER_ALL} onValueChange={(value) => setFilterClass(value === FILTER_ALL ? undefined : value)}>
+              <SelectTrigger className="h-8 w-[140px]"><SelectValue placeholder="班级" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
+                {classNames.map((className) => <SelectItem key={className} value={className}>{className}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterStatus || FILTER_ALL} onValueChange={(value) => setFilterStatus(value === FILTER_ALL ? undefined : value)}>
+              <SelectTrigger className="h-8 w-[120px]"><SelectValue placeholder="状态" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
+                <SelectItem value="in_progress">答题中</SelectItem>
+                <SelectItem value="submitted">已提交</SelectItem>
+                <SelectItem value="graded">已评分</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={searchText}
+                placeholder="搜索学生"
+                className="h-8 w-[190px]"
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSearchSubmit();
+                  }
+                }}
+              />
+              <Button size="sm" variant="outline" onClick={onSearchSubmit}><Search className="h-3.5 w-3.5" /></Button>
+            </div>
+
+            <div className="flex-1" />
+
+            {filterClass && (
+              <Button
+                variant="outline"
+                disabled={batchRetesting}
+                onClick={() => {
+                  if (!window.confirm(`确定让「${filterClass}」全班重新测试？`)) return;
+                  void handleBatchRetest("class");
+                }}
               >
-                <Table rowKey="id" columns={columns} dataSource={sessions} pagination={false}
-                  rowSelection={rowSelection} loading={listLoading} size="small" scroll={{ x: 700, y: 600 }} />
-                {total > pageSize && (
-                  <div className="text-right px-4 py-2.5">
-                    <Pagination size="small" current={page} pageSize={pageSize} total={total}
-                      onChange={(p, s) => { setPage(p); setSelectedRowKeys([]); if (s) setPageSize(s); }}
-                      showTotal={t => `共 ${t} 条`} showSizeChanger />
-                  </div>
+                <Redo className="h-3.5 w-3.5" />
+                全班重测
+              </Button>
+            )}
+
+            <Button
+              variant="outline"
+              disabled={batchGenerating}
+              onClick={() => {
+                const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？";
+                if (!window.confirm(msg)) return;
+                void handleBatchGenerateProfiles();
+              }}
+            >
+              {batchGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+              批量生成画像
+            </Button>
+
+            <Button variant="outline" disabled={exporting} onClick={() => { void handleExport(); }}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              导出
+            </Button>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Card className="overflow-hidden border border-border bg-surface">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+                <span className="text-sm font-semibold">学生答题列表{total > 0 ? ` (${total})` : ""}</span>
+                {selectedRowKeys.length > 0 && (
+                  <>
+                    <Badge variant="info">{selectedRowKeys.length} 已选</Badge>
+                    <Button
+                      size="sm"
+                      variant="link"
+                      className="h-6 px-1.5"
+                      disabled={batchRetesting}
+                      onClick={() => {
+                        if (!window.confirm(`确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`)) return;
+                        void handleBatchRetest("selection");
+                      }}
+                    >批量重测</Button>
+                    <Button size="sm" variant="link" className="h-6 px-1.5" onClick={() => setSelectedRowKeys([])}>取消</Button>
+                  </>
                 )}
-              </Card>
-            </Col>
-            <Col xs={24} lg={8}>
-              <Card size="small" title="知识点掌握率">
-                <div className="flex gap-2 mb-2">
-                  <Select size="small" className="flex-1" showSearch optionFilterProp="label"
-                    value={pickToValue(radarLeft)} onChange={v => setRadarLeft(parsePickerValue(v))}
-                    options={radarPickerOptions} placeholder="选择数据" />
-                  <Select size="small" className="flex-1" showSearch optionFilterProp="label" allowClear
-                    value={pickToValue(radarRight)} onChange={v => setRadarRight(v ? parsePickerValue(v) : null)}
-                    options={radarPickerOptions} placeholder="对比" />
+              </div>
+
+              <DataTable
+                table={sessionTable}
+                className="border-0"
+                tableClassName="min-w-[860px]"
+                emptyState={
+                  listLoading ? (
+                    <div className="py-10 text-center text-sm text-text-tertiary">
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        正在加载...
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="py-10">
+                      <EmptyState description="暂无答题记录" />
+                    </div>
+                  )
+                }
+              />
+
+              <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+                <DataTablePagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={pageSize}
+                  pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+                  onPageChange={(nextPage, nextPageSize) => {
+                    if (nextPageSize && nextPageSize !== pageSize) {
+                      setPageSize(nextPageSize);
+                    }
+                    setPage(nextPage);
+                    setSelectedRowKeys([]);
+                  }}
+                />
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden border border-border bg-surface">
+              <div className="border-b border-border px-3 py-2 text-sm font-semibold">知识点掌握率</div>
+              <div className="space-y-2 p-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={pickToValue(radarLeft) || FILTER_ALL} onValueChange={(value) => setRadarLeft(parsePickerValue(value))}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="选择数据" /></SelectTrigger>
+                    <SelectContent>
+                      {radarOptions.map((option) => (<SelectItem key={`left-${option.value}`} value={option.value}>{`${option.group} · ${option.label}`}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={pickToValue(radarRight) || FILTER_ALL} onValueChange={(value) => setRadarRight(value === FILTER_ALL ? null : parsePickerValue(value))}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="对比" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={FILTER_ALL}>不对比</SelectItem>
+                      {radarOptions.map((option) => (<SelectItem key={`right-${option.value}`} value={option.value}>{`${option.group} · ${option.label}`}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {radarSeries.length > 0 && radarSeries.some(s => Object.keys(s.data).length > 0) ? (
-                  <RadarChart series={radarSeries} size={280} />
-                ) : (
-                  <EmptyState description="暂无知识点数据" />
-                )}
-              </Card>
-            </Col>
-          </Row>
+
+                {radarSeries.length > 0 && radarSeries.some((series) => Object.keys(series.data).length > 0)
+                  ? <RadarChart series={radarSeries} size={280} />
+                  : <EmptyState description="暂无知识点数据" />}
+              </div>
+            </Card>
+          </div>
         </>
       ) : null}
 
-      {/* 答题详情弹窗 */}
-      <Modal title="答题详情" open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailData(null); }} footer={null} width={720}>
-        {detailLoading ? <Spin /> : detailData ? (
-          <>
-            <Descriptions size="small" column={2} className="mb-4">
-              <Descriptions.Item label="状态"><Tag color={statusMap[detailData.status]?.color}>{statusMap[detailData.status]?.text || detailData.status}</Tag></Descriptions.Item>
-              <Descriptions.Item label="得分">{detailData.earned_score ?? "-"} / {detailData.total_score}</Descriptions.Item>
-              <Descriptions.Item label="开始时间">{detailData.started_at ? new Date(detailData.started_at).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
-              <Descriptions.Item label="提交时间">{detailData.submitted_at ? new Date(detailData.submitted_at).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
-            </Descriptions>
-            <Collapse size="small" items={detailData.answers.map((a: AnswerDetailResponse, i: number) => ({
-              key: a.id,
-              label: <span>第{i + 1}题 <Tag>{a.question_type}</Tag>{a.is_correct === true && <Tag color="success">正确</Tag>}{a.is_correct === false && <Tag color="error">错误</Tag>}{a.earned_score != null && <span className="ml-2">{a.earned_score}/{a.max_score}分</span>}</span>,
-              children: (
-                <div className="text-sm">
-                  <p><strong>题目：</strong>{a.content}</p>
-                  {a.options && <p><strong>选项：</strong>{a.options}</p>}
-                  <p><strong>学生答案：</strong>{a.student_answer || "（未作答）"}</p>
-                  <p><strong>正确答案：</strong>{a.correct_answer}</p>
-                  {a.explanation && <p><strong>解析：</strong>{a.explanation}</p>}
-                  {a.ai_feedback && <p><strong>AI反馈：</strong>{a.ai_feedback}</p>}
-                </div>
-              ),
-            }))} />
-          </>
-        ) : null}
-      </Modal>
-
-      {/* 画像弹窗 */}
-      <Modal
-        title={null}
-        open={profileOpen}
-        onCancel={() => { setProfileOpen(false); setProfileData(null); setAdvancedProfile(null); }}
-        footer={null}
-        width={720}
-        styles={{ body: { padding: 0 } }}
+      <Dialog
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setDetailOpen(false);
+            setDetailData(null);
+          }
+        }}
       >
-        {profileLoading ? (
-          <div className="text-center py-16"><Spin size="large" /></div>
-        ) : (
-          <Tabs
-            activeKey={profileTab}
-            onChange={k => setProfileTab(k as "basic" | "advanced")}
-            className="px-6"
-            items={[
-              { key: "basic", label: "初级画像", children: profileData ? (
-                <div className="pb-6">
-                  <BasicProfileView data={profileData} />
-                </div>
-              ) : <EmptyState description="暂无初级画像数据" /> },
+        <DialogContent className="sm:max-w-[780px]">
+          <DialogHeader>
+            <DialogTitle>答题详情</DialogTitle>
+          </DialogHeader>
 
-              { key: "advanced", label: "三维画像", children: advancedProfile ? (
-                <div className="pb-6">
-                  <AdvancedProfileView profile={advancedProfile} />
-                </div>
-              ) : (
-                <AdvancedProfileEmpty onGenerate={handleGenerateProfile} loading={generatingProfile} />
-              ) },
-            ]}
-          />
-        )}
-      </Modal>
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
+          ) : detailData ? (
+            <div className="space-y-3">
+              <div className="grid gap-2 rounded-lg bg-surface-2 p-3 text-sm md:grid-cols-2">
+                <div><span className="text-text-tertiary">状态：</span><StatusTag status={detailData.status} /></div>
+                <div><span className="text-text-tertiary">得分：</span><span>{detailData.earned_score ?? "-"} / {detailData.total_score}</span></div>
+                <div><span className="text-text-tertiary">开始时间：</span><span>{detailData.started_at ? new Date(detailData.started_at).toLocaleString("zh-CN") : "-"}</span></div>
+                <div><span className="text-text-tertiary">提交时间：</span><span>{detailData.submitted_at ? new Date(detailData.submitted_at).toLocaleString("zh-CN") : "-"}</span></div>
+              </div>
+
+              <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
+                {detailData.answers.map((answer: AnswerDetailResponse, index: number) => (
+                  <details key={answer.id} className="rounded-lg border border-border bg-surface px-3 py-2">
+                    <summary className="cursor-pointer select-none text-sm font-medium">
+                      <span>{`第${index + 1}题`}</span>
+                      <span className="ml-2 inline-flex items-center gap-1">
+                        <Badge variant="secondary">{answer.question_type}</Badge>
+                        {answer.is_correct === true ? <Badge variant="success">正确</Badge> : null}
+                        {answer.is_correct === false ? <Badge variant="danger">错误</Badge> : null}
+                        {answer.earned_score != null ? <span className="text-xs text-text-tertiary">{answer.earned_score}/{answer.max_score}分</span> : null}
+                      </span>
+                    </summary>
+
+                    <div className="mt-2 space-y-1.5 text-sm leading-relaxed text-text-secondary">
+                      <p><strong>题目：</strong>{answer.content}</p>
+                      {answer.options ? <p><strong>选项：</strong>{answer.options}</p> : null}
+                      <p><strong>学生答案：</strong>{answer.student_answer || "（未作答）"}</p>
+                      <p><strong>正确答案：</strong>{answer.correct_answer}</p>
+                      {answer.explanation ? <p><strong>解析：</strong>{answer.explanation}</p> : null}
+                      {answer.ai_feedback ? <p><strong>AI反馈：</strong>{answer.ai_feedback}</p> : null}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={profileOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setProfileOpen(false);
+            setProfileData(null);
+            setAdvancedProfile(null);
+          }
+        }}
+      >
+        <DialogContent className="p-0 sm:max-w-[780px]">
+          {profileLoading ? (
+            <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
+          ) : (
+            <div className="p-4">
+              <Tabs value={profileTab} onValueChange={(value) => setProfileTab(value as "basic" | "advanced")}>
+                <TabsList className="mb-2">
+                  <TabsTrigger value="basic">初级画像</TabsTrigger>
+                  <TabsTrigger value="advanced">三维画像</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="basic" className="mt-0">
+                  {profileData ? <div className="pb-2"><BasicProfileView data={profileData} /></div> : <EmptyState description="暂无初级画像数据" />}
+                </TabsContent>
+
+                <TabsContent value="advanced" className="mt-0">
+                  {advancedProfile
+                    ? <div className="pb-2"><AdvancedProfileView profile={advancedProfile} /></div>
+                    : <AdvancedProfileEmpty onGenerate={handleGenerateProfile} loading={generatingProfile} />}
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AdminPage>
   );
 };

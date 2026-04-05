@@ -1,6 +1,7 @@
+import { showMessage } from "@/lib/toast";
 import React, { useEffect, useState } from "react";
-import { message, Row, Col } from "antd";
-import { AppstoreOutlined, ArrowRightOutlined } from "@ant-design/icons";
+
+import { LayoutGrid, ArrowRight } from "lucide-react";
 import { xbkPublicConfigApi } from "@services";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 
@@ -36,33 +37,31 @@ const AdminPersonalPrograms: React.FC = () => {
     try {
       const res = await xbkPublicConfigApi.set(nextEnabled);
       setXbkEnabled(Boolean(res.enabled));
-      message.success(res.enabled ? "已开启前台 XBK 入口" : "已关闭前台 XBK 入口");
+      showMessage.success(res.enabled ? "已开启前台 XBK 入口" : "已关闭前台 XBK 入口");
     } catch (_e) {
       setXbkEnabled(prev);
-      message.error("更新失败，请确认已登录管理员账号");
+      showMessage.error("更新失败，请确认已登录管理员账号");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <AdminPage padding={24}>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <AdminAppCard
-            title="校本课 (XBK)"
-            description="校本课程作业提交与处理系统，支持文件上传与自动化处理"
-            icon={<AppstoreOutlined />}
-            enabled={xbkEnabled}
-            loading={loading || saving}
-            onToggle={handleToggleXbk}
-            color="var(--ws-color-warning)"
-            actionLabel="打开"
-            actionIcon={<ArrowRightOutlined />}
-            onAction={() => window.open("/xbk", "_blank")}
-          />
-        </Col>
-      </Row>
+    <AdminPage padding="var(--ws-space-4)">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <AdminAppCard
+          title="校本课 (XBK)"
+          description="校本课程作业提交与处理系统，支持文件上传与自动化处理"
+          icon={<LayoutGrid className="h-5 w-5" />}
+          enabled={xbkEnabled}
+          loading={loading || saving}
+          onToggle={handleToggleXbk}
+          color="var(--ws-color-warning)"
+          actionLabel="打开"
+          actionIcon={<ArrowRight className="h-4 w-4" />}
+          onAction={() => window.open("/xbk", "_blank")}
+        />
+      </div>
     </AdminPage>
   );
 };

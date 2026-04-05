@@ -317,7 +317,7 @@ export function usePyodideRunner(params: { code: string; debugMap: DebugMap | nu
       readyRef.current = null;
       awaitingInputRef.current = false;
     }
-    const w = new Worker(new URL("../workers/pyodideDebug.worker.ts", import.meta.url));
+    const w = new Worker(new URL("../workers/pyodideDebug.worker.ts", import.meta.url), { type: "module" });
     workerRef.current = w;
     workerModeRef.current = mode;
 

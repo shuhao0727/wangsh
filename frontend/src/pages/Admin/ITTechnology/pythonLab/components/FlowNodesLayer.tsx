@@ -120,8 +120,8 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
             (!hasRoleTarget || !effectiveFocusRole || n.sourceRole === effectiveFocusRole);
         const pulse = !!followMode && !!active && typeof followTick === "number";
         const size = nodeSizeForTitle(n.shape, n.title);
-        const borderColor = selected ? "#0EA5E9" : active ? "#0EA5E9" : shapeColor(n.shape);
-        const bgColor = active ? "rgba(22,119,255,0.08)" : "#fff";
+        const borderColor = selected ? "var(--ws-color-primary)" : active ? "var(--ws-color-primary)" : shapeColor(n.shape);
+        const bgColor = active ? "rgba(22,119,255,0.08)" : "var(--ws-color-surface)";
         const strokeWidth = selected ? 2.5 : active ? 3 : 2;
         const dashed = connectMode && connectFromId === n.id;
         const w = size.w;
@@ -444,7 +444,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                         ? edge.toPort ?? null
                         : null);
                   const active = (connectMode && connectFromId === n.id && connectFromPort === side) || (!!current && current === side);
-                  const stroke = active ? "#0EA5E9" : "rgba(0,0,0,0.35)";
+                  const stroke = active ? "var(--ws-color-primary)" : "var(--ws-color-text-tertiary)";
                   return (
                     <g
                       key={`${n.id}_${side}`}
@@ -454,7 +454,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                       }}
                     >
                       <circle cx={cx} cy={cy} r={12} fill="rgba(0,0,0,0)" />
-                      <circle cx={cx} cy={cy} r={5} fill="#fff" stroke={stroke} strokeWidth={2} />
+                      <circle cx={cx} cy={cy} r={5} fill="var(--ws-color-surface)" stroke={stroke} strokeWidth={2} />
                     </g>
                   );
                 })}

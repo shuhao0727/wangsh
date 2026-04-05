@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, func, UniqueConstraint
 from app.db.database import Base
 
+
 class XxjsDianming(Base):
     __tablename__ = "xxjs_dianming"
     __table_args__ = (
@@ -14,3 +15,10 @@ class XxjsDianming(Base):
     student_name = Column(String(64), nullable=False, comment="学生姓名")
     student_no = Column(String(64), nullable=True, index=True, comment="学号")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        comment="更新时间",
+    )

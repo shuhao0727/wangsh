@@ -1,5 +1,5 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Spin } from "antd";
+import { Loader2 } from "lucide-react";
 import { logger } from "@services/logger";
 
 export type PdfCanvasVirtualViewerHandle = {
@@ -237,7 +237,7 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
       <div>
         {loading ? (
           <div style={{ textAlign: "center", padding: 24 }}>
-            <Spin />
+            <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
           </div>
         ) : null}
         {pageMetas.map((m, idx) => (

@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  InboxOutlined,
-  SearchOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
+import { Inbox, Search, TriangleAlert } from "lucide-react";
 
 type Variant = "no-data" | "no-results" | "error";
 
@@ -18,17 +14,17 @@ interface EmptyStateProps {
 
 const defaults: Record<Variant, { icon: React.ReactNode; title: string; description: string }> = {
   "no-data": {
-    icon: <InboxOutlined className="text-4xl text-text-tertiary" />,
+    icon: <Inbox className="h-10 w-10 text-text-tertiary" />,
     title: "暂无数据",
     description: "当前没有可显示的内容",
   },
   "no-results": {
-    icon: <SearchOutlined className="text-4xl text-text-tertiary" />,
+    icon: <Search className="h-10 w-10 text-text-tertiary" />,
     title: "未找到结果",
     description: "尝试调整筛选条件或搜索关键词",
   },
   error: {
-    icon: <WarningOutlined className="text-4xl text-warning" />,
+    icon: <TriangleAlert className="h-10 w-10 text-warning" />,
     title: "加载失败",
     description: "请稍后重试或联系管理员",
   },

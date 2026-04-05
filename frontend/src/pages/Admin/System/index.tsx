@@ -1,29 +1,31 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Typography,
-  Space,
-  Button,
-  Row,
-  Col,
-  Input,
-  Switch,
-  Tag,
-  message,
-  Segmented,
-} from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { AdminCard, AdminPage } from "@components/Admin";
 import { api } from "@services";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import TypstMetricsPanel from "./TypstMetrics";
 
-const { Text } = Typography;
+const InfoRow: React.FC<{ label: string; value: React.ReactNode; valueClassName?: string }> = ({
+  label,
+  value,
+  valueClassName,
+}) => (
+  <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-3 py-1.5">
+    <span className="text-sm text-text-secondary">{label}</span>
+    <span className={valueClassName}>{value}</span>
+  </div>
+);
 
-const InfoRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="flex justify-between items-center py-2">
-    <Text type="secondary">{label}</Text>
-    <span>{value}</span>
+const MetricRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-border-secondary py-1.5 last:border-b-0">
+    <span className="text-sm text-text-secondary">{label}</span>
+    <span className="text-sm font-medium tabular-nums text-text-base">{value}</span>
   </div>
 );
 
@@ -65,10 +67,10 @@ const AdminSystem: React.FC = () => {
     try {
       await featureFlagsApi.save({ key: item.flagKey, value: { enabled: checked } });
       setNavVisibleMap((prev) => ({ ...prev, [item.path]: checked }));
-      message.success(`${item.label}${checked ? "已设为可见" : "已设为隐藏"}`);
+      showMessage.success(`${item.label}${checked ? "已设为可见" : "已设为隐藏"}`);
     } catch (e: any) {
       const d = e?.response?.data?.detail;
-      message.error(typeof d === "string" ? d : (e?.message || "保存失败"));
+      showMessage.error(typeof d === "string" ? d : (e?.message || "保存失败"));
     } finally {
       setNavToggleLoading((prev) => ({ ...prev, [item.path]: false }));
     }
@@ -76,91 +78,119 @@ const AdminSystem: React.FC = () => {
 
   return (
     <AdminPage>
-      <div className="flex justify-end items-center mb-4">
-        <Space>
-          <Segmented value={tab} options={[{ label: "系统", value: "system" }, { label: "Typst", value: "typst" }]} onChange={(v) => setTab(v as any)} />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-        </Space>
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <div className="inline-flex rounded-lg bg-surface-2 p-1">
+          <Button
+            size="sm"
+            variant={tab === "system" ? "default" : "ghost"}
+            onClick={() => setTab("system")}
+          >
+            系统
+          </Button>
+          <Button
+            size="sm"
+            variant={tab === "typst" ? "default" : "ghost"}
+            onClick={() => setTab("typst")}
+          >
+            Typst
+          </Button>
+        </div>
+        <Button variant="outline" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          刷新
+        </Button>
       </div>
 
       {tab === "typst" ? (
         <TypstMetricsPanel />
       ) : (
-        <Row gutter={[16, 16]}>
-          <Col xs={24}>
-            <AdminCard title="前端导航可见性">
-              <div className="flex gap-6 flex-wrap items-center" style={{ rowGap: 12 }}>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="lg:col-span-2">
+            <AdminCard title="前端导航可见性" className="rounded-lg border border-border bg-surface" size="small">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {NAV_VISIBILITY_ITEMS.map((item) => (
-                  <Space key={item.path} size={8}>
-                    <Text>{item.label}</Text>
+                  <div
+                    key={item.path}
+                    className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5"
+                  >
+                    <span className="text-sm text-text-base">{item.label}</span>
                     <Switch
                       checked={navVisibleMap[item.path] !== false}
-                      loading={!!navToggleLoading[item.path]}
-                      onChange={(checked) => handleNavToggle(item, checked)}
+                      disabled={!!navToggleLoading[item.path]}
+                      onCheckedChange={(checked) => handleNavToggle(item, checked)}
                     />
-                  </Space>
+                  </div>
                 ))}
               </div>
             </AdminCard>
-          </Col>
+          </div>
 
-          <Col xs={24} lg={12}>
-            <AdminCard title="基本设置">
-              <InfoRow label="服务状态" value={
-                health?.status
-                  ? <Tag color={health.status === "healthy" ? "green" : health.status === "degraded" ? "orange" : "red"}>{health.status}</Tag>
-                  : <Tag>-</Tag>
-              } />
-              <InfoRow label="后端版本" value={<Text type="secondary">{health?.system?.version || "-"}</Text>} />
-              <InfoRow label="运行环境" value={<Text type="secondary">{health?.system?.environment || "-"}</Text>} />
-            </AdminCard>
-          </Col>
+          <AdminCard title="基本设置" className="rounded-lg border border-border bg-surface" size="small">
+            <InfoRow
+              label="服务状态"
+              value={
+                health?.status ? (
+                  <Badge variant={health.status === "healthy" ? "success" : health.status === "degraded" ? "warning" : "danger"}>
+                    {health.status}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">-</Badge>
+                )
+              }
+            />
+            <InfoRow
+              label="后端版本"
+              value={health?.system?.version || "-"}
+              valueClassName="text-sm text-text-secondary"
+            />
+            <InfoRow
+              label="运行环境"
+              value={health?.system?.environment || "-"}
+              valueClassName="text-sm text-text-secondary"
+            />
+          </AdminCard>
 
-          <Col xs={24} lg={12}>
-            <AdminCard title="安全设置">
-              <div className="flex flex-col gap-3">
-                <div>
-                  <Text type="secondary" className="text-xs">JWT 过期时间</Text>
-                  <Space.Compact style={{ width: "100%" }}>
-                    <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly className="flex-1" />
-                    <Button disabled>分钟</Button>
-                  </Space.Compact>
+          <AdminCard title="安全设置" className="rounded-lg border border-border bg-surface" size="small">
+            <div className="flex flex-col gap-2.5">
+              <div className="grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-2">
+                <span className="text-sm text-text-secondary">JWT 过期时间</span>
+                <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly className="h-9" />
+                <span className="text-sm text-text-tertiary">分钟</span>
+              </div>
+              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
+                <span className="text-sm text-text-secondary">算法</span>
+                <Input value={settings?.security?.algorithm ?? ""} readOnly className="h-9" />
+              </div>
+              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
+                <span className="text-sm text-text-secondary">Auto Create Tables</span>
+                <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly className="h-9" />
+              </div>
+            </div>
+          </AdminCard>
+
+          <div className="lg:col-span-2">
+            <AdminCard title="观测指标" className="rounded-lg border border-border bg-surface" size="small">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
+                  <span className="mb-1.5 block text-sm font-semibold">HTTP</span>
+                  <MetricRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
+                  <MetricRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
+                  <MetricRow label="5xx" value={overview?.observability?.http?.["5xx"] ?? "-"} />
+                  <MetricRow label="In-flight" value={overview?.observability?.http?.inflight ?? "-"} />
+                  <MetricRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
                 </div>
-                <div>
-                  <Text type="secondary" className="text-xs">算法</Text>
-                  <Input value={settings?.security?.algorithm ?? ""} readOnly />
-                </div>
-                <div>
-                  <Text type="secondary" className="text-xs">Auto Create Tables</Text>
-                  <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly />
+                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
+                  <span className="mb-1.5 block text-sm font-semibold">DB Pool</span>
+                  <MetricRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
+                  <MetricRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />
+                  <MetricRow label="checked_out" value={overview?.observability?.db?.checked_out ?? "-"} />
+                  <MetricRow label="overflow" value={overview?.observability?.db?.overflow ?? "-"} />
+                  <MetricRow label="capacity" value={overview?.observability?.db?.capacity_total ?? "-"} />
                 </div>
               </div>
             </AdminCard>
-          </Col>
-
-          <Col xs={24}>
-            <AdminCard title="观测指标">
-              <Row gutter={[16, 16]}>
-                <Col xs={24} md={12}>
-                  <Text strong className="block mb-2">HTTP</Text>
-                  <InfoRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
-                  <InfoRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
-                  <InfoRow label="5xx" value={overview?.observability?.http?.["5xx"] ?? "-"} />
-                  <InfoRow label="In-flight" value={overview?.observability?.http?.inflight ?? "-"} />
-                  <InfoRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong className="block mb-2">DB Pool</Text>
-                  <InfoRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
-                  <InfoRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />
-                  <InfoRow label="checked_out" value={overview?.observability?.db?.checked_out ?? "-"} />
-                  <InfoRow label="overflow" value={overview?.observability?.db?.overflow ?? "-"} />
-                  <InfoRow label="capacity" value={overview?.observability?.db?.capacity_total ?? "-"} />
-                </Col>
-              </Row>
-            </AdminCard>
-          </Col>
-        </Row>
+          </div>
+        </div>
       )}
     </AdminPage>
   );

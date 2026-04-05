@@ -341,6 +341,9 @@ class Settings(BaseSettings):
     PYTHONLAB_LOG_MAX_FILE: str = Field(default="3")
     PYTHONLAB_WORKSPACE_DISK_QUOTA_MB: int = Field(default=512)  # 512MB disk quota
 
+    # ==================== SSE pub/sub 配置 ====================
+    SSE_REDIS_PUBSUB_ENABLED: bool = Field(default=True)  # True=Redis模式(多worker), False=进程内模式(单worker)
+
     GROUP_DISCUSSION_REDIS_ENABLED: bool = Field(default=True)
     GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=False)
     GROUP_DISCUSSION_LAST_ID_TTL: int = Field(default=86400)

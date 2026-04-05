@@ -1,38 +1,51 @@
-# 后端测试文档
+# 后端测试说明
 
-## 测试目录结构
+`backend/tests/` 只放 pytest 用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
 
-```
+## 当前结构
+
+```text
 tests/
-├── auth/              # 认证相关测试 (3个)
-├── group_discussion/  # 小组讨论测试 (4个)
-├── assessment/        # 评估系统测试 (3个)
-├── ai_agents/         # AI智能体测试 (7个)
-├── core/              # 核心功能测试 (5个)
-└── test_health.py     # 健康检查测试
+├── ai_agents/         # AI 智能体接口、凭证、流式与兼容性
+├── articles/          # 文章与分类相关行为
+├── assessment/        # 测评配置、会话、画像、课堂联动
+├── auth/              # 登录、登出、刷新、nonce
+├── classroom/         # 课堂计划与课堂域服务
+├── core/              # 核心依赖、限流、缓存、会话守卫
+├── group_discussion/  # 小组讨论访问控制、成员切换、消息流
+├── informatics/       # Typst 笔记与 PDF 渲染
+├── system/            # feature flags、metrics
+├── users/             # 用户 CRUD 与导入
+├── xbk/               # 校本课程结构、导入导出规则
+├── xxjs/              # 点名相关测试
+├── test_health.py     # 全局健康检查
+├── test_pubsub.py     # pubsub 核心行为
+└── test_xbk_performance.py
 ```
 
-## 运行测试
+## 常用命令
 
 ```bash
-# 运行所有测试
-pytest tests/
+# 运行全部 pytest
+pytest -q
 
-# 运行特定模块
-pytest tests/auth/
-pytest tests/group_discussion/
-pytest tests/assessment/
-pytest tests/ai_agents/
-pytest tests/core/
+# 运行某个模块
+pytest -q tests/auth
+pytest -q tests/xbk
+pytest -q tests/group_discussion
 
-# 运行单个测试文件
-pytest tests/auth/test_auth_login.py
+# 运行单个文件
+pytest -q tests/auth/test_auth_login.py
 ```
 
-## 测试覆盖
+## 分层约定
 
-- **认证 (auth/)**: 登录、登出、刷新token、nonce验证
-- **小组讨论 (group_discussion/)**: 加入锁、消息发送、访问控制、班级范围
-- **评估系统 (assessment/)**: 评估会话、画像生成、课堂服务流程
-- **AI智能体 (ai_agents/)**: 路由鉴权、流式对话、OpenAI/OpenRouter、凭证解析、Flow优化
-- **核心功能 (core/)**: 缓存NX、依赖注入、会话守卫、WebSocket、限流
+- `backend/tests/`：pytest 单元/集成测试
+- `backend/scripts/`：后端 smoke/soak/专项验证脚本
+- `scripts/prod-smoke/`：生产环境全链路烟测编排
+
+## 维护规则
+
+- 不在这里放一次性排障脚本。
+- 不提交 `__pycache__/`、`.pytest_cache/` 等缓存产物。
+- 如果新增测试模块，同时更新本文件的目录说明。

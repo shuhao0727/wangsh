@@ -1,9 +1,6 @@
 
 import React from "react";
-import { Typography } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
-
-const { Text } = Typography;
+import { CheckCircle, XCircle } from "lucide-react";
 
 export interface StatusItemProps {
   label: string;
@@ -13,12 +10,12 @@ export interface StatusItemProps {
 
 const StatusItem: React.FC<StatusItemProps> = ({ label, value, status }) => (
   <div className="admin-status-item">
-    <Text type="secondary" className="admin-status-item__label">
+    <span className="admin-status-item__label text-text-secondary">
       {label}
-    </Text>
+    </span>
     <div className="admin-status-item__value">
-      {status === "success" && <CheckCircleOutlined className="text-success" />}
-      {status === "error" && <CloseCircleOutlined className="text-error" />}
+      {status === "success" && <CheckCircle className="h-4 w-4 text-success" />}
+      {status === "error" && <XCircle className="h-4 w-4 text-error" />}
       <span className="admin-status-item__value-text">{value}</span>
     </div>
   </div>

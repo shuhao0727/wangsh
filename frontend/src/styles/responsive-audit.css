@@ -6,17 +6,17 @@
   min-width: 0;
 }
 
-.ws-admin-page .ant-row,
-.ws-admin-page .ant-col,
-.ws-admin-page .ant-space,
-.ws-admin-page .ant-space-item,
-.ws-admin-page .ant-form-item-control-input-content {
+.ws-admin-page .grid,
+.ws-admin-page .flex,
+.ws-admin-page .overflow-x-auto,
+.ws-admin-page .overflow-auto {
   min-width: 0;
 }
 
-.ws-admin-page .ant-typography,
-.ws-admin-page .ant-tag,
-.ws-admin-page .ant-btn {
+.ws-admin-page button,
+.ws-admin-page [role="button"],
+.ws-admin-page input,
+.ws-admin-page textarea {
   overflow-wrap: anywhere;
 }
 
@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ws-space-2);
   flex-wrap: wrap;
   width: 100%;
   min-width: 0;
@@ -42,58 +42,26 @@
   flex: 1;
 }
 
-.ws-responsive-toolbar .ant-input-search,
-.ws-responsive-toolbar .ant-select,
-.ws-responsive-toolbar .ant-btn,
-.ws-responsive-toolbar .ant-space {
+.ws-responsive-toolbar input,
+.ws-responsive-toolbar button,
+.ws-responsive-toolbar [role="combobox"] {
   max-width: 100%;
 }
 
-.ws-admin-page .ant-card,
-.ws-admin-page .ant-card-body,
-.ws-admin-page .ant-table-wrapper {
+.ws-admin-page .ws-page-card,
+.ws-admin-page .ws-table-frame,
+.ws-admin-page .overflow-x-auto,
+.ws-admin-page table {
   min-width: 0;
 }
 
-.ws-admin-page .ant-table-wrapper {
+.ws-admin-page table {
   width: 100%;
 }
 
-.ws-admin-page .ant-table-container {
-  overflow-x: auto;
-}
-
-.ws-admin-page .ant-table-content {
-  min-width: 100%;
-}
-
-.ws-admin-page .ant-table-cell .ant-space {
-  flex-wrap: wrap;
-}
-
-.ws-admin-page .ant-table-cell {
+.ws-admin-page th,
+.ws-admin-page td {
   word-break: break-word;
-}
-
-.ws-admin-page .ant-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  row-gap: 8px;
-}
-
-.ws-admin-page .ant-modal {
-  max-width: min(92vw, 920px);
-}
-
-.ws-admin-page .ant-modal-content {
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-}
-
-.ws-admin-page .ant-dropdown,
-.ws-admin-page .ant-select-dropdown,
-.ws-admin-page .ant-picker-dropdown {
-  max-width: min(92vw, 520px);
 }
 
 .ws-clamp-1 {
@@ -125,7 +93,7 @@
 
 @media (max-width: 1024px) {
   .ws-admin-page {
-    padding: 16px !important;
+    padding: var(--ws-space-3) !important;
   }
 }
 
@@ -138,26 +106,23 @@
     width: 100%;
   }
 
-  .ws-responsive-toolbar__group .ant-input-search,
-  .ws-responsive-toolbar__group .ant-select,
-  .ws-responsive-toolbar__group .ant-btn {
+  .ws-responsive-toolbar__group input,
+  .ws-responsive-toolbar__group button,
+  .ws-responsive-toolbar__group [role="combobox"] {
     width: 100% !important;
     min-width: 0;
   }
 
-  .ws-responsive-toolbar__group .ant-btn {
+  .ws-responsive-toolbar__group button,
+  .ws-responsive-toolbar__group [role="button"] {
     justify-content: center;
-  }
-
-  .ws-admin-page .ant-table-wrapper .ant-table-cell {
-    white-space: nowrap;
   }
 }
 
 @media (max-width: 430px) {
   .main-content {
     margin: 0 !important;
-    padding: 10px !important;
+    padding: var(--ws-space-2) !important;
   }
 
   .informatics-page,
@@ -166,12 +131,6 @@
   .ai-agents-page {
     width: 100%;
     min-width: 0;
-  }
-
-  .ant-pagination-options,
-  .ant-pagination-total-text {
-    width: 100%;
-    text-align: center;
   }
 }
 

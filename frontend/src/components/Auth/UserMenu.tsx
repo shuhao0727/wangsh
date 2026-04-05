@@ -1,17 +1,17 @@
 import React from "react";
-import { Dropdown, Avatar, Button, Typography } from "antd";
-import {
-  UserOutlined,
-  DashboardOutlined,
-  RobotOutlined,
-  HomeOutlined,
-  LogoutOutlined,
-} from "@ant-design/icons";
+import { User, LayoutDashboard, Bot, Home, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import useAuth from "@hooks/useAuth";
 import { logger } from "@services/logger";
-
-const { Text } = Typography;
 
 interface UserMenuProps {
   /** 显示模式：avatar（头像）或 button（按钮） */
@@ -36,75 +36,6 @@ const UserMenu: React.FC<UserMenuProps> = ({
 }) => {
   const navigate = useNavigate();
   const auth = useAuth();
-
-  // 生成用户菜单项（已移除个人资料和设置）
-  const getUserMenuItems = () => {
-    const menuItems: any[] = [];
-
-    if (!auth.isLoggedIn()) {
-      // 未登录状态，只显示登录按钮
-      return [];
-    }
-
-    // 根据用户角色显示不同的菜单
-    if (auth.isAdmin()) {
-      // 管理员（包括超级管理员）能看到后端管理
-      menuItems.push({
-        key: "/admin",
-        icon: <DashboardOutlined />,
-        label: "后端管理",
-        onClick: () => {
-          handleMenuClick("/admin");
-          // 在新标签页中打开后端管理
-          const adminUrl = `${window.location.origin}/admin`;
-          window.open(adminUrl, "_blank", "noopener,noreferrer");
-        },
-      });
-    } else if (auth.isLoggedIn()) {
-      // 普通登录用户（学生）看到我的AI助手
-      menuItems.push({
-        key: "/ai-agents",
-        icon: <RobotOutlined />,
-        label: "我的AI助手",
-        onClick: () => {
-          handleMenuClick("/ai-agents");
-          navigate("/ai-agents");
-        },
-      });
-    }
-
-    // 分隔线
-    menuItems.push({
-      key: "divider-1",
-      type: "divider" as const,
-    });
-
-    // 返回首页（所有用户）
-    menuItems.push({
-      key: "/home",
-      icon: <HomeOutlined />,
-      label: "返回首页",
-      onClick: () => {
-        handleMenuClick("/home");
-        navigate("/home");
-      },
-    });
-
-    // 退出登录（所有登录用户）
-    menuItems.push({
-      key: "logout",
-      icon: <LogoutOutlined />,
-      label: "退出登录",
-      danger: true,
-      onClick: () => {
-        handleMenuClick("logout");
-        auth.logout();
-        navigate("/home");
-      },
-    });
-
-    return menuItems;
-  };
 
   // 处理菜单点击
   const handleMenuClick = (key: string) => {
@@ -144,14 +75,20 @@ const UserMenu: React.FC<UserMenuProps> = ({
     const role = auth.getUserRole();
     switch (role) {
       case "super_admin":
-        return "#EF4444"; // 红色
+        return "bg-[var(--ws-color-error)]";
       case "admin":
-        return "#0EA5E9"; // 蓝色
+        return "bg-primary";
       case "student":
-        return "#10B981"; // 绿色
+        return "bg-[var(--ws-color-success)]";
       default:
-        return "#6366F1"; // 紫色
+        return "bg-[var(--ws-color-purple)]";
     }
+  };
+
+  // 获取用户名首字母
+  const getInitials = () => {
+    const name = getDisplayName();
+    return name.charAt(0).toUpperCase();
   };
 
   // 如果用户未登录，显示登录按钮
@@ -159,16 +96,14 @@ const UserMenu: React.FC<UserMenuProps> = ({
     if (mode === "button") {
       return (
         <Button
-          type="primary"
-          icon={<UserOutlined />}
           onClick={() => {
-            // 触发菜单点击事件
             if (onMenuClick) {
               onMenuClick("login");
             }
           }}
           style={style}
         >
+          <User className="mr-2 h-4 w-4" />
           登录
         </Button>
       );
@@ -190,50 +125,93 @@ const UserMenu: React.FC<UserMenuProps> = ({
         }}
         title="点击登录"
       >
-        <Avatar
-          size="default"
-          icon={<UserOutlined />}
-          style={{ backgroundColor: "rgba(0,0,0,0.08)" }}
-          className={showName ? "mr-2" : ""}
-        />
-        {showName && <Text>未登录</Text>}
+        <Avatar className={`${showName ? "mr-2" : ""} h-8 w-8`}>
+          <AvatarFallback className="bg-muted">
+            <User className="h-4 w-4 text-muted-foreground" />
+          </AvatarFallback>
+        </Avatar>
+        {showName && <span className="text-[length:var(--ws-text-nav)] text-muted-foreground">未登录</span>}
       </div>
     );
   }
 
   // 用户已登录，显示用户菜单
-  const menuItems = getUserMenuItems();
-
-  // 用户信息显示
   const userInfo = (
     <div className="flex items-center">
-      <Avatar
-        size={mode === "button" ? "small" : "default"}
-        icon={<UserOutlined />}
-        style={{ backgroundColor: getAvatarColor() }}
-        className={showName ? "mr-2" : ""}
-      />
+      <Avatar className={`${showName ? "mr-2" : ""} ${mode === "button" ? "h-6 w-6" : "h-8 w-8"}`}>
+        <AvatarFallback className={`${getAvatarColor()} text-white text-xs`}>
+          {getInitials()}
+        </AvatarFallback>
+      </Avatar>
       {showName && (
         <div className="flex flex-col leading-tight">
-          <Text strong className="text-sm">{getDisplayName()}</Text>
-          <Text type="secondary" className="text-xs">{getRoleText()}</Text>
+          <span className="text-[length:var(--ws-text-nav)] font-medium">{getDisplayName()}</span>
+          <span className="text-[length:var(--ws-text-xs)] text-muted-foreground">{getRoleText()}</span>
         </div>
       )}
     </div>
   );
 
-  if (mode === "button") {
-    return (
-      <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-        <Button type="text" className="!px-2 !py-1">{userInfo}</Button>
-      </Dropdown>
-    );
-  }
-
   return (
-    <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow>
-      <div className="cursor-pointer">{userInfo}</div>
-    </Dropdown>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {mode === "button" ? (
+          <Button variant="ghost" className="px-2 py-1 h-auto" style={style}>
+            {userInfo}
+          </Button>
+        ) : (
+          <div className="cursor-pointer" style={style}>{userInfo}</div>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        {auth.isAdmin() ? (
+          <DropdownMenuItem
+            onClick={() => {
+              handleMenuClick("/admin/dashboard");
+              const adminUrl = `${window.location.origin}/admin/dashboard`;
+              window.open(adminUrl, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            后端管理
+          </DropdownMenuItem>
+        ) : auth.isLoggedIn() ? (
+          <DropdownMenuItem
+            onClick={() => {
+              handleMenuClick("/ai-agents");
+              navigate("/ai-agents");
+            }}
+          >
+            <Bot className="mr-2 h-4 w-4" />
+            我的AI助手
+          </DropdownMenuItem>
+        ) : null}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={() => {
+            handleMenuClick("/home");
+            navigate("/home");
+          }}
+        >
+          <Home className="mr-2 h-4 w-4" />
+          返回首页
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => {
+            handleMenuClick("logout");
+            auth.logout();
+            navigate("/home");
+          }}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          退出登录
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 

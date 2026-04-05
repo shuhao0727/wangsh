@@ -3,33 +3,32 @@
  * 显示智能体使用记录的完整信息
  */
 import React, { useEffect, useState } from "react";
-import {
-  Row,
-  Col,
-  Tag,
-  Typography,
-  Modal,
-  Button,
-  Divider,
-  Alert,
-  Descriptions,
-  Spin,
-} from "antd";
-import {
-  UserOutlined,
-  RobotOutlined,
-  MessageOutlined,
-  ClockCircleOutlined,
-  CalendarOutlined,
-  DatabaseOutlined,
-  CopyOutlined,
-} from "@ant-design/icons";
 import dayjs from "dayjs";
+import {
+  Bot,
+  Calendar,
+  Clock3,
+  Copy,
+  Database,
+  Loader2,
+  MessageSquare,
+  User,
+} from "lucide-react";
 
 import type { AgentUsageData } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
-
-const { Text, Title, Paragraph } = Typography;
+import { showMessage } from "@/lib/toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface DetailModalProps {
   visible: boolean;
@@ -37,37 +36,80 @@ interface DetailModalProps {
   onClose: () => void;
 }
 
-// 格式化响应时间
 const formatResponseTime = (ms?: number) => {
   if (!ms) return "未知";
   if (ms < 1000) return `${ms}毫秒`;
   return `${(ms / 1000).toFixed(2)}秒`;
 };
 
-// 智能体类型标签配置
+const formatDateTime = (value?: string) =>
+  value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
+
+const displayText = (value?: string | number | null) => {
+  if (value === null || value === undefined) return "-";
+  const text = String(value).trim();
+  return text || "-";
+};
+
 const agentTypeConfig = {
   general: {
-    color: "blue" as const,
     text: "通用智能体",
-    icon: <RobotOutlined />,
+    icon: <Bot className="h-4 w-4" />,
+    variant: "primarySubtle" as const,
   },
   dify: {
-    color: "purple" as const,
     text: "Dify智能体",
-    icon: <RobotOutlined />,
+    icon: <Bot className="h-4 w-4" />,
+    variant: "violet" as const,
   },
   default: {
-    color: "cyan" as const,
     text: "未知类型",
-    icon: <RobotOutlined />,
+    icon: <Bot className="h-4 w-4" />,
+    variant: "cyan" as const,
   },
 };
 
-const DetailModal: React.FC<DetailModalProps> = ({
-  visible,
-  record,
-  onClose,
-}) => {
+const SectionTitle: React.FC<{ icon: React.ReactNode; title: string }> = ({
+  icon,
+  title,
+}) => (
+  <div className="flex items-center gap-2 text-base font-semibold text-text-base">
+    <span className="text-primary">{icon}</span>
+    <span>{title}</span>
+  </div>
+);
+
+const InfoTile: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}> = ({ label, children, className }) => (
+  <div className={`rounded-lg border border-border-secondary bg-surface p-3 ${className || ""}`}>
+    <div className="mb-1.5 text-xs font-medium text-text-tertiary">{label}</div>
+    <div className="text-sm font-medium text-text-base">{children}</div>
+  </div>
+);
+
+const MetricTile: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  tone?: "primary" | "success" | "warning";
+}> = ({ label, value, tone = "primary" }) => {
+  const toneClass =
+    tone === "success"
+      ? "text-[var(--ws-color-success)]"
+      : tone === "warning"
+        ? "text-[var(--ws-color-warning)]"
+        : "text-primary";
+  return (
+    <div className="rounded-lg border border-border-secondary bg-surface p-3">
+      <div className="text-xs text-text-tertiary">{label}</div>
+      <div className={`mt-1 text-xl font-semibold ${toneClass}`}>{value}</div>
+    </div>
+  );
+};
+
+const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) => {
   const [conversationLoading, setConversationLoading] = useState(false);
   const [conversationMessages, setConversationMessages] = useState<
     Array<{
@@ -117,362 +159,214 @@ const DetailModal: React.FC<DetailModalProps> = ({
     : agentTypeConfig.default;
 
   return (
-    <Modal
-      title={
-        <div className="flex items-center">
-          <DatabaseOutlined className="mr-2 text-primary" />
-          <span>智能体使用记录详情</span>
-        </div>
-      }
-      open={visible}
-      onCancel={onClose}
-      footer={[
-        <Button key="close" onClick={onClose}>
-          关闭
-        </Button>,
-      ]}
-      width={800}
-      styles={{ body: { padding: 24 } }}
-    >
-      <div className="overflow-y-auto" style={{ maxHeight: "70vh" }}>
-        {/* 基本信息区域 */}
-        <div className="mb-6">
-          <Title level={4} className="mb-4">
-            <MessageOutlined className="mr-2" />
-            对话信息
-          </Title>
+    <Dialog open={visible} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[88vh] gap-0 overflow-hidden p-0 sm:max-w-[940px]">
+        <DialogHeader className="border-b border-border-secondary bg-surface-2 px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Database className="h-5 w-5 text-primary" />
+            智能体使用记录详情
+          </DialogTitle>
+          <DialogDescription>
+            查看会话、学生、智能体和完整对话信息。
+          </DialogDescription>
+        </DialogHeader>
 
-          <Row gutter={24} className="mb-4">
-            <Col span={12}>
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="记录ID">
-                  <Text strong>{record.id}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="会话ID">
-                  <Tag
-                    icon={<CopyOutlined />}
-                    className="font-mono"
-                  >
-                    {record.session_id || "未记录"}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="响应时间">
-                  <div className="flex items-center">
-                    <ClockCircleOutlined
-                      className="mr-1 text-warning"
-                    />
-                    <Text>{formatResponseTime(record.response_time_ms)}</Text>
-                  </div>
-                </Descriptions.Item>
-              </Descriptions>
-            </Col>
-
-            <Col span={12}>
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="使用时间">
-                  <div className="flex items-center">
-                    <CalendarOutlined
-                      className="mr-1 text-primary"
-                    />
-                    <Text>
-                      {dayjs(record.used_at).format("YYYY-MM-DD HH:mm:ss")}
-                    </Text>
-                  </div>
-                </Descriptions.Item>
-                <Descriptions.Item label="用户ID">
-                  <Text>{record.user_id}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="智能体ID">
-                  <Text>{record.moxing_id}</Text>
-                </Descriptions.Item>
-              </Descriptions>
-            </Col>
-          </Row>
-        </div>
-
-        <Divider />
-
-        {/* 学生信息区域 */}
-        <div className="mb-6">
-          <Title level={4} className="mb-4">
-            <UserOutlined className="mr-2" />
-            学生信息
-          </Title>
-
-          {user ? (
-            <Row gutter={24}>
-              <Col span={8}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    姓名
-                  </Text>
-                  <Text>{user.name}</Text>
-                </div>
-              </Col>
-
-              <Col span={8}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    学号
-                  </Text>
-                  <Text copyable>{user.student_id}</Text>
-                </div>
-              </Col>
-
-              <Col span={8}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    状态
-                  </Text>
-                  <Tag color={user.is_active ? "success" : "error"}>
-                    {user.is_active ? "活跃" : "未激活"}
-                  </Tag>
-                </div>
-              </Col>
-
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    班级
-                  </Text>
-                  <Text>{user.class_name}</Text>
-                </div>
-              </Col>
-
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    学年
-                  </Text>
-                  <Text>{user.grade}</Text>
-                </div>
-              </Col>
-            </Row>
-          ) : (
-            <Alert
-              message="用户信息未关联"
-              description="此记录未关联到具体的用户信息"
-              type="warning"
-              showIcon
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MetricTile label="记录ID" value={record.id} />
+            <MetricTile label="使用时间" value={formatDateTime(record.used_at)} tone="success" />
+            <MetricTile
+              label="响应耗时"
+              value={formatResponseTime(record.response_time_ms)}
+              tone="warning"
             />
-          )}
-        </div>
+          </div>
 
-        <Divider />
-
-        {/* 智能体信息区域 */}
-        <div className="mb-6">
-          <Title level={4} className="mb-4">
-            <RobotOutlined className="mr-2" />
-            智能体信息
-          </Title>
-
-          {agent ? (
-            <Row gutter={24}>
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    智能体名称
-                  </Text>
-                  <div className="flex items-center">
-                    {agentTypeConfigItem.icon}
-                    <Text className="ml-2">{agent.agent_name}</Text>
-                  </div>
-                </div>
-              </Col>
-
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    智能体类型
-                  </Text>
-                  <Tag color={agentTypeConfigItem.color}>
-                    {agentTypeConfigItem.text}
-                  </Tag>
-                </div>
-              </Col>
-
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    模型名称
-                  </Text>
-                  <Text>{agent.model_name}</Text>
-                </div>
-              </Col>
-
-              <Col span={12}>
-                <div className="mb-3">
-                  <Text strong className="block mb-1">
-                    创建者
-                  </Text>
-                  <Text>用户ID: {agent.user_id}</Text>
-                </div>
-              </Col>
-            </Row>
-          ) : (
-            <Alert
-              message="智能体信息未关联"
-              description="此记录未关联到具体的智能体信息"
-              type="warning"
-              showIcon
-            />
-          )}
-        </div>
-
-        <Divider />
-
-        {/* 完整对话区域 */}
-        <div className="mb-4">
-          <Title level={4} className="mb-4">
-            <MessageOutlined className="mr-2" />
-            完整对话
-          </Title>
-
-          {conversationLoading ? (
-            <div className="text-center py-6">
-              <Spin />
-            </div>
-          ) : conversationMessages.length > 0 ? (
-            <div>
-              {conversationMessages.map((m) => {
-                const isQuestion = m.message_type === "question";
-                const isAnswer = m.message_type === "answer";
-                const borderColor = isQuestion
-                  ? "#0EA5E9"
-                  : isAnswer
-                    ? "#10B981"
-                    : "rgba(0,0,0,0.08)";
-                const background = isQuestion
-                  ? "#FAFAFA"
-                  : isAnswer
-                    ? "rgba(14, 165, 233, 0.06)"
-                    : "#FAFAFA";
-                const label = isQuestion ? "Q" : isAnswer ? "A" : m.message_type;
-                return (
-                  <div key={m.id} className="mb-3">
-                    <div className="mb-1 flex gap-2 items-center">
-                      <Tag color={isQuestion ? "blue" : isAnswer ? "green" : "cyan"} style={{ marginInlineEnd: 0 }}>
-                        {label}
-                      </Tag>
-                      <Text type="secondary" className="text-xs">
-                        {dayjs(m.created_at).format("YYYY-MM-DD HH:mm:ss")}
-                      </Text>
-                    </div>
-                    <div
-                      className="px-4 py-3 rounded-md"
-                      style={{
-                        backgroundColor: background,
-                        borderLeft: `4px solid ${borderColor}`,
+          <section className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
+            <SectionTitle icon={<MessageSquare className="h-4 w-4" />} title="会话信息" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <InfoTile label="会话ID" className="sm:col-span-2">
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-md border border-border-secondary bg-surface px-2.5 py-1.5 text-xs text-text-base">
+                    {displayText(record.session_id)}
+                  </code>
+                  {record.session_id ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(record.session_id || "");
+                          showMessage.success("会话ID已复制");
+                        } catch {
+                          showMessage.error("复制失败");
+                        }
                       }}
                     >
-                      <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
-                        {m.content}
-                      </Paragraph>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                </div>
+              </InfoTile>
+              <InfoTile label="用户ID">{displayText(record.user_id)}</InfoTile>
+              <InfoTile label="智能体ID">{displayText(record.moxing_id)}</InfoTile>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <section className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
+              <SectionTitle icon={<User className="h-4 w-4" />} title="学生信息" />
+              {user ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <InfoTile label="姓名">{displayText(user.name)}</InfoTile>
+                  <InfoTile label="学号">{displayText(user.student_id)}</InfoTile>
+                  <InfoTile label="班级">{displayText(user.class_name)}</InfoTile>
+                  <InfoTile label="学年">{displayText(user.grade)}</InfoTile>
+                  <InfoTile label="状态" className="sm:col-span-2">
+                    <Badge variant={user.is_active ? "success" : "danger"}>
+                      {user.is_active ? "活跃" : "未激活"}
+                    </Badge>
+                  </InfoTile>
+                </div>
+              ) : (
+                <Alert className="border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)]">
+                  <AlertTitle>用户信息未关联</AlertTitle>
+                  <AlertDescription>此记录未关联到具体的用户信息。</AlertDescription>
+                </Alert>
+              )}
+            </section>
+
+            <section className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
+              <SectionTitle icon={<Bot className="h-4 w-4" />} title="智能体信息" />
+              {agent ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <InfoTile label="智能体名称">
+                    <div className="flex items-center gap-2">
+                      {agentTypeConfigItem.icon}
+                      {displayText(agent.agent_name)}
+                    </div>
+                  </InfoTile>
+                  <InfoTile label="智能体类型">
+                    <Badge variant={agentTypeConfigItem.variant}>
+                      {agentTypeConfigItem.text}
+                    </Badge>
+                  </InfoTile>
+                  <InfoTile label="模型名称">{displayText(agent.model_name)}</InfoTile>
+                  <InfoTile label="创建者">{displayText(agent.user_id)}</InfoTile>
+                  <InfoTile label="描述" className="sm:col-span-2">
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
+                      {displayText(agent.description)}
+                    </div>
+                  </InfoTile>
+                </div>
+              ) : (
+                <Alert className="border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)]">
+                  <AlertTitle>智能体信息未关联</AlertTitle>
+                  <AlertDescription>此记录未关联到具体的智能体信息。</AlertDescription>
+                </Alert>
+              )}
+            </section>
+          </div>
+
+          <section className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
+            <SectionTitle icon={<MessageSquare className="h-4 w-4" />} title="完整对话" />
+            {conversationLoading ? (
+              <div className="flex h-40 items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-text-tertiary" />
+              </div>
+            ) : conversationMessages.length > 0 ? (
+              <div className="space-y-3">
+                {conversationMessages.map((message) => {
+                  const isQuestion = message.message_type === "question";
+                  const isAnswer = message.message_type === "answer";
+                  const toneClass = isQuestion
+                    ? "border-primary/30 bg-primary-soft"
+                    : isAnswer
+                      ? "border-[var(--ws-color-success)]/30 bg-success-soft"
+                      : "border-border-secondary bg-surface";
+                  const label = isQuestion ? "Q" : isAnswer ? "A" : message.message_type;
+                  return (
+                    <div key={message.id} className={`rounded-lg border px-3 py-2.5 ${toneClass}`}>
+                      <div className="mb-2 flex items-center gap-2">
+                        <Badge variant={isQuestion ? "primarySubtle" : isAnswer ? "success" : "neutral"}>
+                          {label}
+                        </Badge>
+                        <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {formatDateTime(message.created_at)}
+                        </span>
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-text-base">
+                        {displayText(message.content)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Alert className="border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)]">
+                  <AlertTitle>未加载到完整对话</AlertTitle>
+                  <AlertDescription>
+                    当前记录未关联会话，或会话已被清理，已展示单轮摘要。
+                  </AlertDescription>
+                </Alert>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2.5">
+                    <div className="mb-1 text-xs font-medium text-primary">问题</div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-text-base">
+                      {displayText(record.question)}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <>
-              <Alert
-                message="未加载到完整对话"
-                description="当前记录未关联会话，或会话已被清理"
-                type="warning"
-                showIcon
-              />
-              <div className="mt-4">
-                <Title level={5} className="mb-2">
-                  单轮摘要
-                </Title>
-                <div className="bg-gray-50 px-4 py-3 rounded-md mb-3" style={{ borderLeft: "4px solid #0EA5E9" }}>
-                  <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
-                    {record.question}
-                  </Paragraph>
-                </div>
-                <div className="px-4 py-3 rounded-md" style={{ backgroundColor: "rgba(14, 165, 233, 0.06)", borderLeft: "4px solid #10B981" }}>
-                  <Paragraph className="!m-0 leading-relaxed whitespace-pre-wrap">
-                    {record.answer}
-                  </Paragraph>
+                  <div className="rounded-lg border border-[var(--ws-color-success)]/30 bg-success-soft px-3 py-2.5">
+                    <div className="mb-1 text-xs font-medium text-[var(--ws-color-success)]">回答</div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-text-base">
+                      {displayText(record.answer)}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </section>
 
-        {/* 附加数据信息（如果有） */}
-        {record.additional_data && (
-          <>
-            <Divider />
-            <div className="mb-4">
-              <Title level={4} className="mb-4">
-                附加信息
-              </Title>
-              <Alert
-                message="附加数据"
-                description={
-                  <pre className="text-xs !m-0">
-                    {JSON.stringify(record.additional_data, null, 2)}
-                  </pre>
-                }
-                type="info"
-                showIcon
-              />
+          {record.additional_data ? (
+            <section className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
+              <SectionTitle icon={<Database className="h-4 w-4" />} title="附加信息" />
+              <div className="max-h-56 overflow-auto rounded-lg border border-primary/20 bg-primary-soft p-3">
+                <pre className="m-0 whitespace-pre-wrap text-xs text-text-secondary">
+                  {JSON.stringify(record.additional_data, null, 2)}
+                </pre>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="rounded-xl border border-border-secondary bg-surface-2 p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <InfoTile label="问题字数">
+                <span className="text-lg font-semibold">{record.question ? record.question.length : 0}</span>
+              </InfoTile>
+              <InfoTile label="回答字数">
+                <span className="text-lg font-semibold">{record.answer ? record.answer.length : 0}</span>
+              </InfoTile>
+              <InfoTile label="响应时间">
+                <span className="inline-flex items-center gap-1.5 text-lg font-semibold">
+                  <Clock3 className="h-4 w-4 text-[var(--ws-color-warning)]" />
+                  {formatResponseTime(record.response_time_ms)}
+                </span>
+              </InfoTile>
             </div>
-          </>
-        )}
-
-        {/* 统计信息 */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-md border border-black/5">
-          <Row gutter={24}>
-            <Col span={8} className="text-center">
-              <div>
-                <Text
-                  type="secondary"
-                  className="block text-xs"
-                >
-                  问题字数
-                </Text>
-                <Title level={3} className="!my-2">
-                  {record.question ? record.question.length : 0}
-                </Title>
-              </div>
-            </Col>
-
-            <Col span={8} className="text-center">
-              <div>
-                <Text
-                  type="secondary"
-                  className="block text-xs"
-                >
-                  回答字数
-                </Text>
-                <Title level={3} className="!my-2">
-                  {record.answer ? record.answer.length : 0}
-                </Title>
-              </div>
-            </Col>
-
-            <Col span={8} className="text-center">
-              <div>
-                <Text
-                  type="secondary"
-                  className="block text-xs"
-                >
-                  响应时间
-                </Text>
-                <Title level={3} className="!my-2">
-                  {record.response_time_ms
-                    ? formatResponseTime(record.response_time_ms)
-                    : "未知"}
-                </Title>
-              </div>
-            </Col>
-          </Row>
+          </section>
         </div>
-      </div>
-    </Modal>
+
+        <DialogFooter className="border-t border-border-secondary bg-surface-2 px-6 py-3">
+          <Button type="button" onClick={onClose} className="min-w-[96px]">
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

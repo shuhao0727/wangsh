@@ -1,6 +1,7 @@
+import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Spin, message } from "antd";
+import { Loader2 } from "lucide-react";
 import ArticleEditForm from "./EditForm";
 import { articleApi, categoryApi } from "@services";
 import type { ArticleWithRelations } from "@services";
@@ -21,7 +22,7 @@ const ArticleEditorPage: React.FC = () => {
       const response = await articleApi.getArticle(articleId);
       setArticle(response.data);
     } catch (_error) {
-      message.error("加载文章失败");
+      showMessage.error("加载文章失败");
       navigate("/admin/articles");
     } finally {
       setLoading(false);
@@ -47,7 +48,7 @@ const ArticleEditorPage: React.FC = () => {
     }
     const articleId = parseInt(String(id), 10);
     if (!Number.isFinite(articleId)) {
-      message.error("文章ID格式错误");
+      showMessage.error("文章ID格式错误");
       navigate("/admin/articles");
       return;
     }
@@ -55,7 +56,7 @@ const ArticleEditorPage: React.FC = () => {
   }, [id, isCreateMode, loadArticle, loadCategories, navigate]);
 
   const handleSaveSuccess = () => {
-    message.success(isCreateMode ? "文章创建成功" : "文章更新成功");
+    showMessage.success(isCreateMode ? "文章创建成功" : "文章更新成功");
     navigate("/admin/articles");
   };
 
@@ -65,9 +66,9 @@ const ArticleEditorPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="text-center py-28">
-        <Spin size="large" />
-        <div className="mt-3">加载中...</div>
+      <div className="flex flex-col items-center justify-center gap-3 py-28 text-text-secondary">
+        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+        <div>加载中...</div>
       </div>
     );
   }

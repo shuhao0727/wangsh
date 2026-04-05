@@ -8,6 +8,7 @@
 
 # 测试
 pytest==9.0.2
+requests==2.32.3
 
 # Kubernetes（沙箱扩展，开发预留）
 kubernetes==32.0.0

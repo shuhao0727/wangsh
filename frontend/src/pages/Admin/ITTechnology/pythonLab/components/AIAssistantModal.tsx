@@ -1,9 +1,13 @@
+import { showMessage } from "@/lib/toast";
 import React, { useState, useRef, useEffect } from "react";
-import { Input, Button, Space, Switch, App } from "antd";
-import { RobotOutlined, SendOutlined, CodeOutlined } from "@ant-design/icons";
+import { Bot, Send, Code, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { pythonlabFlowApi } from "../services/pythonlabDebugApi";
 import ReactMarkdown from "react-markdown";
 import { FloatingPopup } from "./FloatingPopup";
+import { cn } from "@/lib/utils";
 
 interface AIAssistantModalProps {
   open: boolean;
@@ -27,7 +31,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     autoOptimizeCode,
     setAutoOptimizeCode,
 }) => {
-  const { message } = App.useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -69,11 +72,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       if (res.message) {
         setMessages((prev) => [...prev, { role: "assistant", content: res.message! }]);
       } else {
-        message.error(res.error || "AI response failed");
+        showMessage.error(res.error || "AI response failed");
         setMessages((prev) => [...prev, { role: "assistant", content: "Error: " + (res.error || "Unknown error") }]);
       }
     } catch (_error) {
-      message.error("Network error");
+      showMessage.error("Network error");
       setMessages((prev) => [...prev, { role: "assistant", content: "Error: Network error" }]);
     } finally {
       setLoading(false);
@@ -81,33 +84,35 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   };
 
   const renderChat = () => (
-    <div className="flex flex-col h-full">
-      <div style={{ flex: 1, overflowY: "auto", padding: 12, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto border-b border-border-secondary p-3">
         {messages.length === 0 && (
-            <div style={{ textAlign: "center", marginTop: 40, color: "#999" }}>
-                <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                <p>我是你的 Python 实验室 AI 助手。</p>
-                <p>开启上方“自动优化”开关，我将结合当前代码为你提供建议。</p>
-            </div>
+          <div className="mt-10 text-center text-text-tertiary">
+            <Bot className="mx-auto mb-4 h-12 w-12" />
+            <p>我是你的 Python 实验室 AI 助手。</p>
+            <p>开启上方“自动优化”开关，我将结合当前代码为你提供建议。</p>
+          </div>
         )}
         <div className="flex flex-col gap-2">
           {messages.map((item, index) => (
-            <div key={index} style={{ display: "flex", justifyContent: item.role === "user" ? "flex-end" : "flex-start" }}>
+            <div
+              key={index}
+              className={cn("flex", item.role === "user" ? "justify-end" : "justify-start")}
+            >
               <div
-                style={{
-                  maxWidth: "85%",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: item.role === "user" ? "#0EA5E9" : "#FAFAFA",
-                  color: item.role === "user" ? "#fff" : "#333",
-                }}
+                className={cn(
+                  "max-w-[85%] rounded-xl px-3 py-2 text-sm",
+                  item.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface-2 text-text-base",
+                )}
               >
                 {item.role === "user" ? (
-                    item.content
+                  item.content
                 ) : (
-                    <div className="markdown-body text-sm">
-                        <ReactMarkdown>{item.content}</ReactMarkdown>
-                    </div>
+                  <div className="markdown-body text-sm">
+                    <ReactMarkdown>{item.content}</ReactMarkdown>
+                  </div>
                 )}
               </div>
             </div>
@@ -115,12 +120,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         </div>
         <div ref={messagesEndRef} />
       </div>
-      <div style={{ padding: 12, display: "flex", gap: 8 }}>
-        <Input.TextArea
+      <div className="flex gap-2 p-3">
+        <Textarea
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="输入你的问题..."
-          autoSize={{ minRows: 1, maxRows: 4 }}
+          aria-label="输入你的问题"
+          rows={2}
+          className="max-h-[120px] min-h-[44px] resize-none"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -128,7 +135,9 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             }
           }}
         />
-        <Button type="primary" icon={<SendOutlined />} onClick={() => handleSend()} loading={loading} />
+        <Button onClick={() => handleSend()} disabled={loading} aria-label="发送消息">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
       </div>
     </div>
   );
@@ -136,9 +145,9 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   return (
     <FloatingPopup
       title={
-          <Space>
-              <RobotOutlined /> AI 助手
-          </Space>
+        <div className="inline-flex items-center gap-1.5">
+          <Bot className="h-4 w-4" /> AI 助手
+        </div>
       }
       open={open}
       onClose={onClose}
@@ -148,28 +157,19 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       draggable
       scrollable={false}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         {/* Header / Toolbar */}
-        <div style={{ 
-            padding: "8px 12px", 
-            borderBottom: "1px solid rgba(0,0,0,0.04)",
-            display: "flex", 
-            justifyContent: "space-between",
-            alignItems: "center",
-            background: "#fafafa"
-        }}>
-            <Space size={16}>
-                <Space size={4}>
-                    <CodeOutlined style={{ color: autoOptimizeCode ? "#0EA5E9" : "#999" }} />
-                    <span className="text-xs">自动优化代码</span>
-                    <Switch size="small" checked={autoOptimizeCode} onChange={handleAutoOptimizeCodeChange} />
-                </Space>
-            </Space>
+        <div className="flex items-center justify-between border-b border-border-secondary bg-surface-2 px-3 py-2">
+          <div className="inline-flex items-center gap-2">
+            <Code className={cn("h-4 w-4", autoOptimizeCode ? "text-primary" : "text-text-tertiary")} />
+            <span className="text-xs">自动优化代码</span>
+            <Switch checked={autoOptimizeCode} onCheckedChange={handleAutoOptimizeCodeChange} />
+          </div>
         </div>
 
         {/* Chat Body */}
         <div className="flex-1 overflow-hidden">
-            {renderChat()}
+          {renderChat()}
         </div>
       </div>
     </FloatingPopup>
