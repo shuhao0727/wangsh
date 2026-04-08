@@ -128,6 +128,7 @@ type DataTablePaginationProps = {
   pageSize: number
   pageSizeOptions?: number[]
   onPageChange: (page: number, pageSize?: number) => void
+  className?: string
 }
 
 function DataTablePagination({
@@ -137,12 +138,13 @@ function DataTablePagination({
   pageSize,
   pageSizeOptions = [10, 20, 50, 100],
   onPageChange,
+  className,
 }: DataTablePaginationProps) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="mr-1 text-text-tertiary">共 {total} 条</span>
+    <div className={cn("flex flex-wrap items-center justify-end gap-2 text-sm text-text-secondary", className)}>
+      <span className="mr-1 whitespace-nowrap text-text-tertiary">共 {total} 条</span>
       <select
-        className="h-8 rounded-md border border-border bg-transparent px-2 text-sm"
+        className="h-9 rounded-lg border border-border-secondary bg-background px-3 text-sm text-text-base outline-none transition-colors hover:border-border focus:border-primary/50"
         value={pageSize}
         onChange={(event) => onPageChange(1, Number(event.target.value))}
       >
@@ -153,19 +155,21 @@ function DataTablePagination({
         ))}
       </select>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
+        className="h-9 px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage <= 1}
         onClick={() => onPageChange(currentPage - 1)}
       >
         上一页
       </Button>
-      <span>
+      <span className="min-w-[3.5rem] text-center text-sm font-medium text-text-base">
         {currentPage}/{totalPages}
       </span>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
+        className="h-9 px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage >= totalPages}
         onClick={() => onPageChange(currentPage + 1)}
       >
