@@ -457,7 +457,7 @@ const AdminAIAgents: React.FC = () => {
               </Button>
             }
           >
-            <DataTable table={table} className="h-full" />
+            <DataTable table={table} className="h-full" tableClassName="min-w-[1400px]" />
           </AdminTablePanel>
         </div>
         {agents.length > 0 ? (

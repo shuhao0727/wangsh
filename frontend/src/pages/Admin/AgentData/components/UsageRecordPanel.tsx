@@ -197,7 +197,7 @@ const UsageRecordPanel: React.FC = () => {
             isEmpty={!loading && data.length === 0}
             emptyDescription="暂无使用记录"
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[1400px] table-fixed" />
+            <DataTable table={table} className="h-full" tableClassName="min-w-[1700px] table-fixed" />
           </AdminTablePanel>
         </div>
         {total > 0 ? (

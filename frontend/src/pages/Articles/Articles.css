@@ -93,6 +93,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: var(--ws-shell-max-width);
+  margin: 0 auto;
 }
 
 .articles-split-pane {

@@ -20,6 +20,7 @@ import {
   Zap,
   Cloud,
   Cable,
+  Bot,
 } from "lucide-react";
 import dayjs from "dayjs";
 import type { AIAgent } from "@services/znt/types";
@@ -33,6 +34,11 @@ const typeConfig: Record<
     className?: string;
   }
 > = {
+  general: {
+    text: "通用",
+    icon: <Bot className="h-3 w-3" />,
+    variant: "primarySubtle",
+  },
   openai: {
     text: "OpenAI",
     icon: <Zap className="h-3 w-3" />,
@@ -102,8 +108,11 @@ export const getAgentColumns = (
     id: "name",
     header: "名称",
     accessorFn: (row) => row.agent_name || row.name,
-    size: 280,
-    meta: { headerClassName: "w-[280px]", cellClassName: "w-[280px] align-top" },
+    size: 260,
+    meta: {
+      headerClassName: "w-[260px] min-w-[260px]",
+      cellClassName: "w-[260px] min-w-[260px] align-top",
+    },
     cell: ({ row }) => {
       const record = row.original;
       const displayName = record.agent_name || record.name;
@@ -117,7 +126,7 @@ export const getAgentColumns = (
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="mb-0.5 text-sm font-semibold text-text-base">
+            <div className="mb-0.5 text-sm font-semibold text-text-base break-words">
               {displayName}
             </div>
           </div>
@@ -129,12 +138,15 @@ export const getAgentColumns = (
     id: "agent_type",
     header: "类型",
     accessorKey: "agent_type",
-    size: 120,
-    meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
+    size: 132,
+    meta: {
+      headerClassName: "w-[132px] min-w-[132px]",
+      cellClassName: "w-[132px] min-w-[132px] align-top whitespace-nowrap",
+    },
     cell: ({ row }) => {
       const config = getTypeConfig(row.original.agent_type);
       return (
-        <Badge variant={config.variant} className={config.className}>
+        <Badge variant={config.variant} className={["whitespace-nowrap", config.className].filter(Boolean).join(" ")}>
           {config.icon}
           {config.text}
         </Badge>
@@ -145,7 +157,11 @@ export const getAgentColumns = (
     id: "description",
     header: "描述",
     accessorKey: "description",
-    meta: { cellClassName: "align-top" },
+    size: 360,
+    meta: {
+      headerClassName: "min-w-[320px]",
+      cellClassName: "min-w-[320px] max-w-[520px] align-top",
+    },
     cell: ({ row }) => {
       const value = (row.original.description || "").trim();
       if (!value) return <span className="text-text-tertiary">无</span>;
@@ -163,8 +179,11 @@ export const getAgentColumns = (
     id: "api_key",
     header: "API密钥",
     accessorKey: "api_key",
-    size: 180,
-    meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] align-top" },
+    size: 156,
+    meta: {
+      headerClassName: "w-[156px] min-w-[156px]",
+      cellClassName: "w-[156px] min-w-[156px] align-top whitespace-nowrap",
+    },
     cell: ({ row }) => {
       const record = row.original;
       return (
@@ -172,6 +191,7 @@ export const getAgentColumns = (
           <div>
             <Badge
               variant={record.has_api_key ? "warning" : "outline"}
+              className="whitespace-nowrap"
             >
               <KeyRound className="h-3 w-3" />
               {formatApiKey(record)}
@@ -185,8 +205,11 @@ export const getAgentColumns = (
     id: "status",
     header: "状态",
     accessorFn: (row) => row.status ?? row.is_active,
-    size: 120,
-    meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
+    size: 140,
+    meta: {
+      headerClassName: "w-[140px] min-w-[140px]",
+      cellClassName: "w-[140px] min-w-[140px] align-top whitespace-nowrap",
+    },
     cell: ({ row }) => {
       const record = row.original;
       const isActive = record.status ?? record.is_active;
@@ -205,20 +228,30 @@ export const getAgentColumns = (
     id: "created_at",
     header: "创建时间",
     accessorKey: "created_at",
-    size: 150,
-    meta: { headerClassName: "w-[150px]", cellClassName: "w-[150px] align-top" },
-    cell: ({ row }) => dayjs(row.original.created_at).format("YYYY-MM-DD"),
+    size: 132,
+    meta: {
+      headerClassName: "w-[132px] min-w-[132px]",
+      cellClassName: "w-[132px] min-w-[132px] align-top whitespace-nowrap",
+    },
+    cell: ({ row }) => (
+      <span className="whitespace-nowrap tabular-nums">
+        {dayjs(row.original.created_at).format("YYYY-MM-DD")}
+      </span>
+    ),
   },
   {
     id: "action",
     header: "操作",
-    size: 180,
-    meta: { headerClassName: "w-[180px]", cellClassName: "w-[180px] align-top" },
+    size: 184,
+    meta: {
+      headerClassName: "w-[184px] min-w-[184px]",
+      cellClassName: "w-[184px] min-w-[184px] align-top whitespace-nowrap",
+    },
     cell: ({ row }) => {
       const record = row.original;
       return (
         <TooltipProvider delayDuration={120}>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 whitespace-nowrap">
             <HoverTip title="查看详情">
               <Button
                 variant="ghost"

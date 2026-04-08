@@ -6,6 +6,9 @@
   display: flex;
   flex-direction: column;
   background: var(--ws-color-bg);
+  width: 100%;
+  max-width: var(--ws-shell-max-width);
+  margin: 0 auto;
 }
 
 .article-header {
@@ -135,7 +138,7 @@
 .article-content {
   font-size: var(--ws-text-sm);
   line-height: 1.8;
-  max-width: 720px;
+  max-width: 960px;
 }
 
 /* Override Markdown Styles for Article Detail */

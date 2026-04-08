@@ -82,7 +82,7 @@ export const getAgentDataColumns = (
   {
     title: "学生信息",
     key: "student_info",
-    width: 200,
+    width: 220,
     fixed: "left" as const,
     render: (_: any, record: AgentUsageData) => {
       const user = record.user;
@@ -100,7 +100,7 @@ export const getAgentDataColumns = (
             </span>
             <Badge
               variant={user.is_active ? userStatusConfig.active.variant : userStatusConfig.inactive.variant}
-              className="py-0 text-[10px] leading-[16px]"
+              className="shrink-0 whitespace-nowrap py-0 text-[10px] leading-[16px]"
             >
               {user.is_active ? userStatusConfig.active.text : userStatusConfig.inactive.text}
             </Badge>
@@ -117,7 +117,7 @@ export const getAgentDataColumns = (
   {
     title: "智能体信息",
     key: "agent_info",
-    width: 200,
+    width: 260,
     render: (_: any, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
@@ -128,14 +128,14 @@ export const getAgentDataColumns = (
 
       return (
         <div className="flex min-w-0 items-center gap-1.5">
-          {config.icon}
+          <span className="shrink-0">{config.icon}</span>
           <span
-            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
+            className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
             title={agent.agent_name}
           >
             {agent.agent_name}
           </span>
-          <Badge variant={config.variant} className="text-[10px]">
+          <Badge variant={config.variant} className="shrink-0 whitespace-nowrap text-[10px]">
             {config.text}
           </Badge>
         </div>
@@ -151,10 +151,10 @@ export const getAgentDataColumns = (
     title: "问题内容",
     dataIndex: "question",
     key: "question",
-    width: 250,
+    width: 280,
     render: (question: string) => (
       <HoverTip title={question}>
-        <div className="max-w-[250px] truncate">
+        <div className="max-w-[280px] truncate">
           <MessageCircle className="mr-1 inline h-4 w-4 align-text-bottom text-[var(--ws-color-success)]" />
           {question}
         </div>
@@ -165,10 +165,10 @@ export const getAgentDataColumns = (
     title: "回答摘要",
     dataIndex: "answer",
     key: "answer_summary",
-    width: 240,
+    width: 300,
     render: (answer: string) => (
       <HoverTip title={answer}>
-        <div className="max-w-[240px] truncate text-text-secondary">
+        <div className="max-w-[300px] truncate text-text-secondary">
           {answer}
         </div>
       </HoverTip>
@@ -207,10 +207,10 @@ export const getAgentDataColumns = (
     title: "会话ID",
     dataIndex: "session_id",
     key: "session_id",
-    width: 140,
+    width: 160,
     render: (sessionId?: string) => (
       <HoverTip title={sessionId}>
-        <div className="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-xs bg-surface-2">
+        <div className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-xs bg-surface-2">
           {sessionId || "-"}
         </div>
       </HoverTip>
