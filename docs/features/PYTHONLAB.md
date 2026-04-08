@@ -54,25 +54,28 @@ Python 进程
 
 ### 容器配置
 
-**镜像**：`shuhao07/pythonlab-sandbox:1.5.3`
+**镜像**：`shuhao07/pythonlab-sandbox:1.5.5`
 
 **资源限制**：
 - CPU：50000 微秒/100ms（50%）
-- 内存：80MB（默认，可配置）
+- 内存：128MB（当前部署基线，可配置）
 - 磁盘：512MB（工作目录配额）
 
 **网络**：
 - 隔离网络
 - 仅允许访问后端 API
 
+> 注意：`docker-compose.yml` 中的 `pythonlab-sandbox` 服务只是镜像构建/预拉取占位容器；真实调试会话的 CPU / 内存限制由 backend 创建 sandbox 时按 `PYTHONLAB_DEFAULT_MEMORY_MB` 和请求 limits 动态下发。
+
 ### 内存配置修复（2026-03-22）
 
 **问题**：sandbox 容器内存不足导致 debugpy OOM
 
 **修复**：
-- 默认内存从 32MB 提升到 80MB
+- 历史止血阶段曾将默认内存从 32MB 提升到 80MB
+- 当前部署基线已统一到 128MB
 - `docker.py` 添加 `max(limits_mb, default_mem)` 保底逻辑
-- 环境变量：`PYTHONLAB_DEFAULT_MEMORY_MB=80`
+- 环境变量：`PYTHONLAB_DEFAULT_MEMORY_MB=128`
 
 ---
 
@@ -304,7 +307,7 @@ const canvasY = (clientY - rect.top) / scale - panY;
 ### 调试超时
 
 1. 检查 pythonlab-worker 服务是否运行
-2. 检查容器内存是否足够（80MB）
+2. 检查容器内存是否足够（部署基线 128MB）
 3. 检查 debugpy 端口是否可访问
 4. 查看容器日志
 
@@ -330,12 +333,12 @@ const canvasY = (clientY - rect.top) / scale - panY;
 
 - `/Users/wsh/wangsh/backend/app/api/pythonlab/` - API 路由
 - `/Users/wsh/wangsh/backend/app/api/endpoints/debug/` - deprecated 兼容别名
-- `/Users/wsh/wangsh/backend/app/services/docker.py` - Docker 服务
+- `/Users/wsh/wangsh/backend/app/core/sandbox/docker.py` - Docker 沙箱服务
 - `/Users/wsh/wangsh/backend/app/tasks/pythonlab.py` - Celery 任务
 
 ### 前端
 
-- `/Users/wsh/wangsh/frontend/src/pages/ITTechnology/PythonLab/` - 页面组件
+- `/Users/wsh/wangsh/frontend/src/pages/Admin/ITTechnology/pythonLab/` - 页面组件
 
 ### 测试脚本
 

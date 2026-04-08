@@ -268,7 +268,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 80M
+          # 该占位服务仅用于镜像构建/预拉取；真实调试会话的资源限制由 backend 动态创建时决定。
+          memory: 128M
 
   frontend:
     platform: linux/amd64

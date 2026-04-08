@@ -5,7 +5,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前版本**: 1.5.3
+- **当前版本**: 1.5.5
 
 ### 快速连接
 ```bash
@@ -32,7 +32,7 @@ bash start-dev.sh --docker
 
 ```bash
 # 1. 复制配置文件
-cp .env.dev.example .env.dev
+cp .env.example .env.dev
 
 # 2. 启动所有服务
 docker compose -f docker-compose.dev.yml up -d
@@ -71,9 +71,9 @@ docker compose up -d
 版本号统一在 `.env` 中的 `APP_VERSION` 定义：
 
 ```bash
-APP_VERSION=1.5.3
-IMAGE_TAG=1.5.3
-REACT_APP_VERSION=1.5.3
+APP_VERSION=1.5.5
+IMAGE_TAG=1.5.5
+REACT_APP_VERSION=1.5.5
 ```
 
 修改版本号后，其他相关变量会自动同步。
@@ -103,11 +103,11 @@ REACT_APP_VERSION=1.5.3
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:1.5.3` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:1.5.3` - 前端静态文件
-- `shuhao07/wangsh-gateway:1.5.3` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:1.5.3` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:1.5.3` - PythonLab 调试 worker
+- `shuhao07/wangsh-backend:1.5.5` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:1.5.5` - 前端静态文件
+- `shuhao07/wangsh-gateway:1.5.5` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:1.5.5` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:1.5.5` - PythonLab 调试 worker
 
 ### 2. 测试镜像
 
@@ -185,9 +185,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=1.5.3          # 应用版本号
-IMAGE_TAG=1.5.3            # Docker 镜像标签
-REACT_APP_VERSION=1.5.3    # 前端版本号
+APP_VERSION=1.5.5          # 应用版本号
+IMAGE_TAG=1.5.5            # Docker 镜像标签
+REACT_APP_VERSION=1.5.5    # 前端版本号
 ```
 
 ### 安全配置（生产环境必须修改）
@@ -221,11 +221,21 @@ BACKEND_RELOAD=false         # 生产环境必须为 false
 docker compose -f docker-compose.dev.yml ps pythonlab-worker
 ```
 
-### 3. Typst PDF 渲染失败
+### 3. 前端出现 `Failed to load module script` 或 MIME `text/html`
+
+- 根因通常不是前端业务代码，而是生产静态资源路由把缺失的 `/assets/*`、`/static/*`、`/pyodide/*` 错误回退成了 `index.html`
+- 正确行为应该是：
+  - SPA 页面路由回退到 `index.html`
+  - 静态构建产物和运行时资源缺失时直接返回 `404`
+- 如果浏览器提示 `Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html"`，优先检查：
+  - `frontend/caddy/Caddyfile.prod`
+  - `gateway/Caddyfile`
+
+### 4. Typst PDF 渲染失败
 
 确保 `typst-worker` 服务正常运行，且字体文件已正确挂载
 
-### 4. 数据库连接失败
+### 5. 数据库连接失败
 
 检查 `POSTGRES_HOST` 配置：
 - Docker 内部：使用 `postgres`

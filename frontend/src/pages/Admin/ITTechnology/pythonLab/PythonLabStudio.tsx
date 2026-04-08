@@ -871,37 +871,6 @@ const PythonLabStudioInner: React.FC<{
     onOptimizeCode: handleOptimizeCode,
   }), [runnerView, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
 
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const target = window as typeof window & {
-      __pythonlabRunnerSnapshot?: {
-        status: string;
-        sessionId: string | null;
-        activeLine: number | null;
-        activeNodeId: string | null;
-        activeFocusRole: string | null;
-        variables: Array<{ name: string; value: string; type: string }>;
-      };
-    };
-    target.__pythonlabRunnerSnapshot = {
-      status: String(runnerView.status || ""),
-      sessionId: runnerView.sessionId ?? null,
-      activeLine: runnerView.activeLine ?? null,
-      activeNodeId: runnerView.activeNodeId ?? null,
-      activeFocusRole: runnerView.activeFocusRole ?? null,
-      variables: Array.isArray(runnerView.variables)
-        ? runnerView.variables.map((item) => ({
-            name: String(item.name || ""),
-            value: String(item.value || ""),
-            type: String(item.type || ""),
-          }))
-        : [],
-    };
-    return () => {
-      delete target.__pythonlabRunnerSnapshot;
-    };
-  }, [runnerView]);
-
   return (
     <CodeCtxProvider value={codeApi}>
     <RunnerActionsProvider value={runnerActionsApi}>
