@@ -326,8 +326,7 @@
 
 说明：
 - 当前主入口应视为 `/api/v2/pythonlab/*`
-- `/api/v1/debug/*` 仍存在，但属于 deprecated 兼容别名，不应再作为新代码或新文档的默认路径
-- `/api/v1/debug/*` 的 HTTP 响应会显式返回 `Deprecation / Sunset / Link / Warning` 头，用于帮助排查遗留调用方
+- 历史 `/api/v1/debug/*` 兼容入口已下线，所有调用方都应使用 `/api/v2/pythonlab/*`
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
@@ -348,7 +347,6 @@
 | POST | `/api/v2/pythonlab/ai/chat` | AI 聊天 | 是 |
 | POST | `/api/v2/pythonlab/flow/generate_code` | 生成代码 | 是 |
 | POST | `/api/v2/pythonlab/flow/test_agent_connection` | 测试智能体连接 | 是 |
-| GET | `/api/v2/pythonlab/compat/deprecated_usage` | 查看 `/api/v1/debug/*` 兼容入口最近使用量 | 管理员 |
 | POST | `/api/v2/pythonlab/flow/parse` | 解析流程图 | 是 |
 
 ## 十三、自适应测评（/assessment）

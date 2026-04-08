@@ -13,18 +13,18 @@
 - 当前前端主调用面已经切到 `/api/v2/pythonlab/*`。
 - 当前后端主实现已经收敛到 `backend/app/api/pythonlab/*`。
 - 当前 `/api/v2/pythonlab/*` 直接引用该 canonical 模块。
-- 当前 `/api/v1/debug/*` 仍作为 deprecated 兼容入口挂载，但只保留兼容壳，不再承载主实现。
+- 历史 `/api/v1/debug/*` 兼容入口已在 2026-04-08 清理中下线。
 - 当前普通运行既可能走 DAP，也可能走 Pyodide；当前断点调试既可能走 DAP，也可能走 Pyodide，本地/远端职责没有彻底收敛。
 
 ## 当前清理结论
 
-- 对前端和烟测来说，`/api/v1/debug/*` 已不是主入口。
-- 对后端实现层来说，主实现已经迁到 `backend/app/api/pythonlab/*`，`backend/app/api/endpoints/debug/*` 只剩 deprecated 兼容包装层。
+- 对前端和烟测来说，`/api/v1/debug/*` 已完全移除，不再是可用入口。
+- 对后端实现层来说，主实现已经迁到 `backend/app/api/pythonlab/*`，`backend/app/api/endpoints/debug/*` 兼容包装层已删除。
 - 真正的删除顺序应该是：
   1. 保持 `backend/app/api/pythonlab/*` 作为唯一 canonical 实现层；
   2. 继续让 `/api/v2/pythonlab/*` 作为默认公开入口；
-  3. 维持 `/api/v1/debug/*` 为最小兼容别名；
-  4. 等日志、调用量、脚本和外部依赖全部迁移后再下线别名。
+  3. 删除 `/api/v1/debug/*` 兼容路由、compat 统计与旧 wrapper；
+  4. 用回归测试确保仓库内只剩 v2 路径。
 
 ## 能力清单
 
@@ -51,7 +51,6 @@
 | AI 聊天助手 | 预留弹窗入口，当前在右侧面板中被注释掉 | `POST /api/v2/pythonlab/ai/chat` | `frontend/src/pages/Admin/ITTechnology/pythonLab/components/AIAssistantModal.tsx`<br>`frontend/src/pages/Admin/ITTechnology/pythonLab/services/pythonlabDebugApi.ts`<br>`frontend/src/pages/Admin/ITTechnology/pythonLab/components/rightPanel/RightPanelView.tsx`<br>`backend/app/api/pythonlab/flow.py` | 能力仍在，但当前主 UI 入口被注释，属于“后端可用 / 前端未正式挂载”的状态。 |
 | Prompt 模板读取/保存 | Admin 里的 Agent 配置弹窗打开与保存时 | `GET /api/v2/pythonlab/flow/prompt_template`<br>`POST /api/v2/pythonlab/flow/prompt_template` | `frontend/src/pages/Admin/ITTechnology/components/AgentConfigModal.tsx`<br>`frontend/src/pages/Admin/ITTechnology/pythonLab/services/pythonlabDebugApi.ts`<br>`backend/app/api/pythonlab/flow.py` | 这是 PythonLab 之外的直接依赖方，迁移 v2 时不能遗漏。 |
 | Agent 连通性测试 | Admin 里的 Agent 配置弹窗“测试连接” | `POST /api/v2/pythonlab/flow/test_agent_connection` | `frontend/src/pages/Admin/ITTechnology/components/AgentConfigModal.tsx`<br>`frontend/src/pages/Admin/ITTechnology/pythonLab/services/pythonlabDebugApi.ts`<br>`backend/app/api/pythonlab/flow.py` | 同属 Admin 依赖；当前与 feature flag 配置一起使用。 |
-| 兼容入口命中观测 | 后端排查 / 下线 `/api/v1/debug/*` 前查看最近使用量 | `GET /api/v2/pythonlab/compat/deprecated_usage` | `backend/app/api/pythonlab/compat.py`<br>`backend/app/api/pythonlab/compat_routes.py` | 返回最近 N 天 v1 HTTP / WebSocket 命中计数，用于确认 deprecated 别名是否还能下线。 |
 
 ## 需要在删除旧实现前保持可回归验证的行为
 

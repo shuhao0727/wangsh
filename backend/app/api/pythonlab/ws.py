@@ -5,7 +5,7 @@ import uuid
 import re
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Deque, Dict, Optional, Tuple
+from typing import Any, Deque, Dict, Optional
 
 from loguru import logger
 
@@ -17,7 +17,6 @@ from app.core.celery_app import celery_app
 from app.db.database import get_db
 from app.services.auth import get_current_user as auth_get_current_user
 from app.utils.cache import cache
-from app.api.pythonlab.compat import get_debug_v1_websocket_accept_headers
 from app.api.pythonlab.constants import (
     CACHE_KEY_SESSION_PREFIX,
     DAP_HOST_DEFAULT,
@@ -38,20 +37,6 @@ from app.api.pythonlab.constants import (
 from app.api.pythonlab.utils import now_iso
 
 router = APIRouter()
-
-
-def _websocket_path(websocket: WebSocket) -> str:
-    url = getattr(websocket, "url", None)
-    path = getattr(url, "path", None)
-    if isinstance(path, str) and path:
-        return path
-    scope = getattr(websocket, "scope", None)
-    if isinstance(scope, dict):
-        scoped_path = scope.get("path")
-        if isinstance(scoped_path, str):
-            return scoped_path
-    raw_path = getattr(websocket, "path", None)
-    return str(raw_path or "")
 
 
 def _extract_ws_token(websocket: WebSocket) -> Optional[str]:
@@ -826,11 +811,7 @@ async def _get_or_create_dap_bridge(
 
 @router.websocket("/sessions/{session_id}/terminal")
 async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depends(get_db)):
-    accept_headers = await get_debug_v1_websocket_accept_headers(_websocket_path(websocket))
-    if accept_headers:
-        await websocket.accept(headers=accept_headers)
-    else:
-        await websocket.accept()
+    await websocket.accept()
     logger.info("terminal ws accepted: session_id={}", session_id)
     
     token = _extract_ws_token(websocket)
@@ -998,11 +979,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
 
 @router.websocket("/sessions/{session_id}/ws")
 async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depends(get_db)):
-    accept_headers = await get_debug_v1_websocket_accept_headers(_websocket_path(websocket))
-    if accept_headers:
-        await websocket.accept(headers=accept_headers)
-    else:
-        await websocket.accept()
+    await websocket.accept()
     conn_started_at = now_iso()
     conn_id = uuid.uuid4().hex[:12]
     client_conn_id = _normalize_client_conn_id(websocket.query_params.get("client_conn_id"))

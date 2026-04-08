@@ -29,6 +29,14 @@ def _collect_route_paths(app) -> set[str]:
     }
 
 
+def _collect_legacy_debug_paths(app) -> set[str]:
+    return {
+        path
+        for path in (getattr(route, "path", None) for route in app.routes)
+        if path and path.startswith("/api/v1/debug")
+    }
+
+
 def test_pythonlab_v2_http_routes_registered(monkeypatch):
     app = _load_app(monkeypatch)
     route_map = _collect_http_route_map(app)
@@ -47,7 +55,6 @@ def test_pythonlab_v2_http_routes_registered(monkeypatch):
         ("/api/v2/pythonlab/ai/chat", "POST"),
         ("/api/v2/pythonlab/syntax/check", "POST"),
         ("/api/v2/pythonlab/cfg/parse", "POST"),
-        ("/api/v2/pythonlab/compat/deprecated_usage", "GET"),
         ("/api/v2/pythonlab/optimize/code", "POST"),
         ("/api/v2/pythonlab/optimize/apply/{log_id}", "POST"),
         ("/api/v2/pythonlab/optimize/rollback/{log_id}", "GET"),
@@ -68,3 +75,8 @@ def test_pythonlab_v2_websocket_routes_registered(monkeypatch):
 
     missing = expected - paths
     assert not missing, f"missing v2 websocket routes: {sorted(missing)}"
+
+
+def test_pythonlab_v1_debug_routes_removed(monkeypatch):
+    app = _load_app(monkeypatch)
+    assert _collect_legacy_debug_paths(app) == set()

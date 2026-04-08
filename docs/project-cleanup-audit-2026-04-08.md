@@ -1,7 +1,7 @@
 # 项目整理审计记录
 
 > 记录日期：2026-04-08
-> 目标：把“可以立即清理的内容”和“不能贸然删除的兼容层”分开，避免再次把真实线上问题和无关噪声混在一起。
+> 目标：把“可以立即清理的内容”和“需要专门验证后再删除的历史兼容层”分开，避免再次把真实线上问题和无关噪声混在一起。
 
 ## 已确认并已处理的问题
 
@@ -57,37 +57,30 @@
   - 部署文档版本统一到 `1.5.5`
   - `docker-compose.yml` 中占位 `pythonlab-sandbox` 服务内存说明统一到 `128M`
 
-## 现在不能直接删的内容
+## 已完成的兼容层收口
 
 ### `/api/v1/debug` 兼容层
 
-当前仍然不能直接删除，原因很明确：
-
-- 还在后端主路由中注册
-- 还在 PythonLab v2 路由下暴露兼容别名
-- 系统 overview / metrics 还在统计该兼容入口使用量
-- 还有单独的兼容性测试覆盖
-
-涉及路径包括但不限于：
-
-- `backend/app/api/pythonlab/compat.py`
-- `backend/app/api/pythonlab/compat_routes.py`
-- `backend/app/api/v2/pythonlab/__init__.py`
-- `backend/app/api/endpoints/debug/`
-- `backend/app/api/endpoints/system/metrics.py`
-- `backend/app/api/endpoints/system/overview.py`
+- 已在本轮清理中删除：
+  - `/api/v1/debug/*` 路由注册
+  - `backend/app/api/endpoints/debug/` 兼容包装层
+  - `backend/app/api/pythonlab/compat.py`
+  - `backend/app/api/pythonlab/compat_routes.py`
+  - `/api/v2/pythonlab/compat/deprecated_usage`
+  - system overview / metrics 中的 deprecated alias 观测项
+- 当前仓库内 PythonLab 对外入口只保留 `/api/v2/pythonlab/*`
 
 ## 下一批建议
 
 如果要继续做“大清理”，正确顺序应该是：
 
-1. 先观察 `/api/v1/debug` 兼容别名是否还有真实流量
-2. 确认前端和外部调用方都只走 `/api/v2/pythonlab/*`
-3. 再删除 compat 路由、指标统计、旧 wrapper 和兼容测试
-4. 最后补跑 PythonLab 全链路回归
+1. 继续收敛 PythonLab 运行/调试双引擎状态模型
+2. 统一 DAP 与 Pyodide 的能力边界
+3. 继续做真实浏览器回归，特别是多断点继续到结束
+4. 清理剩余只服务于历史阶段的文档或实验脚本
 
 ## 当前结论
 
 - 现在最值得优先保留的，是稳定性修复和错误边界知识
 - 现在最值得优先清理的，是无消费者的开发钩子、版本漂移和误导性文档
-- 现在最不该直接动的，是仍在路由和指标体系里的 `/api/v1/debug` 兼容层
+- `/api/v1/debug` 兼容层已经下线，后续如果还有调用方报错，应直接迁移到 `/api/v2/pythonlab/*`

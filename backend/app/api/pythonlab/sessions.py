@@ -22,10 +22,10 @@ from app.api.pythonlab.constants import (
     WS_MAX_DAP_MSG_BYTES,
     WS_MAX_STDOUT_KB,
 )
-from app.api.pythonlab.compat import PYTHONLAB_V2_PREFIX
 from app.api.pythonlab.utils import now_iso, sha256_text
 
 router = APIRouter()
+PYTHONLAB_V2_PREFIX = "/api/v2/pythonlab"
 
 def _public_host(request: Request) -> str:
     xf = request.headers.get("x-forwarded-host") or request.headers.get("host")

@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.api.pythonlab.compat_routes import router as compat_router
 from app.api.pythonlab.cfg import router as cfg_router
 from app.api.pythonlab.flow import router as flow_router
 from app.api.pythonlab.sessions import router as sessions_router
@@ -14,4 +13,3 @@ router.include_router(ws_router, tags=["pythonlab"])
 router.include_router(cfg_router, tags=["pythonlab"])
 router.include_router(flow_router, tags=["pythonlab"])
 router.include_router(syntax_router, tags=["pythonlab"])
-router.include_router(compat_router, tags=["pythonlab"])

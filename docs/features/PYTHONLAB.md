@@ -109,7 +109,7 @@ debugpy.wait_for_client()
 
 - 主入口：`/api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（DAP）
 - 主入口：`/api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
-- 兼容别名：`/api/v1/debug/sessions/{session_id}/ws`、`/api/v1/debug/sessions/{session_id}/terminal`
+- 历史 `/api/v1/debug/*` 兼容入口已下线
 
 ### 消息格式
 
@@ -249,7 +249,6 @@ TIMEOUT_SECONDS=20 python backend/scripts/smoke_pythonlab_print_visibility_probe
 - `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话
 - `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket
 - `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
-- `GET /api/v2/pythonlab/compat/deprecated_usage` - 查看旧 `/api/v1/debug/*` 兼容入口最近命中量
 
 ---
 
