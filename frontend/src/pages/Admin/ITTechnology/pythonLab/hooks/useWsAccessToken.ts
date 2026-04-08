@@ -23,7 +23,7 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
         if (!inflightRef.current) {
             inflightRef.current = (async () => {
                 try {
-                    const resp = await authApi.refreshToken(undefined);
+                    const resp = await authApi.refreshToken(undefined, { silent: true });
                     const raw: any = resp?.data;
                     const data: any = raw && typeof raw === "object" && "data" in raw ? (raw as any).data : raw;
                     if (data?.access_token || data?.refresh_token) {
@@ -81,4 +81,3 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
 
     return { status, token, error, refresh };
 }
-

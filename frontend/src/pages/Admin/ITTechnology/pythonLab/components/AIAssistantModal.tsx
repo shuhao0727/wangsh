@@ -4,7 +4,7 @@ import { Bot, Send, Code, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { pythonlabFlowApi } from "../services/pythonlabDebugApi";
+import { pythonlabFlowApi } from "../services/pythonlabCodeApi";
 import ReactMarkdown from "react-markdown";
 import { FloatingPopup } from "./FloatingPopup";
 import { cn } from "@/lib/utils";

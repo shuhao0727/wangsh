@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from "react";
 import type { IRBlock } from "../flow/ir";
-import type { PythonLabFlowDiagnostic } from "../services/pythonlabDebugApi";
+import type { PythonLabFlowDiagnostic } from "../services/pythonlabCodeApi";
 import type { DebugMap } from "../flow/debugMap";
 
 export interface CodeApi {

@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { showMessage } from "@/lib/toast";
 import { logger } from "@services/logger";
 
-import { createDebugCapabilityMapV1, applyDapNegotiatedCapabilities, type DebugCapabilityMapV1 } from "../adapters/debugCapabilityMap";
+import {
+  createDebugCapabilityMapV1,
+  applyDapNegotiatedCapabilities,
+  applyDebugRunnerPolicy,
+  type DebugCapabilityMapV1,
+} from "../adapters/debugCapabilityMap";
 import { resolveDebugFrontendMode, type DebugFrontendMode } from "../adapters/debugFrontendAdapter";
 import { normalizeDebugSessionView } from "../adapters/debugSessionBridge";
 import {
@@ -56,10 +61,8 @@ export function useDebugSession(params: {
   code: string;
   debugMap: DebugMap | null;
   pythonlabRuntime: string;
-  canFrontendDebug: boolean;
-  needsStdin: boolean;
 }): DebugSessionApi {
-  const { code, debugMap, pythonlabRuntime, canFrontendDebug, needsStdin } = params;
+  const { code, debugMap, pythonlabRuntime } = params;
   const {
     breakpoints,
     activeRunnerKind,
@@ -151,8 +154,6 @@ export function useDebugSession(params: {
       const plan = decidePythonLabLaunchPlan({
         enabledBreakpointCount: 0,
         pythonlabRuntime,
-        canFrontendDebug,
-        needsStdin,
       });
 
       switchPythonlabRunner({
@@ -168,7 +169,7 @@ export function useDebugSession(params: {
         stdinLines,
       });
     },
-    [canFrontendDebug, needsStdin, pythonlabRuntime, runnerView.sessionId, runnerView.status, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
+    [pythonlabRuntime, runnerView.sessionId, runnerView.status, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
   );
 
   const onDebug = useCallback(() => {
@@ -185,8 +186,6 @@ export function useDebugSession(params: {
     const plan = decidePythonLabLaunchPlan({
       enabledBreakpointCount,
       pythonlabRuntime,
-      canFrontendDebug,
-      needsStdin,
     });
 
     setLastLaunchMode("debug");
@@ -204,7 +203,6 @@ export function useDebugSession(params: {
     launchPythonlabDebugAction({
       runnerKind: plan.runnerKind,
       dapRunner: dapApiRef.current,
-      pyRunner: pyApiRef.current,
       breakpoints: breakpoints.map((bp) => ({ ...bp })),
       onDapFailure: () => {
         setLastLaunchMode("idle");
@@ -212,9 +210,7 @@ export function useDebugSession(params: {
     });
   }, [
     breakpoints,
-    canFrontendDebug,
     enabledBreakpointCount,
-    needsStdin,
     pythonlabRuntime,
     runnerView.status,
     setActiveRunnerKind,
@@ -244,14 +240,18 @@ export function useDebugSession(params: {
   }, [resetAllRunners, setLastDebugFallback, setLastLaunchMode]);
 
   const debugCapabilityBase = useMemo(() => createDebugCapabilityMapV1(debugMode), [debugMode]);
+  const runnerPolicy = activeRunnerKind;
   const dapNegotiatedCapabilities = useMemo(() => {
     if (activeRunnerKind !== "dap") return null;
     return (dapApi?.state?.dapCapabilities ?? null) as DapCapabilities | null;
   }, [activeRunnerKind, dapApi]);
 
   const resolvedDebugCapabilities = useMemo(
-    () => applyDapNegotiatedCapabilities(debugCapabilityBase, dapNegotiatedCapabilities),
-    [dapNegotiatedCapabilities, debugCapabilityBase]
+    () => {
+      const policyBase = applyDebugRunnerPolicy(debugCapabilityBase, runnerPolicy);
+      return runnerPolicy === "dap" ? applyDapNegotiatedCapabilities(policyBase, dapNegotiatedCapabilities) : policyBase;
+    },
+    [dapNegotiatedCapabilities, debugCapabilityBase, runnerPolicy]
   );
 
   const onToggleBreakpoint = useCallback(

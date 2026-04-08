@@ -59,6 +59,47 @@ set_default_env() {
     fi
 }
 
+is_docker_local_host_alias() {
+    local value="$1"
+    case "${value}" in
+        postgres|redis|wangsh-postgres|wangsh-redis)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+spawn_detached_process() {
+    local workdir="$1"
+    local log_file="$2"
+    shift 2
+
+    python3 - "$workdir" "$log_file" "$@" <<'PY'
+import os
+import subprocess
+import sys
+
+workdir = sys.argv[1]
+log_file = sys.argv[2]
+command = sys.argv[3:]
+
+with open(log_file, "ab", buffering=0) as log_handle, open(os.devnull, "rb") as stdin_handle:
+    process = subprocess.Popen(
+        command,
+        cwd=workdir,
+        stdin=stdin_handle,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+print(process.pid)
+PY
+}
+
 load_env_file() {
     local env_file="$1"
 
@@ -294,10 +335,10 @@ setup_environment() {
         # 本地开发：确保 PDF 存储目录指向宿主机可访问路径
         set_default_env TYPST_PDF_STORAGE_DIR "${PROJECT_ROOT}/data/typst_pdfs"
         mkdir -p "${TYPST_PDF_STORAGE_DIR}"
-        if [ "${POSTGRES_HOST:-}" = "postgres" ]; then
+        if is_docker_local_host_alias "${POSTGRES_HOST:-}"; then
             export POSTGRES_HOST="localhost"
         fi
-        if [ "${REDIS_HOST:-}" = "redis" ]; then
+        if is_docker_local_host_alias "${REDIS_HOST:-}"; then
             export REDIS_HOST="localhost"
         fi
     fi
@@ -312,14 +353,22 @@ setup_environment() {
     set_default_env DEPLOYMENT_ENV "development"
     set_default_env DATABASE_DRIVER "asyncpg"
 
-    if [ -z "${DATABASE_URL+x}" ]; then
+    if [ "${START_MODE:-local}" = "local" ]; then
         export DATABASE_URL="postgresql+${DATABASE_DRIVER}://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-    fi
-    if [ -z "${REDIS_URL+x}" ]; then
         export REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
-    fi
-    if [ -z "${REDIS_CACHE_URL+x}" ]; then
         export REDIS_CACHE_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+        export CELERY_BROKER_URL="${REDIS_URL}"
+        export CELERY_RESULT_BACKEND="${REDIS_URL}"
+    else
+        if [ -z "${DATABASE_URL+x}" ]; then
+            export DATABASE_URL="postgresql+${DATABASE_DRIVER}://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        fi
+        if [ -z "${REDIS_URL+x}" ]; then
+            export REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
+        fi
+        if [ -z "${REDIS_CACHE_URL+x}" ]; then
+            export REDIS_CACHE_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+        fi
     fi
     
     # 后端配置
@@ -586,13 +635,13 @@ start_local_backend() {
     fi
     
     # 启动后端服务（使用正确的环境变量）
-    nohup python3 -m uvicorn main:app \
+    BACKEND_PID="$(spawn_detached_process \
+        "${BACKEND_DIR}" \
+        "${BACKEND_LOG}" \
+        python3 -m uvicorn main:app \
         --host 0.0.0.0 \
-        --port ${BACKEND_PORT} \
-        --reload \
-        > "${BACKEND_LOG}" 2>&1 &
-    
-    BACKEND_PID=$!
+        --port "${BACKEND_PORT}" \
+        --reload)"
     print_info "后端服务PID: ${BACKEND_PID}"
     
     # 等待后端启动
@@ -636,14 +685,14 @@ start_local_celery_worker() {
     cd "${BACKEND_DIR}"
     print_info "Celery日志: ${CELERY_LOG}"
     
-    nohup python3 -m celery -A app.core.celery_app:celery_app worker \
+    CELERY_PID="$(spawn_detached_process \
+        "${BACKEND_DIR}" \
+        "${CELERY_LOG}" \
+        python3 -m celery -A app.core.celery_app:celery_app worker \
         -l INFO \
         -c 1 \
         -Q celery,typst \
-        --pool=solo \
-        > "${CELERY_LOG}" 2>&1 &
-    
-    CELERY_PID=$!
+        --pool=solo)"
     print_info "Celery Worker PID: ${CELERY_PID}"
     
     sleep 2
@@ -693,10 +742,10 @@ start_local_frontend() {
     fi
     
     # 启动前端服务（使用正确的环境变量）
-    nohup npm start \
-        > "${FRONTEND_LOG}" 2>&1 &
-    
-    FRONTEND_PID=$!
+    FRONTEND_PID="$(spawn_detached_process \
+        "${FRONTEND_DIR}" \
+        "${FRONTEND_LOG}" \
+        npm start)"
     print_info "前端服务PID: ${FRONTEND_PID}"
     
     # 等待前端启动

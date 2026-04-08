@@ -8,6 +8,11 @@ import { Maximize2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
+import {
+  getDebugCapabilityNote,
+  isDebugCapabilitySupported,
+  type DebugCapabilityMapV1,
+} from "../../adapters/debugCapabilityMap";
 import type { RunnerState } from "../../hooks/useDapRunner";
 
 type ColumnLike = {
@@ -25,6 +30,19 @@ const CompactDataTable: React.FC<{
   rowKey: string;
   emptyText: string;
 }> = ({ rows, columns, rowKey, emptyText }) => {
+  const normalizedRows = useMemo(() => {
+    const seen = new Map<string, number>();
+    return rows.map((row, index) => {
+      const baseKey = String(row?.[rowKey] ?? index);
+      const duplicateIndex = seen.get(baseKey) ?? 0;
+      seen.set(baseKey, duplicateIndex + 1);
+      return {
+        ...row,
+        __rowKey: duplicateIndex === 0 ? baseKey : `${baseKey}__dup_${duplicateIndex}`,
+      };
+    });
+  }, [rowKey, rows]);
+
   const tableColumns = useMemo<ColumnDef<any>[]>(
     () =>
       columns.map((col, index): ColumnDef<any> => ({
@@ -48,7 +66,7 @@ const CompactDataTable: React.FC<{
   );
 
   const table = useReactTable({
-    data: rows.map((row, index) => ({ ...row, __rowKey: String(row?.[rowKey] ?? index) })),
+    data: normalizedRows,
     columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.__rowKey,
@@ -66,6 +84,7 @@ const CompactDataTable: React.FC<{
 export function DebugTab(props: {
   runner: RunnerState;
   variableColumns: any;
+  debugCapabilities?: DebugCapabilityMapV1;
   onAddWatch: (expr: string) => void;
   onRemoveWatch: (expr: string) => void;
   onExpand?: () => void;
@@ -74,6 +93,7 @@ export function DebugTab(props: {
   const {
     runner,
     variableColumns,
+    debugCapabilities,
     onAddWatch,
     onRemoveWatch,
     onExpand,
@@ -81,6 +101,10 @@ export function DebugTab(props: {
   } = props;
 
   const [watchInput, setWatchInput] = useState("");
+  const variablesSupported = isDebugCapabilitySupported(debugCapabilities, "variables");
+  const watchSupported = isDebugCapabilitySupported(debugCapabilities, "watch");
+  const variablesNotice = getDebugCapabilityNote(debugCapabilities, "variables");
+  const watchNotice = getDebugCapabilityNote(debugCapabilities, "watch");
 
   const changedSet = useMemo(() => new Set<string>((runner.changedVars || []).map((x) => String(x))), [runner.changedVars]);
   const enhancedVariableColumns = useMemo(
@@ -140,18 +164,23 @@ export function DebugTab(props: {
           rows={Array.isArray(runner.variables) ? runner.variables : []}
           columns={Array.isArray(enhancedVariableColumns) ? (enhancedVariableColumns as ColumnLike[]) : []}
           rowKey="name"
-          emptyText="暂无变量"
+          emptyText={variablesSupported ? "暂无变量" : "当前运行模式不提供变量面板"}
         />
+        {!variablesSupported && variablesNotice ? (
+          <div className="text-xs text-text-tertiary">{variablesNotice}</div>
+        ) : null}
         <span className="font-semibold">表达式</span>
         <div className="flex gap-2">
           <Input
             id="pythonlab-watch-expression-input"
             name="pythonlab-watch-expression-input"
             aria-label="调试表达式输入框"
-            placeholder="添加表达式..."
+            placeholder={watchSupported ? "添加表达式..." : "当前运行模式不支持监视表达式"}
             value={watchInput}
+            disabled={!watchSupported}
             onChange={(e) => setWatchInput(e.target.value)}
             onKeyDown={(e) => {
+              if (!watchSupported) return;
               if (e.key !== "Enter") return;
               if (watchInput.trim()) {
                 onAddWatch(watchInput.trim());
@@ -162,7 +191,9 @@ export function DebugTab(props: {
           <Button
             variant="outline"
             size="sm"
+            disabled={!watchSupported}
             onClick={() => {
+              if (!watchSupported) return;
               if (watchInput.trim()) {
                 onAddWatch(watchInput.trim());
                 setWatchInput("");
@@ -172,6 +203,9 @@ export function DebugTab(props: {
             <Plus className="h-4 w-4" />
           </Button>
         </div>
+        {!watchSupported && watchNotice ? (
+          <div className="text-xs text-text-tertiary">{watchNotice}</div>
+        ) : null}
         <CompactDataTable
           rows={Array.isArray(runner.watchResults) ? runner.watchResults : []}
           columns={watchColumns as ColumnLike[]}

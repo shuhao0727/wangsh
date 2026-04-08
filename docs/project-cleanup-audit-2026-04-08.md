@@ -24,6 +24,42 @@
 - 结论：
   - 问题属于前端调试按钮 hover/tooltip 交互兼容性，不是后端 DAP 死循环
 
+### 3. PythonLab 双引擎能力分叉导致的伪调试状态
+
+- 现象：
+  - `launchPlan` 已经规定“有断点就走 DAP”，但前端仍可能把 `Pyodide` 普通运行展示成“可继续 / 可暂停 / 可监视 / 可求值”
+  - UI 和 unified runner 会继续向 `Pyodide` 下发调试语义，制造误导性的 paused / continue 入口
+- 根因：
+  - 运行策略已经迁移到 DAP 优先，但 capability map、控制矩阵、launch control、unified runner 仍保留“Pyodide 也能调试”的历史语义
+- 已处理：
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/adapters/debugCapabilityMap.ts`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/hooks/useUnifiedRunner.ts`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/hooks/usePyodideRunner.ts`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/workers/pyodideRunner.worker.ts`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/core/debugLaunchControl.ts`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/components/rightPanel/DebugTab.tsx`
+  - `frontend/src/pages/Admin/ITTechnology/pythonLab/launchPlan.ts`
+- 规则：
+  - `Pyodide` 只承接普通运行
+  - 断点调试语义只允许走 DAP
+  - `Pyodide` 下只保留“断点可设置、点击调试会切到 DAP”的提示，不再暴露伪调试按钮
+  - `Pyodide` worker 内部仅保留 plain-run 与 `input()` 终端桥接，不再维护暂停、单步、求值、watch 等旧调试分支
+
+### 4. 本地开发脚本退出后前后端一起消失
+
+- 现象：
+  - `./start-dev.sh` 显示启动成功，但命令退出后 `8000/6608` 很快失活
+  - `celery.log` 出现 `SIGHUP not supported`
+- 根因：
+  - 本地模式使用 `nohup ... & disown` 依赖父 shell 脱离，在当前 macOS 环境里不稳定
+  - `uvicorn --reload`、`vite`、`celery` 仍会被父进程退出路径影响
+- 已处理：
+  - `start-dev.sh` 改为通过 Python `subprocess.Popen(..., start_new_session=True)` 启动本地后端、Celery、前端
+  - 同时补齐 local 模式下 Redis / DB / Celery 相关环境变量导出
+- 验证：
+  - `./start-dev.sh` 退出后，`http://localhost:8000/health` 与 `http://localhost:6608` 仍可访问
+  - 完整通过 `frontend/scripts/pythonlab-debug-smoke.mjs` 的 16 个场景
+
 ## 不是项目 Bug 的噪声
 
 - 浏览器扩展 `Obsidian Clipper` 注入的 `content.js` 报错：
@@ -74,10 +110,9 @@
 
 如果要继续做“大清理”，正确顺序应该是：
 
-1. 继续收敛 PythonLab 运行/调试双引擎状态模型
-2. 统一 DAP 与 Pyodide 的能力边界
-3. 继续做真实浏览器回归，特别是多断点继续到结束
-4. 清理剩余只服务于历史阶段的文档或实验脚本
+1. 清理剩余只服务于历史阶段的文档或实验脚本
+2. 继续监控真实浏览器日志里的非阻断告警，例如重复 key / 非功能性噪声
+3. 视需要把 PythonLab 的 smoke 拆进 CI，避免回归再次靠人工发现
 
 ## 当前结论
 

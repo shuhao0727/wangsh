@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { validatePythonLite } from "../../flow/python_sync";
 import { pythonlabApiPath } from "../../services/pythonlabApiBase";
-import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabDebugApi";
+import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabCodeApi";
 import { MonacoPythonEditor } from "../MonacoPythonEditor";
 import XtermTerminal from "../XtermTerminal";
 import PyodideTerminal from "../PyodideTerminal";
@@ -596,6 +596,7 @@ export const RightPanel = React.memo(function RightPanel() {
             <DebugTab
               runner={runner}
               variableColumns={variableColumns}
+              debugCapabilities={debugCapabilities}
               onAddWatch={onAddWatch}
               onRemoveWatch={onRemoveWatch}
               onExpand={() => setDebugOpen(true)}
@@ -655,6 +656,7 @@ export const RightPanel = React.memo(function RightPanel() {
           <DebugTab
             runner={runner}
             variableColumns={variableColumns}
+            debugCapabilities={debugCapabilities}
             onAddWatch={onAddWatch}
             onRemoveWatch={onRemoveWatch}
             showExpandButton={false}

@@ -1,5 +1,5 @@
 import type { FlowEdge, FlowNode } from "./model";
-import type { PythonLabCfgResponse, PythonLabFlowResponse } from "../services/pythonlabDebugApi";
+import type { PythonLabCfgResponse, PythonLabFlowResponse } from "../services/pythonlabCodeApi";
 import type { FlowNodeShape } from "../types";
 import { normalizeTitleForMapping } from "./titleSemantics";
 

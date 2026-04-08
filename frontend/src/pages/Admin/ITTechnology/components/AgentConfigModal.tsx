@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { featureFlagsApi } from "@/services/system/featureFlags";
-import { pythonlabFlowApi } from "../pythonLab/services/pythonlabDebugApi";
+import { pythonlabFlowApi } from "../pythonLab/services/pythonlabCodeApi";
 import {
   Dialog,
   DialogContent,

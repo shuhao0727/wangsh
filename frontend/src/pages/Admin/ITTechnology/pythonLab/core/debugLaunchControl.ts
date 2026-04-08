@@ -18,7 +18,6 @@ type DapRunnerLike = {
 
 type PyodideRunnerLike = {
   runPlain?: (arg?: any) => Promise<void> | void;
-  startDebug?: (arg?: any) => Promise<void> | void;
   reset?: () => void;
 };
 
@@ -88,33 +87,26 @@ export function launchPythonlabRunAction(params: {
 export function launchPythonlabDebugAction(params: {
   runnerKind: PythonLabRunnerKind;
   dapRunner: DapRunnerLike;
-  pyRunner: PyodideRunnerLike;
   breakpoints?: PythonLabLaunchBreakpoint[];
   onDapFailure?: () => void;
 }): void {
-  const { runnerKind, dapRunner, pyRunner, breakpoints, onDapFailure } = params;
+  const { runnerKind, dapRunner, breakpoints, onDapFailure } = params;
   const launchArg = breakpoints ? { initialBreakpoints: breakpoints } : undefined;
 
-  if (runnerKind === "dap") {
-    const start = dapRunner.startDebug;
-    if (typeof start !== "function") {
-      showMessage.error("调试器未就绪，请刷新页面后重试");
-      onDapFailure?.();
-      return;
-    }
-    Promise.resolve(start(launchArg)).catch((error: unknown) => {
-      showMessage.error(error instanceof Error ? error.message : "启动调试失败");
-      onDapFailure?.();
-    });
+  if (runnerKind !== "dap") {
+    showMessage.error("断点调试仅支持后端 DAP 运行器");
+    onDapFailure?.();
     return;
   }
 
-  const start = pyRunner.startDebug;
+  const start = dapRunner.startDebug;
   if (typeof start !== "function") {
-    showMessage.error("前端调试器未就绪，请刷新页面后重试");
+    showMessage.error("调试器未就绪，请刷新页面后重试");
+    onDapFailure?.();
     return;
   }
   Promise.resolve(start(launchArg)).catch((error: unknown) => {
     showMessage.error(error instanceof Error ? error.message : "启动调试失败");
+    onDapFailure?.();
   });
 }

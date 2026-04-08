@@ -45,6 +45,7 @@ export type DebugControlKey = "run" | "debug" | "pause" | "continue" | "stepOver
 export type DebugRunnerStatus = "idle" | "starting" | "running" | "paused" | "stopped" | "error";
 export type DebugControlMatrix = Record<DebugControlKey, boolean>;
 export type DebugControlDiffItem = { key: DebugControlKey; from: boolean; to: boolean };
+export type DebugRunnerPolicy = "dap" | "pyodide";
 
 const CAPABILITY_LABELS: Record<DebugCapabilityKey, string> = {
   breakpoint: "断点",
@@ -79,6 +80,20 @@ const BASE_ITEMS: DebugCapabilityItem[] = [
 export function createDebugCapabilityMapV1(mode: DebugFrontendMode): DebugCapabilityMapV1 {
   const items = BASE_ITEMS.map((item) => ({ ...item }));
   return { version: "v1", mode, items };
+}
+
+export function applyDebugRunnerPolicy(baseMap: DebugCapabilityMapV1, runnerPolicy: DebugRunnerPolicy): DebugCapabilityMapV1 {
+  if (runnerPolicy === "dap") return baseMap;
+  const items = baseMap.items.map((item) => {
+    if (item.key === "terminalAttach") {
+      return { ...item, supported: true, note: "普通运行支持终端输出与输入" };
+    }
+    if (item.key === "breakpoint") {
+      return { ...item, supported: true, note: "支持设置断点；点击调试时将切换到后端 DAP 会话" };
+    }
+    return { ...item, supported: false, note: "Pyodide 普通运行模式下不提供该调试能力" };
+  });
+  return { ...baseMap, items };
 }
 
 export function applyDapNegotiatedCapabilities(baseMap: DebugCapabilityMapV1, negotiated: DapNegotiatedCapabilities): DebugCapabilityMapV1 {
@@ -147,11 +162,13 @@ export function getDebugCapabilityLabel(key: DebugCapabilityKey): string {
 export function resolveDebugControlMatrix(status: DebugRunnerStatus, map?: DebugCapabilityMapV1): DebugControlMatrix {
   const canRun = true; // Always allow run to support "restart"
   const canStep = status === "paused";
+  const canPause = status === "running" && isDebugCapabilitySupported(map, "pause");
+  const canContinue = status === "paused" && isDebugCapabilitySupported(map, "continue");
   return {
     run: canRun,
     debug: status !== "running" && status !== "starting", // Keep debug stricter for now, or relax if needed
-    pause: status === "running",
-    continue: status === "paused",
+    pause: canPause,
+    continue: canContinue,
     stepOver: canStep && isDebugCapabilitySupported(map, "stepOver"),
     stepInto: canStep && isDebugCapabilitySupported(map, "stepInto"),
     stepOut: canStep && isDebugCapabilitySupported(map, "stepOut"),

@@ -10,6 +10,8 @@ import { logger } from "./logger";
 let refreshPromise: Promise<void> | null = null;
 const ACCESS_TOKEN_KEY = "ws_access_token";
 const REFRESH_TOKEN_KEY = "ws_refresh_token";
+const REFRESH_ATTEMPT_AT_KEY = "ws_refresh_attempt_at";
+const REFRESH_COOLDOWN_MS = 5200;
 export const AUTH_EXPIRED_EVENT = "ws:auth-expired";
 let lastAuthExpiredNotifyAt = 0;
 
@@ -60,6 +62,47 @@ const readRequestToken = (requestConfig?: InternalAxiosRequestConfig | any): str
 };
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const readLastRefreshAttemptAt = () => {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(REFRESH_ATTEMPT_AT_KEY) || sessionStorage.getItem(REFRESH_ATTEMPT_AT_KEY) || "";
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const markRefreshAttemptAt = (timestamp: number) => {
+  if (typeof window === "undefined") return;
+  const value = String(timestamp);
+  try {
+    sessionStorage.setItem(REFRESH_ATTEMPT_AT_KEY, value);
+    localStorage.setItem(REFRESH_ATTEMPT_AT_KEY, value);
+  } catch {
+  }
+};
+
+const waitForRefreshCooldown = async () => {
+  const lastAttemptAt = readLastRefreshAttemptAt();
+  if (!lastAttemptAt) return;
+  const elapsed = Date.now() - lastAttemptAt;
+  if (elapsed >= REFRESH_COOLDOWN_MS) return;
+  await sleep(REFRESH_COOLDOWN_MS - elapsed);
+};
+
+type SilentAxiosRequestConfig = AxiosRequestConfig & { silent?: boolean };
+
+const postRefreshRequest = async (
+  instance: AxiosInstance,
+  refreshToken?: string | null,
+  requestConfig?: SilentAxiosRequestConfig,
+) => {
+  await waitForRefreshCooldown();
+  markRefreshAttemptAt(Date.now());
+  return instance.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}, requestConfig);
+};
 
 export const getCookieToken = () => {
   if (typeof document === "undefined") return null;
@@ -304,27 +347,20 @@ const createApiClient = (): AxiosInstance => {
               };
 
               try {
-                const resp = await instance.post(
-                  "/auth/refresh",
-                  storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
-                );
+                const resp = await postRefreshRequest(instance, storedRefreshToken, { silent: true });
                 applyTokens(resp);
                 return;
               } catch (e: unknown) {
                 const status = (e as ApiError)?.response?.status;
                 if (status === 401 && storedRefreshToken) {
-                  const resp2 = await instance.post("/auth/refresh", {});
+                  const resp2 = await postRefreshRequest(instance, null, { silent: true });
                   applyTokens(resp2);
                   return;
                 }
                 // refresh 接口存在 5s 速率限制，跨 tab 并发时先等待再补一次
                 if (status === 429) {
-                  await sleep(5200);
                   const latestRefreshToken = getStoredRefreshToken();
-                  const resp3 = await instance.post(
-                    "/auth/refresh",
-                    latestRefreshToken ? { refresh_token: latestRefreshToken } : {},
-                  );
+                  const resp3 = await postRefreshRequest(instance, latestRefreshToken, { silent: true });
                   applyTokens(resp3);
                   return;
                 }
@@ -506,9 +542,9 @@ export const authApi = {
     }),
 
   // 刷新令牌
-  refreshToken: (refreshToken?: string) => {
+  refreshToken: (refreshToken?: string, requestConfig?: SilentAxiosRequestConfig) => {
     const token = refreshToken || getStoredRefreshToken();
-    return api.client.post("/auth/refresh", token ? { refresh_token: token } : {});
+    return postRefreshRequest(api.client, token, requestConfig);
   },
 
   // 验证令牌

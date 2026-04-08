@@ -40,7 +40,7 @@ import { PythonLabProvider, useCanvas, useFlow, useUI, CodeCtxProvider, RunnerAc
 import type { VariableRow } from "./stores/UIStore";
 import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
 import { OptimizationDialog } from "./components/OptimizationDialog";
-import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabDebugApi";
+import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabCodeApi";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 function nextId(prefix: string) {
@@ -86,14 +86,6 @@ const PythonLabStudioInner: React.FC<{
   } = useUI();
 
   const pythonlabRuntime = ((process.env.REACT_APP_PYTHONLAB_RUNTIME || "pyodide") + "").toLowerCase();
-  const canFrontendDebug = useMemo(() => {
-    try {
-      return typeof window !== "undefined" && window.crossOriginIsolated === true && typeof SharedArrayBuffer !== "undefined";
-    } catch {
-      return false;
-    }
-  }, []);
-
   useEffect(() => {
     if (prewarmOnceRef.current) return;
     prewarmOnceRef.current = true;
@@ -105,8 +97,6 @@ const PythonLabStudioInner: React.FC<{
           const plan = decidePythonLabLaunchPlan({
             enabledBreakpointCount: 1,
             pythonlabRuntime,
-            canFrontendDebug,
-            needsStdin: false,
           });
           if (plan.runnerKind !== "dap") return;
           const key = "pythonlab_debug_prewarm_at";
@@ -138,7 +128,7 @@ const PythonLabStudioInner: React.FC<{
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [canFrontendDebug, pythonlabRuntime]);
+  }, [pythonlabRuntime]);
 
   const arrangeLayoutRef = useRef<null | (() => Promise<void>)>(null);
 
@@ -461,13 +451,10 @@ const PythonLabStudioInner: React.FC<{
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [removeSelected, selectedEdgeId, selectedNodeId]);
 
-  const needsStdin = useMemo(() => /\binput\s*\(/.test(code), [code]);
   const debugSession = useDebugSession({
     code,
     debugMap,
     pythonlabRuntime,
-    canFrontendDebug,
-    needsStdin,
   });
   const {
     debugMode,

@@ -38,21 +38,34 @@ export function useUnifiedRunner(params: {
 }): UnifiedRunnerApi {
   const { code, debugMap, activeKind } = params;
   const dap = useDapRunner({ code, debugMap });
-  const py = usePyodideRunner({ code, debugMap });
+  const py = usePyodideRunner({ code });
 
   const active = activeKind === "dap" ? dap : py;
   const dapRef = useRef(dap);
   dapRef.current = dap;
   const pyRef = useRef(py);
   pyRef.current = py;
-  const activeRef = useRef(active);
-  activeRef.current = active;
 
-  const continueRun = useCallback(() => activeRef.current?.continueRun?.(), []);
-  const pause = useCallback(() => activeRef.current?.pause?.(), []);
-  const stepOver = useCallback(() => activeRef.current?.stepOver?.(), []);
-  const stepInto = useCallback(() => activeRef.current?.stepInto?.(), []);
-  const stepOut = useCallback(() => activeRef.current?.stepOut?.(), []);
+  const continueRun = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.continueRun?.();
+  }, [activeKind]);
+  const pause = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.pause?.();
+  }, [activeKind]);
+  const stepOver = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.stepOver?.();
+  }, [activeKind]);
+  const stepInto = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.stepInto?.();
+  }, [activeKind]);
+  const stepOut = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.stepOut?.();
+  }, [activeKind]);
 
   const resetAll = useCallback(() => {
     dapRef.current.reset?.();
@@ -60,13 +73,11 @@ export function useUnifiedRunner(params: {
   }, []);
 
   const syncBreakpoints = useCallback((bps: Breakpoint[]) => {
-    pyRef.current.setBreakpoints?.(bps);
     dapRef.current.setBreakpoints?.(bps);
   }, []);
 
   const syncWatchExprs = useCallback((exprs: string[]) => {
     dapRef.current.setWatchExprs?.(exprs);
-    pyRef.current.setWatchExprs?.(exprs);
   }, []);
 
   const clearAllOutput = useCallback(() => {
@@ -74,18 +85,39 @@ export function useUnifiedRunner(params: {
     pyRef.current.clearOutput?.();
   }, []);
 
-  const addWatch = useCallback((expr: string) => activeRef.current?.addWatch?.(expr), []);
-  const removeWatch = useCallback((expr: string) => activeRef.current?.removeWatch?.(expr), []);
+  const addWatch = useCallback((expr: string) => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.addWatch?.(expr);
+  }, [activeKind]);
+  const removeWatch = useCallback((expr: string) => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.removeWatch?.(expr);
+  }, [activeKind]);
   const evaluate = useCallback(
-    (expr: string) => activeRef.current?.evaluate?.(expr) ?? Promise.resolve({ ok: false as const, error: "当前运行器不支持求值" }),
-    []
+    (expr: string) => {
+      if (activeKind !== "dap") {
+        return Promise.resolve({ ok: false as const, error: "当前运行模式不支持调试求值" });
+      }
+      return dapRef.current?.evaluate?.(expr) ?? Promise.resolve({ ok: false as const, error: "调试器未就绪" });
+    },
+    [activeKind]
   );
-  const historyBack = useCallback(() => activeRef.current?.historyBack?.(), []);
-  const historyForward = useCallback(() => activeRef.current?.historyForward?.(), []);
-  const historyToLatest = useCallback(() => activeRef.current?.historyToLatest?.(), []);
+  const historyBack = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.historyBack?.();
+  }, [activeKind]);
+  const historyForward = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.historyForward?.();
+  }, [activeKind]);
+  const historyToLatest = useCallback(() => {
+    if (activeKind !== "dap") return;
+    return dapRef.current?.historyToLatest?.();
+  }, [activeKind]);
   const clearPendingOutput = useCallback(() => {
-    (activeRef.current as { clearPendingOutput?: () => void } | null)?.clearPendingOutput?.();
-  }, []);
+    if (activeKind !== "dap") return;
+    (dapRef.current as { clearPendingOutput?: () => void } | null)?.clearPendingOutput?.();
+  }, [activeKind]);
 
   return useMemo(
     () => ({

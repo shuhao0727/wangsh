@@ -4,36 +4,6 @@ import {
   switchPythonlabRunner,
 } from "./debugLaunchControl";
 
-function assert(condition: unknown, message: string) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-function assertEqual<T>(actual: T, expected: T, message?: string) {
-  if (actual !== expected) {
-    throw new Error(message || `Expected ${String(expected)}, got ${String(actual)}`);
-  }
-}
-
-function assertDeepEqual(actual: unknown, expected: unknown, message?: string) {
-  const actualJson = JSON.stringify(actual);
-  const expectedJson = JSON.stringify(expected);
-  if (actualJson !== expectedJson) {
-    throw new Error(message || `Expected ${expectedJson}, got ${actualJson}`);
-  }
-}
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`ok ${name}`);
-  } catch (error) {
-    console.error(`not ok ${name}`);
-    throw error;
-  }
-}
-
 test("launchPythonlabDebugAction forwards launch breakpoint snapshot to dap runner", () => {
   const breakpoints = [
     { line: 2, enabled: true },
@@ -48,11 +18,10 @@ test("launchPythonlabDebugAction forwards launch breakpoint snapshot to dap runn
         receivedArg = arg;
       },
     },
-    pyRunner: {},
     breakpoints,
   });
 
-  assertDeepEqual(receivedArg, { initialBreakpoints: breakpoints });
+  expect(receivedArg).toEqual({ initialBreakpoints: breakpoints });
 });
 
 test("launchPythonlabRunAction forwards stdin lines to dap plain runner", () => {
@@ -70,7 +39,7 @@ test("launchPythonlabRunAction forwards stdin lines to dap plain runner", () => 
     stdinLines,
   });
 
-  assertDeepEqual(receivedArg, stdinLines);
+  expect(receivedArg).toEqual(stdinLines);
 });
 
 test("switchPythonlabRunner stops active dap session when switching back to pyodide", () => {
@@ -90,6 +59,6 @@ test("switchPythonlabRunner stops active dap session when switching back to pyod
     pyRunner: {},
   });
 
-  assertEqual(calls[0], "set:pyodide");
-  assert(calls.includes("stop"), "expected active dap runner to be stopped");
+  expect(calls[0]).toBe("set:pyodide");
+  expect(calls.includes("stop")).toBe(true);
 });

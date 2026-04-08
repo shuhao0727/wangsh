@@ -104,7 +104,7 @@ export async function resolvePythonlabWsToken(): Promise<string | null> {
   if (token) return token;
 
   try {
-    const resp = await authApi.refreshToken(undefined);
+    const resp = await authApi.refreshToken(undefined, { silent: true });
     const data = resp?.data as Record<string, string> | null;
     if (data?.access_token || data?.refresh_token) {
       authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);

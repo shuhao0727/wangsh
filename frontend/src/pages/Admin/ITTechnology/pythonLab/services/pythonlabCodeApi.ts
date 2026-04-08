@@ -35,7 +35,7 @@ export type PythonLabCfgResponse = {
   exitEdges?: Array<{ from: string; kind: string; label?: string }>;
 };
 
-export const pythonlabDebugApi = {
+export const pythonlabCfgApi = {
   parseCfg: async (code: string): Promise<PythonLabCfgResponse> => {
     const resp = await pythonlabV2Client.post<PythonLabCfgResponse>("/cfg/parse", { code });
     return resp.data as PythonLabCfgResponse;

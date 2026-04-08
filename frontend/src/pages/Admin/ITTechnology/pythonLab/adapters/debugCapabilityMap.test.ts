@@ -1,5 +1,6 @@
 import {
   applyDapNegotiatedCapabilities,
+  applyDebugRunnerPolicy,
   createDebugCapabilityMapV1,
   diffDebugControlMatrix,
   getDebugCapabilityLabel,
@@ -80,6 +81,27 @@ test("resolveDebugControlMatrix keeps run enabled while running and disables deb
   expect(running.pause).toBe(true);
   expect(running.continue).toBe(false);
   expect(running.stepOver).toBe(false);
+});
+
+test("pyodide policy downgrades capabilities to plain-run only", () => {
+  const cap = applyDebugRunnerPolicy(createDebugCapabilityMapV1("legacy"), "pyodide");
+  expect(isDebugCapabilitySupported(cap, "breakpoint")).toBe(true);
+  expect(isDebugCapabilitySupported(cap, "terminalAttach")).toBe(true);
+  expect(isDebugCapabilitySupported(cap, "pause")).toBe(false);
+  expect(isDebugCapabilitySupported(cap, "continue")).toBe(false);
+  expect(isDebugCapabilitySupported(cap, "watch")).toBe(false);
+  expect(getDebugCapabilityNote(cap, "breakpoint")).toContain("点击调试时将切换到后端 DAP 会话");
+});
+
+test("resolveDebugControlMatrix disables pause and continue when pyodide policy blocks them", () => {
+  const cap = applyDebugRunnerPolicy(createDebugCapabilityMapV1("legacy"), "pyodide");
+  const running = resolveDebugControlMatrix("running", cap);
+  const paused = resolveDebugControlMatrix("paused", cap);
+  expect(running.pause).toBe(false);
+  expect(paused.continue).toBe(false);
+  expect(paused.stepOver).toBe(false);
+  expect(paused.stepInto).toBe(false);
+  expect(paused.stepOut).toBe(false);
 });
 
 test("control matrix updates stepBack when negotiated capability changes", () => {

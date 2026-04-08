@@ -5,7 +5,7 @@ import { generatePythonFromFlow } from "../flow/ir";
 import { buildUnifiedFlowFromPython } from "../flow/python_sync";
 import { computeBeautify, DEFAULT_BEAUTIFY_PARAMS, DEFAULT_BEAUTIFY_THRESHOLDS, type FlowBeautifyParams, type FlowBeautifyThresholds } from "../flow/beautify";
 import { validatePythonStrict } from "../flow/python_runtime";
-import { pythonlabDebugApi, pythonlabFlowApi, type PythonLabFlowDiagnostic } from "../services/pythonlabDebugApi";
+import { pythonlabCfgApi, pythonlabFlowApi, type PythonLabFlowDiagnostic } from "../services/pythonlabCodeApi";
 import { cfgToFlow } from "../flow/cfg_to_flow";
 import { nodeSizeForTitle } from "../flow/ports";
 import { sortFlowGraphStable } from "../flow/determinism";
@@ -423,7 +423,7 @@ export function usePythonFlowSync(params: {
         }
 
         try {
-          const cfg = await pythonlabDebugApi.parseCfg(code);
+          const cfg = await pythonlabCfgApi.parseCfg(code);
           const flow = cfgToFlow(cfg);
           setFlowDiagnostics(cfg.diagnostics?.map((d) => ({ level: d.level, message: d.message, code: "W_CFG" })) ?? []);
           setCodeIr(null);

@@ -13,8 +13,6 @@ export type PythonLabLaunchPlan = {
 export function decidePythonLabLaunchPlan(params: {
     enabledBreakpointCount: number;
     pythonlabRuntime: PythonLabRuntime;
-    canFrontendDebug: boolean;
-    needsStdin?: boolean;
 }): PythonLabLaunchPlan {
     const enabled = Number(params.enabledBreakpointCount || 0);
     const runtime = String(params.pythonlabRuntime || "").toLowerCase();
