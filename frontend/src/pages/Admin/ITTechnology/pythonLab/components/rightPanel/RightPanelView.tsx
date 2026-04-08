@@ -46,15 +46,18 @@ function PanelTooltip({
   children,
 }: {
   title: React.ReactNode;
-  children: React.ReactElement;
+  children: React.ReactElement<{
+    title?: string;
+    "aria-label"?: string;
+  }>;
 }) {
   // Native titles avoid the Radix hover/pointer interaction that can block
   // real clicks on the debug controls across Chrome/Safari.
   const titleText =
     typeof title === "string" || typeof title === "number" ? String(title) : undefined;
   return React.cloneElement(children, {
-    title: titleText ?? (children.props as { title?: string }).title,
-    "aria-label": titleText ?? (children.props as { "aria-label"?: string })["aria-label"],
+    title: titleText ?? children.props.title,
+    "aria-label": titleText ?? children.props["aria-label"],
   });
 }
 
