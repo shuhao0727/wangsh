@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
   Home,
   Bot,
@@ -114,6 +114,9 @@ const BasicLayout: React.FC = () => {
     (it) => navVisibleMap[it.key] !== false
   );
 
+  const isNavItemActive = (key: string) =>
+    location.pathname === key || location.pathname.startsWith(key + "/");
+
   const handleLoginSuccess = () => {
     setIsLoginModalVisible(false);
     showMessage.success("登录成功！");
@@ -139,20 +142,19 @@ const BasicLayout: React.FC = () => {
               <nav className="horizontal-menu">
                 {visibleNavItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.key ||
-                    location.pathname.startsWith(item.key + "/");
+                  const isActive = isNavItemActive(item.key);
                   return (
-                    <button
+                    <NavLink
                       key={item.key}
+                      to={item.key}
                       className={cn(
                         "nav-item appearance-none border-0",
                         isActive && "nav-item-active"
                       )}
-                      onClick={() => navigate(item.key)}
                     >
                       <Icon className="nav-icon" />
                       <span>{item.label}</span>
-                    </button>
+                    </NavLink>
                   );
                 })}
               </nav>
@@ -184,11 +186,11 @@ const BasicLayout: React.FC = () => {
           <nav className="flex flex-col py-2">
             {visibleNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.key ||
-                location.pathname.startsWith(item.key + "/");
+              const isActive = isNavItemActive(item.key);
               return (
-                <button
+                <NavLink
                   key={item.key}
+                  to={item.key}
                   className={cn(
                     "appearance-none border-0 flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors",
                     "hover:bg-accent hover:text-accent-foreground",
@@ -197,13 +199,12 @@ const BasicLayout: React.FC = () => {
                       : "text-muted-foreground"
                   )}
                   onClick={() => {
-                    navigate(item.key);
                     setMobileMenuOpen(false);
                   }}
                 >
                   <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
-                </button>
+                </NavLink>
               );
             })}
           </nav>

@@ -276,28 +276,6 @@ async function collectPauseSnapshot(page) {
   });
 }
 
-async function readRunnerHookSnapshot(page) {
-  return await page.evaluate(() => {
-    return window.__pythonlabRunnerSnapshot || null;
-  });
-}
-
-async function waitForRunnerHookState(page, predicate, timeout = debugPauseTimeoutMs) {
-  const deadline = Date.now() + timeout;
-  let lastSnapshot = null;
-  while (Date.now() < deadline) {
-    try {
-      const snapshot = await readRunnerHookSnapshot(page);
-      lastSnapshot = snapshot;
-      if (snapshot && predicate(snapshot)) {
-        return snapshot;
-      }
-    } catch {}
-    await page.waitForTimeout(100);
-  }
-  throw new Error(`runner hook timeout: ${JSON.stringify({ lastSnapshot })}`);
-}
-
 async function waitForPauseSnapshot(page, predicate, timeout = debugPauseTimeoutMs) {
   const deadline = Date.now() + timeout;
   let lastSnapshot = null;
@@ -374,6 +352,46 @@ async function waitForDebugPause(page, matcher, timeout = debugPauseTimeoutMs) {
   }, matcher, { timeout });
 }
 
+async function waitForDebugRunning(page, timeout = debugPauseTimeoutMs) {
+  await page.waitForFunction(() => {
+    const debugTab = Array.from(document.querySelectorAll('[role="tab"]')).find(
+      (el) => (el.textContent || "").includes("调试器"),
+    );
+    const continueButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      button.querySelector("svg.lucide-fast-forward"),
+    );
+    const pauseButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      button.querySelector("svg.lucide-circle-pause"),
+    );
+    return (
+      debugTab?.getAttribute("aria-selected") === "true" &&
+      Boolean(continueButton) &&
+      continueButton.disabled === true &&
+      Boolean(pauseButton) &&
+      pauseButton.disabled === false
+    );
+  }, undefined, { timeout });
+
+  return await page.evaluate(() => {
+    const tabs = Array.from(document.querySelectorAll('[role="tab"]')).map((el) => ({
+      text: (el.textContent || "").trim(),
+      selected: el.getAttribute("aria-selected"),
+    }));
+    const continueButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      button.querySelector("svg.lucide-fast-forward"),
+    );
+    const pauseButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      button.querySelector("svg.lucide-circle-pause"),
+    );
+    return {
+      tabs,
+      continueDisabled: Boolean(continueButton?.disabled),
+      pauseDisabled: Boolean(pauseButton?.disabled),
+      bodyText: document.body.innerText || "",
+    };
+  });
+}
+
 async function waitForDebugPauseState(
   page,
   { includeRows = [], excludeRows = [], bodyIncludes = [] } = {},
@@ -426,6 +444,39 @@ async function waitForTerminalOutputAndIdle(page, expectedRow, timeout = 15_000)
       !hasSpinner
     );
   }, expectedRow, { timeout });
+}
+
+async function waitForPersonalProgramsView(page, timeout = 15_000) {
+  await page.waitForFunction(() => {
+    const main = document.querySelector("main");
+    const mainText = main?.innerText || "";
+    const activeNav = Array.from(document.querySelectorAll("nav .nav-item-active"))
+      .map((el) => (el.textContent || "").trim())
+      .find(Boolean);
+    const hasPersonalProgramsContent =
+      mainText.includes("校本课（XBK）处理系统") ||
+      mainText.includes("暂无公开的个人程序");
+    return (
+      window.location.pathname === "/personal-programs" &&
+      activeNav === "个人程序" &&
+      hasPersonalProgramsContent &&
+      !document.querySelector(".monaco-editor")
+    );
+  }, undefined, { timeout });
+
+  return await page.evaluate(() => {
+    const activeNav = Array.from(document.querySelectorAll("nav .nav-item-active"))
+      .map((el) => (el.textContent || "").trim())
+      .find(Boolean) || null;
+    const mainText = document.querySelector("main")?.innerText || "";
+    return {
+      pathname: window.location.pathname,
+      activeNav,
+      hasXbkCard: mainText.includes("校本课（XBK）处理系统"),
+      hasEmptyState: mainText.includes("暂无公开的个人程序"),
+      mainText,
+    };
+  });
 }
 
 async function waitForOwnSessionsToDrain(page, timeout = 10_000) {
@@ -571,6 +622,43 @@ async function runPlainHappyPathScenario(context) {
     try {
       await cleanupOwnSessions(page);
     } catch {}
+    await page.close();
+  }
+}
+
+async function runTopNavPersonalProgramsScenario(context) {
+  const page = await context.newPage();
+  const diagnostics = await attachDiagnostics(page);
+  const screenshotPrefix = path.join(screenshotsDir, "pythonlab-top-nav-personal-programs");
+
+  try {
+    await openSeqBasic(page);
+    await page.locator(".horizontal-menu").getByText("个人程序", { exact: true }).click();
+    const destination = await waitForPersonalProgramsView(page, 15_000);
+    const shot = `${screenshotPrefix}.png`;
+    await page.screenshot({ path: shot, fullPage: true });
+
+    return {
+      id: "top-nav-personal-programs-from-pythonlab",
+      status: "PASS",
+      destination,
+      screenshots: [shot],
+      diagnostics,
+    };
+  } catch (error) {
+    const failShot = `${screenshotPrefix}-failed.png`;
+    try {
+      await page.screenshot({ path: failShot, fullPage: true });
+    } catch {}
+    return {
+      id: "top-nav-personal-programs-from-pythonlab",
+      status: "FAIL",
+      error: String(error),
+      finalUrl: page.url(),
+      screenshots: [failShot],
+      diagnostics,
+    };
+  } finally {
     await page.close();
   }
 }
@@ -1278,14 +1366,6 @@ async function runPauseResumeScenario(context) {
     await setBreakpoint(page, 2);
     await clickRunnerButton(page, "lucide-bug");
 
-    const firstPauseHook = await waitForRunnerHookState(
-      page,
-      (snapshot) =>
-        snapshot.status === "paused" &&
-        Array.isArray(snapshot.variables) &&
-        snapshot.variables.some((item) => item.name === "time" && item.type === "module"),
-      20_000,
-    );
     const firstPause = await waitForPauseSnapshot(
       page,
       (snapshot) => snapshot.rows.some((text) => text.startsWith("time") && text.endsWith("module")),
@@ -1295,18 +1375,10 @@ async function runPauseResumeScenario(context) {
     await page.screenshot({ path: firstShot, fullPage: true });
 
     await clickRunnerButton(page, "lucide-fast-forward");
-    const runningState = await waitForRunnerHookState(page, (snapshot) => snapshot.status === "running", 10_000);
+    const runningState = await waitForDebugRunning(page, 10_000);
 
     await page.waitForTimeout(400);
     await clickRunnerButton(page, "lucide-circle-pause");
-    const pausedHook = await waitForRunnerHookState(
-      page,
-      (snapshot) =>
-        snapshot.status === "paused" &&
-        Array.isArray(snapshot.variables) &&
-        snapshot.variables.some((item) => item.name === "i" && Number(item.value) >= 1),
-      20_000,
-    );
     const resumedPause = await waitForPauseSnapshot(
       page,
       (snapshot) => snapshot.rows.some((text) => /^i[1-9]\d*int$/.test(text)),
@@ -1341,9 +1413,7 @@ async function runPauseResumeScenario(context) {
       id: "debug-pause-resume-to-end",
       status: "PASS",
       firstPause,
-      firstPauseHook,
       runningState,
-      pausedHook,
       resumedPause,
       terminal,
       playState,
@@ -1984,6 +2054,7 @@ async function main() {
     }
 
     const scenarioEntries = [
+      { id: "top-nav-personal-programs-from-pythonlab", enabledByDefault: true, run: () => runTopNavPersonalProgramsScenario(context) },
       { id: "run-happy-path", enabledByDefault: true, run: () => runPlainHappyPathScenario(context) },
       { id: "run-input-remote-path", enabledByDefault: true, run: () => runPlainInputRemoteScenario(context) },
       { id: "debug-happy-path", enabledByDefault: true, run: () => runHappyPathScenario(context) },
