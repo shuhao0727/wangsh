@@ -1,6 +1,7 @@
 import json
 import asyncio
 import threading
+import logging
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
@@ -8,7 +9,7 @@ from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.utils.cache import cache
 from app.core.sandbox import get_sandbox_provider
-from app.api.endpoints.debug.constants import (
+from app.api.pythonlab.constants import (
     CACHE_KEY_SESSION_PREFIX,
     CACHE_KEY_USER_SESSIONS_PREFIX,
     DEFAULT_SESSION_TTL,
@@ -30,6 +31,7 @@ from app.api.endpoints.debug.constants import (
 # ---------------------------------------------------------------------------
 _loop_lock = threading.Lock()
 _shared_loop: Optional[asyncio.AbstractEventLoop] = None
+logger = logging.getLogger(__name__)
 
 
 def _get_loop() -> asyncio.AbstractEventLoop:
@@ -56,6 +58,38 @@ async def _get_session_meta(session_id: str) -> Optional[Dict[str, Any]]:
 async def _set_session_meta(session_id: str, meta: Dict[str, Any]) -> None:
     ttl = int(meta.get("ttl_seconds") or getattr(settings, "PYTHONLAB_SESSION_TTL_SECONDS", DEFAULT_SESSION_TTL) or DEFAULT_SESSION_TTL)
     await cache.set(f"{CACHE_KEY_SESSION_PREFIX}:{session_id}", meta, expire_seconds=ttl)
+
+
+async def _owner_has_other_active_session(owner_user_id: int, excluding_session_id: str) -> bool:
+    if owner_user_id <= 0:
+        return False
+    try:
+        client = await cache.get_client()
+        user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner_user_id}:sessions"
+        raw_ids = await client.smembers(user_sessions_key)  # type: ignore[misc]
+    except Exception:
+        return False
+
+    active_statuses = {
+        SESSION_STATUS_PENDING,
+        SESSION_STATUS_STARTING,
+        SESSION_STATUS_READY,
+        SESSION_STATUS_ATTACHED,
+        SESSION_STATUS_RUNNING,
+        SESSION_STATUS_STOPPED,
+    }
+    for raw in raw_ids or []:
+        sid = raw.decode("utf-8", errors="ignore") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        sid = sid.strip()
+        if not sid or sid == excluding_session_id:
+            continue
+        meta = await _get_session_meta(sid)
+        if not isinstance(meta, dict):
+            continue
+        st = str(meta.get("status") or "").upper()
+        if st in active_statuses:
+            return True
+    return False
 
 
 @celery_app.task(
@@ -217,18 +251,45 @@ def stop_session(session_id: str, force: bool = False):
     async def run():
         meta = await _get_session_meta(session_id)
         provider = get_sandbox_provider()
+        owner = int(meta.get("owner_user_id") or 0) if isinstance(meta, dict) else 0
+        skip_provider_stop = False
+        has_other_active = False
+
+        # User-scoped container reuse means stopping an old session can kill
+        # debugpy for a newer active session of the same owner.
+        if owner > 0:
+            try:
+                has_other_active = await _owner_has_other_active_session(owner, session_id)
+                # IMPORTANT:
+                # Even for force=True (e.g. stale cleanup), do not kill the shared
+                # owner container when another active session exists for that owner.
+                # Otherwise a stale session cleanup can terminate the currently
+                # running/paused debugging session of the same user.
+                if has_other_active:
+                    skip_provider_stop = True
+            except Exception:
+                skip_provider_stop = False
+
+        logger.info(
+            "pythonlab.stop_session decision session_id=%s force=%s owner=%s has_other_active=%s skip_provider_stop=%s",
+            session_id,
+            force,
+            owner,
+            has_other_active,
+            skip_provider_stop,
+        )
 
         # Stop Sandbox Resource
         try:
             if force:
-                await provider.terminate_session(session_id, meta or {})
-            else:
+                if not skip_provider_stop:
+                    await provider.terminate_session(session_id, meta or {})
+            elif not skip_provider_stop:
                 await provider.stop_session(session_id, meta or {})
         except Exception:
             pass
 
         if meta:
-            owner = int(meta.get("owner_user_id") or 0)
             try:
                 client = await cache.get_client()
                 if owner > 0:

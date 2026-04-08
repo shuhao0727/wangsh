@@ -20,6 +20,7 @@ from starlette.responses import Response
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.api import api_router
+from app.api.v2.pythonlab import router as v2_pythonlab_router
 from app.core.celery_app import celery_app
 from app.utils.cache import cache
 from app.core.startup import (
@@ -181,6 +182,7 @@ app.add_middleware(HttpMetricsMiddleware)
 
 # 注册 API 路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(v2_pythonlab_router, prefix="/api/v2/pythonlab")
 
 
 @app.get("/")

@@ -10,6 +10,8 @@
 6. overview 路由检查
 """
 
+import asyncio
+
 from app.utils.metrics import percentile
 
 
@@ -122,3 +124,81 @@ def test_metrics_router_has_admin_auth():
         deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
         dep_names = [getattr(d, "__name__", str(d)) for d in deps]
         assert "require_admin" in dep_names, f"{route.path} missing require_admin"
+
+
+def test_system_overview_includes_pythonlab_deprecated_alias_usage(monkeypatch):
+    from app.api.endpoints.system import overview as overview_api
+
+    class _ScalarResult:
+        def __init__(self, value: int):
+            self._value = value
+
+        def scalar(self):
+            return self._value
+
+    class _FakeDb:
+        def __init__(self):
+            self._values = [11, 22, 33, 44, 55]
+
+        async def execute(self, _query):
+            return _ScalarResult(self._values.pop(0))
+
+    async def _fake_http():
+        return {"total": 1, "4xx": 0, "5xx": 0, "inflight": 0, "dur_ms": {"n": 0, "p50": 0, "p90": 0, "p95": 0, "max": 0}}
+
+    async def _fake_pythonlab(days: int = 7):
+        return {
+            "window_days": days,
+            "prefix": "/api/v1/debug",
+            "successor_prefix": "/api/v2/pythonlab",
+            "summary": {"http": 2, "websocket": 1, "total": 3},
+            "days": [{"date": "2026-04-08", "http": 2, "websocket": 1, "total": 3}],
+        }
+
+    monkeypatch.setattr(overview_api, "collect_http_metrics", _fake_http)
+    monkeypatch.setattr(overview_api, "collect_db_pool_metrics", lambda: {"pool_size": 1, "checked_in": 1, "checked_out": 0, "overflow": 0, "capacity_total": 8})
+    monkeypatch.setattr(overview_api, "_collect_pythonlab_deprecated_usage", _fake_pythonlab)
+
+    result = asyncio.run(overview_api.system_overview(db=_FakeDb(), _={"id": 1}))
+
+    assert result["counts"]["users"] == 11
+    assert result["observability"]["pythonlab"]["deprecated_v1_alias"]["summary"]["total"] == 3
+
+
+def test_prometheus_metrics_include_pythonlab_deprecated_alias_usage(monkeypatch):
+    from app.api.endpoints.system import metrics as metrics_api
+
+    async def _fake_http():
+        return {"total": 5, "4xx": 1, "5xx": 0, "inflight": 0, "dur_ms": {"n": 0, "p50": 0, "p90": 0, "p95": 0, "max": 0}}
+
+    async def _fake_typst():
+        return {
+            "counts": {"total": 0, "hit": 0, "miss": 0, "fail": 0},
+            "cache_hit_rate_recent": 0.0,
+            "dur_ms": {"n": 0, "p50": 0, "p90": 0, "p95": 0, "max": 0},
+            "waited_ms": {"n": 0, "p50": 0, "p90": 0, "p95": 0, "max": 0},
+            "queue_length": {"typst": 0, "celery": 0},
+            "sample_size": 0,
+            "http_429_total": 0,
+        }
+
+    async def _fake_pythonlab(days: int = 7):
+        return {
+            "window_days": days,
+            "prefix": "/api/v1/debug",
+            "successor_prefix": "/api/v2/pythonlab",
+            "summary": {"http": 4, "websocket": 6, "total": 10},
+            "days": [],
+        }
+
+    monkeypatch.setattr(metrics_api, "collect_http_metrics", _fake_http)
+    monkeypatch.setattr(metrics_api, "collect_typst_metrics", _fake_typst)
+    monkeypatch.setattr(metrics_api, "collect_db_pool_metrics", lambda: {"pool_size": 1, "checked_in": 1, "checked_out": 0, "overflow": 0, "capacity_total": 8})
+    monkeypatch.setattr(metrics_api, "_collect_pythonlab_deprecated_usage", _fake_pythonlab)
+
+    response = asyncio.run(metrics_api.prometheus_metrics(_={"id": 1}))
+    content = response.body.decode("utf-8")
+
+    assert 'pythonlab_deprecated_v1_alias_requests_recent{transport="http",window_days="7"} 4' in content
+    assert 'pythonlab_deprecated_v1_alias_requests_recent{transport="websocket",window_days="7"} 6' in content
+    assert 'pythonlab_deprecated_v1_alias_requests_recent{transport="total",window_days="7"} 10' in content

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useDapRunner } from "./useDapRunner";
 import { usePyodideRunner } from "./usePyodideRunner";
 import type { DebugMap } from "../flow/debugMap";
@@ -13,15 +13,22 @@ export interface UnifiedRunnerApi {
   active: ReturnType<typeof useDapRunner> | ReturnType<typeof usePyodideRunner>;
   activeKind: RunnerKind;
 
-  continueRun: () => void;
-  pause: () => void;
-  stepOver: () => void;
-  stepInto: () => void;
-  stepOut: () => void;
+  continueRun: () => Promise<void> | void;
+  pause: () => Promise<void> | void;
+  stepOver: () => Promise<void> | void;
+  stepInto: () => Promise<void> | void;
+  stepOut: () => Promise<void> | void;
   resetAll: () => void;
   syncBreakpoints: (bps: Breakpoint[]) => void;
   syncWatchExprs: (exprs: string[]) => void;
   clearAllOutput: () => void;
+  addWatch: (expr: string) => Promise<void> | void;
+  removeWatch: (expr: string) => void;
+  evaluate: (expr: string) => Promise<{ ok: boolean; value?: string; type?: string; error?: string }>;
+  historyBack: () => void;
+  historyForward: () => void;
+  historyToLatest: () => void;
+  clearPendingOutput: () => void;
 }
 
 export function useUnifiedRunner(params: {
@@ -34,36 +41,96 @@ export function useUnifiedRunner(params: {
   const py = usePyodideRunner({ code, debugMap });
 
   const active = activeKind === "dap" ? dap : py;
+  const dapRef = useRef(dap);
+  dapRef.current = dap;
+  const pyRef = useRef(py);
+  pyRef.current = py;
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
-  const continueRun = useCallback(() => { active?.continueRun?.(); }, [active]);
-  const pause = useCallback(() => { active?.pause?.(); }, [active]);
-  const stepOver = useCallback(() => { active?.stepOver?.(); }, [active]);
-  const stepInto = useCallback(() => { active?.stepInto?.(); }, [active]);
-  const stepOut = useCallback(() => { active?.stepOut?.(); }, [active]);
+  const continueRun = useCallback(() => activeRef.current?.continueRun?.(), []);
+  const pause = useCallback(() => activeRef.current?.pause?.(), []);
+  const stepOver = useCallback(() => activeRef.current?.stepOver?.(), []);
+  const stepInto = useCallback(() => activeRef.current?.stepInto?.(), []);
+  const stepOut = useCallback(() => activeRef.current?.stepOut?.(), []);
 
   const resetAll = useCallback(() => {
-    dap.reset?.();
-    py.reset?.();
-  }, [dap, py]);
+    dapRef.current.reset?.();
+    pyRef.current.reset?.();
+  }, []);
 
   const syncBreakpoints = useCallback((bps: Breakpoint[]) => {
-    py.setBreakpoints?.(bps);
-    dap.setBreakpoints?.(bps);
-  }, [dap, py]);
+    pyRef.current.setBreakpoints?.(bps);
+    dapRef.current.setBreakpoints?.(bps);
+  }, []);
 
   const syncWatchExprs = useCallback((exprs: string[]) => {
-    dap.setWatchExprs?.(exprs);
-    py.setWatchExprs?.(exprs);
-  }, [dap, py]);
+    dapRef.current.setWatchExprs?.(exprs);
+    pyRef.current.setWatchExprs?.(exprs);
+  }, []);
 
   const clearAllOutput = useCallback(() => {
-    dap.clearOutput?.();
-    py.clearOutput?.();
-  }, [dap, py]);
+    dapRef.current.clearOutput?.();
+    pyRef.current.clearOutput?.();
+  }, []);
+
+  const addWatch = useCallback((expr: string) => activeRef.current?.addWatch?.(expr), []);
+  const removeWatch = useCallback((expr: string) => activeRef.current?.removeWatch?.(expr), []);
+  const evaluate = useCallback(
+    (expr: string) => activeRef.current?.evaluate?.(expr) ?? Promise.resolve({ ok: false as const, error: "当前运行器不支持求值" }),
+    []
+  );
+  const historyBack = useCallback(() => activeRef.current?.historyBack?.(), []);
+  const historyForward = useCallback(() => activeRef.current?.historyForward?.(), []);
+  const historyToLatest = useCallback(() => activeRef.current?.historyToLatest?.(), []);
+  const clearPendingOutput = useCallback(() => {
+    (activeRef.current as { clearPendingOutput?: () => void } | null)?.clearPendingOutput?.();
+  }, []);
 
   return useMemo(
-    () => ({ dap, py, active, activeKind, continueRun, pause, stepOver, stepInto, stepOut, resetAll, syncBreakpoints, syncWatchExprs, clearAllOutput }),
-    [dap, py, active, activeKind, continueRun, pause, stepOver, stepInto, stepOut, resetAll, syncBreakpoints, syncWatchExprs, clearAllOutput]
+    () => ({
+      dap,
+      py,
+      active,
+      activeKind,
+      continueRun,
+      pause,
+      stepOver,
+      stepInto,
+      stepOut,
+      resetAll,
+      syncBreakpoints,
+      syncWatchExprs,
+      clearAllOutput,
+      addWatch,
+      removeWatch,
+      evaluate,
+      historyBack,
+      historyForward,
+      historyToLatest,
+      clearPendingOutput,
+    }),
+    [
+      dap,
+      py,
+      active,
+      activeKind,
+      continueRun,
+      pause,
+      stepOver,
+      stepInto,
+      stepOut,
+      resetAll,
+      syncBreakpoints,
+      syncWatchExprs,
+      clearAllOutput,
+      addWatch,
+      removeWatch,
+      evaluate,
+      historyBack,
+      historyForward,
+      historyToLatest,
+      clearPendingOutput,
+    ]
   );
 }
-

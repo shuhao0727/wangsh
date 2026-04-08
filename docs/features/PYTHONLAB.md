@@ -1,10 +1,14 @@
 # PythonLab 调试环境文档
 
-> 最后更新：2026-03-26
+> 最后更新：2026-04-08
 
 ## 概述
 
 PythonLab 是基于 Docker 沙箱的 Python 代码调试环境，支持断点调试、变量查看、代码执行等功能。
+
+## 近期事故记录
+
+- [2026-04-08 调试 Continue 卡死事故记录](./PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md)
 
 ### 核心功能
 
@@ -100,8 +104,9 @@ debugpy.wait_for_client()
 
 ### 端点
 
-- `/debug/sessions/{session_id}/ws` - 调试 WebSocket（DAP）
-- `/debug/sessions/{session_id}/terminal` - 终端 WebSocket
+- 主入口：`/api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（DAP）
+- 主入口：`/api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
+- 兼容别名：`/api/v1/debug/sessions/{session_id}/ws`、`/api/v1/debug/sessions/{session_id}/terminal`
 
 ### 消息格式
 
@@ -132,7 +137,7 @@ debugpy.wait_for_client()
 
 ### 会话生命周期
 
-1. **创建**：`POST /debug/sessions`
+1. **创建**：`POST /api/v2/pythonlab/sessions`
 2. **运行**：WebSocket 连接，执行代码
 3. **心跳**：定期发送心跳保持活跃
 4. **清理**：超时或手动停止
@@ -232,15 +237,16 @@ TIMEOUT_SECONDS=20 python backend/scripts/smoke_pythonlab_print_visibility_probe
 
 ## API 端点
 
-详见 [API.md](../development/API.md) 第十二章节：调试工具 / PythonLab（/debug）
+详见 [API.md](../development/API.md) 第十二章节：调试工具 / PythonLab（主入口：`/api/v2/pythonlab`）
 
 ### 核心端点
 
-- `POST /debug/sessions` - 创建调试会话
-- `GET /debug/sessions/{session_id}` - 获取会话详情
-- `POST /debug/sessions/{session_id}/stop` - 停止会话
-- `WS /debug/sessions/{session_id}/ws` - 调试 WebSocket
-- `WS /debug/sessions/{session_id}/terminal` - 终端 WebSocket
+- `POST /api/v2/pythonlab/sessions` - 创建调试会话
+- `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情
+- `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话
+- `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket
+- `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
+- `GET /api/v2/pythonlab/compat/deprecated_usage` - 查看旧 `/api/v1/debug/*` 兼容入口最近命中量
 
 ---
 
@@ -322,7 +328,8 @@ const canvasY = (clientY - rect.top) / scale - panY;
 
 ### 后端
 
-- `/Users/wsh/wangsh/backend/app/api/endpoints/debug/` - API 路由
+- `/Users/wsh/wangsh/backend/app/api/pythonlab/` - API 路由
+- `/Users/wsh/wangsh/backend/app/api/endpoints/debug/` - deprecated 兼容别名
 - `/Users/wsh/wangsh/backend/app/services/docker.py` - Docker 服务
 - `/Users/wsh/wangsh/backend/app/tasks/pythonlab.py` - Celery 任务
 

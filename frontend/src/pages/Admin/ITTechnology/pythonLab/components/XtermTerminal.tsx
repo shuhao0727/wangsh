@@ -147,6 +147,12 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       });
     }, 24);
   };
+  const writeClearScreen = (t: TerminalInternal) => {
+    try {
+      // Keep clear sequence minimal; ESC[3J may trigger xterm viewport clear race.
+      t.write("\x1b[2J\x1b[H");
+    } catch {}
+  };
 
   useImperativeHandle(
     ref,
@@ -157,9 +163,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         if (terminalDisposedRef.current) return;
         if (!t.element || !t.element.isConnected) return;
         trace("imperative_clear");
-        try {
-          t.write("\x1b[2J\x1b[3J\x1b[H");
-        } catch {}
+        writeClearScreen(t);
         scheduleRefreshGutter();
       },
       ensureNewline: () => {
@@ -458,7 +462,6 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           };
       };
 
-      term.clear();
       scheduleRefreshGutter();
       connect();
 

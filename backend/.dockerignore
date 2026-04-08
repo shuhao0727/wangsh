@@ -6,3 +6,10 @@ venv
 .ruff_cache
 .DS_Store
 *.log
+
+# Keep tests and validation scripts in git/CI, but out of deploy images.
+tests/
+scripts/archive/
+scripts/README.md
+scripts/smoke_*.py
+scripts/soak_*.py

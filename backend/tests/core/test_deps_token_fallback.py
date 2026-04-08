@@ -28,7 +28,7 @@ def test_get_current_user_fallback_to_cookie_token(monkeypatch):
         {
             "type": "http",
             "method": "POST",
-            "path": "/api/v1/debug/optimize/code",
+            "path": "/api/v2/pythonlab/optimize/code",
             "headers": [(b"cookie", b"ws_access_token=cookiegood")],
             "client": ("127.0.0.1", 12345),
             "query_string": b"",

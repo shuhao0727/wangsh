@@ -9,6 +9,7 @@ import aiohttp
 import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
 USERNAME = os.getenv("USERNAME", "admin")
 PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
 ROUNDS = int(os.getenv("ROUNDS", "10"))
@@ -58,12 +59,13 @@ def probe_code() -> str:
 
 def create_session(token: str, title: str) -> str:
     resp = requests.post(
-        f"{API_URL}/api/v1/debug/sessions",
+        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions",
         json={
             "title": title,
             "code": probe_code(),
             "entry_path": "main.py",
             "requirements": [],
+            "engine": "remote",
             "runtime_mode": "debug",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -77,7 +79,7 @@ def wait_ready(token: str, sid: str) -> None:
     started = time.time()
     while time.time() - started < 90:
         resp = requests.get(
-            f"{API_URL}/api/v1/debug/sessions/{sid}",
+            f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=15,
         )
@@ -94,7 +96,10 @@ def wait_ready(token: str, sid: str) -> None:
 
 def ws_url(token: str, sid: str, client_conn_id: str) -> str:
     ws_base = API_URL.replace("http://", "ws://").replace("https://", "wss://")
-    return f"{ws_base}/api/v1/debug/sessions/{sid}/ws?client_conn_id={quote(client_conn_id)}&token={quote(token)}"
+    return (
+        f"{ws_base}{PYTHONLAB_V2_ROOT}/sessions/{sid}/ws"
+        f"?client_conn_id={quote(client_conn_id)}&token={quote(token)}"
+    )
 
 
 async def recv_json(ws: aiohttp.ClientWebSocketResponse, timeout_s: float) -> dict:
@@ -309,7 +314,7 @@ async def run_round(token: str, idx: int) -> dict:
             await wait_event(ws, "terminated", 20, events_seen)
 
     requests.post(
-        f"{API_URL}/api/v1/debug/sessions/{sid}/stop",
+        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}/stop",
         headers={"Authorization": f"Bearer {token}"},
         timeout=20,
     )

@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from app.api.endpoints.debug.flow import (
+from app.api.pythonlab.flow import (
     _ensure_conservative_code_optimization,
     _normalize_optimized_python_code,
     _strip_markdown_fence,

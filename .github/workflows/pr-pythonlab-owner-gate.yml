@@ -3,6 +3,7 @@ name: pr-pythonlab-owner-gate
 on:
   pull_request:
     paths:
+      - "backend/app/api/pythonlab/**"
       - "backend/app/api/endpoints/debug/**"
       - "backend/scripts/smoke_pythonlab_ws_owner_concurrency.py"
       - ".github/workflows/pythonlab-owner-concurrency.yml"

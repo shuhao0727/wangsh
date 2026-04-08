@@ -60,8 +60,11 @@ export function usePythonFlowSync(params: {
   } =
     params;
 
-  const [code, setCode] = useState(starterCode || "print('Hello, Python')\n");
-  const [codeMode, setCodeMode] = useState<"auto" | "manual">("auto");
+  const initialCode = starterCode || "print('Hello, Python')\n";
+  const [code, setCode] = useState(initialCode);
+  const [codeMode, setCodeMode] = useState<"auto" | "manual">(
+    starterCode && starterCode.trim() ? "manual" : "auto"
+  );
   const [codeIr, setCodeIr] = useState<IRBlock | null>(null);
   const [flowDiagnostics, setFlowDiagnostics] = useState<PythonLabFlowDiagnostic[]>([]);
   const [flowExpandFunctions, setFlowExpandFunctions] = useState<"all" | "top" | "none">("all");
@@ -69,7 +72,7 @@ export function usePythonFlowSync(params: {
   const [debugForIns, setDebugForIns] = useState<DebugForInEntry[] | null>(null);
   const [debugMapCodeSha, setDebugMapCodeSha] = useState<string | null>(null);
   const [flowRebuildToken, setFlowRebuildToken] = useState(0);
-  const lastNonEmptyCodeRef = useRef((starterCode || "").trim() ? (starterCode || "") : "print('Hello, Python')\n");
+  const lastNonEmptyCodeRef = useRef(initialCode.trim() ? initialCode : "print('Hello, Python')\n");
   const pendingRebuildRef = useRef<{ token: number; resolve: () => void; reject: (reason?: unknown) => void } | null>(null);
   const aiCodeTokenRef = useRef(0);
   const lastAiSemanticKeyRef = useRef<string | null>(null);

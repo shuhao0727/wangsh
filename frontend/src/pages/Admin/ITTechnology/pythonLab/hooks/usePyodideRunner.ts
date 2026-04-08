@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { logger } from "@services/logger";
 import { computeDebugNodeSelection, type DebugMap } from "../flow/debugMap";
+import { applyDebugStatusTarget } from "../core/debugStateMachine";
 import type { Frame, InternalRunnerState, RunnerState, RunnerStatus, Variable, WatchResult } from "./useDapRunner";
 
 type WorkerReady = { ok: boolean; debugCapable: boolean; error?: string };
@@ -31,6 +32,7 @@ type Action =
 
 const initialState: InternalRunnerState = {
   status: "idle",
+  statusTransitions: [],
   trace: [],
   activeLine: null,
   activeFlowLine: null,
@@ -58,9 +60,9 @@ const initialState: InternalRunnerState = {
 function reducer(state: InternalRunnerState, action: Action): InternalRunnerState {
   switch (action.type) {
     case "SET_STATUS":
-      return { ...state, status: action.payload };
+      return applyStatusTarget(state, action.payload);
     case "SET_ERROR":
-      return { ...state, error: action.payload, status: "error" };
+      return { ...applyStatusTarget(state, "error"), error: action.payload };
     case "APPEND_TRACE_LINES":
       return { ...state, trace: [...state.trace, ...action.payload] };
     case "CLEAR_OUTPUT":
@@ -83,10 +85,10 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
       return { ...state, watchResults: action.payload };
     case "INCREMENT_STEPS":
       return { ...state, steps: state.steps + 1 };
-    case "RESET_SESSION":
+    case "RESET_SESSION": {
+      const nextState = applyStatusTarget(state, "idle");
       return {
-        ...state,
-        status: "idle",
+        ...nextState,
         error: null,
         activeLine: null,
         activeFlowLine: null,
@@ -102,6 +104,7 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
         sessionId: null,
         pendingOutput: [],
       };
+    }
     case "UPDATE_ELAPSED_TIME":
       return { ...state, elapsedTime: action.payload };
     case "SET_START_TIME":
@@ -109,6 +112,24 @@ function reducer(state: InternalRunnerState, action: Action): InternalRunnerStat
     default:
       return state;
   }
+}
+
+function applyStatusTarget(state: InternalRunnerState, target: RunnerStatus): InternalRunnerState {
+  const next = applyDebugStatusTarget({
+    status: state.status,
+    transitions: state.statusTransitions,
+    target,
+  });
+  if (!next.applied) {
+    if (state.status === target) return state;
+    // Preserve legacy behavior while Pyodide actions are migrated to explicit triggers.
+    return { ...state, status: target };
+  }
+  return {
+    ...state,
+    status: next.status,
+    statusTransitions: next.transitions,
+  };
 }
 
 function defaultPyodideBaseUrl() {

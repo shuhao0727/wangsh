@@ -1,6 +1,6 @@
 import pytest
 
-from app.api.endpoints.debug.ws import _normalize_client_conn_id
+from app.api.pythonlab.ws import _normalize_client_conn_id
 
 
 @pytest.mark.parametrize(

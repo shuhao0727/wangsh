@@ -322,28 +322,34 @@
 | DELETE | `/xxjs/dianming/class` | 删除班级 | 管理员 |
 | PUT | `/xxjs/dianming/class/students` | 更新班级学生 | 管理员 |
 
-## 十二、调试工具 / PythonLab（/debug）
+## 十二、调试工具 / PythonLab（主入口：/api/v2/pythonlab）
+
+说明：
+- 当前主入口应视为 `/api/v2/pythonlab/*`
+- `/api/v1/debug/*` 仍存在，但属于 deprecated 兼容别名，不应再作为新代码或新文档的默认路径
+- `/api/v1/debug/*` 的 HTTP 响应会显式返回 `Deprecation / Sunset / Link / Warning` 头，用于帮助排查遗留调用方
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| POST | `/debug/syntax/check` | 语法检查 | 是 |
-| POST | `/debug/cfg/parse` | CFG 解析 | 是 |
-| POST | `/debug/sessions` | 创建调试会话 | 是 |
-| GET | `/debug/sessions/{session_id}` | 获取会话详情 | 是 |
-| POST | `/debug/sessions/{session_id}/stop` | 停止会话 | 是 |
-| GET | `/debug/sessions` | 获取会话列表 | 是 |
-| POST | `/debug/sessions/cleanup` | 清理过期会话 | 管理员 |
-| WS | `/debug/sessions/{session_id}/terminal` | 终端 WebSocket | 是 |
-| WS | `/debug/sessions/{session_id}/ws` | 调试 WebSocket（DAP） | 是 |
-| POST | `/debug/optimize/code` | AI 代码优化 | 是 |
-| POST | `/debug/optimize/apply/{log_id}` | 应用优化结果 | 是 |
-| GET | `/debug/optimize/rollback/{log_id}` | 回滚优化 | 是 |
-| GET | `/debug/flow/prompt_template` | 获取提示模板 | 是 |
-| POST | `/debug/flow/prompt_template` | 创建提示模板 | 是 |
-| POST | `/debug/ai/chat` | AI 聊天 | 是 |
-| POST | `/debug/flow/generate_code` | 生成代码 | 是 |
-| POST | `/debug/flow/test_agent_connection` | 测试智能体连接 | 是 |
-| POST | `/debug/flow/parse` | 解析流程图 | 是 |
+| POST | `/api/v2/pythonlab/syntax/check` | 语法检查 | 是 |
+| POST | `/api/v2/pythonlab/cfg/parse` | CFG 解析 | 是 |
+| POST | `/api/v2/pythonlab/sessions` | 创建调试会话 | 是 |
+| GET | `/api/v2/pythonlab/sessions/{session_id}` | 获取会话详情 | 是 |
+| POST | `/api/v2/pythonlab/sessions/{session_id}/stop` | 停止会话 | 是 |
+| GET | `/api/v2/pythonlab/sessions` | 获取会话列表 | 是 |
+| POST | `/api/v2/pythonlab/sessions/cleanup` | 清理过期会话 | 管理员 |
+| WS | `/api/v2/pythonlab/sessions/{session_id}/terminal` | 终端 WebSocket | 是 |
+| WS | `/api/v2/pythonlab/sessions/{session_id}/ws` | 调试 WebSocket（DAP） | 是 |
+| POST | `/api/v2/pythonlab/optimize/code` | AI 代码优化 | 是 |
+| POST | `/api/v2/pythonlab/optimize/apply/{log_id}` | 应用优化结果 | 是 |
+| GET | `/api/v2/pythonlab/optimize/rollback/{log_id}` | 回滚优化 | 是 |
+| GET | `/api/v2/pythonlab/flow/prompt_template` | 获取提示模板 | 是 |
+| POST | `/api/v2/pythonlab/flow/prompt_template` | 创建提示模板 | 是 |
+| POST | `/api/v2/pythonlab/ai/chat` | AI 聊天 | 是 |
+| POST | `/api/v2/pythonlab/flow/generate_code` | 生成代码 | 是 |
+| POST | `/api/v2/pythonlab/flow/test_agent_connection` | 测试智能体连接 | 是 |
+| GET | `/api/v2/pythonlab/compat/deprecated_usage` | 查看 `/api/v1/debug/*` 兼容入口最近使用量 | 管理员 |
+| POST | `/api/v2/pythonlab/flow/parse` | 解析流程图 | 是 |
 
 ## 十三、自适应测评（/assessment）
 

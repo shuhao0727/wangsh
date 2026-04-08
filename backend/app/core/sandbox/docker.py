@@ -85,6 +85,17 @@ def _workspace_root() -> Path:
     p = Path(str(getattr(settings, "PYTHONLAB_WORKSPACE_ROOT", "/var/lib/pythonlab/workspaces") or "/var/lib/pythonlab/workspaces"))
     return p
 
+
+def _resolve_memory_mb_limit(limits: Dict[str, Any], default_mem: int) -> int:
+    requested_raw = limits.get("memory_mb") if isinstance(limits, dict) else None
+    try:
+        requested = int(requested_raw or 0)
+    except Exception:
+        requested = 0
+    if requested > 0:
+        return max(32, requested)
+    return max(32, int(default_mem or 0))
+
 class DockerProvider(SandboxProvider):
     def __init__(self):
         self.runtime = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", "runc")
@@ -312,8 +323,7 @@ class DockerProvider(SandboxProvider):
             limits = meta.get("limits", {})
             cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
             default_mem = int(settings.PYTHONLAB_DEFAULT_MEMORY_MB)
-            mem_mb_limit = int(limits.get("memory_mb") or default_mem)
-            mem_mb = max(mem_mb_limit, default_mem) if mem_mb_limit > 0 else default_mem
+            mem_mb = _resolve_memory_mb_limit(limits, default_mem)
 
             if runtime_mode == "debug":
                 # Use python to kill debugpy since ps/pkill might be missing

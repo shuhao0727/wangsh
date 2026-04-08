@@ -20,17 +20,8 @@ export function decidePythonLabLaunchPlan(params: {
     const runtime = String(params.pythonlabRuntime || "").toLowerCase();
 
     if (enabled > 0) {
-        if (runtime === "dap") {
-            return { mode: "debug", runnerKind: "dap", debugFallbackReason: null };
-        }
-        if (params.canFrontendDebug) {
-            return { mode: "debug", runnerKind: "pyodide", debugFallbackReason: null };
-        }
-        return {
-            mode: "debug",
-            runnerKind: "dap",
-            debugFallbackReason: "当前环境不支持前端断点调试，已切换为后端调试",
-        };
+        // Breakpoint debugging is always handled by the remote DAP runner.
+        return { mode: "debug", runnerKind: "dap", debugFallbackReason: null };
     }
     if (runtime === "dap") {
         return { mode: "plain", runnerKind: "dap", debugFallbackReason: null };

@@ -17,6 +17,7 @@
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css,md,json}\"",
     "type-check": "tsc --noEmit",
+    "pythonlab:smoke": "node scripts/pythonlab-debug-smoke.mjs",
     "ui:audit": "node scripts/ui-audit.mjs",
     "ui:audit:json": "node scripts/ui-audit.mjs --json",
     "ui:audit:ci": "node scripts/ui-audit.mjs --ci --baseline scripts/ui-audit-baseline.json",

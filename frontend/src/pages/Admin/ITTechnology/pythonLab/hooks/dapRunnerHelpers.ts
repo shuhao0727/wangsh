@@ -95,7 +95,7 @@ export function wsUrl(path: string, token: string | null): string {
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const host = url.host;
 
-    // We assume 'path' is the full path from root, e.g. "/api/v1/debug/..."
+    // We assume 'path' is the full path from root, e.g. "/api/v2/pythonlab/..."
     // So we just use protocol + host + path
     return `${protocol}//${host}${appendToken(path, token)}`;
   } catch (_e) {

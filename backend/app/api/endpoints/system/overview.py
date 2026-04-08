@@ -19,6 +19,12 @@ from app.utils.metrics import collect_db_pool_metrics, collect_http_metrics
 router = APIRouter(prefix="/system")
 
 
+async def _collect_pythonlab_deprecated_usage(days: int = 7) -> Dict[str, Any]:
+    from app.api.pythonlab.compat import collect_debug_v1_alias_usage
+
+    return await collect_debug_v1_alias_usage(days)
+
+
 @router.get("/overview")
 async def system_overview(
     db: AsyncSession = Depends(get_db),
@@ -32,6 +38,7 @@ async def system_overview(
 
     http = await collect_http_metrics()
     db_pool = collect_db_pool_metrics()
+    pythonlab_compat = await _collect_pythonlab_deprecated_usage()
 
     return {
         "timestamp": datetime.now().isoformat(),
@@ -45,6 +52,9 @@ async def system_overview(
         "observability": {
             "http": http,
             "db": db_pool,
+            "pythonlab": {
+                "deprecated_v1_alias": pythonlab_compat,
+            },
         },
     }
 

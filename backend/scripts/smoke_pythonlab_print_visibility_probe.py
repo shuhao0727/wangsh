@@ -9,6 +9,7 @@ import aiohttp
 import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
 USERNAME = os.getenv("USERNAME", "admin")
 PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
 TIMEOUT_SECONDS = float(os.getenv("TIMEOUT_SECONDS", "20"))
@@ -62,12 +63,13 @@ def build_probe_code(run_id: str) -> str:
 
 def create_session(token: str, run_id: str) -> str:
     resp = requests.post(
-        f"{API_URL}/api/v1/debug/sessions",
+        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions",
         json={
             "title": f"phasec_probe_{run_id}",
             "code": build_probe_code(run_id),
             "entry_path": "main.py",
             "requirements": [],
+            "engine": "remote",
             "runtime_mode": "debug",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -81,7 +83,7 @@ def wait_for_ready(token: str, sid: str) -> None:
     started = time.time()
     while time.time() - started < 90:
         resp = requests.get(
-            f"{API_URL}/api/v1/debug/sessions/{sid}",
+            f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=15,
         )
@@ -99,7 +101,7 @@ def wait_for_ready(token: str, sid: str) -> None:
 def ws_url(token: str, sid: str, client_conn_id: str) -> str:
     ws_base = API_URL.replace("http://", "ws://").replace("https://", "wss://")
     return (
-        f"{ws_base}/api/v1/debug/sessions/{sid}/ws"
+        f"{ws_base}{PYTHONLAB_V2_ROOT}/sessions/{sid}/ws"
         f"?client_conn_id={quote(client_conn_id)}&token={quote(token)}"
     )
 

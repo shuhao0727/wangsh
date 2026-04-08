@@ -102,7 +102,7 @@ services:
       - MAX_UPLOAD_SIZE=10485760
       # 开发模式热加载
       - BACKEND_RELOAD=True
-      - PYTHONLAB_DEFAULT_MEMORY_MB=80
+      - PYTHONLAB_DEFAULT_MEMORY_MB=128
       - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}
       - PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
       - PYTHONLAB_DEBUGPY_PORT=${PYTHONLAB_DEBUGPY_PORT:-5678}
@@ -215,7 +215,7 @@ services:
       - PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS=${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
       - PYTHONLAB_IDLE_TIMEOUT_SECONDS=${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
       - HOST_WORKSPACE_ROOT=${PWD}/data/pythonlab/workspaces
-      - PYTHONLAB_DEFAULT_MEMORY_MB=80
+      - PYTHONLAB_DEFAULT_MEMORY_MB=128
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock

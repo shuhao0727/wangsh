@@ -101,6 +101,12 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         });
       }, 24);
     };
+    const writeClearScreen = (t: Terminal) => {
+      try {
+        // Keep clear sequence minimal; ESC[3J may trigger xterm viewport clear race.
+        t.write("\x1b[2J\x1b[H");
+      } catch {}
+    };
 
     useImperativeHandle(
       ref,
@@ -114,12 +120,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           trace("imperative_clear");
           clearingRef.current = true;
           inputBufRef.current = "";
-          try {
-            t.clear();
-          } catch {}
-          try {
-            requestFit();
-          } catch {}
+          writeClearScreen(t);
           try {
             scheduleRefreshGutter();
           } finally {

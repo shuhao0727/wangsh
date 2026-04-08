@@ -1,6 +1,6 @@
 import textwrap
-from app.api.endpoints.debug.flow import _build_flow
-from app.api.endpoints.debug.constants import E_AST_TOO_LARGE, E_SYNTAX
+from app.api.pythonlab.flow import _build_flow
+from app.api.pythonlab.constants import E_AST_TOO_LARGE, E_SYNTAX
 
 
 def _parse(code: str, options: dict = None):

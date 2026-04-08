@@ -22,25 +22,21 @@ import { useFlowCanvasInteractions } from "./hooks/useFlowCanvasInteractions";
 import { useAnnotationInteractions } from "./hooks/useAnnotationInteractions";
 import { CanvasToolbar } from "./components/CanvasToolbar";
 import { usePythonFlowSync } from "./hooks/usePythonFlowSync";
-import { useUnifiedRunner } from "./hooks/useUnifiedRunner";
+import { useDebugSession } from "./hooks/useDebugSession";
 import { usePythonLabActions } from "./hooks/usePythonLabActions";
 import { useBeautifyFlow } from "./hooks/useBeautifyFlow";
 import { useArrangeLayout } from "./hooks/useArrangeLayout";
 import { useConnectMode } from "./hooks/useConnectMode";
-import type { DapCapabilities } from "./hooks/useDapRunner";
 import { computeBeautify } from "./flow/beautify";
 import { sortFlowGraphStable } from "./flow/determinism";
 import { loadEffectiveRuleSetV1, type PythonLabRuleSetV1 } from "./pipeline/rules";
 import { ensurePythonLabStorageCompatible } from "./storageCompat";
 import { toErrorMessage } from "./errorMessage";
 import { decidePythonLabLaunchPlan } from "./launchPlan";
-import { createDebugFrontendAdapter } from "./adapters/debugFrontendAdapter";
 import { resolveFlowActivation, toDebugPauseEvent } from "./adapters/debugEventBridge";
-import { normalizeDebugSessionView } from "./adapters/debugSessionBridge";
-import { applyDapNegotiatedCapabilities } from "./adapters/debugCapabilityMap";
 import { pythonlabSessionApi } from "./services/pythonlabSessionApi";
 import { logger } from "@services/logger";
-import { PythonLabProvider, useCanvas, useFlow, useUI, useDebug, CodeCtxProvider, RunnerActionsProvider } from "./stores";
+import { PythonLabProvider, useCanvas, useFlow, useUI, CodeCtxProvider, RunnerActionsProvider } from "./stores";
 import type { VariableRow } from "./stores/UIStore";
 import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
 import { OptimizationDialog } from "./components/OptimizationDialog";
@@ -124,7 +120,7 @@ const PythonLabStudioInner: React.FC<{
             runtime_mode: "plain",
             entry_path: "main.py",
             requirements: [],
-            limits: { cpu_ms: 15000, wall_ms: 20000, memory_mb: 64 },
+            limits: { cpu_ms: 15000, wall_ms: 20000 },
           });
           const sid = created.session_id;
           for (let i = 0; i < 20; i++) {
@@ -465,52 +461,44 @@ const PythonLabStudioInner: React.FC<{
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [removeSelected, selectedEdgeId, selectedNodeId]);
 
-  const { breakpoints, activeRunnerKind, setActiveRunnerKind, lastLaunchMode, setLastLaunchMode, lastDebugFallback, setLastDebugFallback, updateBreakpoints: updateBreakpointsRaw } = useDebug();
-  const unified = useUnifiedRunner({ code, debugMap, activeKind: activeRunnerKind });
-  const { dap: dapApi, py: pyApi, active: activeApi } = unified;
-
-  // Keep a ref to syncBreakpoints to avoid infinite re-render loop:
-  // unified object is recreated every render (dap/py are new objects),
-  // so putting unified in useEffect deps causes infinite updates.
-  const syncBreakpointsRef = useRef(unified.syncBreakpoints);
-  syncBreakpointsRef.current = unified.syncBreakpoints;
-  const unifiedRef = useRef(unified);
-  unifiedRef.current = unified;
-  const activeApiRef = useRef(activeApi);
-  activeApiRef.current = activeApi;
-  const dapApiRef = useRef(dapApi);
-  dapApiRef.current = dapApi;
-  const pyApiRef = useRef(pyApi);
-  pyApiRef.current = pyApi;
-
-  const updateBreakpoints = useCallback(
-    (updater: (prev: Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => Array<{ line: number; enabled: boolean; condition?: string; hitCount?: number }>) => {
-      updateBreakpointsRaw(updater);
-    },
-    [updateBreakpointsRaw]
-  );
-
-  // Sync breakpoints to runners whenever they change
-  useEffect(() => {
-    syncBreakpointsRef.current(breakpoints);
-  }, [breakpoints]);
-
-  const enabledBreakpointCount = useMemo(() => breakpoints.filter((b) => b.enabled).length, [breakpoints]);
-
-  const activeState = activeApi?.state;
-  const activeError = activeApi?.error;
-  const runnerError = (activeError as string | null) ?? null;
-  const runner = useMemo(() => {
-    const base = (activeState as any) ?? {};
-    const baseWarnings = Array.isArray(base?.warnings) ? base.warnings : [];
-    const warnings: string[] = [];
-    if (lastDebugFallback) warnings.push(lastDebugFallback);
-    if (enabledBreakpointCount > 0) warnings.push(...baseWarnings);
-    return { ...base, breakpoints, warnings };
-  }, [activeState, breakpoints, enabledBreakpointCount, lastDebugFallback, lastLaunchMode]);
-  const runnerView = useMemo(() => normalizeDebugSessionView(runner), [runner]);
-
   const needsStdin = useMemo(() => /\binput\s*\(/.test(code), [code]);
+  const debugSession = useDebugSession({
+    code,
+    debugMap,
+    pythonlabRuntime,
+    canFrontendDebug,
+    needsStdin,
+  });
+  const {
+    debugMode,
+    runnerView,
+    runnerError,
+    lastLaunchMode,
+    terminalBridge,
+    debugCapabilities: resolvedDebugCapabilities,
+    clearBreakpoints,
+    resetSessionState,
+    onRun,
+    onDebug,
+    onContinue,
+    onPause,
+    onStepOver,
+    onStepInto,
+    onStepOut,
+    onReset,
+    onToggleBreakpoint,
+    onSetBreakpointEnabled,
+    onSetBreakpointCondition,
+    onSetBreakpointHitCount,
+    onAddWatch,
+    onRemoveWatch,
+    onEvaluate,
+    onHistoryBack,
+    onHistoryForward,
+    onHistoryToLatest,
+    onClearPendingOutput,
+  } = debugSession;
+  const runner = runnerView;
 
   useEffect(() => {
     try {
@@ -535,20 +523,13 @@ const PythonLabStudioInner: React.FC<{
 
   // Removed auto-open terminal effect since it is now embedded in RightPanel
   const resetTokenRef = useRef<string>("");
-  const runClickLockUntilRef = useRef(0);
 
   useEffect(() => {
     const token = `${experiment?.id ?? ""}|${typeof experiment?.starterCode === "string" ? experiment.starterCode : ""}`;
     if (resetTokenRef.current === token) return;
     resetTokenRef.current = token;
 
-    unifiedRef.current.resetAll();
-    unifiedRef.current.clearAllOutput();
-    updateBreakpoints(() => []);
-    unifiedRef.current.syncWatchExprs([]);
-    setActiveRunnerKind("pyodide");
-    setLastLaunchMode("idle");
-    setLastDebugFallback(null);
+    resetSessionState();
     
     setRevealLine(null);
     setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });
@@ -562,170 +543,11 @@ const PythonLabStudioInner: React.FC<{
     } else {
       setCodeMode("auto");
     }
-  }, [experiment?.id, experiment?.starterCode, setCode, setCodeMode, setFlowAuto, updateBreakpoints]);
+  }, [experiment?.id, experiment?.starterCode, resetSessionState, setCode, setCodeMode, setFlowAuto]);
 
-  const onRun = useCallback(
-    (_stdinLines: string[] = []) => {
-      // Idempotency: relying on runner status is better than ad-hoc lock for logic,
-      // but lock is good for debounce.
-      const now = Date.now();
-      if (now < runClickLockUntilRef.current) {
-        showMessage.info("操作过快，请稍候再试");
-        return;
-      }
-      
-      // Auto-restart logic: If running or starting, stop first then restart
-      const isRestart = runner.status === "starting" || runner.status === "running" || runner.status === "paused";
-      if (isRestart) {
-        logger.debug("Auto-restarting session...");
-        // If it's DAP, we might need to stop it explicitly if we want clean restart,
-        // but runner.runPlain/startDebug handles internal state reset.
-        // However, stopping the previous session on backend is good practice to free resources.
-        if (runner.sessionId) {
-           pythonlabSessionApi.stop(runner.sessionId).catch(() => {});
-        }
-        // We don't return here, we proceed to start new run which will overwrite state
-      }
-      
-      // Set lock to prevent double-clicks
-      runClickLockUntilRef.current = now + 800;
-
-      setLastLaunchMode("run");
-      setLastDebugFallback(null);
-
-      const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount: 0, pythonlabRuntime, canFrontendDebug, needsStdin });
-
-      // Clean logic: just call the runner. The runner handles tokens and status updates.
-      if (plan.runnerKind === "dap") {
-        setActiveRunnerKind("dap");
-        pyApiRef.current.reset?.();
-        const run = dapApiRef.current.runPlain;
-        if (typeof run !== "function") {
-          showMessage.error("运行器未就绪，请刷新页面后重试");
-          return;
-        }
-        // No need for extra Promise wrapper, but catching is good practice
-        Promise.resolve(run()).catch((e: unknown) => {
-          // If the runner threw a "starting" error (idempotency), we can ignore or show info.
-          // But we expect runner to throw specific errors.
-          // If it's the "start in flight" error, we can suppress or show info.
-          const msg = e instanceof Error ? e.message : "启动运行失败";
-          if (msg.includes("会话正在启动中")) {
-             // If we just triggered a restart, this might happen if user spam clicks
-             showMessage.info(msg);
-          } else {
-             showMessage.error(msg);
-          }
-        });
-        return;
-      }
-
-      setActiveRunnerKind("pyodide");
-      const dapStatus = dapApiRef.current?.state?.status;
-      if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
-        Promise.resolve(dapApiRef.current.stopDebug?.()).catch(() => {});
-      }
-      const run = pyApiRef.current.runPlain;
-      if (typeof run !== "function") {
-        showMessage.error("前端运行器未就绪，请刷新页面后重试");
-        return;
-      }
-      Promise.resolve(run()).catch((e: unknown) => {
-          const msg = e instanceof Error ? e.message : "启动运行失败";
-          if (msg.includes("会话正在启动中")) {
-             showMessage.info(msg);
-          } else {
-             showMessage.error(msg);
-          }
-      });
-    },
-    [canFrontendDebug, needsStdin, pythonlabRuntime, runner.sessionId, runner.status]
-  );
-
-  const onDebug = useCallback(() => {
-    const now = Date.now();
-    if (now < runClickLockUntilRef.current) return;
-    if (runner.status === "starting" || runner.status === "running") return;
-    runClickLockUntilRef.current = now + 800;
-
-    if (enabledBreakpointCount <= 0) {
-      showMessage.warning("请先设置断点");
-      return;
-    }
-
-    const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin });
-    if (plan.mode !== "debug" && plan.debugFallbackReason) {
-      showMessage.warning(plan.debugFallbackReason);
-      return;
-    }
-
-    setLastLaunchMode("debug");
-    setLastDebugFallback(plan.debugFallbackReason ?? null);
-    if (plan.debugFallbackReason) {
-      showMessage.warning(plan.debugFallbackReason);
-    }
-
-    if (plan.runnerKind === "dap") {
-      setActiveRunnerKind("dap");
-      pyApiRef.current.reset?.();
-      Promise.resolve(dapApiRef.current.startDebug?.()).catch((e: unknown) => {
-        showMessage.error(e instanceof Error ? e.message : "启动调试失败");
-      });
-      return;
-    }
-
-    setActiveRunnerKind("pyodide");
-    const dapStatus = dapApiRef.current?.state?.status;
-    if (dapStatus === "starting" || dapStatus === "running" || dapStatus === "paused") {
-      Promise.resolve(dapApiRef.current.stopDebug?.()).catch(() => {});
-    }
-    const start = pyApiRef.current.startDebug;
-    if (typeof start !== "function") {
-      showMessage.error("前端调试器未就绪，请刷新页面后重试");
-      return;
-    }
-    Promise.resolve(start()).catch((e: unknown) => {
-      showMessage.error(e instanceof Error ? e.message : "启动调试失败");
-    });
-  }, [enabledBreakpointCount, pythonlabRuntime, canFrontendDebug, needsStdin, runner.status]);
-
-  const onContinue = useCallback(() => { unifiedRef.current.continueRun(); }, []);
-  const onPause = useCallback(() => { unifiedRef.current.pause(); }, []);
-  const onStepOver = useCallback(() => { unifiedRef.current.stepOver(); }, []);
-  const onStepInto = useCallback(() => { unifiedRef.current.stepInto(); }, []);
-  const onStepOut = useCallback(() => { unifiedRef.current.stepOut(); }, []);
-  const onReset = useCallback(() => {
-    unifiedRef.current.resetAll();
-    setLastLaunchMode("idle");
-    setLastDebugFallback(null);
-  }, []);
-
-  const debugFrontendAdapter = useMemo(
-    () =>
-      createDebugFrontendAdapter({
-        run: onRun,
-        debug: onDebug,
-        continueRun: onContinue,
-        pause: onPause,
-        stepOver: onStepOver,
-        stepInto: onStepInto,
-        stepOut: onStepOut,
-        reset: onReset,
-      }),
-    [onContinue, onDebug, onPause, onReset, onRun, onStepInto, onStepOut, onStepOver]
-  );
-  const dapState = dapApi?.state;
-  const dapNegotiatedCapabilities = useMemo(() => {
-    if (activeRunnerKind !== "dap") return null;
-    return (dapState?.dapCapabilities ?? null) as DapCapabilities | null;
-  }, [activeRunnerKind, dapState]);
-  const resolvedDebugCapabilities = useMemo(
-    () => applyDapNegotiatedCapabilities(debugFrontendAdapter.capabilities, dapNegotiatedCapabilities),
-    [dapNegotiatedCapabilities, debugFrontendAdapter.capabilities]
-  );
   const debugPauseEvent = useMemo(
-    () => toDebugPauseEvent({ source: debugFrontendAdapter.mode, runner: runnerView }),
-    [debugFrontendAdapter.mode, runnerView]
+    () => toDebugPauseEvent({ source: debugMode, runner: runnerView }),
+    [debugMode, runnerView]
   );
   const flowActivation = useMemo(
     () => resolveFlowActivation({ event: debugPauseEvent, runner: runnerView }),
@@ -742,43 +564,12 @@ const PythonLabStudioInner: React.FC<{
     return ids.size > 0 ? ids : undefined;
   }, [flowActivation.activeNodeId, edges]);
 
-  const onToggleBreakpoint = useCallback(
-    (line: number) => {
-      updateBreakpoints((prev) => {
-        const idx = prev.findIndex((b) => b.line === line);
-        const next = idx >= 0 ? prev.filter((b) => b.line !== line) : [...prev, { line, enabled: true }];
-        return next;
-      });
-    },
-    [updateBreakpoints]
-  );
-
-  const onSetBreakpointEnabled = useCallback(
-    (line: number, enabled: boolean) => {
-      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, enabled } : b)));
-    },
-    [updateBreakpoints]
-  );
-  const onSetBreakpointCondition = useCallback(
-    (line: number, condition: string) => {
-      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, condition: condition || undefined } : b)));
-    },
-    [updateBreakpoints]
-  );
-  const onSetBreakpointHitCount = useCallback(
-    (line: number, hitCount: number | null) => {
-      updateBreakpoints((prev) => prev.map((b) => (b.line === line ? { ...b, hitCount: typeof hitCount === "number" ? hitCount : undefined } : b)));
-    },
-    [updateBreakpoints]
-  );
-
   const followKey = useMemo(() => {
     const nodeId = runner.activeNodeId ?? "";
     const line = runner.activeLine ?? revealLine ?? null;
     const role = runner.activeFocusRole ?? "";
     return `${nodeId}|${line ?? ""}|${role}`;
   }, [revealLine, runner.activeFocusRole, runner.activeLine, runner.activeNodeId]);
-
   useEffect(() => {
     if (!followMode) return;
     if (!canvasRef.current) return;
@@ -1049,31 +840,28 @@ const PythonLabStudioInner: React.FC<{
     runner: runnerView,
     runnerError,
     lastLaunchMode,
-    terminalBridge: activeRunnerKind === "pyodide" ? pyApiRef.current.terminal : null,
+    terminalBridge,
     debugCapabilities: resolvedDebugCapabilities,
-    onRun: debugFrontendAdapter.run,
-    onDebug: debugFrontendAdapter.debug,
+    onRun,
+    onDebug,
     onTerminalInput: () => {},
-    onContinue: debugFrontendAdapter.continueRun,
-    onPause: debugFrontendAdapter.pause,
-    onStepOver: debugFrontendAdapter.stepOver,
-    onStepInto: debugFrontendAdapter.stepInto,
-    onStepOut: debugFrontendAdapter.stepOut,
-    onReset: debugFrontendAdapter.reset,
+    onContinue,
+    onPause,
+    onStepOver,
+    onStepInto,
+    onStepOut,
+    onReset,
     onToggleBreakpoint,
     onSetBreakpointEnabled,
     onSetBreakpointCondition,
     onSetBreakpointHitCount,
-    onAddWatch: (expr: string) => activeApiRef.current?.addWatch?.(expr),
-    onRemoveWatch: (expr: string) => activeApiRef.current?.removeWatch?.(expr),
-    onEvaluate: (expr: string) =>
-      typeof activeApiRef.current?.evaluate === "function"
-        ? activeApiRef.current.evaluate(expr)
-        : Promise.resolve({ ok: false as const, error: "当前运行器不支持求值" }),
-    onHistoryBack: () => activeApiRef.current?.historyBack?.(),
-    onHistoryForward: () => activeApiRef.current?.historyForward?.(),
-    onHistoryToLatest: () => activeApiRef.current?.historyToLatest?.(),
-    onClearPendingOutput: () => (activeApiRef.current as any)?.clearPendingOutput?.(),
+    onAddWatch,
+    onRemoveWatch,
+    onEvaluate,
+    onHistoryBack,
+    onHistoryForward,
+    onHistoryToLatest,
+    onClearPendingOutput,
     beautifyResult: beautifyResult ?? null,
     beautifyLoading: beautifyLoading ?? false,
     beautifyError: beautifyError ?? null,
@@ -1081,7 +869,38 @@ const PythonLabStudioInner: React.FC<{
     autoOptimizeCode,
     setAutoOptimizeCode,
     onOptimizeCode: handleOptimizeCode,
-  }), [runnerView, runnerError, lastLaunchMode, activeRunnerKind, resolvedDebugCapabilities, debugFrontendAdapter, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
+  }), [runnerView, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const target = window as typeof window & {
+      __pythonlabRunnerSnapshot?: {
+        status: string;
+        sessionId: string | null;
+        activeLine: number | null;
+        activeNodeId: string | null;
+        activeFocusRole: string | null;
+        variables: Array<{ name: string; value: string; type: string }>;
+      };
+    };
+    target.__pythonlabRunnerSnapshot = {
+      status: String(runnerView.status || ""),
+      sessionId: runnerView.sessionId ?? null,
+      activeLine: runnerView.activeLine ?? null,
+      activeNodeId: runnerView.activeNodeId ?? null,
+      activeFocusRole: runnerView.activeFocusRole ?? null,
+      variables: Array.isArray(runnerView.variables)
+        ? runnerView.variables.map((item) => ({
+            name: String(item.name || ""),
+            value: String(item.value || ""),
+            type: String(item.type || ""),
+          }))
+        : [],
+    };
+    return () => {
+      delete target.__pythonlabRunnerSnapshot;
+    };
+  }, [runnerView]);
 
   return (
     <CodeCtxProvider value={codeApi}>
@@ -1158,7 +977,7 @@ const PythonLabStudioInner: React.FC<{
                   toggleLeft={() => setLeftCollapsed((v) => !v)}
                   demoOptions={demoOptions}
                   onLoadDemo={(key) => {
-                    updateBreakpoints(() => []);
+                    clearBreakpoints();
                     const demo = peekDemoFlow(key);
                     setCanvasBusy(true);
                     setFlowAuto({ nodes: [], edges: [], resetSelection: true, resetConnect: true, resetVariables: true });

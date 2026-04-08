@@ -50,7 +50,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 ### 2.3 pr-pythonlab-owner-gate.yml — PR 门禁（并发）
 
-- **触发方式**：PR 修改 `backend/app/api/endpoints/debug/**` 路径时自动触发
+- **触发方式**：PR 修改 `backend/app/api/pythonlab/**` 或兼容壳 `backend/app/api/endpoints/debug/**` 路径时自动触发
 - **功能**：调用 `pythonlab-owner-concurrency.yml` 进行并发测试
 
 ### 2.4 pythonlab-phasec-gate.yml — PythonLab Phase C 可见性测试
@@ -67,7 +67,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 ### 2.5 pr-pythonlab-phasec-gate.yml — PR 门禁（Phase C）
 
-- **触发方式**：PR 修改 debug 相关路径时自动触发
+- **触发方式**：PR 修改 `backend/app/api/pythonlab/**`、兼容壳 `backend/app/api/endpoints/debug/**` 或相关 smoke 脚本时自动触发
 - **功能**：调用 `pythonlab-phasec-gate.yml` 进行可见性测试
 
 ### 2.6 ci-quality.yml — 通用质量门禁

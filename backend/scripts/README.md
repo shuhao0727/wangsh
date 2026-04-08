@@ -14,6 +14,7 @@
 - `smoke_typst_pipeline.py` - Typst 编译链路验证
 - `smoke_pythonlab_ws_owner_concurrency.py` - PythonLab owner 并发验证
 - `smoke_pythonlab_dap_step_watch_soak.py` - PythonLab DAP 步进 soak
+- `smoke_pythonlab_low_memory_start_failure.py` - PythonLab 低内存启动失败故障注入
 - `smoke_pythonlab_print_visibility_probe.py` - PythonLab print 可见性探针
 - `soak_pythonlab_phasec.py` - PythonLab Phase C 专项门禁
 

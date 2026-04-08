@@ -23,11 +23,19 @@ test("toDebugPauseEvent builds normalized event", () => {
   });
 });
 
+test("toDebugPauseEvent ignores stale running markers", () => {
+  const event = toDebugPauseEvent({
+    source: "mature_web_embed",
+    runner: { status: "running", activeLine: 6, activeFlowLine: 5, activeNodeId: "n5", activeFocusRole: "while_check" },
+  });
+  expect(event).toBeNull();
+});
+
 test("resolveFlowActivation prefers event payload and computes enabled by status", () => {
   const activation = resolveFlowActivation({
     event: {
       source: "legacy",
-      status: "running",
+      status: "paused",
       activeLine: 6,
       activeFlowLine: 5,
       activeNodeId: "n5",
@@ -39,6 +47,19 @@ test("resolveFlowActivation prefers event payload and computes enabled by status
   expect(activation).toEqual({
     activeLine: 5,
     activeNodeId: "n5",
+    activeFocusRole: "while_check",
+    activeEnabled: true,
+  });
+});
+
+test("resolveFlowActivation enables flow highlight when runner is running or paused", () => {
+  const activation = resolveFlowActivation({
+    event: null,
+    runner: { status: "running", activeLine: 6, activeNodeId: "n6", activeFocusRole: "while_check" },
+  });
+  expect(activation).toEqual({
+    activeLine: 6,
+    activeNodeId: "n6",
     activeFocusRole: "while_check",
     activeEnabled: true,
   });

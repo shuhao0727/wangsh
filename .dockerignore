@@ -7,6 +7,10 @@ backend/**/__pycache__
 
 frontend/node_modules
 frontend/build
+frontend/test-results
+
+test-results
+output
 
 my_web
 

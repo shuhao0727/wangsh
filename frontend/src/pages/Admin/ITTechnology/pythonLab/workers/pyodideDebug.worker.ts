@@ -156,6 +156,34 @@ function readEvalExpr(): string {
 
 async function loadPyodideFrom(baseUrl: string) {
   const normalizedBase = `${baseUrl.replace(/\/+$/, "")}/`;
+  // Module workers in Chrome expose importScripts but calling it throws TypeError.
+  // Pyodide's compat.ts intentionally tries importScripts first, which can pause
+  // DevTools when "pause on caught exceptions" is enabled. Provide a sync shim
+  // that resolves relative URLs against indexURL and evals classic worker scripts.
+  const importScriptsShim = (...urls: string[]) => {
+    for (const rawUrl of urls) {
+      const url = new URL(String(rawUrl), normalizedBase).toString();
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", url, false);
+      xhr.send();
+      if ((xhr.status >= 200 && xhr.status < 300) || (xhr.status === 0 && xhr.responseText)) {
+        (0, eval)(`${xhr.responseText}\n//# sourceURL=${url}`);
+        continue;
+      }
+      throw new Error(`importScripts shim: failed to load ${url} (status ${xhr.status})`);
+    }
+  };
+  try {
+    (self as any).importScripts = importScriptsShim;
+  } catch {}
+  try {
+    Object.defineProperty(self, "importScripts", {
+      value: importScriptsShim,
+      configurable: true,
+      writable: true,
+    });
+  } catch {}
+
   const pyodideMod = await import(/* @vite-ignore */ `${normalizedBase}pyodide.mjs`);
   const loadPyodide = pyodideMod?.loadPyodide || (self as any).loadPyodide;
   if (typeof loadPyodide !== "function") {

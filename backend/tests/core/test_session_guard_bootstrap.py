@@ -23,7 +23,7 @@ def test_verify_request_session_bootstraps_from_token_nonce(monkeypatch):
         {
             "type": "http",
             "method": "POST",
-            "path": "/api/v1/debug/optimize/code",
+            "path": "/api/v2/pythonlab/optimize/code",
             "headers": [],
             "client": ("127.0.0.1", 12345),
             "query_string": b"",

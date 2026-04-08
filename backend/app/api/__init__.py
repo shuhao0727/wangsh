@@ -40,7 +40,7 @@ api_router.include_router(public_typst_notes_router, tags=["public-informatics"]
 api_router.include_router(public_typst_style_router, tags=["public-informatics"])
 api_router.include_router(xbk_router, tags=["xbk"], prefix="/xbk")
 api_router.include_router(xxjs_router, tags=["xxjs"], prefix="/xxjs")
-api_router.include_router(debug_router, tags=["debug"], prefix="/debug")
+api_router.include_router(debug_router, tags=["debug"], prefix="/debug", deprecated=True)
 api_router.include_router(assessment_router, tags=["assessment"], prefix="/assessment")
 api_router.include_router(classroom_router, tags=["classroom"], prefix="/classroom")
 api_router.include_router(admin_stream_router, tags=["admin-stream"], prefix="/admin")

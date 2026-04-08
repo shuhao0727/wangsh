@@ -1,4 +1,4 @@
-import { api } from "@/services";
+import { pythonlabV2Client } from "./pythonlabApiBase";
 
 export type PythonLabDebugLimits = {
   cpu_ms?: number;
@@ -10,6 +10,7 @@ export type PythonLabDebugLimits = {
 export type PythonLabCreateSessionRequest = {
   title?: string;
   code: string;
+  engine?: "remote";
   runtime_mode?: "plain" | "debug";
   python_version?: string;
   requirements?: string[];
@@ -46,7 +47,10 @@ const SESSION_STORAGE_KEY = "pythonlab:last_session_id";
 
 export const pythonlabSessionApi = {
   create: async (payload: PythonLabCreateSessionRequest): Promise<PythonLabCreateSessionResponse> => {
-    const resp = await api.client.post("/debug/sessions", payload);
+    const resp = await pythonlabV2Client.post<PythonLabCreateSessionResponse>("/sessions", {
+      engine: "remote",
+      ...payload,
+    });
     const data = resp.data as PythonLabCreateSessionResponse;
     // Persist session ID for recovery after browser refresh
     try {
@@ -55,11 +59,11 @@ export const pythonlabSessionApi = {
     return data;
   },
   get: async (sessionId: string): Promise<PythonLabSessionMeta> => {
-    const resp = await api.client.get(`/debug/sessions/${sessionId}`, { silent: true });
+    const resp = await pythonlabV2Client.get<PythonLabSessionMeta>(`/sessions/${sessionId}`, { silent: true });
     return resp.data as PythonLabSessionMeta;
   },
   stop: async (sessionId: string): Promise<{ ok: boolean }> => {
-    const resp = await api.client.post(`/debug/sessions/${sessionId}/stop`);
+    const resp = await pythonlabV2Client.post<{ ok: boolean }>(`/sessions/${sessionId}/stop`);
     // Clear persisted session on stop
     try {
       const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
@@ -68,7 +72,7 @@ export const pythonlabSessionApi = {
     return resp.data as { ok: boolean };
   },
   list: async (): Promise<{ items: PythonLabSessionMeta[]; total: number }> => {
-    const resp = await api.client.get("/debug/sessions", { silent: true });
+    const resp = await pythonlabV2Client.get<{ items: PythonLabSessionMeta[]; total: number }>("/sessions", { silent: true });
     return resp.data as { items: PythonLabSessionMeta[]; total: number };
   },
   /**

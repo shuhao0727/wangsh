@@ -238,6 +238,11 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           editorRef.current = editor;
           const model = editor.getModel();
           if (model) monaco.editor.setModelLanguage(model, "python");
+          (window as typeof window & { __pythonlabMonacoSetValue?: (next: string) => void }).__pythonlabMonacoSetValue = (next) => {
+            const currentModel = editor.getModel();
+            if (!currentModel) return;
+            currentModel.setValue(next);
+          };
           editor.onKeyDown((event) => {
             const browserEvent = event.browserEvent;
             if (!browserEvent) return;

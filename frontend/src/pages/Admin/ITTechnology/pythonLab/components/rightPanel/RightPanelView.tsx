@@ -20,13 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { validatePythonLite } from "../../flow/python_sync";
+import { pythonlabApiPath } from "../../services/pythonlabApiBase";
 import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabDebugApi";
 import { MonacoPythonEditor } from "../MonacoPythonEditor";
 import XtermTerminal from "../XtermTerminal";
@@ -53,12 +48,14 @@ function PanelTooltip({
   title: React.ReactNode;
   children: React.ReactElement;
 }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent>{title}</TooltipContent>
-    </Tooltip>
-  );
+  // Native titles avoid the Radix hover/pointer interaction that can block
+  // real clicks on the debug controls across Chrome/Safari.
+  const titleText =
+    typeof title === "string" || typeof title === "number" ? String(title) : undefined;
+  return React.cloneElement(children, {
+    title: titleText ?? (children.props as { title?: string }).title,
+    "aria-label": titleText ?? (children.props as { "aria-label"?: string })["aria-label"],
+  });
 }
 
 export const RightPanel = React.memo(function RightPanel() {
@@ -140,7 +137,7 @@ export const RightPanel = React.memo(function RightPanel() {
   const firstError = rebuildError ?? runner.error ?? runnerError ?? null;
   const wsToken = useWsAccessToken();
   const terminalWsUrl = runner.sessionId && wsToken.status === "ready" && wsToken.token
-    ? wsUrl(`/api/v1/debug/sessions/${runner.sessionId}/terminal`, wsToken.token)
+    ? wsUrl(pythonlabApiPath(`/sessions/${runner.sessionId}/terminal`), wsToken.token)
     : undefined;
 
   const controlMatrix = useMemo(() => resolveDebugControlMatrix(runner.status, debugCapabilities), [debugCapabilities, runner.status]);
@@ -157,13 +154,6 @@ export const RightPanel = React.memo(function RightPanel() {
     info: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-info-soft)] px-3 py-2",
     error: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-error-soft)] px-3 py-2",
   } as const;
-  const clearTerminalUiSafely = () => {
-    const ui = terminalUiRef.current;
-    if (!ui || typeof ui.clear !== "function") return;
-    try {
-      ui.clear();
-    } catch {}
-  };
   const handleDebugClick = async () => {
     setRebuildError(null);
     if (runner.sourceMismatch && rebuildFlowFromCode) {
@@ -174,13 +164,17 @@ export const RightPanel = React.memo(function RightPanel() {
         return;
       }
     }
-    clearTerminalUiSafely();
     onDebug();
   };
 
   useEffect(() => {
-    if (runner.status === "starting" || runner.status === "error" || runner.status === "running") setActiveTab("terminal");
-    if (runner.status === "paused") setActiveTab("debug");
+    if (runner.status === "paused") {
+      setActiveTab("debug");
+      return;
+    }
+    if (runner.status === "starting" || runner.status === "error") {
+      setActiveTab("terminal");
+    }
   }, [runner.status]);
   useEffect(() => {
     if (firstError) setActiveTab("terminal");
@@ -202,9 +196,6 @@ export const RightPanel = React.memo(function RightPanel() {
     }
   }, [runner.pendingOutput, onClearPendingOutput]);
 
-  useEffect(() => {
-    if (codeMode === "auto") setCode(generated.python);
-  }, [generated, codeMode, setCode]);
   const recoveredBlankCodeRef = useRef(false);
   useEffect(() => {
     if (recoveredBlankCodeRef.current) return;
@@ -329,7 +320,6 @@ export const RightPanel = React.memo(function RightPanel() {
   };
 
   return (
-    <TooltipProvider delayDuration={120}>
       <div ref={panelRef} className="h-full flex flex-col border-l border-l-border bg-surface">
         <div
           className="flex min-h-[160px] flex-shrink flex-col overflow-hidden border-b border-b-border-secondary border-l border-l-border"
@@ -440,7 +430,6 @@ export const RightPanel = React.memo(function RightPanel() {
                     e.preventDefault();
                     e.stopPropagation();
                     logger.debug("Run button clicked in RightPanelView");
-                    clearTerminalUiSafely();
                     onRun([]);
                   }}
                 >
@@ -679,6 +668,5 @@ export const RightPanel = React.memo(function RightPanel() {
         setAutoOptimizeCode={setAutoOptimizeCode}
       /> */}
       </div>
-    </TooltipProvider>
   );
 });

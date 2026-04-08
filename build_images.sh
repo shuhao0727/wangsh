@@ -63,9 +63,10 @@ docker buildx build \
 echo "==> Building pythonlab-sandbox (Multi-Arch) ..."
 # 注意：沙箱镜像需要在生产环境支持 amd64 (x86_64) 和 arm64 (aarch64)
 # 但 docker buildx load 不支持多架构同时加载，所以我们这里只构建本地架构用于测试
-# 真正的多架构构建和推送在 push_images.sh 中进行
+# 本地同时打上版本标签和 py311 别名，避免运行环境与构建产物标签不一致
 docker buildx build \
   --platform "${PLATFORM}" \
+  -t "${REGISTRY}/pythonlab-sandbox:${VERSION}" \
   -t "${REGISTRY}/pythonlab-sandbox:py311" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
   --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
@@ -97,13 +98,14 @@ IMAGES=(
   "wangsh-gateway"
   "wangsh-typst-worker"
   "wangsh-pythonlab-worker"
+  "pythonlab-sandbox:${VERSION}"
   "pythonlab-sandbox:py311"
 )
 
 for IMG in "${IMAGES[@]}"; do
   echo "--> Checking ${IMG} ..."
-  if [[ "${IMG}" == "pythonlab-sandbox:py311" ]]; then
-     docker images | grep -E "pythonlab-sandbox" | grep "py311" || true
+  if [[ "${IMG}" == pythonlab-sandbox:* ]]; then
+     docker images | grep -E "pythonlab-sandbox" | grep "${IMG#pythonlab-sandbox:}" || true
   else
      docker images | grep -E "wangsh-(backend|frontend|gateway|typst-worker|pythonlab-worker)" | grep "${VERSION}" || true
   fi

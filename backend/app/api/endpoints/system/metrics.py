@@ -23,6 +23,12 @@ from app.utils.metrics import (
 router = APIRouter(prefix="/system")
 
 
+async def _collect_pythonlab_deprecated_usage(days: int = 7) -> Dict[str, Any]:
+    from app.api.pythonlab.compat import collect_debug_v1_alias_usage
+
+    return await collect_debug_v1_alias_usage(days)
+
+
 @router.get("/typst-metrics")
 async def typst_metrics(
     _: Dict[str, Any] = Depends(require_admin),
@@ -64,6 +70,7 @@ async def prometheus_metrics(
     http = await collect_http_metrics()
     typst = await collect_typst_metrics()
     db_pool = collect_db_pool_metrics()
+    pythonlab_compat = await _collect_pythonlab_deprecated_usage()
 
     # 从 typst 结构中提取原始值列表用于 percentile 计算已在 collect 函数中完成
     # 这里直接使用已计算好的值
@@ -141,6 +148,11 @@ async def prometheus_metrics(
         "# HELP http_429_total Total 429 responses counted by limiter",
         "# TYPE http_429_total counter",
         f"http_429_total {typst['http_429_total']}",
+        "# HELP pythonlab_deprecated_v1_alias_requests_recent Recent deprecated /api/v1/debug alias hits within the observation window",
+        "# TYPE pythonlab_deprecated_v1_alias_requests_recent gauge",
+        f'pythonlab_deprecated_v1_alias_requests_recent{{transport="http",window_days="{pythonlab_compat["window_days"]}"}} {pythonlab_compat["summary"]["http"]}',
+        f'pythonlab_deprecated_v1_alias_requests_recent{{transport="websocket",window_days="{pythonlab_compat["window_days"]}"}} {pythonlab_compat["summary"]["websocket"]}',
+        f'pythonlab_deprecated_v1_alias_requests_recent{{transport="total",window_days="{pythonlab_compat["window_days"]}"}} {pythonlab_compat["summary"]["total"]}',
         # DB pool metrics
         "# HELP db_pool_size SQLAlchemy pool size",
         "# TYPE db_pool_size gauge",

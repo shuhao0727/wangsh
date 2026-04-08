@@ -9,3 +9,18 @@ yarn-debug.log*
 yarn-error.log*
 .env
 .env.*
+
+# Keep tests and validation scripts in git/CI, but out of deploy images.
+test-results/
+scripts/archive/
+scripts/README.md
+scripts/prod-smoke-ui.mjs
+scripts/pythonlab-debug-smoke.mjs
+scripts/ui-audit-baseline.json
+scripts/ui-audit.mjs
+scripts/ui-migration-metrics.mjs
+scripts/ui-page-workflow.mjs
+scripts/ui-visual-routes.json
+src/**/__tests__/
+src/**/*.test.*
+src/**/*.spec.*
