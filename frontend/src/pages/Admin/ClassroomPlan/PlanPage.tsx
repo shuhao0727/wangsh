@@ -1,6 +1,6 @@
 // 课堂计划 - 独立页面
 import { showMessage } from "@/lib/toast";
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -24,7 +24,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Bot,
   Edit,
   GripVertical,
   Loader2,
@@ -37,8 +36,8 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import type { Plan, PlanItem } from "@services/classroomPlan";
-import type { Activity, ActivityStats, ActiveAgentOption } from "@services/classroom";
+import { planApi, type Plan, type PlanItem } from "@services/classroomPlan";
+import { classroomApi, type Activity, type ActivityStats } from "@services/classroom";
 import { AdminPage } from "@components/Admin";
 import { ActivityDetailContent } from "@components/ActivityDetailDrawer";
 import { Badge } from "@/components/ui/badge";
@@ -59,11 +58,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Textarea } from "@/components/ui/textarea";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { cn } from "@/lib/utils";
 
-const parseErr = (e: any) => String(e?.response?.data?.detail || e?.message || "操作失败");
+const ACTIVITY_FETCH_BATCH_SIZE = 100;
+
+const parseErr = (e: any, fallback = "操作失败") =>
+  String(e?.response?.data?.detail || e?.message || fallback);
 
 const STATUS_MAP: Record<string, { label: string; dot: string; softBg?: string }> = {
   draft: { label: "草稿", dot: "bg-text-tertiary" },
@@ -80,63 +81,6 @@ const FilterOption = {
   all: "__all__",
 } as const;
 
-const FORCE_MOCK_PLANS = true;
-
-const MOCK_PLANS: Plan[] = Array.from({ length: 36 }, (_, index) => {
-  const i = index + 1;
-  const planId = -i;
-  const status = (["draft", "active", "ended"] as const)[index % 3];
-  const createdAt = new Date(Date.now() - index * 3_600_000 * 10).toISOString();
-  const itemCount = 2 + (index % 3);
-  const items = Array.from({ length: itemCount }, (_, itemIndex) => {
-    const itemStatus: "pending" | "active" | "ended" =
-      status === "ended"
-        ? "ended"
-        : status === "active" && itemIndex === 0
-          ? "active"
-          : "pending";
-    const activityType = itemIndex % 2 === 0 ? "vote" : "fill_blank";
-    return {
-      id: -(i * 100 + itemIndex + 1),
-      activity_id: i * 100 + itemIndex + 1,
-      order_index: itemIndex,
-      status: itemStatus,
-      activity: {
-        id: i * 100 + itemIndex + 1,
-        title: `模拟活动 ${i}-${itemIndex + 1}`,
-        activity_type: activityType,
-        time_limit: 60 + itemIndex * 30,
-        status: itemStatus === "active" ? "active" : "draft",
-        options: activityType === "vote"
-          ? [
-              { key: "A", text: "选项 A" },
-              { key: "B", text: "选项 B" },
-            ]
-          : [{ key: "__code__", text: "print(___)" }],
-        correct_answer: activityType === "vote" ? "A" : "42",
-        allow_multiple: false,
-      },
-    };
-  });
-  return {
-    id: planId,
-    title: `模拟课堂计划 #${String(i).padStart(2, "0")}`,
-    status,
-    current_item_id: status === "active" ? items[0]?.id ?? null : null,
-    created_by: 1,
-    created_at: createdAt,
-    items,
-  };
-});
-
-const MOCK_AGENTS: ActiveAgentOption[] = [
-  { id: 101, name: "教学分析助手" },
-  { id: 102, name: "课堂诊断助手" },
-  { id: 103, name: "学习策略助手" },
-];
-
-const cloneDeep = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
 const itemStatusToActivityStatus = (status: "pending" | "active" | "ended"): Activity["status"] => {
   if (status === "active") return "active";
   if (status === "ended") return "ended";
@@ -144,22 +88,13 @@ const itemStatusToActivityStatus = (status: "pending" | "active" | "ended"): Act
 };
 
 const makeActivityFromPlanItem = (item: PlanItem): Activity => {
-  const activityType = item.activity?.activity_type === "fill_blank" ? "fill_blank" : "vote";
-  const fallbackOptions =
-    activityType === "vote"
-      ? [
-          { key: "A", text: "选项 A" },
-          { key: "B", text: "选项 B" },
-        ]
-      : [{ key: "__code__", text: "print(___)" }];
-
   const now = new Date().toISOString();
   return {
     id: item.activity?.id ?? item.activity_id,
-    activity_type: activityType,
+    activity_type: item.activity?.activity_type === "fill_blank" ? "fill_blank" : "vote",
     title: item.activity?.title || `活动 ${item.activity_id}`,
-    options: item.activity?.options || fallbackOptions,
-    correct_answer: item.activity?.correct_answer || (activityType === "vote" ? "A" : "42"),
+    options: item.activity?.options ?? [],
+    correct_answer: item.activity?.correct_answer ?? null,
     allow_multiple: Boolean(item.activity?.allow_multiple),
     time_limit: Number(item.activity?.time_limit || 60),
     status: itemStatusToActivityStatus(item.status),
@@ -167,94 +102,16 @@ const makeActivityFromPlanItem = (item: PlanItem): Activity => {
     ended_at: null,
     created_by: 1,
     created_at: now,
-    response_count: 16 + (Math.abs(item.activity_id) % 12),
-    analysis_status: item.status === "ended" ? "success" : "pending",
-    analysis_result:
-      item.status === "ended"
-        ? `**模拟分析结论**\n\n该题整体完成度稳定，建议关注低分段学生的核心概念理解。`
-        : null,
-    analysis_context:
-      item.status === "ended"
-        ? {
-            risk_slots: [{ slot_index: 1, correct_rate: 52 }],
-            common_mistakes: [{ answer: "示例错答", count: 4 }],
-          }
-        : null,
+    response_count: item.activity?.status === "ended" ? undefined : 0,
+    analysis_status: null,
+    analysis_result: null,
+    analysis_context: null,
   };
 };
-
-const makeMockStats = (activity: Activity): ActivityStats => {
-  const total = 18 + (Math.abs(activity.id) % 23);
-  if (activity.activity_type === "vote") {
-    const options = Array.isArray(activity.options) && activity.options.length > 0
-      ? activity.options
-      : [
-          { key: "A", text: "选项 A" },
-          { key: "B", text: "选项 B" },
-        ];
-    const optionCounts: Record<string, number> = {};
-    let remaining = total;
-    options.forEach((option, index) => {
-      if (index === options.length - 1) {
-        optionCounts[option.key] = remaining;
-        return;
-      }
-      const count = Math.max(1, Math.floor((remaining * (options.length - index)) / (options.length * 1.8)));
-      optionCounts[option.key] = count;
-      remaining -= count;
-    });
-    const correctKey = String(activity.correct_answer || "A").split(",")[0]?.trim() || "A";
-    const correctCount = optionCounts[correctKey] || 0;
-    return {
-      activity_id: activity.id,
-      total_responses: total,
-      option_counts: optionCounts,
-      correct_count: correctCount,
-      correct_rate: total > 0 ? Math.round((correctCount / total) * 100) : 0,
-    };
-  }
-
-  const correctRate = 45 + (Math.abs(activity.id) % 45);
-  const correctCount = Math.round((total * correctRate) / 100);
-  return {
-    activity_id: activity.id,
-    total_responses: total,
-    option_counts: null,
-    correct_count: correctCount,
-    correct_rate: correctRate,
-    blank_slot_stats: [
-      {
-        slot_index: 1,
-        correct_answer: String(activity.correct_answer || "示例答案"),
-        total_count: total,
-        correct_count: correctCount,
-        correct_rate: correctRate,
-        top_wrong_answers: [
-          { answer: "示例错答1", count: Math.max(1, Math.floor(total * 0.16)) },
-          { answer: "示例错答2", count: Math.max(1, Math.floor(total * 0.12)) },
-        ],
-      },
-    ],
-    top_wrong_answers: [
-      { answer: "示例错答1", count: Math.max(1, Math.floor(total * 0.16)) },
-      { answer: "示例错答2", count: Math.max(1, Math.floor(total * 0.12)) },
-    ],
-  };
-};
-
-const PLAN_ACTIVITY_POOL: Activity[] = Array.from(
-  new Map(
-    MOCK_PLANS.flatMap((plan) =>
-      plan.items.map((item) => [item.activity_id, makeActivityFromPlanItem(item)] as const),
-    ),
-  ).values(),
-);
 
 type PlanFormSubmitPayload = {
   title: string;
   selectedIds: number[];
-  analysisAgentId?: number;
-  analysisPrompt?: string;
 };
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -276,7 +133,6 @@ const ActivityTypeTag: React.FC<{ type?: string | null }> = ({ type }) => {
   );
 };
 
-// ─── 可拖拽行 ────────────────────────────────────────────────────────
 const SortableItem: React.FC<{
   id: number;
   act: Activity | null | undefined;
@@ -316,11 +172,10 @@ const SortableItem: React.FC<{
   );
 };
 
-// ─── 编辑面板 ─────────────────────────────────────────────────────────
 interface PlanFormPanelProps {
   editing: Plan | null;
   activities: Activity[];
-  agents: ActiveAgentOption[];
+  loadingActivities: boolean;
   onCancel: () => void;
   onSubmit: (payload: PlanFormSubmitPayload) => Promise<void> | void;
 }
@@ -328,7 +183,7 @@ interface PlanFormPanelProps {
 const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
   editing,
   activities,
-  agents,
+  loadingActivities,
   onCancel,
   onSubmit,
 }) => {
@@ -337,8 +192,6 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [analysisAgentId, setAnalysisAgentId] = useState<number | undefined>();
-  const [analysisPrompt, setAnalysisPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const sensors = useSensors(
@@ -358,26 +211,25 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
           .sort((a, b) => a.order_index - b.order_index)
           .map((it) => it.activity_id),
       );
-    } else {
-      setTitle("");
-      setSelectedIds([]);
-      setAnalysisAgentId(undefined);
-      setAnalysisPrompt("");
+      return;
     }
+
+    setTitle("");
+    setSelectedIds([]);
   }, [editing]);
 
   const editingActMap = Object.fromEntries(
-    (editing?.items || []).map((it) => [it.activity_id, it.activity]).filter(([, a]) => a),
+    (editing?.items || []).map((it) => [it.activity_id, it.activity]).filter(([, activity]) => activity),
   );
   const actMap: Record<number, Activity> = {
     ...editingActMap,
-    ...Object.fromEntries(activities.map((a) => [a.id, a])),
+    ...Object.fromEntries(activities.map((activity) => [activity.id, activity])),
   };
 
-  const filtered = activities.filter((a) => {
-    if (typeFilter && a.activity_type !== typeFilter) return false;
-    if (statusFilter && a.status !== statusFilter) return false;
-    if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
+  const filtered = activities.filter((activity) => {
+    if (typeFilter && activity.activity_type !== typeFilter) return false;
+    if (statusFilter && activity.status !== statusFilter) return false;
+    if (search && !activity.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -407,8 +259,6 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
       await onSubmit({
         title: title.trim(),
         selectedIds: [...selectedIds],
-        analysisAgentId,
-        analysisPrompt: analysisPrompt.trim() || undefined,
       });
     } catch (e: any) {
       showMessage.error(parseErr(e));
@@ -471,7 +321,12 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
           </div>
 
           <div className="min-h-[180px] flex-1 overflow-auto rounded-lg border border-border bg-surface">
-            {filtered.length === 0 ? (
+            {loadingActivities ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-text-tertiary">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                正在加载活动...
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="py-10 text-center text-sm text-text-tertiary">暂无活动</div>
             ) : (
               filtered.map((activity) => {
@@ -529,47 +384,13 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
                       key={id}
                       id={id}
                       act={actMap[id]}
-                      onRemove={() => setSelectedIds((prev) => prev.filter((i) => i !== id))}
+                      onRemove={() => setSelectedIds((prev) => prev.filter((value) => value !== id))}
                     />
                   ))}
                 </SortableContext>
               </DndContext>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border p-3">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-          <Bot className="h-4 w-4 text-purple" />
-          AI 分析配置
-          <span className="text-xs font-normal text-text-tertiary">（可选，计划结束后自动分析）</span>
-        </div>
-        <div className="grid gap-2 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <Select
-            value={analysisAgentId ? String(analysisAgentId) : FilterOption.all}
-            onValueChange={(value) =>
-              setAnalysisAgentId(value === FilterOption.all ? undefined : Number(value))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择分析智能体" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={FilterOption.all}>不启用</SelectItem>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={String(agent.id)}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Textarea
-            value={analysisPrompt}
-            onChange={(e) => setAnalysisPrompt(e.target.value)}
-            className="min-h-[64px]"
-            placeholder="分析提示词（可选）"
-          />
         </div>
       </div>
 
@@ -586,7 +407,6 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
   );
 };
 
-// ─── 控制台面板 ───────────────────────────────────────────────────────
 interface ConsolePanelProps {
   plan: Plan;
   onRefresh: (id: number) => Promise<void>;
@@ -622,9 +442,16 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
   );
 
   const openDetail = async (item: PlanItem) => {
-    const activity = makeActivityFromPlanItem(item);
-    setDrawerActivity(activity);
-    setDrawerStats(item.status === "ended" ? makeMockStats(activity) : null);
+    const fallbackActivity = makeActivityFromPlanItem(item);
+    setDrawerActivity(fallbackActivity);
+    setDrawerStats(null);
+    try {
+      const detail = await classroomApi.getDetail(item.activity_id);
+      setDrawerActivity(detail);
+      setDrawerStats(detail.stats ?? null);
+    } catch (e: any) {
+      showMessage.error(parseErr(e, "加载活动详情失败"));
+    }
   };
 
   const doAction = async (key: string, fn: () => Promise<any>) => {
@@ -879,308 +706,253 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
   );
 };
 
-// ─── 主页面 ──────────────────────────────────────────────────────────
 type RightView =
   | { type: "none" }
   | { type: "form"; editingId: number | null }
   | { type: "console"; planId: number };
 
 const ClassroomPlanPage: React.FC = () => {
-  const [allPlans, setAllPlans] = useState<Plan[]>(() =>
-    FORCE_MOCK_PLANS ? cloneDeep(MOCK_PLANS) : [],
-  );
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [rightView, setRightView] = useState<RightView>({ type: "none" });
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [consolePlan, setConsolePlan] = useState<Plan | null>(null);
 
-  const nextPlanIdRef = useRef(
-    Math.max(1, ...MOCK_PLANS.map((plan) => Math.abs(plan.id))) + 1,
-  );
-  const nextPlanItemIdRef = useRef(
-    Math.max(1, ...MOCK_PLANS.flatMap((plan) => plan.items.map((item) => Math.abs(item.id)))) + 1,
-  );
-
-  const activityPool = useMemo(() => cloneDeep(PLAN_ACTIVITY_POOL), []);
-  const activityMap = useMemo(
-    () => new Map(activityPool.map((activity) => [activity.id, activity])),
-    [activityPool],
-  );
-
-  const total = allPlans.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  const plans = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return allPlans.slice(start, start + pageSize);
-  }, [allPlans, page, pageSize]);
-
-  const editingPlan = useMemo(() => {
-    if (rightView.type !== "form" || rightView.editingId == null) return null;
-    return allPlans.find((plan) => plan.id === rightView.editingId) || null;
-  }, [allPlans, rightView]);
-
-  const consolePlan = useMemo(() => {
-    if (rightView.type !== "console") return null;
-    return allPlans.find((plan) => plan.id === rightView.planId) || null;
-  }, [allPlans, rightView]);
-
-  useEffect(() => {
-    if (rightView.type === "console" && !consolePlan) {
-      setRightView({ type: "none" });
-    }
-  }, [consolePlan, rightView]);
-
-  const getActivity = useCallback((activityId: number): Activity => {
-    const existing = activityMap.get(activityId);
-    if (existing) return cloneDeep(existing);
-    const now = new Date().toISOString();
-    return {
-      id: activityId,
-      activity_type: "vote",
-      title: `模拟活动 ${activityId}`,
-      options: [
-        { key: "A", text: "选项 A" },
-        { key: "B", text: "选项 B" },
-      ],
-      correct_answer: "A",
-      allow_multiple: false,
-      time_limit: 60,
-      status: "draft",
-      started_at: null,
-      ended_at: null,
-      created_by: 1,
-      created_at: now,
-      response_count: 12,
-      analysis_status: "pending",
-    };
-  }, [activityMap]);
-
-  const toPlanItemActivity = useCallback((activity: Activity): NonNullable<PlanItem["activity"]> => ({
-    id: activity.id,
-    title: activity.title,
-    activity_type: activity.activity_type,
-    time_limit: activity.time_limit,
-    status: activity.status,
-    options: activity.options,
-    correct_answer: activity.correct_answer,
-    allow_multiple: activity.allow_multiple,
-  }), []);
-
-  const buildPlanItems = useCallback((selectedIds: number[], existingItems?: PlanItem[]): PlanItem[] => {
-    const existingByActivityId = new Map((existingItems || []).map((item) => [item.activity_id, item]));
-    return selectedIds.map((activityId, index) => {
-      const existing = existingByActivityId.get(activityId);
-      const activity = getActivity(activityId);
-      return {
-        id: existing?.id ?? nextPlanItemIdRef.current++,
-        activity_id: activityId,
-        order_index: index,
-        status: existing?.status ?? "pending",
-        activity: {
-          ...toPlanItemActivity(activity),
-          time_limit: existing?.activity?.time_limit ?? activity.time_limit,
-          status: existing?.activity?.status ?? activity.status,
-        },
-      };
-    });
-  }, [getActivity, toPlanItemActivity]);
-
-  const updatePlanInStore = useCallback((planId: number, updater: (plan: Plan) => Plan) => {
-    setAllPlans((prev) =>
-      prev.map((plan) => (plan.id === planId ? updater(cloneDeep(plan)) : plan)),
-    );
+  const replacePlanInList = useCallback((nextPlan: Plan) => {
+    setPlans((prev) => prev.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)));
   }, []);
+
+  const applyPlanUpdate = useCallback((nextPlan: Plan) => {
+    replacePlanInList(nextPlan);
+    setEditingPlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
+    setConsolePlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
+  }, [replacePlanInList]);
+
+  const loadPlans = useCallback(async (targetPage: number, targetPageSize: number, quiet = false) => {
+    if (!quiet) {
+      setListLoading(true);
+    }
+    try {
+      const resp = await planApi.list((targetPage - 1) * targetPageSize, targetPageSize);
+      const nextTotalPages = Math.max(1, Math.ceil(resp.total / targetPageSize));
+      setTotal(resp.total);
+
+      if (targetPage > nextTotalPages) {
+        setPage(nextTotalPages);
+        return;
+      }
+
+      setPlans(resp.items);
+    } finally {
+      if (!quiet) {
+        setListLoading(false);
+      }
+    }
+  }, []);
+
+  const loadActivities = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      let skip = 0;
+      const nextActivities: Activity[] = [];
+
+      while (true) {
+        const resp = await classroomApi.list({ skip, limit: ACTIVITY_FETCH_BATCH_SIZE });
+        nextActivities.push(...resp.items);
+
+        if (nextActivities.length >= resp.total || resp.items.length < ACTIVITY_FETCH_BATCH_SIZE) {
+          break;
+        }
+        skip += ACTIVITY_FETCH_BATCH_SIZE;
+      }
+
+      setActivities(nextActivities);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, []);
+
+  const loadPlanDetail = useCallback(async (planId: number) => {
+    const detail = await planApi.get(planId);
+    applyPlanUpdate(detail);
+    return detail;
+  }, [applyPlanUpdate]);
+
+  useEffect(() => {
+    void loadPlans(page, pageSize).catch((e) => {
+      showMessage.error(parseErr(e, "加载计划失败"));
+    });
+  }, [loadPlans, page, pageSize]);
+
+  useEffect(() => {
+    void loadActivities().catch((e) => {
+      showMessage.error(parseErr(e, "加载活动失败"));
+    });
+  }, [loadActivities]);
+
+  useEffect(() => {
+    if (rightView.type !== "form" || rightView.editingId == null) {
+      return;
+    }
+
+    void loadPlanDetail(rightView.editingId).catch((e) => {
+      showMessage.error(parseErr(e, "加载计划详情失败"));
+    });
+  }, [loadPlanDetail, rightView]);
+
+  useEffect(() => {
+    if (rightView.type !== "console") {
+      return;
+    }
+
+    void loadPlanDetail(rightView.planId).catch((e) => {
+      showMessage.error(parseErr(e, "加载计划详情失败"));
+    });
+  }, [loadPlanDetail, rightView]);
 
   const handleRefreshList = useCallback(async () => {
-    showMessage.success("已刷新");
-  }, []);
+    await Promise.all([
+      loadPlans(page, pageSize),
+      loadActivities(),
+    ]);
 
-  const handleRefreshPlan = useCallback(async (_id: number) => {}, []);
+    if (rightView.type === "form" && rightView.editingId != null) {
+      await loadPlanDetail(rightView.editingId);
+    }
+    if (rightView.type === "console") {
+      await loadPlanDetail(rightView.planId);
+    }
+
+    showMessage.success("已刷新");
+  }, [loadActivities, loadPlanDetail, loadPlans, page, pageSize, rightView]);
+
+  const handleRefreshPlan = useCallback(async (id: number) => {
+    await loadPlanDetail(id);
+  }, [loadPlanDetail]);
 
   const handleFormSubmit = useCallback(async (payload: PlanFormSubmitPayload) => {
     if (rightView.type !== "form") return;
-    const title = payload.title.trim();
-    if (!title) return;
 
     if (rightView.editingId == null) {
-      const planId = nextPlanIdRef.current++;
-      const nextPlan: Plan = {
-        id: planId,
-        title,
-        status: "draft",
-        current_item_id: null,
-        created_by: 1,
-        created_at: new Date().toISOString(),
-        items: buildPlanItems(payload.selectedIds),
-      };
-      setAllPlans((prev) => [nextPlan, ...prev]);
-      setRightView({ type: "console", planId });
+      const created = await planApi.create(payload.title, payload.selectedIds);
+      setEditingPlan(null);
+      setConsolePlan(created);
+      setRightView({ type: "console", planId: created.id });
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadPlans(1, pageSize, true);
+      }
       showMessage.success("创建成功");
       return;
     }
 
-    const editingId = rightView.editingId;
-    setAllPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== editingId) return plan;
-        const nextItems = buildPlanItems(payload.selectedIds, plan.items);
-        const activeItem = nextItems.find((item) => item.status === "active");
-        return {
-          ...plan,
-          title,
-          items: nextItems,
-          current_item_id: activeItem?.id ?? null,
-        };
-      }),
-    );
-    setRightView({ type: "console", planId: editingId });
+    const updated = await planApi.update(rightView.editingId, payload.title, payload.selectedIds);
+    applyPlanUpdate(updated);
+    setEditingPlan(null);
+    setConsolePlan(updated);
+    setRightView({ type: "console", planId: updated.id });
     showMessage.success("已更新");
-  }, [buildPlanItems, rightView]);
+  }, [applyPlanUpdate, loadPlans, page, pageSize, rightView]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (!window.confirm("确认删除该计划？")) return;
-    setAllPlans((prev) => prev.filter((plan) => plan.id !== id));
+
+    await planApi.remove(id);
+
+    setEditingPlan((prev) => (prev?.id === id ? null : prev));
+    setConsolePlan((prev) => (prev?.id === id ? null : prev));
     setRightView((prev) => {
+      if (prev.type === "form" && prev.editingId === id) return { type: "none" };
       if (prev.type === "console" && prev.planId === id) return { type: "none" };
-      if (prev.type === "form" && prev.editingId === id) return { type: "form", editingId: null };
       return prev;
     });
+
+    const nextTotal = Math.max(0, total - 1);
+    const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
+    const nextPage = Math.min(page, nextTotalPages);
+
+    if (nextPage !== page) {
+      setPage(nextPage);
+    } else {
+      await loadPlans(nextPage, pageSize, true);
+    }
+
     showMessage.success("已删除");
+  }, [loadPlans, page, pageSize, total]);
+
+  const openCreate = useCallback(() => {
+    setEditingPlan(null);
+    setRightView({ type: "form", editingId: null });
+  }, []);
+
+  const openEdit = useCallback((plan: Plan) => {
+    setEditingPlan(plan);
+    setRightView({ type: "form", editingId: plan.id });
   }, []);
 
   const openConsole = useCallback((plan: Plan) => {
+    setConsolePlan(plan);
     setRightView({ type: "console", planId: plan.id });
   }, []);
 
-  const setPlanItemStatus = useCallback((item: PlanItem, status: PlanItem["status"]): PlanItem => ({
-    ...item,
-    status,
-    activity: item.activity
-      ? {
-          ...item.activity,
-          status: itemStatusToActivityStatus(status),
-        }
-      : item.activity,
-  }), []);
-
   const handleStartPlan = useCallback(async (planId: number) => {
-    updatePlanInStore(planId, (plan) => {
-      let activated = false;
-      const nextItems = plan.items.map((item) => {
-        if (item.status === "ended") return setPlanItemStatus(item, "ended");
-        if (!activated) {
-          activated = true;
-          return setPlanItemStatus(item, "active");
-        }
-        return setPlanItemStatus(item, "pending");
-      });
-      const activeItem = nextItems.find((item) => item.status === "active");
-      return {
-        ...plan,
-        status: "active",
-        current_item_id: activeItem?.id ?? null,
-        items: nextItems,
-      };
-    });
+    const nextPlan = await planApi.start(planId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("计划已启动");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleEndPlan = useCallback(async (planId: number) => {
-    updatePlanInStore(planId, (plan) => ({
-      ...plan,
-      status: "ended",
-      current_item_id: null,
-      items: plan.items.map((item) => setPlanItemStatus(item, "ended")),
-    }));
+    const nextPlan = await planApi.end(planId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("计划已结束");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleResetPlan = useCallback(async (planId: number) => {
-    updatePlanInStore(planId, (plan) => ({
-      ...plan,
-      status: "draft",
-      current_item_id: null,
-      items: plan.items.map((item) => setPlanItemStatus(item, "pending")),
-    }));
+    const nextPlan = await planApi.reset(planId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("计划已重置");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleStartItem = useCallback(async (planId: number, itemId: number) => {
-    updatePlanInStore(planId, (plan) => {
-      const nextItems = plan.items.map((item) => {
-        if (item.id === itemId) return setPlanItemStatus(item, "active");
-        if (item.status === "active") return setPlanItemStatus(item, "ended");
-        if (item.status === "ended") return setPlanItemStatus(item, "ended");
-        return setPlanItemStatus(item, "pending");
-      });
-      return {
-        ...plan,
-        status: "active",
-        current_item_id: itemId,
-        items: nextItems,
-      };
-    });
+    const nextPlan = await planApi.startItem(planId, itemId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("题目已开始");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleEndItem = useCallback(async (planId: number, itemId: number) => {
-    updatePlanInStore(planId, (plan) => {
-      const nextItems = plan.items.map((item) =>
-        item.id === itemId ? setPlanItemStatus(item, "ended") : item,
-      );
-      const allEnded = nextItems.length > 0 && nextItems.every((item) => item.status === "ended");
-      return {
-        ...plan,
-        status: allEnded ? "ended" : plan.status,
-        current_item_id: plan.current_item_id === itemId ? null : plan.current_item_id,
-        items: nextItems,
-      };
-    });
+    const nextPlan = await planApi.endItem(planId, itemId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("题目已结束");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleRestartItem = useCallback(async (planId: number, itemId: number) => {
-    updatePlanInStore(planId, (plan) => {
-      const nextItems = plan.items.map((item) => {
-        if (item.id === itemId) return setPlanItemStatus(item, "active");
-        if (item.status === "active") return setPlanItemStatus(item, "ended");
-        if (item.status === "ended") return setPlanItemStatus(item, "ended");
-        return setPlanItemStatus(item, "pending");
-      });
-      return {
-        ...plan,
-        status: "active",
-        current_item_id: itemId,
-        items: nextItems,
-      };
-    });
+    const nextPlan = await planApi.startItem(planId, itemId);
+    applyPlanUpdate(nextPlan);
     showMessage.success("题目已重新开始");
-  }, [setPlanItemStatus, updatePlanInStore]);
+  }, [applyPlanUpdate]);
 
   const handleUpdateItemTime = useCallback(async (planId: number, itemId: number, timeLimit: number) => {
-    updatePlanInStore(planId, (plan) => ({
-      ...plan,
-      items: plan.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              activity: item.activity
-                ? {
-                    ...item.activity,
-                    time_limit: Math.max(0, Math.floor(timeLimit)),
-                  }
-                : item.activity,
-            }
-          : item,
-      ),
-    }));
-  }, [updatePlanInStore]);
+    const plan = await planApi.get(planId);
+    const targetItem = plan.items.find((item) => item.id === itemId);
+    if (!targetItem) {
+      throw new Error("未找到题目");
+    }
+
+    await classroomApi.update(targetItem.activity_id, {
+      time_limit: Math.max(0, Math.floor(timeLimit)),
+    });
+
+    const refreshedPlan = await planApi.get(planId);
+    applyPlanUpdate(refreshedPlan);
+  }, [applyPlanUpdate]);
 
   const rightTitle =
     rightView.type === "form"
@@ -1210,15 +982,10 @@ const ClassroomPlanPage: React.FC = () => {
         id: "title",
         header: "标题",
         accessorKey: "title",
-        size: 220,
-        meta: { className: "max-w-[220px]" },
+        size: 240,
+        meta: { className: "max-w-[240px]" },
         cell: ({ row }) => (
-          <div className="flex max-w-[220px] items-center gap-1.5">
-            <span className="block max-w-[180px] truncate text-sm">{row.original.title}</span>
-            <Badge variant="outline" className="border-border bg-transparent text-[11px] text-text-tertiary">
-              模拟
-            </Badge>
-          </div>
+          <span className="block max-w-[220px] truncate text-sm">{row.original.title}</span>
         ),
       },
       {
@@ -1250,7 +1017,7 @@ const ClassroomPlanPage: React.FC = () => {
                 size="icon"
                 variant="outline"
                 className="h-7 w-7"
-                onClick={() => setRightView({ type: "form", editingId: row.original.id })}
+                onClick={() => openEdit(row.original)}
                 title="编辑"
               >
                 <Edit className="h-3.5 w-3.5" />
@@ -1260,9 +1027,7 @@ const ClassroomPlanPage: React.FC = () => {
               size="icon"
               variant="outline"
               className="h-7 w-7"
-              onClick={() => {
-                void openConsole(row.original);
-              }}
+              onClick={() => openConsole(row.original)}
               title="控制台"
             >
               <Settings2 className="h-3.5 w-3.5" />
@@ -1284,7 +1049,7 @@ const ClassroomPlanPage: React.FC = () => {
         ),
       },
     ],
-    [handleDelete, openConsole],
+    [handleDelete, openConsole, openEdit],
   );
 
   const table = useReactTable({
@@ -1306,11 +1071,11 @@ const ClassroomPlanPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <div className="text-sm font-semibold">计划列表</div>
               <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="outline" onClick={() => { void handleRefreshList(); }}>
-                  <RefreshCw className="h-3.5 w-3.5" />
+                <Button size="sm" variant="outline" onClick={() => { void handleRefreshList(); }} disabled={listLoading}>
+                  {listLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   刷新
                 </Button>
-                <Button size="sm" onClick={() => setRightView({ type: "form", editingId: null })}>
+                <Button size="sm" onClick={openCreate}>
                   <Plus className="h-3.5 w-3.5" />
                   新建
                 </Button>
@@ -1323,12 +1088,16 @@ const ClassroomPlanPage: React.FC = () => {
                 className="h-full rounded-none border-0"
                 tableClassName="min-w-[680px] lg:min-w-full"
                 onRowClick={(row) => {
-                  void openConsole(row.original);
+                  openConsole(row.original);
                 }}
                 getRowClassName={(row) =>
                   cn("cursor-pointer", isConsoleSelected(row.original.id) && "bg-primary-soft hover:bg-primary-soft")
                 }
-                emptyState={<div className="px-4 py-8 text-center text-sm text-text-tertiary">暂无计划</div>}
+                emptyState={
+                  <div className="px-4 py-8 text-center text-sm text-text-tertiary">
+                    {listLoading ? "正在加载..." : "暂无计划"}
+                  </div>
+                }
               />
             </div>
           </Card>
@@ -1362,7 +1131,7 @@ const ClassroomPlanPage: React.FC = () => {
               </div>
               <div
                 className={cn(
-                  "flex-1 min-h-0 px-3 py-3",
+                  "min-h-0 flex-1 px-3 py-3",
                   rightView.type === "form" ? "overflow-hidden" : "overflow-auto",
                 )}
               >
@@ -1370,8 +1139,8 @@ const ClassroomPlanPage: React.FC = () => {
                   <PlanFormPanel
                     key={editingPlan ? `edit-${editingPlan.id}` : "new"}
                     editing={editingPlan}
-                    activities={activityPool}
-                    agents={MOCK_AGENTS}
+                    activities={activities}
+                    loadingActivities={activityLoading}
                     onCancel={() => setRightView({ type: "none" })}
                     onSubmit={handleFormSubmit}
                   />
