@@ -33,7 +33,7 @@
     # 所有其他请求转发给 frontend 服务
     handle {
         # 静态资源长期缓存策略
-        @static path /static/*
+        @static path /assets/* /static/* /pyodide/*
         header @static Cache-Control "public, max-age=31536000"
 
         reverse_proxy frontend:80
