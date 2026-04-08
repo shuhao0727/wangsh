@@ -61,6 +61,7 @@ import {
 import { calcColumnWidth } from "../../utils/table";
 import "./Xbk.css";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { formatXbkClassName, sortXbkClassNames } from "./className";
 
 const FILTER_ALL = "__all__";
 const CURRENT_YEAR = new Date().getFullYear();
@@ -76,6 +77,23 @@ const calcAutoColWidth = <T,>(
     rows as Array<Record<string, unknown>>,
     String(key),
     title,
+    min,
+    max,
+  );
+
+const calcClassColWidth = <
+  T extends { grade?: string | null; class_name?: string | null },
+>(
+  rows: T[],
+  min: number,
+  max: number,
+) =>
+  calcColumnWidth(
+    rows.map((row) => ({
+      class_display: formatXbkClassName(row.grade, row.class_name),
+    })),
+    "class_display",
+    "班级",
     min,
     max,
   );
@@ -531,7 +549,7 @@ const XbkPage: React.FC = () => {
     const yearWidth = calcAutoColWidth(courseResults, "year", "年份", 80, 140);
     const termWidth = calcAutoColWidth(courseResults, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(courseResults, "grade", "年级", 88, 150);
-    const classWidth = calcAutoColWidth(courseResults, "class_name", "班级", 100, 260);
+    const classWidth = calcClassColWidth(courseResults, 120, 280);
     const studentNoWidth = calcAutoColWidth(courseResults, "student_no", "学号", 110, 240);
     const studentNameWidth = calcAutoColWidth(courseResults, "student_name", "姓名", 100, 220);
     const courseCodeWidth = calcAutoColWidth(courseResults, "course_code", "课程代码", 110, 260);
@@ -561,6 +579,7 @@ const XbkPage: React.FC = () => {
         dataIndex: "class_name",
         width: classWidth,
         ellipsis: true,
+        render: (_value, record) => formatXbkClassName(record.grade, record.class_name),
       },
       {
         title: "学号",
@@ -596,7 +615,7 @@ const XbkPage: React.FC = () => {
     const yearWidth = calcAutoColWidth(students, "year", "年份", 80, 140);
     const termWidth = calcAutoColWidth(students, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(students, "grade", "年级", 88, 150);
-    const classWidth = calcAutoColWidth(students, "class_name", "班级", 100, 260);
+    const classWidth = calcClassColWidth(students, 120, 280);
     const studentNoWidth = calcAutoColWidth(students, "student_no", "学号", 110, 240);
     const studentNameWidth = calcAutoColWidth(students, "name", "姓名", 100, 220);
     const genderWidth = calcAutoColWidth(students, "gender", "性别", 80, 140);
@@ -610,6 +629,7 @@ const XbkPage: React.FC = () => {
         dataIndex: "class_name",
         width: classWidth,
         ellipsis: true,
+        render: (_value, record) => formatXbkClassName(record.grade, record.class_name),
       },
       {
         title: "学号",
@@ -725,7 +745,7 @@ const XbkPage: React.FC = () => {
     const yearWidth = calcAutoColWidth(unselectedAll, "year", "年份", 80, 140);
     const termWidth = calcAutoColWidth(unselectedAll, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(unselectedAll, "grade", "年级", 88, 150);
-    const classWidth = calcAutoColWidth(unselectedAll, "class_name", "班级", 100, 260);
+    const classWidth = calcClassColWidth(unselectedAll, 120, 280);
     const studentNoWidth = calcAutoColWidth(unselectedAll, "student_no", "学号", 110, 240);
     const studentNameWidth = calcAutoColWidth(unselectedAll, "name", "姓名", 100, 220);
     const genderWidth = calcAutoColWidth(unselectedAll, "gender", "性别", 80, 140);
@@ -739,6 +759,7 @@ const XbkPage: React.FC = () => {
         dataIndex: "class_name",
         width: classWidth,
         ellipsis: true,
+        render: (_value, record) => formatXbkClassName(record.grade, record.class_name),
       },
       {
         title: "学号",
@@ -760,7 +781,7 @@ const XbkPage: React.FC = () => {
     const yearWidth = calcAutoColWidth(suspendedAll, "year", "年份", 80, 140);
     const termWidth = calcAutoColWidth(suspendedAll, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(suspendedAll, "grade", "年级", 88, 150);
-    const classWidth = calcAutoColWidth(suspendedAll, "class_name", "班级", 100, 260);
+    const classWidth = calcClassColWidth(suspendedAll, 120, 280);
     const studentNoWidth = calcAutoColWidth(suspendedAll, "student_no", "学号", 110, 240);
     const studentNameWidth = calcAutoColWidth(suspendedAll, "name", "姓名", 100, 220);
     const genderWidth = calcAutoColWidth(suspendedAll, "gender", "性别", 80, 140);
@@ -774,6 +795,7 @@ const XbkPage: React.FC = () => {
         dataIndex: "class_name",
         width: classWidth,
         ellipsis: true,
+        render: (_value, record) => formatXbkClassName(record.grade, record.class_name),
       },
       {
         title: "学号",
@@ -800,28 +822,29 @@ const XbkPage: React.FC = () => {
       : [...students, ...unselectedAll, ...suspendedAll]
           .map((item) => item.class_name)
           .filter(Boolean);
-    return Array.from(
+    return sortXbkClassNames(Array.from(
       new Set(
         source
           .map((name) => String(name).trim())
           .filter(Boolean),
       ),
-    ).sort((a, b) => a.localeCompare(b, "zh-CN"));
+    ));
   }, [meta.classes, students, unselectedAll, suspendedAll]);
 
-  const classes = useMemo(
+  const classOptions = useMemo(
     () =>
-      filters.grade
-        ? allClasses.filter((className) => className.startsWith(filters.grade!))
-        : allClasses,
+      allClasses.map((className) => ({
+        value: className,
+        label: formatXbkClassName(filters.grade, className),
+      })),
     [allClasses, filters.grade],
   );
 
   useEffect(() => {
     if (!filters.class_name) return;
-    if (classes.includes(filters.class_name)) return;
+    if (allClasses.includes(filters.class_name)) return;
     setFilters((prev) => (prev.class_name ? { ...prev, class_name: undefined } : prev));
-  }, [classes, filters.class_name, setFilters]);
+  }, [allClasses, filters.class_name, setFilters]);
 
   const kpiStudents = summary?.students ?? 0;
   const kpiCourses = summary?.courses ?? 0;
@@ -997,9 +1020,9 @@ const XbkPage: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
-                  {classes.map((className) => (
-                    <SelectItem key={className} value={className}>
-                      {className}
+                  {classOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

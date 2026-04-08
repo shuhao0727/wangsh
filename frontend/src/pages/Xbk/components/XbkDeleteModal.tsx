@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatXbkClassName } from "../className";
 
 interface XbkDeleteModalProps {
   open: boolean;
@@ -99,6 +100,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
 
           <div className="ws-modal-hint">
             将按当前筛选条件删除数据：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+            {filters.class_name ? ` · ${formatXbkClassName(filters.grade, filters.class_name)}` : ""}
           </div>
         </div>
         <DialogFooter>

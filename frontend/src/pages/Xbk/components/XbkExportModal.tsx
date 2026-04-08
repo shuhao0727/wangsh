@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { formatXbkClassName } from "../className";
 
 interface XbkExportModalProps {
   open: boolean;
@@ -153,7 +154,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
           </div>
 
           <div className="ws-modal-hint">
-            <p>• 将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}{filters.class_name ? ` · ${filters.class_name}` : ""}</p>
+            <p>• 将按当前筛选导出：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}{filters.class_name ? ` · ${formatXbkClassName(filters.grade, filters.class_name)}` : ""}</p>
             <p>• 学期将按当前筛选的学期写入导出文件标题。</p>
           </div>
         </div>
