@@ -214,6 +214,13 @@ class DockerProvider(SandboxProvider):
             return resolved
 
         if source_clean.startswith("/") and not source_clean.startswith("/run/"):
+            if source_clean.startswith("/dev/"):
+                logger.warning(
+                    "Skipping mountinfo absolute source for %s because %s is a device path",
+                    container_path,
+                    source_clean,
+                )
+                return None
             base = Path(source_clean)
             if root_clean not in {"", "/"}:
                 base = base / root_rel
@@ -223,10 +230,26 @@ class DockerProvider(SandboxProvider):
 
         return None
 
+    def _resolve_host_mount_path_from_workspace_root(self, container_path: Path) -> Optional[Path]:
+        host_ws_root_str = str(os.getenv("HOST_WORKSPACE_ROOT") or "").strip()
+        if not host_ws_root_str:
+            return None
+
+        ws_root = _workspace_root()
+        try:
+            relative = container_path.relative_to(ws_root)
+        except ValueError:
+            return None
+
+        host_ws_root = Path(host_ws_root_str)
+        resolved = host_ws_root / relative
+        logger.info("Resolved host path %s via HOST_WORKSPACE_ROOT -> %s", container_path, resolved)
+        return resolved
+
     async def _resolve_host_mount_path(self, container_path: Path) -> Path:
-        mountinfo_resolved = self._resolve_host_mount_path_from_mountinfo(container_path)
-        if mountinfo_resolved is not None:
-            return mountinfo_resolved
+        configured_resolved = self._resolve_host_mount_path_from_workspace_root(container_path)
+        if configured_resolved is not None:
+            return configured_resolved
 
         for source, destination in await self._get_current_container_bind_mounts():
             try:
@@ -237,11 +260,9 @@ class DockerProvider(SandboxProvider):
             logger.info("Resolved host path %s via bind mount %s -> %s", container_path, destination, source)
             return resolved
 
-        host_ws_root_str = str(os.getenv("HOST_WORKSPACE_ROOT") or "").strip()
-        if host_ws_root_str:
-            resolved = Path(host_ws_root_str) / container_path.name
-            logger.info("Resolved host path %s via HOST_WORKSPACE_ROOT -> %s", container_path, resolved)
-            return resolved
+        mountinfo_resolved = self._resolve_host_mount_path_from_mountinfo(container_path)
+        if mountinfo_resolved is not None:
+            return mountinfo_resolved
 
         return container_path
 
