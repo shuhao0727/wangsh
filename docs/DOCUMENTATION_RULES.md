@@ -1,6 +1,6 @@
 # 文档维护规范
 
-> 最后更新：2026-04-05
+> 最后更新：2026-04-11
 
 ## 核心原则
 
@@ -275,6 +275,7 @@ Claude 会自动：
 - `docs/docker/deploy/CICD.md` - CI/CD 说明
 - `docs/docker/testing/README.md` - 测试与验证入口
 - `docs/docker/RELEASE_NOTES.md` - 版本记录
+- `docs/DATABASE_PERFORMANCE_GUIDE.md` - 数据库性能优化指南（整合版）
 
 ### 功能模块文档
 - `docs/features/AI_AGENTS.md` - AI 智能体
@@ -285,6 +286,8 @@ Claude 会自动：
 
 ### 其他文档
 - `docs/development/CLAUDE_GUIDE.md` - Claude 使用指南
+- `docs/IMPROVEMENT_CHECKLIST.md` - 当前改进检查清单（主计划文档）
+- `docs/ACCESSIBILITY_GUIDE.md` - 无障碍访问改进指南
 - `docs/docker/archive/deploy/database-migration-fix.md` - 数据库迁移
 - `docs/docker/archive/deploy/migration_analysis.md` - 迁移链分析
 - `docs/docker/plans/README.md` - 计划与分析索引

@@ -54,6 +54,23 @@ def test_resolve_host_mount_path_preserves_workspace_relative_path(monkeypatch):
     assert resolved == Path("/home/shuhao/wangsh/data/pythonlab/workspaces/u1/.python/current.py")
 
 
+def test_resolve_host_mount_path_ignores_same_path_host_workspace_root(monkeypatch):
+    provider = docker_api.DockerProvider()
+    container_path = Path("/tmp/pythonlab/workspaces/u1")
+
+    async def fake_bind_mounts():
+        return [(Path("/Users/wsh/wangsh/data/pythonlab/workspaces"), Path("/tmp/pythonlab/workspaces"))]
+
+    monkeypatch.setattr(docker_api.settings, "PYTHONLAB_WORKSPACE_ROOT", "/tmp/pythonlab/workspaces", raising=False)
+    monkeypatch.setenv("HOST_WORKSPACE_ROOT", "/tmp/pythonlab/workspaces")
+    monkeypatch.setattr(provider, "_get_current_container_bind_mounts", fake_bind_mounts)
+    monkeypatch.setattr(provider, "_resolve_host_mount_path_from_mountinfo", lambda path: None)
+
+    resolved = asyncio.run(provider._resolve_host_mount_path(container_path))
+
+    assert resolved == Path("/Users/wsh/wangsh/data/pythonlab/workspaces/u1")
+
+
 def test_resolve_host_mount_path_from_mountinfo_ignores_device_source(monkeypatch):
     provider = docker_api.DockerProvider()
     original_path_type = type(Path())

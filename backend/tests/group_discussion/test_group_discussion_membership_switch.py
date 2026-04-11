@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date
 from types import SimpleNamespace
 
 import app.services.agents.group_discussion as gd
@@ -45,22 +45,17 @@ class _FakeDB:
         return None
 
 
-def test_admin_joining_second_group_keeps_previous_membership():
+def test_admin_joining_second_group_does_not_write_membership():
     today = date.today()
-    last_member = SimpleNamespace(
-        session_id=11,
-        joined_at=datetime.now(timezone.utc),
-    )
     target_session = SimpleNamespace(
         id=22,
         session_date=today,
         class_name="高一(1)班",
         group_no="2",
         group_name="第二组",
-        created_by_user_id=1,
+        created_by_user_id=2,
     )
-    previous_session = SimpleNamespace(id=11, session_date=today)
-    db = _FakeDB([last_member, target_session, None, previous_session])
+    db = _FakeDB([target_session])
 
     got = asyncio.run(
         gd.get_or_create_today_session(
@@ -73,7 +68,8 @@ def test_admin_joining_second_group_keeps_previous_membership():
     )
 
     assert got.id == 22
+    assert db.execute_count == 1
     assert db.delete_count == 0
     assert db.flush_count == 0
-    assert db.commit_count == 1
-    assert len(db.added) == 1
+    assert db.commit_count == 0
+    assert len(db.added) == 0

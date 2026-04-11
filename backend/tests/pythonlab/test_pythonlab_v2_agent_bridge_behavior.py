@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from fastapi import HTTPException
 
 import app.api.pythonlab.flow as flow_api
+import app.api.pythonlab.flow.ai_service as optimization_module
 
 
 class FakeDbResult:
@@ -68,16 +69,35 @@ def test_generate_code_from_flow_passes_prompt_template_and_returns_code(monkeyp
     prompt_path = tmp_path / "flowchart_to_python.txt"
     prompt_path.write_text("flow prompt body", encoding="utf-8")
 
-    async def fake_generate_code(flow_json, api_url=None, api_key=None, prompt_template=None, model=None):
-        assert flow_json == {"nodes": [{"id": "n1"}], "edges": []}
+    async def fake_chat_completion(messages, api_url=None, api_key=None, model=None):
         assert api_url == "https://agent.example.com"
         assert api_key == "secret-key"
-        assert prompt_template == "flow prompt body"
         assert model == "gpt-test"
-        return {"success": True, "python_code": "print('generated')\n"}
+        assert messages[0]["content"] == "flow prompt body"
+        assert "根据以下流程图生成 Python 代码" in messages[1]["content"]
+        return {"success": True, "message": "print('generated')\n"}
 
-    monkeypatch.setattr(flow_api, "PROMPT_TEMPLATE_PATH", prompt_path)
-    monkeypatch.setattr(flow_api.code_generator_client, "generate_code", fake_generate_code)
+    # Create a proper mock Path object
+    class MockPath:
+        def __init__(self, content):
+            self.content = content
+
+        def exists(self):
+            return True
+
+        def read_text(self, encoding="utf-8"):
+            return self.content
+
+        def __str__(self):
+            return "/mock/path/flowchart_to_python.txt"
+
+        def __repr__(self):
+            return "MockPath()"
+
+    mock_path = MockPath("flow prompt body")
+    # Need to patch the optimization module where PROMPT_TEMPLATE_PATH is defined
+    monkeypatch.setattr(optimization_module, "PROMPT_TEMPLATE_PATH", mock_path)
+    monkeypatch.setattr(flow_api.code_generator_client, "chat_completion", fake_chat_completion)
     db = FakeFeatureDb(
         {
             "api_url": "https://agent.example.com",
@@ -94,7 +114,7 @@ def test_generate_code_from_flow_passes_prompt_template_and_returns_code(monkeyp
         )
     )
 
-    assert result == {"code": "print('generated')\n"}
+    assert result == {"code": "print('generated')"}
 
 
 def test_test_agent_connection_maps_success_response(monkeypatch):

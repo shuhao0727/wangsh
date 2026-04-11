@@ -7,9 +7,14 @@
 - [../README.md](../README.md) - 项目入口和本地开发说明
 - [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) - 文档维护规范和落位规则
 - [docker/README.md](docker/README.md) - Docker 文档中心（部署、测试、计划、前端专项、归档）
+- [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) - 当前仍在维护的总检查清单
 
 ## 核心文档
 
+- [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) - 当前总检查清单和执行顺序（主计划文档）
+- [DATABASE_PERFORMANCE_GUIDE.md](DATABASE_PERFORMANCE_GUIDE.md) - 数据库性能分析与优化指南（整合版）
+- [DATABASE_PERFORMANCE_ANALYSIS.md](DATABASE_PERFORMANCE_ANALYSIS.md) - 数据库性能分析指南（已整合，重定向）
+- [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
 - [docker/RELEASE_NOTES.md](docker/RELEASE_NOTES.md) - 发布与运维记录
 - [development/API.md](development/API.md) - API 接口文档
 - [docker/deploy/DEPLOY.md](docker/deploy/DEPLOY.md) - 完整部署指南（开发/生产环境）
@@ -24,6 +29,13 @@
 - [docker/frontend/README.md](docker/frontend/README.md) - 前端专项文档入口
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与治理入口
 - [docker/archive/README.md](docker/archive/README.md) - 历史归档入口
+
+### 当前计划与治理 (`docker/plans/`)
+
+- [docker/plans/execution-roadmap.md](docker/plans/execution-roadmap.md) - 阶段执行路线图
+- [docker/plans/week1-execution-plan-2026-04-10.md](docker/plans/week1-execution-plan-2026-04-10.md) - 第一周执行计划
+- [docker/plans/pythonlab-capability-inventory.md](docker/plans/pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
+- [docker/plans/document-consolidation-report-2026-04-11.md](docker/plans/document-consolidation-report-2026-04-11.md) - 文档整理工作报告
 
 ## 功能模块 (`features/`)
 
@@ -48,8 +60,12 @@
 - [development/CLAUDE_GUIDE.md](development/CLAUDE_GUIDE.md) - AI 协作指南
 - [development/CLAUDE_MEMORY.md](development/CLAUDE_MEMORY.md) - 项目知识快照
 
-## 就近说明文档
+## 脚本与测试文档 (`scripts/`)
 
+### 脚本文档中心
+- [scripts/ARCHIVE_INDEX.md](scripts/ARCHIVE_INDEX.md) - 脚本归档索引（历史脚本清理记录）
+
+### 就近说明文档
 - [../backend/tests/README.md](../backend/tests/README.md) - 后端测试说明
 - [../backend/scripts/README.md](../backend/scripts/README.md) - 后端 smoke/soak 脚本说明
 - [../scripts/README.md](../scripts/README.md) - 根层运维与生产烟测脚本说明

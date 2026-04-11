@@ -1,6 +1,7 @@
 # AI Prompt 设计
 
 > 隶属于 [ASSESSMENT_DESIGN.md](./ASSESSMENT_DESIGN.md)
+> 最后更新：2026-04-11
 
 ---
 

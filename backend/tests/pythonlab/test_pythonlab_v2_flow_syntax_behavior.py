@@ -66,8 +66,10 @@ def test_parse_flow_caches_result_and_marks_cache_hit(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(flow_api, "cache", fake_cache)
-    monkeypatch.setattr(flow_api, "_build_flow", fake_build_flow)
+    # Need to patch the actual cache import in builder module
+    import app.api.pythonlab.flow.builder as builder_module
+    monkeypatch.setattr(builder_module, "cache", fake_cache)
+    monkeypatch.setattr(builder_module, "_build_flow", fake_build_flow)
     monkeypatch.setattr(flow_api, "_now_ms", lambda: 1_000)
 
     payload = {"code": "print('ok')\n", "options": {"limits": {"maxParseMs": 1500}}}

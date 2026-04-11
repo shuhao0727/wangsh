@@ -149,8 +149,11 @@ def _patch_ws_auth_and_cache(monkeypatch, *, fake_cache: FakeCache, user: dict |
     async def _auth(_token, _db):
         return deepcopy(user)
 
-    monkeypatch.setattr(ws_api, "cache", fake_cache)
-    monkeypatch.setattr(ws_api, "auth_get_current_user", _auth)
+    # Mock cache in the handlers module
+    import app.api.pythonlab.ws.handlers as handlers_module
+    monkeypatch.setattr(handlers_module, "cache", fake_cache)
+    # Mock auth_get_current_user in the handlers module
+    monkeypatch.setattr(handlers_module, "auth_get_current_user", _auth)
 
 
 def _patch_terminal_docker_provider(monkeypatch, provider_cls):
@@ -551,7 +554,9 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
         "status": ws_api.SESSION_STATUS_READY,
     }
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
-    monkeypatch.setattr(ws_api, "celery_app", fake_celery)
+    # Mock celery_app in the handlers module
+    import app.api.pythonlab.ws.handlers as handlers_module
+    monkeypatch.setattr(handlers_module, "celery_app", fake_celery)
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
     class FakeDockerProvider:
@@ -613,11 +618,19 @@ def test_dap_ws_emits_terminated_fallback_when_launch_followed_by_eof(monkeypatc
     session_key = f"{ws_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
     fake_cache.store[session_key] = _make_debug_session_meta(session_id)
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
-    monkeypatch.setattr(ws_api, "celery_app", fake_celery)
+    # Mock celery_app in the handlers module
+    import app.api.pythonlab.ws.handlers as handlers_module
+    monkeypatch.setattr(handlers_module, "celery_app", fake_celery)
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "launch", "request_seq": 1, "success": True, "body": {}},
@@ -643,7 +656,7 @@ def test_dap_ws_emits_terminated_fallback_when_launch_followed_by_eof(monkeypatc
     )
     websocket = FakeWebSocket(
         query_params={"token": "valid-token"},
-        incoming=[launch_request, ws_api.WebSocketDisconnect()],
+        incoming=[launch_request],
     )
 
     asyncio.run(ws_api.dap_ws(websocket, session_id, db=None))
@@ -670,11 +683,19 @@ def test_dap_ws_emits_terminated_fallback_when_output_reports_done(monkeypatch):
     session_key = f"{ws_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
     fake_cache.store[session_key] = _make_debug_session_meta(session_id)
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
-    monkeypatch.setattr(ws_api, "celery_app", fake_celery)
+    # Mock celery_app in the handlers module
+    import app.api.pythonlab.ws.handlers as handlers_module
+    monkeypatch.setattr(handlers_module, "celery_app", fake_celery)
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "launch", "request_seq": 1, "success": True, "body": {}},
@@ -700,7 +721,7 @@ def test_dap_ws_emits_terminated_fallback_when_output_reports_done(monkeypatch):
     )
     websocket = FakeWebSocket(
         query_params={"token": "valid-token"},
-        incoming=[launch_request, ws_api.WebSocketDisconnect()],
+        incoming=[launch_request],
     )
 
     asyncio.run(ws_api.dap_ws(websocket, session_id, db=None))
@@ -772,8 +793,14 @@ def test_dap_ws_replaces_oversized_response_with_small_error_response(monkeypatc
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     async def _fake_read_dap_message(_reader):
         if not hasattr(_fake_read_dap_message, "called"):
@@ -824,8 +851,14 @@ def test_dap_ws_emits_truncation_notice_when_output_exceeds_limit(monkeypatch):
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {}},
@@ -879,8 +912,14 @@ def test_dap_ws_closes_when_non_response_message_is_too_large(monkeypatch):
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {}},
@@ -930,8 +969,14 @@ def test_dap_ws_retries_after_startup_eof_and_emits_retry_notice(monkeypatch):
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         EOFError("cold start"),
@@ -1013,11 +1058,19 @@ def test_dap_ws_persists_stopped_then_continued_then_terminated_statuses(monkeyp
     session_key = f"{ws_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
     fake_cache.store[session_key] = _make_debug_session_meta(session_id)
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
-    monkeypatch.setattr(ws_api, "celery_app", fake_celery)
+    # Mock celery_app in the handlers module
+    import app.api.pythonlab.ws.handlers as handlers_module
+    monkeypatch.setattr(handlers_module, "celery_app", fake_celery)
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {}},
@@ -1072,8 +1125,14 @@ def test_dap_ws_keeps_paused_status_after_transient_disconnect(monkeypatch):
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
     ws_api._DAP_BRIDGES.clear()
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {"supportsConfigurationDoneRequest": True}},
@@ -1154,8 +1213,14 @@ def test_dap_ws_reconnect_bootstrap_replays_stopped_state_and_stacktrace(monkeyp
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
     ws_api._DAP_BRIDGES.clear()
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     first_phase = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {"supportsConfigurationDoneRequest": True}},
@@ -1318,8 +1383,14 @@ def test_dap_ws_ignores_telemetry_output_events(monkeypatch):
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
     monkeypatch.setattr(ws_api.asyncio, "gather", _make_mainline_gather())
 
-    async def _fake_open_connection(_host, _port):
-        return object(), writer
+    async def _fake_open_connection(host=None, port=None):
+        # 返回一个具有 readline 方法的 mock reader
+        class MockReader:
+            async def readline(self):
+                raise EOFError("dap eof")
+            async def readexactly(self, n):
+                raise EOFError("dap eof")
+        return MockReader(), writer
 
     read_queue = [
         {"type": "response", "command": "initialize", "request_seq": 1, "success": True, "body": {}},

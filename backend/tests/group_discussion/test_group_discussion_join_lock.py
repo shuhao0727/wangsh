@@ -7,6 +7,8 @@ from fastapi import HTTPException
 import app.services.agents.group_discussion as gd
 import app.api.endpoints.agents.ai_agents.group_discussion as gd_api
 from app.schemas.agents import GroupDiscussionJoinRequest
+from app.core.config import settings
+from app.utils.cache import cache
 
 
 class _FakeCache:
@@ -34,10 +36,11 @@ class _FakeCache:
 
 
 def test_enforce_join_lock_only_checks_and_does_not_write_cache(monkeypatch):
-    monkeypatch.setattr(gd.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True, raising=False)
-    monkeypatch.setattr(gd.settings, "GROUP_DISCUSSION_JOIN_LOCK_SECONDS", 180, raising=False)
+    monkeypatch.setattr(settings, "GROUP_DISCUSSION_REDIS_ENABLED", True, raising=False)
+    monkeypatch.setattr(settings, "GROUP_DISCUSSION_JOIN_LOCK_SECONDS", 180, raising=False)
     fake_cache = _FakeCache(locked=None, ttl=None)
-    monkeypatch.setattr(gd, "cache", fake_cache)
+    monkeypatch.setattr(cache, "get", fake_cache.get)
+    monkeypatch.setattr(cache, "set", fake_cache.set)
 
     lock_seconds = asyncio.run(
         gd.enforce_join_lock(user_id=1, requested_group_no="1", user_role="student")
@@ -48,17 +51,20 @@ def test_enforce_join_lock_only_checks_and_does_not_write_cache(monkeypatch):
 
 
 def test_set_join_lock_writes_cache_for_student(monkeypatch):
-    monkeypatch.setattr(gd.settings, "GROUP_DISCUSSION_REDIS_ENABLED", True, raising=False)
-    monkeypatch.setattr(gd.settings, "GROUP_DISCUSSION_JOIN_LOCK_SECONDS", 180, raising=False)
+    monkeypatch.setattr(settings, "GROUP_DISCUSSION_REDIS_ENABLED", True, raising=False)
+    monkeypatch.setattr(settings, "GROUP_DISCUSSION_JOIN_LOCK_SECONDS", 180, raising=False)
     fake_cache = _FakeCache()
-    monkeypatch.setattr(gd, "cache", fake_cache)
+    monkeypatch.setattr(cache, "get", fake_cache.get)
+    monkeypatch.setattr(cache, "set", fake_cache.set)
 
     asyncio.run(gd.set_join_lock(user_id=7, requested_group_no="3", user_role="student"))
 
     assert len(fake_cache.set_calls) == 1
     call = fake_cache.set_calls[0]
     assert ":join_lock:" in call["key"]
-    assert call["value"] == {"group_no": "3"}
+    # 值是 JSON 字符串
+    import json
+    assert json.loads(call["value"]) == {"group_no": "3"}
     assert call["expire_seconds"] == 180
     assert call["nx"] is True
 

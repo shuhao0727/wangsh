@@ -236,6 +236,19 @@ class DockerProvider(SandboxProvider):
             return None
 
         ws_root = _workspace_root()
+        # In containerized deployments the default HOST_WORKSPACE_ROOT used to
+        # match the in-container workspace path. Passing that through to
+        # `docker run -v` makes Docker mount an empty host path (for example
+        # `/tmp/pythonlab/workspaces/...`) instead of the real bind-mounted
+        # project directory, so debugpy cannot see `/workspace/main.py`.
+        if Path(host_ws_root_str) == ws_root:
+            logger.warning(
+                "Ignoring HOST_WORKSPACE_ROOT=%s because it matches PYTHONLAB_WORKSPACE_ROOT; "
+                "falling back to bind mount / mountinfo resolution",
+                host_ws_root_str,
+            )
+            return None
+
         try:
             relative = container_path.relative_to(ws_root)
         except ValueError:

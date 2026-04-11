@@ -635,7 +635,7 @@ async def admin_get_analyses(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> GroupDiscussionAdminAnalysisListResponse:
-    rows = await admin_list_analyses(db, session_id=session_id, limit=limit)
+    rows, _total = await admin_list_analyses(db, session_id=session_id, page=1, size=limit)
     items = [
         GroupDiscussionAdminAnalysisOut(
             id=int(r.id),

@@ -4,8 +4,15 @@
 
 ## 当前活跃文档
 
+- [execution-roadmap.md](execution-roadmap.md) - 当前阶段执行路线图
+- [week1-execution-plan-2026-04-10.md](week1-execution-plan-2026-04-10.md) - 第一周执行计划
+- [pythonlab-capability-inventory.md](pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
 - [sse-redis-pubsub-migration.md](sse-redis-pubsub-migration.md) - SSE pub/sub 从进程内迁移到 Redis 的方案
 - [three-module-improvement.md](three-module-improvement.md) - 点名系统、系统管理、选课系统联合改进计划
+- [document-consolidation-report-2026-04-11.md](document-consolidation-report-2026-04-11.md) - 文档整理工作报告
+- [document-unification-report-2026-04-11.md](document-unification-report-2026-04-11.md) - 文档统一化管理工作报告
+
+> **注意**：`improvement-plan.md` 已归档到 `../archive/plans/improvement-plan-2026-04-10.md`，当前主计划文档为 `../../IMPROVEMENT_CHECKLIST.md`。
 ## UI 治理与回归
 
 - [ui-upgrade-plan.md](ui-upgrade-plan.md) - UI 渐进式迁移计划
@@ -18,14 +25,14 @@
 
 - 当前入口层只保留“仍要继续执行”的计划、治理基线、回归台账和复用模板。
 - 测试脚本清理、测试目录索引、烟测治理等跨模块测试文档统一转入 [`../testing/`](../testing/README.md)。
-- 已完成或明显带时间戳的分析报告统一转入 [`../archive/plans/`](../archive/plans/README.md)。
+- 已完成、明显带时间戳、或内容已经被后续改动覆盖的分析报告统一转入 [`../archive/plans/`](../archive/plans/README.md)。
 - 当前没有活跃的单页体检报告；如后续再做单页治理，建议新报告先生成到 `plans/`，完成后再归档。
 
 ## 历史归档
 
 - [../archive/plans/README.md](../archive/plans/README.md) - 归档目录总览
-- [../archive/plans/project-deep-analysis.md](../archive/plans/project-deep-analysis.md) - 项目级深度分析快照
-- [../archive/plans/module-deep-analysis.md](../archive/plans/module-deep-analysis.md) - 模块级深度分析快照
+- [../archive/plans/HISTORICAL_PLANS_SUMMARY.md](../archive/plans/HISTORICAL_PLANS_SUMMARY.md) - 历史计划文档总结（合并版）
+- [../archive/plans/PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md](../archive/plans/PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md) - 项目与模块深度分析（压缩合并版）
 - [../archive/plans/code-quality-audit.md](../archive/plans/code-quality-audit.md) - 代码质量与安全清理审查快照
 - [../archive/plans/auth-analysis.md](../archive/plans/auth-analysis.md) - 认证系统深度分析和访客权限方案
 - [../archive/plans/responsive-analysis.md](../archive/plans/responsive-analysis.md) - 响应式布局问题分析与修复方案

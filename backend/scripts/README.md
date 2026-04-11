@@ -1,6 +1,8 @@
 # 后端脚本说明
 
-`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。历史脚本清理后，只通过 [`archive/README.md`](archive/README.md) 保留索引。
+> 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
+
+`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。
 
 ## 当前入口
 
@@ -22,7 +24,6 @@
 
 - 统一生产烟测入口：[`../../scripts/prod-smoke/run.sh`](../../scripts/prod-smoke/run.sh)
 - 后端 pytest 用例：[`../tests/README.md`](../tests/README.md)
-- 历史脚本清理记录：[`archive/README.md`](archive/README.md)
 
 ## 使用建议
 

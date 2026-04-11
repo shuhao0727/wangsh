@@ -1,6 +1,6 @@
 # PythonLab 调试环境文档
 
-> 最后更新：2026-04-08
+> 最后更新：2026-04-11
 
 ## 概述
 
@@ -55,6 +55,15 @@ Python 进程
 ### 容器配置
 
 **镜像**：`shuhao07/pythonlab-sandbox:1.5.5`
+
+**镜像构建**：
+```bash
+docker build --build-arg http_proxy= --build-arg https_proxy= \
+  --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= \
+  --build-arg all_proxy= --build-arg ALL_PROXY= \
+  -t shuhao07/pythonlab-sandbox:py311 \
+  backend/docker/pythonlab-sandbox
+```
 
 **资源限制**：
 - CPU：50000 微秒/100ms（50%）
