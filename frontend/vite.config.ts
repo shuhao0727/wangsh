@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { copyFileSync } from "fs";
+import { join } from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -8,7 +10,31 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      // 自定义插件：复制 PDF worker 文件到构建输出目录
+      {
+        name: "copy-pdf-worker",
+        closeBundle() {
+          if (process.env.NODE_ENV === "production") {
+            try {
+              // 源文件：node_modules 中的 PDF worker
+              const pdfWorkerSource = join(
+                __dirname,
+                "node_modules/pdfjs-dist/build/pdf.worker.js"
+              );
+              // 目标文件：构建输出目录
+              const pdfWorkerDest = join(__dirname, "build/assets/pdf.worker.js");
+
+              copyFileSync(pdfWorkerSource, pdfWorkerDest);
+              console.log("PDF worker file copied to:", pdfWorkerDest);
+            } catch (error) {
+              console.error("Failed to copy PDF worker file:", error);
+            }
+          }
+        },
+      },
+    ],
 
     // 模块解析 — 继承自旧前端配置与 tsconfig.json 的路径别名
     resolve: {
@@ -49,6 +75,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
         },
+      },
+      // 允许访问 node_modules 中的文件（用于 PDF worker）
+      fs: {
+        allow: [".."], // 允许访问父目录（包含 node_modules）
       },
     },
 

@@ -36,6 +36,7 @@ docker buildx build \
   --platform "${PLATFORM}" \
   --target backend_runtime \
   -t "${REGISTRY}/wangsh-backend:${VERSION}" \
+  --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -45,6 +46,7 @@ docker buildx build \
   --platform "${PLATFORM}" \
   --target worker_runtime \
   -t "${REGISTRY}/wangsh-typst-worker:${VERSION}" \
+  --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -77,6 +79,8 @@ echo "==> Building frontend ..."
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/wangsh-frontend:${VERSION}" \
+  --build-arg NODE_IMAGE="${NODE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}" \
+  --build-arg CADDY_IMAGE="${CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2-alpine}" \
   --build-arg REACT_APP_VERSION="${VERSION}" \
   -f frontend/Dockerfile.prod \
   --load \

@@ -1,6 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { logger } from "@services/logger";
+import { getPdfJs } from "@/utils/pdfInit";
 
 export type PdfCanvasVirtualViewerHandle = {
   scrollToPage: (pageNumber: number) => void;
@@ -100,7 +101,7 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
 
       const run = async () => {
         try {
-          const pdfjs: any = await import("pdfjs-dist/webpack.mjs");
+          const pdfjs = await getPdfJs();
           const nextPdf = await pdfjs.getDocument({ data }).promise;
           if (loadTokenRef.current !== token) return;
           pdfRef.current = nextPdf;
