@@ -25,7 +25,7 @@ class FakeFeatureDb:
 
 def test_ai_chat_rejects_non_list_messages():
     try:
-        asyncio.run(flow_api.ai_chat({"messages": "hello"}, current_user={"id": 1}, db=FakeFeatureDb()))
+        asyncio.run(flow_api.ai_chat({"messages": "hello"}, current_user={"id": 1, "role_code": "student"}, db=FakeFeatureDb()))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 400
@@ -50,7 +50,7 @@ def test_ai_chat_uses_db_config_and_returns_message(monkeypatch):
     )
 
     result = asyncio.run(
-        flow_api.ai_chat({"messages": [{"role": "user", "content": "hi"}]}, current_user={"id": 1}, db=db)
+        flow_api.ai_chat({"messages": [{"role": "user", "content": "hi"}]}, current_user={"id": 1, "role_code": "student"}, db=db)
     )
 
     assert result == {"message": "pong"}
@@ -58,7 +58,7 @@ def test_ai_chat_uses_db_config_and_returns_message(monkeypatch):
 
 def test_generate_code_from_flow_rejects_non_object_flow():
     try:
-        asyncio.run(flow_api.generate_code_from_flow({"flow": []}, current_user={"id": 1}, db=FakeFeatureDb()))
+        asyncio.run(flow_api.generate_code_from_flow({"flow": []}, current_user={"id": 1, "role_code": "student"}, db=FakeFeatureDb()))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 400
@@ -109,7 +109,7 @@ def test_generate_code_from_flow_passes_prompt_template_and_returns_code(monkeyp
     result = asyncio.run(
         flow_api.generate_code_from_flow(
             {"flow": {"nodes": [{"id": "n1"}], "edges": []}},
-            current_user={"id": 1},
+            current_user={"id": 1, "role_code": "student"},
             db=db,
         )
     )

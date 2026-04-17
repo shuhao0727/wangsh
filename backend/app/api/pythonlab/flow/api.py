@@ -122,7 +122,7 @@ async def save_prompt_template(payload: Dict[str, str], current_user: Dict[str, 
 @router.post("/ai/chat")
 async def ai_chat(
     payload: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(require_admin),
+    current_user: Dict[str, Any] = Depends(require_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -138,7 +138,7 @@ async def ai_chat(
 @router.post("/flow/generate_code")
 async def generate_code_from_flow(
     payload: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(require_admin),
+    current_user: Dict[str, Any] = Depends(require_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -154,7 +154,7 @@ async def generate_code_from_flow(
 @router.post("/flow/test_agent_connection")
 async def test_agent_connection(
     payload: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(require_admin)
+    current_user: Dict[str, Any] = Depends(require_user)
 ):
     """
     测试智能体连接配置
@@ -189,7 +189,7 @@ async def test_agent_connection(
 
 
 @router.post("/flow/parse")
-async def parse_flow(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_admin)):
+async def parse_flow(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(require_user)):
     """
     解析代码生成流程图
     """

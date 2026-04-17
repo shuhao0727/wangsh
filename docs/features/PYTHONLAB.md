@@ -253,11 +253,17 @@ TIMEOUT_SECONDS=20 python backend/scripts/smoke_pythonlab_print_visibility_probe
 
 ### 核心端点
 
-- `POST /api/v2/pythonlab/sessions` - 创建调试会话
-- `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情
-- `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话
-- `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket
-- `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket
+- `POST /api/v2/pythonlab/sessions` - 创建调试会话（已登录用户）
+- `GET /api/v2/pythonlab/sessions/{session_id}` - 获取会话详情（仅会话所有者）
+- `POST /api/v2/pythonlab/sessions/{session_id}/stop` - 停止会话（仅会话所有者）
+- `WS /api/v2/pythonlab/sessions/{session_id}/ws` - 调试 WebSocket（仅会话所有者）
+- `WS /api/v2/pythonlab/sessions/{session_id}/terminal` - 终端 WebSocket（仅会话所有者）
+- `POST /api/v2/pythonlab/flow/parse` - 代码解析流程图（已登录用户）
+- `POST /api/v2/pythonlab/flow/generate_code` - 流程图生成代码（已登录用户）
+- `POST /api/v2/pythonlab/ai/chat` - AI 助手对话（已登录用户）
+- `POST /api/v2/pythonlab/optimize/code` - AI 优化代码（已登录用户）
+- `GET /api/v2/pythonlab/flow/prompt_template` - 获取全局提示模板（管理员）
+- `POST /api/v2/pythonlab/flow/prompt_template` - 保存全局提示模板（管理员）
 
 ---
 

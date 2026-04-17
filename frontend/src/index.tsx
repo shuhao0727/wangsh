@@ -28,7 +28,7 @@ root.render(
       <TooltipProvider delayDuration={120}>
         <AuthProvider>
           <App />
-          <Toaster position="top-right" richColors closeButton />
+          <Toaster position="top-right" richColors closeButton toastOptions={{ style: { zIndex: 200000 } }} />
         </AuthProvider>
       </TooltipProvider>
     </BrowserRouter>

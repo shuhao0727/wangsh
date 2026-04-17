@@ -1,11 +1,13 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { showMessage } from "@/lib/toast";
 import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
+import { AUTH_EXPIRED_EVENT, type AuthExpiredKind } from "@services/api";
 
 // 旧路由兼容重定向
 const ArticleEditRedirect: React.FC = () => {
@@ -57,6 +59,37 @@ const LoadingIndicator = (
 );
 
 function App() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onAuthExpired = (event: Event) => {
+      const detail = (event as CustomEvent<{ reason?: string; kind?: AuthExpiredKind }>).detail;
+      const reason = typeof detail?.reason === "string" && detail.reason.trim()
+        ? detail.reason.trim()
+        : "登录已过期，请重新登录";
+      if (detail?.kind === "replaced") {
+        showMessage.error({ content: "你的账号已在其他地方登录，当前设备已下线，请重新登录", key: "auth-expired", duration: 6 });
+        return;
+      }
+      if (detail?.kind === "ip_changed") {
+        showMessage.error({ content: reason, key: "auth-expired", duration: 5 });
+        return;
+      }
+      showMessage.warning({ content: reason, key: "auth-expired", duration: 4 });
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
+
+    const cachedDetail = (
+      window as typeof window & {
+        __wsLastAuthExpiredDetail?: { reason?: string; kind?: AuthExpiredKind } | null;
+      }
+    ).__wsLastAuthExpiredDetail;
+    if (cachedDetail) {
+      onAuthExpired(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: cachedDetail }));
+    }
+
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
+  }, []);
+
   return (
     <div className="full-height">
       <div className="full-height">

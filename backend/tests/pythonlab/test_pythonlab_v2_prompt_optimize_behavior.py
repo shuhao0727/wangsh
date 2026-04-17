@@ -84,7 +84,7 @@ def test_save_prompt_template_rejects_large_content(monkeypatch, tmp_path):
     try:
         asyncio.run(flow_api.save_prompt_template(
             {"content": large_content},
-            current_user={"id": 1, "is_admin": True}
+            current_user={"id": 1, "role_code": "student"}
         ))
         raise AssertionError("expected SizeLimitError")
     except SizeLimitError as exc:
@@ -207,7 +207,7 @@ def test_ai_chat_validates_messages_parameter(monkeypatch):
     # 测试有效的 messages 参数
     result = asyncio.run(flow_api.ai_chat(
         {"messages": [{"role": "user", "content": "Hello"}]},
-        current_user={"id": 1, "is_admin": True},
+        current_user={"id": 1, "role_code": "student"},
         db=FakeDbWithConfig()
     ))
     # ai_chat_internal 返回 {"message": result["message"]}
@@ -217,7 +217,7 @@ def test_ai_chat_validates_messages_parameter(monkeypatch):
     try:
         asyncio.run(flow_api.ai_chat(
             {"messages": "not a list"},
-            current_user={"id": 1, "is_admin": True},
+            current_user={"id": 1, "role_code": "student"},
             db=FakeOptimizeDb()
         ))
         raise AssertionError("expected ValidationError")
@@ -229,7 +229,7 @@ def test_ai_chat_validates_messages_parameter(monkeypatch):
     try:
         asyncio.run(flow_api.ai_chat(
             {},
-            current_user={"id": 1, "is_admin": True},
+            current_user={"id": 1, "role_code": "student"},
             db=FakeOptimizeDb()
         ))
         raise AssertionError("expected ValidationError")
@@ -250,7 +250,7 @@ def test_generate_code_from_flow_validates_payload(monkeypatch):
     # 测试有效的 flow_data 参数
     result = asyncio.run(flow_api.generate_code_from_flow(
         {"flow": {"nodes": [], "edges": []}},
-        current_user={"id": 1, "is_admin": True},
+        current_user={"id": 1, "role_code": "student"},
         db=FakeOptimizeDb()
     ))
     assert result == {"code": "generated code"}
@@ -259,7 +259,7 @@ def test_generate_code_from_flow_validates_payload(monkeypatch):
     try:
         asyncio.run(flow_api.generate_code_from_flow(
             {},
-            current_user={"id": 1, "is_admin": True},
+            current_user={"id": 1, "role_code": "student"},
             db=FakeOptimizeDb()
         ))
         raise AssertionError("expected HTTPException")
@@ -271,7 +271,7 @@ def test_generate_code_from_flow_validates_payload(monkeypatch):
     try:
         asyncio.run(flow_api.generate_code_from_flow(
             {"flow": "not a dict"},
-            current_user={"id": 1, "is_admin": True},
+            current_user={"id": 1, "role_code": "student"},
             db=FakeOptimizeDb()
         ))
         raise AssertionError("expected HTTPException")
@@ -293,7 +293,7 @@ def test_test_agent_connection_calls_internal_function(monkeypatch):
 
     result = asyncio.run(flow_api.test_agent_connection(
         {"api_url": "https://test.com", "api_key": "secret", "model": "gpt-4"},
-        current_user={"id": 1, "is_admin": True}
+        current_user={"id": 1, "role_code": "student"}
     ))
 
     assert result == {"connected": True, "model": "test-model"}
@@ -306,7 +306,7 @@ def test_test_agent_connection_validates_input():
     try:
         asyncio.run(flow_api.test_agent_connection(
             {"api_url": "not-a-url", "api_key": "secret", "model": "gpt-4"},
-            current_user={"id": 1, "is_admin": True}
+            current_user={"id": 1, "role_code": "student"}
         ))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
@@ -318,7 +318,7 @@ def test_test_agent_connection_validates_input():
     try:
         asyncio.run(flow_api.test_agent_connection(
             {"api_url": long_url, "api_key": "secret", "model": "gpt-4"},
-            current_user={"id": 1, "is_admin": True}
+            current_user={"id": 1, "role_code": "student"}
         ))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
@@ -330,7 +330,7 @@ def test_test_agent_connection_validates_input():
     try:
         asyncio.run(flow_api.test_agent_connection(
             {"api_url": "https://test.com", "api_key": long_key, "model": "gpt-4"},
-            current_user={"id": 1, "is_admin": True}
+            current_user={"id": 1, "role_code": "student"}
         ))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
@@ -342,7 +342,7 @@ def test_test_agent_connection_validates_input():
     try:
         asyncio.run(flow_api.test_agent_connection(
             {"api_url": "https://test.com", "api_key": "secret", "model": long_model},
-            current_user={"id": 1, "is_admin": True}
+            current_user={"id": 1, "role_code": "student"}
         ))
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:

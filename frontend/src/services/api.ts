@@ -11,21 +11,132 @@ let refreshPromise: Promise<void> | null = null;
 const ACCESS_TOKEN_KEY = "ws_access_token";
 const REFRESH_TOKEN_KEY = "ws_refresh_token";
 const REFRESH_ATTEMPT_AT_KEY = "ws_refresh_attempt_at";
+const AUTH_EXPIRED_DETAIL_KEY = "ws_auth_expired_detail";
 const REFRESH_COOLDOWN_MS = 5200;
 export const AUTH_EXPIRED_EVENT = "ws:auth-expired";
+export type AuthExpiredKind = "expired" | "replaced" | "ip_changed";
 let lastAuthExpiredNotifyAt = 0;
+let lastAuthExpiredReason = "";
 
-const notifyAuthExpired = (reason?: string) => {
+const classifyAuthExpiredKind = (reason?: string): AuthExpiredKind => {
+  const text = String(reason || "").trim();
+  if (text.includes("其他地方登录")) return "replaced";
+  if (text.includes("环境已变更")) return "ip_changed";
+  return "expired";
+};
+
+const normalizeAuthExpiredReason = (reason?: string | null) => {
+  const text = String(reason || "").trim();
+  return text || "登录已过期，请重新登录";
+};
+
+const readAuthExpiredDetailFromUnknown = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text || undefined;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const direct = [record.detail, record.message, record.reason];
+  for (const item of direct) {
+    const text = readAuthExpiredDetailFromUnknown(item);
+    if (text) return text;
+  }
+  if ("data" in record) {
+    const nested = readAuthExpiredDetailFromUnknown(record.data);
+    if (nested) return nested;
+  }
+  return undefined;
+};
+
+export const extractAuthErrorDetail = (err?: ApiError | unknown): string | undefined => {
+  const error = err as ApiError | undefined;
+  const responseData = error?.response?.data;
+  const direct = readAuthExpiredDetailFromUnknown(responseData);
+  if (direct) return direct;
+  const userMessage = readAuthExpiredDetailFromUnknown(error?.userMessage);
+  if (userMessage) return userMessage;
+  const message = readAuthExpiredDetailFromUnknown(error?.message);
+  if (message) return message;
+  return undefined;
+};
+
+export const getPersistedAuthExpiredDetail = (): string | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || localStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || "";
+    const text = raw.trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+};
+
+export const clearPersistedAuthExpiredDetail = () => {
   if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(AUTH_EXPIRED_DETAIL_KEY);
+    localStorage.removeItem(AUTH_EXPIRED_DETAIL_KEY);
+  } catch {
+  }
+  try {
+    (
+      window as typeof window & {
+        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string; at?: number } | null;
+      }
+    ).__wsLastAuthExpiredDetail = null;
+  } catch {
+  }
+};
+
+export const persistAuthExpiredDetail = (reason?: string) => {
+  const msg = normalizeAuthExpiredReason(reason);
+  if (typeof window === "undefined") return msg;
+  try {
+    sessionStorage.setItem(AUTH_EXPIRED_DETAIL_KEY, msg);
+    localStorage.setItem(AUTH_EXPIRED_DETAIL_KEY, msg);
+  } catch {
+  }
+  try {
+    (
+      window as typeof window & {
+        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string; at?: number } | null;
+      }
+    ).__wsLastAuthExpiredDetail = {
+      reason: msg,
+      kind: classifyAuthExpiredKind(msg),
+      at: Date.now(),
+    };
+  } catch {
+  }
+  return msg;
+};
+
+export const notifyAuthExpired = (reason?: string) => {
+  if (typeof window === "undefined") return;
+  const msg = persistAuthExpiredDetail(reason);
   const now = Date.now();
-  if (now - lastAuthExpiredNotifyAt < 3000) return;
+  const kind = classifyAuthExpiredKind(msg);
+  const detail = { reason: msg, kind, at: now };
+  if (now - lastAuthExpiredNotifyAt < 3000 && lastAuthExpiredReason === msg) return;
   lastAuthExpiredNotifyAt = now;
-  const msg = typeof reason === "string" && reason.trim() ? reason.trim() : "登录已过期，请重新登录";
+  lastAuthExpiredReason = msg;
+  try {
+    console.debug("[auth-expired] dispatch", detail);
+  } catch {
+  }
   window.dispatchEvent(
     new CustomEvent(AUTH_EXPIRED_EVENT, {
-      detail: { reason: msg, at: now },
+      detail,
     }),
   );
+  window.setTimeout(() => {
+    window.dispatchEvent(
+      new CustomEvent(AUTH_EXPIRED_EVENT, {
+        detail,
+      }),
+    );
+  }, 0);
 };
 
 export const getStoredAccessToken = () => {
@@ -150,6 +261,10 @@ export const authTokenStorage = {
     } catch {
     }
   },
+};
+
+const extractErrorDetail = (err?: ApiError): unknown => {
+  return extractAuthErrorDetail(err);
 };
 
 const isAuthEndpoint = (url?: string) => {
@@ -319,6 +434,7 @@ const createApiClient = (): AxiosInstance => {
         }
 
         const hadAuthContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
+        const originalDetail = extractErrorDetail(error as ApiError);
         originalRequest._retry = true;
 
         // 访客（从未登录过）收到 401 时，直接拒绝，不尝试 refresh
@@ -383,18 +499,24 @@ const createApiClient = (): AxiosInstance => {
           return instance(originalRequest);
         } catch (_refreshError) {
           const err = _refreshError as ApiError;
-          const detail =
-            err?.response?.data && typeof err.response.data === "object"
-              ? (err.response.data as Record<string, unknown>)?.detail ||
-                (err.response.data as Record<string, unknown>)?.message
-              : err?.message;
+          const detail = extractErrorDetail(err);
+          const preferredDetail =
+            typeof originalDetail === "string" && originalDetail.trim()
+              ? originalDetail.trim()
+              : typeof detail === "string"
+                ? detail
+                : undefined;
           logger.debug("⚠️ API: 会话刷新失败", detail);
+          try {
+            console.debug("[auth-refresh-failed] preferredDetail", preferredDetail);
+          } catch {
+          }
           if (err?.response?.status === 429) {
             return Promise.reject(error);
           }
           authTokenStorage.clear();
           if (hadAuthContext) {
-            notifyAuthExpired(typeof detail === "string" ? detail : undefined);
+            notifyAuthExpired(preferredDetail);
           }
           return Promise.reject(error);
         }

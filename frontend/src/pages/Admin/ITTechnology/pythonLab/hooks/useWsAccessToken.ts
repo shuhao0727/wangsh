@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { authApi, authTokenStorage, getCookieToken, getStoredAccessToken } from "@services/api";
+import {
+    authApi,
+    authTokenStorage,
+    extractAuthErrorDetail,
+    getCookieToken,
+    getPersistedAuthExpiredDetail,
+    getStoredAccessToken,
+    notifyAuthExpired,
+} from "@services/api";
 
 export type WsAccessTokenStatus = "idle" | "loading" | "ready" | "error";
 
@@ -10,15 +18,22 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
     const [token, setToken] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const inflightRef = useRef<Promise<string | null> | null>(null);
+    const lastErrorRef = useRef<string | null>(null);
 
     const readToken = useCallback(() => {
         return getStoredAccessToken() || getCookieToken() || null;
+    }, []);
+
+    const resolveAuthErrorMessage = useCallback((err?: unknown) => {
+        return extractAuthErrorDetail(err) || getPersistedAuthExpiredDetail() || "登录已过期，请重新登录";
     }, []);
 
     const ensureToken = useCallback(async () => {
         const existing = readToken();
         if (existing) return existing;
         if (!refreshIfMissing) return null;
+        const hasLoginContext = Boolean(getStoredAccessToken() || getCookieToken());
+        if (!hasLoginContext) return null;
 
         if (!inflightRef.current) {
             inflightRef.current = (async () => {
@@ -28,8 +43,12 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
                     const data: any = raw && typeof raw === "object" && "data" in raw ? (raw as any).data : raw;
                     if (data?.access_token || data?.refresh_token) {
                         authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
+                        lastErrorRef.current = null;
                     }
-                } catch {
+                } catch (err) {
+                    const message = resolveAuthErrorMessage(err);
+                    lastErrorRef.current = message;
+                    notifyAuthExpired(message);
                 } finally {
                     const next = readToken();
                     inflightRef.current = null;
@@ -39,7 +58,7 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
         }
 
         return inflightRef.current;
-    }, [readToken, refreshIfMissing]);
+    }, [readToken, refreshIfMissing, resolveAuthErrorMessage]);
 
     const refresh = useCallback(async () => {
         setStatus("loading");
@@ -48,11 +67,12 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
         if (t) {
             setToken(t);
             setStatus("ready");
+            lastErrorRef.current = null;
             return t;
         }
         setToken(null);
         setStatus("error");
-        setError("登录已过期，请重新登录");
+        setError(lastErrorRef.current || getPersistedAuthExpiredDetail() || "登录已过期，请重新登录");
         return null;
     }, [ensureToken]);
 
@@ -73,7 +93,7 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
         if (!refreshIfMissing) {
             setToken(null);
             setStatus("error");
-            setError("登录已过期，请重新登录");
+            setError(getPersistedAuthExpiredDetail() || "登录已过期，请重新登录");
             return;
         }
         refresh();

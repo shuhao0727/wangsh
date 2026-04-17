@@ -11,8 +11,9 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, get_access_token
-from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token
+from app.core.deps import get_db, get_access_token, get_current_user as require_current_user
+from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token, revoke_all_user_refresh_tokens
+from app.schemas.user_info import UserInfo
 from app.core.session_guard import on_successful_login, get_user_session, rotate_user_session, extract_client_ip
 from app.utils.rate_limit import rate_limiter
 
@@ -55,6 +56,9 @@ async def login_for_access_token(
     
     # 会话绑定：为该登录颁发会话nonce，并处理IP唯一性
     nonce, client_ip = await on_successful_login(int(user["id"]), request)
+
+    # 同账号新登录时撤销此前所有 refresh token，防止旧设备通过 refresh 续命
+    await revoke_all_user_refresh_tokens(db, int(user["id"]))
 
     # 创建访问令牌，加入会话nonce（sn）
     access_token = create_access_token(
@@ -120,33 +124,24 @@ async def register_user() -> Dict[str, Any]:
     }
 
 
+
+def _normalize_user_datetime(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return datetime.now().isoformat()
+
+
 @router.get("/me")
 async def read_users_me(
-    token: str = Depends(get_access_token),
-    db: AsyncSession = Depends(get_db)
+    current_user: UserInfo = Depends(require_current_user),
 ) -> Dict[str, Any]:
     """
-    获取当前用户信息 - 从数据库获取真实用户信息
+    获取当前用户信息 - 从统一认证依赖返回真实用户信息
     """
-    from app.services.auth import get_current_user
-    
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未提供认证令牌",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # 从数据库获取用户信息
-    user = await get_current_user(token, db)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证令牌或用户不存在",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
+    user = current_user
+
     # 格式化响应数据
     user_info = {
         "id": user.get("id", 0),
@@ -154,20 +149,16 @@ async def read_users_me(
         "username": user.get("username"),
         "full_name": user.get("full_name", ""),
         "is_active": user.get("is_active", True),
-        "created_at": user.get("created_at", datetime.now()).isoformat() 
-                    if hasattr(user.get("created_at"), 'isoformat') 
-                    else datetime.now().isoformat(),
-        "updated_at": user.get("updated_at", datetime.now()).isoformat() 
-                    if hasattr(user.get("updated_at"), 'isoformat') 
-                    else datetime.now().isoformat(),
+        "created_at": _normalize_user_datetime(user.get("created_at")),
+        "updated_at": _normalize_user_datetime(user.get("updated_at")),
     }
-    
+
     # 如果是学生，添加学生相关字段
     if user.get("role_code") == "student":
         user_info["student_id"] = user.get("student_id")
         user_info["class_name"] = user.get("class_name")
         user_info["study_year"] = user.get("study_year")
-    
+
     return user_info
 
 

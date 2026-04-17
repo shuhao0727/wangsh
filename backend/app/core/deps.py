@@ -12,7 +12,7 @@ from app.db.database import get_db
 from app.core.config import settings
 from app.services.auth import get_current_user as auth_get_current_user
 from app.services.auth import verify_token
-from app.core.session_guard import verify_request_session
+from app.core.session_guard import verify_request_session, verify_request_session_detail
 from app.schemas.user_info import UserInfo
 
 # OAuth2 配置
@@ -75,11 +75,17 @@ async def get_current_user(
     # 会话有效性校验（基于nonce，必要时校验IP）
     try:
         payload = verify_token(effective_token) or {}
-        ok = await verify_request_session(int(user.get("id") or 0), payload, request)
-        if not ok:
+        result = await verify_request_session_detail(int(user.get("id") or 0), payload, request)
+        if not result.get("ok"):
+            reason = str(result.get("reason") or "")
+            detail = "会话已失效，请重新登录"
+            if reason == "replaced_by_new_login":
+                detail = "账号已在其他地方登录，请重新登录"
+            elif reason == "ip_mismatch":
+                detail = "登录环境已变更，请重新登录"
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="会话已失效，请重新登录",
+                detail=detail,
             )
     except HTTPException:
         raise

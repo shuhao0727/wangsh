@@ -1,4 +1,11 @@
-import { authApi, authTokenStorage, getCookieToken, getStoredAccessToken } from "@services/api";
+import {
+  authApi,
+  authTokenStorage,
+  extractAuthErrorDetail,
+  getCookieToken,
+  getStoredAccessToken,
+  notifyAuthExpired,
+} from "@services/api";
 import { logger } from "@services/logger";
 
 import { parseDapMessageMeta, parseDapOutputMeta, wsCloseHint, wsUrl } from "../hooks/dapRunnerHelpers";
@@ -102,6 +109,8 @@ export async function resolvePythonlabWsToken(): Promise<string | null> {
   let token = getStoredAccessToken();
   if (!token) token = getCookieToken();
   if (token) return token;
+  const hasLoginContext = Boolean(getStoredAccessToken() || getCookieToken());
+  if (!hasLoginContext) return null;
 
   try {
     const resp = await authApi.refreshToken(undefined, { silent: true });
@@ -110,7 +119,9 @@ export async function resolvePythonlabWsToken(): Promise<string | null> {
       authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
       return String(data?.access_token || "");
     }
-  } catch {
+  } catch (err) {
+    const detail = extractAuthErrorDetail(err);
+    if (detail) notifyAuthExpired(detail);
     return null;
   }
 

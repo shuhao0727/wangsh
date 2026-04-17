@@ -6,7 +6,15 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { authApi } from "@services";
-import { AUTH_EXPIRED_EVENT, getStoredAccessToken, getCookieToken } from "@services/api";
+import {
+  AUTH_EXPIRED_EVENT,
+  clearPersistedAuthExpiredDetail,
+  extractAuthErrorDetail,
+  getPersistedAuthExpiredDetail,
+  getStoredAccessToken,
+  getCookieToken,
+  notifyAuthExpired,
+} from "@services/api";
 import { logger } from "@services/logger";
 
 export interface User {
@@ -79,19 +87,24 @@ const useAuthController = () => {
         return userData as User;
       } catch (error: any) {
         const status = error?.response?.status;
+        const hadStoredToken = Boolean(getStoredAccessToken() || getCookieToken());
+        const responseDetail = extractAuthErrorDetail(error) || "";
         if (status === 401) {
+          const resolvedDetail = responseDetail || (hadStoredToken ? "登录已过期，请重新登录" : "");
+          if (hadStoredToken && resolvedDetail) {
+            notifyAuthExpired(resolvedDetail);
+          }
           setAuthState({
             user: null,
             isAuthenticated: false,
             isLoading: false,
-            error: null,
+            error: resolvedDetail || getPersistedAuthExpiredDetail(),
           });
           return null;
         }
 
         const errorMessage =
-          error.response?.data?.detail ||
-          error.response?.data?.message ||
+          responseDetail ||
           error.message ||
           "身份验证失败，请重新登录";
 
@@ -120,6 +133,7 @@ const useAuthController = () => {
 
       try {
         await authApi.login(username, password);
+        clearPersistedAuthExpiredDetail();
         const timeoutPromise = new Promise<null>((resolve) =>
           setTimeout(() => resolve(null), 8000),
         );
@@ -154,6 +168,7 @@ const useAuthController = () => {
     } catch (error) {
       logger.error("登出失败:", error);
     } finally {
+      clearPersistedAuthExpiredDetail();
       setAuthState({
         user: null,
         isAuthenticated: false,
@@ -205,6 +220,11 @@ const useAuthController = () => {
     if (!initialFetchRef.current) {
       initialFetchRef.current = true;
       const token = getStoredAccessToken() || getCookieToken();
+      try {
+        const target = window as typeof window & { __wsInitialAuthToken?: string | null };
+        target.__wsInitialAuthToken = token;
+      } catch {
+      }
       const isAdminPath =
         typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
       // 新标签打开后台时可能只有 HttpOnly Cookie、没有可读 token；
@@ -217,7 +237,7 @@ const useAuthController = () => {
           user: null,
           isAuthenticated: false,
           isLoading: false,
-          error: null,
+          error: getPersistedAuthExpiredDetail(),
         });
       }
     }
@@ -227,21 +247,50 @@ const useAuthController = () => {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onAuthExpired = (event: Event) => {
-      const detail = (event as CustomEvent<{ reason?: string }>).detail;
+      const detail = (event as CustomEvent<{ reason?: string; kind?: string }>).detail;
       const reason =
         typeof detail?.reason === "string" && detail.reason.trim()
           ? detail.reason.trim()
-          : "登录已过期，请重新登录";
-      setAuthState((prev) => ({
+          : getPersistedAuthExpiredDetail() || "登录已过期，请重新登录";
+      setAuthState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        error: prev.isAuthenticated || prev.user ? reason : prev.error,
-      }));
+        error: reason,
+      });
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
+
+    const cachedDetail = (
+      window as typeof window & {
+        __wsLastAuthExpiredDetail?: { reason?: string } | null;
+      }
+    ).__wsLastAuthExpiredDetail;
+    if (cachedDetail?.reason) {
+      onAuthExpired(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: cachedDetail }));
+    }
+
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const target = window as typeof window & {
+        __wsAuthStateTrace?: Array<Record<string, unknown>>;
+      };
+      target.__wsAuthStateTrace = (target.__wsAuthStateTrace || []).slice(-20);
+      target.__wsAuthStateTrace.push({
+        at: Date.now(),
+        isAuthenticated: authState.isAuthenticated,
+        isLoading: authState.isLoading,
+        userId: authState.user?.id ?? null,
+        userName: authState.user?.full_name ?? authState.user?.username ?? null,
+        error: authState.error ?? null,
+      });
+    } catch {
+    }
+  }, [authState]);
 
   return {
     ...authState,

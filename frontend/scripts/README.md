@@ -7,6 +7,7 @@
 ## 当前入口
 
 - `copy-pyodide.js` - `predev` / `prebuild` 复制 Pyodide 资源
+- `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
 - `prod-smoke-ui.mjs` - 生产烟测的浏览器 UI 步骤入口
 - `ui-audit.mjs` - UI 审计主脚本

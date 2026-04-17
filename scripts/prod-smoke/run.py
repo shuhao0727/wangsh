@@ -27,6 +27,7 @@ SCREENSHOT_DIR = OUTPUT_DIR / "screenshots"
 OPENAPI_JSON_PATH = OUTPUT_DIR / "openapi.json"
 OPENAPI_REPORT_PATH = OUTPUT_DIR / "openapi-sweep.json"
 UI_REPORT_PATH = OUTPUT_DIR / "ui-results.json"
+AUTH_RELOGIN_REPORT_PATH = OUTPUT_DIR / "auth-replaced-login-results.json"
 SUMMARY_PATH = OUTPUT_DIR / "summary.json"
 API_RESULTS_PATH = OUTPUT_DIR / "api-results.json"
 SKIPS_PATH = OUTPUT_DIR / "skips.json"
@@ -703,6 +704,27 @@ def main() -> int:
             "modules": ["debug/pythonlab"],
             "command": [str(VENV_PYTHON), "backend/scripts/smoke_pythonlab_print_visibility_probe.py"],
             "env": {**common_env, "USERNAME": admin_username, "PASSWORD": admin_password},
+            "login_heavy": True,
+        },
+        {
+            "name": "auth-replaced-login-ui-smoke",
+            "kind": "core UI",
+            "modules": ["auth", "system/gateway"],
+            "command": [
+                "node",
+                "frontend/scripts/auth-replaced-login-smoke.mjs",
+                "--base-url",
+                base_origin,
+                "--username",
+                admin_username,
+                "--password",
+                admin_password,
+                "--report-path",
+                str(AUTH_RELOGIN_REPORT_PATH),
+                "--screenshots-dir",
+                str(SCREENSHOT_DIR / "auth-replaced-login"),
+            ],
+            "env": os.environ.copy(),
             "login_heavy": True,
         },
         {

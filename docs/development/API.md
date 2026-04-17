@@ -27,6 +27,10 @@
 补充说明（2026-03-24）：
 - `/auth/refresh` 采用 refresh token 轮换策略：同一个 refresh token 成功换发一次后会被撤销，再次使用应返回 `401`。
 - 前端 API 客户端在出现 `401 -> refresh 失败` 时，会触发 `ws:auth-expired` 全局事件，统一将页面登录态回收，避免“前端仍显示已登录但接口持续 401”。
+- 若会话因为“同一账号在其他地方重新登录”而失效，后端会返回“账号已在其他地方登录，请重新登录”，前端会强提示当前设备已下线。
+- 成功登录同一账号会重新旋转 session nonce，因此旧设备即使仍持有未过期 access token，也会在下一次访问受保护接口（包括 `/auth/me`）时收到 `401`。
+- 同账号重新登录时，后端会撤销此前该用户尚未过期的 refresh token，避免旧设备通过 `/auth/refresh` 自动恢复登录态。
+- `/auth/me` 与其他受保护接口一样受单会话策略约束；旧设备在同账号其他地方重新登录后再次访问 `/auth/me` 时，也会收到 `401`。
 - SSE 鉴权支持 query token 与 Cookie 双通道；当 query token 无效但 Cookie 中会话有效时，可继续完成握手（例如 `/classroom/stream`）。
 
 ## 三、系统管理（/system）
@@ -336,14 +340,14 @@
 | GET | `/api/v2/pythonlab/sessions/{session_id}` | 获取会话详情 | 是 |
 | POST | `/api/v2/pythonlab/sessions/{session_id}/stop` | 停止会话 | 是 |
 | GET | `/api/v2/pythonlab/sessions` | 获取会话列表 | 是 |
-| POST | `/api/v2/pythonlab/sessions/cleanup` | 清理过期会话 | 管理员 |
+| POST | `/api/v2/pythonlab/sessions/cleanup` | 清理过期会话 | 是 |
 | WS | `/api/v2/pythonlab/sessions/{session_id}/terminal` | 终端 WebSocket | 是 |
 | WS | `/api/v2/pythonlab/sessions/{session_id}/ws` | 调试 WebSocket（DAP） | 是 |
 | POST | `/api/v2/pythonlab/optimize/code` | AI 代码优化 | 是 |
 | POST | `/api/v2/pythonlab/optimize/apply/{log_id}` | 应用优化结果 | 是 |
 | GET | `/api/v2/pythonlab/optimize/rollback/{log_id}` | 回滚优化 | 是 |
-| GET | `/api/v2/pythonlab/flow/prompt_template` | 获取提示模板 | 是 |
-| POST | `/api/v2/pythonlab/flow/prompt_template` | 创建提示模板 | 是 |
+| GET | `/api/v2/pythonlab/flow/prompt_template` | 获取提示模板 | 管理员 |
+| POST | `/api/v2/pythonlab/flow/prompt_template` | 创建提示模板 | 管理员 |
 | POST | `/api/v2/pythonlab/ai/chat` | AI 聊天 | 是 |
 | POST | `/api/v2/pythonlab/flow/generate_code` | 生成代码 | 是 |
 | POST | `/api/v2/pythonlab/flow/test_agent_connection` | 测试智能体连接 | 是 |

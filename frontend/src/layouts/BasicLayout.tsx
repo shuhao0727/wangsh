@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
   Home,
@@ -65,12 +65,32 @@ const BasicLayout: React.FC = () => {
     isLoading,
     isAuthenticated,
     user,
+    error,
     getToken,
     isLoggedIn,
   } = useAuth();
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
+  const authExpiredBannerReason = useMemo(() => {
+    const authError = String(error || "").trim();
+    if (authError) return authError;
+    if (typeof window === "undefined") return "";
+    const detail = (
+      window as typeof window & {
+        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string } | null;
+      }
+    ).__wsLastAuthExpiredDetail;
+    const reason = typeof detail?.reason === "string" ? detail.reason.trim() : "";
+    const kind = typeof detail?.kind === "string" ? detail.kind : "";
+    if (kind === "replaced" || reason.includes("其他地方登录")) {
+      return "你的账号已在其他地方登录，当前设备已下线，请重新登录";
+    }
+    if (kind === "ip_changed" || reason.includes("环境已变更")) {
+      return reason || "登录环境已变更，请重新登录";
+    }
+    return reason;
+  }, [error, isAuthenticated, user, isLoading, isLoginModalVisible]);
 
   const isFullHeight = FULL_HEIGHT_PATHS.some((re) => re.test(location.pathname));
 
@@ -232,6 +252,21 @@ const BasicLayout: React.FC = () => {
           width: "100%",
         } : undefined}
       >
+        {authExpiredBannerReason ? (
+          <div className="mx-4 mt-4 flex flex-col gap-3 rounded-xl border border-[color:var(--ws-color-error)]/20 bg-[var(--ws-color-error-soft)] px-4 py-3 text-sm text-[color:var(--ws-color-error)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="font-medium">{authExpiredBannerReason}</div>
+            {!isLoggedIn() ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-[color:var(--ws-color-error)]/30 text-[color:var(--ws-color-error)] hover:bg-[color:var(--ws-color-error)]/5 sm:w-auto"
+                onClick={() => setIsLoginModalVisible(true)}
+              >
+                重新登录
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         <Outlet />
       </main>
     </div>

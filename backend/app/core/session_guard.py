@@ -1,7 +1,7 @@
 import ipaddress
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Literal
 from fastapi import Request
 
 from app.core.config import settings
@@ -107,6 +107,7 @@ async def on_successful_login(user_id: int, request: Request) -> Tuple[str, str]
     登录成功时：
     - 解析客户端IP
     - 保证“一个用户只有一个IP（最近一次）”与“一个IP只能绑定一个用户”
+    - 无论是否开启 IP 唯一性，同一用户每次成功登录都旋转 nonce，确保旧会话失效
     - 返回 (nonce, client_ip)
     """
     ip = extract_client_ip(request)
@@ -117,26 +118,38 @@ async def on_successful_login(user_id: int, request: Request) -> Tuple[str, str]
             # 踢掉该IP上的旧用户
             old_uid = int(existing.get("user_id", 0))
             await rotate_user_session(old_uid)  # 旧用户下次请求即失效
-    # 处理 用户 -> IP 的唯一性
-    nonce_data = await rotate_user_session(user_id, keep_ip=ip) if settings.AUTH_IP_UNIQUE_PER_USER else await get_user_session(user_id) or await rotate_user_session(user_id, keep_ip=ip)
+    nonce_data = await rotate_user_session(user_id, keep_ip=ip)
     await set_ip_binding(ip, {"user_id": int(user_id), "nonce": nonce_data["nonce"], "updated_at": _now_iso()})
     return nonce_data["nonce"], ip
 
 
-async def verify_request_session(user_id: int, token_payload: Dict[str, Any], request: Optional[Request] = None) -> bool:
-    """验证请求中的令牌是否与当前有效会话匹配（nonce匹配，必要时IP匹配）"""
+async def verify_request_session_detail(
+    user_id: int,
+    token_payload: Dict[str, Any],
+    request: Optional[Request] = None,
+) -> Dict[str, Literal[True] | Literal[False] | str]:
+    """验证请求中的令牌是否与当前有效会话匹配，并返回失败原因。"""
     token_nonce = str(token_payload.get("sn", ""))
     stored = await get_user_session(user_id)
     if not stored:
         if not token_nonce:
-            return False
+            return {"ok": False, "reason": "expired_or_missing"}
         ip = extract_client_ip(request) if request is not None else ""
         await set_user_session(user_id, {"nonce": token_nonce, "ip": ip, "updated_at": _now_iso()})
-        return True
-    if not token_nonce or token_nonce != str(stored.get("nonce", "")):
-        return False
+        return {"ok": True, "reason": "ok"}
+    stored_nonce = str(stored.get("nonce", ""))
+    if not token_nonce:
+        return {"ok": False, "reason": "expired_or_missing"}
+    if token_nonce != stored_nonce:
+        return {"ok": False, "reason": "replaced_by_new_login"}
     if settings.AUTH_ENFORCE_SAME_IP_PER_REQUEST and request is not None:
         ip = extract_client_ip(request)
-        if ip and stored.get("ip"):
-            return ip == stored.get("ip")
-    return True
+        if ip and stored.get("ip") and ip != stored.get("ip"):
+            return {"ok": False, "reason": "ip_mismatch"}
+    return {"ok": True, "reason": "ok"}
+
+
+async def verify_request_session(user_id: int, token_payload: Dict[str, Any], request: Optional[Request] = None) -> bool:
+    """验证请求中的令牌是否与当前有效会话匹配（nonce匹配，必要时IP匹配）"""
+    result = await verify_request_session_detail(user_id, token_payload, request)
+    return bool(result.get("ok"))
