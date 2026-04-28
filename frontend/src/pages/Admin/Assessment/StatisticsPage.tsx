@@ -11,6 +11,7 @@ import {
 import {
   ArrowLeft,
   BarChart3,
+  Calendar,
   CheckCircle2,
   Download,
   Eye,
@@ -19,9 +20,12 @@ import {
   Redo,
   Search,
   Trophy,
+  TrendingUp,
   User,
   Users,
+  X,
 } from "lucide-react";
+import ReactECharts from "echarts-for-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
 import EmptyState from "@components/Common/EmptyState";
@@ -108,6 +112,43 @@ const StatisticsPage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
   const [searchValue, setSearchValue] = useState("");
 
+  // 时间筛选
+  const [timeField, setTimeField] = useState<string>("submitted_at");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const quickPresets = [
+    { label: "近7天", days: 7 },
+    { label: "近30天", days: 30 },
+    { label: "本月", days: "month" },
+    { label: "全部", days: 0 },
+  ] as const;
+
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
+  const applyPreset = (preset: (typeof quickPresets)[number]) => {
+    setActivePreset(preset.label);
+    const today = new Date();
+    const fmt = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+    if (preset.days === 0) {
+      setStartDate("");
+      setEndDate("");
+    } else if (preset.days === "month") {
+      setStartDate(fmt(new Date(today.getFullYear(), today.getMonth(), 1)));
+      setEndDate(fmt(today));
+    } else {
+      const start = new Date(today);
+      start.setDate(start.getDate() - preset.days);
+      setStartDate(fmt(start));
+      setEndDate(fmt(today));
+    }
+  };
+
   const [radarLeft, setRadarLeft] = useState<RadarPick>({ type: "all" });
   const [radarRight, setRadarRight] = useState<RadarPick | null>(null);
   const [radarLeftData, setRadarLeftData] = useState<{ name: string; data: Record<string, number> } | null>(null);
@@ -141,11 +182,21 @@ const StatisticsPage: React.FC = () => {
     assessmentSessionApi.getClassNames(configId).then(setClassNames).catch(() => setClassNames([]));
   }, [configId]);
 
+  const timeParams = useMemo(() => {
+    const params: { time_field?: string; start_date?: string; end_date?: string } = {};
+    if (timeField && (startDate || endDate)) {
+      params.time_field = timeField;
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+    }
+    return params;
+  }, [timeField, startDate, endDate]);
+
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       const [statsResp, configResp] = await Promise.all([
-        assessmentSessionApi.getStatistics(configId, { class_name: filterClass }),
+        assessmentSessionApi.getStatistics(configId, { class_name: filterClass, ...timeParams }),
         assessmentConfigApi.get(configId),
       ]);
       setStats(statsResp);
@@ -156,7 +207,7 @@ const StatisticsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [configId, filterClass]);
+  }, [configId, filterClass, timeParams]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -167,6 +218,7 @@ const StatisticsPage: React.FC = () => {
         class_name: filterClass,
         status: filterStatus,
         search: searchValue || undefined,
+        ...timeParams,
       });
       setSessions(resp.items);
       setTotal(resp.total);
@@ -175,7 +227,7 @@ const StatisticsPage: React.FC = () => {
     } finally {
       setListLoading(false);
     }
-  }, [configId, page, pageSize, filterClass, filterStatus, searchValue]);
+  }, [configId, page, pageSize, filterClass, filterStatus, searchValue, timeParams]);
 
   useEffect(() => {
     void loadStats();
@@ -212,7 +264,7 @@ const StatisticsPage: React.FC = () => {
   const loadRadarPick = useCallback(
     async (pick: RadarPick): Promise<{ name: string; data: Record<string, number> } | null> => {
       if (pick.type === "all") {
-        const response = await assessmentSessionApi.getStatistics(configId, {});
+        const response = await assessmentSessionApi.getStatistics(configId, { ...timeParams });
         return {
           name: "全部数据",
           data: (response.knowledge_rates || {}) as Record<string, number>,
@@ -221,6 +273,7 @@ const StatisticsPage: React.FC = () => {
       if (pick.type === "class") {
         const response = await assessmentSessionApi.getStatistics(configId, {
           class_name: pick.value,
+          ...timeParams,
         });
         return {
           name: pick.value,
@@ -247,7 +300,7 @@ const StatisticsPage: React.FC = () => {
       }
       return null;
     },
-    [configId, allGradedStudents],
+    [configId, allGradedStudents, timeParams],
   );
 
   useEffect(() => {
@@ -344,6 +397,7 @@ const StatisticsPage: React.FC = () => {
         class_name: filterClass,
         status: filterStatus,
         search: searchValue || undefined,
+        ...timeParams,
       });
       showMessage.success("导出成功");
     } catch (e: any) {
@@ -638,101 +692,202 @@ const StatisticsPage: React.FC = () => {
         </div>
       ) : stats ? (
         <>
-          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          {/* ─── 统计卡片 ─── */}
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {statItems.map((item, index) => (
-              <div key={index} className="flex items-center justify-between rounded-lg bg-surface-2 px-3.5 py-2.5">
-                <div className="text-xs text-text-tertiary">
-                  {item.icon ? <span className="mr-1 inline-block align-middle">{item.icon}</span> : null}
-                  <span className="align-middle">{item.label}</span>
+              <div
+                key={index}
+                className="stat-card"
+                style={{ "--stat-color": item.color } as React.CSSProperties}
+              >
+                <div className="stat-card-accent" style={{ background: item.color }} />
+                <div className="stat-card-body">
+                  <div className="stat-card-label">
+                    {item.icon ? <span className="stat-card-icon">{item.icon}</span> : null}
+                    {item.label}
+                  </div>
+                  <div className="stat-card-value">{item.value}</div>
                 </div>
-                <div className="text-lg font-bold" style={{ color: item.color }}>
-                  {item.value}
+                <div className="stat-card-watermark" style={{ color: item.color }}>
+                  {item.icon}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mb-4 flex flex-wrap items-center gap-2.5">
-            <Select value={filterClass || FILTER_ALL} onValueChange={(value) => setFilterClass(value === FILTER_ALL ? undefined : value)}>
-              <SelectTrigger className="h-8 w-[140px]"><SelectValue placeholder="班级" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
-                {classNames.map((className) => <SelectItem key={className} value={className}>{className}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterStatus || FILTER_ALL} onValueChange={(value) => setFilterStatus(value === FILTER_ALL ? undefined : value)}>
-              <SelectTrigger className="h-8 w-[120px]"><SelectValue placeholder="状态" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
-                <SelectItem value="in_progress">答题中</SelectItem>
-                <SelectItem value="submitted">已提交</SelectItem>
-                <SelectItem value="graded">已评分</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-1.5">
+          {/* ─── 筛选卡片 ─── */}
+          <Card className="mb-5 border border-border bg-surface p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Calendar className="h-4 w-4 text-text-tertiary shrink-0" />
+              <Select value={timeField} onValueChange={setTimeField}>
+                <SelectTrigger className="h-8 w-[100px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="submitted_at">提交时间</SelectItem>
+                  <SelectItem value="started_at">开始时间</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setActivePreset(null); }}
+                className="h-8 w-[135px] text-xs"
+              />
+              <span className="text-xs text-text-tertiary">至</span>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setActivePreset(null); }}
+                className="h-8 w-[135px] text-xs"
+              />
+              {quickPresets.map((preset) => (
+                <Button
+                  key={preset.label}
+                  size="sm"
+                  variant={activePreset === preset.label ? "default" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => applyPreset(preset)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+              {(startDate || endDate) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={() => { setStartDate(""); setEndDate(""); setActivePreset(null); }}
+                  title="清除时间筛选"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <span className="mx-0.5 h-5 w-px bg-border" />
+              <Select value={filterClass || FILTER_ALL} onValueChange={(value) => setFilterClass(value === FILTER_ALL ? undefined : value)}>
+                <SelectTrigger className="h-8 w-[115px]"><SelectValue placeholder="班级" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>全部班级</SelectItem>
+                  {classNames.map((className) => <SelectItem key={className} value={className}>{className}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus || FILTER_ALL} onValueChange={(value) => setFilterStatus(value === FILTER_ALL ? undefined : value)}>
+                <SelectTrigger className="h-8 w-[100px]"><SelectValue placeholder="状态" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
+                  <SelectItem value="in_progress">答题中</SelectItem>
+                  <SelectItem value="submitted">已提交</SelectItem>
+                  <SelectItem value="graded">已评分</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 value={searchText}
                 placeholder="搜索学生"
-                className="h-8 w-[190px]"
+                className="h-8 w-[140px]"
                 onChange={(e) => setSearchText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onSearchSubmit();
-                  }
+                  if (e.key === "Enter") { e.preventDefault(); onSearchSubmit(); }
                 }}
               />
-              <Button size="sm" variant="outline" onClick={onSearchSubmit}><Search className="h-3.5 w-3.5" /></Button>
-            </div>
-
-            <div className="flex-1" />
-
-            {filterClass && (
-              <Button
-                variant="outline"
-                disabled={batchRetesting}
-                onClick={() => {
-                  if (!window.confirm(`确定让「${filterClass}」全班重新测试？`)) return;
-                  void handleBatchRetest("class");
-                }}
-              >
-                <Redo className="h-3.5 w-3.5" />
-                全班重测
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={onSearchSubmit}><Search className="h-3.5 w-3.5" /></Button>
+              <div className="flex-1" />
+              {filterClass && (
+                <Button size="sm" variant="outline" disabled={batchRetesting} onClick={() => { if (!window.confirm(`确定让「${filterClass}」全班重新测试？`)) return; void handleBatchRetest("class"); }}>
+                  <Redo className="mr-1 h-3.5 w-3.5" />全班重测
+                </Button>
+              )}
+              <Button size="sm" variant="outline" disabled={batchGenerating} onClick={() => { const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？"; if (!window.confirm(msg)) return; void handleBatchGenerateProfiles(); }}>
+                {batchGenerating ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 h-3.5 w-3.5" />}批量画像
               </Button>
-            )}
+              <Button size="sm" variant="outline" disabled={exporting} onClick={() => { void handleExport(); }}>
+                {exporting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}导出
+              </Button>
+            </div>
+          </Card>
 
-            <Button
-              variant="outline"
-              disabled={batchGenerating}
-              onClick={() => {
-                const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？";
-                if (!window.confirm(msg)) return;
-                void handleBatchGenerateProfiles();
-              }}
-            >
-              {batchGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
-              批量生成画像
-            </Button>
+          {/* ─── 图表面板（趋势 + 分数分布） ─── */}
+          {stats.trend_data && stats.trend_data.length > 0 || stats.score_distribution && stats.score_distribution.length > 0 ? (
+            <div className="mb-5 grid gap-4 lg:grid-cols-2">
+              {stats.trend_data && stats.trend_data.length > 0 && (
+                <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    提交趋势
+                  </div>
+                  <ReactECharts
+                    option={{
+                      tooltip: { trigger: "axis" },
+                      legend: { data: ["提交数", "平均分"], bottom: 0, textStyle: { fontSize: 11 } },
+                      grid: { top: 10, right: 10, bottom: 30, left: 40 },
+                      xAxis: { type: "category", data: stats.trend_data.map((p) => p.date), axisLabel: { fontSize: 10, rotate: 30 } },
+                      yAxis: [
+                        { type: "value", name: "提交数", axisLabel: { fontSize: 10 } },
+                        { type: "value", name: "平均分", axisLabel: { fontSize: 10 } },
+                      ],
+                      series: [
+                        { name: "提交数", type: "bar", data: stats.trend_data.map((p) => p.count), itemStyle: { color: "var(--ws-color-primary)", borderRadius: [4, 4, 0, 0] } },
+                        { name: "平均分", type: "line", yAxisIndex: 1, data: stats.trend_data.map((p) => p.avg_score), lineStyle: { color: "var(--ws-color-warning)", width: 2 }, itemStyle: { color: "var(--ws-color-warning)" }, symbol: "circle", symbolSize: 4 },
+                      ],
+                    }}
+                    style={{ height: 220 }}
+                    notMerge
+                  />
+                </Card>
+              )}
+              {stats.score_distribution && stats.score_distribution.length > 0 && (
+                <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <BarChart3 className="h-4 w-4 text-secondary" />
+                    分数分布
+                  </div>
+                  <ReactECharts
+                    option={(() => {
+                      const dist = stats.score_distribution!;
+                      const total = dist.length;
+                      const interpolateColor = (c1: string, c2: string, t: number) => {
+                        const parse = (hex: string) => [0, 2, 4].map((i) => parseInt(hex.slice(i + 1, i + 3), 16));
+                        const [r1, g1, b1] = parse(c1);
+                        const [r2, g2, b2] = parse(c2);
+                        const r = Math.round(r1 + (r2 - r1) * t);
+                        const g = Math.round(g1 + (g2 - g1) * t);
+                        const b = Math.round(b1 + (b2 - b1) * t);
+                        return `rgb(${r},${g},${b})`;
+                      };
+                      return {
+                        tooltip: { trigger: "axis" },
+                        grid: { top: 10, right: 10, bottom: 25, left: 40 },
+                        xAxis: { type: "category", data: dist.map((b) => b.range), axisLabel: { fontSize: 10, rotate: 30 } },
+                        yAxis: { type: "value", name: "人数", axisLabel: { fontSize: 10 } },
+                        series: [
+                          {
+                            name: "人数", type: "bar",
+                            data: dist.map((b, idx) => {
+                              const ratio = total > 1 ? idx / (total - 1) : 0;
+                              const color = ratio < 0.5
+                                ? interpolateColor("#EF4444", "#F59E0B", ratio * 2)
+                                : interpolateColor("#F59E0B", "#10B981", (ratio - 0.5) * 2);
+                              return { value: b.count, itemStyle: { color, borderRadius: [4, 4, 0, 0] } };
+                            }),
+                          },
+                        ],
+                      };
+                    })()}
+                    style={{ height: 220 }}
+                    notMerge
+                  />
+                </Card>
+              )}
+            </div>
+          ) : null}
 
-            <Button variant="outline" disabled={exporting} onClick={() => { void handleExport(); }}>
-              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              导出
-            </Button>
-          </div>
-
+          {/* ─── 学生列表 + 雷达图 ─── */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Card className="overflow-hidden border border-border bg-surface">
-              <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+            <Card className="flex flex-col overflow-hidden border border-border bg-surface">
+              <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
                 <span className="text-sm font-semibold">学生答题列表{total > 0 ? ` (${total})` : ""}</span>
                 {selectedRowKeys.length > 0 && (
                   <>
                     <Badge variant="info">{selectedRowKeys.length} 已选</Badge>
                     <Button
-                      size="sm"
-                      variant="link"
-                      className="h-6 px-1.5"
+                      size="sm" variant="link" className="h-6 px-1.5"
                       disabled={batchRetesting}
                       onClick={() => {
                         if (!window.confirm(`确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`)) return;
@@ -744,27 +899,26 @@ const StatisticsPage: React.FC = () => {
                 )}
               </div>
 
-              <DataTable
-                table={sessionTable}
-                className="border-0"
-                tableClassName="min-w-[860px]"
-                emptyState={
-                  listLoading ? (
-                    <div className="py-10 text-center text-sm text-text-tertiary">
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        正在加载...
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="py-10">
-                      <EmptyState description="暂无答题记录" />
-                    </div>
-                  )
-                }
-              />
+              <div className="flex-1 overflow-auto">
+                <DataTable
+                  table={sessionTable}
+                  className="border-0"
+                  tableClassName="min-w-[860px]"
+                  emptyState={
+                    listLoading ? (
+                      <div className="py-10 text-center text-sm text-text-tertiary">
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />正在加载...
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="py-10"><EmptyState description="暂无答题记录" /></div>
+                    )
+                  }
+                />
+              </div>
 
-              <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+              <div className="shrink-0 flex justify-end border-t border-border-secondary px-3 py-2">
                 <DataTablePagination
                   currentPage={page}
                   totalPages={totalPages}
@@ -772,9 +926,7 @@ const StatisticsPage: React.FC = () => {
                   pageSize={pageSize}
                   pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
                   onPageChange={(nextPage, nextPageSize) => {
-                    if (nextPageSize && nextPageSize !== pageSize) {
-                      setPageSize(nextPageSize);
-                    }
+                    if (nextPageSize && nextPageSize !== pageSize) { setPageSize(nextPageSize); }
                     setPage(nextPage);
                     setSelectedRowKeys([]);
                   }}

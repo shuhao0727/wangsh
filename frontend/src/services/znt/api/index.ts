@@ -32,6 +32,7 @@ const agentDataApi = {
   // 获取代理使用数据
   getAgentData: async (
     params?: SearchFilterParams,
+    signal?: AbortSignal,
   ): Promise<BaseResponse<PaginatedResponse<AgentUsageData>>> => {
     try {
       const queryParams: Record<string, unknown> = {};
@@ -48,6 +49,7 @@ const agentDataApi = {
 
       const response = await api.get(AGENT_USAGE_BASE_PATH, {
         params: queryParams,
+        signal,
       });
 
       return {
@@ -183,6 +185,7 @@ const agentDataApi = {
   // 获取统计数据
   getStatistics: async (
     params?: SearchFilterParams,
+    signal?: AbortSignal,
   ): Promise<BaseResponse<StatisticsData>> => {
     try {
       const queryParams: Record<string, unknown> = {};
@@ -197,6 +200,7 @@ const agentDataApi = {
 
       const response = await api.get(`${AGENT_USAGE_BASE_PATH}/statistics`, {
         params: queryParams,
+        signal,
       });
 
       return {
@@ -337,6 +341,26 @@ const agentDataApi = {
         success: false,
         message:
           errMsg(error, "获取学生提问链条失败"),
+      };
+    }
+  },
+
+  getFilterOptions: async (): Promise<
+    BaseResponse<{ class_names: string[]; grades: string[]; agent_names: string[] }>
+  > => {
+    try {
+      const response = await api.get(`${AGENT_USAGE_BASE_PATH}/filter-options`);
+      return {
+        data: response.data as unknown as { class_names: string[]; grades: string[]; agent_names: string[] },
+        success: true,
+        message: "获取筛选选项成功",
+      };
+    } catch (error: unknown) {
+      logger.error("获取筛选选项失败:", error);
+      return {
+        data: { class_names: [], grades: [], agent_names: [] },
+        success: false,
+        message: errMsg(error, "获取筛选选项失败"),
       };
     }
   },

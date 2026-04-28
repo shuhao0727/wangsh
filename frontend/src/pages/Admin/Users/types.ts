@@ -49,6 +49,8 @@ export interface UsersState {
   editingUser: User | null;
   detailVisible: boolean;
   currentUser: User | null;
+  roleFilter: string | undefined;
+  statusFilter: boolean | undefined;
 }
 
 // 用户操作函数

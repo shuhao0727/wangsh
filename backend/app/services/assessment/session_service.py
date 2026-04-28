@@ -932,6 +932,9 @@ async def get_config_sessions(
     class_name: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    time_field: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> tuple[list[dict], int]:
     """管理端：获取某配置下的学生答题列表"""
     from app.models.core.user import User
@@ -962,6 +965,18 @@ async def get_config_sessions(
     if status:
         base = base.where(AssessmentSession.status == status)
         count_base = count_base.where(AssessmentSession.status == status)
+
+    # 时间范围筛选
+    time_col = getattr(AssessmentSession, time_field, None) if time_field in ("submitted_at", "started_at") else None
+    if time_col is not None:
+        if start_date:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            base = base.where(time_col >= start_dt)
+            count_base = count_base.where(time_col >= start_dt)
+        if end_date:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            base = base.where(time_col < end_dt)
+            count_base = count_base.where(time_col < end_dt)
 
     total_result = await db.execute(count_base)
     total = total_result.scalar() or 0
@@ -999,7 +1014,12 @@ async def get_config_sessions(
 
 
 async def get_config_statistics(
-    db: AsyncSession, config_id: int, class_name: str | None = None
+    db: AsyncSession,
+    config_id: int,
+    class_name: str | None = None,
+    time_field: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict:
     """管理端：聚合统计"""
     from app.models.core.user import User
@@ -1011,6 +1031,20 @@ async def get_config_statistics(
     if not config:
         raise ValueError("测评配置不存在")
 
+    # 时间筛选列
+    time_col = getattr(AssessmentSession, time_field, None) if time_field in ("submitted_at", "started_at") else None
+
+    def _apply_time_filter(stmt):
+        if time_col is None:
+            return stmt
+        if start_date:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            stmt = stmt.where(time_col >= start_dt)
+        if end_date:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            stmt = stmt.where(time_col < end_dt)
+        return stmt
+
     # 查询所有已评分的 session
     graded = select(AssessmentSession).where(
         and_(
@@ -1018,9 +1052,13 @@ async def get_config_statistics(
             AssessmentSession.status == "graded",
         )
     )
+    graded = _apply_time_filter(graded)
+
     all_q = select(func.count(AssessmentSession.id)).where(
         AssessmentSession.config_id == config_id
     )
+    all_q = _apply_time_filter(all_q)
+
     if class_name:
         graded = graded.join(User, AssessmentSession.user_id == User.id).where(User.class_name == class_name)
         all_q = all_q.join(User, AssessmentSession.user_id == User.id).where(User.class_name == class_name)
@@ -1043,6 +1081,8 @@ async def get_config_statistics(
             "min_score": None,
             "pass_rate": None,
             "knowledge_rates": None,
+            "score_distribution": None,
+            "trend_data": None,
         }
 
     scores = [s.earned_score or 0 for s in sessions]
@@ -1057,6 +1097,12 @@ async def get_config_statistics(
     session_ids = [s.id for s in sessions]
     knowledge_rates = await _calc_knowledge_rates(db, config_id, session_ids=session_ids)
 
+    # 分数分布（10 个区间：0-10, 10-20, ..., 90-100）
+    score_distribution = _calc_score_distribution(scores, config.total_score)
+
+    # 提交趋势（按天聚合）
+    trend_data = await _calc_trend_data(db, config_id, class_name, time_col, start_date, end_date)
+
     return {
         "config_id": config_id,
         "config_title": config.title,
@@ -1067,6 +1113,8 @@ async def get_config_statistics(
         "min_score": min_score,
         "pass_rate": pass_rate,
         "knowledge_rates": knowledge_rates,
+        "score_distribution": score_distribution,
+        "trend_data": trend_data,
     }
 
 
@@ -1147,6 +1195,93 @@ async def _calc_knowledge_rates(
         if d["total"] > 0:
             rates[kp] = round(d["earned"] / d["total"] * 100, 1)
     return rates
+
+
+def _calc_score_distribution(scores: list[int], total_score: int) -> list[dict]:
+    """将分数分成 10 个区间（等距），返回每个区间的计数"""
+    if not scores or total_score <= 0:
+        return []
+    bucket_size = max(1, total_score // 10)
+    buckets: dict[str, int] = {}
+    for i in range(0, total_score, bucket_size):
+        lo = i
+        hi = min(i + bucket_size, total_score) if i + bucket_size <= total_score else total_score
+        if lo == 0:
+            lo = 0
+        label = f"{lo}-{hi}"
+        buckets[label] = 0
+    # 确保最后一个区间为 total_score
+    if total_score % bucket_size != 0:
+        buckets[f"{total_score - (total_score % bucket_size)}-{total_score}"] = 0
+
+    for s in scores:
+        placed = False
+        for label in buckets:
+            parts = label.split("-")
+            lo, hi = int(parts[0]), int(parts[1])
+            if lo <= s <= hi:
+                buckets[label] += 1
+                placed = True
+                break
+        if not placed:
+            # 兜底放到最后一个区间
+            last_label = list(buckets.keys())[-1]
+            buckets[last_label] += 1
+
+    return [{"range": k, "count": v} for k, v in buckets.items()]
+
+
+async def _calc_trend_data(
+    db: AsyncSession,
+    config_id: int,
+    class_name: str | None,
+    time_col,
+    start_date: str | None,
+    end_date: str | None,
+) -> list[dict]:
+    """按天聚合提交趋势：每天提交数 + 平均分"""
+    from app.models.core.user import User
+    from sqlalchemy import cast, Date
+
+    if time_col is None:
+        time_col = AssessmentSession.submitted_at
+
+    stmt = select(
+        cast(AssessmentSession.submitted_at, Date).label("d"),
+        func.count(AssessmentSession.id).label("cnt"),
+        func.avg(AssessmentSession.earned_score).label("avg_s"),
+    ).where(
+        and_(
+            AssessmentSession.config_id == config_id,
+            AssessmentSession.status == "graded",
+        )
+    )
+
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        stmt = stmt.where(time_col >= start_dt)
+    if end_date:
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+        stmt = stmt.where(time_col < end_dt)
+
+    if class_name:
+        stmt = stmt.join(User, AssessmentSession.user_id == User.id).where(
+            User.class_name == class_name
+        )
+
+    stmt = stmt.group_by(cast(AssessmentSession.submitted_at, Date)).order_by(
+        cast(AssessmentSession.submitted_at, Date)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    return [
+        {
+            "date": str(row.d),
+            "count": row.cnt,
+            "avg_score": round(float(row.avg_s), 1) if row.avg_s is not None else None,
+        }
+        for row in rows
+    ]
 
 
 # ─── 内部工具函数 ───

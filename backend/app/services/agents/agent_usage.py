@@ -186,42 +186,52 @@ async def get_agent_usage_list(
     start_dt = _parse_usage_datetime(start_date)
     end_dt = _parse_usage_datetime(end_date, is_end=True)
 
-    where: List[str] = ["1=1"]
+    cte_where: List[str] = ["session_id IS NOT NULL"]
+    cte_having: List[str] = []
+    outer_where: List[str] = ["1=1"]
     params: Dict[str, Any] = {}
 
+    # 可推入 CTE 的条件（不依赖 JOIN 表）
     if keyword:
         params["keyword"] = f"%{keyword}%"
-        where.append("(s.question ILIKE :keyword OR s.answer ILIKE :keyword)")
-    if student_id:
-        params["student_id"] = f"%{student_id}%"
-        where.append("(u.student_id ILIKE :student_id)")
-    if student_name:
-        params["student_name"] = f"%{student_name}%"
-        where.append("(u.full_name ILIKE :student_name OR s.display_user_name ILIKE :student_name)")
-    if class_name:
-        params["class_name"] = f"%{class_name}%"
-        where.append("(u.class_name ILIKE :class_name)")
-    if grade:
-        params["grade"] = grade
-        where.append("(u.study_year = :grade)")
-    if agent_name:
-        params["agent_name"] = f"%{agent_name}%"
-        where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
+        cte_having.append(
+            "(MAX(CASE WHEN message_type='question' THEN content END) ILIKE :keyword "
+            "OR MAX(CASE WHEN message_type='answer' THEN content END) ILIKE :keyword)"
+        )
     if start_dt:
         params["start_dt"] = start_dt
-        where.append("(s.used_at >= :start_dt)")
+        cte_where.append("created_at >= :start_dt")
     if end_dt:
         params["end_dt"] = end_dt
-        where.append("(s.used_at < :end_dt)")
+        cte_having.append("MAX(created_at) < :end_dt")
+
+    # 依赖 JOIN 表的条件留在外层
+    if student_id:
+        params["student_id"] = f"%{student_id}%"
+        outer_where.append("u.student_id ILIKE :student_id")
+    if student_name:
+        params["student_name"] = f"%{student_name}%"
+        outer_where.append("(u.full_name ILIKE :student_name OR s.display_user_name ILIKE :student_name)")
+    if class_name:
+        params["class_name"] = f"%{class_name}%"
+        outer_where.append("u.class_name ILIKE :class_name")
+    if grade:
+        params["grade"] = grade
+        outer_where.append("u.study_year = :grade")
+    if agent_name:
+        params["agent_name"] = f"%{agent_name}%"
+        outer_where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
 
     effective_limit = limit or page_size
     effective_skip = skip if skip is not None else max(page - 1, 0) * effective_limit
     params["limit"] = effective_limit
     params["offset"] = effective_skip
 
-    where_sql = " AND ".join(where)
+    cte_where_sql = " AND ".join(cte_where)
+    cte_having_sql = " AND ".join(cte_having) if cte_having else "1=1"
+    outer_where_sql = " AND ".join(outer_where)
 
-    cte_sql = """
+    cte_sql = f"""
         WITH sessions AS (
             SELECT
                 max(id) AS id,
@@ -236,8 +246,9 @@ async def get_agent_usage_list(
                 max(created_at) AS used_at,
                 max(created_at) AS created_at
             FROM v_conversations_with_deleted
-            WHERE session_id IS NOT NULL
+            WHERE {cte_where_sql}
             GROUP BY session_id
+            HAVING {cte_having_sql}
         )
     """
 
@@ -248,7 +259,7 @@ async def get_agent_usage_list(
         FROM sessions s
         LEFT JOIN sys_users u ON s.user_id = u.id
         LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql}
+        WHERE {outer_where_sql}
         """
     )
     total_result = await db.execute(total_sql, params)
@@ -270,7 +281,7 @@ async def get_agent_usage_list(
         FROM sessions s
         LEFT JOIN sys_users u ON s.user_id = u.id
         LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql}
+        WHERE {outer_where_sql}
         ORDER BY s.used_at DESC
         OFFSET :offset
         LIMIT :limit
@@ -299,36 +310,51 @@ async def get_agent_usage_statistics(
     start_dt = _parse_usage_datetime(start_date)
     end_dt = _parse_usage_datetime(end_date, is_end=True)
 
-    where: List[str] = ["1=1"]
+    now = datetime.now()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
+
+    cte_where: List[str] = ["session_id IS NOT NULL"]
+    cte_having: List[str] = []
+    outer_where: List[str] = ["1=1"]
     params: Dict[str, Any] = {}
+
     if keyword:
         params["keyword"] = f"%{keyword}%"
-        where.append("(s.question ILIKE :keyword OR s.answer ILIKE :keyword)")
-    if student_id:
-        params["student_id"] = f"%{student_id}%"
-        where.append("(u.student_id ILIKE :student_id)")
-    if student_name:
-        params["student_name"] = f"%{student_name}%"
-        where.append("(u.full_name ILIKE :student_name OR s.display_user_name ILIKE :student_name)")
-    if class_name:
-        params["class_name"] = f"%{class_name}%"
-        where.append("(u.class_name ILIKE :class_name)")
-    if grade:
-        params["grade"] = grade
-        where.append("(u.study_year = :grade)")
-    if agent_name:
-        params["agent_name"] = f"%{agent_name}%"
-        where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
+        cte_having.append(
+            "(MAX(CASE WHEN message_type='question' THEN content END) ILIKE :keyword "
+            "OR MAX(CASE WHEN message_type='answer' THEN content END) ILIKE :keyword)"
+        )
     if start_dt:
         params["start_dt"] = start_dt
-        where.append("(s.used_at >= :start_dt)")
+        cte_where.append("created_at >= :start_dt")
     if end_dt:
         params["end_dt"] = end_dt
-        where.append("(s.used_at < :end_dt)")
+        cte_having.append("MAX(created_at) < :end_dt")
 
-    where_sql = " AND ".join(where)
+    if student_id:
+        params["student_id"] = f"%{student_id}%"
+        outer_where.append("u.student_id ILIKE :student_id")
+    if student_name:
+        params["student_name"] = f"%{student_name}%"
+        outer_where.append("(u.full_name ILIKE :student_name OR s.display_user_name ILIKE :student_name)")
+    if class_name:
+        params["class_name"] = f"%{class_name}%"
+        outer_where.append("u.class_name ILIKE :class_name")
+    if grade:
+        params["grade"] = grade
+        outer_where.append("u.study_year = :grade")
+    if agent_name:
+        params["agent_name"] = f"%{agent_name}%"
+        outer_where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
 
-    cte_sql = """
+    cte_where_sql = " AND ".join(cte_where)
+    cte_having_sql = " AND ".join(cte_having) if cte_having else "1=1"
+    outer_where_sql = " AND ".join(outer_where)
+
+    combined_sql = text(
+        f"""
         WITH sessions AS (
             SELECT
                 session_id,
@@ -341,105 +367,39 @@ async def get_agent_usage_statistics(
                 max(response_time_ms) AS response_time_ms,
                 max(created_at) AS used_at
             FROM v_conversations_with_deleted
-            WHERE session_id IS NOT NULL
+            WHERE {cte_where_sql}
             GROUP BY session_id
+            HAVING {cte_having_sql}
         )
-    """
+        SELECT
+            count(*) AS total_usage,
+            count(DISTINCT s.user_id) FILTER (WHERE s.user_id IS NOT NULL) AS active_students,
+            count(DISTINCT s.agent_id) FILTER (WHERE s.agent_id IS NOT NULL) AS active_agents,
+            coalesce(avg(s.response_time_ms), 0)::int AS avg_response_time,
+            count(*) FILTER (WHERE s.used_at >= :today_start) AS today_usage,
+            count(*) FILTER (WHERE s.used_at >= :week_start) AS week_usage,
+            count(*) FILTER (WHERE s.used_at >= :month_start) AS month_usage
+        FROM sessions s
+        LEFT JOIN sys_users u ON s.user_id = u.id
+        LEFT JOIN znt_agents a ON s.agent_id = a.id
+        WHERE {outer_where_sql}
+        """
+    )
 
-    total_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(*) AS total_usage
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql}
-        """
-    )
-    total_usage = int((await db.execute(total_sql, params)).scalar() or 0)
-
-    active_students_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(distinct s.user_id) AS active_students
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql} AND s.user_id IS NOT NULL
-        """
-    )
-    active_students = int((await db.execute(active_students_sql, params)).scalar() or 0)
-
-    active_agents_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(distinct s.agent_id) AS active_agents
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql} AND s.agent_id IS NOT NULL
-        """
-    )
-    active_agents = int((await db.execute(active_agents_sql, params)).scalar() or 0)
-
-    avg_sql = text(
-        cte_sql
-        + f"""
-        SELECT avg(s.response_time_ms) AS avg_response_time
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql}
-        """
-    )
-    avg_response_time = int((await db.execute(avg_sql, params)).scalar() or 0)
-
-    now = datetime.now()
-    today_start = datetime(now.year, now.month, now.day)
-    week_start = today_start - timedelta(days=7)
-    month_start = today_start - timedelta(days=30)
-    time_params = {**params, "today_start": today_start, "week_start": week_start, "month_start": month_start}
-
-    today_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(*) AS today_usage
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql} AND s.used_at >= :today_start
-        """
-    )
-    week_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(*) AS week_usage
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql} AND s.used_at >= :week_start
-        """
-    )
-    month_sql = text(
-        cte_sql
-        + f"""
-        SELECT count(*) AS month_usage
-        FROM sessions s
-        LEFT JOIN sys_users u ON s.user_id = u.id
-        LEFT JOIN znt_agents a ON s.agent_id = a.id
-        WHERE {where_sql} AND s.used_at >= :month_start
-        """
-    )
-    today_usage = int((await db.execute(today_sql, time_params)).scalar() or 0)
-    week_usage = int((await db.execute(week_sql, time_params)).scalar() or 0)
-    month_usage = int((await db.execute(month_sql, time_params)).scalar() or 0)
+    params.update({
+        "today_start": today_start,
+        "week_start": week_start,
+        "month_start": month_start,
+    })
+    row = (await db.execute(combined_sql, params)).mappings().first()
+    result = dict(row) if row else {}
 
     return {
-        "total_usage": total_usage,
-        "active_students": active_students,
-        "active_agents": active_agents,
-        "avg_response_time": avg_response_time,
-        "today_usage": today_usage,
-        "week_usage": week_usage,
-        "month_usage": month_usage,
+        "total_usage": int(result.get("total_usage", 0)),
+        "active_students": int(result.get("active_students", 0)),
+        "active_agents": int(result.get("active_agents", 0)),
+        "avg_response_time": int(result.get("avg_response_time", 0)),
+        "today_usage": int(result.get("today_usage", 0)),
+        "week_usage": int(result.get("week_usage", 0)),
+        "month_usage": int(result.get("month_usage", 0)),
     }

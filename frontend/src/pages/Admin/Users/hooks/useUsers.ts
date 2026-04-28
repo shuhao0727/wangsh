@@ -35,6 +35,8 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     editingUser: null,
     detailVisible: false,
     currentUser: null,
+    roleFilter: undefined,
+    statusFilter: undefined,
   });
 
   // 搜索参数
@@ -105,6 +107,8 @@ export const useUsers = (initialParams: SearchParams = {}) => {
       searchKeyword: "",
       currentPage: 1,
       selectedRowKeys: [],
+      roleFilter: undefined,
+      statusFilter: undefined,
     }));
     setSearchParams((prev) => ({
       ...prev,
@@ -349,6 +353,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     setState((prev) => ({
       ...prev,
       currentPage: 1,
+      roleFilter: roleCode,
     }));
   }, []);
 
@@ -361,6 +366,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     setState((prev) => ({
       ...prev,
       currentPage: 1,
+      statusFilter: isActive,
     }));
   }, []);
 

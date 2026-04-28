@@ -3,7 +3,7 @@
  */
 
 import { showMessage } from "@/lib/toast";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -24,7 +24,7 @@ import { agentDataApi } from "@services/agents";
 import { logger } from "@services/logger";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
-const UsageRecordPanel: React.FC = () => {
+const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams) => void }> = ({ onFilterChange }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AgentUsageData[]>([]);
   const [total, setTotal] = useState(0);
@@ -37,6 +37,7 @@ const UsageRecordPanel: React.FC = () => {
   });
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<AgentUsageData | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const columns = useMemo(
     () =>
@@ -48,9 +49,17 @@ const UsageRecordPanel: React.FC = () => {
   );
 
   const loadData = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       setLoading(true);
-      const res = await agentDataApi.getAgentData({ ...searchParams, page: currentPage, page_size: pageSize });
+      const res = await agentDataApi.getAgentData(
+        { ...searchParams, page: currentPage, page_size: pageSize },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       if (res.success) {
         setData(res.data.items || []);
         setTotal(res.data.total || 0);
@@ -59,6 +68,7 @@ const UsageRecordPanel: React.FC = () => {
         showMessage.error(res.message || "加载数据失败");
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       logger.error("加载数据失败:", error);
       showMessage.error("加载数据失败");
     } finally {
@@ -68,11 +78,15 @@ const UsageRecordPanel: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [loadData]);
 
   const handleSearch = (params: SearchFilterParams) => {
     setSearchParams({ ...params, page: 1, page_size: pageSize });
     setCurrentPage(1);
+    onFilterChange?.(params);
   };
 
   const handleReset = () => {
@@ -181,7 +195,7 @@ const UsageRecordPanel: React.FC = () => {
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <SearchBar
         searchParams={searchParams}
         onSearch={handleSearch}
@@ -190,18 +204,16 @@ const UsageRecordPanel: React.FC = () => {
         exportDisabled={selectedRowKeys.length === 0}
       />
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1">
-          <AdminTablePanel
-            loading={loading}
-            isEmpty={!loading && data.length === 0}
-            emptyDescription="暂无使用记录"
-          >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[1700px] table-fixed" />
-          </AdminTablePanel>
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-secondary bg-surface-1">
+        <AdminTablePanel
+          loading={loading}
+          isEmpty={!loading && data.length === 0}
+          emptyDescription="暂无使用记录"
+        >
+          <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1700px] table-fixed" />
+        </AdminTablePanel>
         {total > 0 ? (
-          <div className="mt-auto flex justify-end border-t border-border-secondary pt-3">
+          <div className="flex-none flex justify-end border-t border-border-secondary px-4 py-3">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}

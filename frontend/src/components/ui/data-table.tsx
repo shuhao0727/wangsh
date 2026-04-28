@@ -61,7 +61,7 @@ function DataTable<TData>({
 
   return (
     <div
-      className={cn("overflow-auto rounded-md border border-border", className)}
+      className={cn("overflow-hidden rounded-md border border-border", className)}
       style={style}
     >
       <Table

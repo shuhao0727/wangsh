@@ -247,40 +247,58 @@ export const HotQuestionsPanel: React.FC = () => {
       id: "bucket_start",
       header: "时间段",
       accessorKey: "bucket_start",
-      size: 220,
-      meta: { className: "w-[220px]" },
-      cell: ({ row }) => dayjs(row.original.bucket_start).format("YYYY-MM-DD HH:mm:ss"),
+      size: 200,
+      meta: { className: "w-[200px]" },
+      cell: ({ row }) => {
+        const d = dayjs(row.original.bucket_start);
+        return (
+          <div>
+            <div className="text-sm font-medium">{d.format("MM-DD HH:mm")}</div>
+            <div className="text-xs text-text-tertiary">{d.format("ss")}秒起</div>
+          </div>
+        );
+      },
     },
     {
       id: "question_count",
       header: "提问数",
       accessorKey: "question_count",
-      size: 110,
-      meta: { className: "w-[110px]" },
+      size: 90,
+      meta: { className: "w-[90px]" },
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+          {row.original.question_count}
+        </span>
+      ),
     },
     {
       id: "unique_students",
       header: "活跃学生",
       accessorKey: "unique_students",
-      size: 120,
-      meta: { className: "w-[120px]" },
+      size: 100,
+      meta: { className: "w-[100px]" },
     },
     {
       id: "top_questions",
-      header: "Top问题",
+      header: "Top 热点问题",
       accessorKey: "top_questions",
-      cell: ({ row }) => (
-        <div className="space-y-1">
-          {(row.original.top_questions || []).slice(0, 3).map((item, idx) => (
-            <div key={`${item.question}-${idx}`} className="text-sm">
-              <span>
-                {idx + 1}. {item.question}
-              </span>
-              <span className="text-text-tertiary">（{item.count}）</span>
-            </div>
-          ))}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const items = (row.original.top_questions || []).slice(0, 5);
+        if (!items.length) return <span className="text-text-tertiary text-sm">-</span>;
+        return (
+          <div className="space-y-1">
+            {items.map((item, idx) => (
+              <div key={`${item.question}-${idx}`} className="flex items-start gap-1.5 text-sm">
+                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-semibold text-white ${idx < 3 ? "bg-primary" : "bg-text-tertiary"}`}>
+                  {idx + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{item.question}</span>
+                <span className="shrink-0 text-xs text-text-tertiary">{item.count}次</span>
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
   ];
 
@@ -292,102 +310,64 @@ export const HotQuestionsPanel: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-none py-2">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-          <div className="space-y-1 md:col-span-3">
-            <div className="text-xs text-text-secondary">智能体</div>
+      <div className="flex-none">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-[170px]">
+            <div className="mb-1 text-xs text-text-tertiary">智能体</div>
             <Select
               value={filters.agent_id || "__empty__"}
-              onValueChange={(value) =>
-                setFilters((prev) => ({ ...prev, agent_id: value === "__empty__" ? "" : value }))
-              }
+              onValueChange={(value) => setFilters((prev) => ({ ...prev, agent_id: value === "__empty__" ? "" : value }))}
               disabled={loadingAgents}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-8">
                 <SelectValue placeholder={loadingAgents ? "加载中..." : "选择智能体"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__empty__">请选择智能体</SelectItem>
-                {agentOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                {agentOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1 md:col-span-2">
-            <div className="text-xs text-text-secondary">开始时间</div>
-            <Input
-              type="datetime-local"
-              value={filters.start_at}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, start_at: e.target.value }))
-              }
-            />
+          <div className="w-[160px]">
+            <div className="mb-1 text-xs text-text-tertiary">开始时间</div>
+            <Input type="datetime-local" value={filters.start_at} onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))} className="h-8" />
           </div>
-          <div className="space-y-1 md:col-span-2">
-            <div className="text-xs text-text-secondary">结束时间</div>
-            <Input
-              type="datetime-local"
-              value={filters.end_at}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, end_at: e.target.value }))
-              }
-            />
+          <div className="w-[160px]">
+            <div className="mb-1 text-xs text-text-tertiary">结束时间</div>
+            <Input type="datetime-local" value={filters.end_at} onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))} className="h-8" />
           </div>
-          <div className="space-y-1 md:col-span-1">
-            <div className="text-xs text-text-secondary">时间桶(秒)</div>
-            <Input
-              type="number"
-              min={1}
-              value={String(filters.bucket_seconds)}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  bucket_seconds: Number(e.target.value || 1),
-                }))
-              }
-            />
+          <div className="w-[80px]">
+            <div className="mb-1 text-xs text-text-tertiary">桶(秒)</div>
+            <Input type="number" min={1} value={String(filters.bucket_seconds)} onChange={(e) => setFilters((prev) => ({ ...prev, bucket_seconds: Number(e.target.value || 1) }))} className="h-8" />
           </div>
-          <div className="space-y-1 md:col-span-1">
-            <div className="text-xs text-text-secondary">TopN</div>
-            <Input
-              type="number"
-              min={1}
-              value={String(filters.top_n)}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  top_n: Number(e.target.value || 1),
-                }))
-              }
-            />
+          <div className="w-[70px]">
+            <div className="mb-1 text-xs text-text-tertiary">TopN</div>
+            <Input type="number" min={1} max={50} value={String(filters.top_n)} onChange={(e) => setFilters((prev) => ({ ...prev, top_n: Number(e.target.value || 1) }))} className="h-8" />
           </div>
-          <div className="flex gap-2 md:col-span-3 md:items-end md:justify-end">
-            <Button onClick={loadHot} disabled={loadingHot}>
-              {loadingHot ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <div className="flex gap-1.5 items-end pb-px">
+            <Button size="sm" className="h-8" onClick={loadHot} disabled={loadingHot}>
+              {loadingHot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               查询
             </Button>
-            <Button variant="outline" onClick={exportHot} disabled={exportingHot || loadingHot}>
-              {exportingHot ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            <Button variant="outline" size="sm" className="h-8" onClick={exportHot} disabled={exportingHot || loadingHot}>
+              {exportingHot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               导出
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col pt-3">
+        <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
           <AdminTablePanel
             loading={loadingHot}
             isEmpty={hotData.length === 0}
             emptyDescription="暂无热点问题数据，请先查询"
           >
-            <DataTable table={hotTable} className="h-full" />
+            <DataTable table={hotTable} className="h-full !overflow-visible !rounded-none !border-0" />
           </AdminTablePanel>
         </div>
-        <div className="mt-auto flex justify-end border-t border-border-secondary pt-3">
+        <div className="flex-none flex justify-end pt-2">
           <DataTablePagination
             currentPage={hotPage}
             totalPages={Math.max(1, Math.ceil(hotData.length / hotPageSize))}
@@ -511,7 +491,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
         return (
           <button
             type="button"
-            className="inline-flex h-7 w-7 appearance-none items-center justify-center rounded-md border border-border bg-transparent text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
+            className="inline-flex h-7 w-7 appearance-none items-center justify-center rounded-md border border-border bg-transparent text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-base"
             onClick={() =>
               setExpandedSessions((prev) => ({
                 ...prev,
@@ -525,76 +505,93 @@ export const StudentQuestionChainsPanel: React.FC = () => {
       },
     },
     {
-      id: "class_name",
-      header: "班级",
-      accessorKey: "class_name",
-      size: 140,
-      meta: { className: "w-[140px]" },
-      cell: ({ row }) => row.original.class_name || "-",
-    },
-    {
-      id: "student_id",
-      header: "学号",
-      accessorKey: "student_id",
-      size: 120,
-      meta: { className: "w-[120px]" },
-      cell: ({ row }) => row.original.student_id || "-",
-    },
-    {
-      id: "user_name",
-      header: "姓名",
-      accessorKey: "user_name",
-      size: 100,
-      meta: { className: "w-[100px]" },
-      cell: ({ row }) => row.original.user_name || "-",
+      id: "student_info",
+      header: "学生",
+      size: 180,
+      meta: { className: "w-[180px]" },
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <div className="font-medium">{row.original.user_name || "-"}</div>
+          <div className="text-xs text-text-tertiary">
+            {[row.original.class_name, row.original.student_id].filter(Boolean).join(" · ") || "-"}
+          </div>
+        </div>
+      ),
     },
     {
       id: "session_id",
       header: "会话ID",
       accessorKey: "session_id",
-      size: 260,
-      meta: { className: "w-[260px]" },
+      size: 200,
+      meta: { className: "w-[200px]" },
+      cell: ({ row }) => (
+        <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-text-secondary">
+          {row.original.session_id?.slice(-12) || "-"}
+        </code>
+      ),
     },
     {
       id: "last_at",
-      header: "最后时间",
+      header: "最后活跃",
       accessorKey: "last_at",
-      size: 180,
-      meta: { className: "w-[180px]" },
-      cell: ({ row }) => dayjs(row.original.last_at).format("YYYY-MM-DD HH:mm:ss"),
+      size: 160,
+      meta: { className: "w-[160px]" },
+      cell: ({ row }) => (
+        <span className="text-sm">{dayjs(row.original.last_at).format("MM-DD HH:mm:ss")}</span>
+      ),
     },
     {
       id: "turns",
       header: "轮数",
       accessorKey: "turns",
-      size: 80,
-      meta: { className: "w-[80px]" },
+      size: 70,
+      meta: { className: "w-[70px]" },
+      cell: ({ row }) => (
+        <span className="inline-flex items-center rounded-full bg-[var(--ws-color-secondary)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--ws-color-secondary)]">
+          {row.original.turns}
+        </span>
+      ),
     },
     {
       id: "content",
-      header: "内容",
+      header: "对话内容",
       cell: ({ row }) => {
         const record = row.original;
         const expanded = Boolean(expandedSessions[record.session_id]);
         const preview = record.messages
           .filter((msg) => msg.message_type === "question")
           .slice(0, 1)[0]?.content;
+        const msgCount = record.messages.length;
         return (
-          <div className="space-y-1">
-            <div>{preview || "（空）"}</div>
+          <div className="space-y-1.5">
+            <div className="text-sm">
+              {preview ? (
+                <span className="line-clamp-1">{preview}</span>
+              ) : (
+                <span className="text-text-tertiary">（空）</span>
+              )}
+              {!expanded && msgCount > 1 ? (
+                <span className="ml-1 text-xs text-text-tertiary">等{msgCount}条</span>
+              ) : null}
+            </div>
             {expanded ? (
-              <div className="space-y-1 rounded bg-surface-2 px-2 py-1.5">
-                {record.messages.map((msg) => (
-                  <div key={msg.id} className="text-sm">
-                    <span className="font-medium">
-                      {msg.message_type === "question" ? "Q" : "A"}
-                    </span>
-                    <span className="mx-1 text-text-tertiary">
-                      {dayjs(msg.created_at).format("HH:mm:ss")}
-                    </span>
-                    <span>{msg.content}</span>
-                  </div>
-                ))}
+              <div className="space-y-1.5 rounded-lg border border-border-secondary bg-surface-2 p-2.5">
+                {record.messages.map((msg) => {
+                  const isQ = msg.message_type === "question";
+                  return (
+                    <div key={msg.id} className="flex gap-2 text-sm">
+                      <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-semibold text-white ${isQ ? "bg-[var(--ws-color-primary)]" : "bg-[var(--ws-color-success)]"}`}>
+                        {isQ ? "Q" : "A"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="mr-1.5 text-xs text-text-tertiary">
+                          {dayjs(msg.created_at).format("HH:mm:ss")}
+                        </span>
+                        <span className="break-words">{msg.content}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>
@@ -611,10 +608,10 @@ export const StudentQuestionChainsPanel: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-none py-2">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.45fr)_minmax(0,1.45fr)_minmax(0,0.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] md:items-end">
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">智能体</div>
+      <div className="flex-none">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-[170px]">
+            <div className="mb-1 text-xs text-text-tertiary">智能体</div>
             <Select
               value={filters.agent_id || "__empty__"}
               onValueChange={(value) =>
@@ -622,7 +619,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
               }
               disabled={loadingAgents}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-8">
                 <SelectValue placeholder={loadingAgents ? "加载中..." : "选择智能体"} />
               </SelectTrigger>
               <SelectContent>
@@ -635,84 +632,77 @@ export const StudentQuestionChainsPanel: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">开始时间</div>
+          <div className="w-[160px]">
+            <div className="mb-1 text-xs text-text-tertiary">开始时间</div>
             <Input
               type="datetime-local"
               value={filters.start_at}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, start_at: e.target.value }))
-              }
+              onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))}
+              className="h-8"
             />
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">结束时间</div>
+          <div className="w-[160px]">
+            <div className="mb-1 text-xs text-text-tertiary">结束时间</div>
             <Input
               type="datetime-local"
               value={filters.end_at}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, end_at: e.target.value }))
-              }
+              onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))}
+              className="h-8"
             />
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">会话数</div>
+          <div className="w-[80px]">
+            <div className="mb-1 text-xs text-text-tertiary">最多会话</div>
             <Input
               type="number"
               min={1}
+              max={20}
               value={String(filters.limit_sessions)}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  limit_sessions: Number(e.target.value || 1),
-                }))
-              }
+              onChange={(e) => setFilters((prev) => ({ ...prev, limit_sessions: Number(e.target.value || 1) }))}
+              className="h-8"
             />
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">班级</div>
+          <div className="w-[110px]">
+            <div className="mb-1 text-xs text-text-tertiary">班级</div>
             <Input
-              placeholder="高一(1)班"
+              placeholder="筛选班级"
               value={filters.class_name}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, class_name: e.target.value }))
-              }
+              onChange={(e) => setFilters((prev) => ({ ...prev, class_name: e.target.value }))}
+              className="h-8"
             />
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-text-secondary">学号</div>
+          <div className="w-[110px]">
+            <div className="mb-1 text-xs text-text-tertiary">学号</div>
             <Input
-              placeholder="20250001"
+              placeholder="筛选学号"
               value={filters.student_id}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, student_id: e.target.value }))
-              }
+              onChange={(e) => setFilters((prev) => ({ ...prev, student_id: e.target.value }))}
+              className="h-8"
             />
           </div>
-          <div className="flex gap-2 md:justify-end">
-            <Button onClick={loadChains} disabled={loadingChains}>
-              {loadingChains ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <div className="flex gap-1.5 items-end pb-px">
+            <Button size="sm" className="h-8" onClick={loadChains} disabled={loadingChains}>
+              {loadingChains ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               查询
             </Button>
-            <Button variant="outline" onClick={exportChains} disabled={exportingChains || loadingChains}>
-              {exportingChains ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            <Button variant="outline" size="sm" className="h-8" onClick={exportChains} disabled={exportingChains || loadingChains}>
+              {exportingChains ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               导出
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col pt-3">
+        <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
           <AdminTablePanel
             loading={loadingChains}
             isEmpty={chains.length === 0}
             emptyDescription="暂无学生提问链条数据，请先查询"
           >
-            <DataTable table={chainsTable} className="h-full" tableClassName="min-w-[1100px]" />
+            <DataTable table={chainsTable} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1100px]" />
           </AdminTablePanel>
         </div>
-        <div className="mt-auto flex justify-end border-t border-border-secondary pt-3">
+        <div className="flex-none flex justify-end pt-2">
           <DataTablePagination
             currentPage={chainsPage}
             totalPages={Math.max(1, Math.ceil(chains.length / chainsPageSize))}

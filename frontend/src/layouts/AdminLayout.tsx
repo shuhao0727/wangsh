@@ -4,19 +4,12 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   AppWindow,
   Bot,
@@ -43,6 +36,7 @@ import {
 import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
+import LoginForm from "@/components/Auth/LoginForm";
 
 type AdminMenuItem = {
   key: string;
@@ -97,7 +91,6 @@ const AdminLayout: React.FC = () => {
 
   const [collapsed, setCollapsed] = useState(false);
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
-  const [loginValues, setLoginValues] = useState({ username: "", password: "" });
   const { version, envLabel } = useAppMeta();
 
   const path = location.pathname;
@@ -134,35 +127,6 @@ const AdminLayout: React.FC = () => {
           ? "学生用户"
           : "访客";
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const username = loginValues.username.trim();
-    const password = loginValues.password;
-    if (username.length < 3) {
-      showMessage.error("账号至少3个字符");
-      return;
-    }
-    if (password.length < 6) {
-      showMessage.error("密码至少6个字符");
-      return;
-    }
-    const res = await auth.login(username, password);
-    if (!res.success) {
-      showMessage.error(res.error || "登录失败");
-      return;
-    }
-    const role = res.user?.role_code || "";
-    const isAdminUser = role === "admin" || role === "super_admin";
-    if (!isAdminUser) {
-      showMessage.error("当前账号不是管理员");
-      await auth.logout();
-      return;
-    }
-    showMessage.success("登录成功");
-    setIsLoginModalVisible(false);
-    setLoginValues({ username: "", password: "" });
-  };
-
   const sidebarExpandedWidth = 236;
   const sidebarCollapsedWidth = 84;
   const sidebarWidth = isMobile ? sidebarExpandedWidth : collapsed ? sidebarCollapsedWidth : sidebarExpandedWidth;
@@ -193,35 +157,11 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div className="h-screen overflow-hidden bg-surface">
-      <Dialog open={isLoginModalVisible} onOpenChange={setIsLoginModalVisible}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>管理员登录</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-3" onSubmit={handleLogin}>
-            <div className="space-y-1">
-              <label className="text-sm text-text-secondary">管理员账号</label>
-              <Input
-                value={loginValues.username}
-                placeholder="请输入管理员账号"
-                onChange={(e) => setLoginValues((prev) => ({ ...prev, username: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-text-secondary">密码</label>
-              <Input
-                type="password"
-                value={loginValues.password}
-                placeholder="请输入密码"
-                onChange={(e) => setLoginValues((prev) => ({ ...prev, password: e.target.value }))}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={auth.isLoading}>
-              管理员登录
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <LoginForm
+        visible={isLoginModalVisible}
+        onClose={() => setIsLoginModalVisible(false)}
+        isAdmin
+      />
 
       {isMobile && !collapsed ? (
         <div

@@ -47,7 +47,7 @@
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 100%;
   --ring: 199 89% 48%;
-  --radius: 0.5rem;
+  --radius: var(--ws-radius-lg);
 
   --ws-density-scale: clamp(0.9, calc(0.2vw + 0.86), 1.05);
   --ws-page-max-width: clamp(1040px, 90vw, 1620px);
@@ -186,7 +186,9 @@
   --ws-line-height-heading: 1.35;
   --ws-letter-spacing-tight: -0.01em;
   --ws-border-accent-width: 2px;
-  --ws-control-height: 44px;
+  --ws-control-height-sm: 28px;
+  --ws-control-height: 36px;
+  --ws-control-height-lg: 44px;
   --ws-search-input-padding-start: 2.25rem;
   --ws-module-card-min-height: 128px;
   --ws-opacity-decoration-strong: 0.3;
@@ -531,4 +533,77 @@ a:active {
     --ws-page-max-width-wide: 2060px;
     --ws-density-scale: 1.05;
   }
+}
+
+/* ============================================
+ * 统计卡片样式 (Assessment Statistics)
+ * ============================================ */
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--ws-color-surface-2), #fff);
+  border: 1px solid var(--ws-color-border);
+  border-radius: var(--ws-radius-md);
+  padding: var(--ws-space-2) var(--ws-space-2) var(--ws-space-2) calc(var(--ws-space-2) + 3px);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.stat-card-accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  opacity: 0.85;
+}
+
+.stat-card-body {
+  position: relative;
+  z-index: 1;
+}
+
+.stat-card-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--ws-text-xs);
+  color: var(--ws-color-text-tertiary);
+  margin-bottom: 4px;
+}
+
+.stat-card-value {
+  font-size: var(--ws-text-xl);
+  font-weight: 700;
+  color: var(--ws-color-text);
+  line-height: 1.2;
+}
+
+.stat-card-watermark {
+  position: absolute;
+  right: 6px;
+  bottom: -4px;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.stat-card-watermark svg {
+  width: 40px;
+  height: 40px;
+}
+
+.stat-card-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ============================================
+ * 图表面板样式
+ * ============================================ */
+
+.chart-panel {
+  min-height: 280px;
 }

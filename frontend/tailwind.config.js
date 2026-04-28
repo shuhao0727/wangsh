@@ -82,7 +82,7 @@ module.exports = {
         sm: "var(--ws-radius-sm)",
         DEFAULT: "var(--ws-radius-md)",
         md: "var(--ws-radius-md)",
-        lg: "var(--radius)",
+        lg: "var(--ws-radius-lg)",
         xl: "var(--ws-radius-xl)",
       },
       fontFamily: {
@@ -95,6 +95,7 @@ module.exports = {
         base: "var(--ws-text-md)",
         lg: "var(--ws-text-lg)",
         xl: "var(--ws-text-xl)",
+        "2xl": "var(--ws-text-xl)",
       },
       boxShadow: {
         lg: "var(--ws-shadow-lg)",

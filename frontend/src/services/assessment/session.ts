@@ -142,6 +142,17 @@ export interface BasicProfileResponse {
   class_knowledge_rates?: Record<string, number> | null;
 }
 
+export interface ScoreBucket {
+  range: string;
+  count: number;
+}
+
+export interface TrendPoint {
+  date: string;
+  count: number;
+  avg_score: number | null;
+}
+
 export interface StatisticsResponse {
   config_id: number;
   config_title: string;
@@ -152,6 +163,8 @@ export interface StatisticsResponse {
   min_score: number | null;
   pass_rate: number | null;
   knowledge_rates: Record<string, number> | null;
+  score_distribution: ScoreBucket[] | null;
+  trend_data: TrendPoint[] | null;
 }
 
 export interface SessionListItem {
@@ -262,6 +275,7 @@ export const assessmentSessionApi = {
 
   getConfigSessions: async (configId: number, params?: {
     skip?: number; limit?: number; class_name?: string; status?: string; search?: string;
+    time_field?: string; start_date?: string; end_date?: string;
   }): Promise<SessionListResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/sessions`, { params });
@@ -292,7 +306,12 @@ export const assessmentSessionApi = {
     }
   },
 
-  getStatistics: async (configId: number, params?: { class_name?: string }): Promise<StatisticsResponse> => {
+  getStatistics: async (configId: number, params?: {
+    class_name?: string;
+    time_field?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<StatisticsResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/statistics`, { params });
       return resp.data as any;
@@ -322,7 +341,7 @@ export const assessmentSessionApi = {
     }
   },
 
-  exportXlsx: async (configId: number, params?: { class_name?: string; status?: string; search?: string }): Promise<void> => {
+  exportXlsx: async (configId: number, params?: { class_name?: string; status?: string; search?: string; time_field?: string; start_date?: string; end_date?: string }): Promise<void> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/export`, {
         params,

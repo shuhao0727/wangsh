@@ -97,38 +97,6 @@ const DEFAULT_CREATE_VALUES: CreateFormValues = {
   knowledge_points: "",
 };
 
-const MOCK_ASSESSMENTS: AssessmentConfig[] = Array.from({ length: 36 }, (_, index) => {
-  const i = index + 1;
-  const grade = GRADE_OPTIONS[index % GRADE_OPTIONS.length] ?? null;
-  const created = new Date(Date.now() - index * 3600_000 * 12).toISOString();
-  const agentId = 100 + (index % 4);
-  const agentName = ["教学助手A", "教学助手B", "学习诊断助手", "知识点讲解助手"][index % 4];
-  const qCount = 8 + (index % 6) * 2;
-  const sCount = (index * 3) % 31;
-  return {
-    id: -i,
-    title: `模拟测评 #${String(i).padStart(2, "0")} - Python 基础与算法`,
-    grade,
-    teaching_objectives: "巩固基础语法与算法思维",
-    knowledge_points: JSON.stringify(["循环结构", "条件判断", "函数参数", "列表与字典"].slice(0, 2 + (index % 3))),
-    total_score: 100,
-    question_config: JSON.stringify({ mode: "adaptive" }),
-    ai_prompt: null,
-    agent_id: agentId,
-    agent_name: agentName,
-    time_limit_minutes: 30,
-    available_start: null,
-    available_end: null,
-    enabled: index % 5 !== 0,
-    created_by_user_id: 1,
-    creator_name: "系统管理员",
-    question_count: qCount,
-    session_count: sCount,
-    config_agents: [{ id: agentId, name: agentName, agent_type: "teaching" }],
-    created_at: created,
-    updated_at: created,
-  };
-});
 
 const AdminAssessment: React.FC = () => {
   const navigate = useNavigate();
@@ -147,22 +115,6 @@ const AdminAssessment: React.FC = () => {
     defaultValues: DEFAULT_CREATE_VALUES,
   });
 
-  const applyMockData = useCallback(() => {
-    const keyword = search.trim().toLowerCase();
-    const filtered = MOCK_ASSESSMENTS.filter((item) => {
-      if (!keyword) return true;
-      return (
-        item.title.toLowerCase().includes(keyword) ||
-        String(item.grade || "").toLowerCase().includes(keyword) ||
-        String(item.agent_name || "").toLowerCase().includes(keyword)
-      );
-    });
-    const start = (currentPage - 1) * pageSize;
-    const pageItems = filtered.slice(start, start + pageSize);
-    setItems(pageItems);
-    setTotal(filtered.length);
-  }, [currentPage, pageSize, search]);
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -171,19 +123,15 @@ const AdminAssessment: React.FC = () => {
         limit: pageSize,
         search: search.trim() || undefined,
       });
-      if (resp.total === 0) {
-        applyMockData();
-        return;
-      }
       setItems(resp.items || []);
       setTotal(resp.total || 0);
     } catch (error: any) {
-      logger.error("加载测评配置失败，切换到模拟数据:", error);
-      applyMockData();
+      logger.error("加载测评配置失败:", error);
+      showMessage.error("加载测评配置失败");
     } finally {
       setLoading(false);
     }
-  }, [applyMockData, currentPage, pageSize, search]);
+  }, [currentPage, pageSize, search]);
 
   useEffect(() => {
     loadData();

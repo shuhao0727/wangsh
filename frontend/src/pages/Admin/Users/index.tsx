@@ -151,7 +151,7 @@ const AdminUsers: React.FC = () => {
         </div>
 
         <Select
-          defaultValue="__all__"
+          value={state.roleFilter ?? "__all__"}
           onValueChange={(value) =>
             actions.handleRoleFilter(value === "__all__" ? undefined : value)
           }
@@ -170,7 +170,7 @@ const AdminUsers: React.FC = () => {
         </Select>
 
         <Select
-          defaultValue="__all__"
+          value={state.statusFilter === undefined ? "__all__" : String(state.statusFilter)}
           onValueChange={(value) => {
             if (value === "__all__") {
               actions.handleStatusFilter(undefined);

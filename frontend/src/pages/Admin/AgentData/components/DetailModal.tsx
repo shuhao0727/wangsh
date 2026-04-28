@@ -36,6 +36,9 @@ interface DetailModalProps {
   onClose: () => void;
 }
 
+const MESSAGE_CACHE_TTL = 60_000;
+const messageCache = new Map<string, { data: Array<{ id: number; session_id: string; message_type: string; content: string; created_at: string }>; ts: number }>();
+
 const formatResponseTime = (ms?: number) => {
   if (!ms) return "未知";
   if (ms < 1000) return `${ms}毫秒`;
@@ -128,6 +131,13 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
       setConversationMessages([]);
       return;
     }
+
+    const cached = messageCache.get(sessionId);
+    if (cached && Date.now() - cached.ts < MESSAGE_CACHE_TTL) {
+      setConversationMessages(cached.data);
+      return;
+    }
+
     let cancelled = false;
     const load = async () => {
       setConversationLoading(true);
@@ -136,6 +146,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
         if (cancelled) return;
         if (res.success) {
           setConversationMessages(res.data);
+          messageCache.set(sessionId, { data: res.data, ts: Date.now() });
         } else {
           setConversationMessages([]);
         }

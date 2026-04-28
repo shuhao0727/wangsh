@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from loguru import logger
 from app.utils.errors import safe_error_detail
@@ -63,6 +63,15 @@ from app.services.assessment import (
 )
 
 router = APIRouter()
+
+
+def _next_day(date_str: str) -> str:
+    """将日期字符串向后推一天（用于 end_date 包含当日筛选）"""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)
+        return dt.strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        return date_str
 
 
 # ─── 测评配置管理 ───
@@ -387,6 +396,9 @@ async def api_list_sessions(
     class_name: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    time_field: Optional[str] = Query(None, description="时间筛选字段: submitted_at 或 started_at"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD（不含当日）"),
 ):
     """学生答题情况列表"""
     try:
@@ -394,6 +406,9 @@ async def api_list_sessions(
             db, config_id, skip=skip, limit=limit,
             class_name=class_name or None, status=status or None,
             search=search.strip() if search else None,
+            time_field=time_field or None,
+            start_date=start_date or None,
+            end_date=_next_day(end_date) if end_date else None,
         )
         page = (skip // limit) + 1 if limit > 0 else 1
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
@@ -546,10 +561,19 @@ async def api_get_statistics(
     config_id: int,
     db: AsyncSession = Depends(get_db),
     class_name: Optional[str] = Query(None),
+    time_field: Optional[str] = Query(None, description="时间筛选字段: submitted_at 或 started_at"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD（含当日）"),
 ):
     """答题统计"""
     try:
-        return await get_config_statistics(db, config_id, class_name=class_name or None)
+        return await get_config_statistics(
+            db, config_id,
+            class_name=class_name or None,
+            time_field=time_field or None,
+            start_date=start_date or None,
+            end_date=_next_day(end_date) if end_date else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -677,6 +701,9 @@ async def api_export_sessions(
     class_name: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    time_field: Optional[str] = Query(None, description="时间字段 submitted_at 或 started_at"),
+    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
 ):
     """导出答题数据 XLSX"""
@@ -686,7 +713,9 @@ async def api_export_sessions(
     if not config:
         raise HTTPException(status_code=404, detail="测评配置不存在")
 
-    output = await build_assessment_export_xlsx(db, config_id, class_name, status, search)
+    if end_date:
+        end_date = _next_day(end_date)
+    output = await build_assessment_export_xlsx(db, config_id, class_name, status, search, time_field, start_date, end_date)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     parts = [config.title or "测评数据"]

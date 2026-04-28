@@ -117,6 +117,19 @@ class QuestionForStudent(BaseModel):
     is_answered: bool = False
 
 
+class ScoreBucket(BaseModel):
+    """分数区间分布"""
+    range: str  # e.g. "0-10", "10-20", ..., "90-100"
+    count: int
+
+
+class TrendPoint(BaseModel):
+    """每日提交趋势"""
+    date: str  # "YYYY-MM-DD"
+    count: int
+    avg_score: Optional[float] = None
+
+
 class StatisticsResponse(BaseModel):
     """答题统计"""
     config_id: int
@@ -128,3 +141,5 @@ class StatisticsResponse(BaseModel):
     min_score: Optional[int] = None
     pass_rate: Optional[float] = None
     knowledge_rates: Optional[dict] = None
+    score_distribution: Optional[list[ScoreBucket]] = None
+    trend_data: Optional[list[TrendPoint]] = None

@@ -58,10 +58,14 @@ async def build_assessment_export_xlsx(
     class_name: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    time_field: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
 ) -> BytesIO:
     items, total = await get_config_sessions(
         db, config_id, skip=0, limit=None,
         class_name=class_name, status=status, search=search,
+        time_field=time_field, start_date=start_date, end_date=end_date,
     )
 
     # 先加载所有 session 的答题详情，确定最大题目数

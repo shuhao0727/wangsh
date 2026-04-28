@@ -234,6 +234,12 @@ class ConversationMessage(BaseModel):
     message_type: str
     content: str
     response_time_ms: Optional[int] = None
+
+
+class UsageFilterOptions(BaseModel):
+    class_names: List[str] = []
+    grades: List[str] = []
+    agent_names: List[str] = []
     created_at: datetime
 
 

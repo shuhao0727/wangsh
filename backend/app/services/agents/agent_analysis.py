@@ -135,27 +135,47 @@ async def analyze_student_chains(
 
     sessions_sql = text(
         """
+        WITH top_sessions AS (
+            SELECT
+                c.session_id,
+                max(c.created_at) AS last_at,
+                sum(CASE WHEN c.message_type = 'question' THEN 1 ELSE 0 END) AS turns,
+                max(u.student_id) AS student_id,
+                max(u.full_name) AS user_name,
+                max(u.class_name) AS class_name
+            FROM v_conversations_with_deleted c
+            JOIN sys_users u ON u.id = c.user_id
+            WHERE c.agent_id = :agent_id
+              AND (CAST(:user_id AS INTEGER) IS NULL OR c.user_id = CAST(:user_id AS INTEGER))
+              AND (CAST(:class_name_like AS TEXT) IS NULL OR u.class_name ILIKE CAST(:class_name_like AS TEXT))
+              AND c.session_id IS NOT NULL
+              AND c.created_at >= :start_at
+              AND c.created_at < :end_at
+            GROUP BY c.session_id
+            ORDER BY last_at DESC
+            LIMIT :limit_sessions
+        )
         SELECT
-            c.session_id,
-            max(c.created_at) AS last_at,
-            sum(CASE WHEN c.message_type = 'question' THEN 1 ELSE 0 END) AS turns,
-            max(u.student_id) AS student_id,
-            max(u.full_name) AS user_name,
-            max(u.class_name) AS class_name
-        FROM v_conversations_with_deleted c
-        JOIN sys_users u ON u.id = c.user_id
-        WHERE c.agent_id = :agent_id
-          AND (CAST(:user_id AS INTEGER) IS NULL OR c.user_id = CAST(:user_id AS INTEGER))
-          AND (CAST(:class_name_like AS TEXT) IS NULL OR u.class_name ILIKE CAST(:class_name_like AS TEXT))
-          AND c.session_id IS NOT NULL
-          AND c.created_at >= :start_at
-          AND c.created_at < :end_at
-        GROUP BY c.session_id
-        ORDER BY last_at DESC
-        LIMIT :limit_sessions
+            ts.session_id,
+            ts.last_at,
+            ts.turns,
+            ts.student_id,
+            ts.user_name,
+            ts.class_name,
+            c.id AS msg_id,
+            c.message_type AS msg_type,
+            c.content AS msg_content,
+            c.created_at AS msg_created_at
+        FROM top_sessions ts
+        JOIN v_conversations_with_deleted c
+          ON c.session_id = ts.session_id
+         AND c.agent_id = :agent_id
+         AND c.created_at >= :start_at
+         AND c.created_at < :end_at
+        ORDER BY ts.last_at DESC, ts.session_id, c.created_at ASC, c.id ASC
         """
     )
-    sessions_result = await db.execute(
+    all_rows = (await db.execute(
         sessions_sql,
         {
             "agent_id": agent_id,
@@ -165,66 +185,34 @@ async def analyze_student_chains(
             "end_at": end_at,
             "limit_sessions": limit_sessions,
         },
-    )
-    session_rows = sessions_result.mappings().all()
-    session_ids = [r.get("session_id") for r in session_rows if r.get("session_id")]
-    if not session_ids:
-        return []
-
-    messages_sql = text(
-        """
-        SELECT
-            c.id,
-            c.session_id,
-            c.message_type,
-            c.content,
-            c.created_at
-        FROM v_conversations_with_deleted c
-        WHERE c.agent_id = :agent_id
-          AND c.session_id = ANY(:session_ids)
-          AND c.created_at >= :start_at
-          AND c.created_at < :end_at
-        ORDER BY c.session_id ASC, c.created_at ASC, c.id ASC
-        """
-    )
-    messages_result = await db.execute(
-        messages_sql,
-        {
-            "agent_id": agent_id,
-            "session_ids": session_ids,
-            "start_at": start_at,
-            "end_at": end_at,
-        },
-    )
-    msg_rows = messages_result.mappings().all()
+    )).mappings().all()
 
     by_session: Dict[str, Dict[str, Any]] = {}
-    for s in session_rows:
-        sid = s.get("session_id")
+    session_order: List[str] = []
+    for r in all_rows:
+        sid = r.get("session_id")
         if not sid:
             continue
-        by_session[sid] = {
-            "session_id": sid,
-            "last_at": s.get("last_at"),
-            "turns": int(s.get("turns") or 0),
-            "student_id": s.get("student_id"),
-            "user_name": s.get("user_name"),
-            "class_name": s.get("class_name"),
-            "messages": [],
-        }
-
-    for m in msg_rows:
-        sid = m.get("session_id")
         if sid not in by_session:
-            continue
-        by_session[sid]["messages"].append(
-            {
-                "id": int(m.get("id")),
-                "message_type": m.get("message_type"),
-                "content": m.get("content"),
-                "created_at": m.get("created_at"),
+            session_order.append(sid)
+            by_session[sid] = {
+                "session_id": sid,
+                "last_at": r.get("last_at"),
+                "turns": int(r.get("turns") or 0),
+                "student_id": r.get("student_id"),
+                "user_name": r.get("user_name"),
+                "class_name": r.get("class_name"),
+                "messages": [],
             }
-        )
+        msg_id = r.get("msg_id")
+        if msg_id is not None:
+            by_session[sid]["messages"].append(
+                {
+                    "id": int(msg_id),
+                    "message_type": r.get("msg_type"),
+                    "content": r.get("msg_content"),
+                    "created_at": r.get("msg_created_at"),
+                }
+            )
 
-    ordered = [by_session[sid] for sid in session_ids if sid in by_session]
-    return ordered
+    return [by_session[sid] for sid in session_order]

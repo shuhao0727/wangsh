@@ -26,7 +26,7 @@ const AdminTablePanel: React.FC<Props> = ({
   title, extra, loading = false, isEmpty = false,
   emptyDescription, emptyAction, children, pagination,
 }) => (
-  <div className="flex flex-col h-full overflow-hidden">
+  <div className="flex flex-col min-h-0 overflow-hidden flex-1">
     {(title || extra) && (
       <div className="flex items-center justify-between px-4 py-3">
         {title && <div className="text-base font-semibold text-text-base">{title}</div>}
@@ -34,7 +34,7 @@ const AdminTablePanel: React.FC<Props> = ({
       </div>
     )}
 
-    <div className="flex-1 overflow-hidden flex flex-col">
+    <div className="flex-1 overflow-clip flex flex-col">
       {loading ? (
         <TableSkeleton />
       ) : isEmpty ? (
