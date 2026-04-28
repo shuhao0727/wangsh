@@ -202,7 +202,7 @@ case "${cmd}" in
 
     cat > "${tmp_env}" <<EOF
 PROJECT_NAME=WangSh
-APP_VERSION=1.5.1
+APP_VERSION=1.5.6
 API_V1_STR=/api/v1
 
 DOCKER_REGISTRY=docker.io

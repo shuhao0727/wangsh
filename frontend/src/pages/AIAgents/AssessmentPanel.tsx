@@ -951,7 +951,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       style={{
         position: "fixed", left: pos.x, top: pos.y,
         width: size.w, height: size.h,
-        zIndex: "var(--ws-z-floating-panel)",
+        // During a quiz, keep the active panel above the blocking overlay.
+        zIndex: view === "quiz" ? "var(--ws-z-modal)" : "var(--ws-z-floating-panel)",
         resize: "both", minWidth: "20rem", minHeight: "25rem",
       }}
     >
@@ -1016,7 +1017,13 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       <>
         {/* 答题时遮罩：模糊背景 + 禁止交互 */}
         {isQuizzing && (
-          <div className="fixed inset-0 z-[var(--ws-z-floating-btn)] backdrop-blur-sm" style={{ background: "var(--ws-color-overlay)" }} />
+          <div
+            className="fixed inset-0 backdrop-blur-sm"
+            style={{
+              zIndex: "var(--ws-z-panel-overlay)",
+              background: "var(--ws-color-overlay)",
+            }}
+          />
         )}
         {floatingBtn}
         {open && renderWindow()}

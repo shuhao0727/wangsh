@@ -88,7 +88,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.5.5}
+      - APP_VERSION=${APP_VERSION:-1.5.6}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - AGENT_API_KEY_ENCRYPTION_KEY=${AGENT_API_KEY_ENCRYPTION_KEY}
       - AUTH_TRUST_X_FORWARDED_FOR=${AUTH_TRUST_X_FORWARDED_FOR:-true}
@@ -116,6 +116,8 @@ services:
       - ./data/uploads:/app/uploads
       # Typst PDF 存储目录（与 worker 共享）
       - ./data/typst_pdfs:/app/data/typst_pdfs
+      # ⚠️ 安全提醒：docker.sock 赋予容器 root 级别的主机控制权，仅因 PythonLab 沙箱需要动态创建容器
+      # 缓解措施见 docker-compose.yml 中 backend 服务的注释
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     depends_on:
@@ -152,7 +154,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.5.5}
+      - APP_VERSION=${APP_VERSION:-1.5.6}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -194,7 +196,7 @@ services:
       - DEBUG=True
       - LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
-      - APP_VERSION=${APP_VERSION:-1.5.5}
+      - APP_VERSION=${APP_VERSION:-1.5.6}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -218,6 +220,8 @@ services:
       - PYTHONLAB_DEFAULT_MEMORY_MB=128
     volumes:
       - ./backend:/app
+      # ⚠️ 安全提醒：docker.sock 赋予容器 root 级别的主机控制权，仅因 PythonLab 沙箱需要动态创建容器
+      # 缓解措施见 docker-compose.yml 中 backend 服务的注释
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     ulimits:
@@ -278,6 +282,7 @@ services:
 networks:
   wangsh-network:
     driver: bridge
+  # 可选：Dify 外部网络，未部署 Dify 时删除此块和所有 dify_network 引用
   dify_network:
     external: true
     name: docker_default

@@ -22,7 +22,7 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 - **触发方式**：手动触发（workflow_dispatch）
 - **输入参数**：
-  - `image_tag`（必填）：镜像版本号，如 `1.5.0`
+  - `image_tag`（必填）：镜像版本号，如 `1.5.6`
   - `push_latest`（可选）：是否同时推送 `latest` 标签，默认 `true`
 - **构建平台**：`linux/amd64`
 - **构建的镜像**（共 5 个）：

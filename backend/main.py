@@ -100,6 +100,17 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 class HttpMetricsMiddleware(BaseHTTPMiddleware):
+    # 限流告警：避免 Redis 不可用时每条请求都打印 WARNING
+    _last_warn_ts: float = 0.0
+    _WARN_INTERVAL: float = 60.0  # 同一条告警至少间隔 60 秒
+
+    @classmethod
+    def _warn_throttled(cls, message: str) -> None:
+        now = time.monotonic()
+        if now - cls._last_warn_ts >= cls._WARN_INTERVAL:
+            cls._last_warn_ts = now
+            logger.warning(message)
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if path in {"/health", "/ping", "/docs", "/openapi.json"}:
@@ -119,6 +130,7 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
             inflight_inc_ok = True
         except Exception:
             client = None
+            self._warn_throttled("HTTP metrics: 无法获取 Redis 连接，请求指标采集已跳过")
 
         start = time.perf_counter()
         status_code = 500
@@ -134,13 +146,18 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
                         try:
                             await client.decr("http:req:inflight")
                         except Exception:
-                            pass
+                            logger.debug("HTTP metrics: inflight decr 失败（旧连接），尝试新连接回退")
+                            try:
+                                tmp = await cache.get_client()
+                                await tmp.decr("http:req:inflight")
+                            except Exception:
+                                logger.warning("HTTP metrics: inflight 计数器 decr 失败，指标可能出现偏差")
                     else:
                         try:
                             tmp = await cache.get_client()
                             await tmp.decr("http:req:inflight")
                         except Exception:
-                            pass
+                            logger.warning("HTTP metrics: inflight 计数器 decr 失败，指标可能出现偏差")
 
                 client = client or await cache.get_client()
                 pipe = client.pipeline()
@@ -153,7 +170,7 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
                 pipe.ltrim("http:req:dur_ms", 0, max(0, int(settings.HTTP_METRICS_SAMPLE_SIZE) - 1))
                 await pipe.execute()
             except Exception:
-                pass
+                logger.debug("HTTP metrics: pipeline 批量写入失败，本次请求指标将丢失")
 
 # 配置 CORS
 _cors_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]

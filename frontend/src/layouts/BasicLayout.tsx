@@ -192,7 +192,10 @@ const BasicLayout: React.FC = () => {
                 <MenuIcon className="h-5 w-5" />
               </Button>
             )}
-            <UserMenu onMenuClick={(key) => { if (key === "login") setIsLoginModalVisible(true); }} />
+            <UserMenu
+              showName={!isMobile}
+              onMenuClick={(key) => { if (key === "login") setIsLoginModalVisible(true); }}
+            />
           </div>
         </div>
       </header>

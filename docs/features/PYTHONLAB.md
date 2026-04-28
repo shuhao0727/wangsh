@@ -54,7 +54,7 @@ Python 进程
 
 ### 容器配置
 
-**镜像**：`shuhao07/pythonlab-sandbox:1.5.5`
+**镜像**：`shuhao07/pythonlab-sandbox:1.5.6`
 
 **镜像构建**：
 ```bash

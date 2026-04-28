@@ -121,7 +121,7 @@
 
 - 当前开发环境证据：
   - `wangsh-backend` 容器内 `PYTHONLAB_DEFAULT_MEMORY_MB=128`
-  - 当前 sandbox 镜像：`shuhao07/pythonlab-sandbox:1.5.5`
+  - 当前 sandbox 镜像：`shuhao07/pythonlab-sandbox:1.5.6`
 - `128MB` 验证：
   - 直接运行现有脚本 `backend/scripts/smoke_pythonlab_dap_step_watch_soak.py`
   - 连续 10 轮全部通过

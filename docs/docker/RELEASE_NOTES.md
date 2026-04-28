@@ -2,6 +2,31 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.6（2026-04-27）
+
+### 1. 变更范围
+
+- 当前部署、构建、前端包和文档中的默认版本号统一到 `1.5.6`
+- 清理配置拆分后的残留文件，补齐 `.env.example` 中遗漏的开发/运维配置项
+- `startup.py` 中开发环境 Alembic 标记逻辑从硬编码 revision 改为自动检测 head
+
+### 2. 配置影响
+
+- `.env`、`.env.dev`、`.env.example`、`docker-compose.yml`、`docker-compose.dev.yml`、`frontend/package.json`、`frontend/package-lock.json` 当前版本引用均应保持 `1.5.6`
+- PythonLab sandbox 镜像默认标签同步到 `shuhao07/pythonlab-sandbox:1.5.6`
+- 历史发布记录中的旧版本号保留为历史事实，不作为当前部署版本
+
+### 3. 构建与部署
+
+```bash
+./build_images.sh 1.5.6
+docker compose push
+docker compose pull && docker compose up -d
+curl http://localhost:6608/api/health
+```
+
+---
+
 ## v1.5.5（2026-04-05）
 
 ### 1. 变更范围
@@ -44,8 +69,8 @@ cd frontend && npm run type-check
 
 ### 5. 配置影响
 
-- `.env.example`、`docker-compose.yml`、`docker-compose.dev.yml`、`frontend/package.json` 默认版本号已同步到 `1.5.5`
-- 如生产环境仍显式写死旧 `IMAGE_TAG` / `APP_VERSION` / `REACT_APP_VERSION` / `PYTHONLAB_SANDBOX_IMAGE`，需要同步改为 `1.5.5`
+- 【历史记录】在 v1.5.5 发布时，`.env.example`、`docker-compose.yml`、`docker-compose.dev.yml`、`frontend/package.json` 默认版本号已同步到 `1.5.5`
+- 【历史记录】如当时生产环境仍显式写死旧 `IMAGE_TAG` / `APP_VERSION` / `REACT_APP_VERSION` / `PYTHONLAB_SANDBOX_IMAGE`，需要同步改为 `1.5.5`
 
 ---
 

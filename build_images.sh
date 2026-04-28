@@ -37,6 +37,7 @@ docker buildx build \
   --target backend_runtime \
   -t "${REGISTRY}/wangsh-backend:${VERSION}" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -47,6 +48,7 @@ docker buildx build \
   --target worker_runtime \
   -t "${REGISTRY}/wangsh-typst-worker:${VERSION}" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -57,7 +59,7 @@ docker buildx build \
   --target pythonlab_worker_runtime \
   -t "${REGISTRY}/wangsh-pythonlab-worker:${VERSION}" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
-  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
   -f backend/Dockerfile.prod \
   --load \
   backend
@@ -71,7 +73,7 @@ docker buildx build \
   -t "${REGISTRY}/pythonlab-sandbox:${VERSION}" \
   -t "${REGISTRY}/pythonlab-sandbox:py311" \
   --build-arg PYTHON_IMAGE="${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}" \
-  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}" \
+  --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}" \
   backend/docker/pythonlab-sandbox \
   --load
 
@@ -90,6 +92,7 @@ echo "==> Building gateway ..."
 docker buildx build \
   --platform "${PLATFORM}" \
   -t "${REGISTRY}/wangsh-gateway:${VERSION}" \
+  --build-arg CADDY_IMAGE="${GATEWAY_CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2.8.4}" \
   -f gateway/Dockerfile \
   --load \
   gateway

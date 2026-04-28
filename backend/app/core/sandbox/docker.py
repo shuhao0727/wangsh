@@ -91,6 +91,7 @@ def _resolve_memory_mb_limit(limits: Dict[str, Any], default_mem: int) -> int:
     try:
         requested = int(requested_raw or 0)
     except Exception:
+        logger.debug("Docker 资源限制值解析失败，使用默认值 0")
         requested = 0
     if requested > 0:
         return max(32, requested)
@@ -130,6 +131,7 @@ class DockerProvider(SandboxProvider):
             try:
                 container_id = Path("/etc/hostname").read_text(encoding="utf-8").strip()
             except Exception:
+                logger.debug("无法读取容器 hostname，bind mount 缓存禁用")
                 container_id = ""
         if not container_id:
             self._bind_mount_cache = []
@@ -341,7 +343,7 @@ class DockerProvider(SandboxProvider):
             try:
                 await _run_async(["docker", "rm", "-f", name], timeout_s=30)
             except Exception:
-                pass
+                logger.debug("Docker: 清理残留容器 %s 失败，继续创建", name)
 
             # 3. Build Command
             mount_path = await self._resolve_host_mount_path(ws_path)
@@ -514,6 +516,7 @@ class DockerProvider(SandboxProvider):
             # pythonlab_sessionuuid -> sessionuuid
             return [name[len("pythonlab_") :] for name in names if name.startswith("pythonlab_")]
         except Exception:
+            logger.warning("Docker: 列出活动 PythonLab 会话失败")
             return []
 
     async def is_healthy(self, session_id: str, meta: Dict[str, Any]) -> bool:
@@ -593,8 +596,9 @@ class DockerProvider(SandboxProvider):
                 return False
             return (out or "").strip() == "running"
         except Exception:
+            logger.debug("Docker inspect 容器 %s 状态失败", container_id)
             return False
-            
+
     async def _debugpy_is_listening(self, container_id: str, port: int) -> bool:
         try:
             # Fallback to docker exec for reliability if network is tricky
@@ -610,6 +614,7 @@ class DockerProvider(SandboxProvider):
                         return True
             return False
         except Exception:
+            logger.debug("Debugpy 监听检查失败 (容器 %s, 端口 %s)", container_id, port)
             return False
 
     async def _debugpy_dap_ready(self, host_port: int) -> bool:
@@ -658,6 +663,7 @@ class DockerProvider(SandboxProvider):
                     return True
             return False
         except Exception:
+            logger.debug("DAP 就绪检查失败 (host_port=%s)", host_port)
             return False
         finally:
             if writer is not None:

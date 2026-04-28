@@ -88,29 +88,29 @@ const HomePage: React.FC = () => {
   return (
     <div className="home-page w-full flex-1 flex flex-col overflow-hidden bg-surface">
       <div
-        className="flex-1 min-h-0 mx-auto w-full px-4 md:px-6 py-5 flex flex-col gap-5 overflow-y-auto"
+        className="flex-1 min-h-0 mx-auto w-full px-4 md:px-6 py-4 md:py-5 flex flex-col gap-4 md:gap-5 overflow-y-auto"
         style={{ maxWidth: "var(--ws-page-max-width)" }}
       >
         {/* ─── 欢迎条 ─── */}
-        <div className="rounded-xl bg-surface-2 px-5 py-4 md:px-6 md:py-5">
+        <div className="home-welcome-strip rounded-xl px-5 py-4 md:px-6 md:py-5">
           {isLoggedIn ? (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3 min-w-0 sm:items-center">
                 <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
                   <User className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-lg font-bold text-text-base leading-tight truncate">
+                  <div className="text-[1.125rem] font-semibold tracking-tight text-text-base leading-tight sm:truncate">
                     {greeting}，{displayName || "同学"}
                     {roleLabel && <Badge variant="primarySubtle" className="ml-2 text-xs align-middle">{roleLabel}</Badge>}
                   </div>
-                  <div className="text-sm text-text-secondary mt-0.5">欢迎使用 WangSh 平台</div>
+                  <div className="text-sm text-text-secondary mt-1">常用模块和外部工具都集中在这里</div>
                 </div>
               </div>
               {(auth.isAdmin() || auth.isSuperAdmin()) && (
                 <button
                   onClick={() => navigate("/admin/dashboard")}
-                  className="appearance-none flex-shrink-0 flex items-center gap-1.5 rounded-lg border-0 px-3.5 py-2 text-sm font-medium text-primary cursor-pointer transition-all admin-btn-hover"
+                  className="appearance-none flex-shrink-0 flex items-center justify-center gap-1.5 rounded-lg border-0 px-3.5 py-2 text-sm font-medium text-primary cursor-pointer transition-all admin-btn-hover"
                 >
                   <User className="h-4 w-4" /> 管理后台
                 </button>
@@ -118,15 +118,15 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div>
-              <div className="text-lg font-bold text-text-base">WangSh 平台</div>
-              <div className="text-sm text-text-secondary mt-0.5">一站式教学与学习平台</div>
+              <div className="text-[1.125rem] font-semibold tracking-tight text-text-base">WangSh 平台</div>
+              <div className="text-sm text-text-secondary mt-1">课程、训练与工具入口</div>
             </div>
           )}
         </div>
 
         {/* ─── 平台模块 ─── */}
         <div>
-          <h2 className="text-sm font-semibold text-text-secondary mb-3">平台模块</h2>
+          <h2 className="text-sm font-semibold text-text-secondary mb-2.5">进入模块</h2>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {visibleModules.map((mod) => {
               const c = moduleColors[mod.id] ?? {
@@ -138,15 +138,15 @@ const HomePage: React.FC = () => {
                 <button
                   key={mod.id}
                   onClick={() => navigate(mod.path)}
-                  className="appearance-none module-card relative flex h-full flex-col items-start text-left rounded-xl px-5 py-5 border-0 cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="appearance-none module-card relative flex h-full flex-col items-start text-left rounded-xl px-4 py-4 sm:px-5 sm:py-5 border border-[color:var(--ws-color-border-secondary)] cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   style={{ "--mc-bg": c.bg, "--mc-ring": c.ring, minHeight: 120 } as React.CSSProperties}
                 >
                   <div className="module-icon flex items-center justify-center w-10 h-10 rounded-lg mb-2.5 transition-transform"
                     style={{ background: c.bg }}>
                     <span style={{ color: c.icon }}>{mod.icon}</span>
                   </div>
-                  <div className="text-sm font-semibold text-text-base mb-0.5">{mod.title}</div>
-                  <div className="text-xs leading-relaxed text-text-secondary">{mod.description}</div>
+                  <div className="text-[0.95rem] font-semibold tracking-tight text-text-base mb-0.5">{mod.title}</div>
+                  <div className="text-[13px] leading-6 text-text-secondary">{mod.description}</div>
                   <ArrowRight className="module-arrow absolute top-4 right-4 h-4 w-4 transition-all" style={{ color: c.icon }} />
                 </button>
               );
@@ -157,13 +157,13 @@ const HomePage: React.FC = () => {
         {/* ─── 外部服务 ─── */}
         {externalLinks.length > 0 && (
           <div>
-            <h2 className="text-sm font-semibold text-text-secondary mb-3">外部服务</h2>
+            <h2 className="text-sm font-semibold text-text-secondary mb-2.5">工具与服务</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {externalLinks.map((link, i) => (
                 <button
                   key={i}
                   onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
-                  className="appearance-none ext-card flex items-center gap-3.5 rounded-xl px-5 py-4 text-left border-0 cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="appearance-none ext-card flex items-center gap-3.5 rounded-xl px-4 py-3.5 sm:px-5 sm:py-4 text-left border border-[color:var(--ws-color-border-secondary)] cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   style={{ "--ec-bg": link.surfaceBg } as React.CSSProperties}
                 >
                   <div className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0"
@@ -171,8 +171,8 @@ const HomePage: React.FC = () => {
                     {link.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm text-text-base">{link.title}</div>
-                    <div className="text-xs mt-0.5 text-text-secondary">{link.description}</div>
+                    <div className="font-semibold text-sm tracking-tight text-text-base">{link.title}</div>
+                    <div className="text-[13px] mt-0.5 text-text-secondary">{link.description}</div>
                   </div>
                   <ArrowRight className="ext-arrow flex-shrink-0 h-4 w-4 transition-all" style={{ color: link.color }} />
                 </button>

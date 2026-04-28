@@ -7,6 +7,11 @@ FROM ${PYTHON_IMAGE} AS builder
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_CONFIG_FILE=/dev/null
+
 ARG http_proxy
 ARG https_proxy
 ARG HTTP_PROXY
@@ -15,6 +20,8 @@ ARG all_proxy
 ARG ALL_PROXY
 ARG no_proxy
 ARG NO_PROXY
+# 清除所有代理环境变量，避免构建环境中遗留的代理配置干扰 pip install
+# （部分 CI/企业网络会默认注入 http_proxy，导致无法连接外网 PyPI）
 ENV http_proxy=
 ENV https_proxy=
 ENV HTTP_PROXY=
@@ -23,7 +30,6 @@ ENV all_proxy=
 ENV ALL_PROXY=
 ENV no_proxy=
 ENV NO_PROXY=
-ENV PIP_CONFIG_FILE=/dev/null
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
@@ -31,7 +37,7 @@ COPY requirements.txt .
 RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
     pip install --upgrade pip \
     && env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
@@ -39,6 +45,7 @@ FROM ${PYTHON_IMAGE} AS runtime_base
 
 WORKDIR /app
 
+# 再次清除代理变量：runtime 阶段也需要确保干净的代理环境
 ARG http_proxy
 ARG https_proxy
 ARG HTTP_PROXY
@@ -55,6 +62,10 @@ ENV all_proxy=
 ENV ALL_PROXY=
 ENV no_proxy=
 ENV NO_PROXY=
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_CONFIG_FILE=/dev/null
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
@@ -121,10 +132,13 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sou
     '</fontconfig>' \
     > /etc/fonts/local.conf \
     && fc-cache -f \
+    # Cache buster: 强制 Docker 在此层之后不再使用缓存，确保每次重新构建时字体配置生效
+    # 如果后续字体替换仍有问题，尝试递增数字（如 Cache buster 3）来强制重新构建此层
     && echo "Cache buster 2"
 
 RUN ARCH="$(uname -m)" \
     && if [ "$ARCH" = "x86_64" ]; then PKG="typst-x86_64-unknown-linux-musl.tar.xz"; elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then PKG="typst-aarch64-unknown-linux-musl.tar.xz"; else echo "unsupported arch: $ARCH" && exit 1; fi \
+    # --noproxy '*' -x '' 强制绕过代理直连 GitHub，避免企业/CI 代理导致 TLS 握手失败
     && curl --noproxy '*' -x '' -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/${PKG}" -o /tmp/typst.tar.xz \
     && tar -xf /tmp/typst.tar.xz -C /tmp \
     && tar -tf /tmp/typst.tar.xz | head -n 1 | cut -d/ -f1 > /tmp/typst_dir \
