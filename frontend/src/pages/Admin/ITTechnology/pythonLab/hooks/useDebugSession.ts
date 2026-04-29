@@ -21,7 +21,7 @@ import { decidePythonLabLaunchPlan } from "../launchPlan";
 import { useDebug, type Breakpoint } from "../stores";
 import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
 import type { DapCapabilities, RunnerState } from "./useDapRunner";
-import type { PyodideTerminalBridge } from "./usePyodideRunner";
+import { canUseSharedArrayBuffer, type PyodideTerminalBridge } from "./usePyodideRunner";
 import { useUnifiedRunner } from "./useUnifiedRunner";
 
 type BreakpointUpdater = (prev: Breakpoint[]) => Breakpoint[];
@@ -154,7 +154,10 @@ export function useDebugSession(params: {
       const plan = decidePythonLabLaunchPlan({
         enabledBreakpointCount: 0,
         pythonlabRuntime,
+        sourceCode: code,
+        supportsPyodideStdin: canUseSharedArrayBuffer(),
       });
+      setLastDebugFallback(plan.debugFallbackReason);
 
       switchPythonlabRunner({
         runnerKind: plan.runnerKind,
@@ -169,7 +172,7 @@ export function useDebugSession(params: {
         stdinLines,
       });
     },
-    [pythonlabRuntime, runnerView.sessionId, runnerView.status, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
+    [code, pythonlabRuntime, runnerView.sessionId, runnerView.status, setActiveRunnerKind, setLastDebugFallback, setLastLaunchMode]
   );
 
   const onDebug = useCallback(() => {

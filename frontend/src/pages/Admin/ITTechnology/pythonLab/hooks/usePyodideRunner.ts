@@ -104,7 +104,7 @@ function defaultPyodideBaseUrl() {
   return value || "/pyodide/";
 }
 
-function canUseSharedArrayBuffer() {
+export function canUseSharedArrayBuffer() {
   try {
     return window.crossOriginIsolated === true && typeof SharedArrayBuffer !== "undefined";
   } catch {

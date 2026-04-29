@@ -5,8 +5,37 @@ test("断点分流：0 个启用断点走普通运行（runPlain）", () => {
     expect(plan).toEqual({ mode: "plain", runnerKind: "pyodide", debugFallbackReason: null });
 });
 
-test("普通运行：检测到 input() 也仍走当前 plain-run 运行器", () => {
-    const plan = decidePythonLabLaunchPlan({ enabledBreakpointCount: 0, pythonlabRuntime: "pyodide" });
+test("普通运行：Pyodide stdin 可用时，检测到 input() 仍走当前 plain-run 运行器", () => {
+    const plan = decidePythonLabLaunchPlan({
+        enabledBreakpointCount: 0,
+        pythonlabRuntime: "pyodide",
+        sourceCode: "name = input('name:')\nprint(name)\n",
+        supportsPyodideStdin: true,
+    });
+    expect(plan.mode).toBe("plain");
+    expect(plan.runnerKind).toBe("pyodide");
+    expect(plan.debugFallbackReason).toBeNull();
+});
+
+test("普通运行：Pyodide stdin 不可用且代码含 input() 时自动切到后端运行", () => {
+    const plan = decidePythonLabLaunchPlan({
+        enabledBreakpointCount: 0,
+        pythonlabRuntime: "pyodide",
+        sourceCode: "a = int(input('a:'))\nb = int(input('b:'))\nprint(a + b)\n",
+        supportsPyodideStdin: false,
+    });
+    expect(plan.mode).toBe("plain");
+    expect(plan.runnerKind).toBe("dap");
+    expect(plan.debugFallbackReason).toContain("自动切换到后端运行");
+});
+
+test("普通运行：Pyodide stdin 不可用但代码无需 input() 时仍走本地运行", () => {
+    const plan = decidePythonLabLaunchPlan({
+        enabledBreakpointCount: 0,
+        pythonlabRuntime: "pyodide",
+        sourceCode: "print(1 + 2)\n",
+        supportsPyodideStdin: false,
+    });
     expect(plan.mode).toBe("plain");
     expect(plan.runnerKind).toBe("pyodide");
     expect(plan.debugFallbackReason).toBeNull();
