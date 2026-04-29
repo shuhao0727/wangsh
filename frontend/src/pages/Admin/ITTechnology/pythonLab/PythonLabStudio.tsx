@@ -178,6 +178,7 @@ const PythonLabStudioInner: React.FC<{
 
   useEffect(() => {
     let warnedThirdPartySelection = false;
+    let warnedMonacoDisposed = false;
     const shouldSuppressSelectionNoise = (msg: string, name: string, stack: string, file: string) => {
       const normalizedMessage = `${msg}\n${stack}`.toLowerCase();
       const isIndexSize =
@@ -207,6 +208,17 @@ const PythonLabStudioInner: React.FC<{
       const isLikelySelectionNoise = normalizedMessage.includes("range 0") || normalizedMessage.includes("selection") || isIndexSize;
       return isIndexSize && (isGetRangeAt || isLikelySelectionNoise);
     };
+    const shouldSuppressMonacoDisposedNoise = (msg: string, stack: string) => {
+      const normalizedMessage = `${msg}\n${stack}`.toLowerCase();
+      return (
+        normalizedMessage.includes("abstractcontextkeyservice has been disposed") ||
+        (
+          normalizedMessage.includes("disposed") &&
+          normalizedMessage.includes("contextmatchesrules") &&
+          normalizedMessage.includes("createactiongroups")
+        )
+      );
+    };
     const onError = (event: ErrorEvent) => {
       const msg = String(event.message || "");
       const name = (event.error as Error)?.name ? String((event.error as Error).name) : "";
@@ -216,6 +228,17 @@ const PythonLabStudioInner: React.FC<{
         if (!warnedThirdPartySelection) {
           warnedThirdPartySelection = true;
           logger.info("检测到可能来自浏览器插件/注入脚本的 Selection(IndexSizeError) 噪音错误，已在页面层面忽略。");
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        (event as ErrorEvent & { returnValue?: boolean }).returnValue = true;
+        return true;
+      }
+      if (shouldSuppressMonacoDisposedNoise(msg, stack)) {
+        if (!warnedMonacoDisposed) {
+          warnedMonacoDisposed = true;
+          logger.info("检测到 Monaco 编辑器卸载后的 disposed 噪音错误，已在页面层面忽略。");
         }
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -238,6 +261,14 @@ const PythonLabStudioInner: React.FC<{
         event.preventDefault();
         return;
       }
+      if (shouldSuppressMonacoDisposedNoise(msg, stack)) {
+        if (!warnedMonacoDisposed) {
+          warnedMonacoDisposed = true;
+          logger.info("检测到 Monaco 编辑器卸载后的 disposed 噪音错误，已在页面层面忽略。");
+        }
+        event.preventDefault();
+        return;
+      }
     };
     const prevOnError = window.onerror;
     window.onerror = (message, source, _lineno, _colno, error) => {
@@ -246,6 +277,9 @@ const PythonLabStudioInner: React.FC<{
       const stack = error?.stack ? String(error.stack) : "";
       const file = String(source || "");
       if (shouldSuppressSelectionNoise(msg, name, stack, file)) {
+        return true;
+      }
+      if (shouldSuppressMonacoDisposedNoise(msg, stack)) {
         return true;
       }
       if (typeof prevOnError === "function") {
@@ -296,7 +330,7 @@ const PythonLabStudioInner: React.FC<{
       setOptimizedContent(res.optimized_code);
       setOptimizationLogId(res.log_id);
     } catch (e: unknown) {
-      showMessage.error(e instanceof Error ? e.message : "优化请求失败");
+      showMessage.error(toErrorMessage(e, "优化请求失败"));
       setOptimizationVisible(false);
     } finally {
       setOptimizationLoading(false);

@@ -110,7 +110,7 @@ export const pythonlabFlowApi = {
     const resp = await pythonlabV2Client.post<{ optimized_code: string; log_id: number; rollback_id: string }>(
       "/optimize/code",
       { code },
-      { timeout: 60000 },
+      { timeout: 60000, silent: true },
     );
     return resp.data;
   },

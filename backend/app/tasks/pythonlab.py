@@ -251,7 +251,9 @@ def stop_session(session_id: str, force: bool = False):
     async def run():
         meta = await _get_session_meta(session_id)
         provider = get_sandbox_provider()
-        owner = int(meta.get("owner_user_id") or 0) if isinstance(meta, dict) else 0
+        provider_meta = meta if isinstance(meta, dict) else {"session_id": session_id}
+        owner = int(provider_meta.get("owner_user_id") or 0)
+        runtime_mode = str(provider_meta.get("runtime_mode") or "debug").lower()
         skip_provider_stop = False
         has_other_active = False
 
@@ -281,11 +283,11 @@ def stop_session(session_id: str, force: bool = False):
 
         # Stop Sandbox Resource
         try:
-            if force:
-                if not skip_provider_stop:
-                    await provider.terminate_session(session_id, meta or {})
-            elif not skip_provider_stop:
-                await provider.stop_session(session_id, meta or {})
+            if not skip_provider_stop:
+                if force or runtime_mode == "debug":
+                    await provider.terminate_session(session_id, provider_meta)
+                else:
+                    await provider.stop_session(session_id, provider_meta)
         except Exception:
             pass
 

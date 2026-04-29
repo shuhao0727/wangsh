@@ -154,6 +154,24 @@ async def update_note(
     return note
 
 
+async def invalidate_note_pdf_cache(db: AsyncSession, note: TypstNote, *, remove_file: bool = True) -> None:
+    """Clear compiled PDF metadata so the next compile cannot reuse stale output."""
+    old_rel = getattr(note, "compiled_pdf_path", None)
+    if remove_file and old_rel:
+        try:
+            old_abs = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, old_rel)
+            if os.path.exists(old_abs):
+                await asyncio.to_thread(os.remove, old_abs)
+        except Exception:
+            pass
+
+    note.compiled_hash = None
+    note.compiled_pdf_path = None
+    note.compiled_pdf_size = None
+    note.compiled_pdf = None
+    note.compiled_at = None
+    await db.commit()
+    await db.refresh(note)
 
 
 async def delete_note(db: AsyncSession, note: TypstNote) -> None:
@@ -187,8 +205,10 @@ def _write_project_files(tmpdir: str, entry_path: str, files: dict, assets: List
 
     if not isinstance(files, dict) or len(files) == 0:
         files = {"main.typ": ""}
+    else:
+        files = dict(files)
 
-    if style_text and style_text.strip():
+    if style_text and style_text.strip() and not str(files.get("style/my_style.typ") or "").strip():
         files["style/my_style.typ"] = style_text
 
     def _normalize_source(source: str, entry: str) -> str:
@@ -196,8 +216,9 @@ def _write_project_files(tmpdir: str, entry_path: str, files: dict, assets: List
         entry_dir = posixpath.dirname(entry or "main.typ") or "."
         style_rel = posixpath.relpath("style/my_style.typ", entry_dir)
         style_line = f'#import "{style_rel}":my_style'
-        s = re.sub(r'#import\s+["\'][^"\']*style/my_style\.typ["\']\s*:\s*my_style', style_line, s)
-        if not re.search(r'#import\s+["\'][^"\']*style/my_style\.typ["\']\s*:\s*my_style', s):
+        style_import_pattern = r'(#import\s+)(["\'])([^"\']*style/my_style\.typ)(["\'])'
+        s = re.sub(style_import_pattern, lambda m: f"{m.group(1)}{m.group(2)}{style_rel}{m.group(4)}", s)
+        if not re.search(style_import_pattern, s):
             s = style_line + "\n" + s
 
         base = entry_dir
@@ -294,18 +315,20 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
             res = await db.execute(select(TypstAsset).where(TypstAsset.note_id == note.id))
             assets = list(res.scalars().all())
 
-        files = note.files if isinstance(note.files, dict) else {"main.typ": note.content_typst or ""}
+        files = dict(note.files) if isinstance(note.files, dict) else {"main.typ": note.content_typst or ""}
         entry_path = note.entry_path or "main.typ"
         style_key = note.style_key or "my_style"
         style_text = ""
-        try:
-            res = await db.execute(select(TypstStyle).where(TypstStyle.key == style_key))
-            s = res.scalar_one_or_none()
-            style_text = (s.content if s else "") or ""
-        except Exception:
-            style_text = ""
-        if not style_text.strip():
-            style_text = read_resource_style(key=style_key)
+        has_project_style = bool(str(files.get("style/my_style.typ") or "").strip())
+        if not has_project_style:
+            try:
+                res = await db.execute(select(TypstStyle).where(TypstStyle.key == style_key))
+                s = res.scalar_one_or_none()
+                style_text = (s.content if s else "") or ""
+            except Exception:
+                style_text = ""
+            if not style_text.strip():
+                style_text = read_resource_style(key=style_key)
 
         asset_sig = [{"path": a.path, "sha256": _sha256_bytes_hex(bytes(a.content))} for a in assets]
         h = _sha256_hex(
@@ -446,9 +469,24 @@ async def upsert_asset(db: AsyncSession, note_id: int, path: str, mime: str, con
     safe_path = normalize_asset_path(path)
     sha256 = _sha256_bytes_hex(content or b"")
     size_bytes = int(len(content or b""))
-    res = await db.execute(select(TypstAsset).where(TypstAsset.note_id == note_id, TypstAsset.path == safe_path))
-    existing = res.scalar_one_or_none()
-    if existing:
+    res = await db.execute(
+        select(TypstAsset)
+        .where(TypstAsset.note_id == note_id, TypstAsset.path == safe_path)
+        .order_by(TypstAsset.id.asc())
+    )
+    existing_assets = list(res.scalars().all())
+    if existing_assets:
+        existing = existing_assets[0]
+        for duplicate in existing_assets[1:]:
+            await db.delete(duplicate)
+        if len(existing_assets) > 1:
+            logger.warning(
+                "typst.asset duplicate rows repaired note_id={} path={} kept_id={} removed={}",
+                note_id,
+                safe_path,
+                existing.id,
+                len(existing_assets) - 1,
+            )
         existing.mime = mime
         existing.content = content
         existing.sha256 = sha256

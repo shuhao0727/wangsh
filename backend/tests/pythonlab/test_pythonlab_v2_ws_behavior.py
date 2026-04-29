@@ -1026,7 +1026,10 @@ def test_dap_ws_closes_when_client_request_message_is_too_large(monkeypatch):
     fake_cache.client = FakeRedisClient()
     session_id = "dbg_client_msg_too_large"
     session_key = f"{ws_api.CACHE_KEY_SESSION_PREFIX}:{session_id}"
-    fake_cache.store[session_key] = _make_debug_session_meta(session_id)
+    fake_cache.store[session_key] = _make_debug_session_meta(
+        session_id,
+        limits={"max_dap_msg_bytes": 128},
+    )
     _patch_ws_auth_and_cache(monkeypatch, fake_cache=fake_cache, user={"id": 7})
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
@@ -1036,7 +1039,7 @@ def test_dap_ws_closes_when_client_request_message_is_too_large(monkeypatch):
     monkeypatch.setattr(ws_api.asyncio, "open_connection", _pending_open_connection)
     websocket = FakeWebSocket(
         query_params={"token": "valid-token"},
-        incoming=["x" * (ws_api.WS_MAX_DAP_MSG_BYTES + 1)],
+        incoming=["x" * 129],
     )
 
     asyncio.run(ws_api.dap_ws(websocket, session_id, db=None))
@@ -1045,8 +1048,8 @@ def test_dap_ws_closes_when_client_request_message_is_too_large(monkeypatch):
     payload = json.loads(websocket.sent_texts[0])
     assert payload["type"] == "event"
     assert payload["event"] == "output"
-    assert payload["body"]["output"] == "debug ws proxy error: ValueError: message too large\n"
-    assert any(code == 1011 for code, _ in websocket.closed)
+    assert payload["body"]["output"] == "DAP 消息过大，连接已断开\n"
+    assert any(code == 1009 for code, _ in websocket.closed)
 
 
 def test_dap_ws_persists_stopped_then_continued_then_terminated_statuses(monkeypatch):

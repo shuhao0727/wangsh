@@ -240,7 +240,6 @@ class UsageFilterOptions(BaseModel):
     class_names: List[str] = []
     grades: List[str] = []
     agent_names: List[str] = []
-    created_at: datetime
 
 
 class HotQuestionExample(BaseModel):

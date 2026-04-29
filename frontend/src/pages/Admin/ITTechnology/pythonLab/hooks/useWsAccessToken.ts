@@ -6,6 +6,7 @@ import {
     getCookieToken,
     getPersistedAuthExpiredDetail,
     getStoredAccessToken,
+    getStoredRefreshToken,
     notifyAuthExpired,
 } from "@services/api";
 
@@ -32,7 +33,7 @@ export function useWsAccessToken(params?: { enabled?: boolean; refreshIfMissing?
         const existing = readToken();
         if (existing) return existing;
         if (!refreshIfMissing) return null;
-        const hasLoginContext = Boolean(getStoredAccessToken() || getCookieToken());
+        const hasLoginContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
         if (!hasLoginContext) return null;
 
         if (!inflightRef.current) {

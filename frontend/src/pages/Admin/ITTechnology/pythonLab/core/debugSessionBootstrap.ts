@@ -3,6 +3,7 @@ import {
   authTokenStorage,
   extractAuthErrorDetail,
   getCookieToken,
+  getStoredRefreshToken,
   getStoredAccessToken,
   notifyAuthExpired,
 } from "@services/api";
@@ -109,7 +110,7 @@ export async function resolvePythonlabWsToken(): Promise<string | null> {
   let token = getStoredAccessToken();
   if (!token) token = getCookieToken();
   if (token) return token;
-  const hasLoginContext = Boolean(getStoredAccessToken() || getCookieToken());
+  const hasLoginContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
   if (!hasLoginContext) return null;
 
   try {

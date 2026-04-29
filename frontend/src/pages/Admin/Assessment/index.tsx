@@ -392,7 +392,7 @@ const AdminAssessment: React.FC = () => {
       </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 flex flex-col">
           <AdminTablePanel
             loading={isLoading}
             isEmpty={items.length === 0}

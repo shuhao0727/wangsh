@@ -99,6 +99,7 @@ const AdminInformatics: React.FC = () => {
     interval_hours: 48,
     delete_mode: "unpublish",
   });
+  const syncTaskRunning = Boolean(syncTaskId) || Boolean(syncTaskStatus && !syncTaskStatus.ready);
 
   const openSyncResult = useCallback((title: string, detail: string) => {
     setSyncResultTitle(title);
@@ -194,7 +195,8 @@ const AdminInformatics: React.FC = () => {
   }, [syncModalOpen, syncTaskId, loadSync]);
 
   useEffect(() => {
-    if (!syncTaskId || !syncTaskStatus?.ready || syncResultShownTaskId === syncTaskId) return;
+    const completedTaskId = syncTaskStatus?.task_id || syncTaskId;
+    if (!completedTaskId || !syncTaskStatus?.ready || syncResultShownTaskId === completedTaskId) return;
     const created = syncTaskStatus.created_paths || [];
     const updated = syncTaskStatus.updated_paths || [];
     const deleted = syncTaskStatus.deleted_paths || [];
@@ -223,7 +225,7 @@ const AdminInformatics: React.FC = () => {
       syncTaskStatus.successful ? "同步完成" : "同步结束（有失败）",
       lines.join("\n"),
     );
-    setSyncResultShownTaskId(syncTaskId);
+    setSyncResultShownTaskId(completedTaskId);
   }, [syncTaskId, syncTaskStatus, syncResultShownTaskId, openSyncResult]);
 
   const openEditor = useCallback((url: string) => {
@@ -692,8 +694,9 @@ const AdminInformatics: React.FC = () => {
               </Button>
               <Button
                 type="button"
-                disabled={syncTriggering}
+                disabled={syncTriggering || syncTaskRunning}
                 onClick={async () => {
+                  setSyncResultShownTaskId("");
                   setSyncTriggering(true);
                   setSyncTaskStatus({
                     task_id: "__local__",
@@ -760,8 +763,9 @@ const AdminInformatics: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                disabled={syncRecompileTriggering}
+                disabled={syncRecompileTriggering || syncTaskRunning}
                 onClick={async () => {
+                  setSyncResultShownTaskId("");
                   setSyncRecompileTriggering(true);
                   setSyncTaskStatus({
                     task_id: "__local__",

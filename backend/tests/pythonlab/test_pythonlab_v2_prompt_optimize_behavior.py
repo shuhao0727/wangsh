@@ -23,6 +23,17 @@ class FakeDbResult:
         return self._value
 
 
+class FakeScalarListResult:
+    def __init__(self, values):
+        self._values = values
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._values
+
+
 class FakeOptimizeDb:
     def __init__(self, execute_value=None):
         self.added = []
@@ -45,6 +56,14 @@ class FakeOptimizeDb:
 
     async def execute(self, _query):
         return FakeDbResult(self.execute_value)
+
+
+class FakeConfigDb:
+    def __init__(self, flags):
+        self.flags = flags
+
+    async def execute(self, _query):
+        return FakeScalarListResult(self.flags)
 
 
 def test_get_prompt_template_returns_empty_when_file_is_missing(monkeypatch, tmp_path):
@@ -104,6 +123,31 @@ def test_optimize_code_rejects_when_agent_config_missing(monkeypatch):
     except AIAgentNotConfiguredError as exc:
         assert exc.status_code == 502
         assert "AI Agent not configured" in str(exc.detail)
+
+
+def test_get_agent_config_reads_python_lab_config_before_legacy_key():
+    flags = [
+        SimpleNamespace(
+            key="ai_agent_config",
+            value={
+                "api_url": "https://legacy.example.com",
+                "api_key": "legacy-key",
+                "model": "legacy-model",
+            },
+        ),
+        SimpleNamespace(
+            key="python_lab_agent_config",
+            value={
+                "api_url": "https://pythonlab.example.com",
+                "api_key": "pythonlab-key",
+                "model": "pythonlab-model",
+            },
+        ),
+    ]
+
+    result = asyncio.run(flow_api._get_agent_config(FakeConfigDb(flags)))
+
+    assert result == ("https://pythonlab.example.com", "pythonlab-key", "pythonlab-model")
 
 
 def test_optimize_code_returns_normalized_code_and_log_info(monkeypatch, tmp_path):

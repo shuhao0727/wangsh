@@ -19,18 +19,28 @@ export type PublicTypstNote = {
 
 export const publicTypstNotesApi = {
   list: async (params?: { skip?: number; limit?: number; search?: string }) => {
-    const res = await api.get("/public/informatics/typst-notes", { params });
+    const res = await api.get("/public/informatics/typst-notes", {
+      params: { ...(params || {}), _ts: Date.now() },
+      headers: { "Cache-Control": "no-cache" },
+    });
     return res.data as unknown as PublicTypstNoteListItem[];
   },
 
   get: async (id: number) => {
-    const res = await api.get(`/public/informatics/typst-notes/${id}`);
+    const res = await api.get(`/public/informatics/typst-notes/${id}`, {
+      params: { _ts: Date.now() },
+      headers: { "Cache-Control": "no-cache" },
+    });
     return res.data as unknown as PublicTypstNote;
   },
 
-  exportPdf: async (id: number) => {
+  exportPdf: async (id: number, cacheKey?: string | number) => {
     try {
-      const res = await api.get(`/public/informatics/typst-notes/${id}/export.pdf`, { responseType: "blob" });
+      const res = await api.get(`/public/informatics/typst-notes/${id}/export.pdf`, {
+        params: { v: cacheKey ?? Date.now() },
+        responseType: "blob",
+        headers: { "Cache-Control": "no-cache" },
+      });
       return res.data as unknown as Blob;
     } catch (e: any) {
       const blob = e?.response?.data;
@@ -53,7 +63,11 @@ export const publicTypstNotesApi = {
   },
 
   exportTyp: async (id: number) => {
-    const res = await api.get(`/public/informatics/typst-notes/${id}/export.typ`, { responseType: "blob" });
+    const res = await api.get(`/public/informatics/typst-notes/${id}/export.typ`, {
+      params: { v: Date.now() },
+      responseType: "blob",
+      headers: { "Cache-Control": "no-cache" },
+    });
     return res.data as unknown as Blob;
   },
 

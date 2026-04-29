@@ -557,7 +557,15 @@ const createApiClient = (): AxiosInstance => {
       } else if (error.request) {
         // 请求发送但无响应
         const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;
-        if (!silent) logger.error("❌ 网络错误，无响应:", error.request);
+        if (!silent) {
+          logger.error("❌ 网络错误，无响应:", {
+            url: `${error.config?.baseURL || ""}${error.config?.url || ""}`,
+            method: error.config?.method,
+            timeout: error.config?.timeout,
+            message: error.message,
+            status: error.request?.status,
+          });
+        }
       } else {
         // 请求配置错误
         const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;

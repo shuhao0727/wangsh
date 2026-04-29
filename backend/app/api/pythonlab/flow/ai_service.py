@@ -30,6 +30,8 @@ from .exceptions import (
     AIAgentNotConfiguredError,
 )
 
+AGENT_CONFIG_KEYS = ("python_lab_agent_config", "ai_agent_config")
+
 
 def _strip_markdown_fence(content: str) -> str:
     """去除 Markdown 代码块标记"""
@@ -90,19 +92,35 @@ def _ensure_conservative_code_optimization(original_code: str, optimized_code: s
 
 async def _get_agent_config(db: AsyncSession) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """获取 AI 智能体配置"""
-    query = select(FeatureFlag).where(FeatureFlag.key == "ai_agent_config")
+    query = select(FeatureFlag).where(FeatureFlag.key.in_(AGENT_CONFIG_KEYS))
     result = await db.execute(query)
-    flag = result.scalar_one_or_none()
+    if hasattr(result, "scalars"):
+        flags = list(result.scalars().all())
+    elif hasattr(result, "scalar_one_or_none"):
+        # 兼容旧调用形态：历史代码只查询 ai_agent_config 单行。
+        one = result.scalar_one_or_none()
+        flags = [one] if one is not None else []
+    else:
+        flags = []
 
-    if not flag or not isinstance(flag.value, dict):
-        return None, None, None
+    flags_by_key = {
+        str(getattr(flag, "key", "ai_agent_config") or "ai_agent_config"): flag
+        for flag in flags
+        if flag is not None
+    }
+    for key in AGENT_CONFIG_KEYS:
+        flag = flags_by_key.get(key)
+        if not flag or not isinstance(flag.value, dict):
+            continue
 
-    config = flag.value
-    api_url = config.get("api_url")
-    api_key = config.get("api_key")
-    model = config.get("model")
+        config = flag.value
+        api_url = config.get("api_url")
+        api_key = config.get("api_key")
+        model = config.get("model")
+        if api_url and api_key:
+            return api_url, api_key, model
 
-    return api_url, api_key, model
+    return None, None, None
 
 
 async def optimize_code_internal(

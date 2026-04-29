@@ -113,6 +113,10 @@ const InformaticsReaderPage: React.FC = () => {
   const debouncedSearch = useDebounce(search, 500);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedId) || null,
+    [items, selectedId],
+  );
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string>("");
@@ -148,7 +152,7 @@ const InformaticsReaderPage: React.FC = () => {
     loadList();
   }, [loadList]);
 
-  const loadNote = useCallback(async (id: number) => {
+  const loadNote = useCallback(async (id: number, cacheKey?: string | number) => {
     const token = ++renderTokenRef.current;
     setPdfLoading(true);
     setPdfError("");
@@ -156,10 +160,10 @@ const InformaticsReaderPage: React.FC = () => {
     setPdfData(null);
     outlineTokenRef.current = token;
     try {
-      await publicTypstNotesApi.get(id);
+      const note = await publicTypstNotesApi.get(id);
       if (renderTokenRef.current !== token) return;
 
-      const blob = await publicTypstNotesApi.exportPdf(id);
+      const blob = await publicTypstNotesApi.exportPdf(id, note?.updated_at || cacheKey || Date.now());
       const data = new Uint8Array(await blob.arrayBuffer());
       if (renderTokenRef.current !== token) return;
       setPdfData(data);
@@ -176,14 +180,14 @@ const InformaticsReaderPage: React.FC = () => {
   const handleManualRefresh = useCallback(async () => {
     await loadList();
     if (selectedId) {
-      await loadNote(selectedId);
+      await loadNote(selectedId, selectedItem?.updated_at || Date.now());
     }
-  }, [loadList, selectedId, loadNote]);
+  }, [loadList, selectedId, selectedItem?.updated_at, loadNote]);
 
   useEffect(() => {
     if (!selectedId) return;
-    loadNote(selectedId);
-  }, [selectedId, loadNote]);
+    loadNote(selectedId, selectedItem?.updated_at || Date.now());
+  }, [selectedId, selectedItem?.updated_at, loadNote]);
 
   useEffect(() => {
     return () => {

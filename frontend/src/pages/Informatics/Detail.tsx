@@ -57,7 +57,7 @@ const InformaticsDetailPage: React.FC = () => {
       const token = ++renderTokenRef.current;
       setPdfLoading(true);
       try {
-        const blob = await publicTypstNotesApi.exportPdf(noteId);
+        const blob = await publicTypstNotesApi.exportPdf(noteId, note.updated_at || Date.now());
         const data = new Uint8Array(await blob.arrayBuffer());
         if (renderTokenRef.current !== token) return;
         setPdfData(data);

@@ -19,7 +19,14 @@ from app.models.informatics.github_sync_run import InformaticsGithubSyncRun
 from app.models.informatics.github_sync_setting import InformaticsGithubSyncSetting
 from app.models.informatics.github_sync_source import InformaticsGithubSyncSource
 from app.models.informatics.typst_note import TypstNote
-from app.services.informatics.typst_notes import compile_note_pdf, create_note, list_assets, update_note, upsert_asset
+from app.services.informatics.typst_notes import (
+    compile_note_pdf,
+    create_note,
+    invalidate_note_pdf_cache,
+    list_assets,
+    update_note,
+    upsert_asset,
+)
 from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4, try_decrypt_api_key
 from app.utils.cache import cache
 from app.utils.typst_asset_validation import normalize_asset_path
@@ -115,8 +122,7 @@ def _extract_image_refs(content: str, source_path: str) -> List[str]:
 
 def _normalize_imported_typst_content(content: str, source_path: str) -> str:
     s = content or ""
-    s = re.sub(r'#import\s+["\'](?:\.\./)+style/my_style\.typ["\']\s*:\s*my_style', '#import "style/my_style.typ":my_style', s)
-    s = re.sub(r'#import\s+["\']\./style/my_style\.typ["\']\s*:\s*my_style', '#import "style/my_style.typ":my_style', s)
+    s = re.sub(r'(#import\s+)(["\'])(?:\./|(?:\.\./)+)?style/my_style\.typ(["\'])', r'\1\2style/my_style.typ\3', s)
     base = posixpath.dirname(source_path or "main.typ") or "."
 
     def _replace_image_ref(m: re.Match) -> str:
@@ -131,6 +137,13 @@ def _normalize_imported_typst_content(content: str, source_path: str) -> str:
 
     s = re.sub(r'image\(\s*(["\'])([^"\']+)\1', _replace_image_ref, s)
     return s
+
+
+def _build_note_files(content: str, repo_style_text: Optional[str] = None) -> dict:
+    files = {"main.typ": content}
+    if repo_style_text and repo_style_text.strip():
+        files["style/my_style.typ"] = repo_style_text
+    return files
 
 
 async def get_or_create_sync_settings(db: AsyncSession) -> InformaticsGithubSyncSetting:
@@ -391,6 +404,12 @@ async def run_github_sync(
         emit_progress("scan", "扫描章节列表", total_count, done_count)
         image_files = await _walk_dir(owner, repo, "image", branch, token)
         image_map = {str(it.get("path")): it for it in image_files if it.get("type") == "file"}
+        repo_style_text: Optional[str] = None
+        try:
+            style_bytes, _ = await _github_download_file(owner, repo, "style/my_style.typ", branch, token)
+            repo_style_text = style_bytes.decode("utf-8")
+        except Exception as e:
+            logger.info("GitHub 同步未读取到仓库样式 style/my_style.typ，将使用本地样式: %s", e)
         source_res = await db.execute(
             select(InformaticsGithubSyncSource).where(
                 InformaticsGithubSyncSource.repo_owner == owner,
@@ -414,18 +433,64 @@ async def run_github_sync(
                 metadata_updated = False
                 note_res = await db.execute(select(TypstNote).where(TypstNote.id == source.note_id))
                 note = note_res.scalar_one_or_none()
+                counted_updated = False
                 if note is not None and (note.title or "") != title and not dry_run:
                     note.title = title
                     note.updated_at = datetime.now()
                     await db.commit()
                     stats.updated += 1
                     updated_paths.append(path)
+                    counted_updated = True
                     metadata_updated = True
+                if note is not None and repo_style_text and not dry_run:
+                    files = dict(note.files) if isinstance(note.files, dict) else {"main.typ": note.content_typst or ""}
+                    entry_path = note.entry_path or "main.typ"
+                    normalized_main = _normalize_imported_typst_content(str(files.get(entry_path) or note.content_typst or ""), path)
+                    style_changed = str(files.get("style/my_style.typ") or "") != repo_style_text
+                    content_changed = str(files.get(entry_path) or "") != normalized_main
+                    if style_changed or content_changed:
+                        files[entry_path] = normalized_main
+                        files["style/my_style.typ"] = repo_style_text
+                        note.files = files
+                        note.content_typst = normalized_main
+                        note.updated_at = datetime.now()
+                        await db.commit()
+                        if not counted_updated:
+                            stats.updated += 1
+                            updated_paths.append(path)
+                            counted_updated = True
+                        metadata_updated = True
                 if not metadata_updated:
                     stats.skipped += 1
-                if force_recompile and not dry_run:
+                if (force_recompile or metadata_updated) and not dry_run:
                     if note is not None:
                         try:
+                            note_id = int(note.id or 0)
+                            files = note.files if isinstance(note.files, dict) else {"main.typ": note.content_typst or ""}
+                            entry_path = note.entry_path or "main.typ"
+                            content_for_refs = str(files.get(entry_path) or note.content_typst or "")
+                            refs = _extract_image_refs(content_for_refs, "main.typ")
+                            for ref in refs:
+                                img_meta = image_map.get(ref)
+                                if not img_meta or not note_id:
+                                    continue
+                                data, _ = await _github_download_file(owner, repo, ref, branch, token)
+                                await upsert_asset(
+                                    db=db,
+                                    note_id=note_id,
+                                    path=ref,
+                                    mime=_guess_mime(ref),
+                                    content=data,
+                                    uploaded_by_id=setting.updated_by_id,
+                                )
+                            if note_id:
+                                current_assets = await list_assets(db=db, note_id=note_id)
+                                valid_refs = set(refs)
+                                for asset in current_assets:
+                                    if asset.path.startswith("image/") and asset.path not in valid_refs:
+                                        await db.delete(asset)
+                                        await db.commit()
+                            await invalidate_note_pdf_cache(db=db, note=note)
                             await compile_note_pdf(db=db, note=note)
                             if note.id is not None:
                                 compiled_note_ids.append(int(note.id))
@@ -454,7 +519,7 @@ async def run_github_sync(
                     title=title,
                     category_path=category,
                     entry_path="main.typ",
-                    files={"main.typ": normalized_content},
+                    files=_build_note_files(normalized_content, repo_style_text),
                     content_typst=normalized_content,
                     published=True,
                 )
@@ -484,7 +549,7 @@ async def run_github_sync(
                     title=title,
                     category_path=category,
                     entry_path="main.typ",
-                    files={"main.typ": normalized_content},
+                    files=_build_note_files(normalized_content, repo_style_text),
                     content_typst=normalized_content,
                 )
                 source.source_sha = remote_sha

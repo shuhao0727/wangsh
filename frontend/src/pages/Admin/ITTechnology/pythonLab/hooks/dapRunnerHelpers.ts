@@ -37,6 +37,8 @@ export function wsCloseHint(code: number): string | null {
       return "连接异常断开（可能是网络问题或服务器崩溃）";
     case 1008:
       return "策略违规";
+    case 1009:
+      return "消息过大，请减少输出或重试";
     case 1011:
       return "服务器内部错误";
     case 4401:

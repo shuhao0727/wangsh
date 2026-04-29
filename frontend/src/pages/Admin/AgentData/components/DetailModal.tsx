@@ -171,7 +171,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
 
   return (
     <Dialog open={visible} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-h-[88vh] gap-0 overflow-hidden p-0 sm:max-w-[940px]">
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[940px]">
         <DialogHeader className="border-b border-border-secondary bg-surface-2 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Database className="h-5 w-5 text-primary" />
@@ -182,7 +182,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <MetricTile label="记录ID" value={record.id} />
             <MetricTile label="使用时间" value={formatDateTime(record.used_at)} tone="success" />

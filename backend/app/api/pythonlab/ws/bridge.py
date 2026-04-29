@@ -577,9 +577,11 @@ class DapSessionBridge:
 
     async def handle_client_text(self, data: str) -> None:
         """处理客户端文本消息"""
+        if len(data.encode("utf-8", errors="ignore")) > self.max_dap_msg_bytes:
+            await self._send_output("DAP 消息过大，连接已断开\n")
+            await self._close_known_websocket(code=1009, reason="dap_message_too_large")
+            raise RuntimeError("dap message too large")
         await self.start()
-        if len(data) > WS_MAX_DAP_MSG_BYTES:
-            raise ValueError("message too large")
         msg = json.loads(data)
         self.ws_log(
             "ws_client_message",
