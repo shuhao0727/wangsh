@@ -1,6 +1,7 @@
 import { showMessage } from '@/lib/toast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 
 import { AdminTablePanel } from '@/components/Admin';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ const DianmingManager: React.FC = () => {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [editorVisible, setEditorVisible] = useState(false);
   const requestSeq = useRef(0);
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const {
     register,
     handleSubmit,
@@ -174,18 +176,20 @@ const DianmingManager: React.FC = () => {
     }
   };
 
-  const handleDelete = async (record: DianmingClass) => {
-    if (!window.confirm('确定要删除该班级及其所有学生吗？')) return;
-    try {
-      await dianmingApi.deleteClass(record.year, record.class_name);
-      showMessage.success('删除成功');
-      await fetchData();
-    } catch (_error) {
-      showMessage.error('删除失败');
-    }
+  const handleDelete = (record: DianmingClass) => {
+    setConfirmState({ message: '确定要删除该班级及其所有学生吗？', onOk: async () => {
+      try {
+        await dianmingApi.deleteClass(record.year, record.class_name);
+        showMessage.success('删除成功');
+        await fetchData();
+      } catch (_error) {
+        showMessage.error('删除失败');
+      }
+    }});
   };
 
   return (
+    <>
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4 flex flex-wrap justify-between gap-3">
         <div className="flex flex-wrap gap-2">
@@ -332,6 +336,17 @@ const DianmingManager: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

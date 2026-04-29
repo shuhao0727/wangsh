@@ -14,7 +14,7 @@ type Props = {
 };
 
 const TableSkeleton: React.FC = () => (
-  <div className="space-y-3 px-4 py-4">
+  <div className="space-y-3 px-4 py-4" role="status" aria-label="加载中">
     <Skeleton className="h-8 w-full" />
     {Array.from({ length: 5 }).map((_, i) => (
       <Skeleton key={i} className="h-9 w-full" />
@@ -25,8 +25,10 @@ const TableSkeleton: React.FC = () => (
 const AdminTablePanel: React.FC<Props> = ({
   title, extra, loading = false, isEmpty = false,
   emptyDescription, emptyAction, children, pagination,
-}) => (
-  <div className="flex flex-col min-h-0 overflow-hidden flex-1">
+}) => {
+  const ariaLabel = typeof title === "string" ? title : "数据面板";
+  return (
+  <div className="flex flex-col min-h-0 overflow-hidden flex-1" role="region" aria-label={ariaLabel}>
     {(title || extra) && (
       <div className="flex items-center justify-between px-4 py-3">
         {title && <div className="text-base font-semibold text-text-base">{title}</div>}
@@ -34,7 +36,7 @@ const AdminTablePanel: React.FC<Props> = ({
       </div>
     )}
 
-    <div className="flex-1 overflow-clip flex flex-col">
+    <div className="flex-1 overflow-hidden flex flex-col">
       {loading ? (
         <TableSkeleton />
       ) : isEmpty ? (
@@ -54,6 +56,7 @@ const AdminTablePanel: React.FC<Props> = ({
       </div>
     )}
   </div>
-);
+  );
+};
 
 export default AdminTablePanel;

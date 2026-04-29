@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -7,6 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { Plus, RefreshCw, Loader2, Pencil, Trash2 } from "lucide-react";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { githubSyncApi, typstCategoriesApi, typstNotesApi } from "@services";
 import type {
   GithubSyncRun,
@@ -83,6 +85,7 @@ const AdminInformatics: React.FC = () => {
   const [lastRun, setLastRun] = useState<GithubSyncRun | null>(null);
   const [syncTaskId, setSyncTaskId] = useState<string>("");
   const [syncTaskStatus, setSyncTaskStatus] = useState<GithubSyncTaskStatus | null>(null);
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const [syncResultShownTaskId, setSyncResultShownTaskId] = useState<string>("");
   const [syncResultOpen, setSyncResultOpen] = useState(false);
   const [syncResultTitle, setSyncResultTitle] = useState("");
@@ -153,6 +156,8 @@ const AdminInformatics: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAdminSSE("informatics_changed", load);
 
   useEffect(() => {
     if (syncModalOpen) {
@@ -397,15 +402,16 @@ const AdminInformatics: React.FC = () => {
               size="sm"
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={async () => {
-                if (!window.confirm(`确认删除「${row.original.title}」？`)) return;
-                try {
-                  await typstNotesApi.remove(row.original.id);
-                  showMessage.success("已删除");
-                  await load();
-                } catch (e: any) {
-                  showMessage.error(extractErrorMsg(e, "删除失败"));
-                }
+              onClick={() => {
+                setConfirmState({ message: `确认删除「${row.original.title}」？`, onOk: async () => {
+                  try {
+                    await typstNotesApi.remove(row.original.id);
+                    showMessage.success("已删除");
+                    await load();
+                  } catch (e: any) {
+                    showMessage.error(extractErrorMsg(e, "删除失败"));
+                  }
+                }});
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -446,6 +452,7 @@ const AdminInformatics: React.FC = () => {
   };
 
   return (
+    <>
     <AdminPage scrollable={false}>
       <div className="mb-4 flex flex-wrap justify-between gap-3">
         <div className="flex flex-wrap gap-2">
@@ -496,32 +503,34 @@ const AdminInformatics: React.FC = () => {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 flex flex-col">
           <AdminTablePanel
             loading={loading}
             isEmpty={displayedItems.length === 0}
             emptyDescription="暂无笔记数据"
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-full" />
+            <DataTable table={table} tableClassName="min-w-[980px]" />
           </AdminTablePanel>
         </div>
-        <div className="mt-2 flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
-          <DataTablePagination
-            currentPage={Math.max(1, page)}
-            totalPages={Math.max(1, totalPages)}
-            total={displayedItems.length}
-            pageSize={pageSize}
-            pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
-            onPageChange={(nextPage, nextPageSize) => {
-              if (nextPageSize && nextPageSize !== pageSize) {
-                setPageSize(nextPageSize);
-                setPage(1);
-                return;
-              }
-              setPage(Math.max(1, Math.min(Math.max(1, totalPages), nextPage)));
-            }}
-          />
-        </div>
+        {displayedItems.length > 0 ? (
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+            <DataTablePagination
+              currentPage={Math.max(1, page)}
+              totalPages={Math.max(1, totalPages)}
+              total={displayedItems.length}
+              pageSize={pageSize}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              onPageChange={(nextPage, nextPageSize) => {
+                if (nextPageSize && nextPageSize !== pageSize) {
+                  setPageSize(nextPageSize);
+                  setPage(1);
+                  return;
+                }
+                setPage(Math.max(1, Math.min(Math.max(1, totalPages), nextPage)));
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
@@ -909,6 +918,17 @@ const AdminInformatics: React.FC = () => {
         </DialogContent>
       </Dialog>
     </AdminPage>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

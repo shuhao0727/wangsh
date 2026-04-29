@@ -124,11 +124,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      if (window.confirm(`确定要删除用户【${record.full_name}】吗？`)) {
-                        handleDelete(record.id);
-                      }
-                    }}
+                    onClick={() => handleDelete(record.id)}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>

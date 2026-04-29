@@ -3,7 +3,7 @@
  * 使用自定义Hook和组件架构
  */
 
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -43,21 +43,25 @@ import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
 import { roleOptions, statusOptions } from "./data";
 import type { User } from "./types";
-import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
 const AdminUsers: React.FC = () => {
   const { state, actions, closeForm, closeDetail } = useUsers();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+
+  const handleDeleteRequest = useCallback((id: number) => setDeleteTarget(id), []);
 
   const baseColumns = useMemo(
     () =>
       getUserColumns({
         handleEdit: actions.handleEdit,
-        handleDelete: actions.handleDelete,
+        handleDelete: handleDeleteRequest,
         handleView: actions.handleView,
       }),
-    [actions.handleDelete, actions.handleEdit, actions.handleView],
+    [actions.handleEdit, actions.handleView, handleDeleteRequest],
   );
 
   const rowSelection = useMemo<RowSelectionState>(() => {
@@ -134,7 +138,7 @@ const AdminUsers: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <AdminFilterBar>
         <div className="relative w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
@@ -251,7 +255,7 @@ const AdminUsers: React.FC = () => {
           <Plus className="h-4 w-4" />
           添加用户
         </Button>
-      </div>
+      </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
@@ -261,7 +265,7 @@ const AdminUsers: React.FC = () => {
             emptyDescription={state.searchKeyword ? "未找到匹配的用户" : "暂无用户数据"}
             emptyAction={<Button onClick={actions.handleAddUser}>添加第一个用户</Button>}
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[980px]" />
+            <DataTable table={table} tableClassName="min-w-[980px]" />
           </AdminTablePanel>
         </div>
         {state.users.length > 0 ? (
@@ -290,6 +294,25 @@ const AdminUsers: React.FC = () => {
         currentUser={state.currentUser}
         onCancel={closeDetail}
         onEdit={actions.handleEdit}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="确认删除"
+        description={
+          deleteTarget !== null
+            ? `确定要删除用户【${state.users.find((u) => u.id === deleteTarget)?.full_name ?? ""}】吗？`
+            : ""
+        }
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={async () => {
+          if (deleteTarget !== null) {
+            await actions.handleDelete(deleteTarget);
+            setDeleteTarget(null);
+          }
+        }}
       />
     </AdminPage>
   );

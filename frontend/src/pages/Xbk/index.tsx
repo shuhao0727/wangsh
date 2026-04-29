@@ -27,6 +27,7 @@ import { useXbkFilters } from "./hooks/useXbkFilters";
 import { useXbkPagination, DEFAULT_PAGINATION } from "./hooks/useXbkPagination";
 import { xbkDataApi, xbkPublicConfigApi } from "@services";
 import useAuth from "@hooks/useAuth";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import type {
   XbkCourseRow,
   XbkCourseResultRow,
@@ -239,6 +240,8 @@ const XbkPage: React.FC = () => {
   const [exportingCurrent, setExportingCurrent] = useState(false);
 
   const canEdit = auth.isAdmin();
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
+
   const [editKind, setEditKind] = useState<
     "students" | "courses" | "selections"
   >("students");
@@ -531,8 +534,7 @@ const XbkPage: React.FC = () => {
                 variant="ghost"
                 className="h-7 px-2 text-destructive hover:text-destructive"
                 onClick={() => {
-                  if (!window.confirm("确认删除？")) return;
-                  void handleDeleteRow(kind, record.id);
+                  setConfirmState({ message: "确认删除？", onOk: () => { void handleDeleteRow(kind, record.id); } });
                 }}
               >
                 删除
@@ -928,6 +930,7 @@ const XbkPage: React.FC = () => {
   }
 
   return (
+    <>
     <div className="xbk-page">
       <div className="xbk-sidebar">
         <Card className="xbk-sidebar-card">
@@ -1241,6 +1244,17 @@ const XbkPage: React.FC = () => {
         />
       </div>
     </div>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

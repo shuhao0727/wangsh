@@ -44,6 +44,7 @@ import type { User } from "@services/users";
 import type { AIAgent } from "@services/znt/types";
 import type { GroupDiscussionMember } from "@services/znt/api/group-discussion-api";
 import { AdminCard, AdminTablePanel } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
 type SessionRow = {
@@ -99,6 +100,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -499,23 +502,24 @@ const GroupDiscussionAdminTab: React.FC = () => {
     }
   };
 
-  const handleKickMember = async (userId: number) => {
+  const handleKickMember = (userId: number) => {
     if (!currentSession) return;
-    if (!window.confirm("确认移除成员？移除后该成员将无法继续参与讨论。")) return;
-    try {
-      const res = await groupDiscussionApi.adminRemoveMember({
-        sessionId: currentSession.id,
-        userId,
-      });
-      if (res.success) {
-        showMessage.success("移除成功");
-        loadMembers();
-      } else {
-        showMessage.error(res.message || "移除失败");
+    setConfirmState({ message: "确认移除成员？移除后该成员将无法继续参与讨论。", onOk: async () => {
+      try {
+        const res = await groupDiscussionApi.adminRemoveMember({
+          sessionId: currentSession.id,
+          userId,
+        });
+        if (res.success) {
+          showMessage.success("移除成功");
+          loadMembers();
+        } else {
+          showMessage.error(res.message || "移除失败");
+        }
+      } catch (_e) {
+        showMessage.error("移除失败");
       }
-    } catch (_e) {
-      showMessage.error("移除失败");
-    }
+    } });
   };
 
   const handleGenerateProfile = async (member: GroupDiscussionMember) => {
@@ -725,8 +729,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             size="sm"
             disabled={deletingSessionId === row.original.id}
             onClick={() => {
-              if (!window.confirm("确认删除该会话吗？将同时删除消息、成员和分析记录，且不可恢复。")) return;
-              handleDeleteSession(row.original);
+              setConfirmState({ message: "确认删除该会话吗？将同时删除消息、成员和分析记录，且不可恢复。", onOk: () => { handleDeleteSession(row.original); } });
             }}
           >
             {deletingSessionId === row.original.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -971,8 +974,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               disabled={batchDeleting || selectedSessionIds.length === 0}
               onClick={() => {
                 if (selectedSessionIds.length === 0) return;
-                if (!window.confirm(`确认删除所选 ${selectedSessionIds.length} 个会话吗？此操作不可恢复。`)) return;
-                handleBatchDeleteSessions();
+                setBatchDeleteOpen(true);
               }}
             >
               {batchDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -1027,7 +1029,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             isEmpty={!loading && sessions.length === 0}
             emptyDescription="暂无数据"
           >
-            <DataTable table={sessionsTable} className="h-full" tableClassName="min-w-[980px]" />
+            <DataTable table={sessionsTable} tableClassName="min-w-[980px]" />
           </AdminTablePanel>
         </div>
         <div className="mt-auto flex justify-end border-t border-border-secondary pt-3">
@@ -1627,6 +1629,26 @@ const GroupDiscussionAdminTab: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认"
+        variant="destructive"
+        onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="确认删除"
+        description={`确认删除所选 ${selectedSessionIds.length} 个会话吗？此操作不可恢复。`}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={async () => { await handleBatchDeleteSessions(); setBatchDeleteOpen(false); }}
+      />
     </div>
   );
 };

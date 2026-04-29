@@ -3,7 +3,7 @@ PythonLab 沙箱调试环境配置
 """
 
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class PythonLabSettingsMixin:
@@ -34,3 +34,17 @@ class PythonLabSettingsMixin:
     PYTHONLAB_LOG_MAX_SIZE: str = Field(default="10m")
     PYTHONLAB_LOG_MAX_FILE: str = Field(default="3")
     PYTHONLAB_WORKSPACE_DISK_QUOTA_MB: int = Field(default=512)
+
+    _MAX_PYTHONLAB_TTL = 7200
+
+    @field_validator("PYTHONLAB_SESSION_TTL_SECONDS", "PYTHONLAB_UNATTACHED_TTL_SECONDS", mode="after")
+    @classmethod
+    def cap_pythonlab_ttls(cls, v: int) -> int:
+        if v > cls._MAX_PYTHONLAB_TTL:
+            import logging
+            logging.getLogger("app.core.config").warning(
+                "TTL 值 %ds 超过上限 %ds，已自动限制",
+                v, cls._MAX_PYTHONLAB_TTL,
+            )
+            return cls._MAX_PYTHONLAB_TTL
+        return v

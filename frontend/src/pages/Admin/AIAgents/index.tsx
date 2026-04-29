@@ -1,9 +1,9 @@
 /**
- * AI智能体管理页面 - 真实数据版
- * 连接后端数据库，支持完整的CRUD操作和测试功能
+ * AI智能体管理页面 - TanStack Query 迁移版
+ * 使用 TanStack Query hooks 替代手动 useState/useEffect 数据获取
  */
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -11,6 +11,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAdminSSE } from "@hooks/useAdminSSE";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,57 +29,68 @@ import type { AIAgent, AgentStatisticsData } from "@services/znt/types";
 import { aiAgentsApi } from "@services/agents";
 import { logger } from "@services/logger";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
+// TanStack Query hooks
+import {
+  useAgentsList,
+  useAgentStatistics,
+  useCreateAgent,
+  useUpdateAgent,
+  useDeleteAgent,
+  useBatchDeleteAgents,
+  AI_AGENTS_QUERY_KEY,
+} from "@hooks/queries/useAIAgentsQuery";
+
 const AdminAIAgents: React.FC = () => {
-  // 状态管理
-  const [loading, setLoading] = useState(false);
-  const [agents, setAgents] = useState<AIAgent[]>([]);
-  const [total, setTotal] = useState(0);
+  // 本地状态
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
-  const [statisticsData, setStatisticsData] = useState<AgentStatisticsData | null>(null);
 
   // 弹窗状态
   const [formVisible, setFormVisible] = useState(false);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AIAgent | null>(null);
 
-  // 加载智能体列表 - 使用真实API数据
-  const loadAgents = useCallback(async () => {
-    try {
-      setLoading(true);
+  // TanStack Query — 数据查询
+  const agentsQueryParams = useMemo(
+    () => ({
+      page: currentPage,
+      pageSize,
+      search: searchKeyword.trim() || undefined,
+      agentType: selectedType !== "all" ? selectedType : undefined,
+    }),
+    [currentPage, pageSize, searchKeyword, selectedType],
+  );
 
-      // 调用真实API
-      const response = await aiAgentsApi.getAgents({
-        skip: (currentPage - 1) * pageSize,
-        limit: pageSize,
-        search: searchKeyword.trim() || undefined,
-        agent_type: selectedType !== "all" ? selectedType : undefined,
-      });
+  const {
+    data: agentsData,
+    isLoading,
+  } = useAgentsList(agentsQueryParams);
 
-      if (response.success) {
-        setAgents(response.data.items);
-        setTotal(response.data.total);
-        setSelectedRowKeys([]);
-      } else {
-        showMessage.error(response.message || "加载智能体列表失败");
-        setAgents([]);
-        setTotal(0);
-      }
-    } catch (error) {
-      logger.error("加载智能体列表失败:", error);
-      showMessage.error("加载智能体列表失败");
-      setAgents([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, pageSize, searchKeyword, selectedType]);
+  const { data: statisticsData } = useAgentStatistics();
+
+  const agents = agentsData?.items ?? [];
+  const total = agentsData?.total ?? 0;
+
+  // TanStack Query — 变更 mutations
+  const createAgentMutation = useCreateAgent();
+  const updateAgentMutation = useUpdateAgent();
+  const deleteAgentMutation = useDeleteAgent();
+  const batchDeleteMutation = useBatchDeleteAgents();
+
+  const queryClient = useQueryClient();
+
+  // SSE 实时更新 — 收到变更事件后刷新查询缓存
+  useAdminSSE("agent_changed", () => {
+    queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+  });
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -112,87 +124,77 @@ const AdminAIAgents: React.FC = () => {
   };
 
   // 处理删除智能体
-  const handleDelete = async (id: number) => {
-    try {
-      setLoading(true);
-      
-      // 调用真实API删除
-      const response = await aiAgentsApi.deleteAgent(id);
-      
-      if (response.success) {
-        // 重新加载列表
-        await loadAgents();
-        showMessage.success("智能体删除成功");
-      } else {
-        showMessage.error(response.message || "删除智能体失败");
+  const handleDelete = useCallback(
+    async (id: number) => {
+      try {
+        const response = await deleteAgentMutation.mutateAsync(id);
+        if (response.success) {
+          showMessage.success("智能体删除成功");
+        } else {
+          showMessage.error(response.message || "删除智能体失败");
+        }
+      } catch (error) {
+        logger.error("删除智能体失败:", error);
+        showMessage.error("删除智能体失败");
       }
-    } catch (error) {
-      logger.error("删除智能体失败:", error);
-      showMessage.error("删除智能体失败");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [deleteAgentMutation],
+  );
 
   // 处理切换激活状态
-  const handleToggleActive = async (id: number, isActive: boolean) => {
-    try {
-      setLoading(true);
-
-      // 调用真实API更新状态
-      const response = await aiAgentsApi.updateAgent(id, { is_active: isActive });
-      
-      if (response.success) {
-        // 重新加载列表
-        await loadAgents();
-        showMessage.success(`智能体已${isActive ? "启用" : "停用"}`);
-      } else {
-        showMessage.error(response.message || "更新智能体状态失败");
+  const handleToggleActive = useCallback(
+    async (id: number, isActive: boolean) => {
+      try {
+        const response = await updateAgentMutation.mutateAsync({
+          id,
+          data: { is_active: isActive },
+        });
+        if (response.success) {
+          showMessage.success(`智能体已${isActive ? "启用" : "停用"}`);
+        } else {
+          showMessage.error(response.message || "更新智能体状态失败");
+        }
+      } catch (error) {
+        logger.error("更新智能体状态失败:", error);
+        showMessage.error("更新智能体状态失败");
       }
-    } catch (error) {
-      logger.error("更新智能体状态失败:", error);
-      showMessage.error("更新智能体状态失败");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [updateAgentMutation],
+  );
 
   // 处理表单提交
   const handleFormSubmit = async (values: any) => {
     try {
-      setLoading(true);
-
       if (editingAgent) {
         // 更新现有智能体
-        // model_name 可能是数组（tags模式），需要取第一个值
         const modelName = Array.isArray(values.model_name)
           ? (values.model_name[0] ?? "")
           : (values.model_name || "");
-        const response = await aiAgentsApi.updateAgent(editingAgent.id, {
-          name: values.name,
-          agent_type: values.agent_type,
-          description: values.description || undefined,
-          model_name: modelName || undefined,
-          system_prompt: values.system_prompt || undefined,
-          api_endpoint: values.api_endpoint,
-          api_key: values.api_key || undefined,
-          is_active: values.is_active,
+        const response = await updateAgentMutation.mutateAsync({
+          id: editingAgent.id,
+          data: {
+            name: values.name,
+            agent_type: values.agent_type,
+            description: values.description || undefined,
+            model_name: modelName || undefined,
+            system_prompt: values.system_prompt || undefined,
+            api_endpoint: values.api_endpoint,
+            api_key: values.api_key || undefined,
+            is_active: values.is_active,
+          },
         });
-        
         if (response.success) {
-          // 重新加载列表
-          await loadAgents();
           showMessage.success("智能体信息更新成功");
+          setFormVisible(false);
         } else {
           showMessage.error(response.message || "更新智能体信息失败");
-          return;
         }
       } else {
         // 创建新智能体
         const createModelName = Array.isArray(values.model_name)
           ? (values.model_name[0] ?? "")
           : (values.model_name || "");
-        const response = await aiAgentsApi.createAgent({
+        const response = await createAgentMutation.mutateAsync({
           name: values.name,
           agent_type: values.agent_type || "general",
           description: values.description || undefined,
@@ -202,23 +204,16 @@ const AdminAIAgents: React.FC = () => {
           api_key: values.api_key || undefined,
           is_active: values.is_active !== undefined ? values.is_active : true,
         });
-        
         if (response.success) {
-          // 重新加载列表
-          await loadAgents();
           showMessage.success("智能体添加成功");
+          setFormVisible(false);
         } else {
           showMessage.error(response.message || "创建智能体失败");
-          return;
         }
       }
-
-      setFormVisible(false);
     } catch (error) {
       logger.error("保存智能体信息失败:", error);
       showMessage.error("保存智能体信息失败");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -249,7 +244,9 @@ const AdminAIAgents: React.FC = () => {
         return;
       }
       const testData = response.data as { message?: string; response_time?: number };
-      showMessage.success(`测试成功${testData.response_time ? `（${testData.response_time.toFixed(2)}ms）` : ""}`);
+      showMessage.success(
+        `测试成功${testData.response_time ? `（${testData.response_time.toFixed(2)}ms）` : ""}`,
+      );
       if (testData.message) {
         showMessage.info(testData.message);
       }
@@ -265,71 +262,43 @@ const AdminAIAgents: React.FC = () => {
       showMessage.warning("请选择要删除的智能体");
       return;
     }
-    if (!window.confirm(`确定要删除选中的 ${selectedRowKeys.length} 个智能体吗？此操作不可恢复。`)) {
-      return;
-    }
-
-    const run = async () => {
-      try {
-        setLoading(true);
-
-        let successCount = 0;
-        let errorCount = 0;
-
-        for (const id of selectedRowKeys) {
-          try {
-            const response = await aiAgentsApi.deleteAgent(id);
-            if (response.success) {
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } catch {
-            errorCount++;
-          }
-        }
-
-        await loadAgents();
-        setSelectedRowKeys([]);
-
-        if (errorCount === 0) {
-          showMessage.success(`成功删除 ${successCount} 个智能体`);
-        } else if (successCount > 0) {
-          showMessage.warning(`成功删除 ${successCount} 个智能体，${errorCount} 个删除失败`);
-        } else {
-          showMessage.error(`批量删除失败，所有 ${errorCount} 个智能体删除失败`);
-        }
-      } catch (error) {
-        logger.error("批量删除失败:", error);
-        showMessage.error("批量删除失败");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void run();
+    setBatchDeleteOpen(true);
   };
 
-  // 加载统计数据
-  const loadStatistics = useCallback(async () => {
+  const executeBatchDelete = async () => {
     try {
-      const response = await aiAgentsApi.getAgentStatistics();
-      if (response.success) {
-        setStatisticsData(response.data);
+      const results = await batchDeleteMutation.mutateAsync(selectedRowKeys);
+
+      let successCount = 0;
+      let errorCount = 0;
+      results.forEach((r) => {
+        if (r.status === "fulfilled" && r.value?.success) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      });
+
+      setSelectedRowKeys([]);
+
+      if (errorCount === 0) {
+        showMessage.success(`成功删除 ${successCount} 个智能体`);
+      } else if (successCount > 0) {
+        showMessage.warning(
+          `成功删除 ${successCount} 个智能体，${errorCount} 个删除失败`,
+        );
+      } else {
+        showMessage.error(
+          `批量删除失败，所有 ${errorCount} 个智能体删除失败`,
+        );
       }
     } catch (error) {
-      logger.error("加载统计数据失败:", error);
+      logger.error("批量删除失败:", error);
+      showMessage.error("批量删除失败");
+    } finally {
+      setBatchDeleteOpen(false);
     }
-  }, []);
-
-  // 页面加载时获取数据
-  useEffect(() => {
-    loadAgents();
-    loadStatistics();
-  }, [loadAgents, loadStatistics]);
-
-  // SSE 实时更新
-  useAdminSSE('agent_changed', loadAgents);
+  };
 
   const baseColumns = useMemo(
     () =>
@@ -415,20 +384,22 @@ const AdminAIAgents: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const statisticsDefaults: AgentStatisticsData = {
+    total: 0,
+    generalCount: 0,
+    difyCount: 0,
+    activeCount: 0,
+    total_agents: 0,
+    active_agents: 0,
+    deleted_agents: 0,
+    api_errors: 0,
+  };
+
   return (
     <AdminPage scrollable={false}>
       {/* 统计卡片 */}
-      <StatisticsCards 
-        data={statisticsData || {
-          total: 0,
-          generalCount: 0,
-          difyCount: 0,
-          activeCount: 0,
-          total_agents: 0,
-          active_agents: 0,
-          deleted_agents: 0,
-          api_errors: 0,
-        }} 
+      <StatisticsCards
+        data={statisticsData || statisticsDefaults}
       />
 
       {/* 搜索和操作栏 */}
@@ -448,16 +419,20 @@ const AdminAIAgents: React.FC = () => {
       <div className="mt-3 flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <AdminTablePanel
-            loading={loading}
+            loading={isLoading}
             isEmpty={agents.length === 0}
-            emptyDescription={searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"}
+            emptyDescription={
+              searchKeyword ? "未找到匹配的智能体" : "暂无智能体数据"
+            }
             emptyAction={
-              <Button onClick={handleAddAgent}>
-                添加第一个智能体
-              </Button>
+              <Button onClick={handleAddAgent}>添加第一个智能体</Button>
             }
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[1400px]" />
+            <DataTable
+              table={table}
+              className="h-full"
+              tableClassName="min-w-[1400px]"
+            />
           </AdminTablePanel>
         </div>
         {agents.length > 0 ? (
@@ -487,6 +462,16 @@ const AdminAIAgents: React.FC = () => {
         visible={detailVisible}
         agent={currentAgent}
         onClose={() => setDetailVisible(false)}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="确认删除"
+        description={`确定要删除选中的 ${selectedRowKeys.length} 个智能体吗？此操作不可恢复。`}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeBatchDelete}
       />
     </AdminPage>
   );

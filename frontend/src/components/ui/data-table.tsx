@@ -67,7 +67,7 @@ function DataTable<TData>({
       <Table
         className={cn(
           tableClassName,
-          "[&_thead_th]:h-10 [&_tbody_td]:py-2.5",
+          "[&_thead_th]:h-[var(--ws-control-height)] [&_tbody_td]:py-2.5",
         )}
       >
         <TableHeader>
@@ -97,6 +97,18 @@ function DataTable<TData>({
                 data-state={row.getIsSelected() ? "selected" : undefined}
                 className={getRowClassName?.(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
+                {...(onRowClick
+                  ? {
+                      role: "button",
+                      tabIndex: 0,
+                      onKeyDown: (e: React.KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      },
+                    }
+                  : {})}
               >
                 {row.getVisibleCells().map((cell) => {
                   return (
@@ -144,9 +156,10 @@ function DataTablePagination({
     <div className={cn("flex flex-wrap items-center justify-end gap-2 text-sm text-text-secondary", className)}>
       <span className="mr-1 whitespace-nowrap text-text-tertiary">共 {total} 条</span>
       <select
-        className="h-9 rounded-lg border border-border-secondary bg-background px-3 text-sm text-text-base outline-none transition-colors hover:border-border focus:border-primary/50"
+        className="h-[var(--ws-control-height)] rounded-lg border border-border-secondary bg-background px-3 text-sm text-text-base outline-none transition-colors hover:border-border focus:border-primary/50"
         value={pageSize}
         onChange={(event) => onPageChange(1, Number(event.target.value))}
+        aria-label="每页条数"
       >
         {pageSizeOptions.map((size) => (
           <option key={size} value={size}>
@@ -157,9 +170,10 @@ function DataTablePagination({
       <Button
         variant="ghost"
         size="sm"
-        className="h-9 px-3 text-sm text-text-secondary hover:text-text-base"
+        className="h-[var(--ws-control-height)] px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage <= 1}
         onClick={() => onPageChange(currentPage - 1)}
+        aria-label="上一页"
       >
         上一页
       </Button>
@@ -169,9 +183,10 @@ function DataTablePagination({
       <Button
         variant="ghost"
         size="sm"
-        className="h-9 px-3 text-sm text-text-secondary hover:text-text-base"
+        className="h-[var(--ws-control-height)] px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage >= totalPages}
         onClick={() => onPageChange(currentPage + 1)}
+        aria-label="下一页"
       >
         下一页
       </Button>

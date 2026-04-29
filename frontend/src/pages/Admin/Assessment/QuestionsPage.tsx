@@ -4,6 +4,7 @@
  */
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -230,6 +231,8 @@ const QuestionsPage: React.FC = () => {
   const [questionDraft, setQuestionDraft] = useState<QuestionDraft>(initialQuestionDraft);
   const [qSaving, setQSaving] = useState(false);
   const [previewQ, setPreviewQ] = useState<AssessmentQuestion | null>(null);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
@@ -466,15 +469,16 @@ const QuestionsPage: React.FC = () => {
     }
   };
 
-  const handleDeleteQ = async (questionId: number) => {
-    if (!window.confirm("确认删除该题目？")) return;
-    try {
-      await assessmentQuestionApi.delete(questionId);
-      showMessage.success("已删除");
-      await loadQuestions();
-    } catch (e: any) {
-      showMessage.error(e.message || "删除失败");
-    }
+  const handleDeleteQ = (questionId: number) => {
+    setConfirmState({ message: "确认删除该题目？", onOk: async () => {
+      try {
+        await assessmentQuestionApi.delete(questionId);
+        showMessage.success("已删除");
+        await loadQuestions();
+      } catch (e: any) {
+        showMessage.error(e.message || "删除失败");
+      }
+    }});
   };
 
   const handleGenerate = async () => {
@@ -535,14 +539,15 @@ const QuestionsPage: React.FC = () => {
     );
   };
 
-  const removeAdaptive = async (kp: AdaptiveKP) => {
-    if (!window.confirm("确认删除该知识点？")) return;
-    if (!kp.key.startsWith("new_")) {
-      try {
-        await assessmentQuestionApi.delete(Number(kp.key));
-      } catch {}
-    }
-    setAdaptiveKPs((prev) => prev.filter((item) => item.key !== kp.key));
+  const removeAdaptive = (kp: AdaptiveKP) => {
+    setConfirmState({ message: "确认删除该知识点？", onOk: async () => {
+      if (!kp.key.startsWith("new_")) {
+        try {
+          await assessmentQuestionApi.delete(Number(kp.key));
+        } catch {}
+      }
+      setAdaptiveKPs((prev) => prev.filter((item) => item.key !== kp.key));
+    }});
   };
 
   const saveAllAdaptive = async () => {
@@ -695,6 +700,7 @@ const QuestionsPage: React.FC = () => {
   }
 
   return (
+    <>
     <AdminPage scrollable>
       <div className="mb-5 flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/admin/assessment")}>
@@ -1424,6 +1430,17 @@ const QuestionsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </AdminPage>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

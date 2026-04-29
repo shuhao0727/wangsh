@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import type { MarkdownStyleListItem, MarkdownStyleResponse } from "@services";
 import { markdownStylesApi } from "@services";
 import ArticlePreviewContent from "./ArticlePreviewContent";
@@ -64,6 +65,8 @@ export default function MarkdownStyleManagerModal({
   const [newStyleKey, setNewStyleKey] = useState("");
   const [newStyleTitle, setNewStyleTitle] = useState("");
 
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
+
   useEffect(() => {
     if (!open) return;
     refreshStyles()
@@ -98,6 +101,7 @@ export default function MarkdownStyleManagerModal({
   }, [open, styleEditingKey]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-[1100px]">
         <DialogHeader>
@@ -167,15 +171,16 @@ export default function MarkdownStyleManagerModal({
                 aria-label="删除样式方案"
                 onClick={async () => {
                   if (!styleEditingKey) return;
-                  if (!window.confirm(`删除样式方案？\n${styleEditingKey}`)) return;
-                  await markdownStylesApi.remove(styleEditingKey);
-                  const items = await refreshStyles();
-                  const next = items[0]?.key || "";
-                  setStyleEditingKey(next);
-                  if (activeStyleKey === styleEditingKey) {
-                    onActiveStyleKeyChange(null);
-                    onStyleCssChange("");
-                  }
+                  setConfirmState({ message: `删除样式方案？\n${styleEditingKey}`, onOk: async () => {
+                    await markdownStylesApi.remove(styleEditingKey);
+                    const items = await refreshStyles();
+                    const next = items[0]?.key || "";
+                    setStyleEditingKey(next);
+                    if (activeStyleKey === styleEditingKey) {
+                      onActiveStyleKeyChange(null);
+                      onStyleCssChange("");
+                    }
+                  }});
                 }}
               >
                 删除
@@ -251,5 +256,16 @@ export default function MarkdownStyleManagerModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 }

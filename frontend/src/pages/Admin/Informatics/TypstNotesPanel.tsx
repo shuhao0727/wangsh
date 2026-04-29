@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Download, Plus, Save, Search, Loader2 } from "lucide-react";
 import EmptyState from "@components/Common/EmptyState";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { typstNotesApi } from "@services";
 import type { TypstNote, TypstNoteListItem } from "@services";
 
@@ -40,6 +41,8 @@ const TypstNotesPanel: React.FC = () => {
   const [svgLoading, setSvgLoading] = useState(false);
   const [svg, setSvg] = useState<string>("");
   const previewTimerRef = useRef<number | null>(null);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const previewTokenRef = useRef(0);
   const typstImportRef = useRef<Promise<any> | null>(null);
 
@@ -157,17 +160,18 @@ const TypstNotesPanel: React.FC = () => {
     }
   };
 
-  const removeNote = async () => {
+  const removeNote = () => {
     if (!selectedId) return;
-    if (!window.confirm("确认删除当前笔记？删除后不可恢复。")) return;
-    try {
-      await typstNotesApi.remove(selectedId);
-      const next = items.filter((it) => it.id !== selectedId);
-      setItems(next);
-      setSelectedId(next[0]?.id ?? null);
-    } catch (e: any) {
-      showMessage.error(e?.response?.data?.detail || e?.message || "删除失败");
-    }
+    setConfirmState({ message: "确认删除当前笔记？删除后不可恢复。", onOk: async () => {
+      try {
+        await typstNotesApi.remove(selectedId);
+        const next = items.filter((it) => it.id !== selectedId);
+        setItems(next);
+        setSelectedId(next[0]?.id ?? null);
+      } catch (e: any) {
+        showMessage.error(e?.response?.data?.detail || e?.message || "删除失败");
+      }
+    }});
   };
 
   const exportTyp = () => {
@@ -196,6 +200,7 @@ const TypstNotesPanel: React.FC = () => {
   const activeItem = useMemo(() => items.find((it) => it.id === selectedId) || null, [items, selectedId]);
 
   return (
+    <>
     <div className="grid grid-cols-[320px_1fr] gap-4 items-start">
       <div className="sticky top-[72px]">
         <Card className="!border-none !rounded-[10px]">
@@ -344,6 +349,17 @@ const TypstNotesPanel: React.FC = () => {
         </Card>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

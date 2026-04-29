@@ -26,27 +26,25 @@
 }
 
 :root {
-  /* ========== shadcn/ui HSL 变量（映射到项目设计 token）========== */
-  /* 核心原则：无阴影、无边框、无缝融合 */
-  --background: 0 0% 100%;
-  --foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  /* 与 --ws-color-text-secondary (#475569) 对齐 */
-  --muted-foreground: 215.3 19.3% 34.5%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 47.4% 11.2%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 47.4% 11.2%;
-  --border: 0 0% 93%;
-  --input: 220 13% 91%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 100%;
-  --ring: 199 89% 48%;
+  /* ========== shadcn/ui 兼容变量（直接引用项目 token，统一颜色系统）========== */
+  --background: var(--ws-color-surface);
+  --foreground: var(--ws-color-text);
+  --muted: var(--ws-color-surface-2);
+  --muted-foreground: var(--ws-color-text-secondary);
+  --popover: var(--ws-color-surface);
+  --popover-foreground: var(--ws-color-text);
+  --card: var(--ws-color-surface);
+  --card-foreground: var(--ws-color-text);
+  --border: var(--ws-color-border);
+  --input: var(--ws-color-border);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--ws-color-surface-2);
+  --secondary-foreground: var(--ws-color-text);
+  --accent: var(--ws-color-hover-bg);
+  --accent-foreground: var(--ws-color-text);
+  --destructive: var(--ws-color-error);
+  --destructive-foreground: #FFFFFF;
+  --ring: var(--ws-color-focus-ring);
   --radius: var(--ws-radius-lg);
 
   --ws-density-scale: clamp(0.9, calc(0.2vw + 0.86), 1.05);
@@ -69,7 +67,7 @@
   /* 文字 */
   --ws-color-text: #0F172A;
   --ws-color-text-secondary: #475569;
-  --ws-color-text-tertiary: #94A3B8;
+  --ws-color-text-tertiary: #64748B;
 
   /* 主色 — Sky Blue */
   --ws-color-primary: #0EA5E9;
@@ -104,21 +102,18 @@
   --ws-color-purple-hover: #7C3AED;
   --ws-color-purple-active: #7C3AED;
   --ws-color-purple-soft: rgba(139, 92, 246, 0.06);
-  --ws-color-purple-ring: rgba(139, 92, 246, 0.25);
 
   /* 代码块 */
   --ws-color-code-bg: #1e1e1e;
   --ws-color-code-text: #d4d4d4;
   --ws-color-code-purple: #722ed1;
+  --ws-color-tooltip: rgba(15, 23, 42, 0.92);
 
   /* 渐变 */
   --ws-gradient-primary: linear-gradient(135deg, #0EA5E9, #06B6D4);
-  --ws-gradient-primary-soft: linear-gradient(135deg, rgba(14, 165, 233, 0.06), rgba(6, 182, 212, 0.06));
-  --ws-gradient-surface: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%);
 
   /* 毛玻璃 */
   --ws-glass-bg: rgba(255, 255, 255, 0.9);
-  --ws-glass-border: transparent;
   --ws-glass-blur: blur(16px);
 
   /* 圆角 */
@@ -128,13 +123,9 @@
   --ws-radius-xl: 16px;
 
   /* 阴影 — 全部极淡或无 */
-  --ws-shadow-xs: none;
   --ws-shadow-sm: none;
-  --ws-shadow-md: none;
   --ws-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
   --ws-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.08);
-  --ws-shadow-primary: none;
-  --ws-shadow-card-hover: none;
 
   /* z-index */
   --ws-z-header: 1000;
@@ -171,6 +162,7 @@
   --ws-text-md: clamp(14px, calc(0.14vw + 12.8px), 16px);
   --ws-text-lg: clamp(15px, calc(0.2vw + 14px), 19px);
   --ws-text-xl: clamp(18px, calc(0.34vw + 16px), 24px);
+  --ws-text-2xl: clamp(22px, calc(0.40vw + 19px), 32px);
   --ws-text-nav: clamp(14px, calc(0.12vw + 13.4px), 16px);
   --ws-text-nav-brand: clamp(17px, calc(0.16vw + 16.2px), 20.5px);
   --ws-text-body: var(--ws-text-md);
@@ -181,7 +173,6 @@
   --ws-font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --ws-font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --ws-font-size-base: clamp(14px, calc(0.12vw + 13px), 15px);
-  --ws-font-size-sm: var(--ws-text-xs);
   --ws-line-height-base: 1.6;
   --ws-line-height-heading: 1.35;
   --ws-letter-spacing-tight: -0.01em;
@@ -221,6 +212,11 @@ body {
 }
 
 /* 滚动条样式 - Subtle & Minimal */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

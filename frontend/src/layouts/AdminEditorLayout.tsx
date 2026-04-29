@@ -30,7 +30,7 @@ const AdminEditorLayout: React.FC = () => {
 
   return (
     <div className="h-screen bg-surface">
-      <header className="sticky top-0 z-[var(--ws-z-floating-panel)] flex h-14 items-center justify-between border-b border-border bg-surface px-4">
+      <header className="sticky top-0 z-[var(--ws-z-floating-panel)] flex h-[var(--ws-header-height)] items-center justify-between border-b border-border bg-surface px-4">
         <div className="flex items-center gap-2.5">
           <Button variant="outline" onClick={backToList}>
             <ArrowLeft className="h-4 w-4" />

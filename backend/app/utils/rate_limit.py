@@ -10,16 +10,14 @@ class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._last: dict[str, float] = {}
+        self.http_429_count: int = 0
 
     async def check(self, key: str, interval_seconds: float) -> None:
         now = time.monotonic()
         async with self._lock:
             last = self._last.get(key)
             if last is not None and (now - last) < interval_seconds:
-                try:
-                    await cache.increment("http:429")
-                except Exception:
-                    pass
+                self.http_429_count += 1
                 raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="请求过于频繁")
             self._last[key] = now
 

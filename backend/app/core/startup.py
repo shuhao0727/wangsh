@@ -12,7 +12,7 @@ from app.db.database import engine, Base, AsyncSessionLocal
 from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.core.http_client import HttpClientManager
-from app.utils.cache import shutdown_cache
+from app.utils.cache import shutdown_cache, startup_cache
 from app.core.pubsub import shutdown_pubsub
 from app.models import User
 from app.services.informatics.typst_styles import read_resource_style
@@ -105,6 +105,7 @@ async def init_seed_data():
 async def init_services():
     """初始化缓存和 HTTP 客户端"""
     try:
+        await startup_cache()
         logger.info("缓存服务初始化完成")
     except Exception as e:
         logger.error(f"缓存服务初始化失败: {e}")

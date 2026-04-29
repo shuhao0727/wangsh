@@ -1,6 +1,7 @@
 // 课堂计划 - 弹窗组件集合
 import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -10,6 +11,7 @@ import { planApi, Plan } from "@services/classroomPlan";
 import { classroomApi, Activity } from "@services/classroom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
@@ -40,6 +42,12 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  usePlansList,
+  useDeletePlan,
+  PLAN_QUERY_KEY,
+} from "@hooks/queries/useClassroomPlanQuery";
 
 const parseErr = (e: any) => String(e?.response?.data?.detail || e?.message || "操作失败");
 
@@ -385,6 +393,7 @@ interface ConsoleProps {
 
 const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefresh }) => {
   const [loading, setLoading] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{ message: string; key: string; fn: () => Promise<any> } | null>(null);
 
   const doAction = async (key: string, fn: () => Promise<any>) => {
     setLoading(key);
@@ -415,11 +424,11 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
   };
 
   const confirmRun = (message: string, key: string, fn: () => Promise<any>) => {
-    if (!window.confirm(message)) return;
-    void doAction(key, fn);
+    setConfirmState({ message, key, fn });
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
@@ -539,6 +548,22 @@ const PlanConsoleModal: React.FC<ConsoleProps> = ({ plan, open, onClose, onRefre
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="default"
+      onConfirm={async () => {
+        if (confirmState === null) return;
+        const { key, fn } = confirmState;
+        setConfirmState(null);
+        void doAction(key, fn);
+      }}
+    />
+    </>
   );
 };
 
@@ -549,35 +574,29 @@ interface PlanListModalProps {
 }
 
 export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) => {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [consolePlan, setConsolePlan] = useState<Plan | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
-  const fetchList = useCallback(async () => {
-    setLoading(true);
-    try {
-      const resp = await planApi.list(0, 50);
-      setPlans(resp.items);
-    } catch (e: any) {
-      showMessage.error(parseErr(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: listData, isLoading } = usePlansList(
+    { skip: 0, limit: 50 },
+  );
+  const plans = listData?.items ?? [];
 
-  useEffect(() => {
-    if (open) {
-      void fetchList();
-    }
-  }, [open, fetchList]);
+  const deleteMutation = useDeletePlan();
+
+  // SSE
+  useAdminSSE("classroom_plan_changed", () => {
+    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+  });
 
   const refreshPlan = async (id: number) => {
     const detail = await planApi.get(id);
-    setPlans((prev) => prev.map((plan) => (plan.id === id ? detail : plan)));
-    if (consolePlan?.id === id) setConsolePlan(detail);
+    setConsolePlan((prev) => (prev?.id === id ? detail : prev));
+    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
   };
 
   const openConsole = async (plan: Plan) => {
@@ -590,16 +609,18 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
     setConsoleOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("确认删除？")) return;
+  const executeDelete = async () => {
+    if (deleteTarget === null) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
     try {
-      await planApi.remove(id);
+      await deleteMutation.mutateAsync(id);
       showMessage.success("已删除");
-      void fetchList();
     } catch (e: any) {
       showMessage.error(parseErr(e));
     }
   };
+  const handleDelete = (id: number) => setDeleteTarget(id);
 
   const columns = useMemo<ColumnDef<Plan>[]>(
     () => [
@@ -705,8 +726,8 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
           </DialogHeader>
 
           <div className="mb-2 flex items-center justify-between">
-            <Button size="sm" variant="outline" onClick={() => { void fetchList(); }} disabled={loading}>
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            <Button size="sm" variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] })} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               刷新
             </Button>
             <Button
@@ -726,7 +747,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
               table={table}
               tableClassName="min-w-[760px]"
               emptyState={
-                !loading ? (
+                !isLoading ? (
                   <div className="py-8 text-center text-sm text-text-tertiary">
                     暂无计划
                   </div>
@@ -750,7 +771,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
         editing={editing}
         onClose={() => setFormOpen(false)}
         onSuccess={() => {
-          void fetchList();
+          queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
         }}
       />
 
@@ -759,6 +780,16 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
         open={consoleOpen}
         onClose={() => setConsoleOpen(false)}
         onRefresh={refreshPlan}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="确认删除"
+        description="确认删除？"
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeDelete}
       />
     </>
   );

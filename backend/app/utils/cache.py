@@ -43,6 +43,21 @@ class RedisCache:
         try:
             self._loop = asyncio.get_running_loop()
 
+            # 构建 SSL 上下文（云 Redis 需要 TLS 连接）
+            ssl_context = None
+            if settings.REDIS_SSL:
+                import ssl
+                ssl_context = ssl.create_default_context()
+                cert_reqs_map = {
+                    "required": ssl.CERT_REQUIRED,
+                    "optional": ssl.CERT_OPTIONAL,
+                    "none": ssl.CERT_NONE,
+                }
+                ssl_context.check_hostname = (settings.REDIS_SSL_CERT_REQS != "none")
+                ssl_context.verify_mode = cert_reqs_map.get(
+                    settings.REDIS_SSL_CERT_REQS, ssl.CERT_REQUIRED
+                )
+
             if settings.REDIS_SENTINEL_ENABLED and settings.REDIS_SENTINEL_HOSTS:
                 # Sentinel 模式：解析 sentinel 地址列表
                 sentinel_hosts = []
@@ -58,11 +73,18 @@ class RedisCache:
                     sentinel_hosts,
                     socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
                     socket_keepalive=True,
+                    password=settings.REDIS_PASSWORD,
                 )
+                sentinel_kwargs: dict = {}
+                if ssl_context is not None:
+                    sentinel_kwargs["ssl"] = True
+                    sentinel_kwargs["ssl_context"] = ssl_context
                 self._client = sentinel.master_for(
                     settings.REDIS_SENTINEL_MASTER,
                     db=settings.REDIS_DB_CACHE,
+                    password=settings.REDIS_PASSWORD,
                     decode_responses=True,
+                    **sentinel_kwargs,
                 )
                 logger.info(f"Redis Sentinel 模式初始化成功，master={settings.REDIS_SENTINEL_MASTER}")
             else:
@@ -71,12 +93,17 @@ class RedisCache:
                     host=settings.REDIS_HOST,
                     port=settings.REDIS_PORT,
                     db=settings.REDIS_DB_CACHE,
+                    password=settings.REDIS_PASSWORD,
                     decode_responses=True,
                     socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
                     socket_keepalive=True,
                     max_connections=settings.REDIS_MAX_CONNECTIONS,
                 )
-                self._client = redis.Redis(connection_pool=pool)
+                redis_kwargs: dict = {}
+                if ssl_context is not None:
+                    redis_kwargs["ssl"] = True
+                    redis_kwargs["ssl_context"] = ssl_context
+                self._client = redis.Redis(connection_pool=pool, **redis_kwargs)
                 logger.info(f"Redis 单机模式初始化成功，max_connections={settings.REDIS_MAX_CONNECTIONS}")
 
             # 测试连接

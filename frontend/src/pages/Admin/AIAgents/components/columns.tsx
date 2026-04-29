@@ -67,7 +67,7 @@ const typeConfig: Record<
   system: {
     text: "系统",
     icon: <Cable className="h-3 w-3" />,
-    className: "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-600",
+    variant: "violet",
   },
 };
 

@@ -1,20 +1,28 @@
 /**
  * 用户管理自定义 Hook
- * 连接真实的后端 API，不使用模拟数据
+ * 使用 TanStack Query 进行数据获取和缓存管理
  */
 
 import { showMessage } from "@/lib/toast";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   userApi,
-  User,
-  UserCreateRequest,
-  UserUpdateRequest,
-  UserListResponse,
+  type User,
+  type UserCreateRequest,
+  type UserUpdateRequest,
 } from "@services";
 import { logger } from "@services/logger";
-import { UsersState, UserActions, SearchParams } from "../types";
+import type { UsersState, UserActions, SearchParams } from "../types";
 import { useAdminSSE } from "@hooks/useAdminSSE";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useUsersList,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+  useBatchDeleteUsers,
+  useImportUsers,
+} from "@hooks/queries/useUsersQuery";
 
 /**
  * 用户管理 Hook
@@ -22,172 +30,119 @@ import { useAdminSSE } from "@hooks/useAdminSSE";
  * @returns 用户状态和操作方法
  */
 export const useUsers = (initialParams: SearchParams = {}) => {
-  // 状态管理
-  const [state, setState] = useState<UsersState>({
-    users: [],
-    total: 0,
-    loading: false,
-    currentPage: 1,
-    pageSize: initialParams.limit || 20,
-    searchKeyword: initialParams.search || "",
-    selectedRowKeys: [],
-    formVisible: false,
-    editingUser: null,
-    detailVisible: false,
-    currentUser: null,
-    roleFilter: undefined,
-    statusFilter: undefined,
-  });
+  const queryClient = useQueryClient();
 
-  // 搜索参数
-  const [searchParams, setSearchParams] = useState<SearchParams>({
-    skip: initialParams.skip || 0,
-    limit: initialParams.limit || 20,
-    search: initialParams.search || "",
-    role_code: initialParams.role_code,
-    is_active: initialParams.is_active,
-  });
+  // ── UI state ────────────────────────────────────────────
+  const [searchKeyword, setSearchKeyword] = useState(
+    initialParams.search || "",
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialParams.limit || 20);
+  const [selectedRowKeys, setSelectedRowKeysState] = useState<number[]>([]);
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string | undefined>(
+    initialParams.role_code,
+  );
+  const [statusFilter, setStatusFilter] = useState<boolean | undefined>(
+    initialParams.is_active,
+  );
 
-  // 加载用户列表
-  const loadUsers = useCallback(async () => {
-    try {
-      setState((prev) => ({ ...prev, loading: true }));
+  // ── Derived query params ────────────────────────────────
+  const queryParams = useMemo(
+    () => ({
+      skip: (currentPage - 1) * pageSize,
+      limit: pageSize,
+      search: searchKeyword.trim() || undefined,
+      role_code: roleFilter,
+      is_active: statusFilter,
+    }),
+    [currentPage, pageSize, searchKeyword, roleFilter, statusFilter],
+  );
 
-      const params = {
-        skip: (state.currentPage - 1) * state.pageSize,
-        limit: state.pageSize,
-        search: state.searchKeyword.trim() || undefined,
-        role_code: searchParams.role_code,
-        is_active: searchParams.is_active,
-      };
+  // ── TanStack Query hooks ────────────────────────────────
+  const { data, isLoading, isFetching } = useUsersList(queryParams);
+  const createMutation = useCreateUser();
+  const updateMutation = useUpdateUser();
+  const deleteMutation = useDeleteUser();
+  const batchDeleteMutation = useBatchDeleteUsers();
+  const importMutation = useImportUsers();
 
-      const response = (await userApi.getUsers(
-        params,
-      )) as any as UserListResponse;
+  // ── Derived data ────────────────────────────────────────
+  const users = data?.users ?? [];
+  const total = data?.total ?? 0;
+  const isMutating =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending ||
+    batchDeleteMutation.isPending ||
+    importMutation.isPending;
+  const loading = isLoading || isFetching || isMutating;
 
-      setState((prev) => ({
-        ...prev,
-        users: response.users,
-        total: response.total,
-        loading: false,
-      }));
+  // ── Actions ─────────────────────────────────────────────
 
-      // 更新搜索参数
-      setSearchParams((prev) => ({
-        ...prev,
-        skip: response.skip,
-        limit: response.limit,
-      }));
-    } catch (error) {
-      logger.error("加载用户列表失败:", error);
-      showMessage.error("加载用户列表失败");
-      setState((prev) => ({ ...prev, loading: false }));
-    }
-  }, [
-    state.currentPage,
-    state.pageSize,
-    state.searchKeyword,
-    searchParams.role_code,
-    searchParams.is_active,
-  ]);
-
-  // 处理搜索
   const handleSearch = useCallback((value: string) => {
-    setState((prev) => ({
-      ...prev,
-      searchKeyword: value,
-      currentPage: 1,
-    }));
+    setSearchKeyword(value);
+    setCurrentPage(1);
   }, []);
 
-  // 处理重置
   const handleReset = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      searchKeyword: "",
-      currentPage: 1,
-      selectedRowKeys: [],
-      roleFilter: undefined,
-      statusFilter: undefined,
-    }));
-    setSearchParams((prev) => ({
-      ...prev,
-      search: "",
-      role_code: undefined,
-      is_active: undefined,
-    }));
+    setSearchKeyword("");
+    setCurrentPage(1);
+    setSelectedRowKeysState([]);
+    setRoleFilter(undefined);
+    setStatusFilter(undefined);
   }, []);
 
-  // 处理分页变化
   const handlePageChange = useCallback((page: number, size?: number) => {
-    setState((prev) => ({
-      ...prev,
-      currentPage: page,
-      pageSize: size || prev.pageSize,
-      selectedRowKeys: [],
-    }));
+    setCurrentPage(page);
+    if (size !== undefined) setPageSize(size);
+    setSelectedRowKeysState([]);
   }, []);
 
-  // 处理添加用户
   const handleAddUser = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      editingUser: null,
-      formVisible: true,
-    }));
+    setEditingUser(null);
+    setFormVisible(true);
   }, []);
 
-  // 处理编辑用户
   const handleEdit = useCallback((record: User) => {
-    setState((prev) => ({
-      ...prev,
-      editingUser: record,
-      formVisible: true,
-    }));
+    setEditingUser(record);
+    setFormVisible(true);
   }, []);
 
-  // 处理删除用户
   const handleDelete = useCallback(
     async (id: number) => {
       try {
-        setState((prev) => ({ ...prev, loading: true }));
-
-        await userApi.deleteUser(id);
-
-        // 重新加载用户列表
-        await loadUsers();
-
+        await deleteMutation.mutateAsync(id);
         showMessage.success("用户删除成功");
       } catch (error) {
         logger.error("删除用户失败:", error);
         showMessage.error("删除用户失败");
-        setState((prev) => ({ ...prev, loading: false }));
       }
     },
-    [loadUsers],
+    [deleteMutation],
   );
 
-  // 处理表单提交
   const handleFormSubmit = useCallback(
     async (values: any) => {
       try {
-        setState((prev) => ({ ...prev, loading: true }));
-
-        if (state.editingUser) {
-          // 更新用户
+        if (editingUser) {
           const updateData: UserUpdateRequest = {
             student_id: values.student_id,
             full_name: values.full_name,
             class_name: values.class_name,
             study_year: values.study_year,
-            role_code: values.role_code || state.editingUser.role_code,
+            role_code: values.role_code || editingUser.role_code,
             is_active: values.is_active,
           };
-
-          await userApi.updateUser(state.editingUser.id, updateData);
+          await updateMutation.mutateAsync({
+            id: editingUser.id,
+            data: updateData,
+          });
           showMessage.success("用户信息更新成功");
         } else {
-          // 创建新用户
           const createData: UserCreateRequest = {
             student_id: values.student_id,
             username: values.username,
@@ -197,22 +152,13 @@ export const useUsers = (initialParams: SearchParams = {}) => {
             role_code: values.role_code || "student",
             is_active: values.is_active ?? true,
           };
-
-          await userApi.createUser(createData);
+          await createMutation.mutateAsync(createData);
           showMessage.success("用户添加成功");
         }
-
-        // 关闭表单并重新加载数据
-        setState((prev) => ({
-          ...prev,
-          formVisible: false,
-          editingUser: null,
-        }));
-        await loadUsers();
+        setFormVisible(false);
+        setEditingUser(null);
       } catch (error: any) {
         logger.error("保存用户信息失败:", error);
-
-        // 显示具体的错误信息
         if (error.response?.data?.detail) {
           showMessage.error(error.response.data.detail);
         } else if (error.message) {
@@ -220,114 +166,77 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         } else {
           showMessage.error("保存用户信息失败");
         }
-
-        setState((prev) => ({ ...prev, loading: false }));
       }
     },
-    [state.editingUser, loadUsers],
+    [editingUser, createMutation, updateMutation],
   );
 
-  // 处理查看详情
   const handleView = useCallback((record: User) => {
-    setState((prev) => ({
-      ...prev,
-      currentUser: record,
-      detailVisible: true,
-    }));
+    setCurrentUser(record);
+    setDetailVisible(true);
   }, []);
 
-  // 批量删除
   const handleBatchDelete = useCallback(async () => {
-    if (state.selectedRowKeys.length === 0) {
+    if (selectedRowKeys.length === 0) {
       showMessage.warning("请选择要删除的用户");
       return;
     }
-
+    const count = selectedRowKeys.length;
     try {
-      setState((prev) => ({ ...prev, loading: true }));
-
-      // 这里假设后端支持批量删除，如果不行就单个删除
-      const deletePromises = state.selectedRowKeys.map((id) =>
-        userApi.deleteUser(id),
-      );
-
-      await Promise.all(deletePromises);
-
-      // 重新加载用户列表
-      await loadUsers();
-
-      setState((prev) => ({
-        ...prev,
-        selectedRowKeys: [],
-      }));
-
-      showMessage.success(`成功删除 ${state.selectedRowKeys.length} 个用户`);
+      await batchDeleteMutation.mutateAsync(selectedRowKeys);
+      setSelectedRowKeysState([]);
+      showMessage.success(`成功删除 ${count} 个用户`);
     } catch (error) {
       logger.error("批量删除失败:", error);
       showMessage.error("批量删除失败");
-      setState((prev) => ({ ...prev, loading: false }));
     }
-  }, [state.selectedRowKeys, loadUsers]);
+  }, [selectedRowKeys, batchDeleteMutation]);
 
-  // 处理下载模板
-  const handleDownloadTemplate = useCallback(async (format: "xlsx" | "csv" = "xlsx") => {
-    try {
-      setState((prev) => ({ ...prev, loading: true }));
-      const blob = await userApi.downloadImportTemplate(format);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `user_import_template.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+  const handleDownloadTemplate = useCallback(
+    async (format: "xlsx" | "csv" = "xlsx") => {
+      try {
+        const blob = await userApi.downloadImportTemplate(format);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `user_import_template.${format}`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        showMessage.success(
+          `模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`,
+        );
+      } catch (error) {
+        logger.error("下载模板失败:", error);
+        showMessage.error("下载模板失败");
+      }
+    },
+    [],
+  );
 
-      showMessage.success(`模板下载成功（${format.toUpperCase()}），请按照模板格式填写数据`);
-    } catch (error) {
-      logger.error("下载模板失败:", error);
-      showMessage.error("下载模板失败");
-    } finally {
-      setState((prev) => ({ ...prev, loading: false }));
-    }
-  }, []);
-
-  // 处理文件上传
   const handleFileUpload = useCallback(
     async (file: File) => {
       try {
-        setState((prev) => ({ ...prev, loading: true }));
-
-        // 调用真实的后端导入API
-        const result = await userApi.importUsers(file);
-
+        const result = await importMutation.mutateAsync(file);
         if (result.success) {
-          // 显示详细的导入结果
-          const successMessage = result.message || `导入完成。成功导入: ${result.imported_count}, 更新: ${result.updated_count}, 失败: ${result.error_count}`;
-
+          const successMessage =
+            result.message ||
+            `导入完成。成功导入: ${result.imported_count}, 更新: ${result.updated_count}, 失败: ${result.error_count}`;
           if (result.error_count > 0) {
-            // 如果有错误，显示警告消息
             showMessage.warning(successMessage);
-
-            // 可以在这里添加错误详情显示逻辑
             if (result.errors.length > 0) {
               logger.warn("导入错误详情:", result.errors);
-              // 可以在这里将错误详情存储到状态中，以便在UI中显示
             }
           } else {
             showMessage.success(successMessage);
           }
         } else {
-          // 导入失败
           showMessage.error(result.message || "文件上传失败");
         }
-
-        await loadUsers(); // 重新加载用户列表
-        return false; // 阻止默认上传行为
+        return false;
       } catch (error: any) {
         logger.error("文件上传失败:", error);
-
-        // 显示具体的错误信息
         if (error.response?.data?.detail) {
           showMessage.error(`文件上传失败: ${error.response.data.detail}`);
         } else if (error.message) {
@@ -335,75 +244,64 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         } else {
           showMessage.error("文件上传失败");
         }
-
         return false;
-      } finally {
-        setState((prev) => ({ ...prev, loading: false }));
       }
     },
-    [loadUsers],
+    [importMutation],
   );
 
-  // 处理角色过滤
   const handleRoleFilter = useCallback((roleCode: string | undefined) => {
-    setSearchParams((prev) => ({
-      ...prev,
-      role_code: roleCode,
-    }));
-    setState((prev) => ({
-      ...prev,
-      currentPage: 1,
-      roleFilter: roleCode,
-    }));
+    setRoleFilter(roleCode);
+    setCurrentPage(1);
   }, []);
 
-  // 处理状态过滤
   const handleStatusFilter = useCallback((isActive: boolean | undefined) => {
-    setSearchParams((prev) => ({
-      ...prev,
-      is_active: isActive,
-    }));
-    setState((prev) => ({
-      ...prev,
-      currentPage: 1,
-      statusFilter: isActive,
-    }));
+    setStatusFilter(isActive);
+    setCurrentPage(1);
   }, []);
 
-  // 设置选中的行
   const setSelectedRowKeys = useCallback((keys: number[]) => {
-    setState((prev) => ({
-      ...prev,
-      selectedRowKeys: keys,
-    }));
+    setSelectedRowKeysState(keys);
   }, []);
 
-  // 关闭表单
   const closeForm = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      formVisible: false,
-      editingUser: null,
-    }));
+    setFormVisible(false);
+    setEditingUser(null);
   }, []);
 
-  // 关闭详情弹窗
   const closeDetail = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      detailVisible: false,
-      currentUser: null,
-    }));
+    setDetailVisible(false);
+    setCurrentUser(null);
   }, []);
 
-  // 初始加载
-  useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+  // ── SSE: invalidate cache on user_changed events ────────
+  useAdminSSE("user_changed", () => {
+    queryClient.invalidateQueries({ queryKey: ["users"] });
+  });
 
-  // 操作方法集合
+  // ── State object (UsersState interface) ─────────────────
+  const state: UsersState = {
+    users,
+    total,
+    loading,
+    currentPage,
+    pageSize,
+    searchKeyword,
+    selectedRowKeys,
+    formVisible,
+    editingUser,
+    detailVisible,
+    currentUser,
+    roleFilter,
+    statusFilter,
+  };
+
+  // ── Actions object (UserActions interface) ──────────────
   const actions: UserActions = {
-    loadUsers,
+    loadUsers: async () => {
+      // Kept for interface compatibility; TanStack Query handles auto-refetch
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
     handleSearch,
     handleReset,
     handlePageChange,
@@ -419,9 +317,6 @@ export const useUsers = (initialParams: SearchParams = {}) => {
     handleRoleFilter,
     handleStatusFilter,
   };
-
-  // SSE 实时更新
-  useAdminSSE('user_changed', loadUsers);
 
   return {
     state,

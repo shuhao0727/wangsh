@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -419,22 +420,22 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       showMessage.warning("请选择要删除的分类");
       return;
     }
-    if (!window.confirm(`确定删除选中的 ${selectedRowKeys.length} 个分类吗？`)) return;
-
-    try {
-      setLoading(true);
-      for (const id of selectedRowKeys) {
-        await categoryApi.deleteCategory(id);
+    setConfirmState({ message: `确定删除选中的 ${selectedRowKeys.length} 个分类吗？`, onOk: async () => {
+      try {
+        setLoading(true);
+        for (const id of selectedRowKeys) {
+          await categoryApi.deleteCategory(id);
+        }
+        showMessage.success(`成功删除 ${selectedRowKeys.length} 个分类`);
+        await loadCategories();
+        onCategoryChange?.();
+      } catch (error) {
+        logger.error("批量删除失败:", error);
+        showMessage.error("批量删除失败");
+      } finally {
+        setLoading(false);
       }
-      showMessage.success(`成功删除 ${selectedRowKeys.length} 个分类`);
-      await loadCategories();
-      onCategoryChange?.();
-    } catch (error) {
-      logger.error("批量删除失败:", error);
-      showMessage.error("批量删除失败");
-    } finally {
-      setLoading(false);
-    }
+    }});
   };
 
   const pagedCategories = useMemo(() => {
@@ -459,6 +460,8 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       return next;
     });
   }, [pagedCategories]);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
   const selectedRowKeys = useMemo(
     () =>
@@ -572,10 +575,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
               variant="ghost"
               className="h-7 px-2 text-destructive hover:text-destructive"
               onClick={() => {
-                if (!window.confirm("确定要删除这个分类吗？删除后不可恢复。")) {
-                  return;
-                }
-                void handleDelete(row.original.id);
+                setConfirmState({ message: "确定要删除这个分类吗？删除后不可恢复。", onOk: () => { void handleDelete(row.original.id); } });
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -781,6 +781,16 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         isCreateMode={isCreateMode}
         onSave={() => void handleEditFormSave()}
         onCancel={() => setEditModalVisible(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认"
+        variant="destructive"
+        onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
       />
     </>
   );

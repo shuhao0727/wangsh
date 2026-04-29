@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Trash2, Plus, RefreshCw, Save } from "lucide-react";
 import { publicTypstNotesApi, typstCategoriesApi, typstNotesApi, typstStylesApi } from "@services";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import type { TypstAssetListItem, TypstCategoryListItem, TypstNote, TypstStyleListItem, TypstStyleResponse } from "@services";
 import PdfCanvasVirtualViewer from "@components/Pdf/PdfCanvasVirtualViewer";
 import LineNumberedTextArea from "./typst/LineNumberedTextArea";
@@ -100,6 +101,8 @@ const TypstNoteEditorInner: React.FC<{
   const [tocOpen, setTocOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [renderLoading, setRenderLoading] = useState(false);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const [renderError, setRenderError] = useState<string>("");
   const [previewPdfData, setPreviewPdfData] = useState<Uint8Array | null>(null);
   const previewTimerRef = useRef<number | null>(null);
@@ -503,10 +506,11 @@ const TypstNoteEditorInner: React.FC<{
 
   const deleteAsset = async (asset: TypstAssetListItem) => {
     if (!note?.id) return;
-    if (!window.confirm(`确认删除 ${asset.path}？`)) return;
-    await typstNotesApi.deleteAsset(note.id, asset.id);
-    await refreshAssetsCache();
-    showMessage.success("已删除");
+    setConfirmState({ message: `确认删除 ${asset.path}？`, onOk: async () => {
+      await typstNotesApi.deleteAsset(note.id!, asset.id);
+      await refreshAssetsCache();
+      showMessage.success("已删除");
+    }});
   };
 
   const renderEditor = () => (
@@ -970,6 +974,16 @@ const TypstNoteEditorInner: React.FC<{
         />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认"
+        variant="destructive"
+        onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+      />
     </>
   );
 };

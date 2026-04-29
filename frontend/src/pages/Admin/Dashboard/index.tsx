@@ -8,22 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdminPage } from "@components/Admin";
+import { StatCard } from "@components/Common/StatCard";
 import { api, config } from "@services";
 
 const dot = (ok: boolean) => ok
   ? <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-success)]" />
   : <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-error)]" />;
-
-interface StatCardProps { label: string; value: React.ReactNode; icon?: React.ReactNode; color?: string; }
-const StatCard: React.FC<StatCardProps> = ({ label, value, icon, color = "var(--ws-color-primary)" }) => (
-  <div className="rounded-xl p-4 bg-surface-2">
-    <div className="flex items-center justify-between mb-3">
-      <span className="text-sm font-medium uppercase tracking-wide text-text-tertiary">{label}</span>
-      {icon && <span style={{ color }}>{icon}</span>}
-    </div>
-    <div className="text-xl font-semibold text-text-base">{value ?? "-"}</div>
-  </div>
-);
 
 interface StatusRowProps { label: string; value: React.ReactNode; ok?: boolean; }
 const StatusRow: React.FC<StatusRowProps> = ({ label, value, ok }) => (
@@ -115,9 +105,9 @@ const AdminDashboard: React.FC = () => {
 
           {/* 数据概览卡片 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} color="var(--ws-color-primary)" />
-            <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} color="var(--ws-color-purple)" />
-            <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} color="var(--ws-color-warning)" />
+            <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} color="primary" />
+            <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} color="purple" />
+            <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} color="warning" />
           </div>
 
           {/* 健康检查详情 */}

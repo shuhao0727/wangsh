@@ -48,15 +48,21 @@ import {
   Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { AdminPage, AdminTablePanel } from "@components/Admin";
-import {
-  assessmentConfigApi,
-  type AssessmentConfig,
-} from "@services/assessment";
+import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
+import type { AssessmentConfig } from "@services/assessment";
 import { aiAgentsApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
 import { logger } from "@services/logger";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useAssessmentConfigs,
+  useCreateAssessmentConfig,
+  useToggleAssessmentConfig,
+  useDeleteAssessmentConfig,
+  ASSESSMENT_QUERY_KEY,
+} from "@hooks/queries/useAssessmentQuery";
 
 const GRADE_OPTIONS = [
   "高一",
@@ -100,14 +106,13 @@ const DEFAULT_CREATE_VALUES: CreateFormValues = {
 
 const AdminAssessment: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<AssessmentConfig[]>([]);
-  const [total, setTotal] = useState(0);
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [agents, setAgents] = useState<AIAgent[]>([]);
 
   const createForm = useForm<CreateFormValues>({
@@ -115,30 +120,30 @@ const AdminAssessment: React.FC = () => {
     defaultValues: DEFAULT_CREATE_VALUES,
   });
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const resp = await assessmentConfigApi.list({
-        skip: (currentPage - 1) * pageSize,
-        limit: pageSize,
-        search: search.trim() || undefined,
-      });
-      setItems(resp.items || []);
-      setTotal(resp.total || 0);
-    } catch (error: any) {
-      logger.error("加载测评配置失败:", error);
-      showMessage.error("加载测评配置失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, pageSize, search]);
+  // ── TanStack Query ────────────────────────────────────────
+  const queryParams = useMemo(
+    () => ({
+      skip: (currentPage - 1) * pageSize,
+      limit: pageSize,
+      search: search.trim() || undefined,
+    }),
+    [currentPage, pageSize, search],
+  );
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data: listData, isLoading } = useAssessmentConfigs(queryParams);
+  const items = listData?.items ?? [];
+  const total = listData?.total ?? 0;
 
-  useAdminSSE("assessment_changed", loadData);
+  const createMutation = useCreateAssessmentConfig();
+  const toggleMutation = useToggleAssessmentConfig();
+  const deleteMutation = useDeleteAssessmentConfig();
 
+  // ── SSE ───────────────────────────────────────────────────
+  useAdminSSE("assessment_changed", () => {
+    queryClient.invalidateQueries({ queryKey: [ASSESSMENT_QUERY_KEY] });
+  });
+
+  // ── Agents for create form ────────────────────────────────
   const loadAgents = useCallback(async () => {
     try {
       const resp = await aiAgentsApi.getAgents({ limit: 100 });
@@ -163,7 +168,7 @@ const AdminAssessment: React.FC = () => {
       const kpStr = values.knowledge_points.trim();
       const kps = kpStr ? kpStr.split(/[,，、\s]+/).filter(Boolean) : [];
 
-      const config = await assessmentConfigApi.create({
+      const config = await createMutation.mutateAsync({
         title,
         grade: values.grade || undefined,
         agent_id: Number(agentId),
@@ -181,23 +186,22 @@ const AdminAssessment: React.FC = () => {
 
   const handleToggle = async (id: number) => {
     try {
-      await assessmentConfigApi.toggle(id);
-      await loadData();
+      await toggleMutation.mutateAsync(id);
     } catch (error: any) {
       showMessage.error(error.message || "切换状态失败");
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (
-      !window.confirm("确定删除此测评配置？将同时删除关联的题目、答题记录和画像。")
-    ) {
-      return;
-    }
+  const handleDelete = (id: number) => {
+    setDeleteTarget(id);
+  };
+
+  const executeDelete = async () => {
+    if (deleteTarget === null) return;
     try {
-      await assessmentConfigApi.delete(id);
+      await deleteMutation.mutateAsync(deleteTarget);
       showMessage.success("删除成功");
-      await loadData();
+      setDeleteTarget(null);
     } catch (error: any) {
       showMessage.error(error.message || "删除失败");
     }
@@ -212,7 +216,7 @@ const AdminAssessment: React.FC = () => {
       setSearch(next);
       return;
     }
-    void loadData();
+    queryClient.invalidateQueries({ queryKey: [ASSESSMENT_QUERY_KEY] });
   };
 
   const handleClearSearch = () => {
@@ -337,7 +341,7 @@ const AdminAssessment: React.FC = () => {
               size="sm"
               disabled={row.original.id < 0}
               className="text-destructive hover:text-destructive"
-              onClick={() => void handleDelete(row.original.id)}
+              onClick={() => handleDelete(row.original.id)}
             >
               <Trash2 className="h-4 w-4" />
               删除
@@ -346,7 +350,7 @@ const AdminAssessment: React.FC = () => {
         ),
       },
     ],
-    [handleToggle, navigate],
+    [navigate],
   );
 
   const table = useReactTable({
@@ -359,7 +363,7 @@ const AdminAssessment: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex items-center gap-2">
+      <AdminFilterBar className="flex-nowrap">
         <Input
           placeholder="搜索测评标题"
           className="w-[220px]"
@@ -385,17 +389,17 @@ const AdminAssessment: React.FC = () => {
           <Plus className="h-4 w-4" />
           新建测评
         </Button>
-      </div>
+      </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <AdminTablePanel
-            loading={loading}
+            loading={isLoading}
             isEmpty={items.length === 0}
             emptyDescription={search ? "未找到匹配的测评" : "暂无测评配置"}
             emptyAction={<Button onClick={openCreateModal}>创建第一个测评</Button>}
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[980px]" />
+            <DataTable table={table} tableClassName="min-w-[980px]" />
           </AdminTablePanel>
         </div>
         {items.length > 0 ? (
@@ -562,6 +566,16 @@ const AdminAssessment: React.FC = () => {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="确认删除"
+        description="确定删除此测评配置？将同时删除关联的题目、答题记录和画像。"
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeDelete}
+      />
     </AdminPage>
   );
 };

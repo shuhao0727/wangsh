@@ -5,11 +5,27 @@
 和 Redis/DB 指标采集代码。
 """
 
+import logging
+import time
 from typing import List, Tuple
 
 from app.core.config import settings
 from app.db.database import engine
 from app.utils.cache import cache
+
+logger = logging.getLogger(__name__)
+
+# 节流日志：Redis 不可用时避免日志轰炸
+_last_metrics_warn_ts: float = 0.0
+_METRICS_WARN_INTERVAL: float = 120.0  # 每 2 分钟最多警告一次
+
+
+def _warn_metrics_failure(context: str) -> None:
+    global _last_metrics_warn_ts
+    now = time.monotonic()
+    if now - _last_metrics_warn_ts >= _METRICS_WARN_INTERVAL:
+        _last_metrics_warn_ts = now
+        logger.warning("Metrics 采集失败 (%s): Redis 可能不可用", context)
 
 
 def percentile(values: List[int], p: float) -> int:
@@ -57,7 +73,7 @@ async def collect_http_metrics() -> dict:
         )
         dur_ms = [int(x) for x in raw if str(x).isdigit()]
     except Exception:
-        pass
+        _warn_metrics_failure("http")
 
     return {
         "total": total,
@@ -123,7 +139,7 @@ async def collect_typst_metrics() -> dict:
         waited_ms = [int(x) for x in raw_waited if str(x).isdigit()]
         cache_hit_samples = [int(x) for x in raw_hit if str(x).isdigit()]
     except Exception:
-        pass
+        _warn_metrics_failure("typst")
 
     hit_rate = 0.0
     if cache_hit_samples:

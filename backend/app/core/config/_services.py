@@ -32,7 +32,7 @@ class ServicesSettingsMixin:
     ARTICLE_CACHE_ADMIN_LIST_TTL: int = Field(default=180)
     ARTICLE_CACHE_ADMIN_DETAIL_TTL: int = Field(default=300)
     ARTICLE_CACHE_USER_DETAIL_TTL: int = Field(default=600)
-    ARTICLE_CACHE_PUBLIC_LIST_TTL: int = Field(default=300)
+    ARTICLE_CACHE_PUBLIC_LIST_TTL: int = Field(default=600)
     ARTICLE_CACHE_PUBLIC_DETAIL_TTL: int = Field(default=600)
     ARTICLE_CACHE_DEFAULT_TTL: int = Field(default=300)
 
@@ -49,7 +49,7 @@ class ServicesSettingsMixin:
 
     # ==================== 群组讨论 ====================
     GROUP_DISCUSSION_REDIS_ENABLED: bool = Field(default=True)
-    GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=False)
+    GROUP_DISCUSSION_METRICS_ENABLED: bool = Field(default=True)
     GROUP_DISCUSSION_LAST_ID_TTL: int = Field(default=86400)
     GROUP_DISCUSSION_LAST_AT_TTL: int = Field(default=86400)
     GROUP_DISCUSSION_RATE_LIMIT_SECONDS: int = Field(default=2)

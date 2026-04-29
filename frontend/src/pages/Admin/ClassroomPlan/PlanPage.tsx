@@ -39,6 +39,7 @@ import {
 import { planApi, type Plan, type PlanItem } from "@services/classroomPlan";
 import { classroomApi, type Activity, type ActivityStats } from "@services/classroom";
 import { AdminPage } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { ActivityDetailContent } from "@components/ActivityDetailDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,12 @@ import {
 } from "@/components/ui/sheet";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  usePlansList,
+  useDeletePlan,
+  PLAN_QUERY_KEY,
+} from "@hooks/queries/useClassroomPlanQuery";
 
 const ACTIVITY_FETCH_BATCH_SIZE = 100;
 
@@ -435,6 +442,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
   const [editTimeVal, setEditTimeVal] = useState<number>(60);
   const [drawerActivity, setDrawerActivity] = useState<Activity | null>(null);
   const [drawerStats, setDrawerStats] = useState<ActivityStats | null>(null);
+  const [confirmState, setConfirmState] = useState<{ message: string; key: string; fn: () => Promise<any> } | null>(null);
 
   const items = useMemo(
     () => [...plan.items].sort((a, b) => a.order_index - b.order_index),
@@ -489,8 +497,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   const confirmRun = (message: string, key: string, fn: () => Promise<any>) => {
-    if (!window.confirm(message)) return;
-    void doAction(key, fn);
+    setConfirmState({ message, key, fn });
   };
 
   return (
@@ -527,7 +534,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
             variant="outline"
             onClick={() =>
               confirmRun(
-                "重置计划？（所有题目恢复为待开始，计划变为草稿）",
+                "重置计划？（所有题目恢复为待开始，计划状态变为草稿）",
                 "reset-plan",
                 () => onResetPlan(plan.id),
               )
@@ -702,6 +709,21 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
           </div>
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认执行"
+        variant="default"
+        onConfirm={async () => {
+          if (confirmState === null) return;
+          const { key, fn } = confirmState;
+          setConfirmState(null);
+          void doAction(key, fn);
+        }}
+      />
     </div>
   );
 };
@@ -712,49 +734,35 @@ type RightView =
   | { type: "console"; planId: number };
 
 const ClassroomPlanPage: React.FC = () => {
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const queryClient = useQueryClient();
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [listLoading, setListLoading] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
   const [rightView, setRightView] = useState<RightView>({ type: "none" });
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [consolePlan, setConsolePlan] = useState<Plan | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
+  // ── TanStack Query: plan list ────────────────────────────
+  const queryParams = useMemo(
+    () => ({ skip: (page - 1) * pageSize, limit: pageSize }),
+    [page, pageSize],
+  );
+  const { data: listData, isLoading: listLoading } = usePlansList(queryParams);
+  const plans = listData?.items ?? [];
+  const total = listData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const deleteMutation = useDeletePlan();
+
   const replacePlanInList = useCallback((nextPlan: Plan) => {
-    setPlans((prev) => prev.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)));
+    // Update is handled by cache invalidation
   }, []);
 
   const applyPlanUpdate = useCallback((nextPlan: Plan) => {
-    replacePlanInList(nextPlan);
     setEditingPlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
     setConsolePlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
-  }, [replacePlanInList]);
-
-  const loadPlans = useCallback(async (targetPage: number, targetPageSize: number, quiet = false) => {
-    if (!quiet) {
-      setListLoading(true);
-    }
-    try {
-      const resp = await planApi.list((targetPage - 1) * targetPageSize, targetPageSize);
-      const nextTotalPages = Math.max(1, Math.ceil(resp.total / targetPageSize));
-      setTotal(resp.total);
-
-      if (targetPage > nextTotalPages) {
-        setPage(nextTotalPages);
-        return;
-      }
-
-      setPlans(resp.items);
-    } finally {
-      if (!quiet) {
-        setListLoading(false);
-      }
-    }
   }, []);
 
   const loadActivities = useCallback(async () => {
@@ -786,12 +794,6 @@ const ClassroomPlanPage: React.FC = () => {
   }, [applyPlanUpdate]);
 
   useEffect(() => {
-    void loadPlans(page, pageSize).catch((e) => {
-      showMessage.error(parseErr(e, "加载计划失败"));
-    });
-  }, [loadPlans, page, pageSize]);
-
-  useEffect(() => {
     void loadActivities().catch((e) => {
       showMessage.error(parseErr(e, "加载活动失败"));
     });
@@ -817,9 +819,13 @@ const ClassroomPlanPage: React.FC = () => {
     });
   }, [loadPlanDetail, rightView]);
 
+  const invalidatePlans = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+  }, [queryClient]);
+
   const handleRefreshList = useCallback(async () => {
     await Promise.all([
-      loadPlans(page, pageSize),
+      invalidatePlans(),
       loadActivities(),
     ]);
 
@@ -831,7 +837,7 @@ const ClassroomPlanPage: React.FC = () => {
     }
 
     showMessage.success("已刷新");
-  }, [loadActivities, loadPlanDetail, loadPlans, page, pageSize, rightView]);
+  }, [loadActivities, loadPlanDetail, invalidatePlans, rightView]);
 
   const handleRefreshPlan = useCallback(async (id: number) => {
     await loadPlanDetail(id);
@@ -848,7 +854,7 @@ const ClassroomPlanPage: React.FC = () => {
       if (page !== 1) {
         setPage(1);
       } else {
-        await loadPlans(1, pageSize, true);
+        invalidatePlans();
       }
       showMessage.success("创建成功");
       return;
@@ -859,34 +865,44 @@ const ClassroomPlanPage: React.FC = () => {
     setEditingPlan(null);
     setConsolePlan(updated);
     setRightView({ type: "console", planId: updated.id });
+    invalidatePlans();
     showMessage.success("已更新");
-  }, [applyPlanUpdate, loadPlans, page, pageSize, rightView]);
+  }, [applyPlanUpdate, invalidatePlans, page, rightView]);
 
   const handleDelete = useCallback(async (id: number) => {
-    if (!window.confirm("确认删除该计划？")) return;
+    setDeleteTarget(id);
+  }, []);
 
-    await planApi.remove(id);
+  const executeDelete = async () => {
+    if (deleteTarget === null) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      await deleteMutation.mutateAsync(id);
 
-    setEditingPlan((prev) => (prev?.id === id ? null : prev));
-    setConsolePlan((prev) => (prev?.id === id ? null : prev));
-    setRightView((prev) => {
-      if (prev.type === "form" && prev.editingId === id) return { type: "none" };
-      if (prev.type === "console" && prev.planId === id) return { type: "none" };
-      return prev;
-    });
+      setEditingPlan((prev) => (prev?.id === id ? null : prev));
+      setConsolePlan((prev) => (prev?.id === id ? null : prev));
+      setRightView((prev) => {
+        if (prev.type === "form" && prev.editingId === id) return { type: "none" };
+        if (prev.type === "console" && prev.planId === id) return { type: "none" };
+        return prev;
+      });
 
-    const nextTotal = Math.max(0, total - 1);
-    const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
-    const nextPage = Math.min(page, nextTotalPages);
+      const nextTotal = Math.max(0, total - 1);
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
+      const nextPage = Math.min(page, nextTotalPages);
 
-    if (nextPage !== page) {
-      setPage(nextPage);
-    } else {
-      await loadPlans(nextPage, pageSize, true);
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        invalidatePlans();
+      }
+
+      showMessage.success("已删除");
+    } catch (e: any) {
+      showMessage.error(parseErr(e, "删除失败"));
     }
-
-    showMessage.success("已删除");
-  }, [loadPlans, page, pageSize, total]);
+  };
 
   const openCreate = useCallback(() => {
     setEditingPlan(null);
@@ -906,38 +922,44 @@ const ClassroomPlanPage: React.FC = () => {
   const handleStartPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.start(planId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("计划已启动");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleEndPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.end(planId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("计划已结束");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleResetPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.reset(planId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("计划已重置");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleStartItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.startItem(planId, itemId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("题目已开始");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleEndItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.endItem(planId, itemId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("题目已结束");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleRestartItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.startItem(planId, itemId);
     applyPlanUpdate(nextPlan);
+    invalidatePlans();
     showMessage.success("题目已重新开始");
-  }, [applyPlanUpdate]);
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const handleUpdateItemTime = useCallback(async (planId: number, itemId: number, timeLimit: number) => {
     const plan = await planApi.get(planId);
@@ -952,7 +974,8 @@ const ClassroomPlanPage: React.FC = () => {
 
     const refreshedPlan = await planApi.get(planId);
     applyPlanUpdate(refreshedPlan);
-  }, [applyPlanUpdate]);
+    invalidatePlans();
+  }, [applyPlanUpdate, invalidatePlans]);
 
   const rightTitle =
     rightView.type === "form"
@@ -1163,6 +1186,15 @@ const ClassroomPlanPage: React.FC = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="确认删除"
+        description="确认删除该计划？"
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeDelete}
+      />
     </AdminPage>
   );
 };

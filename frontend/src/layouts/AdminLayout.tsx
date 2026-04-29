@@ -37,6 +37,7 @@ import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
 import LoginForm from "@/components/Auth/LoginForm";
+import { Breadcrumbs } from "@/components/Common/Breadcrumbs";
 
 type AdminMenuItem = {
   key: string;
@@ -142,12 +143,13 @@ const AdminLayout: React.FC = () => {
           navigate(item.key);
           if (isMobile) setCollapsed(true);
         }}
-        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
           active
             ? "bg-primary-soft text-primary"
             : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
         }`}
         title={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
       >
         <span className="shrink-0">{item.icon}</span>
         {!collapsed ? <span className="truncate">{item.label}</span> : null}
@@ -214,7 +216,7 @@ const AdminLayout: React.FC = () => {
                       }
                       setAgentsOpen((v) => !v);
                     }}
-                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
                       inAgentGroup
                         ? "bg-primary-soft text-primary"
                         : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
@@ -321,7 +323,7 @@ const AdminLayout: React.FC = () => {
                     </span>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" sideOffset={8}>
                   <DropdownMenuItem onClick={() => navigate("/admin/users")}>
                     <User className="mr-2 h-4 w-4" />
                     管理员资料
@@ -358,6 +360,7 @@ const AdminLayout: React.FC = () => {
         >
           {auth.isLoggedIn() && auth.isAdmin() ? (
             <div className="flex min-h-0 flex-1 flex-col">
+              <Breadcrumbs />
               <Outlet key={location.pathname} />
             </div>
           ) : (

@@ -41,6 +41,7 @@ import {
 } from "@services/assessment";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 import EmptyState from "@components/Common/EmptyState";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 
 const STORAGE_KEYS = {
   FLOATING_POS: "assessment_floating_pos",
@@ -203,6 +204,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   const profilePollAttemptRef = useRef(0);
   // 开始检测进度
   const [startingConfigId, setStartingConfigId] = useState<number | null>(null);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
+
   // 浮动按钮位置
   const [btnTop, setBtnTop] = useState(() => {
     try { const v = localStorage.getItem(STORAGE_KEYS.BTN_TOP); return v ? Number(v) : 55; } catch { return 55; }
@@ -837,8 +841,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               className="!bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
               disabled={submitting}
               onClick={() => {
-                if (!window.confirm("确定提交检测？提交后无法修改答案。")) return;
-                void handleSubmitAll();
+                setConfirmState({ message: "确定提交检测？提交后无法修改答案。", onOk: () => { void handleSubmitAll(); } });
               }}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -1027,6 +1030,16 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         )}
         {floatingBtn}
         {open && renderWindow()}
+
+        <ConfirmDialog
+          open={confirmState !== null}
+          onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+          title="确认操作"
+          description={confirmState?.message ?? ""}
+          confirmText="确认"
+          variant="destructive"
+          onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+        />
       </>
     </TooltipProvider>,
     document.body,

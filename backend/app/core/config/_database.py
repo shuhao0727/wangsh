@@ -33,9 +33,12 @@ class DatabaseSettingsMixin:
 
     # ==================== Redis 连接优化 ====================
     REDIS_CONNECT_TIMEOUT: int = Field(default=5)
-    REDIS_MAX_CONNECTIONS: int = Field(default=50)
+    REDIS_MAX_CONNECTIONS: int = Field(default=150)
     STUDENT_SESSION_TTL: int = Field(default=7200)
-    REDIS_DB_CACHE: int = Field(default=0)
+    REDIS_DB_CACHE: int = Field(default=1)
+    REDIS_PASSWORD: Optional[str] = Field(default=None)
+    REDIS_SSL: bool = Field(default=False)
+    REDIS_SSL_CERT_REQS: str = Field(default="required")  # "required" | "optional" | "none"
 
     # ==================== Redis Sentinel 高可用 ====================
     REDIS_SENTINEL_ENABLED: bool = Field(default=False)

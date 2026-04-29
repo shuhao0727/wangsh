@@ -17,7 +17,7 @@ module.exports = {
           hover: "var(--ws-color-primary-hover)",
           active: "var(--ws-color-primary-active)",
           soft: "var(--ws-color-primary-soft)",
-          foreground: "hsl(var(--primary-foreground))",
+          foreground: "#FFFFFF",
         },
         success: {
           DEFAULT: "var(--ws-color-success)",
@@ -46,35 +46,35 @@ module.exports = {
         "code-bg": "var(--ws-color-code-bg)",
         "code-text": "var(--ws-color-code-text)",
 
-        // ========== shadcn/ui 语义色（映射到项目 token）==========
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        // ========== shadcn/ui 语义色（直接映射到项目 CSS 变量，统一颜色系统）==========
+        border: "var(--ws-color-border)",
+        input: "var(--ws-color-border)",
+        ring: "var(--ws-color-focus-ring)",
+        background: "var(--ws-color-surface)",
+        foreground: "var(--ws-color-text)",
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "var(--ws-color-surface-2)",
+          foreground: "var(--ws-color-text)",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "var(--ws-color-error)",
+          foreground: "#FFFFFF",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "var(--ws-color-surface-2)",
+          foreground: "var(--ws-color-text-secondary)",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "var(--ws-color-hover-bg)",
+          foreground: "var(--ws-color-text)",
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "var(--ws-color-surface)",
+          foreground: "var(--ws-color-text)",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "var(--ws-color-surface)",
+          foreground: "var(--ws-color-text)",
         },
       },
       borderRadius: {
@@ -95,7 +95,7 @@ module.exports = {
         base: "var(--ws-text-md)",
         lg: "var(--ws-text-lg)",
         xl: "var(--ws-text-xl)",
-        "2xl": "var(--ws-text-xl)",
+        "2xl": "var(--ws-text-2xl)",
       },
       boxShadow: {
         lg: "var(--ws-shadow-lg)",

@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import { useNavigate } from "react-router-dom";
 import {
   type ColumnDef,
@@ -15,7 +16,8 @@ import { z } from "zod";
 import { categoryApi } from "@services";
 import type { CategoryWithUsage, CategoryFilterParams } from "@services";
 import { logger } from "@services/logger";
-import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -293,6 +295,9 @@ const AdminCategories: React.FC = () => {
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryWithUsage | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [batchDeleteIds, setBatchDeleteIds] = useState<number[]>([]);
   const [isCreateMode, setIsCreateMode] = useState(false);
 
   const [filterVisible, setFilterVisible] = useState(false);
@@ -323,6 +328,8 @@ const AdminCategories: React.FC = () => {
     loadCategories();
   }, []);
 
+  useAdminSSE("category_changed", loadCategories);
+
   const filteredCategories = useMemo(() => {
     const kw = searchKeyword.trim().toLowerCase();
     let list = [...categories];
@@ -352,10 +359,15 @@ const AdminCategories: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("确定删除该分类吗？")) return;
+    setDeleteTarget(id);
+  };
+
+  const executeDelete = async () => {
+    if (deleteTarget === null) return;
     try {
-      await categoryApi.deleteCategory(id);
+      await categoryApi.deleteCategory(deleteTarget);
       showMessage.success("分类删除成功");
+      setDeleteTarget(null);
       loadCategories();
     } catch (error: any) {
       logger.error("删除分类失败:", error);
@@ -372,19 +384,43 @@ const AdminCategories: React.FC = () => {
       showMessage.warning("请选择要删除的分类");
       return;
     }
-    if (!window.confirm(`确定删除选中的 ${selectedIds.length} 个分类吗？`)) return;
+    setBatchDeleteIds(selectedIds);
+    setBatchDeleteOpen(true);
+  };
+
+  const executeBatchDelete = async () => {
     try {
       setLoading(true);
-      for (const id of selectedIds) {
-        await categoryApi.deleteCategory(id);
-      }
-      showMessage.success(`成功删除 ${selectedIds.length} 个分类`);
+
+      const results = await Promise.allSettled(
+        batchDeleteIds.map((id) => categoryApi.deleteCategory(id))
+      );
+
+      let successCount = 0;
+      let errorCount = 0;
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      });
+
       loadCategories();
+
+      if (errorCount === 0) {
+        showMessage.success(`成功删除 ${successCount} 个分类`);
+      } else if (successCount > 0) {
+        showMessage.warning(`成功删除 ${successCount} 个分类，${errorCount} 个删除失败`);
+      } else {
+        showMessage.error(`批量删除失败，所有 ${errorCount} 个分类删除失败`);
+      }
     } catch (error) {
       logger.error("批量删除失败:", error);
       showMessage.error("批量删除失败");
     } finally {
       setLoading(false);
+      setBatchDeleteOpen(false);
     }
   };
 
@@ -580,7 +616,7 @@ const AdminCategories: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <AdminFilterBar>
         <div className="relative w-[280px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
@@ -632,7 +668,7 @@ const AdminCategories: React.FC = () => {
           <Plus className="h-4 w-4" />
           新增分类
         </Button>
-      </div>
+      </AdminFilterBar>
 
       {filterVisible && (
         <div className="mb-4 rounded-xl bg-surface-2 p-4">
@@ -703,7 +739,7 @@ const AdminCategories: React.FC = () => {
               </Button>
             }
           >
-            <DataTable table={table} className="h-full" tableClassName="min-w-[980px]" />
+            <DataTable table={table} tableClassName="min-w-[980px]" />
           </AdminTablePanel>
         </div>
         {filteredCategories.length > 0 ? (
@@ -729,6 +765,25 @@ const AdminCategories: React.FC = () => {
           setEditModalVisible(false);
           loadCategories();
         }}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="确认删除"
+        description="确定删除该分类吗？"
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeDelete}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="确认批量删除"
+        description={`确定删除选中的 ${batchDeleteIds.length} 个分类吗？`}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeBatchDelete}
       />
     </AdminPage>
   );

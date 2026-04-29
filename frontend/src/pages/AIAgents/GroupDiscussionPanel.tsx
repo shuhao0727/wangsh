@@ -24,6 +24,7 @@ import type { User } from "@services/users";
 import { logger } from "@services/logger";
 import { getJoinLockRemainingSeconds, parseJoinLockHint, type JoinLockHint } from "./groupDiscussionJoinLock";
 import EmptyState from "@components/Common/EmptyState";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import dayjs from "dayjs";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
 import { Button } from "@/components/ui/button";
@@ -165,6 +166,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [invitingUserId, setInvitingUserId] = useState<number | null>(null);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
   const canUse = isAuthenticated && config.enabled && (isStudent || isAdmin);
   const isCompactViewport = viewportWidth <= 430;
@@ -1156,8 +1159,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
                       onClick={() => {
-                        if (!window.confirm("确认移除该成员吗？")) return;
-                        void handleKick(item.user_id);
+                        setConfirmState({ message: "确认移除该成员吗？", onOk: () => { void handleKick(item.user_id); } });
                       }}
                     >
                       <DeleteOutlined className="h-4 w-4" />
@@ -1236,6 +1238,16 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认"
+        variant="destructive"
+        onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+      />
     </>,
     document.body
   );

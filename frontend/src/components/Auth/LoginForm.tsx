@@ -117,7 +117,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
               {isAdmin ? "管理员账号" : "用户名"}
             </Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
               <Input
                 id="username"
                 value={username}
@@ -138,7 +138,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           <div className="space-y-2">
             <Label htmlFor="password">密码</Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
               <Input
                 id="password"
                 type="password"
@@ -159,7 +159,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           {/* 提交按钮 */}
           <Button
             type="submit"
-            className="w-full h-11"
+            className="w-full h-[var(--ws-control-height-lg)]"
             disabled={auth.isLoading}
           >
             {auth.isLoading ? (
@@ -172,7 +172,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
 
           {isAdmin && (
             <div className="text-center mt-4">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-text-tertiary">
                 提示：仅支持管理员账号登录
               </p>
             </div>

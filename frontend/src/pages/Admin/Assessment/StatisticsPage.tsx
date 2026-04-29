@@ -29,6 +29,8 @@ import ReactECharts from "echarts-for-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
 import EmptyState from "@components/Common/EmptyState";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
+import { StatCard } from "@components/Common/StatCard";
 import RadarChart from "@components/RadarChart";
 import {
   BasicProfileView,
@@ -177,6 +179,7 @@ const StatisticsPage: React.FC = () => {
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
   const [configAgentId, setConfigAgentId] = useState<number | null>(null);
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
   useEffect(() => {
     assessmentSessionApi.getClassNames(configId).then(setClassNames).catch(() => setClassNames([]));
@@ -364,15 +367,16 @@ const StatisticsPage: React.FC = () => {
     }
   };
 
-  const handleAllowRetest = async (sessionId: number) => {
-    if (!window.confirm("允许该学生重新测试？")) return;
-    try {
-      await assessmentSessionApi.allowRetest(sessionId);
-      showMessage.success("已允许重新测试");
-      await Promise.all([loadSessions(), loadStats()]);
-    } catch (e: any) {
-      showMessage.error(e.message || "操作失败");
-    }
+  const handleAllowRetest = (sessionId: number) => {
+    setConfirmState({ message: "允许该学生重新测试？", onOk: async () => {
+      try {
+        await assessmentSessionApi.allowRetest(sessionId);
+        showMessage.success("已允许重新测试");
+        await Promise.all([loadSessions(), loadStats()]);
+      } catch (e: any) {
+        showMessage.error(e.message || "操作失败");
+      }
+    } });
   };
 
   const handleBatchRetest = async (mode: "class" | "selection") => {
@@ -505,12 +509,12 @@ const StatisticsPage: React.FC = () => {
 
   const statItems = stats
     ? [
-        { icon: <Users className="h-3.5 w-3.5" />, label: "参与人数", value: stats.total_students, color: "var(--ws-color-primary)" },
-        { icon: <CheckCircle2 className="h-3.5 w-3.5" />, label: "已评分", value: stats.submitted_count, color: "var(--ws-color-success)" },
-        { icon: <BarChart3 className="h-3.5 w-3.5" />, label: "平均分", value: stats.avg_score != null ? stats.avg_score.toFixed(1) : "-", color: "var(--ws-color-secondary)" },
-        { icon: <Trophy className="h-3.5 w-3.5" />, label: "最高分", value: stats.max_score ?? "-", color: "var(--ws-color-warning)" },
-        { label: "最低分", value: stats.min_score ?? "-", color: "var(--ws-color-error)" },
-        { label: "通过率", value: stats.pass_rate != null ? `${(stats.pass_rate * 100).toFixed(0)}%` : "-", color: "var(--ws-color-success)" },
+        { icon: <Users className="h-3.5 w-3.5" />, label: "参与人数", value: stats.total_students, color: "primary" as const },
+        { icon: <CheckCircle2 className="h-3.5 w-3.5" />, label: "已评分", value: stats.submitted_count, color: "success" as const },
+        { icon: <BarChart3 className="h-3.5 w-3.5" />, label: "平均分", value: stats.avg_score != null ? stats.avg_score.toFixed(1) : "-", color: "secondary" as const },
+        { icon: <Trophy className="h-3.5 w-3.5" />, label: "最高分", value: stats.max_score ?? "-", color: "warning" as const },
+        { label: "最低分", value: stats.min_score ?? "-", color: "error" as const },
+        { label: "通过率", value: stats.pass_rate != null ? `${(stats.pass_rate * 100).toFixed(0)}%` : "-", color: "success" as const },
       ]
     : [];
 
@@ -695,23 +699,14 @@ const StatisticsPage: React.FC = () => {
           {/* ─── 统计卡片 ─── */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {statItems.map((item, index) => (
-              <div
+              <StatCard
                 key={index}
-                className="stat-card"
-                style={{ "--stat-color": item.color } as React.CSSProperties}
-              >
-                <div className="stat-card-accent" style={{ background: item.color }} />
-                <div className="stat-card-body">
-                  <div className="stat-card-label">
-                    {item.icon ? <span className="stat-card-icon">{item.icon}</span> : null}
-                    {item.label}
-                  </div>
-                  <div className="stat-card-value">{item.value}</div>
-                </div>
-                <div className="stat-card-watermark" style={{ color: item.color }}>
-                  {item.icon}
-                </div>
-              </div>
+                label={item.label}
+                value={item.value}
+                icon={item.icon}
+                variant="accent"
+                color={item.color}
+              />
             ))}
           </div>
 
@@ -790,11 +785,11 @@ const StatisticsPage: React.FC = () => {
               <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={onSearchSubmit}><Search className="h-3.5 w-3.5" /></Button>
               <div className="flex-1" />
               {filterClass && (
-                <Button size="sm" variant="outline" disabled={batchRetesting} onClick={() => { if (!window.confirm(`确定让「${filterClass}」全班重新测试？`)) return; void handleBatchRetest("class"); }}>
+                <Button size="sm" variant="outline" disabled={batchRetesting} onClick={() => { setConfirmState({ message: `确定让「${filterClass}」全班重新测试？`, onOk: () => { void handleBatchRetest("class"); } }); }}>
                   <Redo className="mr-1 h-3.5 w-3.5" />全班重测
                 </Button>
               )}
-              <Button size="sm" variant="outline" disabled={batchGenerating} onClick={() => { const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？"; if (!window.confirm(msg)) return; void handleBatchGenerateProfiles(); }}>
+              <Button size="sm" variant="outline" disabled={batchGenerating} onClick={() => { const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？"; setConfirmState({ message: msg, onOk: () => { void handleBatchGenerateProfiles(); } }); }}>
                 {batchGenerating ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 h-3.5 w-3.5" />}批量画像
               </Button>
               <Button size="sm" variant="outline" disabled={exporting} onClick={() => { void handleExport(); }}>
@@ -890,8 +885,7 @@ const StatisticsPage: React.FC = () => {
                       size="sm" variant="link" className="h-6 px-1.5"
                       disabled={batchRetesting}
                       onClick={() => {
-                        if (!window.confirm(`确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`)) return;
-                        void handleBatchRetest("selection");
+                        setConfirmState({ message: `确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`, onOk: () => { void handleBatchRetest("selection"); } });
                       }}
                     >批量重测</Button>
                     <Button size="sm" variant="link" className="h-6 px-1.5" onClick={() => setSelectedRowKeys([])}>取消</Button>
@@ -1016,6 +1010,16 @@ const StatisticsPage: React.FC = () => {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+        title="确认操作"
+        description={confirmState?.message ?? ""}
+        confirmText="确认"
+        variant="destructive"
+        onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+      />
 
       <Dialog
         open={profileOpen}

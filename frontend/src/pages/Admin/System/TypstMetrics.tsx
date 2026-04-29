@@ -6,12 +6,15 @@ import { AdminCard } from "@components/Admin";
 import { systemMetricsApi } from "@services";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 const TypstMetricsPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+
+  const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +57,7 @@ const TypstMetricsPanel: React.FC = () => {
   );
 
   return (
+    <>
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div className="inline-flex items-center gap-2">
@@ -64,14 +68,14 @@ const TypstMetricsPanel: React.FC = () => {
           <Button
             variant="outline"
             onClick={async () => {
-              const ok = window.confirm("会删除超过保留天数且未被任何笔记引用的 PDF。建议先预演，是否继续？");
-              if (!ok) return;
-              try {
-                const res = await systemMetricsApi.typstPdfCleanup({ dry_run: true });
-                showMessage.info(`预演完成：scanned=${res?.scanned ?? 0} removed=${res?.removed ?? 0}`);
-              } catch (e: any) {
-                showMessage.error(e?.message || "预演失败");
-              }
+              setConfirmState({ message: "会删除超过保留天数且未被任何笔记引用的 PDF。建议先预演，是否继续？", onOk: async () => {
+                try {
+                  const res = await systemMetricsApi.typstPdfCleanup({ dry_run: true });
+                  showMessage.info(`预演完成：scanned=${res?.scanned ?? 0} removed=${res?.removed ?? 0}`);
+                } catch (e: any) {
+                  showMessage.error(e?.message || "预演失败");
+                }
+              }});
             }}
           >
             清理 PDF
@@ -119,6 +123,17 @@ const TypstMetricsPanel: React.FC = () => {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={confirmState !== null}
+      onOpenChange={(open) => { if (!open) setConfirmState(null); }}
+      title="确认操作"
+      description={confirmState?.message ?? ""}
+      confirmText="确认"
+      variant="destructive"
+      onConfirm={() => { confirmState?.onOk(); setConfirmState(null); }}
+    />
+    </>
   );
 };
 

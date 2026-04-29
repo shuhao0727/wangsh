@@ -156,6 +156,7 @@ async def create_session(request: Request, payload: DebugSessionCreateRequest, c
 
     session_id = f"dbg_{uuid.uuid4().hex}"
     ttl_seconds = int(getattr(settings, "PYTHONLAB_UNATTACHED_TTL_SECONDS", DEFAULT_UNATTACHED_TTL) or DEFAULT_UNATTACHED_TTL)
+    ttl_seconds = min(ttl_seconds, 7200)  # 上限 2 小时
     created_at = now_iso()
     code_sha256 = sha256_text(payload.code)
 

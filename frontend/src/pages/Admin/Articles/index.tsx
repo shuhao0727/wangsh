@@ -36,14 +36,23 @@ import {
   Loader2,
 } from "lucide-react";
 import dayjs from "dayjs";
-import { articleApi, categoryApi } from "@services";
+import { categoryApi } from "@services";
 import { logger } from "@services/logger";
 import type { ArticleWithRelations, ArticleFilterParams } from "@services";
-import { AdminPage, AdminTablePanel } from "@components/Admin";
+import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import CategoryManageModal from "./CategoryManageModal";
 import { useAdminSSE } from "@hooks/useAdminSSE";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useArticlesList,
+  useDeleteArticle,
+  useTogglePublish,
+  useBatchDeleteArticles,
+  useBatchPublishArticles,
+} from "@hooks/queries/useArticlesQuery";
 
 const getArticleColumns = (
   handleEdit: (record: ArticleWithRelations) => void,
@@ -156,40 +165,59 @@ const getArticleColumns = (
 ];
 
 const AdminArticles: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [articles, setArticles] = useState<ArticleWithRelations[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const queryClient = useQueryClient();
+
   const [searchParams, setSearchParams] = useState<ArticleFilterParams>({
     page: 1,
     size: 20,
     published_only: false,
     include_relations: true,
   });
+
+  // TanStack Query hooks
+  const { data: articlesData, isLoading } = useArticlesList(searchParams);
+  const articles = articlesData?.articles || [];
+  const total = articlesData?.total || 0;
+  const currentPage = searchParams.page || 1;
+  const pageSize = searchParams.size || 20;
+
+  const deleteArticleMutation = useDeleteArticle();
+  const togglePublishMutation = useTogglePublish();
+  const batchDeleteMutation = useBatchDeleteArticles();
+  const batchPublishMutation = useBatchPublishArticles();
+
+  const [categories, setCategories] = useState<any[]>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>(undefined);
   const [titleKeyword, setTitleKeyword] = useState("");
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
 
-  const loadArticles = useCallback(async (params: ArticleFilterParams = searchParams) => {
+  const loadCategories = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await articleApi.listArticles(params);
-      const listData = response.data;
-
-      setArticles(listData?.articles || []);
-      setTotal(listData?.total || 0);
-      setRowSelection({});
+      const response = await categoryApi.listCategories({
+        page: 1,
+        size: 100,
+      });
+      const categoriesData = response.data?.categories || [];
+      setCategories(categoriesData);
     } catch (error) {
-      logger.error("加载文章列表失败:", error);
-      showMessage.error("加载文章列表失败");
-    } finally {
-      setLoading(false);
+      logger.error("加载分类列表失败:", error);
     }
-  }, [searchParams]);
+  }, []);
 
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  // SSE-based refresh
+  const invalidateArticles = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["articles"] });
+  }, [queryClient]);
+
+  useAdminSSE("article_changed", invalidateArticles);
+
+  // Global article update event + postMessage fallback
   const refreshTimerRef = useRef<number | null>(null);
   const lastRefreshAtRef = useRef(0);
   const seenSignalIdsRef = useRef<Map<string, number>>(new Map());
@@ -212,36 +240,16 @@ const AdminArticles: React.FC = () => {
     const since = now - lastRefreshAtRef.current;
     if (since >= minInterval) {
       lastRefreshAtRef.current = now;
-      loadArticles();
+      invalidateArticles();
       return;
     }
     if (refreshTimerRef.current) return;
     refreshTimerRef.current = window.setTimeout(() => {
       refreshTimerRef.current = null;
       lastRefreshAtRef.current = Date.now();
-      loadArticles();
+      invalidateArticles();
     }, minInterval - since);
-  }, [loadArticles]);
-
-  const loadCategories = useCallback(async () => {
-    try {
-      const response = await categoryApi.listCategories({
-        page: 1,
-        size: 100,
-      });
-      const categoriesData = response.data?.categories || [];
-      setCategories(categoriesData);
-    } catch (error) {
-      logger.error("加载分类列表失败:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadArticles();
-    loadCategories();
-  }, [loadArticles, loadCategories]);
-
-  useAdminSSE("article_changed", loadArticles);
+  }, [invalidateArticles]);
 
   useEffect(() => {
     const unsub = subscribeArticleUpdated((_payload, meta) => {
@@ -264,6 +272,7 @@ const AdminArticles: React.FC = () => {
     };
   }, [requestRefreshFromSignal]);
 
+  // Visibility / focus refresh
   useEffect(() => {
     const onFocus = () => requestRefreshFromSignal();
     const onVisibilityChange = () => {
@@ -278,6 +287,7 @@ const AdminArticles: React.FC = () => {
     };
   }, [requestRefreshFromSignal]);
 
+  // Client-side keyword filter
   const displayedArticles = useMemo(() => {
     const kw = titleKeyword.trim().toLowerCase();
     if (!kw) return articles;
@@ -288,6 +298,7 @@ const AdminArticles: React.FC = () => {
     });
   }, [articles, titleKeyword]);
 
+  // Keep rowSelection valid only for visible rows
   useEffect(() => {
     const allowedIds = new Set(displayedArticles.map((item) => String(item.id)));
     setRowSelection((prev) => {
@@ -317,15 +328,11 @@ const AdminArticles: React.FC = () => {
   const handlePageChange = (nextPage: number, size?: number) => {
     const resolvedSize = size ?? pageSize;
     const boundedPage = Math.max(1, Math.min(Math.max(1, Math.ceil(total / resolvedSize)), nextPage));
-    const newParams = {
-      ...searchParams,
+    setSearchParams((prev) => ({
+      ...prev,
       page: boundedPage,
       size: resolvedSize,
-    };
-    setCurrentPage(boundedPage);
-    if (size && size !== pageSize) setPageSize(size);
-    setSearchParams(newParams);
-    loadArticles(newParams);
+    }));
   };
 
   const handleEdit = (record: ArticleWithRelations) => {
@@ -334,9 +341,8 @@ const AdminArticles: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await articleApi.deleteArticle(id);
+      await deleteArticleMutation.mutateAsync(id);
       showMessage.success("文章删除成功");
-      loadArticles();
     } catch (error) {
       logger.error("删除文章失败:", error);
       showMessage.error("删除文章失败");
@@ -345,9 +351,8 @@ const AdminArticles: React.FC = () => {
 
   const handleTogglePublish = async (id: number, published: boolean) => {
     try {
-      await articleApi.togglePublishStatus(id, published);
+      await togglePublishMutation.mutateAsync({ id, published });
       showMessage.success(`文章已${published ? "发布" : "转为草稿"}`);
-      loadArticles();
     } catch (error) {
       logger.error("切换发布状态失败:", error);
       showMessage.error("操作失败");
@@ -377,43 +382,26 @@ const AdminArticles: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`确定要删除选中的 ${selectedRowKeys.length} 篇文章吗？此操作不可恢复。`)) {
-      logger.debug("用户取消批量删除");
-      return;
-    }
+    setBatchDeleteOpen(true);
+  };
+
+  const executeBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return;
 
     try {
-      setLoading(true);
-      const successIds: number[] = [];
-      const failedIds: Array<{ id: number; error: string }> = [];
-
-      for (const id of selectedRowKeys) {
-        try {
-          await articleApi.deleteArticle(id);
-          successIds.push(id);
-        } catch (error: any) {
-          logger.error(`删除文章 ${id} 失败:`, error);
-          failedIds.push({
-            id,
-            error: error?.message || error?.toString() || "未知错误",
-          });
-        }
-      }
-
-      if (failedIds.length === 0) {
-        showMessage.success(`成功删除 ${successIds.length} 篇文章`);
-      } else if (successIds.length > 0) {
-        showMessage.warning(`部分删除成功：成功删除 ${successIds.length} 篇，失败 ${failedIds.length} 篇`);
+      const result = await batchDeleteMutation.mutateAsync(selectedRowKeys);
+      if (result.errorCount === 0) {
+        showMessage.success(`成功删除 ${result.successCount} 篇文章`);
+      } else if (result.successCount > 0) {
+        showMessage.warning(`部分删除成功：成功删除 ${result.successCount} 篇，失败 ${result.errorCount} 篇`);
       } else {
         showMessage.error("全部删除失败，请检查文章ID是否正确");
       }
-
-      loadArticles();
     } catch (error) {
       logger.error("批量删除失败:", error);
       showMessage.error("批量删除操作失败");
     } finally {
-      setLoading(false);
+      setBatchDeleteOpen(false);
     }
   };
 
@@ -424,19 +412,22 @@ const AdminArticles: React.FC = () => {
     }
 
     try {
-      setLoading(true);
-      for (const id of selectedRowKeys) {
-        await articleApi.togglePublishStatus(id, published);
+      const result = await batchPublishMutation.mutateAsync({
+        ids: selectedRowKeys,
+        published,
+      });
+
+      const actionText = published ? "发布" : "转为草稿";
+      if (result.errorCount === 0) {
+        showMessage.success(`成功${actionText} ${result.successCount} 篇文章`);
+      } else if (result.successCount > 0) {
+        showMessage.warning(`部分${actionText}成功：成功 ${result.successCount} 篇，失败 ${result.errorCount} 篇`);
+      } else {
+        showMessage.error(`批量${actionText}失败`);
       }
-      showMessage.success(
-        `成功${published ? "发布" : "转为草稿"} ${selectedRowKeys.length} 篇文章`,
-      );
-      loadArticles();
     } catch (error) {
       logger.error("批量操作失败:", error);
       showMessage.error("批量操作失败");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -483,18 +474,22 @@ const AdminArticles: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Whether a mutation is in-flight (for button disabled state)
+  const mutating =
+    deleteArticleMutation.isPending ||
+    togglePublishMutation.isPending ||
+    batchDeleteMutation.isPending ||
+    batchPublishMutation.isPending;
+
   return (
     <AdminPage scrollable={false}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <AdminFilterBar>
         <Select
           value={categoryFilter != null ? String(categoryFilter) : "__all__"}
           onValueChange={(value) => {
             const next = value === "__all__" ? undefined : Number(value);
             setCategoryFilter(next);
-            const newParams: ArticleFilterParams = { ...searchParams, page: 1, category_id: next };
-            setCurrentPage(1);
-            setSearchParams(newParams);
-            void loadArticles(newParams);
+            setSearchParams((prev) => ({ ...prev, page: 1, category_id: next }));
           }}
         >
           <SelectTrigger className="w-[220px]">
@@ -538,8 +533,8 @@ const AdminArticles: React.FC = () => {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        <Button variant="outline" onClick={() => loadArticles()} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+        <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
+          {(isLoading || mutating) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
           刷新
         </Button>
         <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
@@ -550,12 +545,12 @@ const AdminArticles: React.FC = () => {
           <Plus className="h-4 w-4" />
           新建文章
         </Button>
-      </div>
+      </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <AdminTablePanel
-            loading={loading}
+            loading={isLoading}
             isEmpty={displayedArticles.length === 0}
             emptyDescription="暂无文章数据"
           >
@@ -582,6 +577,16 @@ const AdminArticles: React.FC = () => {
         visible={categoryModalVisible}
         onClose={() => setCategoryModalVisible(false)}
         onCategoryChange={loadCategories}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="确认删除"
+        description={`确定要删除选中的 ${selectedRowKeys.length} 篇文章吗？此操作不可恢复。`}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={executeBatchDelete}
       />
     </AdminPage>
   );
