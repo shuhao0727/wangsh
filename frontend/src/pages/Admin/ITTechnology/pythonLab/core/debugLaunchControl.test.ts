@@ -24,7 +24,7 @@ test("launchPythonlabDebugAction forwards launch breakpoint snapshot to dap runn
   expect(receivedArg).toEqual({ initialBreakpoints: breakpoints });
 });
 
-test("launchPythonlabRunAction forwards stdin lines to dap plain runner", () => {
+test("launchPythonlabRunAction forwards stdin text object to dap plain runner", () => {
   const stdinLines = ["1", "2"];
   let receivedArg: unknown = null;
 
@@ -39,7 +39,7 @@ test("launchPythonlabRunAction forwards stdin lines to dap plain runner", () => 
     stdinLines,
   });
 
-  expect(receivedArg).toEqual(stdinLines);
+  expect(receivedArg).toEqual({ stdinText: "1\n2" });
 });
 
 test("switchPythonlabRunner stops active dap session when switching back to pyodide", () => {

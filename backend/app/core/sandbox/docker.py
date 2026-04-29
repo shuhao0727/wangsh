@@ -389,7 +389,11 @@ class DockerProvider(SandboxProvider):
                     f"done"
                 )
             else:
-                loop_cmd = "exec tail -f /dev/null"
+                # Plain sessions are driven through the terminal WebSocket by
+                # writing a command to the container TTY after attach. Keep a
+                # real shell on stdin; `tail -f /dev/null` ignores stdin, so
+                # attached commands would never start the student's program.
+                loop_cmd = "exec env PS1= sh -i"
             
             cmd = [
                 "docker", "run", "-d", "-i", "-t",

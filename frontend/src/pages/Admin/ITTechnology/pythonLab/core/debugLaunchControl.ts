@@ -17,7 +17,7 @@ type DapRunnerLike = {
 };
 
 type PyodideRunnerLike = {
-  runPlain?: (arg?: any) => Promise<void> | void;
+  runPlain?: (stdinLines?: string[]) => Promise<void> | void;
   reset?: () => void;
 };
 
@@ -68,7 +68,7 @@ export function launchPythonlabRunAction(params: {
       showMessage.error("运行器未就绪，请刷新页面后重试");
       return;
     }
-    Promise.resolve(run(stdinLines)).catch((error: unknown) => {
+    Promise.resolve(run({ stdinText: stdinLines?.join("\n") })).catch((error: unknown) => {
       reportLaunchFailure(error, "启动运行失败");
     });
     return;
