@@ -26,11 +26,30 @@ require_docker() {
   fi
 }
 
+raw_env_value() {
+  awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "${env_file}" 2>/dev/null || true
+}
+
+resolved_env_value() {
+  docker compose --env-file "${env_file}" -f "${compose_file}" config --environment 2>/dev/null \
+    | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
+}
+
+env_value() {
+  local value
+  value="$(resolved_env_value "$1" || true)"
+  if [ -n "${value}" ]; then
+    printf '%s' "${value}"
+    return
+  fi
+  raw_env_value "$1"
+}
+
 compose() {
-  app_version="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-  tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-  version="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-  react_version="$(awk -F= '/^REACT_APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+  app_version="$(env_value APP_VERSION)"
+  tag="$(env_value IMAGE_TAG)"
+  version="$(env_value VERSION)"
+  react_version="$(env_value REACT_APP_VERSION)"
 
   if [ -z "${app_version}" ] && [ -n "${version}" ]; then
     app_version="${version}"
@@ -88,7 +107,8 @@ case "${cmd}" in
     require_docker
     bash scripts/deploy.sh pull-up
     bash scripts/deploy.sh health
-    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
+    web_port="$(env_value WEB_PORT)"
+    web_port="${web_port:-6608}"
     echo "web: http://localhost:${web_port}"
     ;;
   deploy-amd64)
@@ -101,7 +121,8 @@ case "${cmd}" in
     COMPOSE_PROJECT_NAME=wangsh_local compose up -d --no-build
     compose ps
     bash scripts/deploy.sh health
-    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
+    web_port="$(env_value WEB_PORT)"
+    web_port="${web_port:-6608}"
     echo "web: http://localhost:${web_port}"
     ;;
   up-amd64)
@@ -145,18 +166,18 @@ case "${cmd}" in
   push)
     require_env_file
     require_docker
-    registry="$(awk -F= '/^DOCKER_REGISTRY=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-    ns="$(awk -F= '/^DOCKERHUB_NAMESPACE=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-    tag="$(awk -F= '/^IMAGE_TAG=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    registry="$(env_value DOCKER_REGISTRY)"
+    ns="$(env_value DOCKERHUB_NAMESPACE)"
+    tag="$(env_value IMAGE_TAG)"
     if [ -z "${tag}" ]; then
-      tag="$(awk -F= '/^APP_VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+      tag="$(env_value APP_VERSION)"
     fi
     if [ -z "${tag}" ]; then
-      tag="$(awk -F= '/^VERSION=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+      tag="$(env_value VERSION)"
     fi
-    name_backend="$(awk -F= '/^IMAGE_NAME_BACKEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-    name_frontend="$(awk -F= '/^IMAGE_NAME_FRONTEND=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
-    name_worker="$(awk -F= '/^IMAGE_NAME_WORKER=/{print $2; exit}' "${env_file}" 2>/dev/null || true)"
+    name_backend="$(env_value IMAGE_NAME_BACKEND)"
+    name_frontend="$(env_value IMAGE_NAME_FRONTEND)"
+    name_worker="$(env_value IMAGE_NAME_WORKER)"
 
     if [ -z "${registry}" ] || [ -z "${ns}" ] || [ -z "${tag}" ] || [ -z "${name_backend}" ] || [ -z "${name_frontend}" ] || [ -z "${name_worker}" ]; then
       echo "missing DOCKER_REGISTRY/DOCKERHUB_NAMESPACE/IMAGE_TAG/IMAGE_NAME_* in ${env_file}" >&2
@@ -188,7 +209,8 @@ case "${cmd}" in
     ;;
   health)
     require_env_file
-    web_port="$(awk -F= '/^WEB_PORT=/{print $2; exit}' "${env_file}" 2>/dev/null || echo 6608)"
+    web_port="$(env_value WEB_PORT)"
+    web_port="${web_port:-6608}"
     curl -fsS "http://localhost:${web_port}/api/health"
     ;;
   simulate)
@@ -258,8 +280,10 @@ EOF
     out_dir="${BACKUP_DIR:-./backups}"
     ts="$(date +%Y%m%d_%H%M%S)"
     mkdir -p "${out_dir}"
-    db="$(awk -F= '/^POSTGRES_DB=/{print $2; exit}' "${env_file}" 2>/dev/null || echo wangsh_db)"
-    user="$(awk -F= '/^POSTGRES_USER=/{print $2; exit}' "${env_file}" 2>/dev/null || echo admin)"
+    db="$(env_value POSTGRES_DB)"
+    db="${db:-wangsh_db}"
+    user="$(env_value POSTGRES_USER)"
+    user="${user:-admin}"
     case "${mode}" in
       full) out="${out_dir}/${db}_${ts}.dump" ;;
       schema) out="${out_dir}/${db}_${ts}_schema.dump" ;;
