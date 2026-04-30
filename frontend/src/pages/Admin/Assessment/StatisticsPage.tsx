@@ -306,7 +306,35 @@ const StatisticsPage: React.FC = () => {
     [configId, allGradedStudents, timeParams],
   );
 
+  const resolveRadarPickFromLoadedStats = useCallback(
+    (
+      pick: RadarPick,
+    ): { handled: true; data: { name: string; data: Record<string, number> } | null } | { handled: false } => {
+      const canReuseStats =
+        pick.type === "all" && !filterClass ||
+        pick.type === "class" && pick.value === filterClass;
+
+      if (!canReuseStats) return { handled: false };
+      if (!stats) return { handled: true, data: null };
+
+      return {
+        handled: true,
+        data: {
+          name: pick.type === "class" ? pick.value : "全部数据",
+          data: (stats.knowledge_rates || {}) as Record<string, number>,
+        },
+      };
+    },
+    [filterClass, stats],
+  );
+
   useEffect(() => {
+    const loaded = resolveRadarPickFromLoadedStats(radarLeft);
+    if (loaded.handled) {
+      setRadarLeftData(loaded.data);
+      return;
+    }
+
     let cancelled = false;
     void loadRadarPick(radarLeft)
       .then((data) => {
@@ -316,13 +344,20 @@ const StatisticsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [radarLeft, loadRadarPick]);
+  }, [radarLeft, loadRadarPick, resolveRadarPickFromLoadedStats]);
 
   useEffect(() => {
     if (!radarRight) {
       setRadarRightData(null);
       return;
     }
+
+    const loaded = resolveRadarPickFromLoadedStats(radarRight);
+    if (loaded.handled) {
+      setRadarRightData(loaded.data);
+      return;
+    }
+
     let cancelled = false;
     void loadRadarPick(radarRight)
       .then((data) => {
@@ -332,7 +367,7 @@ const StatisticsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [radarRight, loadRadarPick]);
+  }, [radarRight, loadRadarPick, resolveRadarPickFromLoadedStats]);
 
   const handleViewDetail = async (sessionId: number) => {
     try {
