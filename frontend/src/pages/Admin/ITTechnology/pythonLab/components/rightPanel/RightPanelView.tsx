@@ -99,7 +99,7 @@ export const RightPanel = React.memo(function RightPanel() {
   const {
     code,
     setCode,
-    codeMode,
+    codeMode: _codeMode,
     setCodeMode,
     generated,
     flowDiagnostics: _flowDiagnostics,

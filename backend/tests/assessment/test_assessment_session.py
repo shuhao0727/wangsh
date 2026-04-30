@@ -408,6 +408,7 @@ def test_get_config_statistics_with_data():
         MockScalarResult(values=[s1, s2, s3]),   # graded sessions
         MockScalarResult(value=4),               # all_count
         MockScalarResult(values=[a1, a2]),        # answers for knowledge rates
+        MockScalarResult(values=[]),              # trend_data
     ])
 
     result = asyncio.run(get_config_statistics(db, config_id=1))

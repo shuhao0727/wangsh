@@ -10,7 +10,6 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
-  BarChart3,
   Plus,
   RefreshCw,
   Square,
@@ -29,10 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  classroomApi,
-  type Activity,
-} from "@services/classroom";
+import type { Activity } from "@services/classroom";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { parseErrorMessage } from "./utils";
 import ActivityFormDialog from "./components/ActivityFormDialog";

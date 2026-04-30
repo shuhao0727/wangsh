@@ -4,7 +4,7 @@
 
 from pathlib import Path
 from typing import Optional
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
@@ -54,6 +54,17 @@ class BaseSettingsMixin:
     HTTP_METRICS_SAMPLE_SIZE: int = Field(default=500)
 
     AUTO_CREATE_TABLES: bool = Field(default=False)
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def normalize_debug_flag(cls, value):
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production"}:
+                return False
+            if normalized in {"debug", "dev", "development"}:
+                return True
+        return value
 
     @model_validator(mode="after")
     def apply_app_version(self):

@@ -1,6 +1,5 @@
 // 课堂计划 API
 import { api } from "./api";
-import { Activity } from "./classroom";
 
 const BASE = "/classroom/plans";
 

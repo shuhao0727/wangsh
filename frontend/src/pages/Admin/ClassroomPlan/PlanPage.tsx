@@ -756,10 +756,6 @@ const ClassroomPlanPage: React.FC = () => {
 
   const deleteMutation = useDeletePlan();
 
-  const replacePlanInList = useCallback((nextPlan: Plan) => {
-    // Update is handled by cache invalidation
-  }, []);
-
   const applyPlanUpdate = useCallback((nextPlan: Plan) => {
     setEditingPlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
     setConsolePlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));

@@ -15,7 +15,6 @@ import SearchBar from "./SearchBar";
 import DetailModal from "./DetailModal";
 import { getAgentDataColumns } from "./columns";
 import { AdminTablePanel } from "@components/Admin";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
 

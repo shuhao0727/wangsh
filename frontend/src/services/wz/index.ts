@@ -3,8 +3,8 @@
  */
 
 // 首先导入所有模块
-import articleApi, * as articlesModule from "./articles";
-import categoryApi, * as categoriesModule from "./categories";
+import articleApi from "./articles";
+import categoryApi from "./categories";
 import { markdownStylesApi } from "./markdownStyles";
 
 // 重新导出文章相关接口和服务

@@ -2,7 +2,7 @@
  * 测评配置列表页 - /admin/assessment
  */
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,

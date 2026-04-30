@@ -2,8 +2,8 @@
  * useChatStore — 聊天状态管理
  * 从 index.tsx 抽取消息、会话、流式状态
  */
-import { useCallback, useState, useRef } from "react";
-import type { Message, ConversationSummary, WorkflowGroup, WorkflowNode } from "../types";
+import { useCallback, useState } from "react";
+import type { Message, ConversationSummary, WorkflowGroup } from "../types";
 
 export function useChatStore() {
   const [messages, setMessages] = useState<Message[]>([]);
