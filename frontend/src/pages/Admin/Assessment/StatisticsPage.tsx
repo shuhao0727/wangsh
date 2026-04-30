@@ -2,7 +2,7 @@
  * 答题统计页 - /admin/assessment/:id/statistics
  */
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -99,6 +99,16 @@ const StatusTag: React.FC<{ status: string }> = ({ status }) => {
   return <Badge variant={item.variant}>{item.label}</Badge>;
 };
 
+const interpolateScoreColor = (c1: string, c2: string, t: number) => {
+  const parse = (hex: string) => [0, 2, 4].map((i) => parseInt(hex.slice(i + 1, i + 3), 16));
+  const [r1, g1, b1] = parse(c1);
+  const [r2, g2, b2] = parse(c2);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r},${g},${b})`;
+};
+
 const StatisticsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const configId = Number(id);
@@ -162,6 +172,7 @@ const StatisticsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
+  const lastListScopeKeyRef = useRef("");
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [batchRetesting, setBatchRetesting] = useState(false);
@@ -232,18 +243,37 @@ const StatisticsPage: React.FC = () => {
     }
   }, [configId, page, pageSize, filterClass, filterStatus, searchValue, timeParams]);
 
+  const listScopeKey = useMemo(
+    () =>
+      [
+        configId,
+        pageSize,
+        filterClass ?? "",
+        filterStatus ?? "",
+        searchValue,
+        timeParams.time_field ?? "",
+        timeParams.start_date ?? "",
+        timeParams.end_date ?? "",
+      ].join("\u0001"),
+    [configId, pageSize, filterClass, filterStatus, searchValue, timeParams],
+  );
+
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
 
   useEffect(() => {
-    void loadSessions();
-  }, [loadSessions]);
-
-  useEffect(() => {
     setPage(1);
     setSelectedRowKeys([]);
-  }, [filterClass, filterStatus, searchValue]);
+  }, [listScopeKey]);
+
+  useEffect(() => {
+    if (lastListScopeKeyRef.current !== listScopeKey) {
+      lastListScopeKeyRef.current = listScopeKey;
+      if (page !== 1) return;
+    }
+    void loadSessions();
+  }, [loadSessions, listScopeKey, page]);
 
   useEffect(() => {
     assessmentSessionApi
@@ -369,7 +399,7 @@ const StatisticsPage: React.FC = () => {
     };
   }, [radarRight, loadRadarPick, resolveRadarPickFromLoadedStats]);
 
-  const handleViewDetail = async (sessionId: number) => {
+  const handleViewDetail = useCallback(async (sessionId: number) => {
     try {
       setDetailOpen(true);
       setDetailLoading(true);
@@ -379,9 +409,9 @@ const StatisticsPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, []);
 
-  const handleViewProfile = async (sessionId: number, userId: number) => {
+  const handleViewProfile = useCallback(async (sessionId: number, userId: number) => {
     try {
       setProfileOpen(true);
       setProfileLoading(true);
@@ -400,9 +430,9 @@ const StatisticsPage: React.FC = () => {
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, []);
 
-  const handleAllowRetest = (sessionId: number) => {
+  const handleAllowRetest = useCallback((sessionId: number) => {
     setConfirmState({ message: "允许该学生重新测试？", onOk: async () => {
       try {
         await assessmentSessionApi.allowRetest(sessionId);
@@ -412,7 +442,7 @@ const StatisticsPage: React.FC = () => {
         showMessage.error(e.message || "操作失败");
       }
     } });
-  };
+  }, [loadSessions, loadStats]);
 
   const handleBatchRetest = async (mode: "class" | "selection") => {
     setBatchRetesting(true);
@@ -555,6 +585,12 @@ const StatisticsPage: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const selectableSessionIds = useMemo(
     () => sessions.filter((s) => ["graded", "submitted"].includes(s.status)).map((s) => s.id),
     [sessions],
@@ -563,15 +599,15 @@ const StatisticsPage: React.FC = () => {
   const allSelectableChecked =
     selectableSessionIds.length > 0 && selectableSessionIds.every((sessionId) => selectedRowKeys.includes(sessionId));
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     if (allSelectableChecked) {
       setSelectedRowKeys([]);
       return;
     }
     setSelectedRowKeys(selectableSessionIds);
-  };
+  }, [allSelectableChecked, selectableSessionIds]);
 
-  const toggleSelectOne = (sessionId: number, checked: boolean) => {
+  const toggleSelectOne = useCallback((sessionId: number, checked: boolean) => {
     setSelectedRowKeys((prev) => {
       if (checked) {
         if (prev.includes(sessionId)) return prev;
@@ -579,137 +615,193 @@ const StatisticsPage: React.FC = () => {
       }
       return prev.filter((id) => id !== sessionId);
     });
-  };
+  }, []);
 
-  const sessionColumns: ColumnDef<SessionListItem>[] = [
-    {
-      id: "select",
-      header: () => (
-        <input
-          type="checkbox"
-          checked={allSelectableChecked}
-          onChange={toggleSelectAll}
-          disabled={selectableSessionIds.length === 0}
-          className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
-          aria-label="全选可重测学生"
-        />
-      ),
-      size: 36,
-      meta: { className: "w-[36px]" },
-      cell: ({ row }) => {
-        const selectable = ["graded", "submitted"].includes(row.original.status);
-        const checked = selectedRowKeys.includes(row.original.id);
-        return (
+  const sessionColumns: ColumnDef<SessionListItem>[] = useMemo(
+    () => [
+      {
+        id: "select",
+        header: () => (
           <input
             type="checkbox"
-            checked={checked}
-            disabled={!selectable}
-            onChange={(event) => toggleSelectOne(row.original.id, event.target.checked)}
+            checked={allSelectableChecked}
+            onChange={toggleSelectAll}
+            disabled={selectableSessionIds.length === 0}
             className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
-            aria-label={`选择学生 ${row.original.user_name || row.original.id}`}
+            aria-label="全选可重测学生"
           />
-        );
+        ),
+        size: 36,
+        meta: { className: "w-[36px]" },
+        cell: ({ row }) => {
+          const selectable = ["graded", "submitted"].includes(row.original.status);
+          const checked = selectedRowKeys.includes(row.original.id);
+          return (
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={!selectable}
+              onChange={(event) => toggleSelectOne(row.original.id, event.target.checked)}
+              className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
+              aria-label={`选择学生 ${row.original.user_name || row.original.id}`}
+            />
+          );
+        },
       },
-    },
-    {
-      id: "user_name",
-      header: "学生",
-      accessorKey: "user_name",
-      size: 120,
-      meta: { className: "w-[120px]" },
-      cell: ({ row }) => row.original.user_name || "-",
-    },
-    {
-      id: "class_name",
-      header: "班级",
-      accessorKey: "class_name",
-      size: 120,
-      meta: { className: "w-[120px]" },
-      cell: ({ row }) => row.original.class_name || "-",
-    },
-    {
-      id: "status",
-      header: "状态",
-      accessorKey: "status",
-      size: 100,
-      meta: { className: "w-[100px]" },
-      cell: ({ row }) => <StatusTag status={row.original.status} />,
-    },
-    {
-      id: "score",
-      header: "得分",
-      size: 120,
-      meta: { className: "w-[120px]" },
-      cell: ({ row }) =>
-        row.original.earned_score != null
-          ? `${row.original.earned_score}/${row.original.total_score}`
-          : "-",
-    },
-    {
-      id: "submitted_at",
-      header: "提交时间",
-      accessorKey: "submitted_at",
-      size: 190,
-      meta: { className: "w-[190px]" },
-      cell: ({ row }) =>
-        row.original.submitted_at
-          ? new Date(row.original.submitted_at).toLocaleString("zh-CN")
-          : "-",
-    },
-    {
-      id: "actions",
-      header: "操作",
-      size: 220,
-      meta: { className: "w-[220px]" },
-      cell: ({ row }) => (
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            size="sm"
-            variant="link"
-            className="h-6 px-1.5"
-            onClick={() => {
-              void handleViewDetail(row.original.id);
-            }}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            详情
-          </Button>
-          {(row.original.status === "graded" || row.original.status === "submitted") && (
+      {
+        id: "user_name",
+        header: "学生",
+        accessorKey: "user_name",
+        size: 120,
+        meta: { className: "w-[120px]" },
+        cell: ({ row }) => row.original.user_name || "-",
+      },
+      {
+        id: "class_name",
+        header: "班级",
+        accessorKey: "class_name",
+        size: 120,
+        meta: { className: "w-[120px]" },
+        cell: ({ row }) => row.original.class_name || "-",
+      },
+      {
+        id: "status",
+        header: "状态",
+        accessorKey: "status",
+        size: 100,
+        meta: { className: "w-[100px]" },
+        cell: ({ row }) => <StatusTag status={row.original.status} />,
+      },
+      {
+        id: "score",
+        header: "得分",
+        size: 120,
+        meta: { className: "w-[120px]" },
+        cell: ({ row }) =>
+          row.original.earned_score != null
+            ? `${row.original.earned_score}/${row.original.total_score}`
+            : "-",
+      },
+      {
+        id: "submitted_at",
+        header: "提交时间",
+        accessorKey: "submitted_at",
+        size: 190,
+        meta: { className: "w-[190px]" },
+        cell: ({ row }) =>
+          row.original.submitted_at
+            ? new Date(row.original.submitted_at).toLocaleString("zh-CN")
+            : "-",
+      },
+      {
+        id: "actions",
+        header: "操作",
+        size: 220,
+        meta: { className: "w-[220px]" },
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-1">
             <Button
               size="sm"
               variant="link"
               className="h-6 px-1.5"
               onClick={() => {
-                void handleViewProfile(row.original.id, row.original.user_id);
+                void handleViewDetail(row.original.id);
               }}
             >
-              <User className="h-3.5 w-3.5" />
-              画像
+              <Eye className="h-3.5 w-3.5" />
+              详情
             </Button>
-          )}
-          {(row.original.status === "graded" || row.original.status === "submitted") && (
-            <Button
-              size="sm"
-              variant="link"
-              className="h-6 px-1.5"
-              onClick={() => {
-                void handleAllowRetest(row.original.id);
-              }}
-            >
-              <Redo className="h-3.5 w-3.5" />
-              重测
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
+            {(row.original.status === "graded" || row.original.status === "submitted") && (
+              <Button
+                size="sm"
+                variant="link"
+                className="h-6 px-1.5"
+                onClick={() => {
+                  void handleViewProfile(row.original.id, row.original.user_id);
+                }}
+              >
+                <User className="h-3.5 w-3.5" />
+                画像
+              </Button>
+            )}
+            {(row.original.status === "graded" || row.original.status === "submitted") && (
+              <Button
+                size="sm"
+                variant="link"
+                className="h-6 px-1.5"
+                onClick={() => {
+                  handleAllowRetest(row.original.id);
+                }}
+              >
+                <Redo className="h-3.5 w-3.5" />
+                重测
+              </Button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [
+      allSelectableChecked,
+      handleAllowRetest,
+      handleViewDetail,
+      handleViewProfile,
+      selectableSessionIds.length,
+      selectedRowKeys,
+      toggleSelectAll,
+      toggleSelectOne,
+    ],
+  );
 
   const sessionTable = useReactTable({
     data: listLoading ? [] : sessions,
     columns: sessionColumns,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  const trendChartOption = useMemo(() => {
+    const trendData = stats?.trend_data;
+    if (!trendData?.length) return null;
+    return {
+      tooltip: { trigger: "axis" },
+      legend: { data: ["提交数", "平均分"], bottom: 0, textStyle: { fontSize: 11 } },
+      grid: { top: 10, right: 10, bottom: 30, left: 40 },
+      xAxis: { type: "category", data: trendData.map((p) => p.date), axisLabel: { fontSize: 10, rotate: 30 } },
+      yAxis: [
+        { type: "value", name: "提交数", axisLabel: { fontSize: 10 } },
+        { type: "value", name: "平均分", axisLabel: { fontSize: 10 } },
+      ],
+      series: [
+        { name: "提交数", type: "bar", data: trendData.map((p) => p.count), itemStyle: { color: "var(--ws-color-primary)", borderRadius: [4, 4, 0, 0] } },
+        { name: "平均分", type: "line", yAxisIndex: 1, data: trendData.map((p) => p.avg_score), lineStyle: { color: "var(--ws-color-warning)", width: 2 }, itemStyle: { color: "var(--ws-color-warning)" }, symbol: "circle", symbolSize: 4 },
+      ],
+    };
+  }, [stats?.trend_data]);
+
+  const scoreDistributionOption = useMemo(() => {
+    const dist = stats?.score_distribution;
+    if (!dist?.length) return null;
+    const totalBuckets = dist.length;
+    return {
+      tooltip: { trigger: "axis" },
+      grid: { top: 10, right: 10, bottom: 25, left: 40 },
+      xAxis: { type: "category", data: dist.map((b) => b.range), axisLabel: { fontSize: 10, rotate: 30 } },
+      yAxis: { type: "value", name: "人数", axisLabel: { fontSize: 10 } },
+      series: [
+        {
+          name: "人数",
+          type: "bar",
+          data: dist.map((b, idx) => {
+            const ratio = totalBuckets > 1 ? idx / (totalBuckets - 1) : 0;
+            const color = ratio < 0.5
+              ? interpolateScoreColor("#EF4444", "#F59E0B", ratio * 2)
+              : interpolateScoreColor("#F59E0B", "#10B981", (ratio - 0.5) * 2);
+            return { value: b.count, itemStyle: { color, borderRadius: [4, 4, 0, 0] } };
+          }),
+        },
+      ],
+    };
+  }, [stats?.score_distribution]);
 
   const onSearchSubmit = () => {
     setSearchValue(searchText.trim());
@@ -834,72 +926,29 @@ const StatisticsPage: React.FC = () => {
           </Card>
 
           {/* ─── 图表面板（趋势 + 分数分布） ─── */}
-          {stats.trend_data && stats.trend_data.length > 0 || stats.score_distribution && stats.score_distribution.length > 0 ? (
+          {trendChartOption || scoreDistributionOption ? (
             <div className="mb-5 grid gap-4 lg:grid-cols-2">
-              {stats.trend_data && stats.trend_data.length > 0 && (
+              {trendChartOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                     <TrendingUp className="h-4 w-4 text-primary" />
                     提交趋势
                   </div>
                   <ReactECharts
-                    option={{
-                      tooltip: { trigger: "axis" },
-                      legend: { data: ["提交数", "平均分"], bottom: 0, textStyle: { fontSize: 11 } },
-                      grid: { top: 10, right: 10, bottom: 30, left: 40 },
-                      xAxis: { type: "category", data: stats.trend_data.map((p) => p.date), axisLabel: { fontSize: 10, rotate: 30 } },
-                      yAxis: [
-                        { type: "value", name: "提交数", axisLabel: { fontSize: 10 } },
-                        { type: "value", name: "平均分", axisLabel: { fontSize: 10 } },
-                      ],
-                      series: [
-                        { name: "提交数", type: "bar", data: stats.trend_data.map((p) => p.count), itemStyle: { color: "var(--ws-color-primary)", borderRadius: [4, 4, 0, 0] } },
-                        { name: "平均分", type: "line", yAxisIndex: 1, data: stats.trend_data.map((p) => p.avg_score), lineStyle: { color: "var(--ws-color-warning)", width: 2 }, itemStyle: { color: "var(--ws-color-warning)" }, symbol: "circle", symbolSize: 4 },
-                      ],
-                    }}
+                    option={trendChartOption}
                     style={{ height: 220 }}
                     notMerge
                   />
                 </Card>
               )}
-              {stats.score_distribution && stats.score_distribution.length > 0 && (
+              {scoreDistributionOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                     <BarChart3 className="h-4 w-4 text-secondary" />
                     分数分布
                   </div>
                   <ReactECharts
-                    option={(() => {
-                      const dist = stats.score_distribution!;
-                      const total = dist.length;
-                      const interpolateColor = (c1: string, c2: string, t: number) => {
-                        const parse = (hex: string) => [0, 2, 4].map((i) => parseInt(hex.slice(i + 1, i + 3), 16));
-                        const [r1, g1, b1] = parse(c1);
-                        const [r2, g2, b2] = parse(c2);
-                        const r = Math.round(r1 + (r2 - r1) * t);
-                        const g = Math.round(g1 + (g2 - g1) * t);
-                        const b = Math.round(b1 + (b2 - b1) * t);
-                        return `rgb(${r},${g},${b})`;
-                      };
-                      return {
-                        tooltip: { trigger: "axis" },
-                        grid: { top: 10, right: 10, bottom: 25, left: 40 },
-                        xAxis: { type: "category", data: dist.map((b) => b.range), axisLabel: { fontSize: 10, rotate: 30 } },
-                        yAxis: { type: "value", name: "人数", axisLabel: { fontSize: 10 } },
-                        series: [
-                          {
-                            name: "人数", type: "bar",
-                            data: dist.map((b, idx) => {
-                              const ratio = total > 1 ? idx / (total - 1) : 0;
-                              const color = ratio < 0.5
-                                ? interpolateColor("#EF4444", "#F59E0B", ratio * 2)
-                                : interpolateColor("#F59E0B", "#10B981", (ratio - 0.5) * 2);
-                              return { value: b.count, itemStyle: { color, borderRadius: [4, 4, 0, 0] } };
-                            }),
-                          },
-                        ],
-                      };
-                    })()}
+                    option={scoreDistributionOption}
                     style={{ height: 220 }}
                     notMerge
                   />

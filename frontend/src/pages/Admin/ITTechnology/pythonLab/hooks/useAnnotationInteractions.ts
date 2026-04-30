@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FlowNode } from "../flow/model";
 import { nodeSizeForTitle } from "../flow/ports";
 

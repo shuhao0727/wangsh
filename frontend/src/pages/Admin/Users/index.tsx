@@ -51,17 +51,22 @@ const AdminUsers: React.FC = () => {
   const { state, actions, closeForm, closeDetail } = useUsers();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const {
+    handleEdit,
+    handleView,
+    setSelectedRowKeys,
+  } = actions;
 
   const handleDeleteRequest = useCallback((id: number) => setDeleteTarget(id), []);
 
   const baseColumns = useMemo(
     () =>
       getUserColumns({
-        handleEdit: actions.handleEdit,
+        handleEdit,
         handleDelete: handleDeleteRequest,
-        handleView: actions.handleView,
+        handleView,
       }),
-    [actions.handleEdit, actions.handleView, handleDeleteRequest],
+    [handleEdit, handleView, handleDeleteRequest],
   );
 
   const rowSelection = useMemo<RowSelectionState>(() => {
@@ -82,9 +87,9 @@ const AdminUsers: React.FC = () => {
       const nextKeys = Object.keys(nextSelection)
         .filter((key) => nextSelection[key])
         .map((key) => Number(key));
-      actions.setSelectedRowKeys(nextKeys);
+      setSelectedRowKeys(nextKeys);
     },
-    [actions.setSelectedRowKeys, rowSelection],
+    [setSelectedRowKeys, rowSelection],
   );
 
   const columns = useMemo<ColumnDef<User>[]>(

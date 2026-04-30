@@ -274,10 +274,10 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
   const [minArticles, setMinArticles] = useState<number | undefined>(undefined);
 
   const loadCategories = useCallback(
-    async (params: CategoryFilterParams = searchParams) => {
+    async () => {
       try {
         setLoading(true);
-        const response = await categoryApi.listCategories(params);
+        const response = await categoryApi.listCategories(searchParams);
         const listData = response.data;
 
         const normalized = (listData?.categories || []).map((category) => {
@@ -342,22 +342,20 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     void loadCategories();
   }, [loadCategories, visible]);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     const nextParams = { ...searchParams, page: 1 };
     setCurrentPage(1);
     setSearchParams(nextParams);
-    void loadCategories(nextParams);
-  };
+  }, [searchParams]);
 
-  const handleFilterApply = () => {
+  const handleFilterApply = useCallback(() => {
     const nextParams = { ...searchParams, page: 1 };
     setCurrentPage(1);
     setSearchParams(nextParams);
     setFilterVisible(false);
-    void loadCategories(nextParams);
-  };
+  }, [searchParams]);
 
-  const handleFilterReset = () => {
+  const handleFilterReset = useCallback(() => {
     setSortBy(undefined);
     setMinArticles(undefined);
     const defaultParams: CategoryFilterParams = {
@@ -368,10 +366,9 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     setCurrentPage(1);
     setSearchParams(defaultParams);
     setFilterVisible(false);
-    void loadCategories(defaultParams);
-  };
+  }, [pageSize]);
 
-  const handlePageChange = (page: number, size?: number) => {
+  const handlePageChange = useCallback((page: number, size?: number) => {
     const nextPage = Math.max(1, page);
     const nextSize = size || pageSize;
     const nextParams = {
@@ -382,16 +379,15 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     setCurrentPage(nextPage);
     if (size) setPageSize(size);
     setSearchParams(nextParams);
-    void loadCategories(nextParams);
-  };
+  }, [pageSize, searchParams]);
 
-  const handleEdit = (record: CategoryWithUsage) => {
+  const handleEdit = useCallback((record: CategoryWithUsage) => {
     setEditingCategory(record);
     setIsCreateMode(false);
     setEditModalVisible(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     try {
       await categoryApi.deleteCategory(id);
       showMessage.success("分类删除成功");
@@ -401,19 +397,19 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       logger.error("删除分类失败:", error);
       showMessage.error(error.response?.data?.detail || "删除分类失败");
     }
-  };
+  }, [loadCategories, onCategoryChange]);
 
-  const handleAddCategory = () => {
+  const handleAddCategory = useCallback(() => {
     setEditingCategory(null);
     setIsCreateMode(true);
     setEditModalVisible(true);
-  };
+  }, []);
 
-  const handleEditFormSave = async () => {
+  const handleEditFormSave = useCallback(async () => {
     setEditModalVisible(false);
     await loadCategories();
     onCategoryChange?.();
-  };
+  }, [loadCategories, onCategoryChange]);
 
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {

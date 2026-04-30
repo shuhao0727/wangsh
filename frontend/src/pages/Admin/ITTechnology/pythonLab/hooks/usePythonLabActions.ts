@@ -4,7 +4,7 @@ import type { FlowNodeTemplate } from "../types";
 import { nodeSize } from "../flow/ports";
 import { normalizeTitleForEditInput } from "../flow/titleSemantics";
 import { FOR_TEACHING_EXAMPLE_DESCRIPTION } from "../forTeachingExample";
-import type { VariableRow } from "../stores/UIStore";
+import type { VariableRow } from "../stores/UIContext";
 
 export function usePythonLabActions(params: {
   canvasRef: React.RefObject<HTMLDivElement | null>;

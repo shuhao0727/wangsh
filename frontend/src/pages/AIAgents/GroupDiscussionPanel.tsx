@@ -240,11 +240,15 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     }
   };
 
-  const handleSearchUsers = async () => {
-    if (!inviteKeyword.trim()) return;
+  const handleSearchUsers = useCallback(async () => {
+    const keyword = inviteKeyword.trim();
+    if (!keyword) {
+      setInviteUsers([]);
+      return;
+    }
     setInviteLoading(true);
     try {
-      const res = await userApi.getUsers({ search: inviteKeyword, limit: 20 });
+      const res = await userApi.getUsers({ search: keyword, limit: 20 });
       setInviteUsers(res.users || []);
     } catch (err) {
       logger.error(err);
@@ -252,14 +256,14 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     } finally {
       setInviteLoading(false);
     }
-  };
+  }, [inviteKeyword]);
 
   // 防抖搜索用户
   useEffect(() => {
     if (!inviteModalOpen) return;
     const timer = setTimeout(handleSearchUsers, 300);
     return () => clearTimeout(timer);
-  }, [inviteKeyword, inviteModalOpen]);
+  }, [handleSearchUsers, inviteModalOpen]);
 
   const handleInvite = async (userId: number) => {
     if (!sessionId) return;
@@ -420,16 +424,12 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   // 自动刷新：当切换到“加入小组”模式或筛选变更时
   useEffect(() => {
-    if (introMode === 'join') {
-      fetchGroups();
-    }
-  }, [introMode, fetchGroups]);
-
-  // 防抖搜索
-  useEffect(() => {
-    const timer = setTimeout(fetchGroups, 300);
-    return () => clearTimeout(timer);
-  }, [searchKeyword]);
+    if (introMode !== "join") return;
+    const timer = window.setTimeout(() => {
+      void fetchGroups();
+    }, searchKeyword.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [introMode, fetchGroups, searchKeyword]);
 
   // --- 业务逻辑：加入/创建小组 ---
   const handleJoinOrCreate = async (values: { groupNo: string; groupName?: string; className?: string }) => {

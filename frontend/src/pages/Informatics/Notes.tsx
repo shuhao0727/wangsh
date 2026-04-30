@@ -14,17 +14,19 @@ const InformaticsNotesPage: React.FC = () => {
   const [items, setItems] = useState<PublicTypstNoteListItem[]>([]);
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
+  const fetchItems = useCallback(async (searchText: string) => {
     setLoading(true);
     try {
-      const res = await publicTypstNotesApi.list({ limit: 100, search: search.trim() || undefined });
+      const res = await publicTypstNotesApi.list({ limit: 100, search: searchText.trim() || undefined });
       setItems(res || []);
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  const load = useCallback(() => fetchItems(search), [fetchItems, search]);
+
+  useEffect(() => { void fetchItems(""); }, [fetchItems]);
 
   return (
     <div className="informatics-page">

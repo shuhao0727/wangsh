@@ -593,13 +593,13 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
     queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
   });
 
-  const refreshPlan = async (id: number) => {
+  const refreshPlan = useCallback(async (id: number) => {
     const detail = await planApi.get(id);
     setConsolePlan((prev) => (prev?.id === id ? detail : prev));
     queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
-  };
+  }, [queryClient]);
 
-  const openConsole = async (plan: Plan) => {
+  const openConsole = useCallback(async (plan: Plan) => {
     try {
       const detail = await planApi.get(plan.id);
       setConsolePlan(detail);
@@ -607,7 +607,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
       setConsolePlan(plan);
     }
     setConsoleOpen(true);
-  };
+  }, []);
 
   const executeDelete = async () => {
     if (deleteTarget === null) return;

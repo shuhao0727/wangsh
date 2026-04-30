@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { dianmingApi, DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
@@ -16,11 +16,50 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
   const [currentName, setCurrentName] = useState<string>('准备就绪');
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const studentsRef = useRef<DianmingStudent[]>([]);
+
+  const startAnimation = useCallback(() => {
+    const availableStudents = studentsRef.current;
+    if (availableStudents.length === 0) return;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsRunning(true);
+    intervalRef.current = setInterval(() => {
+      const currentStudents = studentsRef.current;
+      if (currentStudents.length === 0) return;
+      const randomIndex = Math.floor(Math.random() * currentStudents.length);
+      setCurrentName(currentStudents[randomIndex].student_name);
+    }, 50); // 50ms 快速切换
+  }, []);
+
+  const stopAnimation = useCallback((finalize = true) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsRunning(false);
+    // 最终确定一个名字
+    const availableStudents = studentsRef.current;
+    if (finalize && availableStudents.length > 0) {
+      const randomIndex = Math.floor(Math.random() * availableStudents.length);
+      setCurrentName(availableStudents[randomIndex].student_name);
+    }
+  }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    stopAnimation(false);
+    studentsRef.current = [];
+    setStudents([]);
+    setCurrentName('准备就绪');
     const fetchStudents = async () => {
       try {
         const res = await dianmingApi.listStudents(record.year, record.class_name);
+        if (cancelled) return;
+        studentsRef.current = res;
         setStudents(res);
         if (res.length > 0) {
           setCurrentName('点击开始');
@@ -28,36 +67,17 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
           setCurrentName('暂无学生');
         }
       } catch (_error) {
-        showMessage.error('获取学生名单失败');
+        if (!cancelled) showMessage.error('获取学生名单失败');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchStudents();
-    return () => stopAnimation();
-  }, [record]);
-
-  const startAnimation = () => {
-    if (students.length === 0) return;
-    setIsRunning(true);
-    intervalRef.current = setInterval(() => {
-      const randomIndex = Math.floor(Math.random() * students.length);
-      setCurrentName(students[randomIndex].student_name);
-    }, 50); // 50ms 快速切换
-  };
-
-  const stopAnimation = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsRunning(false);
-    // 最终确定一个名字
-    if (students.length > 0) {
-      const randomIndex = Math.floor(Math.random() * students.length);
-      setCurrentName(students[randomIndex].student_name);
-    }
-  };
+    return () => {
+      cancelled = true;
+      stopAnimation(false);
+    };
+  }, [record, stopAnimation]);
 
   const toggle = () => {
     if (isRunning) {

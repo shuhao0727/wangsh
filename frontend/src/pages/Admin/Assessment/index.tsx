@@ -155,11 +155,11 @@ const AdminAssessment: React.FC = () => {
     }
   }, []);
 
-  const openCreateModal = () => {
+  const openCreateModal = useCallback(() => {
     createForm.reset(DEFAULT_CREATE_VALUES);
     void loadAgents();
     setCreateOpen(true);
-  };
+  }, [createForm, loadAgents]);
 
   const handleCreate = async (values: CreateFormValues) => {
     try {
@@ -184,17 +184,17 @@ const AdminAssessment: React.FC = () => {
     }
   };
 
-  const handleToggle = async (id: number) => {
+  const handleToggle = useCallback(async (id: number) => {
     try {
       await toggleMutation.mutateAsync(id);
     } catch (error: any) {
       showMessage.error(error.message || "切换状态失败");
     }
-  };
+  }, [toggleMutation]);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = useCallback((id: number) => {
     setDeleteTarget(id);
-  };
+  }, []);
 
   const executeDelete = async () => {
     if (deleteTarget === null) return;
@@ -350,7 +350,7 @@ const AdminAssessment: React.FC = () => {
         ),
       },
     ],
-    [navigate],
+    [handleDelete, handleToggle, navigate],
   );
 
   const table = useReactTable({

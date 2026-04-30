@@ -278,7 +278,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     };
     window.addEventListener("panel-open", handler);
     return () => window.removeEventListener("panel-open", handler);
-  }, [open]);
+  }, [open, view]);
 
   const handleOpen = useCallback(() => {
     setOpen(true);

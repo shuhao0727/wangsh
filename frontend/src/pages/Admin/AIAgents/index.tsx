@@ -76,7 +76,7 @@ const AdminAIAgents: React.FC = () => {
 
   const { data: statisticsData } = useAgentStatistics();
 
-  const agents = agentsData?.items ?? [];
+  const agents = useMemo(() => agentsData?.items ?? [], [agentsData?.items]);
   const total = agentsData?.total ?? 0;
 
   // TanStack Query — 变更 mutations
@@ -93,35 +93,35 @@ const AdminAIAgents: React.FC = () => {
   });
 
   // 处理搜索
-  const handleSearch = (value: string) => {
+  const handleSearch = useCallback((value: string) => {
     setSearchKeyword(value);
     setCurrentPage(1);
-  };
+  }, []);
 
   // 处理重置
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setSearchKeyword("");
     setSelectedType("all");
     setCurrentPage(1);
-  };
+  }, []);
 
   // 处理分页变化
-  const handlePageChange = (page: number, size?: number) => {
+  const handlePageChange = useCallback((page: number, size?: number) => {
     setCurrentPage(Math.max(1, page));
     if (size) setPageSize(size);
-  };
+  }, []);
 
   // 处理添加智能体
-  const handleAddAgent = () => {
+  const handleAddAgent = useCallback(() => {
     setEditingAgent(null);
     setFormVisible(true);
-  };
+  }, []);
 
   // 处理编辑智能体
-  const handleEdit = (record: AIAgent) => {
+  const handleEdit = useCallback((record: AIAgent) => {
     setEditingAgent(record);
     setFormVisible(true);
-  };
+  }, []);
 
   // 处理删除智能体
   const handleDelete = useCallback(
@@ -218,13 +218,13 @@ const AdminAIAgents: React.FC = () => {
   };
 
   // 处理查看详情
-  const handleViewDetails = (record: AIAgent) => {
+  const handleViewDetails = useCallback((record: AIAgent) => {
     setCurrentAgent(record);
     setDetailVisible(true);
-  };
+  }, []);
 
   // 处理测试智能体
-  const handleTestAgent = async (id: number, name: string) => {
+  const handleTestAgent = useCallback(async (id: number, name: string) => {
     try {
       const input = window.prompt(
         `测试智能体: ${name}\n请输入测试消息`,
@@ -254,7 +254,7 @@ const AdminAIAgents: React.FC = () => {
       logger.error("测试智能体失败:", error);
       showMessage.error("测试智能体失败");
     }
-  };
+  }, []);
 
   // 批量删除
   const handleBatchDelete = () => {
@@ -309,7 +309,7 @@ const AdminAIAgents: React.FC = () => {
         handleViewDetails,
         handleTestAgent,
       ),
-    [handleDelete, handleEdit, handleTestAgent, handleToggleActive],
+    [handleDelete, handleEdit, handleTestAgent, handleToggleActive, handleViewDetails],
   );
 
   const rowSelection = useMemo<RowSelectionState>(() => {

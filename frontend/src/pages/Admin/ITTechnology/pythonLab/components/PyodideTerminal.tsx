@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { logger } from "@services/logger";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
@@ -27,7 +27,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const [canInit, setCanInit] = useState(false);
     const termEpochRef = useRef(0);
     const terminalDisposedRef = useRef(true);
-    const trace = (phase: string, extra?: Record<string, unknown>) => {
+    const trace = useCallback((phase: string, extra?: Record<string, unknown>) => {
       try {
         const enabled =
           Boolean((window as any).__PYTHONLAB_TERMINAL_TRACE__) ||
@@ -41,9 +41,9 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           ...(extra || {}),
         });
       } catch {}
-    };
+    }, []);
 
-    const refreshGutter = () => {
+    const refreshGutter = useCallback(() => {
       if (!showLineNumbersOn) return;
       const term = termRef.current as any;
       if (!term) return;
@@ -59,17 +59,17 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       }
       setGutterDigits(digits);
       setGutterText(text);
-    };
+    }, [showLineNumbersOn]);
 
-    const scheduleRefreshGutter = () => {
+    const scheduleRefreshGutter = useCallback(() => {
       if (!showLineNumbersOn) return;
       if (gutterRafRef.current != null) window.cancelAnimationFrame(gutterRafRef.current);
       gutterRafRef.current = window.requestAnimationFrame(() => {
         gutterRafRef.current = null;
         refreshGutter();
       });
-    };
-    const safeFit = (expectedEpoch: number) => {
+    }, [refreshGutter, showLineNumbersOn]);
+    const safeFit = useCallback((expectedEpoch: number) => {
       try {
         const host = hostRef.current;
         const fit = fitRef.current;
@@ -83,8 +83,8 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         fit.fit();
         trace("safe_fit_ok", { expectedEpoch });
       } catch {}
-    };
-    const requestFit = () => {
+    }, [trace]);
+    const requestFit = useCallback(() => {
       if (fitDebounceRef.current != null) {
         window.clearTimeout(fitDebounceRef.current);
         fitDebounceRef.current = null;
@@ -100,13 +100,13 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           scheduleRefreshGutter();
         });
       }, 24);
-    };
-    const writeClearScreen = (t: Terminal) => {
+    }, [safeFit, scheduleRefreshGutter, trace]);
+    const writeClearScreen = useCallback((t: Terminal) => {
       try {
         // Keep clear sequence minimal; ESC[3J may trigger xterm viewport clear race.
         t.write("\x1b[2J\x1b[H");
       } catch {}
-    };
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -141,7 +141,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           scheduleRefreshGutter();
         },
       }),
-      []
+      [scheduleRefreshGutter, trace, writeClearScreen]
     );
 
     const theme = useMemo(
@@ -198,7 +198,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         ro.disconnect();
       } catch {}
     };
-  }, []);
+  }, [requestFit]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -327,7 +327,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       } catch {}
       trace("terminal_cleanup_done");
     };
-  }, [bridge, canInit, fontSize, theme, showLineNumbersOn]);
+  }, [bridge, canInit, fontSize, requestFit, scheduleRefreshGutter, theme, trace]);
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden" }} onClick={() => termRef.current?.focus()}>

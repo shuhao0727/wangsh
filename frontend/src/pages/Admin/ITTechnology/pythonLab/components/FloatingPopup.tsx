@@ -22,6 +22,7 @@ export function FloatingPopup(props: {
   const [pos, setPos] = useState({ x: padding, y: padding });
   const sizeRef = useRef(size);
   const posRef = useRef(pos);
+  const anchorRectRef = useRef<DOMRect | null>(null);
 
   useEffect(() => {
     sizeRef.current = size;
@@ -30,6 +31,10 @@ export function FloatingPopup(props: {
   useEffect(() => {
     posRef.current = pos;
   }, [pos]);
+
+  useEffect(() => {
+    anchorRectRef.current = anchorRect ?? null;
+  }, [anchorRect]);
 
   const clampSize = useCallback((w: number, h: number) => {
     const maxW = Math.max(minW, window.innerWidth - padding * 2);
@@ -68,12 +73,13 @@ export function FloatingPopup(props: {
 
   useEffect(() => {
     if (!open) return;
-    if (!anchorRect) return;
-    const s = clampSize(size.w, size.h);
+    const currentAnchor = anchorRectRef.current;
+    if (!currentAnchor) return;
+    const s = clampSize(sizeRef.current.w, sizeRef.current.h);
     setSize(s);
-    const preferRight = anchorRect.right + 12 + s.w + padding <= window.innerWidth;
-    const x = preferRight ? anchorRect.right + 12 : anchorRect.left - 12 - s.w;
-    const y = anchorRect.top;
+    const preferRight = currentAnchor.right + 12 + s.w + padding <= window.innerWidth;
+    const x = preferRight ? currentAnchor.right + 12 : currentAnchor.left - 12 - s.w;
+    const y = currentAnchor.top;
     setPos(clampPos(x, y));
   }, [anchorKey, clampPos, clampSize, open]);
 

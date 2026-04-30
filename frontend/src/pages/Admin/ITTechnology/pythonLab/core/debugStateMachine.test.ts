@@ -30,9 +30,9 @@ function assert(condition: unknown, message: string) {
 function test(name: string, fn: () => void) {
   try {
     fn();
-    console.log(`ok ${name}`);
+    process.stdout.write(`ok ${name}\n`);
   } catch (error) {
-    console.error(`not ok ${name}`);
+    process.stderr.write(`not ok ${name}\n`);
     throw error;
   }
 }

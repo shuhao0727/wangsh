@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
 import {
   Home,
@@ -72,7 +72,7 @@ const BasicLayout: React.FC = () => {
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
-  const authExpiredBannerReason = useMemo(() => {
+  const authExpiredBannerReason = (() => {
     const authError = String(error || "").trim();
     if (authError) return authError;
     if (typeof window === "undefined") return "";
@@ -90,7 +90,7 @@ const BasicLayout: React.FC = () => {
       return reason || "登录环境已变更，请重新登录";
     }
     return reason;
-  }, [error, isAuthenticated, user, isLoading, isLoginModalVisible]);
+  })();
 
   const isFullHeight = FULL_HEIGHT_PATHS.some((re) => re.test(location.pathname));
 

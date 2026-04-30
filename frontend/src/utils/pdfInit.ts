@@ -34,10 +34,12 @@ export async function configurePdfJs(): Promise<void> {
       pdfjs.GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/build/pdf.worker.js';
     }
 
-    console.log('PDF.js configured with workerSrc:', pdfjs.GlobalWorkerOptions.workerSrc);
+    const logger = await import('../services/logger');
+    logger.logger.debug('PDF.js configured with workerSrc:', pdfjs.GlobalWorkerOptions.workerSrc);
     pdfjsConfigured = true;
   } catch (error) {
-    console.error('Failed to configure PDF.js:', error);
+    const logger = await import('../services/logger');
+    logger.logger.error('Failed to configure PDF.js:', error);
     throw error;
   }
 }

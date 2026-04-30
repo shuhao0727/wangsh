@@ -5,12 +5,6 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   Bot,
   Calendar,
   Clock,
@@ -21,6 +15,7 @@ import {
 import dayjs from "dayjs";
 
 import type { AgentUsageData } from "@services/znt/types";
+import { HoverTip } from "@components/Common/HoverTip";
 
 // 格式化响应时间
 const formatResponseTime = (ms?: number) => {
@@ -34,15 +29,6 @@ const formatQuestion = (question: string, maxLength: number = 50) => {
   if (question.length <= maxLength) return question;
   return `${question.substring(0, maxLength)}...`;
 };
-
-const HoverTip: React.FC<{ title?: React.ReactNode; children: React.ReactElement }> = ({ title, children }) => (
-  <TooltipProvider delayDuration={120}>
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent className="max-w-[460px] break-words">{title || "-"}</TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
 
 // 智能体类型标签配置
 const agentTypeConfig = {
@@ -153,7 +139,7 @@ export const getAgentDataColumns = (
     key: "question",
     width: 280,
     render: (question: string) => (
-      <HoverTip title={question}>
+      <HoverTip title={question} contentClassName="max-w-[460px] break-words">
         <div className="max-w-[280px] truncate">
           <MessageCircle className="mr-1 inline h-4 w-4 align-text-bottom text-[var(--ws-color-success)]" />
           {question}
@@ -167,7 +153,7 @@ export const getAgentDataColumns = (
     key: "answer_summary",
     width: 300,
     render: (answer: string) => (
-      <HoverTip title={answer}>
+      <HoverTip title={answer} contentClassName="max-w-[460px] break-words">
         <div className="max-w-[300px] truncate text-text-secondary">
           {answer}
         </div>
@@ -209,7 +195,7 @@ export const getAgentDataColumns = (
     key: "session_id",
     width: 160,
     render: (sessionId?: string) => (
-      <HoverTip title={sessionId}>
+      <HoverTip title={sessionId} contentClassName="max-w-[460px] break-words">
         <div className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-xs bg-surface-2">
           {sessionId || "-"}
         </div>

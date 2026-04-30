@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -46,18 +46,20 @@ const TypstNotesPanel: React.FC = () => {
   const previewTokenRef = useRef(0);
   const typstImportRef = useRef<Promise<any> | null>(null);
 
-  const loadList = async () => {
+  const fetchList = useCallback(async (searchText: string, options?: { selectFirst?: boolean }) => {
     setListLoading(true);
     try {
-      const res = await typstNotesApi.list({ limit: 100, search: search.trim() || undefined });
+      const res = await typstNotesApi.list({ limit: 100, search: searchText.trim() || undefined });
       setItems(res || []);
-      if (!selectedId && res?.length) setSelectedId(res[0].id);
+      if (options?.selectFirst && res?.length) setSelectedId((prev) => prev ?? res[0].id);
     } catch (e: any) {
       showMessage.error(e?.response?.data?.detail || e?.message || "加载笔记失败");
     } finally {
       setListLoading(false);
     }
-  };
+  }, []);
+
+  const loadList = useCallback(() => fetchList(search, { selectFirst: true }), [fetchList, search]);
 
   const loadNote = async (id: number) => {
     setNoteLoading(true);
@@ -96,8 +98,8 @@ const TypstNotesPanel: React.FC = () => {
   };
 
   useEffect(() => {
-    loadList();
-  }, []);
+    void fetchList("", { selectFirst: true });
+  }, [fetchList]);
 
   useEffect(() => {
     if (selectedId) loadNote(selectedId);

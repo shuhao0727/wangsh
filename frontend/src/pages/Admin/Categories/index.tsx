@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminSSE } from "@hooks/useAdminSSE";
 import { useNavigate } from "react-router-dom";
 import {
@@ -304,10 +304,10 @@ const AdminCategories: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [minArticles, setMinArticles] = useState<string>("");
 
-  const loadCategories = async (params: CategoryFilterParams = searchParams) => {
+  const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await categoryApi.listCategories(params);
+      const response = await categoryApi.listCategories(searchParams);
       const listData = response.data;
       const categoriesWithUsage = (listData?.categories || []).map((category) => {
         if ("article_count" in category) return category as CategoryWithUsage;
@@ -322,11 +322,11 @@ const AdminCategories: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchParams]);
 
   useEffect(() => {
     loadCategories();
-  }, []);
+  }, [loadCategories]);
 
   useAdminSSE("category_changed", loadCategories);
 
@@ -346,7 +346,7 @@ const AdminCategories: React.FC = () => {
     return list;
   }, [categories, minArticles, searchKeyword]);
 
-  const handlePageChange = (page: number, size?: number) => {
+  const handlePageChange = useCallback((page: number, size?: number) => {
     const newParams = {
       ...searchParams,
       page,
@@ -355,12 +355,11 @@ const AdminCategories: React.FC = () => {
     setCurrentPage(page);
     if (size) setPageSize(size);
     setSearchParams(newParams);
-    loadCategories(newParams);
-  };
+  }, [pageSize, searchParams]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     setDeleteTarget(id);
-  };
+  }, []);
 
   const executeDelete = async () => {
     if (deleteTarget === null) return;
@@ -424,22 +423,22 @@ const AdminCategories: React.FC = () => {
     }
   };
 
-  const handleViewArticles = (id: number, name: string) => {
+  const handleViewArticles = useCallback((id: number, name: string) => {
     navigate(`/admin/articles?category=${id}`);
     showMessage.info(`正在查看 "${name}" 分类的文章`);
-  };
+  }, [navigate]);
 
-  const handleAddCategory = () => {
+  const handleAddCategory = useCallback(() => {
     setEditingCategory(null);
     setIsCreateMode(true);
     setEditModalVisible(true);
-  };
+  }, []);
 
-  const handleEdit = (record: CategoryWithUsage) => {
+  const handleEdit = useCallback((record: CategoryWithUsage) => {
     setEditingCategory(record);
     setIsCreateMode(false);
     setEditModalVisible(true);
-  };
+  }, []);
 
   const selectedIds = useMemo(
     () =>
@@ -596,7 +595,7 @@ const AdminCategories: React.FC = () => {
         meta: { className: "w-[210px]" },
       },
     ],
-    [handleDelete, handleEdit, navigate],
+    [handleDelete, handleEdit, handleViewArticles],
   );
 
   const table = useReactTable({

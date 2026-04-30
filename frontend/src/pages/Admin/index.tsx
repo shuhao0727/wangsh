@@ -52,7 +52,7 @@ interface SystemStats {
 
 const AdminPage: React.FC = () => {
   const navigate = useNavigate();
-  const auth = useAuth();
+  const { isLoading: authLoading, user, isSuperAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserData[]>([]);
   const [stats, setStats] = useState<SystemStats>({
@@ -116,17 +116,17 @@ const AdminPage: React.FC = () => {
 
   // 检查权限 - 如果不是超级管理员，重定向到首页
   useEffect(() => {
-    if (!auth.isLoading && !auth.isSuperAdmin()) {
+    if (!authLoading && !isSuperAdmin()) {
       navigate("/home");
     }
-  }, [auth.isLoading, auth.isSuperAdmin, navigate]);
+  }, [authLoading, isSuperAdmin, navigate]);
 
   // 初始化加载
   useEffect(() => {
-    if (auth.isSuperAdmin && auth.isSuperAdmin()) {
+    if (isSuperAdmin()) {
       loadUserData();
     }
-  }, [auth.isSuperAdmin, loadUserData]);
+  }, [isSuperAdmin, loadUserData]);
 
   const userColumns = useMemo<ColumnDef<UserData>[]>(
     () => [
@@ -216,7 +216,7 @@ const AdminPage: React.FC = () => {
   });
 
   // 如果正在加载或不是管理员，显示加载中
-  if (auth.isLoading || loading) {
+  if (authLoading || loading) {
     return (
       <div className="text-center py-24">
         <div className="inline-flex items-center gap-2 text-text-tertiary">
@@ -232,7 +232,7 @@ const AdminPage: React.FC = () => {
       className="admin-page mx-auto max-w-[1400px] bg-[var(--ws-color-bg)] p-[var(--ws-space-4)]"
     >
       {/* 权限警告 */}
-      {!auth.isSuperAdmin() && (
+      {!isSuperAdmin() && (
         <Alert variant="destructive" className="mb-6">
           <TriangleAlert className="h-4 w-4" />
           <AlertTitle>权限不足</AlertTitle>
@@ -409,11 +409,11 @@ const AdminPage: React.FC = () => {
           <div className="grid gap-3 text-sm md:grid-cols-2">
             <div className="rounded-md border border-border bg-surface px-3 py-2">
               <div className="text-xs text-text-tertiary">用户名</div>
-              <div>{auth.user?.username}</div>
+              <div>{user?.username}</div>
             </div>
             <div className="rounded-md border border-border bg-surface px-3 py-2">
               <div className="text-xs text-text-tertiary">全名</div>
-              <div>{auth.user?.full_name || "未设置"}</div>
+              <div>{user?.full_name || "未设置"}</div>
             </div>
             <div className="rounded-md border border-border bg-surface px-3 py-2 md:col-span-2">
               <div className="text-xs text-text-tertiary mb-1">权限级别</div>
@@ -425,8 +425,8 @@ const AdminPage: React.FC = () => {
             <div className="rounded-md border border-border bg-surface px-3 py-2">
               <div className="text-xs text-text-tertiary">账户创建时间</div>
               <div>
-                {auth.user?.created_at
-                  ? new Date(auth.user.created_at).toLocaleString("zh-CN")
+                {user?.created_at
+                  ? new Date(user.created_at).toLocaleString("zh-CN")
                   : "未知"}
               </div>
             </div>

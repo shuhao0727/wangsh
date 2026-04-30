@@ -176,7 +176,7 @@ const AdminArticles: React.FC = () => {
 
   // TanStack Query hooks
   const { data: articlesData, isLoading } = useArticlesList(searchParams);
-  const articles = articlesData?.articles || [];
+  const articles = useMemo(() => articlesData?.articles ?? [], [articlesData?.articles]);
   const total = articlesData?.total || 0;
   const currentPage = searchParams.page || 1;
   const pageSize = searchParams.size || 20;
@@ -325,7 +325,7 @@ const AdminArticles: React.FC = () => {
     [rowSelection],
   );
 
-  const handlePageChange = (nextPage: number, size?: number) => {
+  const handlePageChange = useCallback((nextPage: number, size?: number) => {
     const resolvedSize = size ?? pageSize;
     const boundedPage = Math.max(1, Math.min(Math.max(1, Math.ceil(total / resolvedSize)), nextPage));
     setSearchParams((prev) => ({
@@ -333,13 +333,13 @@ const AdminArticles: React.FC = () => {
       page: boundedPage,
       size: resolvedSize,
     }));
-  };
+  }, [pageSize, total]);
 
-  const handleEdit = (record: ArticleWithRelations) => {
+  const handleEdit = useCallback((record: ArticleWithRelations) => {
     window.open(`/admin/articles/editor/${record.id}`, "_blank", "noopener,noreferrer");
-  };
+  }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     try {
       await deleteArticleMutation.mutateAsync(id);
       showMessage.success("文章删除成功");
@@ -347,9 +347,9 @@ const AdminArticles: React.FC = () => {
       logger.error("删除文章失败:", error);
       showMessage.error("删除文章失败");
     }
-  };
+  }, [deleteArticleMutation]);
 
-  const handleTogglePublish = async (id: number, published: boolean) => {
+  const handleTogglePublish = useCallback(async (id: number, published: boolean) => {
     try {
       await togglePublishMutation.mutateAsync({ id, published });
       showMessage.success(`文章已${published ? "发布" : "转为草稿"}`);
@@ -357,15 +357,15 @@ const AdminArticles: React.FC = () => {
       logger.error("切换发布状态失败:", error);
       showMessage.error("操作失败");
     }
-  };
+  }, [togglePublishMutation]);
 
-  const handleView = (slug: string) => {
+  const handleView = useCallback((slug: string) => {
     window.open(`/articles/${slug}`, "_blank");
-  };
+  }, []);
 
-  const handleAddArticle = () => {
+  const handleAddArticle = useCallback(() => {
     window.open("/admin/articles/editor/new", "_blank", "noopener,noreferrer");
-  };
+  }, []);
 
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {

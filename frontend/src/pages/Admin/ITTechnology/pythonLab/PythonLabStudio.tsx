@@ -157,7 +157,7 @@ const PythonLabStudioInner: React.FC<{
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [setScale]);
   useEffect(() => {
     try {
       localStorage.setItem("python_lab_canvas_routing_style", canvasRoutingStyle);
@@ -457,13 +457,13 @@ const PythonLabStudioInner: React.FC<{
 
   useEffect(() => {
     if (!selectedNodeId) setNodeInspectorOpen(false);
-  }, [selectedNodeId]);
+  }, [selectedNodeId, setNodeInspectorOpen]);
 
   useEffect(() => {
     if (isCompactViewport) {
       setLeftCollapsed(true);
     }
-  }, [isCompactViewport]);
+  }, [isCompactViewport, setLeftCollapsed]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -564,7 +564,7 @@ const PythonLabStudioInner: React.FC<{
     } else {
       setCodeMode("auto");
     }
-  }, [experiment?.id, experiment?.starterCode, resetSessionState, setCode, setCodeMode, setFlowAuto]);
+  }, [experiment?.id, experiment?.starterCode, resetSessionState, setCode, setCodeMode, setFlowAuto, setFollowMode, setNodeInspectorOpen, setPanMode, setRevealLine]);
 
   const debugPauseEvent = useMemo(
     () => toDebugPauseEvent({ source: debugMode, runner: runnerView }),
@@ -650,7 +650,7 @@ const PythonLabStudioInner: React.FC<{
     if (nextOffsetX !== offsetX) setOffsetX(nextOffsetX);
     if (nextOffsetY !== offsetY) setOffsetY(nextOffsetY);
     setFollowTick((t) => t + 1);
-  }, [followMode, nodes, followKey, offsetX, offsetY, scale]);
+  }, [followMode, nodes, followKey, offsetX, offsetY, scale, setFollowTick, setOffsetX, setOffsetY]);
 
   const canvasMetricsRef = useRef(new Map());
   const edgeGeometryCacheRef = useRef(new Map());
@@ -685,7 +685,7 @@ const PythonLabStudioInner: React.FC<{
 
   useEffect(() => {
     setInteractionFlag(interacting || annotationInteracting);
-  }, [interacting, annotationInteracting]);
+  }, [interacting, annotationInteracting, setInteractionFlag]);
 
   const { canvasMetrics, edgeGeometries } = useEdgeGeometries(nodes, edges, canvasRoutingStyle, interacting);
   useEffect(() => {
@@ -851,7 +851,7 @@ const PythonLabStudioInner: React.FC<{
     setNodes((prev) => [...prev, noteNode]);
     setSelectedNodeId(noteId);
     setSelectedEdgeId(null);
-  }, [addNode, ensureAuto, nodes, offsetX, offsetY, scale, selectedNodeId]);
+  }, [addNode, ensureAuto, nodes, offsetX, offsetY, scale, selectedNodeId, setNodes, setSelectedEdgeId, setSelectedNodeId]);
 
   const codeApi = useMemo(() => ({
     code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode,

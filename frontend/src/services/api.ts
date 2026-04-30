@@ -121,10 +121,7 @@ export const notifyAuthExpired = (reason?: string) => {
   if (now - lastAuthExpiredNotifyAt < 3000 && lastAuthExpiredReason === msg) return;
   lastAuthExpiredNotifyAt = now;
   lastAuthExpiredReason = msg;
-  try {
-    console.debug("[auth-expired] dispatch", detail);
-  } catch {
-  }
+  logger.debug("[auth-expired] dispatch", detail);
   window.dispatchEvent(
     new CustomEvent(AUTH_EXPIRED_EVENT, {
       detail,
@@ -507,10 +504,7 @@ const createApiClient = (): AxiosInstance => {
                 ? detail
                 : undefined;
           logger.debug("⚠️ API: 会话刷新失败", detail);
-          try {
-            console.debug("[auth-refresh-failed] preferredDetail", preferredDetail);
-          } catch {
-          }
+          logger.debug("[auth-refresh-failed] preferredDetail", preferredDetail);
           if (err?.response?.status === 429) {
             return Promise.reject(error);
           }

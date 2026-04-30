@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
@@ -49,7 +49,13 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const afterEnterRef = useRef(false);
   const termEpochRef = useRef(0);
   const terminalDisposedRef = useRef(true);
-  const trace = (phase: string, extra?: Record<string, unknown>) => {
+  const fontSizeRef = useRef(fontSize);
+
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+  }, [fontSize]);
+
+  const trace = useCallback((phase: string, extra?: Record<string, unknown>) => {
     try {
       const enabled =
         Boolean((window as unknown as { __PYTHONLAB_TERMINAL_TRACE__?: boolean }).__PYTHONLAB_TERMINAL_TRACE__) ||
@@ -63,9 +69,9 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         ...(extra || {}),
       });
     } catch {}
-  };
+  }, []);
 
-  const shouldHideLine = (line: string) => {
+  const shouldHideLine = useCallback((line: string) => {
     const s = line.trim();
     if (!s) return false;
     if (/^debugpy exited rc=0 \(iter=\d+\)$/.test(s)) return true;
@@ -74,9 +80,9 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     if (/^\d+\.\d+s - to python to disable frozen modules\.$/.test(s)) return true;
     if (/^\d+\.\d+s - Note: Debugging will proceed\. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation\.$/.test(s)) return true;
     return false;
-  };
+  }, []);
 
-  const filterTerminalText = (chunk: string, options?: { flushTail?: boolean }) => {
+  const filterTerminalText = useCallback((chunk: string, options?: { flushTail?: boolean }) => {
     if (!chunk) return "";
     const combined = textTailRef.current + chunk;
     const parts = combined.split(/\r\n|\n|\r/);
@@ -93,9 +99,9 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       return complete;
     }
     return `${complete}${tail}`;
-  };
+  }, [shouldHideLine]);
 
-  const refreshGutter = () => {
+  const refreshGutter = useCallback(() => {
     if (!showLineNumbersOn) return;
     const term = terminalRef.current;
     if (!term) return;
@@ -111,36 +117,36 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     }
     setGutterDigits(digits);
     setGutterText(text);
-  };
+  }, [showLineNumbersOn]);
 
-  const scheduleRefreshGutter = () => {
+  const scheduleRefreshGutter = useCallback(() => {
     if (!showLineNumbersOn) return;
     if (gutterRafRef.current != null) window.cancelAnimationFrame(gutterRafRef.current);
     gutterRafRef.current = window.requestAnimationFrame(() => {
       gutterRafRef.current = null;
       refreshGutter();
     });
-  };
+  }, [refreshGutter, showLineNumbersOn]);
 
-  const queueInput = (data: string) => {
+  const queueInput = useCallback((data: string) => {
     if (!data) return;
     pendingInputRef.current = `${pendingInputRef.current}${data}`;
     if (pendingInputRef.current.length > MAX_PENDING_STDIN_CHARS) {
       pendingInputRef.current = pendingInputRef.current.slice(-MAX_PENDING_STDIN_CHARS);
     }
     trace("stdin_buffered", { size: pendingInputRef.current.length });
-  };
+  }, [trace]);
 
-  const flushQueuedInput = (ws: WebSocket | null = wsRef.current) => {
+  const flushQueuedInput = useCallback((ws: WebSocket | null = wsRef.current) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const pending = pendingInputRef.current;
     if (!pending) return;
     pendingInputRef.current = "";
     ws.send(pending);
     trace("stdin_flushed", { size: pending.length });
-  };
+  }, [trace]);
 
-  const safeFit = (expectedEpoch: number) => {
+  const safeFit = useCallback((expectedEpoch: number) => {
     try {
       const container = containerRef.current;
       const fit = fitAddonRef.current;
@@ -157,9 +163,9 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       fit.fit();
       trace("safe_fit_ok", { expectedEpoch });
     } catch {}
-  };
+  }, [trace]);
 
-  const requestFit = () => {
+  const requestFit = useCallback(() => {
     if (fitDebounceRef.current != null) {
       window.clearTimeout(fitDebounceRef.current);
       fitDebounceRef.current = null;
@@ -175,13 +181,13 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         scheduleRefreshGutter();
       });
     }, 24);
-  };
-  const writeClearScreen = (t: TerminalInternal) => {
+  }, [safeFit, scheduleRefreshGutter, trace]);
+  const writeClearScreen = useCallback((t: TerminalInternal) => {
     try {
       // Keep clear sequence minimal; ESC[3J may trigger xterm viewport clear race.
       t.write("\x1b[2J\x1b[H");
     } catch {}
-  };
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -220,7 +226,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         scheduleRefreshGutter();
       },
     }),
-    []
+    [scheduleRefreshGutter, trace, writeClearScreen]
   );
 
   // 1. Setup ResizeObserver
@@ -278,7 +284,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       }
       ro.disconnect();
     };
-  }, []);
+  }, [requestFit]);
 
   // 2. Initialize Terminal
   useEffect(() => {
@@ -305,7 +311,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
         const term = new Terminal({
           cursorBlink: true,
-          fontSize: fontSize,
+          fontSize: fontSizeRef.current,
           lineHeight: 1.35,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, monospace",
           theme: {
@@ -376,7 +382,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       window.cancelAnimationFrame(raf);
       cleanup?.();
     };
-  }, [canInit]);
+  }, [canInit, queueInput, requestFit, scheduleRefreshGutter, trace]);
 
   // 3. WS Connection
   useEffect(() => {
@@ -519,7 +525,16 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           textTailRef.current = "";
           pendingInputRef.current = "";
       };
-  }, [wsUrl, canInit, showLineNumbersOn, terminalReadyEpoch]);
+  }, [
+    canInit,
+    filterTerminalText,
+    flushQueuedInput,
+    requestFit,
+    scheduleRefreshGutter,
+    terminalReadyEpoch,
+    trace,
+    wsUrl,
+  ]);
 
   useEffect(() => {
       return () => {
@@ -549,7 +564,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         requestFit();
       }, 50);
     }
-  }, [fontSize]);
+  }, [fontSize, requestFit]);
 
   useEffect(() => {
     return () => {

@@ -133,28 +133,28 @@ const AdminClassroomInteractionPage: React.FC = () => {
     showMessage.success("已刷新");
   }, [queryClient]);
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
     setEditingId(null);
     setEditingRecord(null);
     setModalOpen(true);
-  };
+  }, []);
 
-  const openEdit = (record: Activity) => {
+  const openEdit = useCallback((record: Activity) => {
     setEditingId(record.id);
     setEditingRecord(record);
     setModalOpen(true);
-  };
+  }, []);
 
-  const handleStart = async (id: number) => {
+  const handleStart = useCallback(async (id: number) => {
     try {
       await startMutation.mutateAsync(id);
       showMessage.success("活动已开始");
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
     }
-  };
+  }, [startMutation]);
 
-  const handleEnd = async (id: number) => {
+  const handleEnd = useCallback(async (id: number) => {
     const act = activities.find((a) => a.id === id) || detailActivity;
     try {
       await endMutation.mutateAsync({
@@ -171,16 +171,16 @@ const AdminClassroomInteractionPage: React.FC = () => {
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
     }
-  };
+  }, [activities, detailActivity, detailActivityId, endMutation, refetchDetail]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     try {
       await deleteMutation.mutateAsync(id);
       showMessage.success("已删除");
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
     }
-  };
+  }, [deleteMutation]);
 
   const executeBulkDelete = async () => {
     if (selectedRowKeys.length === 0) return;
@@ -198,28 +198,28 @@ const AdminClassroomInteractionPage: React.FC = () => {
     }
   };
 
-  const handleDuplicate = async (id: number) => {
+  const handleDuplicate = useCallback(async (id: number) => {
     try {
       await duplicateMutation.mutateAsync(id);
       showMessage.success("已复制为新草稿");
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
     }
-  };
+  }, [duplicateMutation]);
 
-  const handleRestart = async (id: number) => {
+  const handleRestart = useCallback(async (id: number) => {
     try {
       await restartMutation.mutateAsync(id);
       showMessage.success("已重新开始");
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
     }
-  };
+  }, [restartMutation]);
 
-  const openDetail = (record: Activity) => {
+  const openDetail = useCallback((record: Activity) => {
     setDetailOpen(true);
     setDetailActivityId(record.id);
-  };
+  }, []);
 
   const closeDetail = () => {
     setDetailOpen(false);
@@ -255,14 +255,22 @@ const AdminClassroomInteractionPage: React.FC = () => {
 
   const columnHandlers: ActivityColumnHandlers = useMemo(() => ({
     handleEdit: openEdit,
-    handleDelete: (record: Activity) => setConfirmState({ message: "确认删除？", onOk: () => { handleDelete(record.id); } }),
+    handleDelete: (record: Activity) => setConfirmState({ message: "确认删除？", onOk: () => { void handleDelete(record.id); } }),
     handleStart,
     handleEnd,
     handleRestart,
     handleDuplicate,
     openDetail,
     onConfirm: (message, onOk) => setConfirmState({ message, onOk }),
-  }), []);
+  }), [
+    handleDelete,
+    handleDuplicate,
+    handleEnd,
+    handleRestart,
+    handleStart,
+    openDetail,
+    openEdit,
+  ]);
 
   const columns = useMemo(
     () => getActivityColumns(columnHandlers),

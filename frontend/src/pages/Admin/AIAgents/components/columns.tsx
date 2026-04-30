@@ -6,12 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   KeyRound,
   Eye,
@@ -24,6 +19,7 @@ import {
 } from "lucide-react";
 import dayjs from "dayjs";
 import type { AIAgent } from "@services/znt/types";
+import { HoverTip } from "@components/Common/HoverTip";
 
 const typeConfig: Record<
   string,
@@ -86,16 +82,6 @@ const formatApiKey = (agent: AIAgent): string => {
   if (agent.api_key_last4) return `****${agent.api_key_last4}`;
   return "已配置";
 };
-
-const HoverTip: React.FC<{ title: React.ReactNode; children: React.ReactElement }> = ({
-  title,
-  children,
-}) => (
-  <Tooltip>
-    <TooltipTrigger asChild>{children}</TooltipTrigger>
-    <TooltipContent>{title}</TooltipContent>
-  </Tooltip>
-);
 
 export const getAgentColumns = (
   handleEdit: (record: AIAgent) => void,
