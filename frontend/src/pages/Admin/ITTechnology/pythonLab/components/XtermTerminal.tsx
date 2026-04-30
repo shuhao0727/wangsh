@@ -3,6 +3,8 @@ import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
 
+const MAX_PENDING_STDIN_CHARS = 64 * 1024;
+
 type TerminalInternal = Terminal & {
   element?: HTMLElement;
   buffer?: { active?: { cursorX?: number } };
@@ -41,6 +43,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const fitDebounceRef = useRef<number | null>(null);
   const fitTimerRef = useRef<number | null>(null);
   const textTailRef = useRef("");
+  const pendingInputRef = useRef("");
   const [canInit, setCanInit] = useState(false);
   const [terminalReadyEpoch, setTerminalReadyEpoch] = useState(0);
   const afterEnterRef = useRef(false);
@@ -117,6 +120,24 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       gutterRafRef.current = null;
       refreshGutter();
     });
+  };
+
+  const queueInput = (data: string) => {
+    if (!data) return;
+    pendingInputRef.current = `${pendingInputRef.current}${data}`;
+    if (pendingInputRef.current.length > MAX_PENDING_STDIN_CHARS) {
+      pendingInputRef.current = pendingInputRef.current.slice(-MAX_PENDING_STDIN_CHARS);
+    }
+    trace("stdin_buffered", { size: pendingInputRef.current.length });
+  };
+
+  const flushQueuedInput = (ws: WebSocket | null = wsRef.current) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const pending = pendingInputRef.current;
+    if (!pending) return;
+    pendingInputRef.current = "";
+    ws.send(pending);
+    trace("stdin_flushed", { size: pending.length });
   };
 
   const safeFit = (expectedEpoch: number) => {
@@ -313,6 +334,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         if (data.includes("\r")) afterEnterRef.current = true;
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(normalized);
+        } else {
+          queueInput(normalized);
         }
       });
 
@@ -390,6 +413,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           ws.onopen = () => {
               reconnectAttemptsRef.current = 0;
               term.focus();
+              flushQueuedInput(ws);
               trace("ws_open");
           };
 
@@ -443,6 +467,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
                         term.write("\r\n会话不存在或已结束（Code: 4404）。\r\n");
                       }
                       scheduleRefreshGutter();
+                      pendingInputRef.current = "";
                       return;
                   }
                   const attempts = reconnectAttemptsRef.current + 1;
@@ -453,8 +478,10 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
                       reconnectRef.current = window.setTimeout(() => connect(), delay);
                   } else {
                       term.write(`\r\n终端连接多次失败 (Code: ${ev.code})，请点击运行重试。\r\n`);
+                      pendingInputRef.current = "";
                   }
               } else {
+                  pendingInputRef.current = "";
                   term.write("\r\n终端已断开\r\n");
               }
               scheduleRefreshGutter();
@@ -490,6 +517,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
               wsRef.current = null;
           }
           textTailRef.current = "";
+          pendingInputRef.current = "";
       };
   }, [wsUrl, canInit, showLineNumbersOn, terminalReadyEpoch]);
 
