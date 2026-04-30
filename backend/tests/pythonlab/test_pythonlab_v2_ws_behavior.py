@@ -560,7 +560,7 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
 
     class FakeDockerProvider:
-        async def attach_tty(self, _session_id, _meta):
+        async def exec_tty(self, _session_id, _meta, _command):
             return process, 11
 
     _patch_terminal_docker_provider(monkeypatch, FakeDockerProvider)
@@ -590,8 +590,7 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
 
     asyncio.run(ws_api.terminal_ws(websocket, session_id, db=None))
 
-    assert writes == [(11, b"sh /workspace/.pythonlab_plain_run.sh\n")]
-    assert b"__PYTHONLAB_DONE__" not in writes[0][1]
+    assert writes == []
     assert websocket.sent_texts[0] == "hello\n"
     assert "退出码: 0" in websocket.sent_texts[1]
     assert websocket.sent_texts[2] == "rest\n"

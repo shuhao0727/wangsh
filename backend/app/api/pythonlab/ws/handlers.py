@@ -168,18 +168,21 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
     plain_done_marker = "__PYTHONLAB_DONE__:"
     plain_finished = False
     try:
-        process, pty_fd = await provider.attach_tty(session_id, meta)
-        logger.info("terminal ws attached tty: session_id={}", session_id)
-        if plain_mode and pty_fd is not None and not bool(meta.get("plain_started")):
+        if plain_mode and not bool(meta.get("plain_started")):
             meta["plain_started"] = True
             meta["status"] = SESSION_STATUS_RUNNING
             meta["last_heartbeat_at"] = _compat_now_iso()
             ttl = int(meta.get("ttl_seconds") or 300)
             await cache_backend.set(session_key, meta, expire_seconds=ttl)
-            # The real launch logic lives in a workspace script. Keeping the
-            # TTY command tiny avoids exposing shell plumbing to students and
-            # prevents the echoed command from being confused with output.
-            os.write(pty_fd, b"sh /workspace/.pythonlab_plain_run.sh\n")
+            process, pty_fd = await provider.exec_tty(
+                session_id,
+                meta,
+                ["sh", "/workspace/.pythonlab_plain_run.sh"],
+            )
+            logger.info("terminal ws exec tty started: session_id={}", session_id)
+        else:
+            process, pty_fd = await provider.attach_tty(session_id, meta)
+            logger.info("terminal ws attached tty: session_id={}", session_id)
     except Exception as e:
         logger.error(f"Failed to attach TTY: {e}")
         await websocket.close(code=4500)

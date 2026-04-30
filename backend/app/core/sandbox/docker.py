@@ -560,6 +560,39 @@ class DockerProvider(SandboxProvider):
         os.close(slave_fd)
         return process, master_fd
 
+    async def exec_tty(self, session_id: str, meta: Dict[str, Any], command: List[str]) -> Tuple[Any, int]:
+        """
+        Run a command inside the session container with an interactive TTY.
+
+        Plain PythonLab runs use this instead of attaching to the idle shell and
+        typing a launch command. That avoids leaking the internal launch command
+        into the student's terminal and prevents its newline from being consumed
+        by input().
+        """
+        name = self._container_name(meta)
+        deadline = time.monotonic() + 5
+        while not await self._docker_is_running(name):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Container not running")
+            await asyncio.sleep(0.1)
+
+        cmd = ["docker", "exec", "-i", "-t", name, *command]
+        master_fd, slave_fd = pty.openpty()
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True
+            )
+        except Exception:
+            os.close(master_fd)
+            os.close(slave_fd)
+            raise
+        os.close(slave_fd)
+        return process, master_fd
+
     def _prepare_workspace_files(self, ws_path: Path, code: str, meta: Dict[str, Any]):
         import json
         ws_path.mkdir(parents=True, exist_ok=True)
