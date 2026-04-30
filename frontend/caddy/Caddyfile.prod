@@ -20,6 +20,9 @@
 	# 纯静态 SPA 路由回退
 	handle {
 		try_files {path} {path}/ /index.html
+		header Cache-Control "no-cache, no-store, must-revalidate"
+		header Pragma "no-cache"
+		header Expires "0"
 		file_server
 	}
 }

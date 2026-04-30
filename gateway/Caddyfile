@@ -36,6 +36,11 @@
 		@static path /assets/* /static/* /pyodide/*
 		header @static Cache-Control "public, max-age=31536000"
 
+		@spa not path /assets/* /static/* /pyodide/*
+		header @spa Cache-Control "no-cache, no-store, must-revalidate"
+		header @spa Pragma "no-cache"
+		header @spa Expires "0"
+
 		reverse_proxy frontend:80
 	}
 }
