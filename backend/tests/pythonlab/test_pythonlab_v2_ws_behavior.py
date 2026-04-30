@@ -590,17 +590,7 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
 
     asyncio.run(ws_api.terminal_ws(websocket, session_id, db=None))
 
-    assert writes == [
-        (
-            11,
-            (
-                b"stty echo 2>/dev/null || true; "
-                b"python -u /workspace/main.py; "
-                b"rc=$?; "
-                b"printf '\\n__PYTHONLAB_%s__:%s\\n' DONE \"$rc\";\n"
-            ),
-        )
-    ]
+    assert writes == [(11, b"sh /workspace/.pythonlab_plain_run.sh\n")]
     assert b"__PYTHONLAB_DONE__" not in writes[0][1]
     assert websocket.sent_texts[0] == "hello\n"
     assert "退出码: 0" in websocket.sent_texts[1]

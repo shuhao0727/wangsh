@@ -176,15 +176,10 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             meta["last_heartbeat_at"] = _compat_now_iso()
             ttl = int(meta.get("ttl_seconds") or 300)
             await cache_backend.set(session_key, meta, expire_seconds=ttl)
-            os.write(
-                pty_fd,
-                (
-                    b"stty echo 2>/dev/null || true; "
-                    b"python -u /workspace/main.py; "
-                    b"rc=$?; "
-                    b"printf '\\n__PYTHONLAB_%s__:%s\\n' DONE \"$rc\";\n"
-                ),
-            )
+            # The real launch logic lives in a workspace script. Keeping the
+            # TTY command tiny avoids exposing shell plumbing to students and
+            # prevents the echoed command from being confused with output.
+            os.write(pty_fd, b"sh /workspace/.pythonlab_plain_run.sh\n")
     except Exception as e:
         logger.error(f"Failed to attach TTY: {e}")
         await websocket.close(code=4500)

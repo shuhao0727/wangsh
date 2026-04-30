@@ -566,12 +566,26 @@ class DockerProvider(SandboxProvider):
 
         (ws_path / "main.py").write_text(code, encoding="utf-8")
         (ws_path / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+        (ws_path / ".pythonlab_plain_run.sh").write_text(
+            "\n".join(
+                [
+                    "#!/bin/sh",
+                    "stty echo 2>/dev/null || true",
+                    "python -u /workspace/main.py",
+                    "rc=$?",
+                    "printf '\\n__PYTHONLAB_DONE__:%s\\n' \"$rc\"",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         # Inject sitecustomize.py to block network access at Python level (defense-in-depth)
         (ws_path / "sitecustomize.py").write_text(get_sitecustomize_content(), encoding="utf-8")
         try:
             ws_path.chmod(0o755)
             (ws_path / "main.py").chmod(0o644)
             (ws_path / "meta.json").chmod(0o644)
+            (ws_path / ".pythonlab_plain_run.sh").chmod(0o755)
         except Exception:
             pass
 
