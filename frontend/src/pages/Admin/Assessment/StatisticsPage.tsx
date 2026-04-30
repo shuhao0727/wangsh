@@ -172,7 +172,7 @@ const StatisticsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
-  const lastListScopeKeyRef = useRef("");
+  const listRequestSeqRef = useRef(0);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [batchRetesting, setBatchRetesting] = useState(false);
@@ -224,6 +224,7 @@ const StatisticsPage: React.FC = () => {
   }, [configId, filterClass, timeParams]);
 
   const loadSessions = useCallback(async () => {
+    const requestSeq = ++listRequestSeqRef.current;
     try {
       setListLoading(true);
       const resp: SessionListResponse = await assessmentSessionApi.getConfigSessions(configId, {
@@ -234,20 +235,23 @@ const StatisticsPage: React.FC = () => {
         search: searchValue || undefined,
         ...timeParams,
       });
+      if (requestSeq !== listRequestSeqRef.current) return;
       setSessions(resp.items);
       setTotal(resp.total);
     } catch (e: any) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       showMessage.error(e.message || "加载答题列表失败");
     } finally {
-      setListLoading(false);
+      if (requestSeq === listRequestSeqRef.current) {
+        setListLoading(false);
+      }
     }
   }, [configId, page, pageSize, filterClass, filterStatus, searchValue, timeParams]);
 
-  const listScopeKey = useMemo(
+  const listFilterKey = useMemo(
     () =>
       [
         configId,
-        pageSize,
         filterClass ?? "",
         filterStatus ?? "",
         searchValue,
@@ -255,7 +259,7 @@ const StatisticsPage: React.FC = () => {
         timeParams.start_date ?? "",
         timeParams.end_date ?? "",
       ].join("\u0001"),
-    [configId, pageSize, filterClass, filterStatus, searchValue, timeParams],
+    [configId, filterClass, filterStatus, searchValue, timeParams],
   );
 
   useEffect(() => {
@@ -263,17 +267,13 @@ const StatisticsPage: React.FC = () => {
   }, [loadStats]);
 
   useEffect(() => {
-    setPage(1);
-    setSelectedRowKeys([]);
-  }, [listScopeKey]);
+    setPage((prev) => (prev === 1 ? prev : 1));
+    setSelectedRowKeys((prev) => (prev.length ? [] : prev));
+  }, [listFilterKey]);
 
   useEffect(() => {
-    if (lastListScopeKeyRef.current !== listScopeKey) {
-      lastListScopeKeyRef.current = listScopeKey;
-      if (page !== 1) return;
-    }
     void loadSessions();
-  }, [loadSessions, listScopeKey, page]);
+  }, [loadSessions]);
 
   useEffect(() => {
     assessmentSessionApi
@@ -754,7 +754,7 @@ const StatisticsPage: React.FC = () => {
   );
 
   const sessionTable = useReactTable({
-    data: listLoading ? [] : sessions,
+    data: sessions,
     columns: sessionColumns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -938,6 +938,7 @@ const StatisticsPage: React.FC = () => {
                     option={trendChartOption}
                     style={{ height: 220 }}
                     notMerge
+                    lazyUpdate
                   />
                 </Card>
               )}
@@ -951,6 +952,7 @@ const StatisticsPage: React.FC = () => {
                     option={scoreDistributionOption}
                     style={{ height: 220 }}
                     notMerge
+                    lazyUpdate
                   />
                 </Card>
               )}
@@ -959,7 +961,7 @@ const StatisticsPage: React.FC = () => {
 
           {/* ─── 学生列表 + 雷达图 ─── */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Card className="flex flex-col overflow-hidden border border-border bg-surface">
+            <Card className="flex min-h-[420px] flex-col overflow-hidden border border-border bg-surface">
               <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
                 <span className="text-sm font-semibold">学生答题列表{total > 0 ? ` (${total})` : ""}</span>
                 {selectedRowKeys.length > 0 && (
@@ -977,7 +979,7 @@ const StatisticsPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex-1 overflow-auto">
+              <div className="relative min-h-[320px] flex-1 overflow-auto">
                 <DataTable
                   table={sessionTable}
                   className="border-0"
@@ -994,6 +996,14 @@ const StatisticsPage: React.FC = () => {
                     )
                   }
                 />
+                {listLoading && sessions.length > 0 ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-surface/70 backdrop-blur-[1px]">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-secondary shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      正在加载...
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="shrink-0 flex justify-end border-t border-border-secondary px-3 py-2">
@@ -1004,9 +1014,19 @@ const StatisticsPage: React.FC = () => {
                   pageSize={pageSize}
                   pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
                   onPageChange={(nextPage, nextPageSize) => {
-                    if (nextPageSize && nextPageSize !== pageSize) { setPageSize(nextPageSize); }
-                    setPage(nextPage);
-                    setSelectedRowKeys([]);
+                    const normalizedPageSize = nextPageSize ?? pageSize;
+                    const nextTotalPages = Math.max(1, Math.ceil(total / normalizedPageSize));
+                    const normalizedPage = Math.min(Math.max(1, nextPage), nextTotalPages);
+                    if (normalizedPage === page && normalizedPageSize === pageSize) return;
+                    if (normalizedPageSize !== pageSize) {
+                      setPageSize(normalizedPageSize);
+                    }
+                    if (normalizedPage !== page) {
+                      setPage(normalizedPage);
+                    }
+                    if (selectedRowKeys.length > 0) {
+                      setSelectedRowKeys([]);
+                    }
                   }}
                 />
               </div>
@@ -1116,6 +1136,9 @@ const StatisticsPage: React.FC = () => {
         }}
       >
         <DialogContent className="p-0 sm:max-w-[780px]">
+          <DialogHeader className="sr-only">
+            <DialogTitle>学生画像详情</DialogTitle>
+          </DialogHeader>
           {profileLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
           ) : (

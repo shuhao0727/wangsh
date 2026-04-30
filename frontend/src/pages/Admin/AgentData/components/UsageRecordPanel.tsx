@@ -71,7 +71,9 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
       logger.error("加载数据失败:", error);
       showMessage.error("加载数据失败");
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, [currentPage, pageSize, searchParams]);
 

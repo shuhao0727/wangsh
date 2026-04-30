@@ -3,6 +3,13 @@ import { flexRender, type Row, type Table as TanStackTable } from "@tanstack/rea
 
 import { Button } from "@/components/ui/button"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Table,
   TableBody,
   TableCell,
@@ -152,24 +159,25 @@ function DataTablePagination({
   onPageChange,
   className,
 }: DataTablePaginationProps) {
+  const displayTotalPages = Math.max(1, totalPages)
+
   const changePage = React.useCallback(
     (nextPage: number, nextPageSize?: number) => {
-      onPageChange(nextPage, nextPageSize)
+      const normalizedPageSize = nextPageSize ?? pageSize
+      if (!Number.isFinite(normalizedPageSize) || normalizedPageSize <= 0) return
+      const normalizedTotalPages = Math.max(1, Math.ceil(total / normalizedPageSize))
+      const normalizedPage = Math.min(Math.max(1, nextPage), normalizedTotalPages)
+      if (normalizedPage === currentPage && normalizedPageSize === pageSize) return
+      onPageChange(normalizedPage, normalizedPageSize === pageSize ? undefined : normalizedPageSize)
     },
-    [onPageChange],
+    [currentPage, pageSize, total, onPageChange],
   )
 
   const createClickPageHandler = React.useCallback(
     (nextPage: number) =>
       (event: React.MouseEvent<HTMLButtonElement>) => {
-        if (event.nativeEvent.isTrusted) {
-          event.preventDefault()
-          event.stopPropagation()
-          window.setTimeout(() => {
-            changePage(nextPage)
-          }, 0)
-          return
-        }
+        event.preventDefault()
+        event.stopPropagation()
         changePage(nextPage)
       },
     [changePage],
@@ -178,18 +186,18 @@ function DataTablePagination({
   return (
     <div className={cn("flex flex-wrap items-center justify-end gap-2 text-sm text-text-secondary", className)}>
       <span className="mr-1 whitespace-nowrap text-text-tertiary">共 {total} 条</span>
-      <select
-        className="h-[var(--ws-control-height)] rounded-lg border border-border-secondary bg-background px-3 text-sm text-text-base outline-none transition-colors hover:border-border focus:border-primary/50"
-        value={pageSize}
-        onChange={(event) => changePage(1, Number(event.target.value))}
-        aria-label="每页条数"
-      >
-        {pageSizeOptions.map((size) => (
-          <option key={size} value={size}>
-            {size} / 页
-          </option>
-        ))}
-      </select>
+      <Select value={String(pageSize)} onValueChange={(value) => changePage(1, Number(value))}>
+        <SelectTrigger className="w-[6.5rem] border-border-secondary text-text-base" aria-label="每页条数">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {pageSizeOptions.map((size) => (
+            <SelectItem key={size} value={String(size)}>
+              {size} / 页
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button
         variant="ghost"
         size="sm"
@@ -201,13 +209,13 @@ function DataTablePagination({
         上一页
       </Button>
       <span className="min-w-[3.5rem] text-center text-sm font-medium text-text-base">
-        {currentPage}/{totalPages}
+        {currentPage}/{displayTotalPages}
       </span>
       <Button
         variant="ghost"
         size="sm"
         className="h-[var(--ws-control-height)] px-3 text-sm text-text-secondary hover:text-text-base"
-        disabled={currentPage >= totalPages}
+        disabled={currentPage >= displayTotalPages}
         onClick={createClickPageHandler(currentPage + 1)}
         aria-label="下一页"
       >

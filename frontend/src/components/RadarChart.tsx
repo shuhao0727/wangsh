@@ -107,6 +107,8 @@ const RadarChart: React.FC<RadarChartProps> = ({
       option={option}
       style={{ width: size, height: size, margin: "0 auto" }}
       opts={{ renderer: "svg" }}
+      notMerge
+      lazyUpdate
     />
   );
 };

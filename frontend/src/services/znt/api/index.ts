@@ -18,6 +18,10 @@ interface ApiErrorShape {
 }
 const asApiError = (e: unknown): ApiErrorShape =>
   (e && typeof e === "object" ? e : {}) as ApiErrorShape;
+const isRequestCanceled = (e: unknown): boolean => {
+  const err = asApiError(e) as ApiErrorShape & { code?: string; name?: string };
+  return err.code === "ERR_CANCELED" || err.name === "CanceledError" || err.message === "canceled";
+};
 const errMsg = (e: unknown, fallback: string): string => {
   const err = asApiError(e);
   const detail = err.response?.data?.detail;
@@ -58,6 +62,9 @@ const agentDataApi = {
         message: "获取智能体使用数据成功",
       };
     } catch (error: unknown) {
+      if (isRequestCanceled(error)) {
+        throw error;
+      }
       logger.error("获取智能体使用数据失败:", error);
       return {
         data: {

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { config } from '@services';
+import { getStoredAccessToken } from '@services/api';
 
 export function useAdminSSE(
   eventType: string,
@@ -21,8 +22,9 @@ export function useAdminSSE(
     const connect = () => {
       if (stopped) return;
 
-      // 使用 HttpOnly cookie 认证（withCredentials: true），不再通过 URL 传递 token
-      const streamUrl = `${config.apiUrl}/admin/stream`;
+      const token = getStoredAccessToken();
+      const query = token ? `?token=${encodeURIComponent(token)}` : "";
+      const streamUrl = `${config.apiUrl}/admin/stream${query}`;
 
       try {
         stream = new EventSource(streamUrl, { withCredentials: true });
@@ -65,8 +67,8 @@ export function useAdminSSE(
     const scheduleReconnect = () => {
       if (stopped) return;
       clearRetry();
-      // 指数退避: 1s → 2s → 4s → ... → 30s cap
-      const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+      // 指数退避: 1s → 2s → 4s → ... → 60s cap，避免服务端/代理暂不可用时刷屏
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 60000);
       retryCount++;
       retryTimer = setTimeout(connect, delay);
     };

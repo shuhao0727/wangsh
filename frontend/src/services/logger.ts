@@ -13,6 +13,22 @@ const isDebugEnabled = () => {
 
 type LogArgs = unknown[];
 
+const isCanceledRequestValue = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return value === "canceled" || value.includes("CanceledError");
+  }
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.code === "ERR_CANCELED" ||
+    record.name === "CanceledError" ||
+    record.message === "canceled"
+  );
+};
+
+const isCanceledRequestLog = (args: LogArgs): boolean =>
+  args.some(isCanceledRequestValue);
+
 export const logger = {
   debug: (...args: LogArgs) => {
     if (!isDebugEnabled()) return;
@@ -29,6 +45,7 @@ export const logger = {
     c?.warn?.(...args);
   },
   error: (...args: LogArgs) => {
+    if (isCanceledRequestLog(args)) return;
     const c = (globalThis as any)["console"];
     c?.error?.(...args);
   },

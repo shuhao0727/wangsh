@@ -13,6 +13,30 @@ const DialogPortal = DialogPrimitive.Portal
 
 const DialogClose = DialogPrimitive.Close
 
+const hasDisplayName = (value: unknown): value is { displayName?: string } =>
+  (typeof value === "function" || (typeof value === "object" && value !== null)) &&
+  "displayName" in value
+
+const hasDialogTitle = (node: React.ReactNode): boolean => {
+  let found = false
+  React.Children.forEach(node, (child) => {
+    if (found || !React.isValidElement(child)) return
+    const childType = child.type
+    if (
+      childType === DialogPrimitive.Title ||
+      (hasDisplayName(childType) && childType.displayName === DialogPrimitive.Title.displayName)
+    ) {
+      found = true
+      return
+    }
+    const props = child.props as { children?: React.ReactNode } | undefined
+    if (props?.children && hasDialogTitle(props.children)) {
+      found = true
+    }
+  })
+  return found
+}
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -62,6 +86,9 @@ const DialogContent = React.forwardRef<
         )}
         {...contentProps}
       >
+        {hasDialogTitle(children) ? null : (
+          <DialogPrimitive.Title className="sr-only">对话框</DialogPrimitive.Title>
+        )}
         {children}
         <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
           <X className="h-4 w-4" />
