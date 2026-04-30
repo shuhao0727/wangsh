@@ -337,6 +337,19 @@ const ArticlesPage: React.FC = () => {
     updateUrlParams({ page });
   };
 
+  const handlePageButtonClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    page: number,
+  ) => {
+    if (event.nativeEvent.isTrusted) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.setTimeout(() => handlePageChange(page), 0);
+      return;
+    }
+    handlePageChange(page);
+  };
+
   const handleCategorySelect = useCallback(
     (categoryId: number | null) => {
       setSelectedCategory(categoryId);
@@ -546,7 +559,7 @@ const ArticlesPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                          onClick={(event) => handlePageButtonClick(event, Math.max(1, currentPage - 1))}
                           disabled={currentPage <= 1}
                         >
                           <ChevronLeft className="h-4 w-4" />
@@ -557,7 +570,7 @@ const ArticlesPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                          onClick={(event) => handlePageButtonClick(event, Math.min(totalPages, currentPage + 1))}
                           disabled={currentPage >= totalPages}
                         >
                           <ChevronRight className="h-4 w-4" />

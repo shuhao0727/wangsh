@@ -152,13 +152,36 @@ function DataTablePagination({
   onPageChange,
   className,
 }: DataTablePaginationProps) {
+  const changePage = React.useCallback(
+    (nextPage: number, nextPageSize?: number) => {
+      onPageChange(nextPage, nextPageSize)
+    },
+    [onPageChange],
+  )
+
+  const createClickPageHandler = React.useCallback(
+    (nextPage: number) =>
+      (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (event.nativeEvent.isTrusted) {
+          event.preventDefault()
+          event.stopPropagation()
+          window.setTimeout(() => {
+            changePage(nextPage)
+          }, 0)
+          return
+        }
+        changePage(nextPage)
+      },
+    [changePage],
+  )
+
   return (
     <div className={cn("flex flex-wrap items-center justify-end gap-2 text-sm text-text-secondary", className)}>
       <span className="mr-1 whitespace-nowrap text-text-tertiary">共 {total} 条</span>
       <select
         className="h-[var(--ws-control-height)] rounded-lg border border-border-secondary bg-background px-3 text-sm text-text-base outline-none transition-colors hover:border-border focus:border-primary/50"
         value={pageSize}
-        onChange={(event) => onPageChange(1, Number(event.target.value))}
+        onChange={(event) => changePage(1, Number(event.target.value))}
         aria-label="每页条数"
       >
         {pageSizeOptions.map((size) => (
@@ -172,7 +195,7 @@ function DataTablePagination({
         size="sm"
         className="h-[var(--ws-control-height)] px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage <= 1}
-        onClick={() => onPageChange(currentPage - 1)}
+        onClick={createClickPageHandler(currentPage - 1)}
         aria-label="上一页"
       >
         上一页
@@ -185,7 +208,7 @@ function DataTablePagination({
         size="sm"
         className="h-[var(--ws-control-height)] px-3 text-sm text-text-secondary hover:text-text-base"
         disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
+        onClick={createClickPageHandler(currentPage + 1)}
         aria-label="下一页"
       >
         下一页
