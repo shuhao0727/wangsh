@@ -73,16 +73,23 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     return false;
   };
 
-  const filterTerminalText = (chunk: string) => {
+  const filterTerminalText = (chunk: string, options?: { flushTail?: boolean }) => {
     if (!chunk) return "";
     const combined = textTailRef.current + chunk;
     const parts = combined.split(/\r\n|\n|\r/);
-    textTailRef.current = parts.pop() ?? "";
+    const tail = parts.pop() ?? "";
+    textTailRef.current = "";
     const out: string[] = [];
     for (const line of parts) {
       if (!shouldHideLine(line)) out.push(line);
     }
-    return out.length ? `${out.join("\r\n")}\r\n` : "";
+    const complete = out.length ? `${out.join("\r\n")}\r\n` : "";
+    if (!tail) return complete;
+    if (!options?.flushTail && shouldHideLine(tail)) {
+      textTailRef.current = tail;
+      return complete;
+    }
+    return `${complete}${tail}`;
   };
 
   const refreshGutter = () => {
@@ -398,7 +405,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
                       return;
                   }
 
-                  const filtered = filterTerminalText(data);
+                  const filtered = filterTerminalText(data, { flushTail: true });
                   if (!filtered) return;
                   if (afterEnterRef.current) {
                     afterEnterRef.current = false;

@@ -178,7 +178,12 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             await cache_backend.set(session_key, meta, expire_seconds=ttl)
             os.write(
                 pty_fd,
-                b"python -u /workspace/main.py; printf '\\n__PYTHONLAB_DONE__:%s\\n' $?;\n",
+                (
+                    b"stty echo 2>/dev/null || true; "
+                    b"python -u /workspace/main.py; "
+                    b"rc=$?; "
+                    b"printf '\\n__PYTHONLAB_%s__:%s\\n' DONE \"$rc\";\n"
+                ),
             )
     except Exception as e:
         logger.error(f"Failed to attach TTY: {e}")

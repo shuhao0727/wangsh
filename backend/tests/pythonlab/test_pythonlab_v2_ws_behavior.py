@@ -593,9 +593,15 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
     assert writes == [
         (
             11,
-            b"python -u /workspace/main.py; printf '\\n__PYTHONLAB_DONE__:%s\\n' $?;\n",
+            (
+                b"stty echo 2>/dev/null || true; "
+                b"python -u /workspace/main.py; "
+                b"rc=$?; "
+                b"printf '\\n__PYTHONLAB_%s__:%s\\n' DONE \"$rc\";\n"
+            ),
         )
     ]
+    assert b"__PYTHONLAB_DONE__" not in writes[0][1]
     assert websocket.sent_texts[0] == "hello\n"
     assert "退出码: 0" in websocket.sent_texts[1]
     assert websocket.sent_texts[2] == "rest\n"

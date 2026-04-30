@@ -393,7 +393,9 @@ class DockerProvider(SandboxProvider):
                 # writing a command to the container TTY after attach. Keep a
                 # real shell on stdin; `tail -f /dev/null` ignores stdin, so
                 # attached commands would never start the student's program.
-                loop_cmd = "exec env PS1= sh -i"
+                # Start with echo off so the hidden launch command is not
+                # mistaken for program output; it is re-enabled before Python.
+                loop_cmd = "stty -echo 2>/dev/null || true; exec env PS1= sh -i"
             
             cmd = [
                 "docker", "run", "-d", "-i", "-t",

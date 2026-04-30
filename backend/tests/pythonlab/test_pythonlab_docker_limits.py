@@ -156,7 +156,7 @@ def test_plain_session_container_uses_interactive_shell(monkeypatch, tmp_path):
     ))
 
     docker_run = next(cmd for cmd in run_calls if cmd[:3] == ["docker", "run", "-d"])
-    assert docker_run[-4:] == [provider.image, "sh", "-lc", "exec env PS1= sh -i"]
+    assert docker_run[-4:] == [provider.image, "sh", "-lc", "stty -echo 2>/dev/null || true; exec env PS1= sh -i"]
     assert "tail -f /dev/null" not in docker_run
     assert "--network" in docker_run
     assert result["docker_container_id"] == "plain-container-id"
