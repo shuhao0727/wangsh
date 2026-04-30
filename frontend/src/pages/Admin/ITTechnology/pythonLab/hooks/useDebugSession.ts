@@ -29,6 +29,7 @@ type BreakpointUpdater = (prev: Breakpoint[]) => Breakpoint[];
 export interface DebugSessionApi {
   breakpoints: Breakpoint[];
   debugMode: DebugFrontendMode;
+  activeRunnerKind: "pyodide" | "dap";
   runnerView: RunnerState;
   runnerError: string | null;
   lastLaunchMode: "idle" | "run" | "debug";
@@ -333,6 +334,7 @@ export function useDebugSession(params: {
   return {
     breakpoints,
     debugMode,
+    activeRunnerKind,
     runnerView,
     runnerError,
     lastLaunchMode,

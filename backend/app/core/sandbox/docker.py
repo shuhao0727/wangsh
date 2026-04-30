@@ -534,8 +534,11 @@ class DockerProvider(SandboxProvider):
         Actually, we return the process object so caller can access stdin/stdout.
         """
         name = self._container_name(meta)
-        if not await self._docker_is_running(name):
-             raise RuntimeError("Container not running")
+        deadline = time.monotonic() + 5
+        while not await self._docker_is_running(name):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Container not running")
+            await asyncio.sleep(0.1)
         
         # Use docker attach with a pseudo-tty so docker won't reject non-tty stdin.
         cmd = ["docker", "attach", name]

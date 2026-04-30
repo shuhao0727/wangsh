@@ -38,6 +38,7 @@ import { PipelineTab } from "./PipelineTab";
 import { wsUrl } from "../../hooks/dapRunnerHelpers";
 import { useWsAccessToken } from "../../hooks/useWsAccessToken";
 import { getTerminalModeHint } from "./terminalHint";
+import { shouldConnectBackendTerminal, shouldUseBackendTerminal as resolveShouldUseBackendTerminal } from "./terminalRenderer";
 import { resolveDebugControlMatrix } from "../../adapters/debugCapabilityMap";
 import { logger } from "@services/logger";
 
@@ -70,6 +71,7 @@ export const RightPanel = React.memo(function RightPanel() {
   const variableColumns = VARIABLE_COLUMNS;
   const {
     runner,
+    activeRunnerKind,
     debugCapabilities,
     runnerError,
     lastLaunchMode,
@@ -139,9 +141,10 @@ export const RightPanel = React.memo(function RightPanel() {
 
   const firstError = rebuildError ?? runner.error ?? runnerError ?? null;
   const wsToken = useWsAccessToken();
-  const terminalWsUrl = runner.sessionId && wsToken.status === "ready" && wsToken.token
+  const terminalWsUrl = shouldConnectBackendTerminal({ sessionId: runner.sessionId, runnerStatus: runner.status }) && wsToken.status === "ready" && wsToken.token
     ? wsUrl(pythonlabApiPath(`/sessions/${runner.sessionId}/terminal`), wsToken.token)
     : undefined;
+  const shouldUseBackendTerminal = resolveShouldUseBackendTerminal({ activeRunnerKind, sessionId: runner.sessionId });
 
   const controlMatrix = useMemo(() => resolveDebugControlMatrix(runner.status, debugCapabilities), [debugCapabilities, runner.status]);
   const visibleWarnings = useMemo(() => {
@@ -574,7 +577,7 @@ export const RightPanel = React.memo(function RightPanel() {
           <TabsContent value="terminal" className="mt-0 flex-1 min-h-0 overflow-hidden p-1">
             <div className="flex h-full flex-col bg-surface p-1">
               <div className="flex-1 min-h-0">
-                {terminalBridge ? (
+                {!shouldUseBackendTerminal && terminalBridge ? (
                   <PyodideTerminal ref={terminalUiRef as any} bridge={terminalBridge} fontSize={editorFontSize} showLineNumbers />
                 ) : terminalWsUrl ? (
                   <XtermTerminal ref={terminalUiRef as any} wsUrl={terminalWsUrl} fontSize={editorFontSize} showLineNumbers />

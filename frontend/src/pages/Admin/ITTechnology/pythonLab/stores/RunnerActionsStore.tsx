@@ -6,6 +6,7 @@ import type { FlowBeautifyResult } from "../flow/beautify";
 
 export interface RunnerActionsApi {
   runner: RunnerState;
+  activeRunnerKind: "pyodide" | "dap";
   runnerError: string | null;
   lastLaunchMode: "idle" | "run" | "debug";
   terminalBridge: PyodideTerminalBridge | null;

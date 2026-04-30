@@ -492,6 +492,7 @@ const PythonLabStudioInner: React.FC<{
   });
   const {
     debugMode,
+    activeRunnerKind,
     runnerView,
     runnerError,
     lastLaunchMode,
@@ -859,6 +860,7 @@ const PythonLabStudioInner: React.FC<{
 
   const runnerActionsApi = useMemo(() => ({
     runner: runnerView,
+    activeRunnerKind,
     runnerError,
     lastLaunchMode,
     terminalBridge,
@@ -890,7 +892,7 @@ const PythonLabStudioInner: React.FC<{
     autoOptimizeCode,
     setAutoOptimizeCode,
     onOptimizeCode: handleOptimizeCode,
-  }), [runnerView, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
+  }), [runnerView, activeRunnerKind, runnerError, lastLaunchMode, terminalBridge, resolvedDebugCapabilities, onRun, onDebug, onContinue, onPause, onStepOver, onStepInto, onStepOut, onReset, onToggleBreakpoint, onSetBreakpointEnabled, onSetBreakpointCondition, onSetBreakpointHitCount, onAddWatch, onRemoveWatch, onEvaluate, onHistoryBack, onHistoryForward, onHistoryToLatest, onClearPendingOutput, beautifyResult, beautifyLoading, beautifyError, refreshBeautify, autoOptimizeCode, handleOptimizeCode]);
 
   return (
     <CodeCtxProvider value={codeApi}>

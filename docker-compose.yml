@@ -170,6 +170,10 @@ services:
       - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    group_add:
+      # 允许非 root 的 appuser 访问宿主机 Docker socket，用于 PythonLab 终端附着。
+      # 默认 984 是当前部署机 docker.sock 的 group id，可通过 DOCKER_SOCK_GID 覆盖。
+      - "${DOCKER_SOCK_GID:-984}"
     deploy:
       resources:
         limits:

@@ -42,6 +42,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const fitTimerRef = useRef<number | null>(null);
   const textTailRef = useRef("");
   const [canInit, setCanInit] = useState(false);
+  const [terminalReadyEpoch, setTerminalReadyEpoch] = useState(0);
   const afterEnterRef = useRef(false);
   const termEpochRef = useRef(0);
   const terminalDisposedRef = useRef(true);
@@ -315,6 +316,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       fitAddonRef.current = fitAddon;
       termEpochRef.current += 1;
       terminalDisposedRef.current = false;
+      setTerminalReadyEpoch(termEpochRef.current);
       trace("terminal_init");
       requestFit();
 
@@ -323,6 +325,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         termEpochRef.current += 1;
         terminalRef.current = null;
         fitAddonRef.current = null;
+        setTerminalReadyEpoch(0);
         trace("terminal_cleanup_start");
         inputDisposable.dispose();
         scrollDisposable.dispose();
@@ -481,7 +484,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           }
           textTailRef.current = "";
       };
-  }, [wsUrl, canInit, showLineNumbersOn]);
+  }, [wsUrl, canInit, showLineNumbersOn, terminalReadyEpoch]);
 
   useEffect(() => {
       return () => {
