@@ -29,7 +29,6 @@ async def init_database():
     logger.info("创建数据库表（仅开发环境/首次部署可选，生产请使用 Alembic 迁移）...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await _ensure_dev_schema(conn)
         await _ensure_views(conn)
         await _sync_alembic_version(conn)
 
@@ -175,66 +174,12 @@ async def shutdown(cleanup_task: "asyncio.Task[None] | None"):
 # ---- 内部辅助函数 ----
 
 async def _ensure_dev_schema(conn):
-    """⚠️ 开发环境专用：绕过 Alembic 直接修补历史遗留表结构。
+    """历史遗留函数桩。
 
-    这些 ALTER TABLE 直接操作数据库，可能导致开发库与生产库的
-    schema 逐渐不一致。每一条都应该尽快迁移为正式的 Alembic migration，
-    然后从此函数中移除。
+    原直接在此处执行 raw SQL ALTER TABLE，现已迁移为 Alembic migration:
+        alembic/versions/20260430_migrate_dev_schema.py
     """
-    logger.warning(
-        "⚠️ _ensure_dev_schema 正在绕过 Alembic 直接修改表结构 —— "
-        "仅限开发环境，生产部署请使用 Alembic 迁移"
-    )
-    try:
-        # TODO: 应迁移为 Alembic migration
-        # 历史兼容：xxjs_dianming 早期缺少 updated_at 列
-        # 该列已在生产库通过手动操作添加，但新开发库首次创建时仍需此补丁
-        await conn.execute(
-            text(
-                "ALTER TABLE xxjs_dianming "
-                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"
-            )
-        )
-        await conn.execute(
-            text(
-                "UPDATE xxjs_dianming "
-                "SET updated_at = created_at "
-                "WHERE updated_at IS NULL"
-            )
-        )
-        await conn.execute(
-            text(
-                "ALTER TABLE xxjs_dianming "
-                "ALTER COLUMN updated_at SET NOT NULL"
-            )
-        )
-
-        # TODO: 应迁移为 Alembic migration
-        # 群组讨论功能扩展：group_name 列和索引
-        await conn.execute(
-            text(
-                "ALTER TABLE znt_group_discussion_sessions "
-                "ADD COLUMN IF NOT EXISTS group_name VARCHAR(64)"
-            )
-        )
-        await conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_znt_group_discussion_sessions_group_name "
-                "ON znt_group_discussion_sessions (group_name)"
-            )
-        )
-        # TODO: 应迁移为 Alembic migration
-        await conn.execute(
-            text(
-                "ALTER TABLE znt_group_discussion_analyses "
-                "ADD COLUMN IF NOT EXISTS compare_session_ids TEXT"
-            )
-        )
-    except Exception:
-        logger.exception(
-            "_ensure_dev_schema 执行失败（表可能尚未创建），"
-            "如果这是首次启动且 Alembic 迁移已包含这些变更，可安全忽略"
-        )
+    logger.debug("_ensure_dev_schema: 已由 Alembic migration 20260430_migrate_dev_schema 接管")
 
 
 async def _ensure_views(conn):

@@ -1,5 +1,6 @@
 import { attachPythonlabDapRuntimeHandlers } from "./debugSessionBootstrap";
 import type { DebugController, DapMessage } from "./DebugController";
+import { test } from "vitest";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -10,16 +11,6 @@ function assert(condition: unknown, message: string) {
 function assertEqual<T>(actual: T, expected: T, message?: string) {
   if (actual !== expected) {
     throw new Error(message || `Expected ${String(expected)}, got ${String(actual)}`);
-  }
-}
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    process.stdout.write(`ok ${name}\n`);
-  } catch (error) {
-    process.stderr.write(`not ok ${name}\n`);
-    throw error;
   }
 }
 

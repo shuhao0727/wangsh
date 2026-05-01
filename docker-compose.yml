@@ -172,7 +172,9 @@ services:
       - "host.docker.internal:host-gateway"
     group_add:
       # 允许非 root 的 appuser 访问宿主机 Docker socket，用于 PythonLab 终端附着。
-      # 默认 984 是当前部署机 docker.sock 的 group id，可通过 DOCKER_SOCK_GID 覆盖。
+      # Docker Desktop/部分部署环境会把 socket 映射为 root:root(0)，生产 Linux
+      # 常见为 root:docker(例如 984/999)，所以同时加入 0 和可覆盖的宿主 GID。
+      - "0"
       - "${DOCKER_SOCK_GID:-984}"
     deploy:
       resources:

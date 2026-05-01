@@ -6,6 +6,7 @@ import {
   type DebugSessionStatus,
   type DebugStatusTransition,
 } from "./debugStateMachine";
+import { test } from "vitest";
 
 function assertEqual<T>(actual: T, expected: T, message?: string) {
   if (actual !== expected) {
@@ -24,16 +25,6 @@ function assertDeepEqual(actual: unknown, expected: unknown, message?: string) {
 function assert(condition: unknown, message: string) {
   if (!condition) {
     throw new Error(message);
-  }
-}
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    process.stdout.write(`ok ${name}\n`);
-  } catch (error) {
-    process.stderr.write(`not ok ${name}\n`);
-    throw error;
   }
 }
 

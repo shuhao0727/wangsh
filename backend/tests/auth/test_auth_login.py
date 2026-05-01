@@ -35,6 +35,9 @@ def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127
     async def fake_create_refresh_token(db, user_id):
         return "mock-refresh-token"
 
+    async def fake_revoke_all_user_refresh_tokens(db, user_id):
+        return True
+
     async def fake_rate_limiter_check(key, interval_seconds):
         pass  # 默认不限流
 
@@ -42,6 +45,7 @@ def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127
     monkeypatch.setattr(auth_api, "on_successful_login", fake_on_successful_login)
     monkeypatch.setattr(auth_api, "create_access_token", fake_create_access_token)
     monkeypatch.setattr(auth_api, "create_refresh_token", fake_create_refresh_token)
+    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all_user_refresh_tokens)
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
 
 

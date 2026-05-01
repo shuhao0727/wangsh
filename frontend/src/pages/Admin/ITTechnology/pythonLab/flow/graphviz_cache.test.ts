@@ -1,7 +1,8 @@
+import { vi } from "vitest";
 import { __resetGraphvizForTest, __setGraphvizForTest, renderGraphviz } from "./graphviz";
 
 test("renderGraphviz caches per (format, engine, dot)", async () => {
-  const mockLayout = jest.fn((dot: string, format: string, engine: string) => `${format}:${engine}:${dot.length}`);
+  const mockLayout = vi.fn((dot: string, format: string, engine: string) => `${format}:${engine}:${dot.length}`);
   __resetGraphvizForTest();
   __setGraphvizForTest({ layout: mockLayout });
   const dot = "digraph G { a -> b }";

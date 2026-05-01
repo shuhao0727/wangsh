@@ -1,11 +1,10 @@
 import asyncio
-import logging
 import json
 from typing import Dict, Any, List, Optional
 from app.core.config import settings
 from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 try:
     from kubernetes import client, config, watch

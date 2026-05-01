@@ -7,6 +7,7 @@ import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
+import PageErrorBoundary from "@components/Common/PageErrorBoundary";
 import { AUTH_EXPIRED_EVENT, type AuthExpiredKind } from "@services/api";
 
 // 旧路由兼容重定向
@@ -100,17 +101,17 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
 
             <Route element={<BasicLayout />}>
-              <Route path="/home" element={<HomePage />} />
-              <Route path="/ai-agents" element={<AIAgentsPage />} />
-              <Route path="/informatics" element={<InformaticsPage />} />
-              <Route path="/informatics/:id" element={<InformaticsDetailPage />} />
-              <Route path="/it-technology" element={<ITTechnologyPage />} />
-              <Route path="/it-technology/python-lab" element={<ITTechnologyPythonLabPage />} />
-              <Route path="/it-technology/python-lab/:id" element={<ITTechnologyPythonLabPage />} />
-              <Route path="/personal-programs" element={<PersonalProgramsPage />} />
-              <Route path="/xbk" element={<XbkPage />} />
-              <Route path="/articles" element={<ArticlesPage />} />
-              <Route path="/articles/:slug" element={<ArticleDetailPage />} />
+              <Route path="/home" element={<PageErrorBoundary pageName="home"><HomePage /></PageErrorBoundary>} />
+              <Route path="/ai-agents" element={<PageErrorBoundary pageName="ai-agents"><AIAgentsPage /></PageErrorBoundary>} />
+              <Route path="/informatics" element={<PageErrorBoundary pageName="informatics"><InformaticsPage /></PageErrorBoundary>} />
+              <Route path="/informatics/:id" element={<PageErrorBoundary pageName="informatics-detail"><InformaticsDetailPage /></PageErrorBoundary>} />
+              <Route path="/it-technology" element={<PageErrorBoundary pageName="it-technology"><ITTechnologyPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/python-lab" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/python-lab/:id" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
+              <Route path="/personal-programs" element={<PageErrorBoundary pageName="personal-programs"><PersonalProgramsPage /></PageErrorBoundary>} />
+              <Route path="/xbk" element={<PageErrorBoundary pageName="xbk"><XbkPage /></PageErrorBoundary>} />
+              <Route path="/articles" element={<PageErrorBoundary pageName="articles"><ArticlesPage /></PageErrorBoundary>} />
+              <Route path="/articles/:slug" element={<PageErrorBoundary pageName="article-detail"><ArticleDetailPage /></PageErrorBoundary>} />
               <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
             </Route>
 
@@ -121,21 +122,21 @@ function App() {
                 </AdminGuard>
               }
             >
-              <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-              <Route path="/admin/users" element={<AdminUsersPage />} />
-              <Route path="/admin/ai-agents" element={<AdminAIAgentsPage />} />
-              <Route path="/admin/agent-data" element={<AdminAgentDataPage />} />
-              <Route path="/admin/group-discussion" element={<AdminGroupDiscussionPage />} />
-              <Route path="/admin/informatics" element={<AdminInformaticsPage />} />
-              <Route path="/admin/it-technology" element={<AdminITTechnologyPage />} />
-              <Route path="/admin/personal-programs" element={<AdminPersonalProgramsPage />} />
-              <Route path="/admin/articles" element={<AdminArticlesPage />} />
-              <Route path="/admin/assessment" element={<AdminAssessmentPage />} />
-              <Route path="/admin/assessment/:id/questions" element={<AdminAssessmentQuestionsPage />} />
-              <Route path="/admin/assessment/:id/statistics" element={<AdminAssessmentStatisticsPage />} />
-              <Route path="/admin/classroom-interaction" element={<AdminClassroomInteractionPage />} />
-              <Route path="/admin/classroom-plan" element={<AdminClassroomPlanPage />} />
-              <Route path="/admin/system" element={<AdminSystemPage />} />
+              <Route path="/admin/dashboard" element={<PageErrorBoundary pageName="admin-dashboard"><AdminDashboardPage /></PageErrorBoundary>} />
+              <Route path="/admin/users" element={<PageErrorBoundary pageName="admin-users"><AdminUsersPage /></PageErrorBoundary>} />
+              <Route path="/admin/ai-agents" element={<PageErrorBoundary pageName="admin-ai-agents"><AdminAIAgentsPage /></PageErrorBoundary>} />
+              <Route path="/admin/agent-data" element={<PageErrorBoundary pageName="admin-agent-data"><AdminAgentDataPage /></PageErrorBoundary>} />
+              <Route path="/admin/group-discussion" element={<PageErrorBoundary pageName="admin-group-discussion"><AdminGroupDiscussionPage /></PageErrorBoundary>} />
+              <Route path="/admin/informatics" element={<PageErrorBoundary pageName="admin-informatics"><AdminInformaticsPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology" element={<PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary>} />
+              <Route path="/admin/personal-programs" element={<PageErrorBoundary pageName="admin-personal-programs"><AdminPersonalProgramsPage /></PageErrorBoundary>} />
+              <Route path="/admin/articles" element={<PageErrorBoundary pageName="admin-articles"><AdminArticlesPage /></PageErrorBoundary>} />
+              <Route path="/admin/assessment" element={<PageErrorBoundary pageName="admin-assessment"><AdminAssessmentPage /></PageErrorBoundary>} />
+              <Route path="/admin/assessment/:id/questions" element={<PageErrorBoundary pageName="admin-assessment-questions"><AdminAssessmentQuestionsPage /></PageErrorBoundary>} />
+              <Route path="/admin/assessment/:id/statistics" element={<PageErrorBoundary pageName="admin-assessment-statistics"><AdminAssessmentStatisticsPage /></PageErrorBoundary>} />
+              <Route path="/admin/classroom-interaction" element={<PageErrorBoundary pageName="admin-classroom-interaction"><AdminClassroomInteractionPage /></PageErrorBoundary>} />
+              <Route path="/admin/classroom-plan" element={<PageErrorBoundary pageName="admin-classroom-plan"><AdminClassroomPlanPage /></PageErrorBoundary>} />
+              <Route path="/admin/system" element={<PageErrorBoundary pageName="admin-system"><AdminSystemPage /></PageErrorBoundary>} />
             </Route>
 
             <Route
@@ -145,14 +146,14 @@ function App() {
                 </AdminGuard>
               }
             >
-              <Route path="/admin/articles/editor/new" element={<AdminArticleEditorPage />} />
-              <Route path="/admin/articles/editor/:id" element={<AdminArticleEditorPage />} />
+              <Route path="/admin/articles/editor/new" element={<PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/articles/editor/:id" element={<PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
               <Route path="/admin/articles/edit/:id" element={<ArticleEditRedirect />} />
-              <Route path="/admin/informatics/editor/new" element={<AdminTypstEditorPage />} />
-              <Route path="/admin/informatics/editor/:id" element={<AdminTypstEditorPage />} />
-              <Route path="/admin/assessment/editor/new" element={<AdminAssessmentEditorPage />} />
-              <Route path="/admin/assessment/editor/:id" element={<AdminAssessmentEditorPage />} />
+              <Route path="/admin/informatics/editor/new" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/informatics/editor/:id" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/assessment/editor/new" element={<PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/assessment/editor/:id" element={<PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

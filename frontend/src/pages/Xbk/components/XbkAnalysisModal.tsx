@@ -74,7 +74,7 @@ const ModalDataTable = <TData extends object>({
   return (
     <DataTable
       table={table}
-      className={cn("h-full", className)}
+      className={cn("h-full overflow-auto", className)}
       tableClassName="min-w-full"
     />
   );
@@ -327,13 +327,13 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 value="overview"
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
-                <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
-                    <div className="ws-section-title font-semibold">课程统计（按课程代码）</div>
+                <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-2">
+                  <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
+                    <div className="ws-section-title flex-shrink-0 font-semibold">课程统计（按课程代码）</div>
                     <CourseTable data={courseStats} className="min-h-0 flex-1" />
                   </div>
-                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
-                    <div className="ws-section-title font-semibold">班级统计</div>
+                  <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
+                    <div className="ws-section-title flex-shrink-0 font-semibold">班级统计</div>
                     <ClassTable data={classStats} className="min-h-0 flex-1" grade={filters.grade} />
                   </div>
                 </div>
@@ -343,12 +343,12 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 value="courses"
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
-                <div className="flex min-h-0 flex-1 flex-col space-y-3">
+                <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-hidden">
                   <Input
                     placeholder="搜索课程代码/名称"
                     value={courseQuery}
                     onChange={(e) => setCourseQuery(e.target.value)}
-                    className="max-w-[300px]"
+                    className="max-w-[300px] flex-shrink-0"
                   />
                   <CourseTable data={filteredCourseStats} className="min-h-0 flex-1" />
                 </div>
@@ -358,19 +358,21 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 value="classes"
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
-                <ClassTable data={classStats} className="min-h-0 flex-1" grade={filters.grade} />
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <ClassTable data={classStats} className="min-h-0 flex-1" grade={filters.grade} />
+                </div>
               </TabsContent>
 
               <TabsContent
                 value="no_selection"
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
-                <div className="flex min-h-0 flex-1 flex-col space-y-3">
+                <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-hidden">
                   <Input
                     placeholder="搜索班级/姓名/学号"
                     value={studentQuery}
                     onChange={(e) => setStudentQuery(e.target.value)}
-                    className="max-w-[300px]"
+                    className="max-w-[300px] flex-shrink-0"
                   />
                   <NoSelectionTable data={filteredNoSelection} className="min-h-0 flex-1" />
                 </div>

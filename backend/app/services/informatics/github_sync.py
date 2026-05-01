@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import logging
 import mimetypes
 import os
 import posixpath
@@ -32,7 +31,7 @@ from app.utils.cache import cache
 from app.utils.typst_asset_validation import normalize_asset_path
 from app.utils.typst_pdf_storage import abs_pdf_path
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 _LOCAL_SYNC_LOCKS: Dict[str, asyncio.Lock] = {}
 
 

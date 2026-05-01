@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DiffEditor } from "@monaco-editor/react";
 import { FlowNodesLayer } from "./FlowNodesLayer";
 import { FlowEdgesSvg } from "./FlowEdgesSvg";
 import { useEdgeGeometries } from "../hooks/useEdgeGeometries";
@@ -14,6 +13,7 @@ import { FloatingPopup } from "./FloatingPopup";
 import { logger } from "@services/logger";
 import { normalizeAnnotationForTeaching } from "../flow/annotationTeaching";
 import { FlowAnnotationsSvg } from "./FlowAnnotationsSvg";
+import { LazyMonacoDiffEditor } from "./LazyMonacoDiffEditor";
 
 interface OptimizationDialogProps {
   visible: boolean;
@@ -181,7 +181,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
         <>
           {type === "code" ? (
               <div className="relative min-h-[360px] flex-1 rounded border border-border">
-                <DiffEditor
+                <LazyMonacoDiffEditor
                   original={typeof originalContent === "string" ? originalContent : ""}
                   modified={typeof optimizedContent === "string" ? optimizedContent : ""}
                   language="python"

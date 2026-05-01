@@ -4,6 +4,7 @@ PythonLab 沙箱调试环境配置
 
 from typing import Optional
 from pydantic import Field, field_validator
+from loguru import logger
 
 
 class PythonLabSettingsMixin:
@@ -41,8 +42,7 @@ class PythonLabSettingsMixin:
     @classmethod
     def cap_pythonlab_ttls(cls, v: int) -> int:
         if v > cls._MAX_PYTHONLAB_TTL:
-            import logging
-            logging.getLogger("app.core.config").warning(
+            logger.warning(
                 "TTL 值 %ds 超过上限 %ds，已自动限制",
                 v, cls._MAX_PYTHONLAB_TTL,
             )

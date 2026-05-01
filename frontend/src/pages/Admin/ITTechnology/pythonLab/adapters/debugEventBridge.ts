@@ -20,6 +20,7 @@ export type DebugFlowActivation = {
 export function toDebugPauseEvent(params: { source: DebugFrontendMode; runner: any }): DebugPauseEvent | null {
   const { source, runner } = params;
   const status = typeof runner?.status === "string" ? runner.status : null;
+  if (status !== "paused") return null;
   const activeLine = typeof runner?.activeLine === "number" ? runner.activeLine : null;
   const activeFlowLine = typeof runner?.activeFlowLine === "number" ? runner.activeFlowLine : null;
   const activeNodeId = typeof runner?.activeNodeId === "string" ? runner.activeNodeId : null;

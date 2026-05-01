@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Editor, { loader } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
-import * as monaco from "monaco-editor";
+import { configureMonaco, monaco } from "@/lib/monacoSetup";
 import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
 
 // 使用本地 npm 包中的 Monaco，避免从 CDN (jsdelivr) 加载失败
-loader.config({ monaco });
+configureMonaco();
 
-export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: {
+export type MonacoPythonEditorProps = {
   value: string;
   onChange: (next: string) => void;
   activeLine?: number | null;
@@ -16,7 +16,9 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
   onToggleBreakpoint?: (line: number) => void;
   syntaxErrors?: { line: number; col: number; message: string; endLine?: number | null; endCol?: number | null; source?: string }[];
   fontSize?: number;
-}) {
+};
+
+export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: MonacoPythonEditorProps) {
   const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors, fontSize = 14 } = props;
 
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);

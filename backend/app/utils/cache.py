@@ -7,12 +7,10 @@ import json
 import asyncio
 from typing import Any, Optional, Dict, List, Union
 from datetime import timedelta
-import logging
-
 import redis.asyncio as redis
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RedisCache:

@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { applyPlainLayoutToCanvas, buildDot, computeBeautify, parsePlain, DEFAULT_BEAUTIFY_PARAMS } from "./beautify";
 import { __resetGraphvizForTest, __setGraphvizForTest } from "./graphviz";
 import { nodeSizeForTitle } from "./ports";
@@ -21,7 +22,7 @@ test("parsePlain reads graph size and node centers", () => {
 });
 
 test("computeBeautify renders svg/plain from the same DOT", async () => {
-  const mockLayout = jest.fn((dot: string, format: string, engine: string) => {
+  const mockLayout = vi.fn((dot: string, format: string, engine: string) => {
     if (format === "plain") {
       return [
         "graph 4.0 3.0 1.0",
@@ -56,7 +57,7 @@ test("computeBeautify renders svg/plain from the same DOT", async () => {
 });
 
 test("computeBeautify output is deterministic for different nodes/edges array order", async () => {
-  const mockLayout = jest.fn((dot: string, format: string, engine: string) => {
+  const mockLayout = vi.fn((dot: string, format: string, engine: string) => {
     if (format === "plain") {
       const names = new Set<string>();
       for (const line of dot.split("\n")) {

@@ -1,9 +1,8 @@
+import { generatePythonFromFlow } from "./ir";
+import { validatePythonStrict } from "./python_runtime";
 import { buildUnifiedFlowFromPython } from "./python_sync";
 
 test("hello code can be converted to flow and back to runnable python", () => {
-  const { generatePythonFromFlow } = require("./ir");
-  const { validatePythonStrict } = require("./python_runtime");
-
   const code = ['name = "Python"', 'print("Hello,", name)', ""].join("\n");
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
@@ -16,4 +15,3 @@ test("hello code can be converted to flow and back to runnable python", () => {
   expect(v.ok).toBe(true);
   expect(gen.python.includes("print(")).toBe(true);
 });
-

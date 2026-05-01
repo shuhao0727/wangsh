@@ -1,5 +1,5 @@
-import { buildFlowsFromPython } from "./python_sync";
-import { buildUnifiedFlowFromPython } from "./python_sync";
+import { generatePythonFromFlow } from "./ir";
+import { buildFlowsFromPython, buildUnifiedFlowFromPython } from "./python_sync";
 
 test("buildFlowsFromPython returns function flows and main flow", () => {
   const code = ["def add(x, y):", "  return x + y", "", "x = add(2, 3)", "print(x)", ""].join("\n");
@@ -22,7 +22,6 @@ test("buildUnifiedFlowFromPython merges functions into one graph", () => {
 });
 
 test("generatePythonFromFlow converts while to for with variable end", () => {
-  const { generatePythonFromFlow } = require("./ir");
   const nodes = [
     { id: "start", shape: "start_end", title: "开始", x: 0, y: 0 },
     { id: "n", shape: "process", title: "n = 10", x: 0, y: 0 },
@@ -47,7 +46,7 @@ test("generatePythonFromFlow converts while to for with variable end", () => {
     { id: "e9", from: "step2", to: "cond", style: "straight", routeMode: "auto", anchor: null, fromPort: "left", toPort: "left" },
     { id: "e10", from: "cond", to: "end", style: "straight", routeMode: "auto", anchor: null, label: "否", fromPort: "right" },
   ];
-  const g = generatePythonFromFlow(nodes, edges);
+  const g = generatePythonFromFlow(nodes as any, edges as any);
   expect(g.python.includes("for i in range(0, n):")).toBe(true);
   expect(g.python.includes("while")).toBe(false);
 });

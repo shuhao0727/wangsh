@@ -5,7 +5,6 @@
 和 Redis/DB 指标采集代码。
 """
 
-import logging
 import time
 from typing import List, Tuple
 
@@ -13,7 +12,7 @@ from app.core.config import settings
 from app.db.database import engine
 from app.utils.cache import cache
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # 节流日志：Redis 不可用时避免日志轰炸
 _last_metrics_warn_ts: float = 0.0

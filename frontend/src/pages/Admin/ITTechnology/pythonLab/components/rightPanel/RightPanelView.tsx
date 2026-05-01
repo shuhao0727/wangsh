@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { validatePythonLite } from "../../flow/python_sync";
 import { pythonlabApiPath } from "../../services/pythonlabApiBase";
 import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabCodeApi";
-import { MonacoPythonEditor } from "../MonacoPythonEditor";
+import { LazyMonacoPythonEditor } from "../LazyMonacoPythonEditor";
 import XtermTerminal from "../XtermTerminal";
 import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
@@ -407,7 +407,7 @@ export const RightPanel = React.memo(function RightPanel() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-hidden">
-            <MonacoPythonEditor
+            <LazyMonacoPythonEditor
               value={code}
               activeLine={runner.activeLine}
               revealLine={revealLine}
@@ -628,7 +628,7 @@ export const RightPanel = React.memo(function RightPanel() {
         scrollable={false}
       >
         <div className="h-full flex flex-col">
-          <MonacoPythonEditor
+          <LazyMonacoPythonEditor
             value={code}
             activeLine={runner.activeLine}
             revealLine={revealLine}

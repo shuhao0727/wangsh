@@ -6,11 +6,9 @@
 """
 
 import bcrypt
-import logging
-
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def get_password_hash(password: str) -> str:

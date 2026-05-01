@@ -5,6 +5,7 @@
 
 from typing import List, Optional, Dict, Any, cast
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -485,8 +486,6 @@ async def delete_article(
         await clear_article_cache(article_id=article_id_val, slug=article_slug)
     except Exception as e:
         # 缓存清理失败不应该阻止文章删除，但记录错误
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(f"清理文章缓存时出错: {e}")
     
     # 删除文章

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import pty
-import logging
 import shutil
 import json
 import time
@@ -12,7 +11,7 @@ from app.core.config import settings
 from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
 from app.utils.cache import cache
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class RedisDistributedLock:
     """Distributed lock implementation using Redis."""
@@ -647,8 +646,15 @@ class DockerProvider(SandboxProvider):
 
     async def _docker_is_running(self, container_id: str) -> bool:
         try:
-            rc, out, _ = await _run_async(["docker", "inspect", "-f", "{{.State.Status}}", container_id], timeout_s=5)
+            rc, out, err = await _run_async(["docker", "inspect", "-f", "{{.State.Status}}", container_id], timeout_s=5)
             if rc != 0:
+                detail = (err or out or "").strip()
+                logger.warning(
+                    "Docker inspect failed for container {} rc={} detail={}",
+                    container_id,
+                    rc,
+                    detail[:500],
+                )
                 return False
             return (out or "").strip() == "running"
         except Exception:

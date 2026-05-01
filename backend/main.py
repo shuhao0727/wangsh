@@ -3,6 +3,7 @@ WangSh 后端应用主入口
 FastAPI 应用配置和启动
 """
 
+import logging
 import time
 import uuid
 from datetime import datetime
@@ -12,12 +13,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
+from app.core.exception_handlers import (
+    generic_exception_handler,
+    value_error_handler,
+    integrity_error_handler,
+)
 from app.db.database import AsyncSessionLocal
 from app.api import api_router
 from app.api.v2.pythonlab import router as v2_pythonlab_router
@@ -31,6 +38,28 @@ from app.core.startup import (
     start_background_tasks,
     shutdown,
 )
+
+
+# 配置 loguru 拦截标准 logging，统一日志格式
+class _InterceptHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        level = logger.level(record.levelname).name if logger.level(record.levelname) else record.levelno
+        frame = logging.currentframe()
+        depth = 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage(),
+        )
+
+
+logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+# 拦截常用库的 logger
+for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "sqlalchemy", "celery", "passlib"):
+    _lg = logging.getLogger(_name)
+    _lg.handlers = [_InterceptHandler()]
+    _lg.propagate = False
 
 
 @asynccontextmanager
@@ -196,6 +225,11 @@ elif settings.CORS_ORIGINS:
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(HttpMetricsMiddleware)
+
+# 注册全局异常处理器
+app.add_exception_handler(Exception, generic_exception_handler)
+app.add_exception_handler(ValueError, value_error_handler)
+app.add_exception_handler(IntegrityError, integrity_error_handler)
 
 # 注册 API 路由
 app.include_router(api_router, prefix=settings.API_V1_STR)

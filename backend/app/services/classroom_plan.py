@@ -1,6 +1,5 @@
 """课堂计划 Service 层"""
 
-import logging
 from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.models.classroom import ClassroomActivity, ClassroomPlan, ClassroomPlanItem
 from app.services import classroom as activity_svc
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 async def create_plan(db: AsyncSession, title: str, activity_ids: List[int], user_id: int) -> ClassroomPlan:

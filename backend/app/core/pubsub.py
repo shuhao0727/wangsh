@@ -14,10 +14,9 @@ SSE pub/sub 模块 — Redis 优先，进程内降级
 
 import asyncio
 import json
-import logging
 from typing import Dict, Optional
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 CHANNEL_PREFIX = "sse:"
 

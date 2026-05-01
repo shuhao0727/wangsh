@@ -2,7 +2,8 @@
  * 雷达图组件 - 支持单组或多组数据对比
  */
 import React, { useMemo } from "react";
-import ReactECharts from "echarts-for-react";
+import ReactECharts from "echarts-for-react/lib/core";
+import { echarts } from "@/lib/echarts";
 
 interface RadarChartProps {
   /** 单组数据 */
@@ -104,6 +105,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
 
   return (
     <ReactECharts
+      echarts={echarts}
       option={option}
       style={{ width: size, height: size, margin: "0 auto" }}
       opts={{ renderer: "svg" }}

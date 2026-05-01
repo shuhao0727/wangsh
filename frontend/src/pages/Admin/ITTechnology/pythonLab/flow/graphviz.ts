@@ -9,7 +9,7 @@ async function loadGraphviz(): Promise<GraphvizLike> {
   graphvizPromise = (async () => {
     let mod: any;
     try {
-      mod = await import("@hpcc-js/wasm");
+      mod = await import("@hpcc-js/wasm/graphviz");
     } catch (e: any) {
       const msg = (e?.message && String(e.message)) || "unknown";
       throw new Error(`Graphviz wasm 加载失败：模块导入失败（${msg}）`);

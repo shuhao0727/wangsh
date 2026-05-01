@@ -2,6 +2,7 @@
  * 答题统计页 - /admin/assessment/:id/statistics
  */
 import { showMessage } from "@/lib/toast";
+import { echarts } from "@/lib/echarts";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ColumnDef,
@@ -25,7 +26,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import ReactECharts from "echarts-for-react";
+import ReactECharts from "echarts-for-react/lib/core";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
 import EmptyState from "@components/Common/EmptyState";
@@ -935,6 +936,7 @@ const StatisticsPage: React.FC = () => {
                     提交趋势
                   </div>
                   <ReactECharts
+                    echarts={echarts}
                     option={trendChartOption}
                     style={{ height: 220 }}
                     notMerge
@@ -949,6 +951,7 @@ const StatisticsPage: React.FC = () => {
                     分数分布
                   </div>
                   <ReactECharts
+                    echarts={echarts}
                     option={scoreDistributionOption}
                     style={{ height: 220 }}
                     notMerge

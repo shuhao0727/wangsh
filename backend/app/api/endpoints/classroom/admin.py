@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import logging
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
@@ -15,7 +14,7 @@ from app.schemas.user_info import UserInfo
 from app.schemas.classroom import ActivityCreate, ActivityUpdate, ActivityEndRequest, ActivityResponse, ActivityStats
 from app.services import classroom as svc
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 router = APIRouter()
 
 

@@ -2,18 +2,17 @@
 
 import asyncio
 import json
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 
-from sqlalchemy import select, func
+from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
 from app.models.agents import AIAgent
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # ─── SSE pub/sub（已提取到 app.core.pubsub，此处保持向后兼容导入）───
 from app.core.pubsub import publish, subscribe, unsubscribe  # noqa: F401
@@ -200,11 +199,9 @@ async def restart_activity(db: AsyncSession, activity_id: int) -> ClassroomActiv
     if activity.status != "ended":
         raise ValueError("只能重新开始已结束的活动")
     # 清除旧答题记录
-    old_responses = (await db.execute(
-        select(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
-    )).scalars().all()
-    for r in old_responses:
-        await db.delete(r)
+    await db.execute(
+        delete(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
+    )
     # 重置状态
     now = datetime.now(timezone.utc)
     activity.status = "active"
@@ -509,14 +506,22 @@ def _build_analysis_context(activity: ClassroomActivity, stats: dict) -> dict:
 
 
 async def _auto_end_overdue_activities(db: AsyncSession) -> None:
+    """自动结束超时活动：仅查询已超时的活动，避免加载全部活跃活动再逐个检查。"""
+    now = datetime.now(timezone.utc)
     rows = (await db.execute(
-        select(ClassroomActivity).where(ClassroomActivity.status == "active")
+        select(ClassroomActivity).where(
+            ClassroomActivity.status == "active",
+            ClassroomActivity.time_limit > 0,
+            ClassroomActivity.started_at.is_not(None),
+            func.extract("epoch", now - ClassroomActivity.started_at) >= ClassroomActivity.time_limit,
+        )
     )).scalars().all()
     for activity in rows:
-        await _ensure_activity_not_overdue(db, activity)
+        await end_activity(db, activity.id)
 
 
 async def _ensure_activity_not_overdue(db: AsyncSession, activity: ClassroomActivity) -> bool:
+    """检查单个活动是否超时（保留供 submit_response 等外部调用方使用）。"""
     if activity.status != "active":
         return False
     if activity.time_limit <= 0 or not activity.started_at:

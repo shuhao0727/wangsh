@@ -3,14 +3,13 @@
 SQLAlchemy 异步引擎和会话管理
 """
 
-import logging
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class Base(DeclarativeBase):

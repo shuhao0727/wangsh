@@ -1,3 +1,5 @@
+import { generatePythonFromFlow } from "./ir";
+import { validatePythonStrict } from "./python_runtime";
 import { buildUnifiedFlowFromPython } from "./python_sync";
 
 function normPython(s: string) {
@@ -8,8 +10,6 @@ function normPython(s: string) {
 }
 
 function flowToPython(code: string) {
-  const { generatePythonFromFlow } = require("./ir");
-  const { validatePythonStrict } = require("./python_runtime");
   const built = buildUnifiedFlowFromPython(code);
   expect(built).not.toBeNull();
   if (!built) throw new Error("failed to build flow");
@@ -86,4 +86,3 @@ test("sync closure reaches a stable python form for multi-branch decisions", () 
   expect(normPython(a.python).includes("if ")).toBe(true);
   expect(normPython(a.python).includes("else")).toBe(true);
 });
-

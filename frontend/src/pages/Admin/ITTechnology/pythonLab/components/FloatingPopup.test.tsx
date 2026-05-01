@@ -1,9 +1,10 @@
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { flushSync } from "react-dom";
+import { vi } from "vitest";
 import { FloatingPopup } from "./FloatingPopup";
 
-jest.mock("antd", () => {
+vi.mock("antd", () => {
   return {
     Button: ({ children, onClick, onPointerDown }: any) => (
       <button type="button" onClick={onClick} onPointerDown={onPointerDown}>
@@ -17,7 +18,7 @@ jest.mock("antd", () => {
   };
 });
 
-jest.mock("@ant-design/icons", () => ({
+vi.mock("@ant-design/icons", () => ({
   CloseOutlined: () => null,
 }));
 

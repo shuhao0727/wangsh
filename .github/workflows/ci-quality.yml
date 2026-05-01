@@ -13,8 +13,54 @@ on:
       - "**/*.md"
 
 jobs:
+  repo-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: version consistency
+        run: node scripts/check-version-consistency.mjs
+      - name: shell syntax
+        run: bash -n scripts/deploy.sh build_images.sh
+      - name: compose config validation
+        run: |
+          docker compose --env-file .env.example -f docker-compose.yml config --quiet
+          docker compose --env-file .env.dev -f docker-compose.dev.yml config --quiet
+      - name: compose image tags
+        run: |
+          expected="$(node -p "require('./frontend/package.json').version")"
+          images="$(docker compose --env-file .env.example -f docker-compose.yml config --images)"
+          echo "$images"
+          wangsh_images="$(echo "$images" | grep -E '/wangsh-[^:]+:' || true)"
+          if [ -z "$wangsh_images" ]; then
+            echo "No wangsh images found in production compose config."
+            exit 1
+          fi
+          mismatches="$(echo "$wangsh_images" | grep -v ":${expected}$" || true)"
+          if [ -n "$mismatches" ]; then
+            echo "Found wangsh images not tagged ${expected}:"
+            echo "$mismatches"
+            exit 1
+          fi
+
   backend-pytest:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wangsh_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wangsh_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -29,10 +75,55 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: bootstrap and migrate clean database
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "55433"
+          POSTGRES_DB: wangsh_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
+          SUPER_ADMIN_PASSWORD: ci-admin-password
+          AGENT_API_KEY_ENCRYPTION_KEY: ci-agent-key
+        run: |
+          python scripts/bootstrap_db.py
+          alembic upgrade head
+          python - <<'PY'
+          import os
+          import asyncio
+          import asyncpg
+
+          async def main():
+              conn = await asyncpg.connect(
+                  host=os.environ["POSTGRES_HOST"],
+                  port=int(os.environ["POSTGRES_PORT"]),
+                  database=os.environ["POSTGRES_DB"],
+                  user=os.environ["POSTGRES_USER"],
+                  password=os.environ["POSTGRES_PASSWORD"],
+              )
+              try:
+                  version = await conn.fetchval("SELECT version_num FROM alembic_version")
+                  assert version == "20260430_migrate_dev_schema", version
+                  has_view = await conn.fetchval("SELECT to_regclass('public.v_conversations_with_deleted') IS NOT NULL")
+                  assert has_view is True
+                  has_column = await conn.fetchval(
+                      """
+                      SELECT EXISTS (
+                          SELECT 1 FROM information_schema.columns
+                          WHERE table_name='xxjs_dianming' AND column_name='updated_at'
+                      )
+                      """
+                  )
+                  assert has_column is True
+              finally:
+                  await conn.close()
+
+          asyncio.run(main())
+          PY
       - name: pytest
         run: pytest -q
 
-  frontend-type-check:
+  frontend-quality:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,39 +137,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: install deps
         run: npm ci
+      - name: tests
+        run: npm test
       - name: type-check
         run: npm run -s type-check
-
-  frontend-lint:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-      - name: install deps
-        run: npm ci
       - name: lint
         run: npm run -s lint
-
-  frontend-ui-audit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-      - name: install deps
-        run: npm ci
       - name: ui-audit-gate
         run: npm run -s ui:audit:ci
+      - name: production build
+        run: npm run build

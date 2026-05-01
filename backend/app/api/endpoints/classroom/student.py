@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -15,7 +14,7 @@ from app.schemas.classroom import ResponseSubmit
 from app.services import classroom as svc
 from app.services.classroom import calc_remaining
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 router = APIRouter()
 
 

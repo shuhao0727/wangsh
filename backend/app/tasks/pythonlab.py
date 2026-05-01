@@ -1,7 +1,6 @@
 import json
 import asyncio
 import threading
-import logging
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
@@ -31,7 +30,7 @@ from app.api.pythonlab.constants import (
 # ---------------------------------------------------------------------------
 _loop_lock = threading.Lock()
 _shared_loop: Optional[asyncio.AbstractEventLoop] = None
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def _get_loop() -> asyncio.AbstractEventLoop:

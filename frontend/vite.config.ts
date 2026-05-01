@@ -86,16 +86,88 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "build", // 与 CRA 保持一致（CRA 默认输出到 build/）
       sourcemap: mode !== "production",
+      cssCodeSplit: false,
+      // 关闭自动 modulepreload，避免首页提前下载 Monaco/Graphviz 等重型功能包。
+      // 动态 import 仍会在进入对应页面或组件时正常拉取依赖。
+      modulePreload: false,
       // 分包策略
       rollupOptions: {
         output: {
           manualChunks(id: string) {
-            if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/") || id.includes("node_modules/react-router")) {
-              return "vendor";
+            const normalizedId = id.replaceAll("\\", "/");
+            const modulePath = normalizedId.split("node_modules/").pop();
+            if (!modulePath) {
+              return undefined;
             }
-            if (id.includes("node_modules/echarts")) {
-              return "echarts";
+
+            const isPackage = (name: string) =>
+              modulePath === name || modulePath.startsWith(`${name}/`);
+
+            if (
+              isPackage("react") ||
+              isPackage("react-dom") ||
+              isPackage("react-router") ||
+              isPackage("react-router-dom") ||
+              isPackage("scheduler")
+            ) {
+              return "react-vendor";
             }
+
+            if (
+              isPackage("echarts") ||
+              isPackage("echarts-for-react") ||
+              isPackage("zrender")
+            ) {
+              return "echarts-vendor";
+            }
+
+            if (isPackage("pdfjs-dist")) {
+              return "pdf-vendor";
+            }
+
+            if (
+              isPackage("@hpcc-js/wasm") ||
+              modulePath.startsWith("@hpcc-js/wasm/")
+            ) {
+              return "graphviz-vendor";
+            }
+
+            if (
+              isPackage("@myriaddreamin/typst.ts") ||
+              isPackage("@myriaddreamin/typst-ts-renderer") ||
+              isPackage("@myriaddreamin/typst-ts-web-compiler")
+            ) {
+              return "typst-vendor";
+            }
+
+            if (
+              isPackage("xterm") ||
+              isPackage("xterm-addon-fit") ||
+              isPackage("xterm-addon-webgl")
+            ) {
+              return "terminal-vendor";
+            }
+
+            if (
+              isPackage("react-markdown") ||
+              isPackage("remark-gfm") ||
+              isPackage("remark-math") ||
+              isPackage("remark-parse") ||
+              isPackage("remark-rehype") ||
+              isPackage("rehype-katex") ||
+              isPackage("katex") ||
+              isPackage("unified") ||
+              isPackage("micromark") ||
+              modulePath.startsWith("micromark-") ||
+              modulePath.startsWith("mdast-") ||
+              modulePath.startsWith("hast-") ||
+              modulePath.startsWith("unist-") ||
+              modulePath.startsWith("vfile")
+            ) {
+              return "markdown-vendor";
+            }
+
+            return undefined;
           },
         },
       },

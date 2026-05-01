@@ -307,8 +307,10 @@ EOF
       echo "usage: $0 restore-db <path-to-dump(.dump|.sql)>" >&2
       exit 2
     fi
-    db="$(awk -F= '/^POSTGRES_DB=/{print $2; exit}' "${env_file}" 2>/dev/null || echo wangsh_db)"
-    user="$(awk -F= '/^POSTGRES_USER=/{print $2; exit}' "${env_file}" 2>/dev/null || echo admin)"
+    db="$(env_value POSTGRES_DB)"
+    db="${db:-wangsh_db}"
+    user="$(env_value POSTGRES_USER)"
+    user="${user:-admin}"
     case "${dump_path}" in
       *.sql) cat "${dump_path}" | compose exec -T postgres psql -U "${user}" -d "${db}" ;;
       *) cat "${dump_path}" | compose exec -T postgres pg_restore -U "${user}" -d "${db}" --clean --if-exists --no-owner --no-privileges ;;
