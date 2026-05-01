@@ -53,10 +53,10 @@ const LoginPage: React.FC = () => {
     if (!auth.isLoggedIn()) return;
     if (requireAdmin && !auth.isAdmin()) {
       showMessage.warning("当前账号不是管理员，请使用管理员账号登录");
-      auth.logout();
+      void auth.logout();
       return;
     }
-    navigate(redirect, { replace: true });
+    void navigate(redirect, { replace: true });
   }, [auth, navigate, redirect, requireAdmin]);
 
   const onFinish = async (values: LoginFormValues) => {
@@ -73,7 +73,7 @@ const LoginPage: React.FC = () => {
       return;
     }
     showMessage.success("登录成功");
-    navigate(redirect, { replace: true });
+    void navigate(redirect, { replace: true });
   };
 
   return (

@@ -15,6 +15,7 @@ export type {
   QuestionListResponse,
   QuestionCreateRequest,
   QuestionUpdateRequest,
+  GenerateParams,
   GenerateResult,
 } from "./question";
 

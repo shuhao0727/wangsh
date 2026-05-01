@@ -150,7 +150,7 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
         }
       };
 
-      run();
+      void run();
     }, [data, scale, pagePadding, onPdfLoaded, onFirstPageWrapHeight]);
 
     const wrapStyle = useMemo<React.CSSProperties>(
@@ -217,7 +217,7 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
             const idx = idxStr ? Number(idxStr) : NaN;
             if (!Number.isFinite(idx)) continue;
             if (observerTokenRef.current !== token) return;
-            renderPage(idx);
+            void renderPage(idx);
           }
         },
         { root, rootMargin: "800px 0px", threshold: 0.01 },

@@ -1,6 +1,6 @@
 import { computeDebugNodeSelection, type DebugMap } from "../flow/debugMap";
 import { diffVarTrace } from "../hooks/varTrace";
-import { DebugController } from "./DebugController";
+import type { DebugController } from "./DebugController";
 
 type TraceLifecycle = (phase: string, extra?: Record<string, unknown>) => void;
 

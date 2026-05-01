@@ -16,9 +16,9 @@ const AdminEditorLayout: React.FC = () => {
   const isFullscreenEditor = isTypstEditor || isArticleEditor;
 
   const backToList = () => {
-    if (isTypstEditor) navigate("/admin/informatics");
-    else if (isAssessmentEditor) navigate("/admin/assessment");
-    else navigate("/admin/articles");
+    if (isTypstEditor) void navigate("/admin/informatics");
+    else if (isAssessmentEditor) void navigate("/admin/assessment");
+    else void navigate("/admin/articles");
   };
 
   const title = (() => {

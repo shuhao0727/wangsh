@@ -9,6 +9,11 @@ interface ApiErrorShape {
   message?: string;
   response?: { data?: { detail?: unknown } };
 }
+interface ValidationErrorItem {
+  loc?: unknown;
+  msg?: unknown;
+  message?: unknown;
+}
 const asApiError = (e: unknown): ApiErrorShape =>
   (e && typeof e === "object" ? e : {}) as ApiErrorShape;
 
@@ -16,7 +21,7 @@ const toDetailMessage = (detail: unknown): string | undefined => {
   if (!detail) return undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    return detail.map((d: any) => {
+    return detail.map((d: string | ValidationErrorItem) => {
       if (typeof d === "string") return d;
       const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
       const msg = String(d?.msg || d?.message || "");
@@ -113,7 +118,7 @@ export const assessmentConfigApi = {
   }): Promise<AssessmentConfigListResponse> => {
     try {
       const resp = await api.get(`${BASE}/configs`, { params });
-      return resp.data as any;
+      return resp.data as unknown as AssessmentConfigListResponse;
     } catch (error) {
       logger.error("获取测评配置列表失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取测评配置列表失败");
@@ -123,7 +128,7 @@ export const assessmentConfigApi = {
   get: async (id: number): Promise<AssessmentConfig> => {
     try {
       const resp = await api.get(`${BASE}/configs/${id}`);
-      return resp.data as any;
+      return resp.data as unknown as AssessmentConfig;
     } catch (error) {
       logger.error("获取测评配置详情失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取测评配置详情失败");
@@ -133,7 +138,7 @@ export const assessmentConfigApi = {
   create: async (data: AssessmentConfigCreateRequest): Promise<AssessmentConfig> => {
     try {
       const resp = await api.post(`${BASE}/configs`, data);
-      return resp.data as any;
+      return resp.data as unknown as AssessmentConfig;
     } catch (error) {
       logger.error("创建测评配置失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "创建测评配置失败");
@@ -143,7 +148,7 @@ export const assessmentConfigApi = {
   update: async (id: number, data: AssessmentConfigUpdateRequest): Promise<AssessmentConfig> => {
     try {
       const resp = await api.put(`${BASE}/configs/${id}`, data);
-      return resp.data as any;
+      return resp.data as unknown as AssessmentConfig;
     } catch (error) {
       logger.error("更新测评配置失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "更新测评配置失败");
@@ -162,7 +167,7 @@ export const assessmentConfigApi = {
   toggle: async (id: number): Promise<AssessmentConfig> => {
     try {
       const resp = await api.put(`${BASE}/configs/${id}/toggle`);
-      return resp.data as any;
+      return resp.data as unknown as AssessmentConfig;
     } catch (error) {
       logger.error("切换测评状态失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "切换测评状态失败");

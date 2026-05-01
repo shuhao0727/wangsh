@@ -27,8 +27,10 @@ import {
   LogOut,
   Menu,
   Monitor,
+  Moon,
   PanelLeftClose,
   Settings,
+  Sun,
   User,
   Users,
   Zap,
@@ -36,8 +38,10 @@ import {
 import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
+import { useDarkMode } from "@hooks/useDarkMode";
 import LoginForm from "@/components/Auth/LoginForm";
 import { Breadcrumbs } from "@/components/Common/Breadcrumbs";
+import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 
 type AdminMenuItem = {
   key: string;
@@ -89,6 +93,7 @@ const AdminLayout: React.FC = () => {
   const auth = useAuth();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+  const { isDark, toggle: toggleDark } = useDarkMode();
 
   const [collapsed, setCollapsed] = useState(false);
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
@@ -140,7 +145,7 @@ const AdminLayout: React.FC = () => {
         key={item.key}
         type="button"
         onClick={() => {
-          navigate(item.key);
+          void navigate(item.key);
           if (isMobile) setCollapsed(true);
         }}
         className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
@@ -180,9 +185,11 @@ const AdminLayout: React.FC = () => {
           boxShadow: isMobile ? "var(--ws-shadow-xl)" : "none",
         }}
       >
-        <div
-          className="flex cursor-pointer select-none items-center gap-2.5 px-4 py-4"
-          onClick={() => navigate("/admin/dashboard")}
+        <button
+          type="button"
+          className="flex w-full appearance-none items-center gap-2.5 border-0 bg-transparent px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          onClick={() => void navigate("/admin/dashboard")}
+          aria-label="返回管理后台首页"
         >
           <div
             className="grid h-8 w-8 shrink-0 place-content-center rounded-lg text-sm font-bold text-white"
@@ -196,7 +203,7 @@ const AdminLayout: React.FC = () => {
               {envLabel ? <span className="text-xs text-text-tertiary">{envLabel}</span> : null}
             </div>
           ) : null}
-        </div>
+        </button>
 
         <div className="mx-4 mb-2 h-px bg-border-secondary" />
 
@@ -210,7 +217,7 @@ const AdminLayout: React.FC = () => {
                     type="button"
                     onClick={() => {
                       if (collapsed) {
-                        navigate(item.children?.[0]?.key || "/admin/ai-agents");
+                        void navigate(item.children?.[0]?.key || "/admin/ai-agents");
                         if (isMobile) setCollapsed(true);
                         return;
                       }
@@ -291,7 +298,7 @@ const AdminLayout: React.FC = () => {
         >
           <div className="flex items-center gap-3">
             {isMobile ? (
-              <Button variant="ghost" size="icon" onClick={() => setCollapsed((v) => !v)}>
+              <Button variant="ghost" size="icon" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
                 <Menu className="h-4 w-4" />
               </Button>
             ) : null}
@@ -306,6 +313,15 @@ const AdminLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDark}
+              aria-label="切换暗色模式"
+              title={isDark ? "切换亮色模式" : "切换暗色模式"}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
             {auth.isLoggedIn() && auth.isAdmin() ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -324,22 +340,22 @@ const AdminLayout: React.FC = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" sideOffset={8}>
-                  <DropdownMenuItem onClick={() => navigate("/admin/users")}>
+                  <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
                     <User className="mr-2 h-4 w-4" />
                     管理员资料
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/")}>
+                  <DropdownMenuItem onClick={() => void navigate("/")}>
                     <Home className="mr-2 h-4 w-4" />
                     返回首页
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive"
                     onClick={async () => {
-                      await auth.logout();
-                      showMessage.success("已退出登录");
-                      navigate("/");
-                    }}
+	                      await auth.logout();
+	                      showMessage.success("已退出登录");
+	                      void navigate("/");
+	                    }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     退出登录
@@ -361,7 +377,9 @@ const AdminLayout: React.FC = () => {
           {auth.isLoggedIn() && auth.isAdmin() ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <Breadcrumbs />
-              <Outlet key={location.pathname} />
+              <PageTransitionShell variant="fade">
+                <Outlet key={location.pathname} />
+              </PageTransitionShell>
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-4">

@@ -53,6 +53,7 @@ import {
   useBatchDeleteArticles,
   useBatchPublishArticles,
 } from "@hooks/queries/useArticlesQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const getArticleColumns = (
   handleEdit: (record: ArticleWithRelations) => void,
@@ -135,7 +136,7 @@ const getArticleColumns = (
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="更多操作">
                 <Ellipsis className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -207,12 +208,12 @@ const AdminArticles: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadCategories();
+    void loadCategories();
   }, [loadCategories]);
 
   // SSE-based refresh
   const invalidateArticles = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["articles"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.articles.all });
   }, [queryClient]);
 
   useAdminSSE("article_changed", invalidateArticles);

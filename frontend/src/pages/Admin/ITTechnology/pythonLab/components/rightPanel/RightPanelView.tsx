@@ -24,6 +24,7 @@ import { validatePythonLite } from "../../flow/python_sync";
 import { pythonlabApiPath } from "../../services/pythonlabApiBase";
 import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabCodeApi";
 import { LazyMonacoPythonEditor } from "../LazyMonacoPythonEditor";
+import { PythonLabStatusBar } from "../PythonLabStatusBar";
 import XtermTerminal from "../XtermTerminal";
 import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
@@ -535,6 +536,16 @@ export const RightPanel = React.memo(function RightPanel() {
           )}
         </div>
 
+      <PythonLabStatusBar
+        state={{
+          status: runner.status,
+          runnerKind: activeRunnerKind,
+          lastLaunchMode,
+          elapsed: runner.elapsedTime,
+          error: firstError,
+          sourceMismatch: runner.sourceMismatch,
+        }}
+      />
       <div
         onPointerDown={handleVerticalResize}
         style={{

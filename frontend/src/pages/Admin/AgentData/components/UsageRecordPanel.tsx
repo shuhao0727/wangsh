@@ -1,9 +1,10 @@
 /**
  * 使用记录面板 — 搜索栏 + AdminTablePanel（表格+分页固定底部）
+ * 使用 TanStack Query hooks 替代手动 useState/useEffect 数据获取
  */
 
 import { showMessage } from "@/lib/toast";
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -20,23 +21,33 @@ import { DataTable, DataTablePagination } from "@/components/ui/data-table";
 
 import type { AgentUsageData, SearchFilterParams } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
-import { logger } from "@services/logger";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { useAgentDataList } from "@hooks/queries/useAgentDataQuery";
 
 const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams) => void }> = ({ onFilterChange }) => {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<AgentUsageData[]>([]);
-  const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchFilterParams>({
     page: 1,
     page_size: DEFAULT_PAGE_SIZE,
   });
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<AgentUsageData | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+
+  // TanStack Query — 数据查询
+  const {
+    data: agentListData,
+    isLoading,
+  } = useAgentDataList({
+    searchParams,
+    page: currentPage,
+    pageSize,
+  });
+
+  const data = useMemo(() => agentListData?.items ?? [], [agentListData?.items]);
+  const total = agentListData?.total ?? 0;
 
   const columns = useMemo(
     () =>
@@ -46,43 +57,6 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
       }),
     [],
   );
-
-  const loadData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      setLoading(true);
-      const res = await agentDataApi.getAgentData(
-        { ...searchParams, page: currentPage, page_size: pageSize },
-        controller.signal,
-      );
-      if (controller.signal.aborted) return;
-      if (res.success) {
-        setData(res.data.items || []);
-        setTotal(res.data.total || 0);
-        setSelectedRowKeys([]);
-      } else {
-        showMessage.error(res.message || "加载数据失败");
-      }
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      logger.error("加载数据失败:", error);
-      showMessage.error("加载数据失败");
-    } finally {
-      if (abortRef.current === controller) {
-        setLoading(false);
-      }
-    }
-  }, [currentPage, pageSize, searchParams]);
-
-  useEffect(() => {
-    loadData();
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [loadData]);
 
   const handleSearch = (params: SearchFilterParams) => {
     setSearchParams({ ...params, page: 1, page_size: pageSize });
@@ -111,7 +85,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
       return;
     }
     try {
-      setLoading(true);
+      setExportLoading(true);
       const res = await agentDataApi.exportSelectedConversations(sessionIds);
       if (!res.success) {
         showMessage.error(res.message || "导出失败");
@@ -129,7 +103,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
     } catch {
       showMessage.error("导出失败");
     } finally {
-      setLoading(false);
+      setExportLoading(false);
     }
   };
 
@@ -203,12 +177,13 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
         onReset={handleReset}
         onExport={handleExportSelected}
         exportDisabled={selectedRowKeys.length === 0}
+        exportLoading={exportLoading}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-secondary bg-surface-1">
         <AdminTablePanel
-          loading={loading}
-          isEmpty={!loading && data.length === 0}
+          loading={isLoading}
+          isEmpty={!isLoading && data.length === 0}
           emptyDescription="暂无使用记录"
         >
           <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1700px] table-fixed" />

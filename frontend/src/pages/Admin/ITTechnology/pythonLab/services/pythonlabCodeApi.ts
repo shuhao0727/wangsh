@@ -71,8 +71,16 @@ export type PythonLabFlowParseOptions = {
 };
 
 export const pythonlabFlowApi = {
-  parseFlow: async (code: string, options?: PythonLabFlowParseOptions): Promise<PythonLabFlowResponse> => {
-    const resp = await pythonlabV2Client.post<PythonLabFlowResponse>("/flow/parse", { code, options: options ?? {} });
+  parseFlow: async (
+    code: string,
+    options?: PythonLabFlowParseOptions,
+    config?: { silent?: boolean; timeoutMs?: number },
+  ): Promise<PythonLabFlowResponse> => {
+    const resp = await pythonlabV2Client.post<PythonLabFlowResponse>(
+      "/flow/parse",
+      { code, options: options ?? {} },
+      { silent: config?.silent, timeout: config?.timeoutMs },
+    );
     return resp.data as PythonLabFlowResponse;
   },
   generateCode: async (flow: any, options?: { timeoutMs?: number; silent?: boolean }): Promise<{ code?: string; error?: string }> => {

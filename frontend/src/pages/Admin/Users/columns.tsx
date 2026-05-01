@@ -44,7 +44,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
       cell: ({ row }) =>
         row.original.study_year ? (
-          <Badge variant="primarySubtle">
+          <Badge variant="info">
             {row.original.study_year}
           </Badge>
         ) : (

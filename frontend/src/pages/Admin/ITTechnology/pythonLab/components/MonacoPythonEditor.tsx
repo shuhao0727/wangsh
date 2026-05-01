@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
 import { configureMonaco, monaco } from "@/lib/monacoSetup";
 import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
+import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
 
 // 使用本地 npm 包中的 Monaco，避免从 CDN (jsdelivr) 加载失败
 configureMonaco();
@@ -20,6 +21,7 @@ export type MonacoPythonEditorProps = {
 
 export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: MonacoPythonEditorProps) {
   const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors, fontSize = 14 } = props;
+  const isDark = useDocumentDarkMode();
 
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const bpDecoIdsRef = useRef<string[]>([]);
@@ -122,7 +124,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
         borderRadius: 0,
         overflow: "hidden",
         border: "none",
-        background: "#ffffff",
+        background: "var(--ws-color-bg)",
       }}
     >
       <style>{`
@@ -134,11 +136,11 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
           width: 20px !important;
           text-align: right !important;
           padding-right: 2px !important;
-          color: rgba(35, 120, 147, 0.6) !important;
+          color: color-mix(in srgb, var(--ws-color-primary) 70%, var(--ws-color-text-secondary)) !important;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
         }
         .wsMonacoRoot .monaco-editor .margin {
-          background-color: #ffffff !important;
+          background-color: var(--ws-color-bg) !important;
           border-right: 1px solid var(--ws-color-border-secondary) !important;
         }
         .wsMonacoBp {
@@ -199,7 +201,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
             fontSize: `${fontSize}px`,
             lineHeight: `${Math.round(fontSize * 1.35)}px`,
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            background: "#fff",
+            background: "var(--ws-color-bg)",
             color: "var(--ws-color-text)",
             zIndex: 2,
           }}
@@ -208,7 +210,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
       <Editor
         height="100%"
         defaultLanguage="python"
-        theme="vs"
+        theme={isDark ? "vs-dark" : "vs"}
         value={value}
         loading={
           <div className="flex h-full items-center justify-center text-xs text-text-secondary">

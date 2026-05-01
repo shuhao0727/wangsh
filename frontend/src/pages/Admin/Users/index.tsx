@@ -203,7 +203,7 @@ const AdminUsers: React.FC = () => {
 
         <div className="flex-1" />
 
-        <Button variant="ghost" size="icon" onClick={actions.handleReset} title="重置">
+        <Button variant="ghost" size="icon" onClick={actions.handleReset} aria-label="重置">
           <RotateCcw className="h-4 w-4" />
         </Button>
 
@@ -239,6 +239,7 @@ const AdminUsers: React.FC = () => {
         <Button
           variant="ghost"
           size="icon"
+          aria-label="导入用户"
           title="导入用户"
           onClick={() => fileInputRef.current?.click()}
         >

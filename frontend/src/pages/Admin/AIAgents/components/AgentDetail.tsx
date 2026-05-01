@@ -46,14 +46,14 @@ const getAgentTypeTag = (agentType: string) => {
   switch (agentType) {
     case "general":
       return (
-        <Badge variant="primarySubtle">
+        <Badge variant="info">
           <Zap className="h-3 w-3" />
           通用智能体
         </Badge>
       );
     case "dify":
       return (
-        <Badge variant="violet">
+        <Badge variant="purple">
           <Cloud className="h-3 w-3" />
           Dify智能体
         </Badge>

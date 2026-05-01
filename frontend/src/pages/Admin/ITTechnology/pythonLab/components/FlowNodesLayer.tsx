@@ -121,7 +121,8 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
         const pulse = !!followMode && !!active && typeof followTick === "number";
         const size = nodeSizeForTitle(n.shape, n.title);
         const borderColor = selected ? "var(--ws-color-primary)" : active ? "var(--ws-color-primary)" : shapeColor(n.shape);
-        const bgColor = active ? "rgba(22,119,255,0.08)" : "var(--ws-color-surface)";
+        const bgColor = active ? "rgba(22,119,255,0.14)" : "var(--ws-color-surface)";
+        const textColor = n.shape === "note" ? "#2f2600" : "var(--ws-color-text)";
         const strokeWidth = selected ? 2.5 : active ? 3 : 2;
         const dashed = connectMode && connectFromId === n.id;
         const w = size.w;
@@ -380,7 +381,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   const centerY = n.shape === "note" ? h * 0.42 : h / 2;
                   const topY = centerY - ((lines.length - 1) * lineH) / 2;
                   return (
-                    <text textAnchor="middle" fontSize="12" fontWeight="700" fill="#262626">
+                    <text textAnchor="middle" fontSize="12" fontWeight="700" fill={textColor}>
                       {lines.map((t, i) => (
                         <tspan key={i} x="50%" y={topY + i * lineH} dominantBaseline="middle">
                           {t}
@@ -423,7 +424,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   resize: "none",
                   textAlign: "center",
                   fontWeight: 700,
-                  color: "#262626",
+                  color: textColor,
                   lineHeight: 1.25,
                 }}
               />

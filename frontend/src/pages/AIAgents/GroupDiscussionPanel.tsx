@@ -220,7 +220,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   useEffect(() => {
     if (membersDrawerOpen) {
-      fetchMembers();
+      void fetchMembers();
     }
   }, [membersDrawerOpen, fetchMembers]);
 
@@ -230,7 +230,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       const res = await groupDiscussionApi.adminRemoveMember({ sessionId, userId });
       if (res.success) {
         showMessage.success("移除成功");
-        fetchMembers();
+        void fetchMembers();
       } else {
         showMessage.error(res.message);
       }
@@ -273,7 +273,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       if (res.success) {
         showMessage.success("邀请成功");
         setInviteModalOpen(false);
-        fetchMembers();
+        void fetchMembers();
       } else {
         showMessage.error(res.message);
       }
@@ -345,7 +345,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
 
   // --- 初始化与会话恢复 ---
   useEffect(() => {
-    groupDiscussionApi.getPublicConfig().then(res => {
+    void groupDiscussionApi.getPublicConfig().then(res => {
       if (res.success) {
         setConfig(res.data);
       }
@@ -358,7 +358,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       // 无论 filterDate 是否为空，都去获取班级列表
       // 如果 filterDate 为空，后端应当返回所有日期的班级列表（或默认策略）
       // 如果 filterDate 不为空，后端返回该日期的班级列表
-      groupDiscussionApi.adminListClasses({ date: filterDate || undefined }).then(res => {
+      void groupDiscussionApi.adminListClasses({ date: filterDate || undefined }).then(res => {
         if (res.success) {
           setClassList(res.data);
           return;
@@ -626,7 +626,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       return;
     }
     setView("intro");
-    fetchGroups();
+    void fetchGroups();
   }, [open, isAuthenticated, sessionId, loadMessages, handleExit, fetchGroups]);
 
   useEffect(() => {
@@ -674,7 +674,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             await loadMessages(sessionId);
             if (fallbackActive) setTimeout(poll, 3000);
           };
-          poll();
+          void poll();
         }
       };
     } catch {
@@ -685,7 +685,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         await loadMessages(sessionId);
         if (fallbackActive) setTimeout(poll, 3000);
       };
-      poll();
+      void poll();
     }
 
     return () => {
@@ -1157,6 +1157,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                       type="button"
                       size="icon"
                       variant="ghost"
+                      aria-label={`移除成员 ${item.full_name || item.username || item.user_id}`}
                       className="text-destructive hover:text-destructive"
                       onClick={() => {
                         setConfirmState({ message: "确认移除该成员吗？", onOk: () => { void handleKick(item.user_id); } });

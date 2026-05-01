@@ -36,12 +36,12 @@ const AdminTypstEditorPage: React.FC = () => {
       } catch (e: any) {
         const d = e?.response?.data?.detail;
         showMessage.error(typeof d === "string" ? d : (e?.message || "加载笔记失败"));
-        navigate("/admin/informatics");
+        void navigate("/admin/informatics");
       } finally {
         setLoading(false);
       }
     };
-    load();
+    void load();
   }, [id, isCreateMode, navigate]);
 
   if (loading) {
@@ -59,9 +59,9 @@ const AdminTypstEditorPage: React.FC = () => {
       onCreated={(created) => {
         setNote(created);
         setLoading(false);
-        navigate(`/admin/informatics/editor/${created.id}`, { replace: true });
+        void navigate(`/admin/informatics/editor/${created.id}`, { replace: true });
       }}
-      onBack={() => navigate("/admin/informatics")}
+      onBack={() => void navigate("/admin/informatics")}
     />
   );
 };

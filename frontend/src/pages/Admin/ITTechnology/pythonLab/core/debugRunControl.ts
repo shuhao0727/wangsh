@@ -1,5 +1,5 @@
 import { pythonlabSessionApi } from "../services/pythonlabSessionApi";
-import { DebugController } from "./DebugController";
+import type { DebugController } from "./DebugController";
 
 export interface DebugEvalResult {
   ok: boolean;

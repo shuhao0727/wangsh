@@ -35,7 +35,7 @@ export type FlowNodeArrow = {
 
 export type FlowNode = {
   id: string;
-  type: FlowNodeType;
+  type?: FlowNodeType;
   shape: FlowNodeShape;
   title: string;
   tooltip?: string;

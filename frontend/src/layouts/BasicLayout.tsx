@@ -8,6 +8,8 @@ import {
   LayoutGrid,
   FileText,
   Menu as MenuIcon,
+  Moon,
+  Sun,
 } from "lucide-react";
 import {
   Sheet,
@@ -21,9 +23,11 @@ import { cn } from "@/lib/utils";
 import "./BasicLayout.css";
 import useAuth from "@hooks/useAuth";
 import { LoginForm, UserMenu } from "@components/Auth";
+import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 import { logger } from "@services/logger";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
+import { useDarkMode } from "@hooks/useDarkMode";
 
 // 这些页面需要 overflow:hidden + flex-col（子页面自己处理滚动）
 const FULL_HEIGHT_PATHS = [
@@ -32,6 +36,7 @@ const FULL_HEIGHT_PATHS = [
   /^\/articles(\/|$)/,
   /^\/informatics(\/|$)/,
   /^\/it-technology(\/|$)/,
+  /^\/xbk(\/|$)/,
 ];
 
 // 导航项配置
@@ -72,6 +77,7 @@ const BasicLayout: React.FC = () => {
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const authExpiredBannerReason = (() => {
     const authError = String(error || "").trim();
     if (authError) return authError;
@@ -111,7 +117,7 @@ const BasicLayout: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    void (async () => {
       const pairs = await Promise.all(
         NAV_VISIBILITY_ITEMS.map(async (it) => {
           try {
@@ -140,7 +146,7 @@ const BasicLayout: React.FC = () => {
   const handleLoginSuccess = () => {
     setIsLoginModalVisible(false);
     showMessage.success("登录成功！");
-    navigate(0);
+    void navigate(0);
   };
 
   return (
@@ -150,12 +156,17 @@ const BasicLayout: React.FC = () => {
         <div className="top-header-inner">
           <div className="header-left">
             {/* Logo */}
-            <div className="logo" onClick={() => navigate("/")}>
+            <button
+              type="button"
+              className="logo appearance-none border-0 bg-transparent p-0 text-left"
+              onClick={() => void navigate("/")}
+              aria-label="返回首页"
+            >
               <div className="logo-icon">W</div>
               {!isMobile && (
-                <h4 className="logo-text">WangSh</h4>
+                <span className="logo-text">WangSh</span>
               )}
-            </div>
+            </button>
 
             {/* 桌面端导航 */}
             {!isMobile && (
@@ -182,12 +193,22 @@ const BasicLayout: React.FC = () => {
           </div>
 
           <div className="header-right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDark}
+              aria-label="切换暗色模式"
+              title={isDark ? "切换亮色模式" : "切换暗色模式"}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
             {isMobile && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="mobile-menu-btn"
                 onClick={() => setMobileMenuOpen(true)}
+                aria-label="打开菜单"
               >
                 <MenuIcon className="h-5 w-5" />
               </Button>
@@ -243,7 +264,7 @@ const BasicLayout: React.FC = () => {
 
       {/* 内容区域 — 统一两种模式 */}
       <main
-        className="main-content"
+        className={cn("main-content", isFullHeight && "main-content--full-height")}
         style={isFullHeight ? {
           padding: 0,
           margin: 0,
@@ -270,7 +291,9 @@ const BasicLayout: React.FC = () => {
             ) : null}
           </div>
         ) : null}
-        <Outlet />
+        <PageTransitionShell variant="fade">
+          <Outlet />
+        </PageTransitionShell>
       </main>
     </div>
   );

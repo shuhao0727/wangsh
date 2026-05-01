@@ -8,7 +8,14 @@ import type { XbkMeta } from "@services";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Dialog,
   DialogContent,
@@ -187,19 +194,12 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
     [kind],
   );
 
-  const {
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<FormValues>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: EMPTY_FORM,
     mode: "onChange",
   });
-  const values = watch() as FormValues;
-
+  const { reset } = form;
   useEffect(() => {
     if (!open) return;
     const base = initialValues || {};
@@ -218,7 +218,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
       quota: typeof base.quota === "number" ? base.quota : base.quota ? Number(base.quota) : "",
       location: String(base.location || ""),
     });
-  }, [open, initialValues, filters, reset]);
+  }, [open, initialValues, filters.grade, filters.term, filters.year, reset]);
 
   const getErrorMsg = (e: any, defaultMsg: string) => {
     const detail = e?.response?.data?.detail;
@@ -227,11 +227,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
     return detail || defaultMsg;
   };
 
-  const setField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
-    setValue(key as any, value as any, { shouldDirty: true, shouldValidate: true });
-  };
-
-  const handleSave = handleSubmit(async (values) => {
+  const handleSave = async (values: FormValues) => {
     const common = {
       year: Number(values.year),
       term: values.term,
@@ -287,7 +283,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
     } finally {
       setSaving(false);
     }
-  });
+  };
 
   const getTitle = () => {
     if (kind === "students") return mode === "create" ? "新增学生" : "编辑学生";
@@ -307,181 +303,288 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label className="ws-modal-label">年份</Label>
-              <Input
-                type="number"
-                min={2000}
-                max={2100}
-                value={values.year}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setField("year", v ? Number(v) : "");
-                }}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="year"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>年份</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={2000}
+                        max={2100}
+                        value={field.value === "" ? "" : field.value}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          field.onChange(v ? Number(v) : "");
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {errors.year ? <p className="text-xs text-destructive">{errors.year.message}</p> : null}
+
+              <FormField
+                control={form.control}
+                name="term"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>学期</FormLabel>
+                    <Select value={field.value || undefined} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="请选择学期" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {termOptions.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="grade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>年级</FormLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={(v) => field.onChange(v === "__none__" ? "" : (v as "高一" | "高二"))}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择年级" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">不设置</SelectItem>
+                        <SelectItem value="高一">高一</SelectItem>
+                        <SelectItem value="高二">高二</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label className="ws-modal-label">学期</Label>
-              <Select value={values.term || undefined} onValueChange={(v) => setField("term", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="请选择学期" />
-                </SelectTrigger>
-                <SelectContent>
-                  {termOptions.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.term ? <p className="text-xs text-destructive">{errors.term.message}</p> : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="ws-modal-label">年级</Label>
-              <Select
-                value={values.grade || "__none__"}
-                onValueChange={(v) => setField("grade", v === "__none__" ? "" : (v as "高一" | "高二"))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择年级" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不设置</SelectItem>
-                  <SelectItem value="高一">高一</SelectItem>
-                  <SelectItem value="高二">高二</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {kind === "students" ? (
-            <>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">班级</Label>
-                <Input
-                  placeholder="如：高二(1)班"
-                  value={values.class_name}
-                  onChange={(e) => setField("class_name", e.target.value)}
+            {kind === "students" ? (
+              <>
+                <FormField
+                  control={form.control}
+                  name="class_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>班级</FormLabel>
+                      <FormControl>
+                        <Input placeholder="如：高二(1)班" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.class_name ? <p className="text-xs text-destructive">{errors.class_name.message}</p> : null}
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">学号</Label>
-                  <Input
-                    value={values.student_no}
-                    onChange={(e) => setField("student_no", e.target.value)}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="student_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>学号</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {errors.student_no ? <p className="text-xs text-destructive">{errors.student_no.message}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">姓名</Label>
-                  <Input value={values.name} onChange={(e) => setField("name", e.target.value)} />
-                  {errors.name ? <p className="text-xs text-destructive">{errors.name.message}</p> : null}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">性别</Label>
-                <Select
-                  value={values.gender || "__none__"}
-                  onValueChange={(v) => setField("gender", v === "__none__" ? "" : (v as "男" | "女"))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择性别" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">不设置</SelectItem>
-                    <SelectItem value="男">男</SelectItem>
-                    <SelectItem value="女">女</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          ) : kind === "courses" ? (
-            <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">课程代码</Label>
-                  <Input
-                    value={values.course_code}
-                    onChange={(e) => setField("course_code", e.target.value)}
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>姓名</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {errors.course_code ? <p className="text-xs text-destructive">{errors.course_code.message}</p> : null}
                 </div>
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">限报人数</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={999}
-                    value={values.quota}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setField("quota", v ? Number(v) : "");
-                    }}
-                  />
-                  {errors.quota ? <p className="text-xs text-destructive">{errors.quota.message}</p> : null}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">课程名称</Label>
-                <Input
-                  value={values.course_name}
-                  onChange={(e) => setField("course_name", e.target.value)}
+                <FormField
+                  control={form.control}
+                  name="gender"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>性别</FormLabel>
+                      <Select
+                        value={field.value || "__none__"}
+                        onValueChange={(v) => field.onChange(v === "__none__" ? "" : (v as "男" | "女"))}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择性别" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">不设置</SelectItem>
+                          <SelectItem value="男">男</SelectItem>
+                          <SelectItem value="女">女</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.course_name ? <p className="text-xs text-destructive">{errors.course_name.message}</p> : null}
-              </div>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">课程负责人</Label>
-                <Input value={values.teacher} onChange={(e) => setField("teacher", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">上课地点</Label>
-                <Input value={values.location} onChange={(e) => setField("location", e.target.value)} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">学号</Label>
-                  <Input
-                    value={values.student_no}
-                    onChange={(e) => setField("student_no", e.target.value)}
+              </>
+            ) : kind === "courses" ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="course_code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>课程代码</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {errors.student_no ? <p className="text-xs text-destructive">{errors.student_no.message}</p> : null}
+                  <FormField
+                    control={form.control}
+                    name="quota"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>限报人数</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={999}
+                            value={field.value === "" ? "" : field.value}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              field.onChange(v ? Number(v) : "");
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label className="ws-modal-label">姓名</Label>
-                  <Input value={values.name} onChange={(e) => setField("name", e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="ws-modal-label">课程代码</Label>
-                <Input
-                  value={values.course_code}
-                  onChange={(e) => setField("course_code", e.target.value)}
+                <FormField
+                  control={form.control}
+                  name="course_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>课程名称</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.course_code ? <p className="text-xs text-destructive">{errors.course_code.message}</p> : null}
-              </div>
-            </>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
-            取消
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            保存
-          </Button>
-        </DialogFooter>
+                <FormField
+                  control={form.control}
+                  name="teacher"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>课程负责人</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>上课地点</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="student_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>学号</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>姓名</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="course_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>课程代码</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+                取消
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                保存
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

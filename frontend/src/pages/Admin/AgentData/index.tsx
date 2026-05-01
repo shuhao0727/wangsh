@@ -41,11 +41,11 @@ const AdminAgentData: React.FC = () => {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadStatistics(); }, [loadStatistics]);
+  useEffect(() => { void loadStatistics(); }, [loadStatistics]);
 
   const handleFilterChange = useCallback((params: SearchFilterParams) => {
     filterRef.current = params;
-    loadStatistics(params);
+    void loadStatistics(params);
   }, [loadStatistics]);
 
   useEffect(() => {

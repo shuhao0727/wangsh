@@ -73,11 +73,11 @@
 }
 
 .article-detail-title {
-  font-size: var(--ws-text-xl);
+  font-size: var(--ws-text-2xl);
   font-weight: 700;
   line-height: var(--ws-line-height-heading);
   color: var(--ws-color-text);
-  margin-bottom: var(--ws-space-2);
+  margin-bottom: var(--ws-space-3);
   letter-spacing: var(--ws-letter-spacing-tight);
 }
 
@@ -92,8 +92,11 @@
 
 .article-meta-row {
   margin-bottom: var(--ws-space-4);
-  padding-bottom: var(--ws-space-2);
+  padding: var(--ws-space-2) var(--ws-space-3);
   font-size: var(--ws-text-xs);
+  background: var(--ws-color-surface-2);
+  border-radius: var(--ws-radius-md);
+  border: 1px solid var(--ws-color-border-secondary);
 }
 
 .article-toc-list {
@@ -137,14 +140,16 @@
 
 .article-content {
   font-size: var(--ws-text-sm);
-  line-height: 1.8;
-  max-width: 960px;
+  line-height: 1.85;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 /* Override Markdown Styles for Article Detail */
 .article-content.ws-markdown h1 {
   font-size: var(--ws-text-xl);
-  margin-top: var(--ws-space-4);
+  margin-top: calc(var(--ws-space-4) + 4px);
+  margin-bottom: var(--ws-space-2);
   font-weight: 700;
   border-bottom: 1px solid var(--ws-color-border);
   padding-bottom: var(--ws-space-1);
@@ -152,15 +157,17 @@
 
 .article-content.ws-markdown h2 {
   font-size: var(--ws-text-lg);
-  margin-top: var(--ws-space-3);
+  margin-top: var(--ws-space-4);
+  margin-bottom: var(--ws-space-2);
   font-weight: 600;
-  border-bottom: 1px solid var(--ws-color-border);
+  border-bottom: 1px solid var(--ws-color-border-secondary);
   padding-bottom: var(--ws-space-1);
 }
 
 .article-content.ws-markdown h3 {
   font-size: var(--ws-text-md);
   margin-top: var(--ws-space-3);
+  margin-bottom: var(--ws-space-1);
   font-weight: 600;
 }
 
@@ -168,11 +175,13 @@
   font-size: var(--ws-text-sm);
   font-weight: 600;
   margin-top: var(--ws-space-2);
+  margin-bottom: var(--ws-space-1);
 }
 
 .article-content.ws-markdown h5 {
   font-size: var(--ws-text-sm);
   font-weight: 600;
+  color: var(--ws-color-text-secondary);
 }
 
 .article-content.ws-markdown h6 {
@@ -183,10 +192,12 @@
 
 .article-content.ws-markdown p {
   margin: var(--ws-space-2) 0;
+  line-height: 1.85;
 }
 
 .article-content.ws-markdown li {
   margin: var(--ws-space-1) 0;
+  line-height: 1.75;
 }
 
 .article-content.ws-markdown code {

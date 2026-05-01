@@ -201,7 +201,7 @@ const AIAgentsPage: React.FC = () => {
       } finally {}
     };
 
-    loadAgents();
+    void loadAgents();
   }, []);
 
   // 监听认证状态变化，登录后显示欢迎消息
@@ -306,7 +306,7 @@ const AIAgentsPage: React.FC = () => {
   useEffect(() => {
     if (!currentAgent) return;
     if (!auth.isAuthenticated) return;
-    loadSessionsAndMaybeRestore(currentAgent);
+    void loadSessionsAndMaybeRestore(currentAgent);
   }, [auth.isAuthenticated, currentAgent, loadSessionsAndMaybeRestore]);
 
   // 切换智能体
@@ -517,7 +517,7 @@ const AIAgentsPage: React.FC = () => {
               setStreamingContent("");
               setCurrentStreamingMessageId(null);
               setIsStreaming(false);
-              persistUsage(fullText);
+              void persistUsage(fullText);
             },
             onError: (errText) => {
               const errMsg: Message = {
@@ -558,7 +558,7 @@ const AIAgentsPage: React.FC = () => {
         setCurrentStreamingMessageId(null);
       }
     };
-    startStream();
+    void startStream();
   };
 
   // 停止流式响应
@@ -653,7 +653,7 @@ const AIAgentsPage: React.FC = () => {
           if (draft) {
             logger.debug("📝 登录成功后自动发送草稿消息", draft);
             setDraftMessage("");
-            handleSendMessage(draft);
+            void handleSendMessage(draft);
           } else {
             setDraftMessage("");
           }
@@ -716,7 +716,7 @@ const AIAgentsPage: React.FC = () => {
                 onAgentChange={(id) => { handleAgentChange(id); if (isMobile) setHistoryVisible(false); }}
                 onToggleSidebar={() => setHistoryVisible(false)}
                 onStartNewConversation={() => { handleStartNewConversation(); if (isMobile) setHistoryVisible(false); }}
-                onSelectSession={(id) => { handleSelectSession(id); if (isMobile) setHistoryVisible(false); }}
+                onSelectSession={(id) => { void handleSelectSession(id); if (isMobile) setHistoryVisible(false); }}
               />
             </div>
           </SheetContent>

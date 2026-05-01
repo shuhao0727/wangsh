@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,12 +31,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import {
-  classroomApi,
+import type {
   Activity,
   ActivityCreateRequest,
   OptionItem,
-  ActiveAgentOption,
+  ActiveAgentOption} from "@services/classroom";
+import {
+  classroomApi
 } from "@services/classroom";
 import {
   toFillBlankPayload,
@@ -149,17 +158,18 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
   onSuccess,
 }) => {
   const [step, setStep] = useState(0);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(activityFormSchema),
+    defaultValues: defaultFormValues(),
+    mode: "onChange",
+  });
   const {
     reset,
     setValue,
     getValues,
     watch,
     handleSubmit: submitForm,
-  } = useForm<FormValues>({
-    resolver: zodResolver(activityFormSchema),
-    defaultValues: defaultFormValues(),
-    mode: "onChange",
-  });
+  } = form;
   const formValues = watch() as FormValues;
   const [codeTemplate, setCodeTemplate] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -179,17 +189,6 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
     reset(defaultFormValues());
     setCodeTemplate("");
   }, [open, editingRecord, reset]);
-
-  const updateField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
-    setValue(key as any, value as any, { shouldDirty: true, shouldValidate: true });
-  };
-
-  const updateOption = (index: number, text: string) => {
-    const options = getValues("options") || [];
-    const next = [...options];
-    next[index] = { ...next[index], text };
-    setValue("options", next, { shouldDirty: true, shouldValidate: true });
-  };
 
   const addOption = () => {
     const options = getValues("options") || [];
@@ -214,13 +213,6 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
     const cur = getValues("blank_answers") || [];
     if (cur.length === count) return;
     const next = Array.from({ length: count }, (_, i) => cur[i] ?? "");
-    setValue("blank_answers", next, { shouldDirty: true, shouldValidate: true });
-  };
-
-  const updateBlankAnswer = (index: number, value: string) => {
-    const answers = getValues("blank_answers") || [];
-    const next = [...answers];
-    next[index] = value;
     setValue("blank_answers", next, { shouldDirty: true, shouldValidate: true });
   };
 
@@ -336,7 +328,8 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
           <DialogTitle>{editingId ? "编辑活动" : "创建活动"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <Form {...form}>
+          <div className="space-y-4">
           <div className="grid grid-cols-4 gap-2">
             {STEP_TITLES.map((title, index) => (
               <div
@@ -357,45 +350,61 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
 
           {step === 0 ? (
             <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">活动类型</label>
-                <div className="inline-flex rounded-md border border-border bg-surface p-0.5">
-                  {[
-                    { value: "vote", label: "投票 / 选择" },
-                    { value: "fill_blank", label: "填空" },
-                  ].map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      className={cn(
-                        "rounded px-3 py-1.5 text-xs transition-colors",
-                        formValues.activity_type === item.value
-                          ? "bg-surface text-text shadow-sm"
-                          : "text-text-tertiary hover:text-text",
-                      )}
-                      onClick={() => {
-                        const next = item.value as "vote" | "fill_blank";
-                        updateField("activity_type", next);
-                        if (next === "fill_blank" && formValues.blank_answers.length === 0) {
-                          updateField("blank_answers", [""]);
-                        }
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="activity_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>活动类型</FormLabel>
+                    <FormControl>
+                      <div className="inline-flex rounded-md border border-border bg-surface p-0.5">
+                        {[
+                          { value: "vote", label: "投票 / 选择" },
+                          { value: "fill_blank", label: "填空" },
+                        ].map((item) => (
+                          <button
+                            key={item.value}
+                            type="button"
+                            className={cn(
+                              "rounded px-3 py-1.5 text-xs transition-colors",
+                              field.value === item.value
+                                ? "bg-surface text-text shadow-sm"
+                                : "text-text-tertiary hover:text-text",
+                            )}
+                            onClick={() => {
+                              field.onChange(item.value);
+                              if (item.value === "fill_blank" && formValues.blank_answers.length === 0) {
+                                setValue("blank_answers", [""], { shouldDirty: true, shouldValidate: true });
+                              }
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">活动标题</label>
-                <Input
-                  value={formValues.title}
-                  maxLength={200}
-                  placeholder="活动标题，填空题中可用（1）（2）标记空位"
-                  onChange={(e) => updateField("title", e.target.value)}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>活动标题</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        maxLength={200}
+                        placeholder="活动标题，填空题中可用（1）（2）标记空位"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
           ) : null}
 
@@ -407,10 +416,20 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                   {(formValues.options || []).map((option, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <Input value={option.key} disabled className="w-[48px]" />
-                      <Input
-                        value={option.text}
-                        placeholder={`选项 ${option.key}`}
-                        onChange={(e) => updateOption(idx, e.target.value)}
+                      <FormField
+                        control={form.control}
+                        name={`options.${idx}.text`}
+                        render={({ field }) => (
+                          <FormItem className="flex-1 space-y-0">
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder={`选项 ${option.key}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
                       {formValues.options.length > 2 ? (
                         <Button
@@ -430,14 +449,22 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                       <Plus className="h-4 w-4" /> 添加选项
                     </Button>
                   ) : null}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium">正确答案（可选）</label>
-                    <Input
-                      value={formValues.correct_answer}
-                      placeholder="如 A 或 A,B（留空表示无标准答案）"
-                      onChange={(e) => updateField("correct_answer", e.target.value)}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="correct_answer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>正确答案（可选）</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="如 A 或 A,B（留空表示无标准答案）"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </>
               ) : (
                 <>
@@ -474,14 +501,23 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                   </div>
                   {(formValues.blank_answers || []).map((answer, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <Badge variant="violet" className="shrink-0 whitespace-nowrap">
+                      <Badge variant="purple" className="shrink-0 whitespace-nowrap">
                         空位 {idx + 1}
                       </Badge>
-                      <Input
-                        className="min-w-0 flex-1"
-                        value={answer}
-                        placeholder={`空位 ${idx + 1} 标准答案`}
-                        onChange={(e) => updateBlankAnswer(idx, e.target.value)}
+                      <FormField
+                        control={form.control}
+                        name={`blank_answers.${idx}`}
+                        render={({ field }) => (
+                          <FormItem className="min-w-0 flex-1 space-y-0">
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder={`空位 ${idx + 1} 标准答案`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
                       {formValues.blank_answers.length > 1 ? (
                         <Button
@@ -508,18 +544,27 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
 
           {step === 2 ? (
             <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">时间限制（秒）</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={3600}
-                  value={String(formValues.time_limit)}
-                  onChange={(e) =>
-                    updateField("time_limit", Number(e.target.value || 0))
-                  }
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="time_limit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>时间限制（秒）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={3600}
+                        value={String(field.value)}
+                        onChange={(e) =>
+                          field.onChange(Number(e.target.value || 0))
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div>
                 <div className="mb-1.5 text-xs text-text-tertiary">快速设置</div>
                 <div className="flex flex-wrap gap-2">
@@ -529,7 +574,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => updateField("time_limit", v)}
+                      onClick={() => form.setValue("time_limit", v, { shouldDirty: true, shouldValidate: true })}
                     >
                       {v === 0 ? "无限" : `${v}s`}
                     </Button>
@@ -537,13 +582,22 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                 </div>
               </div>
               {formValues.activity_type === "vote" ? (
-                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <span className="text-sm">允许多选</span>
-                  <Switch
-                    checked={formValues.allow_multiple}
-                    onCheckedChange={(checked) => updateField("allow_multiple", checked)}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="allow_multiple"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-md border border-border px-3 py-2 space-y-0">
+                      <FormLabel className="text-sm">允许多选</FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               ) : null}
             </div>
           ) : null}
@@ -553,43 +607,60 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
               <div className="text-xs text-text-tertiary">
                 活动结束后自动触发 AI 分析（可选，跳过则不分析）
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">分析智能体</label>
-                <Select
-                  value={formValues.analysis_agent_id || FILTER_ALL}
-                  disabled={loadingAgents || activeAgents.length === 0}
-                  onValueChange={(v) =>
-                    updateField("analysis_agent_id", v === FILTER_ALL ? "" : v)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        activeAgents.length > 0 ? "选择智能体" : "暂无可用智能体"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FILTER_ALL}>不设置</SelectItem>
-                    {activeAgents.map((agent) => (
-                      <SelectItem key={agent.id} value={String(agent.id)}>
-                        {agent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">AI 分析提示词</label>
-                <Textarea
-                  rows={4}
-                  maxLength={1000}
-                  value={formValues.analysis_prompt}
-                  disabled={activeAgents.length === 0}
-                  placeholder="留空使用默认提示词；填写后将完全自定义分析要求"
-                  onChange={(e) => updateField("analysis_prompt", e.target.value)}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="analysis_agent_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>分析智能体</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value || FILTER_ALL}
+                        disabled={loadingAgents || activeAgents.length === 0}
+                        onValueChange={(v) =>
+                          field.onChange(v === FILTER_ALL ? "" : v)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              activeAgents.length > 0 ? "选择智能体" : "暂无可用智能体"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={FILTER_ALL}>不设置</SelectItem>
+                          {activeAgents.map((agent) => (
+                            <SelectItem key={agent.id} value={String(agent.id)}>
+                              {agent.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="analysis_prompt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>AI 分析提示词</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={4}
+                        maxLength={1000}
+                        disabled={activeAgents.length === 0}
+                        placeholder="留空使用默认提示词；填写后将完全自定义分析要求"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <Button
                 type="button"
                 size="sm"
@@ -623,6 +694,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
             )}
           </div>
         </div>
+        </Form>
       </DialogContent>
     </Dialog>
   );

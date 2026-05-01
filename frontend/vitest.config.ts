@@ -23,9 +23,12 @@ export default defineConfig({
     setupFiles: "./src/test/setup.ts",
     css: false,
     // PythonLab 是核心交互模块，纳入默认门禁防止流程图/调试/终端能力回归。
+    // Query hooks 和 service 层覆盖键值稳定性与 API 形状。
     include: [
       "src/components/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
+      "src/hooks/queries/**/*.test.{ts,tsx}",
+      "src/services/**/*.test.{ts,tsx}",
     ],
   },
 });

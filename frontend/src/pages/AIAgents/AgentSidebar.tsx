@@ -201,7 +201,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                                 }`}
                               >
                                 <div className="flex items-center justify-between mb-1">
-                                  <Badge variant="sky" className="m-0 h-5 px-2 text-xs leading-4">
+                                  <Badge variant="info" className="m-0 h-5 px-2 text-xs leading-4">
                                     {s.turns}轮
                                   </Badge>
                                   <span className="text-xs text-text-tertiary">

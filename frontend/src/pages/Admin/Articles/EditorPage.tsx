@@ -23,7 +23,7 @@ const ArticleEditorPage: React.FC = () => {
       setArticle(response.data);
     } catch (_error) {
       showMessage.error("加载文章失败");
-      navigate("/admin/articles");
+      void navigate("/admin/articles");
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ const ArticleEditorPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadCategories();
+    void loadCategories();
     if (isCreateMode) {
       setArticle(null);
       setLoading(false);
@@ -49,19 +49,19 @@ const ArticleEditorPage: React.FC = () => {
     const articleId = parseInt(String(id), 10);
     if (!Number.isFinite(articleId)) {
       showMessage.error("文章ID格式错误");
-      navigate("/admin/articles");
+      void navigate("/admin/articles");
       return;
     }
-    loadArticle(articleId);
+    void loadArticle(articleId);
   }, [id, isCreateMode, loadArticle, loadCategories, navigate]);
 
   const handleSaveSuccess = () => {
     showMessage.success(isCreateMode ? "文章创建成功" : "文章更新成功");
-    navigate("/admin/articles");
+    void navigate("/admin/articles");
   };
 
   const handleCancel = () => {
-    navigate("/admin/articles");
+    void navigate("/admin/articles");
   };
 
   if (loading) {

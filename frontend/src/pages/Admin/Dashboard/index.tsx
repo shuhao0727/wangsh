@@ -51,7 +51,7 @@ const AdminDashboard: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { void loadAll(); }, [loadAll]);
 
   const isHealthy = health?.status === "healthy";
 

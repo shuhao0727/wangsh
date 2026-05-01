@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FlowNodesLayer } from "./FlowNodesLayer";
 import { FlowEdgesSvg } from "./FlowEdgesSvg";
 import { useEdgeGeometries } from "../hooks/useEdgeGeometries";
-import { FlowNode, FlowEdge } from "../flow/model";
+import type { FlowNode, FlowEdge } from "../flow/model";
 import { computeBeautify, DEFAULT_BEAUTIFY_PARAMS, DEFAULT_BEAUTIFY_THRESHOLDS } from "../flow/beautify";
 import { sortFlowGraphStable } from "../flow/determinism";
 import { FloatingPopup } from "./FloatingPopup";
@@ -63,7 +63,7 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
         setLoading(false);
       }
     };
-    run();
+    void run();
   }, [nodes, edges]);
 
   const { canvasMetrics, edgeGeometries } = useEdgeGeometries(layoutNodes, layoutEdges, "orthogonal", false);

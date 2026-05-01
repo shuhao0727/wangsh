@@ -40,8 +40,8 @@ import {
   useUpdateAgent,
   useDeleteAgent,
   useBatchDeleteAgents,
-  AI_AGENTS_QUERY_KEY,
 } from "@hooks/queries/useAIAgentsQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const AdminAIAgents: React.FC = () => {
   // 本地状态
@@ -89,7 +89,7 @@ const AdminAIAgents: React.FC = () => {
 
   // SSE 实时更新 — 收到变更事件后刷新查询缓存
   useAdminSSE("agent_changed", () => {
-    queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.aiAgents.all });
   });
 
   // 处理搜索

@@ -223,19 +223,19 @@ export function useDebugSession(params: {
   ]);
 
   const onContinue = useCallback(() => {
-    continueUnifiedRun();
+    void continueUnifiedRun();
   }, [continueUnifiedRun]);
   const onPause = useCallback(() => {
-    pauseUnifiedRun();
+    void pauseUnifiedRun();
   }, [pauseUnifiedRun]);
   const onStepOver = useCallback(() => {
-    stepOverUnifiedRun();
+    void stepOverUnifiedRun();
   }, [stepOverUnifiedRun]);
   const onStepInto = useCallback(() => {
-    stepIntoUnifiedRun();
+    void stepIntoUnifiedRun();
   }, [stepIntoUnifiedRun]);
   const onStepOut = useCallback(() => {
-    stepOutUnifiedRun();
+    void stepOutUnifiedRun();
   }, [stepOutUnifiedRun]);
   const onReset = useCallback(() => {
     resetAllRunners();

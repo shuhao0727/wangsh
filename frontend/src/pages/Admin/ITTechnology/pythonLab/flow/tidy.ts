@@ -1,6 +1,8 @@
 import type { FlowEdge, FlowNode } from "./model";
 import { nodeSizeForTitle } from "./ports";
 
+type Point = { x: number; y: number };
+
 export type FlowTidyRuleId =
   | "R_TIDY_START_END"
   | "R_TIDY_CONNECT_DEG0"
@@ -64,13 +66,13 @@ function centers(nodes: FlowNode[]) {
   return m;
 }
 
-function segIntersects(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }) {
-  const orient = (p: any, q: any, r: any) => {
+function segIntersects(a: Point, b: Point, c: Point, d: Point) {
+  const orient = (p: Point, q: Point, r: Point) => {
     const v = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
     if (Math.abs(v) < 1e-9) return 0;
     return v > 0 ? 1 : 2;
   };
-  const onSeg = (p: any, q: any, r: any) => {
+  const onSeg = (p: Point, q: Point, r: Point) => {
     return Math.min(p.x, r.x) <= q.x && q.x <= Math.max(p.x, r.x) && Math.min(p.y, r.y) <= q.y && q.y <= Math.max(p.y, r.y);
   };
   const o1 = orient(a, b, c);
@@ -271,8 +273,8 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
     return id;
   };
 
-  let ns: FlowNode[] = rawNodes.map((n) => ({ ...(n as any) }));
-  let es: FlowEdge[] = rawEdges.map((e) => ({ ...(e as any) }));
+  let ns: FlowNode[] = rawNodes.map((n) => ({ ...n }));
+  let es: FlowEdge[] = rawEdges.map((e) => ({ ...e }));
 
   const ensureStartEnd = () => {
     const start = ns.find(isStartNode) ?? null;
@@ -516,8 +518,8 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
       if (removedNodes.has(a.id) || removedNodes.has(b.id)) continue;
       const nextTitle = [a.title, b.title].map((x) => (x || "").trim()).filter(Boolean).join("\n");
       const nextTooltip = [a.tooltip, b.tooltip].map((x) => (x || "").trim()).filter(Boolean).join("\n");
-      (a as any).title = nextTitle || a.title;
-      (a as any).tooltip = nextTooltip || a.tooltip;
+      a.title = nextTitle || a.title;
+      a.tooltip = nextTooltip || a.tooltip;
       const outsB = (outEdges.get(b.id) || []).filter((x) => !x.toEdge);
       for (const oe of outsB) {
         replacedEdges.push({ ...oe, id: nextId(`e_${a.id}_to_${oe.to}`), from: a.id });
@@ -549,8 +551,8 @@ export function computeTidy(nodes: FlowNode[], edges: FlowEdge[], options?: Flow
       const id = edgeIdBetween(es, crit[i], crit[i + 1]);
       if (id) critEdges.add(id);
     }
-    ns = ns.map((n) => (critSet.has(n.id) ? ({ ...n, emphasis: "critical" } as any) : n));
-    es = es.map((e) => (critEdges.has(e.id) ? ({ ...e, emphasis: "critical" } as any) : e));
+    ns = ns.map((n) => (critSet.has(n.id) ? { ...n, emphasis: "critical" } : n));
+    es = es.map((e) => (critEdges.has(e.id) ? { ...e, emphasis: "critical" } : e));
     log.push({
       ruleId: "R_TIDY_MARK_CRITICAL",
       description: `标注关键路径（节点 ${critSet.size} 个，边 ${critEdges.size} 条）`,

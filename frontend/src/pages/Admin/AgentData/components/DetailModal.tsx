@@ -2,7 +2,7 @@
  * 智能体数据详情弹窗组件
  * 显示智能体使用记录的完整信息
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
 import dayjs from "dayjs";
 import {
   Bot,
@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 
 import type { AgentUsageData } from "@services/znt/types";
-import { agentDataApi } from "@services/agents";
 import { showMessage } from "@/lib/toast";
+import { useConversationMessages } from "@hooks/queries/useAgentDataQuery";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,9 +35,6 @@ interface DetailModalProps {
   record: AgentUsageData | null;
   onClose: () => void;
 }
-
-const MESSAGE_CACHE_TTL = 60_000;
-const messageCache = new Map<string, { data: Array<{ id: number; session_id: string; message_type: string; content: string; created_at: string }>; ts: number }>();
 
 const formatResponseTime = (ms?: number) => {
   if (!ms) return "未知";
@@ -58,12 +55,12 @@ const agentTypeConfig = {
   general: {
     text: "通用智能体",
     icon: <Bot className="h-4 w-4" />,
-    variant: "primarySubtle" as const,
+    variant: "info" as const,
   },
   dify: {
     text: "Dify智能体",
     icon: <Bot className="h-4 w-4" />,
-    variant: "violet" as const,
+    variant: "purple" as const,
   },
   default: {
     text: "未知类型",
@@ -113,52 +110,13 @@ const MetricTile: React.FC<{
 };
 
 const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) => {
-  const [conversationLoading, setConversationLoading] = useState(false);
-  const [conversationMessages, setConversationMessages] = useState<
-    Array<{
-      id: number;
-      session_id: string;
-      message_type: string;
-      content: string;
-      created_at: string;
-    }>
-  >([]);
+  // TanStack Query — 会话消息查询，关闭弹窗时不请求
+  const {
+    data: conversationMessages,
+    isLoading: conversationLoading,
+  } = useConversationMessages(record?.session_id, visible);
 
-  useEffect(() => {
-    const sessionId = record?.session_id;
-    if (!visible) return;
-    if (!sessionId) {
-      setConversationMessages([]);
-      return;
-    }
-
-    const cached = messageCache.get(sessionId);
-    if (cached && Date.now() - cached.ts < MESSAGE_CACHE_TTL) {
-      setConversationMessages(cached.data);
-      return;
-    }
-
-    let cancelled = false;
-    const load = async () => {
-      setConversationLoading(true);
-      try {
-        const res = await agentDataApi.getConversationMessagesAdmin(sessionId);
-        if (cancelled) return;
-        if (res.success) {
-          setConversationMessages(res.data);
-          messageCache.set(sessionId, { data: res.data, ts: Date.now() });
-        } else {
-          setConversationMessages([]);
-        }
-      } finally {
-        if (!cancelled) setConversationLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [record?.session_id, visible]);
+  const safeMessages = conversationMessages ?? [];
 
   if (!record) return null;
 
@@ -287,9 +245,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
               <div className="flex h-40 items-center justify-center">
                 <Loader2 className="h-7 w-7 animate-spin text-text-tertiary" />
               </div>
-            ) : conversationMessages.length > 0 ? (
+            ) : safeMessages.length > 0 ? (
               <div className="space-y-3">
-                {conversationMessages.map((message) => {
+                {safeMessages.map((message) => {
                   const isQuestion = message.message_type === "question";
                   const isAnswer = message.message_type === "answer";
                   const toneClass = isQuestion
@@ -301,7 +259,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
                   return (
                     <div key={message.id} className={`rounded-lg border px-3 py-2.5 ${toneClass}`}>
                       <div className="mb-2 flex items-center gap-2">
-                        <Badge variant={isQuestion ? "primarySubtle" : isAnswer ? "success" : "neutral"}>
+                        <Badge variant={isQuestion ? "info" : isAnswer ? "success" : "neutral"}>
                           {label}
                         </Badge>
                         <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">

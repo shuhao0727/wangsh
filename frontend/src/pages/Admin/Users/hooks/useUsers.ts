@@ -23,6 +23,7 @@ import {
   useBatchDeleteUsers,
   useImportUsers,
 } from "@hooks/queries/useUsersQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 /**
  * 用户管理 Hook
@@ -276,7 +277,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
 
   // ── SSE: invalidate cache on user_changed events ────────
   useAdminSSE("user_changed", () => {
-    queryClient.invalidateQueries({ queryKey: ["users"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
   });
 
   // ── State object (UsersState interface) ─────────────────
@@ -300,7 +301,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
   const actions: UserActions = {
     loadUsers: async () => {
       // Kept for interface compatibility; TanStack Query handles auto-refetch
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
     handleSearch,
     handleReset,

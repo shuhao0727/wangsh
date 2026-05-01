@@ -33,17 +33,17 @@ const typeConfig: Record<
   general: {
     text: "通用",
     icon: <Bot className="h-3 w-3" />,
-    variant: "primarySubtle",
+    variant: "info",
   },
   openai: {
     text: "OpenAI",
     icon: <Zap className="h-3 w-3" />,
-    variant: "primarySubtle",
+    variant: "info",
   },
   dify: {
     text: "Dify",
     icon: <Cloud className="h-3 w-3" />,
-    variant: "violet",
+    variant: "purple",
   },
   custom: {
     text: "自定义",
@@ -63,7 +63,7 @@ const typeConfig: Record<
   system: {
     text: "系统",
     icon: <Cable className="h-3 w-3" />,
-    variant: "violet",
+    variant: "purple",
   },
 };
 

@@ -73,7 +73,7 @@ const AdminITTechnology: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchFlags();
+    void fetchFlags();
   }, []);
 
   const handleToggle = async (key: string, checked: boolean) => {

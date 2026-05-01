@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { articleApi } from "@services";
 import type { ArticleFilterParams } from "@services";
-
-const QUERY_KEY = "articles";
+import { queryKeys } from "./queryKeys";
 
 export function useArticlesList(params: ArticleFilterParams) {
   return useQuery({
-    queryKey: [QUERY_KEY, params],
+    queryKey: queryKeys.articles.list(params as Record<string, unknown>),
     queryFn: async () => {
       const response = await articleApi.listArticles(params);
       return response.data;
@@ -20,7 +19,7 @@ export function useDeleteArticle() {
   return useMutation({
     mutationFn: (id: number) => articleApi.deleteArticle(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.articles.all });
     },
   });
 }
@@ -31,7 +30,7 @@ export function useTogglePublish() {
     mutationFn: ({ id, published }: { id: number; published: boolean }) =>
       articleApi.togglePublishStatus(id, published),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.articles.all });
     },
   });
 }
@@ -55,7 +54,7 @@ export function useBatchDeleteArticles() {
       return { successCount, errorCount };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.articles.all });
     },
   });
 }
@@ -85,7 +84,7 @@ export function useBatchPublishArticles() {
       return { successCount, errorCount };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.articles.all });
     },
   });
 }

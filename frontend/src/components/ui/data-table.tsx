@@ -18,15 +18,24 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { densityStyles, TABLE_MIN_WIDTH_PRESETS, type TableDensity } from "./tableDefaults"
 
 type DataTableProps<TData> = {
   table: TanStackTable<TData>
   className?: string
   style?: React.CSSProperties
   tableClassName?: string
+  tableWrapperClassName?: string
+  tableScrollContainer?: boolean
   emptyState?: React.ReactNode
   getRowClassName?: (row: Row<TData>) => string | undefined
   onRowClick?: (row: Row<TData>) => void
+  /** 表格密度预设 */
+  density?: TableDensity
+  /** 表格最小宽度，避免横滚时布局崩塌 */
+  minWidthPreset?: keyof typeof TABLE_MIN_WIDTH_PRESETS
+  /** 表头吸顶 */
+  stickyHeader?: boolean
 }
 
 type DataTableColumnMeta = {
@@ -58,9 +67,14 @@ function DataTable<TData>({
   className,
   style,
   tableClassName,
+  tableWrapperClassName,
+  tableScrollContainer = true,
   emptyState = defaultEmptyState,
   getRowClassName,
   onRowClick,
+  density = "default",
+  minWidthPreset,
+  stickyHeader = false,
 }: DataTableProps<TData>) {
   const headerGroups = table.getHeaderGroups()
   const rows = table.getRowModel().rows
@@ -68,14 +82,22 @@ function DataTable<TData>({
 
   return (
     <div
-      className={cn("overflow-hidden rounded-md border border-border", className)}
+      className={cn(
+        !stickyHeader && "overflow-hidden",
+        "rounded-md border border-border",
+        minWidthPreset && TABLE_MIN_WIDTH_PRESETS[minWidthPreset],
+        className,
+      )}
       style={style}
     >
       <Table
         className={cn(
           tableClassName,
-          "[&_thead_th]:h-[var(--ws-control-height)] [&_tbody_td]:py-2.5",
+          densityStyles[density],
+          stickyHeader && "[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead_th]:bg-background",
         )}
+        wrapperClassName={tableWrapperClassName}
+        scrollContainer={tableScrollContainer}
       >
         <TableHeader>
           {headerGroups.map((headerGroup) => (
@@ -102,7 +124,11 @@ function DataTable<TData>({
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() ? "selected" : undefined}
-                className={getRowClassName?.(row)}
+                className={cn(
+                  onRowClick &&
+                    "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-inset",
+                  getRowClassName?.(row),
+                )}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 {...(onRowClick
                   ? {
@@ -110,8 +136,8 @@ function DataTable<TData>({
                       tabIndex: 0,
                       onKeyDown: (e: React.KeyboardEvent) => {
                         if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onRowClick(row);
+                          e.preventDefault()
+                          onRowClick(row)
                         }
                       },
                     }

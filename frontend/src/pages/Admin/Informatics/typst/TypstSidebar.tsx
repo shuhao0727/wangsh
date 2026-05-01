@@ -149,7 +149,7 @@ export default function TypstSidebar({
             <div className="flex items-center">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={onOpenToc}>
+                  <Button variant="ghost" size="icon" onClick={onOpenToc} aria-label="目录">
                     <List className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -157,7 +157,7 @@ export default function TypstSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={onRefreshPreview} disabled={!noteId}>
+                  <Button variant="ghost" size="icon" onClick={onRefreshPreview} disabled={!noteId} aria-label="刷新预览">
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -165,7 +165,7 @@ export default function TypstSidebar({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={onSave} disabled={submitting}>
+                  <Button variant="ghost" size="icon" onClick={onSave} disabled={submitting} aria-label="保存">
                     <Save className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -262,7 +262,7 @@ export default function TypstSidebar({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="outline" onClick={onOpenStyleEditor} className="h-9 w-9 p-0">
+                  <Button variant="outline" onClick={onOpenStyleEditor} className="h-9 w-9 p-0" aria-label="编辑样式">
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
@@ -272,7 +272,7 @@ export default function TypstSidebar({
                 <div className="flex-1">
                   <FieldLabel>编译</FieldLabel>
                   {compiledAt ? (
-                    <Badge variant="sky">
+                    <Badge variant="info">
                       已编译
                     </Badge>
                   ) : (
@@ -282,7 +282,7 @@ export default function TypstSidebar({
                 <div className="flex-1">
                   <FieldLabel>模式</FieldLabel>
                   {isCreateMode ? (
-                    <Badge variant="sky">
+                    <Badge variant="info">
                       新建
                     </Badge>
                   ) : (

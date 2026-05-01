@@ -61,8 +61,8 @@ import {
   useCreateAssessmentConfig,
   useToggleAssessmentConfig,
   useDeleteAssessmentConfig,
-  ASSESSMENT_QUERY_KEY,
 } from "@hooks/queries/useAssessmentQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const GRADE_OPTIONS = [
   "高一",
@@ -140,7 +140,7 @@ const AdminAssessment: React.FC = () => {
 
   // ── SSE ───────────────────────────────────────────────────
   useAdminSSE("assessment_changed", () => {
-    queryClient.invalidateQueries({ queryKey: [ASSESSMENT_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.assessment.all });
   });
 
   // ── Agents for create form ────────────────────────────────
@@ -178,7 +178,7 @@ const AdminAssessment: React.FC = () => {
       showMessage.success("创建成功");
       setCreateOpen(false);
       createForm.reset(DEFAULT_CREATE_VALUES);
-      navigate(`/admin/assessment/${config.id}/questions`);
+      void navigate(`/admin/assessment/${config.id}/questions`);
     } catch (error: any) {
       showMessage.error(error.message || "创建失败");
     }
@@ -216,7 +216,7 @@ const AdminAssessment: React.FC = () => {
       setSearch(next);
       return;
     }
-    queryClient.invalidateQueries({ queryKey: [ASSESSMENT_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.assessment.all });
   };
 
   const handleClearSearch = () => {
@@ -322,7 +322,7 @@ const AdminAssessment: React.FC = () => {
               variant="ghost"
               size="sm"
               disabled={row.original.id < 0}
-              onClick={() => navigate(`/admin/assessment/${row.original.id}/questions`)}
+              onClick={() => void navigate(`/admin/assessment/${row.original.id}/questions`)}
             >
               <Database className="h-4 w-4" />
               管理
@@ -331,7 +331,7 @@ const AdminAssessment: React.FC = () => {
               variant="ghost"
               size="sm"
               disabled={row.original.id < 0}
-              onClick={() => navigate(`/admin/assessment/${row.original.id}/statistics`)}
+              onClick={() => void navigate(`/admin/assessment/${row.original.id}/statistics`)}
             >
               <BarChart3 className="h-4 w-4" />
               统计

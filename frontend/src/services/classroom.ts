@@ -33,7 +33,7 @@ export interface Activity {
   analysis_prompt?: string | null;
   analysis_status?: string | null;
   analysis_result?: string | null;
-  analysis_context?: Record<string, any> | null;
+  analysis_context?: Record<string, unknown> | null;
   analysis_error?: string | null;
   analysis_updated_at?: string | null;
 }
@@ -101,11 +101,11 @@ export const classroomApi = {
   // 管理端
   create: async (data: ActivityCreateRequest): Promise<Activity> => {
     const resp = await api.post(ADMIN_BASE + "/", data);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   update: async (id: number, data: Partial<ActivityCreateRequest>): Promise<Activity> => {
     const resp = await api.put(`${ADMIN_BASE}/${id}`, data);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   remove: async (id: number): Promise<void> => {
     await api.delete(`${ADMIN_BASE}/${id}`);
@@ -113,41 +113,41 @@ export const classroomApi = {
 
   bulkRemove: async (ids: number[]): Promise<{ deleted: number[]; skipped: number[] }> => {
     const resp = await api.post(`${ADMIN_BASE}/bulk-delete`, { ids });
-    return resp.data as any;
+    return resp.data as unknown as { deleted: number[]; skipped: number[] };
   },
 
   duplicate: async (id: number): Promise<Activity> => {
     const resp = await api.post(`${ADMIN_BASE}/${id}/duplicate`);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   restart: async (id: number): Promise<Activity> => {
     const resp = await api.post(`${ADMIN_BASE}/${id}/restart`);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   list: async (params?: { skip?: number; limit?: number; status?: string }): Promise<ActivityListResponse> => {
     const resp = await api.get(ADMIN_BASE + "/", { params });
-    return resp.data as any;
+    return resp.data as unknown as ActivityListResponse;
   },
   getDetail: async (id: number): Promise<Activity> => {
     const resp = await api.get(`${ADMIN_BASE}/${id}`);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   start: async (id: number): Promise<Activity> => {
     const resp = await api.post(`${ADMIN_BASE}/${id}/start`);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   end: async (id: number, data?: ActivityEndRequest): Promise<Activity> => {
     const resp = await api.post(`${ADMIN_BASE}/${id}/end`, data || {});
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   getStatistics: async (id: number): Promise<ActivityStats> => {
     const resp = await api.get(`${ADMIN_BASE}/${id}/statistics`);
-    return resp.data as any;
+    return resp.data as unknown as ActivityStats;
   },
   getActiveAgents: async (): Promise<ActiveAgentOption[]> => {
     const resp = await api.get("/ai-agents/active");
     const rows = Array.isArray(resp.data) ? resp.data : [];
-    return rows.map((row: any) => ({
+    return rows.map((row: { id?: unknown; name?: unknown; agent_name?: unknown }) => ({
       id: Number(row?.id || 0),
       name: String(row?.name || row?.agent_name || `智能体${row?.id ?? ""}`),
     })).filter((row: ActiveAgentOption) => Number.isFinite(row.id) && row.id > 0);
@@ -156,18 +156,18 @@ export const classroomApi = {
   // 学生端
   getActive: async (): Promise<Activity[]> => {
     const resp = await api.get(BASE + "/active");
-    return resp.data as any;
+    return resp.data as unknown as Activity[];
   },
   getActivity: async (id: number): Promise<Activity> => {
     const resp = await api.get(`${BASE}/${id}`);
-    return resp.data as any;
+    return resp.data as unknown as Activity;
   },
   respond: async (id: number, answer: string): Promise<{ id: number; answer: string; is_correct: boolean | null; submitted_at: string }> => {
     const resp = await api.post(`${BASE}/${id}/respond`, { answer });
-    return resp.data as any;
+    return resp.data as unknown as { id: number; answer: string; is_correct: boolean | null; submitted_at: string };
   },
   getResult: async (id: number): Promise<ActivityResult> => {
     const resp = await api.get(`${BASE}/${id}/result`);
-    return resp.data as any;
+    return resp.data as unknown as ActivityResult;
   },
 };

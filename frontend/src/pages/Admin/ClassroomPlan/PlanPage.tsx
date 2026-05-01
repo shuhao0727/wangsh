@@ -6,14 +6,15 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import type {
+  DragEndEvent} from "@dnd-kit/core";
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
-  useSensors,
-  DragEndEvent,
+  useSensors
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -65,8 +66,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   usePlansList,
   useDeletePlan,
-  PLAN_QUERY_KEY,
 } from "@hooks/queries/useClassroomPlanQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const ACTIVITY_FETCH_BATCH_SIZE = 100;
 
@@ -361,6 +362,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
                       checked={checked}
                       readOnly
                       disabled={isActive}
+                      aria-label={`选择活动 ${activity.title}`}
                       className="h-3.5 w-3.5 rounded border border-border accent-primary"
                     />
                     <ActivityTypeTag type={activity.activity_type} />
@@ -816,7 +818,7 @@ const ClassroomPlanPage: React.FC = () => {
   }, [loadPlanDetail, rightView]);
 
   const invalidatePlans = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
   }, [queryClient]);
 
   const handleRefreshList = useCallback(async () => {
@@ -1037,6 +1039,7 @@ const ClassroomPlanPage: React.FC = () => {
                 variant="outline"
                 className="h-7 w-7"
                 onClick={() => openEdit(row.original)}
+                aria-label="编辑计划"
                 title="编辑"
               >
                 <Edit className="h-3.5 w-3.5" />
@@ -1047,6 +1050,7 @@ const ClassroomPlanPage: React.FC = () => {
               variant="outline"
               className="h-7 w-7"
               onClick={() => openConsole(row.original)}
+              aria-label="打开控制台"
               title="控制台"
             >
               <Settings2 className="h-3.5 w-3.5" />
@@ -1059,6 +1063,7 @@ const ClassroomPlanPage: React.FC = () => {
                 onClick={() => {
                   void handleDelete(row.original.id);
                 }}
+                aria-label="删除计划"
                 title="删除"
               >
                 <Trash2 className="h-3.5 w-3.5" />

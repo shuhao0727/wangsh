@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -38,14 +39,22 @@ import { Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
-import { aiAgentsApi, groupDiscussionApi } from "@services/agents";
+import { groupDiscussionApi } from "@services/agents";
 import { userApi } from "@services/users";
 import type { User } from "@services/users";
-import type { AIAgent } from "@services/znt/types";
 import type { GroupDiscussionMember } from "@services/znt/api/group-discussion-api";
 import { AdminCard, AdminTablePanel } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import {
+  useAllAgents,
+  useDiscussionPublicConfig,
+  useGroupDiscussionSessions,
+  useGroupDiscussionMessages,
+  useGroupDiscussionMembers,
+  useGroupDiscussionAnalyses,
+} from "@hooks/queries/useAgentDataQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 type SessionRow = {
   id: number;
@@ -56,15 +65,6 @@ type SessionRow = {
   message_count: number;
   created_at: string;
   last_message_at?: string | null;
-};
-
-type MessageRow = {
-  id: number;
-  session_id: number;
-  user_id: number;
-  user_display_name: string;
-  content: string;
-  created_at: string;
 };
 
 type AnalysisFormState = {
@@ -97,16 +97,13 @@ const createCompareFormState = (
 });
 
 const GroupDiscussionAdminTab: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [frontendVisible, setFrontendVisible] = useState(true);
   const [frontendVisibleLoading, setFrontendVisibleLoading] = useState(false);
 
   const [dateRange, setDateRange] = useState<[string, string]>([
@@ -120,29 +117,62 @@ const GroupDiscussionAdminTab: React.FC = () => {
   const [selectedSessionIds, setSelectedSessionIds] = useState<number[]>([]);
 
   const [currentSession, setCurrentSession] = useState<SessionRow | null>(null);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [members, setMembers] = useState<GroupDiscussionMember[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [sessionModalTab, setSessionModalTab] = useState<string>("messages");
 
-  const [agents, setAgents] = useState<AIAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [analysisForm, setAnalysisForm] = useState<AnalysisFormState>(() => createAnalysisFormState(null));
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>("");
-  const [analysesLoading, setAnalysesLoading] = useState(false);
-  const [analyses, setAnalyses] = useState<
-    Array<{
-      id: number;
-      agent_id: number;
-      analysis_type: string;
-      result_text: string;
-      created_at: string;
-      prompt: string;
-    }>
-  >([]);
+
+  // ---- TanStack Query 数据查询 ----
+
+  // 会话列表
+  const {
+    data: sessionsData,
+    isLoading,
+    refetch: refetchSessions,
+  } = useGroupDiscussionSessions({
+    startDate: dateRange[0] || undefined,
+    endDate: dateRange[1] || undefined,
+    className: className.trim() || undefined,
+    groupNo: groupNo.trim() || undefined,
+    groupName: groupName.trim() || undefined,
+    userName: userName.trim() || undefined,
+    page,
+    size: pageSize,
+  });
+  const sessions = useMemo(() => sessionsData?.items ?? [], [sessionsData?.items]);
+  const total = sessionsData?.total ?? 0;
+
+  // 公共配置
+  const { data: publicConfig } = useDiscussionPublicConfig();
+  const frontendVisible = Boolean(publicConfig?.enabled);
+
+  // 全部智能体（下拉选择用）
+  const { data: agentsData } = useAllAgents();
+  const agents = useMemo(() => agentsData?.items ?? [], [agentsData?.items]);
+
+  // 会话消息（弹窗内）
+  const { data: messages, isLoading: messagesLoading } = useGroupDiscussionMessages(
+    currentSession?.id,
+    sessionModalOpen,
+  );
+  const safeMessages = messages ?? [];
+
+  // 会话成员（弹窗内）
+  const { data: membersData, isLoading: membersLoading } = useGroupDiscussionMembers(
+    currentSession?.id,
+    sessionModalOpen,
+  );
+  const members = membersData?.items ?? [];
+
+  // 分析历史（弹窗内）
+  const { data: analyses, isLoading: analysesLoading } = useGroupDiscussionAnalyses(
+    currentSession?.id,
+    sessionModalOpen,
+  );
+  const safeAnalyses = analyses ?? [];
 
   const [compareVisible, setCompareVisible] = useState(false);
   const [compareForm, setCompareForm] = useState<CompareFormState>(() => createCompareFormState(null, "learning_compare"));
@@ -183,47 +213,6 @@ const GroupDiscussionAdminTab: React.FC = () => {
     });
   }, [selectedAgentId]);
 
-  const loadAgents = useCallback(async () => {
-    const res = await aiAgentsApi.getAgents({ limit: 200 });
-    if (!res.success) return;
-    setAgents(res.data.items || []);
-  }, []);
-
-  const loadPublicConfig = useCallback(async () => {
-    setFrontendVisibleLoading(true);
-    try {
-      const res = await groupDiscussionApi.getPublicConfig();
-      if (!res.success) return;
-      setFrontendVisible(Boolean(res.data.enabled));
-    } finally {
-      setFrontendVisibleLoading(false);
-    }
-  }, []);
-
-  const loadSessions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await groupDiscussionApi.adminListSessions({
-        startDate: dateRange[0] || undefined,
-        endDate: dateRange[1] || undefined,
-        className: className.trim() || undefined,
-        groupNo: groupNo.trim() || undefined,
-        groupName: groupName.trim() || undefined,
-        userName: userName.trim() || undefined,
-        page,
-        size: pageSize,
-      });
-      if (!res.success) {
-        showMessage.error(res.message || "加载失败");
-        return;
-      }
-      setSessions(res.data.items || []);
-      setTotal(res.data.total || 0);
-    } finally {
-      setLoading(false);
-    }
-  }, [dateRange, className, groupNo, groupName, userName, page, pageSize]);
-
   const handleDeleteSession = useCallback(
     async (row: SessionRow) => {
       setDeletingSessionId(row.id);
@@ -236,18 +225,15 @@ const GroupDiscussionAdminTab: React.FC = () => {
         if (currentSession?.id === row.id) {
           setSessionModalOpen(false);
           setCurrentSession(null);
-          setMessages([]);
-          setMembers([]);
-          setAnalyses([]);
           setAnalysisResult("");
         }
         showMessage.success("删除成功");
-        loadSessions();
+        void queryClient.invalidateQueries({ queryKey: [...queryKeys.discussion.all, "sessions"] });
       } finally {
         setDeletingSessionId(null);
       }
     },
-    [currentSession?.id, loadSessions],
+    [currentSession?.id, queryClient],
   );
 
   const handleBatchDeleteSessions = useCallback(async () => {
@@ -262,97 +248,25 @@ const GroupDiscussionAdminTab: React.FC = () => {
       if (currentSession?.id && selectedSessionIds.includes(currentSession.id)) {
         setSessionModalOpen(false);
         setCurrentSession(null);
-        setMessages([]);
-        setMembers([]);
-        setAnalyses([]);
         setAnalysisResult("");
       }
       setSelectedSessionIds([]);
       showMessage.success(`已删除 ${res.data} 个会话`);
-      loadSessions();
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.discussion.all, "sessions"] });
     } finally {
       setBatchDeleting(false);
     }
-  }, [currentSession?.id, loadSessions, selectedSessionIds]);
+  }, [currentSession?.id, queryClient, selectedSessionIds]);
 
-  useEffect(() => {
-    loadPublicConfig();
-  }, [loadPublicConfig]);
-
-  const loadMessages = useCallback(async () => {
-    if (!currentSession) return;
-    setMessagesLoading(true);
-    try {
-      const res = await groupDiscussionApi.adminListMessages({
-        sessionId: currentSession.id,
-        page: 1,
-        size: 500,
-      });
-      if (!res.success) {
-        showMessage.error(res.message || "加载消息失败");
-        return;
-      }
-      setMessages(res.data.items || []);
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, [currentSession]);
-
-  const loadMembers = useCallback(async () => {
-    if (!currentSession) return;
-    setMembersLoading(true);
-    try {
-      const res = await groupDiscussionApi.adminListMembers({
-        sessionId: currentSession.id,
-      });
-      if (!res.success) {
-        showMessage.error(res.message || "加载成员失败");
-        return;
-      }
-      setMembers(res.data.items || []);
-    } finally {
-      setMembersLoading(false);
-    }
-  }, [currentSession]);
-
-  const loadAnalyses = useCallback(async () => {
-    if (!currentSession) return;
-    setAnalysesLoading(true);
-    try {
-      const res = await groupDiscussionApi.adminListAnalyses({
-        sessionId: currentSession.id,
-        limit: 20,
-      });
-      if (!res.success) {
-        showMessage.error(res.message || "加载分析历史失败");
-        return;
-      }
-      setAnalyses(res.data.items || []);
-    } finally {
-      setAnalysesLoading(false);
-    }
-  }, [currentSession]);
-
-  useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
-
-  useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
-
-  useAdminSSE("discussion_changed", loadSessions);
-
-  useEffect(() => {
-    if (!sessionModalOpen) return;
-    loadMessages();
-    loadMembers();
-    loadAnalyses();
-  }, [sessionModalOpen, loadMessages, loadMembers, loadAnalyses]);
+  // SSE 实时更新
+  useAdminSSE("discussion_changed", () => {
+    void queryClient.invalidateQueries({ queryKey: [...queryKeys.discussion.all, "sessions"] });
+    void queryClient.invalidateQueries({ queryKey: [...queryKeys.discussion.all, "messages"] });
+    void queryClient.invalidateQueries({ queryKey: [...queryKeys.discussion.all, "members"] });
+  });
 
   const openSessionModal = useCallback((session: SessionRow, tab: "messages" | "analysis") => {
     setCurrentSession(session);
-    setMessages([]);
     setAnalysisResult("");
     resetAnalysisForm("learning_topics");
     setSessionModalTab(tab);
@@ -379,7 +293,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       }
       setAnalysisResult(res.data.result_text || "");
       showMessage.success("分析完成");
-      loadAnalyses();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.analyses(currentSession.id) });
     } finally {
       setAnalysisLoading(false);
     }
@@ -476,7 +390,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
     }
 
     const timer = window.setTimeout(() => {
-      handleSearchUsers(keyword);
+      void handleSearchUsers(keyword);
     }, 300);
 
     return () => window.clearTimeout(timer);
@@ -493,7 +407,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       if (res.success) {
         showMessage.success("添加成功");
         setAddMemberVisible(false);
-        loadMembers();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.members(currentSession.id) });
       } else {
         showMessage.error(res.message || "添加失败");
       }
@@ -512,7 +426,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
         });
         if (res.success) {
           showMessage.success("移除成功");
-          loadMembers();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.members(currentSession.id) });
         } else {
           showMessage.error(res.message || "移除失败");
         }
@@ -565,7 +479,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       });
       if (res.success) {
         showMessage.success("解除禁言成功");
-        loadMembers();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.members(currentSession.id) });
       } else {
         showMessage.error(res.message || "解除禁言失败");
       }
@@ -592,7 +506,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
       if (res.success) {
         showMessage.success("禁言成功");
         setMuteState((s) => ({ ...s, visible: false }));
-        loadMembers();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.members(currentSession.id) });
       } else {
         showMessage.error(res.message || "禁言失败");
       }
@@ -729,7 +643,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             size="sm"
             disabled={deletingSessionId === row.original.id}
             onClick={() => {
-              setConfirmState({ message: "确认删除该会话吗？将同时删除消息、成员和分析记录，且不可恢复。", onOk: () => { handleDeleteSession(row.original); } });
+              setConfirmState({ message: "确认删除该会话吗？将同时删除消息、成员和分析记录，且不可恢复。", onOk: () => { void handleDeleteSession(row.original); } });
             }}
           >
             {deletingSessionId === row.original.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -824,13 +738,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
               size="sm"
               variant="outline"
               disabled={profileLoadingUserId === member.user_id}
-              onClick={() => handleGenerateProfile(member)}
+              onClick={() => void handleGenerateProfile(member)}
             >
               {profileLoadingUserId === member.user_id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               画像
             </Button>
             {isMuted ? (
-              <Button size="sm" variant="outline" onClick={() => handleUnmuteClick(member)}>
+              <Button size="sm" variant="outline" onClick={() => void handleUnmuteClick(member)}>
                 解除禁言
               </Button>
             ) : (
@@ -916,13 +830,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </div>
 
             <Button
-              disabled={loading}
+              disabled={isLoading}
               onClick={() => {
                 setPage(1);
-                loadSessions();
+                void refetchSessions();
               }}
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               查询
             </Button>
           </div>
@@ -1009,7 +923,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       showMessage.error(res.message || "设置失败");
                       return;
                     }
-                    setFrontendVisible(Boolean(res.data.enabled));
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.discussion.publicConfig() });
                     showMessage.success(`学生端小组讨论已${res.data.enabled ? "开启" : "关闭"}`);
                   } finally {
                     setFrontendVisibleLoading(false);
@@ -1025,8 +939,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <AdminTablePanel
-            loading={loading}
-            isEmpty={!loading && sessions.length === 0}
+            loading={isLoading}
+            isEmpty={!isLoading && sessions.length === 0}
             emptyDescription="暂无数据"
           >
             <DataTable table={sessionsTable} tableClassName="min-w-[980px]" />
@@ -1069,11 +983,11 @@ const GroupDiscussionAdminTab: React.FC = () => {
                     <div className="flex items-center gap-2 text-sm text-text-tertiary">
                       <Loader2 className="h-4 w-4 animate-spin" />加载中...
                     </div>
-                  ) : messages.length === 0 ? (
+                  ) : safeMessages.length === 0 ? (
                     <p className="text-sm text-text-tertiary">暂无消息</p>
                   ) : (
                     <div className="space-y-2.5">
-                      {messages.map((message) => (
+                      {safeMessages.map((message) => (
                         <div key={message.id} className="flex justify-start">
                           <div className="max-w-[92%]">
                             <div className="mb-1 flex justify-between gap-2.5">
@@ -1269,11 +1183,11 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       <div className="flex items-center gap-2 text-sm text-text-tertiary">
                         <Loader2 className="h-4 w-4 animate-spin" />加载中...
                       </div>
-                    ) : analyses.length === 0 ? (
+                    ) : safeAnalyses.length === 0 ? (
                       <p className="text-sm text-text-tertiary">暂无历史记录</p>
                     ) : (
                       <div className="space-y-2">
-                        {analyses.map((analysis) => (
+                        {safeAnalyses.map((analysis) => (
                           <div
                             key={analysis.id}
                             className="cursor-pointer rounded-lg border border-border bg-surface p-2.5 transition hover:bg-[var(--ws-color-hover-bg)]"

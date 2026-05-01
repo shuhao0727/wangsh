@@ -142,7 +142,7 @@ const ArticleDetailPage: React.FC = () => {
       }
     };
 
-    fetchArticle();
+    void fetchArticle();
 
     return () => {
       isMounted = false;
@@ -159,7 +159,7 @@ const ArticleDetailPage: React.FC = () => {
         payload.oldSlug === currentSlug &&
         payload.newSlug !== currentSlug
       ) {
-        navigate(`/articles/${payload.newSlug}`, { replace: true });
+        void navigate(`/articles/${payload.newSlug}`, { replace: true });
         return;
       }
 
@@ -232,7 +232,7 @@ const ArticleDetailPage: React.FC = () => {
   }, [article?.content, article?.title]);
 
   const handleBack = () => {
-    navigate("/articles");
+    void navigate("/articles");
   };
 
   const scrollToTocItem = (id: string) => {
@@ -407,7 +407,7 @@ const ArticleDetailPage: React.FC = () => {
             <div className="text-center px-5 py-16">
               <div className="mb-6 text-5xl text-text-secondary">📝</div>
               <h3 className="mb-4 text-2xl font-semibold text-text-secondary">文章内容正在建设中</h3>
-              <p className="mx-auto max-w-[500px] text-sm text-text-secondary">
+              <p className="mx-auto max-w-prose text-sm text-text-secondary">
                 这篇文章的详细内容正在编写中，敬请期待。
               </p>
             </div>

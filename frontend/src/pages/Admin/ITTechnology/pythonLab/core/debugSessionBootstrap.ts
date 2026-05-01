@@ -16,7 +16,8 @@ import {
   type PythonLabCreateSessionResponse,
   type PythonLabSessionMeta,
 } from "../services/pythonlabSessionApi";
-import { DebugController, type DapMessage } from "./DebugController";
+import type { DebugController} from "./DebugController";
+import { type DapMessage } from "./DebugController";
 
 type TraceLifecycle = (phase: string, extra?: Record<string, unknown>) => void;
 

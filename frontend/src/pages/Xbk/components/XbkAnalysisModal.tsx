@@ -242,7 +242,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
         setLoading(false);
       }
     };
-    fetchData();
+    void fetchData();
   }, [open, filters]);
 
   const filteredCourseStats = useMemo(() => {

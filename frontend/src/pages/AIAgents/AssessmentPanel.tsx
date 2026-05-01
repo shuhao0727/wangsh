@@ -316,7 +316,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   }, [userId]);
 
   useEffect(() => {
-    if (open && view === "list") loadAvailable();
+    if (open && view === "list") void loadAvailable();
   }, [open, view, loadAvailable]);
 
   // ─── 开始/继续检测 ───
@@ -689,7 +689,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         {/* 题目内容 */}
         <div className="flex-1 overflow-y-auto p-3">
           <Badge
-            variant={q.question_type === "choice" ? "sky" : q.question_type === "fill" ? "success" : "warning"}
+            variant={q.question_type === "choice" ? "info" : q.question_type === "fill" ? "success" : "warning"}
             className="mb-2 border-none"
           >
             {q.question_type === "choice" ? "选择题" : q.question_type === "fill" ? "填空题" : "简答题"} ({q.score}分)

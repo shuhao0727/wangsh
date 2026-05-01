@@ -1,9 +1,21 @@
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { logger } from "@services/logger";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import type { PyodideTerminalBridge } from "../hooks/usePyodideRunner";
+import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
+
+interface XTermInternal {
+  element?: HTMLElement;
+  buffer?: { active?: { viewportY?: number; cursorX?: number } };
+  rows?: number;
+  onRender?: (cb: () => void) => { dispose: () => void };
+}
+
+interface DebugWindow {
+  __PYTHONLAB_TERMINAL_TRACE__?: boolean;
+}
 
 export type PyodideTerminalHandle = {
   clear: () => void;
@@ -18,6 +30,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const [_gutterDigits, setGutterDigits] = useState(2);
     const gutterRafRef = useRef<number | null>(null);
     const hostRef = useRef<HTMLDivElement | null>(null);
+    const isDark = useDocumentDarkMode();
     const termRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
     const fitRafRef = useRef<number | null>(null);
@@ -27,10 +40,12 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const [canInit, setCanInit] = useState(false);
     const termEpochRef = useRef(0);
     const terminalDisposedRef = useRef(true);
+    const isDarkRef = useRef(isDark);
+    isDarkRef.current = isDark;
     const trace = useCallback((phase: string, extra?: Record<string, unknown>) => {
       try {
         const enabled =
-          Boolean((window as any).__PYTHONLAB_TERMINAL_TRACE__) ||
+          Boolean((window as unknown as DebugWindow).__PYTHONLAB_TERMINAL_TRACE__) ||
           window.localStorage?.getItem("pythonlab:terminal:trace") === "1";
         if (!enabled) return;
         logger.info("[pythonlab:terminal:pyodide]", {
@@ -42,10 +57,26 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         });
       } catch {}
     }, []);
+    const readTerminalTheme = useCallback(() => {
+      const dark = isDarkRef.current;
+      const readToken = (name: string, fallback: string) => {
+        try {
+          return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+        } catch {
+          return fallback;
+        }
+      };
+      return {
+        background: readToken("--ws-color-bg", dark ? "#0f1117" : "#ffffff"),
+        foreground: readToken("--ws-color-text", dark ? "#e4e6ed" : "#000000"),
+        cursor: readToken("--ws-color-text", dark ? "#e4e6ed" : "#000000"),
+        selectionBackground: "rgba(37, 99, 235, 0.2)",
+      };
+    }, []);
 
     const refreshGutter = useCallback(() => {
       if (!showLineNumbersOn) return;
-      const term = termRef.current as any;
+      const term = termRef.current as unknown as XTermInternal;
       if (!term) return;
       const active = term.buffer?.active;
       const viewportY = typeof active?.viewportY === "number" ? active.viewportY : 0;
@@ -73,7 +104,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       try {
         const host = hostRef.current;
         const fit = fitRef.current;
-        const termAny = termRef.current as any;
+        const termAny = termRef.current as unknown as XTermInternal;
         if (!host || !fit || !termAny) return;
         if (terminalDisposedRef.current) return;
         if (expectedEpoch !== termEpochRef.current) return;
@@ -116,7 +147,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           const t = termRef.current;
           if (!t) return;
           if (terminalDisposedRef.current) return;
-          if (!(t as any).element || !(t as any).element.isConnected) return;
+          if (!(t as unknown as XTermInternal).element?.isConnected) return;
           trace("imperative_clear");
           clearingRef.current = true;
           inputBufRef.current = "";
@@ -131,8 +162,8 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           const t = termRef.current;
           if (!t) return;
           if (terminalDisposedRef.current) return;
-          if (!(t as any).element || !(t as any).element.isConnected) return;
-          const cx = (t as any).buffer?.active?.cursorX;
+          if (!(t as unknown as XTermInternal).element?.isConnected) return;
+          const cx = (t as unknown as XTermInternal).buffer?.active?.cursorX;
           if (typeof cx === "number" && cx === 0) return;
           trace("imperative_newline");
           try {
@@ -144,33 +175,10 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       [scheduleRefreshGutter, trace, writeClearScreen]
     );
 
-    const theme = useMemo(
-      () => ({
-        background: (() => {
-          try {
-            return getComputedStyle(document.documentElement).getPropertyValue("--ws-color-surface").trim() || "#ffffff";
-          } catch {
-            return "#ffffff";
-          }
-        })(),
-        foreground: (() => {
-          try {
-            return getComputedStyle(document.documentElement).getPropertyValue("--ws-color-text").trim() || "#000000";
-          } catch {
-            return "#000000";
-          }
-        })(),
-        cursor: (() => {
-          try {
-            return getComputedStyle(document.documentElement).getPropertyValue("--ws-color-text").trim() || "#000000";
-          } catch {
-            return "#000000";
-          }
-        })(),
-        selectionBackground: "rgba(37, 99, 235, 0.2)",
-      }),
-      []
-    );
+    useEffect(() => {
+      if (!termRef.current) return;
+      termRef.current.options.theme = readTerminalTheme();
+    }, [isDark, readTerminalTheme]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -209,7 +217,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       fontSize,
       lineHeight: 1.35,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      theme,
+      theme: readTerminalTheme(),
       convertEol: true,
       cursorBlink: true,
       scrollback: 4000,
@@ -243,7 +251,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const dispose = bridge.subscribe((s) => {
       try {
         if (terminalDisposedRef.current) return;
-        if (!termRef.current || !(termRef.current as any).element || !(termRef.current as any).element.isConnected) return;
+        if (!termRef.current || !(termRef.current as unknown as XTermInternal).element?.isConnected) return;
         trace("bridge_write", { size: String(s).length });
         term.write(String(s));
         scheduleRefreshGutter();
@@ -254,7 +262,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       const t = termRef.current;
       if (!t) return;
       if (terminalDisposedRef.current) return;
-      if (!(t as any).element || !(t as any).element.isConnected) return;
+      if (!(t as unknown as XTermInternal).element?.isConnected) return;
       trace("on_data", { size: data?.length ?? 0 });
       if (data === "\r") {
         t.write("\r\n");
@@ -287,7 +295,8 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     });
 
     const scrollDisposable = term.onScroll(() => scheduleRefreshGutter());
-    const renderDisposable = (term as any).onRender ? (term as any).onRender(() => scheduleRefreshGutter()) : null;
+    const te = term as unknown as XTermInternal;
+    const renderDisposable = te.onRender ? te.onRender(() => scheduleRefreshGutter()) : null;
     scheduleRefreshGutter();
 
     return () => {
@@ -327,17 +336,17 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       } catch {}
       trace("terminal_cleanup_done");
     };
-  }, [bridge, canInit, fontSize, requestFit, scheduleRefreshGutter, theme, trace]);
+  }, [bridge, canInit, fontSize, readTerminalTheme, requestFit, scheduleRefreshGutter, trace]);
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden" }} onClick={() => termRef.current?.focus()}>
+    <div style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden", background: "var(--ws-color-bg)" }} onClick={() => termRef.current?.focus()}>
       {showLineNumbersOn ? (
         <div
           style={{
             width: "30px",
             padding: "14px 0 12px 0",
-            background: "#ffffff",
-            color: "#237893",
+            background: "var(--ws-color-bg)",
+            color: "color-mix(in srgb, var(--ws-color-primary) 70%, var(--ws-color-text-secondary))",
             borderRight: "1px solid var(--ws-color-border-secondary)",
             overflow: "hidden",
             boxSizing: "border-box",
@@ -351,7 +360,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
           <pre style={{ margin: 0, paddingRight: 2, fontSize, lineHeight: 1.35, textAlign: "right", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", opacity: 0.6 }}>{gutterText}</pre>
         </div>
       ) : null}
-      <div ref={hostRef} style={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden", paddingLeft: 12, paddingTop: 12 }} />
+      <div ref={hostRef} style={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden", paddingLeft: 12, paddingTop: 12, background: "var(--ws-color-bg)" }} />
     </div>
   );
   }

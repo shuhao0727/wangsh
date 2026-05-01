@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { planApi } from "@services/classroomPlan";
+import { queryKeys } from "./queryKeys";
 
+/** @deprecated Use queryKeys.classroomPlans instead */
 export const PLAN_QUERY_KEY = "classroom-plans";
 
 export function usePlansList(params: { skip: number; limit: number }) {
   return useQuery({
-    queryKey: [PLAN_QUERY_KEY, params],
+    queryKey: queryKeys.classroomPlans.list(params),
     queryFn: () => planApi.list(params.skip, params.limit),
     placeholderData: (prev) => prev,
   });
@@ -13,7 +15,7 @@ export function usePlansList(params: { skip: number; limit: number }) {
 
 export function usePlanDetail(id: number | null) {
   return useQuery({
-    queryKey: [PLAN_QUERY_KEY, "detail", id],
+    queryKey: queryKeys.classroomPlans.detail(id!),
     queryFn: () => planApi.get(id!),
     enabled: id != null,
   });
@@ -25,7 +27,7 @@ export function useCreatePlan() {
     mutationFn: ({ title, activity_ids }: { title: string; activity_ids: number[] }) =>
       planApi.create(title, activity_ids),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -36,7 +38,7 @@ export function useUpdatePlan() {
     mutationFn: ({ id, title, activity_ids }: { id: number; title?: string; activity_ids?: number[] }) =>
       planApi.update(id, title, activity_ids),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -46,7 +48,7 @@ export function useDeletePlan() {
   return useMutation({
     mutationFn: (id: number) => planApi.remove(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -56,7 +58,7 @@ export function useStartPlan() {
   return useMutation({
     mutationFn: (id: number) => planApi.start(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -66,7 +68,7 @@ export function useResetPlan() {
   return useMutation({
     mutationFn: (id: number) => planApi.reset(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -76,7 +78,7 @@ export function useNextPlanItem() {
   return useMutation({
     mutationFn: (id: number) => planApi.next(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -86,7 +88,7 @@ export function useEndPlan() {
   return useMutation({
     mutationFn: (id: number) => planApi.end(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -97,7 +99,7 @@ export function useStartPlanItem() {
     mutationFn: ({ planId, itemId }: { planId: number; itemId: number }) =>
       planApi.startItem(planId, itemId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }
@@ -108,7 +110,7 @@ export function useEndPlanItem() {
     mutationFn: ({ planId, itemId }: { planId: number; itemId: number }) =>
       planApi.endItem(planId, itemId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
     },
   });
 }

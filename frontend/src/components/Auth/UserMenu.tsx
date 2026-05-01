@@ -192,7 +192,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
           <DropdownMenuItem
             onClick={() => {
               handleMenuClick("/ai-agents");
-              navigate("/ai-agents");
+              void navigate("/ai-agents");
             }}
           >
             <Bot className="mr-2 h-4 w-4" />
@@ -205,7 +205,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
         <DropdownMenuItem
           onClick={() => {
             handleMenuClick("/home");
-            navigate("/home");
+            void navigate("/home");
           }}
         >
           <Home className="mr-2 h-4 w-4" />
@@ -216,8 +216,8 @@ const UserMenu: React.FC<UserMenuProps> = ({
           className="text-destructive focus:text-destructive"
           onClick={() => {
             handleMenuClick("logout");
-            auth.logout();
-            navigate("/home");
+            void auth.logout();
+            void navigate("/home");
           }}
         >
           <LogOut className="mr-2 h-4 w-4" />

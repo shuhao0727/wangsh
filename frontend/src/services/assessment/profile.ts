@@ -10,6 +10,11 @@ interface ApiErrorShape {
   message?: string;
   response?: { data?: { detail?: unknown } };
 }
+interface ValidationErrorItem {
+  loc?: unknown;
+  msg?: unknown;
+  message?: unknown;
+}
 const asApiError = (e: unknown): ApiErrorShape =>
   (e && typeof e === "object" ? e : {}) as ApiErrorShape;
 
@@ -17,7 +22,7 @@ const toDetailMessage = (detail: unknown): string | undefined => {
   if (!detail) return undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    return detail.map((d: any) => {
+    return detail.map((d: string | ValidationErrorItem) => {
       if (typeof d === "string") return d;
       const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
       const msg = String(d?.msg || d?.message || "");
@@ -77,7 +82,7 @@ export const profileApi = {
   generate: async (data: ProfileGenerateRequest): Promise<StudentProfile> => {
     try {
       const resp = await api.post(`${ADMIN_BASE}/profiles/generate`, data, { timeout: 120000 });
-      return resp.data as any;
+      return resp.data as unknown as StudentProfile;
     } catch (error) {
       logger.error("生成画像失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "生成画像失败");
@@ -88,7 +93,7 @@ export const profileApi = {
   batchGenerate: async (data: ProfileBatchGenerateRequest): Promise<{ items: StudentProfile[]; count: number }> => {
     try {
       const resp = await api.post(`${ADMIN_BASE}/profiles/batch-generate`, data, { timeout: 120000 });
-      return resp.data as any;
+      return resp.data as unknown as { items: StudentProfile[]; count: number };
     } catch (error) {
       logger.error("批量生成画像失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "批量生成画像失败");
@@ -97,11 +102,15 @@ export const profileApi = {
 
   // Admin: 画像列表
   list: async (params?: {
-    skip?: number; limit?: number; profile_type?: string; target_id?: string;
+    skip?: number;
+    limit?: number;
+    profile_type?: string;
+    target_id?: string;
+    config_id?: number;
   }): Promise<ProfileListResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/profiles`, { params });
-      return resp.data as any;
+      return resp.data as unknown as ProfileListResponse;
     } catch (error) {
       logger.error("获取画像列表失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取画像列表失败");
@@ -112,7 +121,7 @@ export const profileApi = {
   get: async (id: number): Promise<StudentProfile> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/profiles/${id}`);
-      return resp.data as any;
+      return resp.data as unknown as StudentProfile;
     } catch (error) {
       logger.error("获取画像详情失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取画像详情失败");
@@ -133,7 +142,7 @@ export const profileApi = {
   getMyProfiles: async (params?: { skip?: number; limit?: number }): Promise<ProfileListResponse> => {
     try {
       const resp = await api.get(`${BASE}/my-profiles`, { params });
-      return resp.data as any;
+      return resp.data as unknown as ProfileListResponse;
     } catch (error) {
       logger.error("获取我的画像失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取我的画像失败");
@@ -144,7 +153,7 @@ export const profileApi = {
   getMyProfile: async (id: number): Promise<StudentProfile> => {
     try {
       const resp = await api.get(`${BASE}/my-profiles/${id}`);
-      return resp.data as any;
+      return resp.data as unknown as StudentProfile;
     } catch (error) {
       logger.error("获取画像详情失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取画像详情失败");

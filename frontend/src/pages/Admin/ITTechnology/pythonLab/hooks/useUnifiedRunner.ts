@@ -68,12 +68,12 @@ export function useUnifiedRunner(params: {
   }, [activeKind]);
 
   const resetAll = useCallback(() => {
-    dapRef.current.reset?.();
-    pyRef.current.reset?.();
+    void dapRef.current.reset?.();
+    void pyRef.current.reset?.();
   }, []);
 
   const syncBreakpoints = useCallback((bps: Breakpoint[]) => {
-    dapRef.current.setBreakpoints?.(bps);
+    void dapRef.current.setBreakpoints?.(bps);
   }, []);
 
   const syncWatchExprs = useCallback((exprs: string[]) => {

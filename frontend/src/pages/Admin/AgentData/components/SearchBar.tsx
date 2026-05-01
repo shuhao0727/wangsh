@@ -22,6 +22,7 @@ interface SearchBarProps {
   onReset: () => void;
   onExport?: () => void;
   exportDisabled?: boolean;
+  exportLoading?: boolean;
 }
 
 const DEFAULT_FILTER_OPTIONS = {
@@ -52,13 +53,13 @@ const EMPTY_FORM: FormState = {
   end_date: "",
 };
 
-const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, onExport, exportDisabled }) => {
+const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, onExport, exportDisabled, exportLoading }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
 
   useEffect(() => {
-    agentDataApi.getFilterOptions().then((res) => {
+    void agentDataApi.getFilterOptions().then((res) => {
       if (res.success) {
         setFilterOptions({
           grades: res.data.grades || [],
@@ -143,7 +144,15 @@ const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, 
           ) : null}
         </Button>
         {onExport ? (
-          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={onExport} disabled={exportDisabled}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0"
+            onClick={onExport}
+            disabled={exportDisabled || exportLoading}
+            aria-label={exportLoading ? "正在导出选中会话" : "导出选中会话"}
+          >
             <Download className="h-3.5 w-3.5" />
           </Button>
         ) : null}

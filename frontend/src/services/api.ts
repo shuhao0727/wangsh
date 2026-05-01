@@ -3,7 +3,8 @@
  * 基于配置的统一 API 调用封装
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
+import axios from "axios";
 import { config } from "./config";
 import { logger } from "./logger";
 

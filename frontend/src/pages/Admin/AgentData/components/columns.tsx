@@ -35,12 +35,12 @@ const agentTypeConfig = {
   general: {
     text: "通用",
     icon: <Bot className="h-4 w-4" />,
-    variant: "primarySubtle" as const,
+    variant: "info" as const,
   },
   dify: {
     text: "Dify",
     icon: <Bot className="h-4 w-4" />,
-    variant: "violet" as const,
+    variant: "purple" as const,
   },
   default: {
     text: "未知",

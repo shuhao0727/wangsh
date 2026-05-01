@@ -112,7 +112,7 @@ const useActiveAgentOptions = () => {
     if (cachedAgents && !isStale) return;
     if (cachedAgentsPromise && !isStale) {
       setLoadingAgents(true);
-      cachedAgentsPromise
+      void cachedAgentsPromise
         .then((list) => setAgents(list))
         .finally(() => setLoadingAgents(false));
       return;
@@ -140,7 +140,7 @@ const useActiveAgentOptions = () => {
         setLoadingAgents(false);
       }
     };
-    load();
+    void load();
   }, []);
 
   const agentOptions = useMemo<AgentOption[]>(

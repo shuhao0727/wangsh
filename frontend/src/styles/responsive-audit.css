@@ -120,9 +120,9 @@
 }
 
 @media (max-width: 430px) {
-  .main-content {
-    margin: 0 !important;
-    padding: var(--ws-space-2) !important;
+  .main-content:not(.main-content--full-height) {
+    margin: 0;
+    padding: var(--ws-space-2);
   }
 
   .informatics-page,
@@ -135,14 +135,14 @@
 }
 
 @media (min-width: 1366px) {
-  .main-content {
-    padding: var(--ws-space-4) !important;
+  .main-content:not(.main-content--full-height) {
+    padding: var(--ws-space-4);
   }
 }
 
 @media (min-width: 1920px) {
-  .main-content {
-    padding: var(--ws-space-5) !important;
+  .main-content:not(.main-content--full-height) {
+    padding: var(--ws-space-5);
   }
 
   .article-content {
@@ -151,8 +151,8 @@
 }
 
 @media (min-width: 2560px) {
-  .main-content {
-    padding-inline: clamp(28px, 2.6vw, 64px) !important;
+  .main-content:not(.main-content--full-height) {
+    padding-inline: clamp(28px, 2.6vw, 64px);
   }
 
   .article-content,

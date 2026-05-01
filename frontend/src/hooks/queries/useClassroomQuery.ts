@@ -1,8 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { classroomApi } from "@services/classroom";
 import type { ActivityCreateRequest, ActivityEndRequest } from "@services/classroom";
+import { queryKeys } from "./queryKeys";
 
+/** @deprecated Use queryKeys.classroom instead */
 export const CLASSROOM_QUERY_KEY = "classroom-activities";
+/** @deprecated Use queryKeys.activeAgents instead */
 export const ACTIVE_AGENTS_KEY = "active-agents";
 
 export function useClassroomList(params: {
@@ -11,7 +14,7 @@ export function useClassroomList(params: {
   status?: string;
 }) {
   return useQuery({
-    queryKey: [CLASSROOM_QUERY_KEY, params],
+    queryKey: queryKeys.classroom.list(params),
     queryFn: () => classroomApi.list(params),
     placeholderData: (prev) => prev,
   });
@@ -19,7 +22,7 @@ export function useClassroomList(params: {
 
 export function useActiveAgents() {
   return useQuery({
-    queryKey: [ACTIVE_AGENTS_KEY],
+    queryKey: queryKeys.activeAgents.all,
     queryFn: () => classroomApi.getActiveAgents(),
     staleTime: 5 * 60 * 1000,
   });
@@ -27,7 +30,7 @@ export function useActiveAgents() {
 
 export function useActivityDetail(id: number | null) {
   return useQuery({
-    queryKey: [CLASSROOM_QUERY_KEY, "detail", id],
+    queryKey: queryKeys.classroom.detail(id),
     queryFn: () => classroomApi.getDetail(id!),
     enabled: id != null,
   });
@@ -38,7 +41,7 @@ export function useCreateActivity() {
   return useMutation({
     mutationFn: (data: ActivityCreateRequest) => classroomApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -49,7 +52,7 @@ export function useUpdateActivity() {
     mutationFn: ({ id, data }: { id: number; data: Partial<ActivityCreateRequest> }) =>
       classroomApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -59,7 +62,7 @@ export function useDeleteActivity() {
   return useMutation({
     mutationFn: (id: number) => classroomApi.remove(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -69,7 +72,7 @@ export function useBulkDeleteActivities() {
   return useMutation({
     mutationFn: (ids: number[]) => classroomApi.bulkRemove(ids),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -79,7 +82,7 @@ export function useStartActivity() {
   return useMutation({
     mutationFn: (id: number) => classroomApi.start(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -90,7 +93,7 @@ export function useEndActivity() {
     mutationFn: ({ id, data }: { id: number; data?: ActivityEndRequest }) =>
       classroomApi.end(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -100,7 +103,7 @@ export function useDuplicateActivity() {
   return useMutation({
     mutationFn: (id: number) => classroomApi.duplicate(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }
@@ -110,7 +113,7 @@ export function useRestartActivity() {
   return useMutation({
     mutationFn: (id: number) => classroomApi.restart(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     },
   });
 }

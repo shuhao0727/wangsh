@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { dianmingApi, DianmingClass } from '@/services/xxjs/dianming';
+import type { DianmingClass } from '@/services/xxjs/dianming';
+import { dianmingApi } from '@/services/xxjs/dianming';
 import { logger } from '@/services/logger';
 import { Users } from 'lucide-react';
 import EmptyState from "@components/Common/EmptyState";
@@ -14,7 +15,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
   const [classes, setClasses] = useState<DianmingClass[]>([]);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       setLoading(true);
       try {
         const res = await dianmingApi.listClasses();

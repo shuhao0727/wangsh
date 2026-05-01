@@ -36,7 +36,7 @@ ENV PORT=6608
 COPY package*.json ./
 
 # 安装依赖（开发环境包含所有依赖）
-RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --include=dev --legacy-peer-deps
 
 # 复制源代码
 COPY . .
@@ -76,7 +76,7 @@ RUN npm config set registry https://registry.npmmirror.com/
 COPY package*.json ./
 
 # 安装依赖（生产环境）
-RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --include=dev --legacy-peer-deps
 
 # 复制源代码
 COPY . .

@@ -1,17 +1,32 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { copyFileSync } from "fs";
 import { join } from "path";
 
+type VisualizerModule = {
+  visualizer: (options: {
+    filename: string;
+    template: "treemap";
+    open: boolean;
+    gzipSize: boolean;
+    brotliSize: boolean;
+  }) => PluginOption;
+};
+
+const importOptionalModule = new Function(
+  "specifier",
+  "return import(specifier)"
+) as (specifier: string) => Promise<VisualizerModule>;
+
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
   // 加载 .env 文件
   const env = loadEnv(mode, process.cwd(), "");
+  const isAnalyze = process.env.ANALYZE === "true";
 
-  return {
-    plugins: [
-      react(),
+  const plugins: PluginOption[] = [
+    react(),
       // 自定义插件：复制 PDF worker 文件到构建输出目录
       {
         name: "copy-pdf-worker",
@@ -34,10 +49,25 @@ export default defineConfig(({ mode }) => {
           }
         },
       },
-    ],
+    ];
 
-    // 模块解析 — 继承自旧前端配置与 tsconfig.json 的路径别名
-    resolve: {
+    if (isAnalyze) {
+      const { visualizer } = await importOptionalModule("rollup-plugin-visualizer");
+      plugins.push(
+        visualizer({
+          filename: "build/stats.html",
+          template: "treemap",
+          open: false,
+          gzipSize: true,
+          brotliSize: true,
+        })
+      );
+    }
+
+    return {
+      plugins,
+      // 模块解析 — 继承自旧前端配置与 tsconfig.json 的路径别名
+      resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),
         "@components": path.resolve(__dirname, "src/components"),
@@ -102,6 +132,13 @@ export default defineConfig(({ mode }) => {
 
             const isPackage = (name: string) =>
               modulePath === name || modulePath.startsWith(`${name}/`);
+
+            if (
+              isPackage("@monaco-editor/react") ||
+              isPackage("monaco-editor")
+            ) {
+              return "monaco-vendor";
+            }
 
             if (
               isPackage("react") ||

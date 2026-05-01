@@ -60,7 +60,7 @@ const AdminSystem: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const handleNavToggle = async (item: typeof NAV_VISIBILITY_ITEMS[number], checked: boolean) => {
     setNavToggleLoading((prev) => ({ ...prev, [item.path]: true }));

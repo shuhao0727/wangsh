@@ -108,7 +108,7 @@ export const useAppMeta = (): AppMeta => {
           loadingPromise = null;
         });
     }
-    loadingPromise.then((m) => {
+    void loadingPromise.then((m) => {
       if (mounted) setMeta(m);
     });
     return () => {

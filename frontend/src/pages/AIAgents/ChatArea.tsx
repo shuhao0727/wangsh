@@ -209,7 +209,7 @@ const MessageBubble = React.memo<{
                               ? "success"
                               : n.status === "error"
                                 ? "danger"
-                                : "sky"
+                                : "info"
                           }
                           className="min-w-12 justify-center border-none"
                         >
@@ -467,7 +467,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <div className="flex items-center gap-2">
             {isStreaming && (
               <>
-                <Badge variant="sky">
+                <Badge variant="info">
                   <TimerDisplay startTime={streamStartTime || null} isRunning={true} prefix="执行中 " />
                 </Badge>
                 <Button size="sm" variant="destructive" onClick={onStopStream}>停止</Button>

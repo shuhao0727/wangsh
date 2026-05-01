@@ -15,7 +15,7 @@ const PersonalProgramsPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    void (async () => {
       try {
         const config = await xbkPublicConfigApi.get();
         if (!mounted) return;

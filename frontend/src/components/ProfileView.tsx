@@ -189,7 +189,7 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
 const DATA_SOURCE_MAP: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }> = {
   assessment: { label: "测评数据", variant: "info" },
   discussion: { label: "讨论数据", variant: "success" },
-  agent_chat: { label: "AI对话", variant: "violet" },
+  agent_chat: { label: "AI对话", variant: "purple" },
 };
 
 function parseDataSources(raw: string | null): string[] {

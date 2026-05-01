@@ -17,7 +17,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
     if (auth.isLoading) return;
     const here = `${location.pathname}${location.search}${location.hash}`;
     if (!auth.isLoggedIn()) {
-      navigate(`/login?redirect=${encodeURIComponent(here)}`, { replace: true });
+      void navigate(`/login?redirect=${encodeURIComponent(here)}`, { replace: true });
       return;
     }
   }, [auth, location.hash, location.pathname, location.search, navigate]);
@@ -42,14 +42,14 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
           <div className="text-2xl font-bold text-text-base mb-2">权限不足</div>
           <div className="text-base text-text-secondary mb-6">需要管理员权限才能访问管理后台</div>
           <div className="flex items-center justify-center gap-3">
-            <Button onClick={() => navigate("/home", { replace: true })}>
+            <Button onClick={() => void navigate("/home", { replace: true })}>
               返回首页
             </Button>
             <Button
               variant="destructive"
               onClick={async () => {
                 await auth.logout();
-                navigate("/login?redirect=%2Fadmin%2Fdashboard", { replace: true });
+                void navigate("/login?redirect=%2Fadmin%2Fdashboard", { replace: true });
               }}
             >
               退出并切换账号

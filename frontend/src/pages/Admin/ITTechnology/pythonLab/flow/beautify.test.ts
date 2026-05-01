@@ -1,7 +1,10 @@
 import { vi } from "vitest";
+import type { FlowEdge, FlowNode } from "./model";
 import { applyPlainLayoutToCanvas, buildDot, computeBeautify, parsePlain, DEFAULT_BEAUTIFY_PARAMS } from "./beautify";
 import { __resetGraphvizForTest, __setGraphvizForTest } from "./graphviz";
 import { nodeSizeForTitle } from "./ports";
+
+type GraphvizLayoutCall = [dot: string, format: string, engine: string];
 
 test("parsePlain reads graph size and node centers", () => {
   const plain = [
@@ -37,16 +40,17 @@ test("computeBeautify renders svg/plain from the same DOT", async () => {
   __resetGraphvizForTest();
   __setGraphvizForTest({ layout: mockLayout });
 
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "a", shape: "process", title: "A", x: 0, y: 0 },
     { id: "b", shape: "process", title: "B", x: 0, y: 0 },
   ];
-  const edges: any[] = [{ id: "e1", from: "a", to: "b", style: "straight", label: "是" }];
+  const edges: FlowEdge[] = [{ id: "e1", from: "a", to: "b", style: "straight", label: "是" }];
 
-  const res = await computeBeautify(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const res = await computeBeautify(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
 
-  const svgCall = mockLayout.mock.calls.find((c: any[]) => c[1] === "svg");
-  const plainCall = mockLayout.mock.calls.find((c: any[]) => c[1] === "plain");
+  const layoutCalls = mockLayout.mock.calls as GraphvizLayoutCall[];
+  const svgCall = layoutCalls.find((c) => c[1] === "svg");
+  const plainCall = layoutCalls.find((c) => c[1] === "plain");
   expect(svgCall).toBeTruthy();
   expect(plainCall).toBeTruthy();
   expect(svgCall?.[0]).toBe(plainCall?.[0]);
@@ -75,21 +79,21 @@ test("computeBeautify output is deterministic for different nodes/edges array or
   __resetGraphvizForTest();
   __setGraphvizForTest({ layout: mockLayout });
 
-  const nodes1: any[] = [
+  const nodes1: FlowNode[] = [
     { id: "b", shape: "process", title: "B", x: 0, y: 0 },
     { id: "a", shape: "process", title: "A", x: 0, y: 0 },
     { id: "c", shape: "process", title: "C", x: 0, y: 0 },
   ];
-  const edges1: any[] = [
+  const edges1: FlowEdge[] = [
     { id: "e2", from: "a", to: "c", style: "straight", label: "否" },
     { id: "e1", from: "a", to: "b", style: "straight", label: "是" },
   ];
 
-  const nodes2: any[] = [nodes1[2], nodes1[0], nodes1[1]];
-  const edges2: any[] = [edges1[1], edges1[0]];
+  const nodes2: FlowNode[] = [nodes1[2], nodes1[0], nodes1[1]];
+  const edges2: FlowEdge[] = [edges1[1], edges1[0]];
 
-  const r1 = await computeBeautify(nodes1 as any, edges1 as any, DEFAULT_BEAUTIFY_PARAMS);
-  const r2 = await computeBeautify(nodes2 as any, edges2 as any, DEFAULT_BEAUTIFY_PARAMS);
+  const r1 = await computeBeautify(nodes1, edges1, DEFAULT_BEAUTIFY_PARAMS);
+  const r2 = await computeBeautify(nodes2, edges2, DEFAULT_BEAUTIFY_PARAMS);
 
   expect(r1.dot).toBe(r2.dot);
   expect(r1.svg).toBe(r2.svg);
@@ -99,21 +103,21 @@ test("computeBeautify output is deterministic for different nodes/edges array or
 });
 
 test("applyPlainLayoutToCanvas maps node centers into canvas x/y", () => {
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "a", shape: "process", title: "A", x: 0, y: 0 },
     { id: "b", shape: "process", title: "B", x: 0, y: 0 },
   ];
-  const edges: any[] = [{ id: "e1", from: "a", to: "b", style: "straight" }];
-  const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const edges: FlowEdge[] = [{ id: "e1", from: "a", to: "b", style: "straight" }];
+  const { nameById } = buildDot(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
   const plain = [
     "graph 4.0 3.0 1.0",
     "node n_1 1.0 2.0 0.5 0.3 A solid box black lightgrey",
     "node n_2 2.0 1.0 0.5 0.3 B solid box black lightgrey",
     "stop",
   ].join("\n");
-  const out = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById);
-  const a = out.nodes.find((n: any) => n.id === "a");
-  const b = out.nodes.find((n: any) => n.id === "b");
+  const out = applyPlainLayoutToCanvas(nodes, edges, plain, nameById);
+  const a = out.nodes.find((n: FlowNode) => n.id === "a");
+  const b = out.nodes.find((n: FlowNode) => n.id === "b");
   expect(a).toBeTruthy();
   expect(b).toBeTruthy();
   expect(typeof a?.x).toBe("number");
@@ -121,12 +125,12 @@ test("applyPlainLayoutToCanvas maps node centers into canvas x/y", () => {
 });
 
 test("applyPlainLayoutToCanvas writes FlowEdge.labelPosition from plain lp", () => {
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "a", shape: "process", title: "A", x: 0, y: 0 },
     { id: "b", shape: "process", title: "B", x: 0, y: 0 },
   ];
-  const edges: any[] = [{ id: "e1", from: "a", to: "b", style: "straight", label: "是" }];
-  const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const edges: FlowEdge[] = [{ id: "e1", from: "a", to: "b", style: "straight", label: "是" }];
+  const { nameById } = buildDot(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
 
   const from = nameById.get("a")!;
   const to = nameById.get("b")!;
@@ -139,8 +143,8 @@ test("applyPlainLayoutToCanvas writes FlowEdge.labelPosition from plain lp", () 
     "stop",
   ].join("\n");
 
-  const out = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById);
-  const e = out.edges.find((x: any) => x.id === "e1");
+  const out = applyPlainLayoutToCanvas(nodes, edges, plain, nameById);
+  const e = out.edges.find((x: FlowEdge) => x.id === "e1");
   expect(e).toBeTruthy();
   expect(e?.labelPosition).toBeTruthy();
   expect(e?.labelPosition?.x).toBeCloseTo(144);
@@ -148,12 +152,12 @@ test("applyPlainLayoutToCanvas writes FlowEdge.labelPosition from plain lp", () 
 });
 
 test("applyPlainLayoutToCanvas writes fromAttach/toAttach and does not force decision ports", () => {
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "d", shape: "decision", title: "D", x: 0, y: 0 },
     { id: "b", shape: "process", title: "B", x: 0, y: 0 },
   ];
-  const edges: any[] = [{ id: "e1", from: "d", to: "b", style: "straight", label: "否" }];
-  const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const edges: FlowEdge[] = [{ id: "e1", from: "d", to: "b", style: "straight", label: "否" }];
+  const { nameById } = buildDot(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
 
   const from = nameById.get("d")!;
   const to = nameById.get("b")!;
@@ -166,8 +170,8 @@ test("applyPlainLayoutToCanvas writes fromAttach/toAttach and does not force dec
     "stop",
   ].join("\n");
 
-  const out = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById);
-  const e = out.edges.find((x: any) => x.id === "e1");
+  const out = applyPlainLayoutToCanvas(nodes, edges, plain, nameById);
+  const e = out.edges.find((x: FlowEdge) => x.id === "e1");
   expect(e?.fromPort).toBeUndefined();
   expect(e?.toPort).toBeUndefined();
   expect(e?.fromAttach).toBeTruthy();
@@ -187,20 +191,20 @@ test("applyPlainLayoutToCanvas writes fromAttach/toAttach and does not force dec
 });
 
 test("if/else applyPlainLayoutToCanvas keeps branches left/right and labelPosition stable", () => {
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "cond", shape: "decision", title: "x % 2 == 0 ?", x: 0, y: 0 },
     { id: "then", shape: "process", title: "msg = 'even'", x: 0, y: 0 },
     { id: "else", shape: "process", title: "msg = 'odd'", x: 0, y: 0 },
     { id: "join", shape: "connector", title: "", x: 0, y: 0 },
   ];
-  const edges: any[] = [
+  const edges: FlowEdge[] = [
     { id: "e_yes", from: "cond", to: "then", style: "straight", label: "是" },
     { id: "e_no", from: "cond", to: "else", style: "straight", label: "否" },
     { id: "e_then", from: "then", to: "join", style: "straight" },
     { id: "e_else", from: "else", to: "join", style: "straight" },
   ];
 
-  const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const { nameById } = buildDot(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
 
   const heightIn = 12;
   const pxPerIn = 72;
@@ -264,13 +268,13 @@ test("if/else applyPlainLayoutToCanvas keeps branches left/right and labelPositi
   }
 
   const plain = [`graph 12 ${heightIn} 1.0`, ...nodeLines, ...lines, "stop"].join("\n");
-  const out1 = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById, { snapToGrid: false });
-  const out2 = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById, { snapToGrid: false });
+  const out1 = applyPlainLayoutToCanvas(nodes, edges, plain, nameById, { snapToGrid: false });
+  const out2 = applyPlainLayoutToCanvas(nodes, edges, plain, nameById, { snapToGrid: false });
 
   expect(out1.nodes).toEqual(out2.nodes);
   expect(out1.edges).toEqual(out2.edges);
 
-  const nodeById = new Map(out1.nodes.map((n: any) => [n.id, n] as const));
+  const nodeById = new Map(out1.nodes.map((n: FlowNode) => [n.id, n] as const));
   const cond = nodeById.get("cond")!;
   const thenN = nodeById.get("then")!;
   const elseN = nodeById.get("else")!;
@@ -278,8 +282,8 @@ test("if/else applyPlainLayoutToCanvas keeps branches left/right and labelPositi
   expect(elseN.x).toBeGreaterThan(cond.x);
   expect(thenN.x).toBeLessThan(elseN.x);
 
-  const yes = out1.edges.find((e: any) => e.id === "e_yes") as any;
-  const no = out1.edges.find((e: any) => e.id === "e_no") as any;
+  const yes = out1.edges.find((e: FlowEdge) => e.id === "e_yes") ;
+  const no = out1.edges.find((e: FlowEdge) => e.id === "e_no") ;
   expect(yes?.labelPosition).toEqual({ x: 240, y: 300 });
   expect(no?.labelPosition).toEqual({ x: 360, y: 300 });
   expect(yes?.fromPort).toBeUndefined();
@@ -289,7 +293,7 @@ test("if/else applyPlainLayoutToCanvas keeps branches left/right and labelPositi
 });
 
 test("while-loop beautify output is stable; anchors do not penetrate nodes; labelPosition exists", () => {
-  const nodes: any[] = [
+  const nodes: FlowNode[] = [
     { id: "start", shape: "start_end", title: "开始", x: 0, y: 0 },
     { id: "init", shape: "process", title: "i = 10", x: 0, y: 0 },
     { id: "cond", shape: "decision", title: "i >= 1 ?", x: 0, y: 0 },
@@ -297,7 +301,7 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
     { id: "dec", shape: "process", title: "i -= 1", x: 0, y: 0 },
     { id: "end", shape: "start_end", title: "结束", x: 0, y: 0 },
   ];
-  const edges: any[] = [
+  const edges: FlowEdge[] = [
     { id: "e1", from: "start", to: "init", style: "straight" },
     { id: "e2", from: "init", to: "cond", style: "straight" },
     { id: "e3", from: "cond", to: "body", style: "straight", label: "是" },
@@ -306,7 +310,7 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
     { id: "e6", from: "cond", to: "end", style: "straight", label: "否" },
   ];
 
-  const { nameById } = buildDot(nodes as any, edges as any, DEFAULT_BEAUTIFY_PARAMS);
+  const { nameById } = buildDot(nodes, edges, DEFAULT_BEAUTIFY_PARAMS);
   const heightIn = 10;
   const pxPerIn = 72;
   const _graphHPx = heightIn * pxPerIn;
@@ -395,13 +399,13 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
   }
 
   const plain = [`graph 9 10 1.0`, ...nodeLines, ...lines, "stop"].join("\n");
-  const out1 = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById);
-  const out2 = applyPlainLayoutToCanvas(nodes as any, edges as any, plain, nameById);
+  const out1 = applyPlainLayoutToCanvas(nodes, edges, plain, nameById);
+  const out2 = applyPlainLayoutToCanvas(nodes, edges, plain, nameById);
 
   expect(out1.nodes).toEqual(out2.nodes);
   expect(out1.edges).toEqual(out2.edges);
 
-  const rects = out1.nodes.map((n: any) => {
+  const rects = out1.nodes.map((n: FlowNode) => {
     const s = nodeSizeForTitle(n.shape, n.title);
     return { id: n.id as string, x: n.x as number, y: n.y as number, w: s.w, h: s.h };
   });
@@ -409,13 +413,15 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
     const eps = 2;
     return p.x > r.x + eps && p.x < r.x + r.w - eps && p.y > r.y + eps && p.y < r.y + r.h - eps;
   };
-  for (const e of out1.edges as any[]) {
+  for (const e of out1.edges) {
     if (e.toEdge) continue;
     expect(e.style).toBe("bezier");
     expect(e.routeMode).toBe("manual");
     expect(Array.isArray(e.anchors)).toBe(true);
-    expect(e.anchors.length).toBeGreaterThanOrEqual(3);
-    const anchors = e.anchors as { x: number; y: number }[];
+    const anchors = e.anchors;
+    expect(anchors).toBeDefined();
+    if (!anchors) throw new Error("manual edge anchors missing");
+    expect(anchors.length).toBeGreaterThanOrEqual(3);
     for (const p of anchors.slice(1, anchors.length - 1)) {
       for (const r of rects) {
         expect(deepInside(p, r)).toBe(false);
@@ -423,13 +429,13 @@ test("while-loop beautify output is stable; anchors do not penetrate nodes; labe
     }
   }
 
-  const loop = out1.edges.find((e: any) => e.id === "e5") as any;
+  const loop = out1.edges.find((e: FlowEdge) => e.id === "e5") ;
   if (!loop) throw new Error("loop edge missing");
   const minX = Math.min(...rects.map((r) => r.x));
   expect((loop.anchors as { x: number; y: number }[]).some((p) => p.x < minX - 20)).toBe(true);
 
-  const yes = out1.edges.find((e: any) => e.id === "e3");
-  const no = out1.edges.find((e: any) => e.id === "e6");
+  const yes = out1.edges.find((e: FlowEdge) => e.id === "e3");
+  const no = out1.edges.find((e: FlowEdge) => e.id === "e6");
   expect(yes?.labelPosition).toBeTruthy();
   expect(no?.labelPosition).toBeTruthy();
   expect(typeof yes?.labelPosition?.x).toBe("number");

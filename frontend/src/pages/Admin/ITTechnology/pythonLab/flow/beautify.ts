@@ -4,6 +4,8 @@ import { renderGraphviz } from "./graphviz";
 import { sortFlowGraphStable } from "./determinism";
 import { clampFinite } from "./math";
 
+type Point = { x: number; y: number };
+
 export type FlowBeautifyRankdir = "TB" | "LR";
 
 export type FlowBeautifyTheme = "light";
@@ -409,9 +411,9 @@ export function applyPlainLayoutToCanvas(
 
   const nextNodes: FlowNode[] = nodes.map((n) => {
     const gv = nameById.get(n.id);
-    if (!gv) return { ...(n as any) };
+    if (!gv) return { ...n };
     const p = parsed.nodes.get(gv);
-    if (!p) return { ...(n as any) };
+    if (!p) return { ...n };
     const size = nodeSizeForTitle(n.shape, n.title);
     const cx = p.cxIn * pxPerIn;
     const cy = (parsed.heightIn - p.cyIn) * pxPerIn;
@@ -419,7 +421,7 @@ export function applyPlainLayoutToCanvas(
     const y = cy - size.h / 2;
     const outX = snapToGrid ? snap(x) : fmt(x);
     const outY = snapToGrid ? snap(y) : fmt(y);
-    return { ...(n as any), x: outX, y: outY };
+    return { ...n, x: outX, y: outY };
   });
 
   // Create a map for quick node lookup by ID
@@ -523,13 +525,13 @@ function contrastRatio(fg: string, bg: string) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-function segIntersects(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }) {
-  const orient = (p: any, q: any, r: any) => {
+function segIntersects(a: Point, b: Point, c: Point, d: Point) {
+  const orient = (p: Point, q: Point, r: Point) => {
     const v = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
     if (Math.abs(v) < 1e-9) return 0;
     return v > 0 ? 1 : 2;
   };
-  const onSeg = (p: any, q: any, r: any) => {
+  const onSeg = (p: Point, q: Point, r: Point) => {
     return Math.min(p.x, r.x) <= q.x && q.x <= Math.max(p.x, r.x) && Math.min(p.y, r.y) <= q.y && q.y <= Math.max(p.y, r.y);
   };
   const o1 = orient(a, b, c);

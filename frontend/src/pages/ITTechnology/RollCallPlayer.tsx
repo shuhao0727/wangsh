@@ -2,7 +2,8 @@ import { showMessage } from "@/lib/toast";
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { dianmingApi, DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
+import type { DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
+import { dianmingApi } from '@/services/xxjs/dianming';
 import { PlayCircle, Square, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface Props {
@@ -72,7 +73,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
         if (!cancelled) setLoading(false);
       }
     };
-    fetchStudents();
+    void fetchStudents();
     return () => {
       cancelled = true;
       stopAnimation(false);

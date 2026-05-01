@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Cable,
   CircleCheck,
-  Clock3,
   Database,
   Loader2,
   RotateCcw,
@@ -117,14 +116,14 @@ const AdminPage: React.FC = () => {
   // 检查权限 - 如果不是超级管理员，重定向到首页
   useEffect(() => {
     if (!authLoading && !isSuperAdmin()) {
-      navigate("/home");
+      void navigate("/home");
     }
   }, [authLoading, isSuperAdmin, navigate]);
 
   // 初始化加载
   useEffect(() => {
     if (isSuperAdmin()) {
-      loadUserData();
+      void loadUserData();
     }
   }, [isSuperAdmin, loadUserData]);
 
@@ -240,42 +239,58 @@ const AdminPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* 系统概览统计卡片 */}
+      {/* 系统概览统计卡片 — 主要指标 */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-surface-2 p-5">
-          <div className="mb-1 flex items-center gap-2 text-sm text-text-tertiary">
-            <Users className="h-4 w-4 text-primary" />
-            总用户数
+        <div className="stat-card">
+          <span className="stat-card-accent" style={{ background: "linear-gradient(180deg, var(--ws-color-primary), color-mix(in srgb, var(--ws-color-primary) 48%, white))" }} />
+          <div className="stat-card-body">
+            <div className="stat-card-label">
+              <span className="stat-card-icon" style={{ color: "var(--ws-color-primary)" }}><Users className="h-4 w-4" /></span>
+              总用户数
+            </div>
+            <div className="stat-card-value">{stats.totalUsers}</div>
           </div>
-          <div className="text-2xl font-semibold text-primary">{stats.totalUsers}</div>
+          <div className="stat-card-watermark" style={{ color: "var(--ws-color-primary)" }}><Users /></div>
         </div>
-        <div className="rounded-xl bg-surface-2 p-5">
-          <div className="mb-1 flex items-center gap-2 text-sm text-text-tertiary">
-            <CircleCheck className="h-4 w-4 text-[var(--ws-color-success)]" />
-            活跃用户
+        <div className="stat-card">
+          <span className="stat-card-accent" style={{ background: "linear-gradient(180deg, var(--ws-color-success), color-mix(in srgb, var(--ws-color-success) 48%, white))" }} />
+          <div className="stat-card-body">
+            <div className="stat-card-label">
+              <span className="stat-card-icon" style={{ color: "var(--ws-color-success)" }}><CircleCheck className="h-4 w-4" /></span>
+              活跃用户
+            </div>
+            <div className="stat-card-value">{stats.activeUsers}</div>
           </div>
-          <div className="text-2xl font-semibold text-[var(--ws-color-success)]">{stats.activeUsers}</div>
+          <div className="stat-card-watermark" style={{ color: "var(--ws-color-success)" }}><CircleCheck /></div>
         </div>
-        <div className="rounded-xl bg-surface-2 p-5">
-          <div className="mb-1 flex items-center gap-2 text-sm text-text-tertiary">
-            <ShieldCheck className="h-4 w-4 text-[var(--ws-color-info)]" />
-            管理员数量
+        <div className="stat-card">
+          <span className="stat-card-accent" style={{ background: "linear-gradient(180deg, var(--ws-color-info), color-mix(in srgb, var(--ws-color-info) 48%, white))" }} />
+          <div className="stat-card-body">
+            <div className="stat-card-label">
+              <span className="stat-card-icon" style={{ color: "var(--ws-color-info)" }}><ShieldCheck className="h-4 w-4" /></span>
+              管理员数量
+            </div>
+            <div className="stat-card-value">{stats.superAdmins}</div>
           </div>
-          <div className="text-2xl font-semibold text-[var(--ws-color-info)]">{stats.superAdmins}</div>
+          <div className="stat-card-watermark" style={{ color: "var(--ws-color-info)" }}><ShieldCheck /></div>
         </div>
-        <div className="rounded-xl bg-surface-2 p-5">
-          <div className="mb-1 flex items-center gap-2 text-sm text-text-tertiary">
-            <Database className="h-4 w-4 text-[var(--ws-color-warning)]" />
-            数据库大小
+        <div className="stat-card">
+          <span className="stat-card-accent" style={{ background: "linear-gradient(180deg, var(--ws-color-warning), color-mix(in srgb, var(--ws-color-warning) 48%, white))" }} />
+          <div className="stat-card-body">
+            <div className="stat-card-label">
+              <span className="stat-card-icon" style={{ color: "var(--ws-color-warning)" }}><Database className="h-4 w-4" /></span>
+              数据库大小
+            </div>
+            <div className="stat-card-value">{stats.databaseSize}</div>
           </div>
-          <div className="text-2xl font-semibold text-[var(--ws-color-warning)]">{stats.databaseSize}</div>
+          <div className="stat-card-watermark" style={{ color: "var(--ws-color-warning)" }}><Database /></div>
         </div>
       </div>
 
-      {/* 管理功能标签页 */}
-      <div className="border-t border-border-secondary pt-6">
+      {/* 管理功能标签页 — 二级内容区 */}
+      <div className="mt-[var(--ws-space-4)]">
         <Tabs defaultValue="users">
-          <TabsList className="mb-4">
+          <TabsList className="mb-[var(--ws-space-3)]">
             <TabsTrigger value="users">
               <Users className="mr-1.5 h-4 w-4" />
               用户管理
@@ -291,9 +306,9 @@ const AdminPage: React.FC = () => {
           </TabsList>
 
           <TabsContent value="users" className="mt-0">
-            <div className="rounded-xl bg-surface-2 p-6">
+            <div className="rounded-xl border border-[color:var(--ws-color-border-secondary)] p-6" style={{ background: "var(--ws-color-surface)" }}>
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-base font-semibold">用户列表</span>
+                <h3 className="text-base font-semibold text-text-base">用户列表</h3>
                 <Button>
                   <Users className="h-4 w-4" />
                   添加用户
@@ -308,43 +323,38 @@ const AdminPage: React.FC = () => {
 
           <TabsContent value="api" className="mt-0">
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl bg-surface-2 p-6">
-                <div className="mb-4 text-base font-semibold">API 统计</div>
+              <div className="rounded-xl border border-[color:var(--ws-color-border-secondary)] p-6" style={{ background: "var(--ws-color-surface-2)" }}>
+                <h3 className="mb-4 text-base font-semibold text-text-base">API 统计</h3>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">总请求数</span>
-                    <Badge variant="sky">
-                      {stats.apiRequests}
-                    </Badge>
+                    <span className="text-xl font-bold text-text-base">{stats.apiRequests.toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">服务状态</span>
                     <Badge variant="success">
                       <CircleCheck className="h-3 w-3" />
                       正常运行
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">运行时间</span>
-                    <Badge variant="cyan">
-                      <Clock3 className="h-3 w-3" />
-                      {stats.uptime}
-                    </Badge>
+                    <span className="font-medium text-text-base">{stats.uptime}</span>
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl bg-surface-2 p-6">
-                <div className="mb-4 text-base font-semibold">API 配置</div>
+              <div className="rounded-xl border border-[color:var(--ws-color-border-secondary)] p-6" style={{ background: "var(--ws-color-surface-2)" }}>
+                <h3 className="mb-4 text-base font-semibold text-text-base">API 配置</h3>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">JWT 有效期</span>
-                    <span>8天 (11520分钟)</span>
+                    <span className="font-medium">8天 (11520分钟)</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">API 版本</span>
-                    <span>v1.0.0</span>
+                    <span className="font-medium">v1.0.0</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between rounded-md p-2" style={{ background: "var(--ws-color-surface)" }}>
                     <span className="text-text-tertiary">调试模式</span>
                     <Badge
                       variant={process.env.NODE_ENV === "development" ? "warning" : "success"}
@@ -358,38 +368,38 @@ const AdminPage: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0">
-            <div className="rounded-xl bg-surface-2 p-6">
-              <div className="mb-4 text-base font-semibold">系统配置</div>
+            <div className="rounded-xl border border-[color:var(--ws-color-border-secondary)] p-6" style={{ background: "var(--ws-color-surface-2)" }}>
+              <h3 className="mb-4 text-base font-semibold text-text-base">系统配置</h3>
               <div className="grid gap-3 text-sm md:grid-cols-2">
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">后端服务</span>
-                  <Badge variant="sky">
+                  <Badge variant="info">
                     {window.location.origin}/api/v1
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">前端服务</span>
                   <Badge variant="success">
                     {window.location.origin}
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">数据库</span>
                   <Badge variant="purple">
                     PostgreSQL 15.15
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">Redis</span>
                   <Badge variant="danger">
                     redis://localhost:6379
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">环境变量</span>
                   <Button variant="link" size="sm">查看 .env 配置</Button>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5">
                   <span className="text-text-tertiary">系统重启</span>
                   <Button variant="outline" size="sm">
                     <RotateCcw className="h-4 w-4" />
@@ -402,37 +412,37 @@ const AdminPage: React.FC = () => {
         </Tabs>
       </div>
 
-      {/* 管理员信息 */}
-      <div className="border-t border-border-secondary mt-6 pt-6">
-        <div className="bg-surface-2 rounded-xl p-6">
-          <div className="text-base font-semibold mb-4">当前管理员信息</div>
+      {/* 当前管理员信息 — 三级信息区 */}
+      <div className="mt-[var(--ws-space-4)]">
+        <div className="rounded-xl border border-[color:var(--ws-color-border-secondary)] p-6" style={{ background: "var(--ws-color-surface-2)" }}>
+          <h3 className="text-base font-semibold text-text-base mb-4">当前管理员信息</h3>
           <div className="grid gap-3 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="text-xs text-text-tertiary">用户名</div>
-              <div>{user?.username}</div>
+            <div className="rounded-md border border-border bg-surface px-3 py-2.5">
+              <div className="text-xs text-text-tertiary mb-0.5">用户名</div>
+              <div className="font-medium text-text-base">{user?.username}</div>
             </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="text-xs text-text-tertiary">全名</div>
-              <div>{user?.full_name || "未设置"}</div>
+            <div className="rounded-md border border-border bg-surface px-3 py-2.5">
+              <div className="text-xs text-text-tertiary mb-0.5">全名</div>
+              <div className="font-medium text-text-base">{user?.full_name || "未设置"}</div>
             </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2 md:col-span-2">
+            <div className="rounded-md border border-border bg-surface px-3 py-2.5 md:col-span-2">
               <div className="text-xs text-text-tertiary mb-1">权限级别</div>
               <Badge variant="purple">
                 <ShieldCheck className="h-3 w-3" />
                 超级管理员
               </Badge>
             </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="text-xs text-text-tertiary">账户创建时间</div>
-              <div>
+            <div className="rounded-md border border-border bg-surface px-3 py-2.5">
+              <div className="text-xs text-text-tertiary mb-0.5">账户创建时间</div>
+              <div className="font-medium text-text-base">
                 {user?.created_at
                   ? new Date(user.created_at).toLocaleString("zh-CN")
                   : "未知"}
               </div>
             </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="text-xs text-text-tertiary">最后登录</div>
-              <div>刚刚</div>
+            <div className="rounded-md border border-border bg-surface px-3 py-2.5">
+              <div className="text-xs text-text-tertiary mb-0.5">最后登录</div>
+              <div className="font-medium text-text-base">刚刚</div>
             </div>
           </div>
         </div>

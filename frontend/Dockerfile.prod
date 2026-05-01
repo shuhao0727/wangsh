@@ -43,7 +43,7 @@ ENV NO_PROXY=
 RUN npm config set registry https://registry.npmmirror.com/
 
 COPY package*.json ./
-RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --legacy-peer-deps
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --include=dev --legacy-peer-deps
 
 COPY . .
 RUN npm run build

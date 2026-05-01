@@ -41,6 +41,7 @@ import { shouldHandleCanvasDeleteShortcut } from "./keyboardGuards";
 import { OptimizationDialog } from "./components/OptimizationDialog";
 import { pythonlabFlowApi, pythonlabSyntaxApi } from "./services/pythonlabCodeApi";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import useAuth from "@hooks/useAuth";
 
 function nextId(prefix: string) {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
@@ -50,6 +51,7 @@ const PythonLabStudioInner: React.FC<{
   experiment?: PythonLabExperiment;
 }> = ({ experiment }) => {
   const screens = useBreakpoint();
+  const auth = useAuth();
   const isCompactViewport = !screens.sm;
   const prewarmOnceRef = useRef(false);
   const readyMsgShownRef = useRef(false);
@@ -297,7 +299,7 @@ const PythonLabStudioInner: React.FC<{
 
   const { code, setCode, codeMode, setCodeMode, codeIr, generated, debugMap, flowDiagnostics, flowExpandFunctions, setFlowExpandFunctions, rebuildFlowFromCode } = usePythonFlowSync({
     starterCode: experiment?.starterCode,
-    preferBackendCfg: true,
+    preferBackendCfg: auth.isLoggedIn() || Boolean(auth.getToken()),
     beautifyParams: ruleSet.beautify.params,
     beautifyThresholds: ruleSet.beautify.thresholds,
     beautifyAlignMode: ruleSet.beautify.alignMode,
@@ -950,11 +952,11 @@ const PythonLabStudioInner: React.FC<{
               <div className="flex items-center gap-2">
                 <span className="text-[var(--ws-text-md)] font-semibold">画布</span>
                 {experiment?.title ? (
-                  <Badge variant="sky">
+                  <Badge variant="info">
                     {experiment.title}
                   </Badge>
                 ) : (
-                  <Badge variant="sky">
+                  <Badge variant="info">
                     UI
                   </Badge>
                 )}
@@ -1035,7 +1037,7 @@ const PythonLabStudioInner: React.FC<{
                   minHeight: 0,
                   position: "relative",
                   background:
-                    "linear-gradient(0deg, color-mix(in srgb, var(--ws-color-border-secondary) 75%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ws-color-border-secondary) 75%, transparent) 1px, transparent 1px)",
+                    "linear-gradient(0deg, color-mix(in srgb, var(--ws-color-border) 72%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ws-color-border) 72%, transparent) 1px, transparent 1px), var(--ws-color-bg)",
                   backgroundSize: "20px 20px",
                   overflow: "hidden",
                   cursor: panMode ? (panning ? "grabbing" : "grab") : "default",
@@ -1055,7 +1057,7 @@ const PythonLabStudioInner: React.FC<{
                     style={{
                       position: "absolute",
                       inset: 0,
-                      background: "rgba(255,255,255,0.65)",
+                      background: "color-mix(in srgb, var(--ws-color-surface) 72%, transparent)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

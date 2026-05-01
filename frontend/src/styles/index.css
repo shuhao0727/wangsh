@@ -87,7 +87,7 @@
 
   /* 交互 */
   --ws-color-hover-bg: rgba(14, 165, 233, 0.04);
-  --ws-color-focus-ring: rgba(14, 165, 233, 0.2);
+  --ws-color-focus-ring: #0284C7;
 
   /* 柔和背景 */
   --ws-color-primary-soft: rgba(14, 165, 233, 0.06);
@@ -251,6 +251,11 @@ a:hover {
 
 a:active {
   color: var(--ws-color-primary-active);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--ws-color-focus-ring);
+  outline-offset: 3px;
 }
 
 /* 布局类 */
@@ -602,4 +607,115 @@ a:active {
 
 .chart-panel {
   min-height: 280px;
+}
+
+/* ── Dark Mode Experiment (light-mode-first, .dark class on <html>) ── */
+.dark {
+  color-scheme: dark;
+
+  --ws-color-bg: #0f1117;
+  --ws-color-surface: #1a1d27;
+  --ws-color-surface-2: #242836;
+  --ws-color-elevated: #242836;
+  --ws-color-overlay: rgba(15, 23, 42, 0.6);
+
+  --ws-color-border: #2e3348;
+  --ws-color-border-secondary: #242836;
+
+  --ws-color-text: #e4e6ed;
+  --ws-color-text-secondary: #9ca3af;
+  --ws-color-text-tertiary: #6b7280;
+
+  --ws-color-hover-bg: rgba(14, 165, 233, 0.08);
+  --ws-color-focus-ring: #38BDF8;
+
+  --ws-color-primary-soft: rgba(14, 165, 233, 0.1);
+  --ws-color-primary-light: rgba(14, 165, 233, 0.15);
+  --ws-color-success-soft: rgba(16, 185, 129, 0.1);
+  --ws-color-warning-soft: rgba(245, 158, 11, 0.1);
+  --ws-color-error-soft: rgba(239, 68, 68, 0.1);
+  --ws-color-info-soft: rgba(14, 165, 233, 0.1);
+  --ws-color-purple-soft: rgba(139, 92, 246, 0.1);
+
+  --ws-glass-bg: rgba(26, 29, 39, 0.9);
+  --ws-color-tooltip: rgba(228, 230, 237, 0.92);
+
+  --ws-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --ws-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.dark .home-welcome-strip {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ws-color-primary) 6%, var(--ws-color-surface)) 0%, var(--ws-color-surface-2) 100%);
+  border-color: var(--ws-color-border);
+}
+
+.dark .home-welcome-strip::before {
+  background: linear-gradient(180deg, var(--ws-color-primary), color-mix(in srgb, var(--ws-color-primary) 48%, var(--ws-color-surface)));
+}
+
+.dark .admin-btn-hover {
+  background: color-mix(in srgb, var(--ws-color-primary) 12%, var(--ws-color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ws-color-primary) 18%, transparent);
+}
+
+.dark .admin-btn-hover:hover {
+  background: color-mix(in srgb, var(--ws-color-primary) 18%, var(--ws-color-surface));
+}
+
+.dark .stat-card {
+  background: linear-gradient(135deg, var(--ws-color-surface-2), var(--ws-color-surface));
+}
+
+.dark .admin-user-menu:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dark .ws-floating-panel {
+  background: var(--ws-color-surface);
+  border-color: var(--ws-color-border);
+}
+
+.dark .article-item-hover:hover {
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+html.dark {
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* 暗色模式：阻止浏览器自动填充强制白色背景 */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark textarea:-webkit-autofill,
+.dark textarea:-webkit-autofill:hover,
+.dark textarea:-webkit-autofill:focus,
+.dark select:-webkit-autofill,
+.dark select:-webkit-autofill:hover,
+.dark select:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--ws-color-surface-2) inset;
+  -webkit-text-fill-color: var(--ws-color-text);
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ============================================
+ * Reduced motion
+ * ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

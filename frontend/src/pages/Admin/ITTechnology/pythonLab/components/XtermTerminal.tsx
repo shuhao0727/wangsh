@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } 
 import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
+import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
 
 const MAX_PENDING_STDIN_CHARS = 64 * 1024;
 
@@ -30,6 +31,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   ref
 ) {
   const showLineNumbersOn = showLineNumbers !== false;
+  const isDark = useDocumentDarkMode();
   const [gutterText, setGutterText] = useState("");
   const [_gutterDigits, setGutterDigits] = useState(2);
   const gutterRafRef = useRef<number | null>(null);
@@ -50,6 +52,30 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const termEpochRef = useRef(0);
   const terminalDisposedRef = useRef(true);
   const fontSizeRef = useRef(fontSize);
+  const isDarkRef = useRef(isDark);
+  isDarkRef.current = isDark;
+
+  const getTerminalTheme = useCallback(() => {
+    const dark = isDarkRef.current;
+    try {
+      const styles = getComputedStyle(document.documentElement);
+      const bg = styles.getPropertyValue("--ws-color-bg").trim() || (dark ? "#0f1117" : "#ffffff");
+      const fg = styles.getPropertyValue("--ws-color-text").trim() || (dark ? "#e4e6ed" : "#1e293b");
+      return {
+        background: bg,
+        foreground: fg,
+        cursor: fg,
+        selectionBackground: "rgba(37, 99, 235, 0.2)",
+      };
+    } catch {
+      return {
+        background: dark ? "#0f1117" : "#ffffff",
+        foreground: dark ? "#e4e6ed" : "#1e293b",
+        cursor: dark ? "#e4e6ed" : "#1e293b",
+        selectionBackground: "rgba(37, 99, 235, 0.2)",
+      };
+    }
+  }, []);
 
   useEffect(() => {
     fontSizeRef.current = fontSize;
@@ -299,7 +325,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       if (!container.isConnected || container.offsetParent === null) return;
       if (!container.ownerDocument?.contains(container)) return;
 
-      Promise.all([
+      void Promise.all([
         import(/* webpackChunkName: "xterm" */ "xterm"),
         import(/* webpackChunkName: "xterm" */ "xterm-addon-fit"),
         // @ts-ignore
@@ -315,10 +341,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           lineHeight: 1.35,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, monospace",
           theme: {
-            background: "#ffffff",
-            foreground: "#1e293b",
-            cursor: "#1e293b",
-            selectionBackground: "rgba(37, 99, 235, 0.2)",
+            ...getTerminalTheme(),
           },
           convertEol: true,
           disableStdin: false,
@@ -329,7 +352,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       term.loadAddon(fitAddon);
       try {
         term.open(container);
-      } catch (_e: any) {
+      } catch {
         try { term.dispose(); } catch {}
         return;
       }
@@ -374,6 +397,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         textTailRef.current = "";
         trace("terminal_cleanup_done");
       };
+    }).catch((error: unknown) => {
+      trace("terminal_import_failed", { message: error instanceof Error ? error.message : String(error) });
     }); // close .then()
     }); // close requestAnimationFrame
 
@@ -382,7 +407,12 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       window.cancelAnimationFrame(raf);
       cleanup?.();
     };
-  }, [canInit, queueInput, requestFit, scheduleRefreshGutter, trace]);
+  }, [canInit, getTerminalTheme, queueInput, requestFit, scheduleRefreshGutter, trace]);
+
+  useEffect(() => {
+    if (!terminalRef.current) return;
+    terminalRef.current.options.theme = getTerminalTheme();
+  }, [getTerminalTheme, isDark]);
 
   // 3. WS Connection
   useEffect(() => {
@@ -590,7 +620,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   return (
     <div
       className={className}
-      style={{ height: "100%", width: "100%", overflow: "hidden", display: "flex" }}
+      style={{ height: "100%", width: "100%", overflow: "hidden", display: "flex", background: "var(--ws-color-bg)" }}
       onClick={() => terminalRef.current?.focus()}
     >
       {showLineNumbersOn ? (
@@ -598,8 +628,8 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           style={{
             width: "30px",
             padding: "14px 0 12px 0",
-            background: "#ffffff",
-            color: "#237893",
+            background: "var(--ws-color-bg)",
+            color: "color-mix(in srgb, var(--ws-color-primary) 70%, var(--ws-color-text-secondary))",
             borderRight: "1px solid var(--ws-color-border-secondary)",
             overflow: "hidden",
             boxSizing: "border-box",
@@ -613,7 +643,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
           <pre style={{ margin: 0, paddingRight: 2, fontSize, lineHeight: 1.35, textAlign: "right", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", opacity: 0.6 }}>{gutterText}</pre>
         </div>
       ) : null}
-      <div ref={containerRef} style={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden", paddingLeft: 12, paddingTop: 12 }} />
+      <div ref={containerRef} style={{ flex: 1, minWidth: 0, height: "100%", overflow: "hidden", paddingLeft: 12, paddingTop: 12, background: "var(--ws-color-bg)" }} />
     </div>
   );
 });

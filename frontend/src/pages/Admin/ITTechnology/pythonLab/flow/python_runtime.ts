@@ -63,7 +63,7 @@ export function validatePythonStrict(code: string): StrictValidationResult {
     "round",
     "range",
   ]);
-  for (const it of (parsed.ir as any as CodeIRBlock).items) {
+  for (const it of (parsed.ir as unknown as CodeIRBlock).items) {
     if (it.kind === "def") {
       if (moduleDefs.has(it.name)) errors.push(`函数重复定义: ${it.name}`);
       moduleDefs.add(it.name);
@@ -152,7 +152,7 @@ export function validatePythonStrict(code: string): StrictValidationResult {
     }
   };
 
-  walk(parsed.ir as any, false, new Set<string>());
+  walk(parsed.ir as unknown as CodeIRBlock, false, new Set<string>());
   if (errors.length) {
     const src = String(code || "");
     const hints: string[] = [];
@@ -164,15 +164,13 @@ export function validatePythonStrict(code: string): StrictValidationResult {
     if (hints.length) warnings.push(...hints);
     return { ok: false, errors, warnings };
   }
-  return { ok: true, ir: parsed.ir as any, warnings };
+  return { ok: true, ir: parsed.ir as unknown as CodeIRBlock, warnings };
 }
 
+type TokenWithValue = { k: "num"; v: number } | { k: "str"; v: string } | { k: "id"; v: string } | { k: "op"; v: string } | { k: "paren"; v: "(" | ")" };
+
 type Token =
-  | { k: "num"; v: number }
-  | { k: "str"; v: string }
-  | { k: "id"; v: string }
-  | { k: "op"; v: string }
-  | { k: "paren"; v: "(" | ")" }
+  | TokenWithValue
   | { k: "comma" }
   | { k: "eof" };
 
@@ -271,10 +269,10 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
   let i = 0;
   const peek = () => t.tokens[i];
   const eat = () => t.tokens[i++];
-  const expect = (k: Token["k"], v?: any) => {
+  const expect = (k: Token["k"], v?: string | number) => {
     const p = peek();
     if (p.k !== k) return false;
-    if (v !== undefined && (p as any).v !== v) return false;
+    if (v !== undefined && (p as TokenWithValue).v !== v) return false;
     eat();
     return true;
   };
@@ -295,10 +293,10 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
       if (p.v === "False") return { kind: "bool", value: false };
       if (p.v === "None") return { kind: "none" };
       const name = p.v;
-      if (peek().k === "paren" && (peek() as any).v === "(") {
+      if (peek().k === "paren" && (peek() as TokenWithValue).v === "(") {
         eat();
         const args: Expr[] = [];
-        if (peek().k === "paren" && (peek() as any).v === ")") {
+        if (peek().k === "paren" && (peek() as TokenWithValue).v === ")") {
           eat();
           return { kind: "call", name, args };
         }
@@ -310,7 +308,7 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
             eat();
             continue;
           }
-          if (peek().k === "paren" && (peek() as any).v === ")") {
+          if (peek().k === "paren" && (peek() as TokenWithValue).v === ")") {
             eat();
             break;
           }
@@ -336,7 +334,7 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
       eat();
       const e = parseUnary();
       if (!e) return null;
-      return { kind: "unary", op: p.v as any, expr: e };
+      return { kind: "unary", op: p.v as ("+" | "-" | "not"), expr: e };
     }
     if (p.k === "id" && p.v === "not") {
       eat();
@@ -356,7 +354,7 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
       eat();
       const right = parseUnary();
       if (!right) return null;
-      left = { kind: "bin", op: p.v as any, left, right };
+      left = { kind: "bin", op: p.v as ("*" | "/" | "//" | "%"), left, right };
     }
     return left;
   };
@@ -370,7 +368,7 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
       eat();
       const right = parseMul();
       if (!right) return null;
-      left = { kind: "bin", op: p.v as any, left, right };
+      left = { kind: "bin", op: p.v as ("+" | "-"), left, right };
     }
     return left;
   };
@@ -383,7 +381,7 @@ function parseExprStrict(src: string): ParseExprOk | ParseExprErr {
       eat();
       const right = parseAdd();
       if (!right) return null;
-      return { kind: "bin", op: p.v as any, left, right };
+      return { kind: "bin", op: p.v as ("==" | "!=" | "<" | "<=" | ">" | ">="), left, right };
     }
     return left;
   };

@@ -7,8 +7,10 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { planApi, Plan } from "@services/classroomPlan";
-import { classroomApi, Activity } from "@services/classroom";
+import type { Plan } from "@services/classroomPlan";
+import { planApi } from "@services/classroomPlan";
+import type { Activity } from "@services/classroom";
+import { classroomApi } from "@services/classroom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
@@ -46,8 +48,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   usePlansList,
   useDeletePlan,
-  PLAN_QUERY_KEY,
 } from "@hooks/queries/useClassroomPlanQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const parseErr = (e: any) => String(e?.response?.data?.detail || e?.message || "操作失败");
 
@@ -276,6 +278,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
                         checked={checked}
                         readOnly
                         disabled={isActive}
+                        aria-label={`选择活动 ${activity.title}`}
                         className="h-3.5 w-3.5 rounded border border-border-secondary accent-primary"
                       />
                       <ActivityTypeTag type={activity.activity_type} />
@@ -318,6 +321,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
                         });
                       }}
                       disabled={idx === 0}
+                      aria-label="上移"
                       title="上移"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
@@ -335,6 +339,7 @@ const PlanFormModal: React.FC<PlanFormProps> = ({ open, editing, onClose, onSucc
                         });
                       }}
                       disabled={idx === selectedIds.length - 1}
+                      aria-label="下移"
                       title="下移"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
@@ -590,13 +595,13 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
 
   // SSE
   useAdminSSE("classroom_plan_changed", () => {
-    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
   });
 
   const refreshPlan = useCallback(async (id: number) => {
     const detail = await planApi.get(id);
     setConsolePlan((prev) => (prev?.id === id ? detail : prev));
-    queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
   }, [queryClient]);
 
   const openConsole = useCallback(async (plan: Plan) => {
@@ -698,6 +703,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
                   onClick={() => {
                     void handleDelete(plan.id);
                   }}
+                  aria-label="删除计划"
                   title="删除"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -726,7 +732,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
           </DialogHeader>
 
           <div className="mb-2 flex items-center justify-between">
-            <Button size="sm" variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] })} disabled={isLoading}>
+            <Button size="sm" variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all })} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               刷新
             </Button>
@@ -771,7 +777,7 @@ export const PlanListModal: React.FC<PlanListModalProps> = ({ open, onClose }) =
         editing={editing}
         onClose={() => setFormOpen(false)}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: [PLAN_QUERY_KEY] });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
         }}
       />
 

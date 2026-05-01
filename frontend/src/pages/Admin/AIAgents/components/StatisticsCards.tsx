@@ -1,7 +1,7 @@
 import React from "react";
 import { Bot, Cloud, Cpu, Zap } from "lucide-react";
 import { StatCard } from "@components/Common/StatCard";
-import { AgentStatisticsData } from "@services/znt/types";
+import type { AgentStatisticsData } from "@services/znt/types";
 
 interface StatisticsCardsProps {
   data: AgentStatisticsData;

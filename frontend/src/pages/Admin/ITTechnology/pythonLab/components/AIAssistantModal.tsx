@@ -128,14 +128,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           aria-label="输入你的问题"
           rows={2}
           className="max-h-[120px] min-h-[44px] resize-none"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-        />
-        <Button onClick={() => handleSend()} disabled={loading} aria-label="发送消息">
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
+          />
+          <Button onClick={() => void handleSend()} disabled={loading} aria-label="发送消息">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>

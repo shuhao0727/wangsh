@@ -41,7 +41,7 @@ const HomePage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    void (async () => {
       const pairs = await Promise.all(
         NAV_VISIBILITY_ITEMS.map(async (it) => {
           try {
@@ -88,23 +88,23 @@ const HomePage: React.FC = () => {
   return (
     <div className="home-page w-full flex-1 flex flex-col overflow-hidden bg-surface">
       <div
-        className="flex-1 min-h-0 mx-auto w-full px-4 md:px-6 py-4 md:py-5 flex flex-col gap-4 md:gap-5 overflow-y-auto"
+        className="flex-1 min-h-0 mx-auto w-full px-4 md:px-6 py-4 md:py-5 flex flex-col gap-0 overflow-y-auto"
         style={{ maxWidth: "var(--ws-page-max-width)" }}
       >
         {/* ─── 欢迎条 ─── */}
-        <div className="home-welcome-strip rounded-xl px-5 py-4 md:px-6 md:py-5">
+        <div className="home-welcome-strip rounded-xl px-5 py-5 md:px-7 md:py-7 mb-[var(--ws-space-4)]">
           {isLoggedIn ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3 min-w-0 sm:items-center">
-                <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
+                <div className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl bg-primary/12 text-primary">
                   <User className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[1.125rem] font-semibold tracking-tight text-text-base leading-tight sm:truncate">
+                  <div className="text-[1.25rem] md:text-[1.375rem] font-bold tracking-tight text-text-base leading-tight sm:truncate">
                     {greeting}，{displayName || "同学"}
-                    {roleLabel && <Badge variant="primarySubtle" className="ml-2 text-xs align-middle">{roleLabel}</Badge>}
+                    {roleLabel && <Badge variant="info" className="ml-2 text-xs align-middle">{roleLabel}</Badge>}
                   </div>
-                  <div className="text-sm text-text-secondary mt-1">常用模块和外部工具都集中在这里</div>
+                  <div className="text-sm text-text-secondary mt-1.5">常用模块和外部工具都集中在这里</div>
                 </div>
               </div>
               {(auth.isAdmin() || auth.isSuperAdmin()) && (
@@ -118,15 +118,15 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div>
-              <div className="text-[1.125rem] font-semibold tracking-tight text-text-base">WangSh 平台</div>
-              <div className="text-sm text-text-secondary mt-1">课程、训练与工具入口</div>
+              <div className="text-[1.375rem] md:text-[1.625rem] font-bold tracking-tight text-text-base">WangSh 平台</div>
+              <div className="text-sm text-text-secondary mt-2">课程、训练与工具入口 — 探索学习资源，管理个人项目</div>
             </div>
           )}
         </div>
 
         {/* ─── 平台模块 ─── */}
-        <div>
-          <h2 className="text-sm font-semibold text-text-secondary mb-2.5">进入模块</h2>
+        <section className="pb-[var(--ws-space-3)] mb-[var(--ws-space-3)]" style={{ borderBottom: "1px solid var(--ws-color-border-secondary)" }}>
+          <h2 className="text-sm font-semibold text-text-secondary mb-[var(--ws-space-3)] tracking-wide uppercase opacity-70">进入模块</h2>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {visibleModules.map((mod) => {
               const c = moduleColors[mod.id] ?? {
@@ -145,19 +145,19 @@ const HomePage: React.FC = () => {
                     style={{ background: c.bg }}>
                     <span style={{ color: c.icon }}>{mod.icon}</span>
                   </div>
-                  <div className="text-[0.95rem] font-semibold tracking-tight text-text-base mb-0.5">{mod.title}</div>
+                  <div className="text-[0.95rem] font-semibold tracking-tight text-text-base mb-1">{mod.title}</div>
                   <div className="text-[13px] leading-6 text-text-secondary">{mod.description}</div>
                   <ArrowRight className="module-arrow absolute top-4 right-4 h-4 w-4 transition-all" style={{ color: c.icon }} />
                 </button>
               );
             })}
           </div>
-        </div>
+        </section>
 
         {/* ─── 外部服务 ─── */}
         {externalLinks.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold text-text-secondary mb-2.5">工具与服务</h2>
+          <section className="pb-[var(--ws-space-3)] mb-[var(--ws-space-3)]" style={{ borderBottom: "1px solid var(--ws-color-border-secondary)" }}>
+            <h2 className="text-sm font-semibold text-text-secondary mb-[var(--ws-space-3)] tracking-wide uppercase opacity-70">工具与服务</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {externalLinks.map((link, i) => (
                 <button
@@ -178,11 +178,11 @@ const HomePage: React.FC = () => {
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {/* ─── 底部 ─── */}
-        <div className="mt-auto pt-3 pb-1 text-center">
+        <div className="mt-auto pt-[var(--ws-space-3)] pb-1 text-center">
           <span className="text-xs text-text-tertiary">
             WangSh 平台 · v{version} · {envLabel || "本地开发"}
           </span>

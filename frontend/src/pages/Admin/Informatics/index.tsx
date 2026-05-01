@@ -49,14 +49,22 @@ type SyncFormState = {
   delete_mode: "unpublish" | "soft_delete";
 };
 
+interface ValidationErrorItem {
+  msg?: unknown;
+}
+
 /** 安全提取错误信息（防止 FastAPI 422 返回对象数组导致 React 崩溃） */
-const extractErrorMsg = (e: any, fallback = "操作失败"): string => {
-  const detail = e?.response?.data?.detail;
+const extractErrorMsg = (e: unknown, fallback = "操作失败"): string => {
+  const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
+  const detail = err.response?.data?.detail;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    return detail.map((d: any) => d?.msg || JSON.stringify(d)).join("; ");
+    return detail.map((d: string | ValidationErrorItem) => {
+      if (typeof d === "string") return d;
+      return String(d?.msg || JSON.stringify(d));
+    }).join("; ");
   }
-  return e?.message || fallback;
+  return err.message || fallback;
 };
 
 const clampPercent = (value?: number) => {
@@ -127,7 +135,7 @@ const AdminInformatics: React.FC = () => {
             delete_mode: settingsRes.delete_mode || "unpublish",
           });
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         showMessage.error(extractErrorMsg(e, "加载 GitHub 同步配置失败"));
       } finally {
         setSyncLoading(false);
@@ -147,7 +155,7 @@ const AdminInformatics: React.FC = () => {
       } catch {
         setCategories([]);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       showMessage.error(extractErrorMsg(e, "加载 Typst 笔记失败"));
     } finally {
       setLoading(false);
@@ -315,10 +323,10 @@ const AdminInformatics: React.FC = () => {
                     }> = {
                       title: record.title,
                       ...(typeof record.summary !== "undefined"
-                        ? { summary: record.summary as any }
+                        ? { summary: record.summary ?? undefined }
                         : {}),
                       ...(typeof record.category_path !== "undefined"
-                        ? { category_path: record.category_path as any }
+                        ? { category_path: record.category_path ?? undefined }
                         : {}),
                       published: val,
                     };
@@ -335,7 +343,7 @@ const AdminInformatics: React.FC = () => {
                       ),
                     );
                     showMessage.success(val ? "已发布" : "已停用");
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     setItems((list) =>
                       list.map((it) => (it.id === record.id ? { ...it, published: prev } : it)),
                     );
@@ -410,7 +418,7 @@ const AdminInformatics: React.FC = () => {
                     await typstNotesApi.remove(row.original.id);
                     showMessage.success("已删除");
                     await load();
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     showMessage.error(extractErrorMsg(e, "删除失败"));
                   }
                 }});
@@ -658,7 +666,7 @@ const AdminInformatics: React.FC = () => {
                     setSyncSettings(saved);
                     setSyncForm((prev) => ({ ...prev, token: "" }));
                     showMessage.success("配置已保存");
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     showMessage.error(extractErrorMsg(e, "保存失败"));
                   } finally {
                     setSyncSaving(false);
@@ -685,7 +693,7 @@ const AdminInformatics: React.FC = () => {
                       token: token || "__use_saved_token__",
                     });
                     showMessage.success("连接成功");
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     showMessage.error(extractErrorMsg(e, "连接失败"));
                   }
                 }}
@@ -749,7 +757,7 @@ const AdminInformatics: React.FC = () => {
                     }
                     await load();
                     await loadSync(false);
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     setSyncTaskStatus(null);
                     showMessage.error(extractErrorMsg(e, "触发同步失败"));
                   } finally {
@@ -817,7 +825,7 @@ const AdminInformatics: React.FC = () => {
                       );
                     }
                     await loadSync(false);
-                  } catch (e: any) {
+                  } catch (e: unknown) {
                     setSyncTaskStatus(null);
                     showMessage.error(extractErrorMsg(e, "触发全部重新编译失败"));
                   } finally {

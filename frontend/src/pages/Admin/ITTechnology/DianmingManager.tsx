@@ -14,8 +14,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/tableDefaults';
 import { dianmingApi, type DianmingClass } from '@/services/xxjs/dianming';
@@ -50,12 +57,7 @@ const DianmingManager: React.FC = () => {
   const [editorVisible, setEditorVisible] = useState(false);
   const requestSeq = useRef(0);
   const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: EMPTY_FORM_VALUES,
   });
@@ -105,14 +107,14 @@ const DianmingManager: React.FC = () => {
     setEditorVisible(false);
     setEditingRecord(null);
     setFormLoading(false);
-    reset(EMPTY_FORM_VALUES);
+    form.reset(EMPTY_FORM_VALUES);
   };
 
   const openCreateEditor = () => {
     requestSeq.current += 1;
     setEditingRecord(null);
     setFormLoading(false);
-    reset(EMPTY_FORM_VALUES);
+    form.reset(EMPTY_FORM_VALUES);
     setEditorVisible(true);
   };
 
@@ -122,7 +124,7 @@ const DianmingManager: React.FC = () => {
 
     setEditingRecord(record);
     setFormLoading(true);
-    reset({
+    form.reset({
       year: record.year,
       class_name: record.class_name,
       names_text: '',
@@ -133,7 +135,7 @@ const DianmingManager: React.FC = () => {
       .listStudents(record.year, record.class_name)
       .then((students) => {
         if (requestSeq.current !== currentRequest) return;
-        reset({
+        form.reset({
           year: record.year,
           class_name: record.class_name,
           names_text: students.map((student) => student.student_name).join('\n'),
@@ -285,54 +287,79 @@ const DianmingManager: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editorTitle}</DialogTitle>
             <DialogDescription>{editorDescription}</DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(handleImport)} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="dm-admin-year">年份/届别</Label>
-                <Input id="dm-admin-year" placeholder="例如：2024级" disabled={formLoading || isSubmitting} {...register('year')} />
-                {errors.year?.message ? <p className="text-xs text-destructive">{errors.year.message}</p> : null}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleImport)} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="year"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>年份/届别</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如：2024级" disabled={formLoading || form.formState.isSubmitting} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="class_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>班级名称</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如：软件工程1班" disabled={formLoading || form.formState.isSubmitting} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="dm-admin-class">班级名称</Label>
-                <Input id="dm-admin-class" placeholder="例如：软件工程1班" disabled={formLoading || isSubmitting} {...register('class_name')} />
-                {errors.class_name?.message ? <p className="text-xs text-destructive">{errors.class_name.message}</p> : null}
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dm-admin-names">学生名单</Label>
-              <Textarea
-                id="dm-admin-names"
-                rows={15}
-                placeholder={formLoading ? '正在加载学生名单...' : '张三\n李四\n王五'}
-                disabled={formLoading || isSubmitting}
-                {...register('names_text')}
+              <FormField
+                control={form.control}
+                name="names_text"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>学生名单</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={15}
+                        placeholder={formLoading ? '正在加载学生名单...' : '张三\n李四\n王五'}
+                        disabled={formLoading || form.formState.isSubmitting}
+                        {...field}
+                      />
+                    </FormControl>
+                    {formLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        正在加载班级名单...
+                      </div>
+                    ) : null}
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {formLoading ? (
-                <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  正在加载班级名单...
-                </div>
-              ) : null}
-              {errors.names_text?.message ? <p className="text-xs text-destructive">{errors.names_text.message}</p> : null}
-            </div>
 
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button type="button" variant="outline" onClick={closeEditor}>
-                取消
-              </Button>
-              <Button type="submit" disabled={isSubmitting || formLoading}>
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                保存
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button type="button" variant="outline" onClick={closeEditor}>
+                  取消
+                </Button>
+                <Button type="submit" disabled={form.formState.isSubmitting || formLoading}>
+                  {form.formState.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  保存
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

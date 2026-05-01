@@ -53,6 +53,7 @@ const rowActionButton = (
         className={cn(options?.danger ? "text-destructive hover:text-destructive" : "")}
         disabled={options?.disabled}
         onClick={onClick}
+        aria-label={title}
       >
         {icon}
       </Button>

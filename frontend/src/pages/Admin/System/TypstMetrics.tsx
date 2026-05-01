@@ -31,7 +31,7 @@ const TypstMetricsPanel: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const counts = data?.typst_compile?.counts;

@@ -183,7 +183,7 @@ const ArticlesPage: React.FC = () => {
       }
     };
 
-    fetchCategories();
+    void fetchCategories();
 
     return () => {
       isMounted = false;
@@ -272,7 +272,7 @@ const ArticlesPage: React.FC = () => {
       }
     };
 
-    fetchArticles();
+    void fetchArticles();
 
     return () => {
       isMounted = false;
@@ -368,7 +368,7 @@ const ArticlesPage: React.FC = () => {
 
   const navigateToArticle = useCallback(
     (slug: string) => {
-      navigate(`/articles/${slug}`);
+      void navigate(`/articles/${slug}`);
     },
     [navigate],
   );

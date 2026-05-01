@@ -134,7 +134,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
 
   useEffect(() => {
     if (open && importFile) {
-      runPreview(importFile);
+      void runPreview(importFile);
     }
   }, [importFile, open, runPreview]);
 

@@ -38,7 +38,7 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
             </span>
           )}
           {categoryName && (
-            <Badge variant="primarySubtle" className="!m-0 text-xs">
+            <Badge variant="info" className="!m-0 text-xs">
               {categoryName}
             </Badge>
           )}

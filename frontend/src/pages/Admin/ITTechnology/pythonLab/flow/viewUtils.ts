@@ -1,5 +1,5 @@
 
-import { FlowNode, FlowEdge } from "./model";
+import type { FlowNode, FlowEdge } from "./model";
 import { nodeSizeForTitle } from "./ports";
 
 export function calculateFitView(

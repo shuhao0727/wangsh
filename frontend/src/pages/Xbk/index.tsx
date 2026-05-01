@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -168,8 +169,10 @@ const LegacyConfigDataTable = <T extends Record<string, unknown>>({
   return (
     <DataTable
       table={table}
-      className="h-full xbk-data-table"
+      className="xbk-data-table"
       tableClassName="xbk-table-native min-w-max"
+      tableScrollContainer={false}
+      stickyHeader
       emptyState={
         loading ? (
           <div className="py-10 text-center text-sm text-text-tertiary">
@@ -213,6 +216,17 @@ const toText = (value: unknown) =>
     ? "-"
     : String(value);
 
+const getCourseResultRowKey = (record: XbkCourseResultRow) =>
+  [
+    record.year,
+    record.term,
+    record.grade ?? "",
+    record.class_name ?? "",
+    record.student_no,
+    record.course_code,
+    record.course_name ?? "",
+  ].join("::");
+
 const XbkPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -224,6 +238,7 @@ const XbkPage: React.FC = () => {
   const [meta, setMeta] = useState<XbkMeta>({ years: [], terms: [], classes: [] });
   const [summary, setSummary] = useState<XbkSummary | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const dataRequestSeqRef = useRef(0);
 
   const [students, setStudents] = useState<XbkStudentRow[]>([]);
   const [courses, setCourses] = useState<XbkCourseRow[]>([]);
@@ -279,6 +294,9 @@ const XbkPage: React.FC = () => {
   }, [filters.class_name, filters.term, filters.year]);
 
   const loadData = useCallback(async (tab: DataTabKey, page: number, size: number) => {
+    const requestSeq = dataRequestSeqRef.current + 1;
+    dataRequestSeqRef.current = requestSeq;
+    const isLatestRequest = () => dataRequestSeqRef.current === requestSeq;
     setDataLoading(true);
     const base = {
       year: filters.year,
@@ -294,6 +312,7 @@ const XbkPage: React.FC = () => {
           page,
           size,
         });
+        if (!isLatestRequest()) return;
         setCourseResults(res.items);
         updatePg("course_results", { total: res.total });
       } else if (tab === "students") {
@@ -302,6 +321,7 @@ const XbkPage: React.FC = () => {
           page,
           size,
         });
+        if (!isLatestRequest()) return;
         setStudents(res.items);
         updatePg("students", { total: res.total });
       } else if (tab === "courses") {
@@ -313,6 +333,7 @@ const XbkPage: React.FC = () => {
           page,
           size,
         });
+        if (!isLatestRequest()) return;
         setCourses(res.items);
         updatePg("courses", { total: res.total });
       } else if (tab === "unselected") {
@@ -322,6 +343,7 @@ const XbkPage: React.FC = () => {
           grade: base.grade,
           class_name: base.class_name,
         });
+        if (!isLatestRequest()) return;
         const items = res.items || [];
         setUnselectedAll(items);
         updatePg("unselected", { total: items.length });
@@ -332,6 +354,7 @@ const XbkPage: React.FC = () => {
           grade: base.grade,
           class_name: base.class_name,
         });
+        if (!isLatestRequest()) return;
         const items = res.items || [];
         setSuspendedAll(items);
         updatePg("suspended", { total: items.length });
@@ -341,13 +364,17 @@ const XbkPage: React.FC = () => {
           page,
           size,
         });
+        if (!isLatestRequest()) return;
         setSelections(res.items);
         updatePg("selections", { total: res.total });
       }
     } catch (e) {
+      if (!isLatestRequest()) return;
       showMessage.error(getErrorMsg(e, "加载数据失败"));
     } finally {
-      setDataLoading(false);
+      if (isLatestRequest()) {
+        setDataLoading(false);
+      }
     }
   }, [
     filters.year,
@@ -856,7 +883,7 @@ const XbkPage: React.FC = () => {
 
   const renderTable = (tab: DataTabKey) => {
     const map: Record<DataTabKey, TableConfig<any>> = {
-      course_results: { columns: courseResultColumns, data: courseResults, rowKey: "id" },
+      course_results: { columns: courseResultColumns, data: courseResults, rowKey: getCourseResultRowKey },
       students: { columns: studentColumns, data: students, rowKey: "id" },
       courses: { columns: courseColumns, data: courses, rowKey: "id" },
       selections: {
@@ -938,7 +965,7 @@ const XbkPage: React.FC = () => {
             <h3 className="mb-[var(--ws-space-3)] text-sm font-semibold">筛选条件</h3>
 
             <div className="xbk-filter-field">
-              <label>年份</label>
+              <label htmlFor="xbk-filter-year">年份</label>
               <Select
                 value={filters.year ? String(filters.year) : FILTER_ALL}
                 onValueChange={(value) =>
@@ -948,7 +975,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="xbk-filter-year" aria-label="年份">
                   <SelectValue placeholder="选择年份" />
                 </SelectTrigger>
                 <SelectContent>
@@ -963,7 +990,7 @@ const XbkPage: React.FC = () => {
             </div>
 
             <div className="xbk-filter-field">
-              <label>学期</label>
+              <label htmlFor="xbk-filter-term">学期</label>
               <Select
                 value={filters.term || FILTER_ALL}
                 onValueChange={(value) =>
@@ -973,7 +1000,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="xbk-filter-term" aria-label="学期">
                   <SelectValue placeholder="选择学期" />
                 </SelectTrigger>
                 <SelectContent>
@@ -985,7 +1012,7 @@ const XbkPage: React.FC = () => {
             </div>
 
             <div className="xbk-filter-field">
-              <label>年级</label>
+              <label htmlFor="xbk-filter-grade">年级</label>
               <Select
                 value={filters.grade || FILTER_ALL}
                 onValueChange={(value) =>
@@ -996,7 +1023,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="xbk-filter-grade" aria-label="年级">
                   <SelectValue placeholder="选择年级" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1008,7 +1035,7 @@ const XbkPage: React.FC = () => {
             </div>
 
             <div className="xbk-filter-field">
-              <label>班级</label>
+              <label htmlFor="xbk-filter-class">班级</label>
               <Select
                 value={filters.class_name || FILTER_ALL}
                 onValueChange={(value) =>
@@ -1018,7 +1045,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="xbk-filter-class" aria-label="班级">
                   <SelectValue placeholder="选择班级" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1033,10 +1060,12 @@ const XbkPage: React.FC = () => {
             </div>
 
             <div className="xbk-filter-field">
-              <label>搜索</label>
+              <label htmlFor="xbk-filter-search">搜索</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                 <Input
+                  id="xbk-filter-search"
+                  aria-label="搜索"
                   className="pl-[var(--ws-search-input-padding-start)]"
                   value={filters.search_text || ""}
                   placeholder="关键字搜索..."

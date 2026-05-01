@@ -12,7 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { Activity, ActivityStats } from "@services/classroom";
+import type { Activity, ActivityStats, OptionItem } from "@services/classroom";
 
 const ANALYSIS_STATUS_MAP: Record<string, { variant: React.ComponentProps<typeof Badge>["variant"]; text: string }> = {
   pending:        { variant: "neutral", text: "待分析" },
@@ -33,7 +33,7 @@ const parseBlankAnswers = (raw?: string | null): string[] => {
     if (parsed && typeof parsed === "object") {
       return Object.keys(parsed)
         .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as any)[k] ?? "").trim());
+        .map((k) => String((parsed as Record<string, unknown>)[k] ?? "").trim());
     }
   } catch {
     return [text];
@@ -139,7 +139,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
   const riskSlots = Array.isArray(analysisContext.risk_slots) ? analysisContext.risk_slots : [];
   const commonMistakes = Array.isArray(analysisContext.common_mistakes) ? analysisContext.common_mistakes : [];
   const analysisStatus = ANALYSIS_STATUS_MAP[String(activity.analysis_status || "")] || ANALYSIS_STATUS_MAP.pending;
-  const codeOpt = Array.isArray(activity.options) ? (activity.options as any[]).find((o) => o.key === "__code__") : null;
+  const codeOpt = Array.isArray(activity.options) ? activity.options.find((o) => o.key === "__code__") : null;
 
   const lifecycle =
     activity.status === "active"
@@ -164,7 +164,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
       {activity.activity_type === "vote" && Array.isArray(activity.options) && activity.options.length > 0 && (
         <div className="mb-3">
           <div className="mb-1 text-xs text-text-tertiary">选项</div>
-          {(activity.options as any[]).map((opt: any) => {
+          {activity.options.map((opt: OptionItem) => {
             const isCorrect = activity.correct_answer?.includes(opt.key);
             return (
               <div
@@ -203,7 +203,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
           <div className="mb-2.5 text-sm font-semibold">答题统计（{stats.total_responses} 人参与）</div>
           {activity.activity_type === "vote" &&
             Array.isArray(activity.options) &&
-            (activity.options as any[]).map((opt: any) => {
+            activity.options.map((opt: OptionItem) => {
               const count = stats.option_counts?.[opt.key] || 0;
               const pct = stats.total_responses > 0 ? Math.round((count / stats.total_responses) * 100) : 0;
               const isCorrect = activity.correct_answer?.includes(opt.key);
@@ -232,10 +232,10 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
                 <div className="text-xs text-text-tertiary">暂无作答数据</div>
               )}
               {Array.isArray(stats.blank_slot_stats) &&
-                stats.blank_slot_stats.map((slot: any) => (
+                stats.blank_slot_stats.map((slot) => (
                   <div key={slot.slot_index} className="mb-2 rounded-lg border border-border p-2">
                     <div className="mb-1 text-sm">
-                      <Badge variant="violet" className="mr-1">空位 {slot.slot_index}</Badge>
+                      <Badge variant="purple" className="mr-1">空位 {slot.slot_index}</Badge>
                       标准答案：{slot.correct_answer}
                     </div>
                     <div className="mb-1 flex items-center gap-2 text-xs text-text-tertiary">
@@ -251,7 +251,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
                     />
                     {slot.top_wrong_answers?.length > 0 && (
                       <div className="mt-1 text-xs text-text-tertiary">
-                        高频错答：{slot.top_wrong_answers.slice(0, 3).map((x: any) => `${x.answer}(${x.count})`).join("、")}
+                        高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
                       </div>
                     )}
                   </div>
@@ -273,12 +273,12 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
               <SimpleMarkdown text={activity.analysis_result} />
               {riskSlots.length > 0 && (
                 <div className="mt-2 text-xs text-[var(--ws-color-warning)]">
-                  薄弱空位：{riskSlots.map((s: any) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}
+                  薄弱空位：{riskSlots.map((s: { slot_index?: number; correct_rate?: number }) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}
                 </div>
               )}
               {commonMistakes.length > 0 && (
                 <div className="mt-1 text-xs text-text-secondary">
-                  高频错答：{commonMistakes.slice(0, 5).map((x: any) => `${x.answer}(${x.count})`).join("、")}
+                  高频错答：{commonMistakes.slice(0, 5).map((x: { answer?: string; count?: number }) => `${x.answer}(${x.count})`).join("、")}
                 </div>
               )}
             </div>

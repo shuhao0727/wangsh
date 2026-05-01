@@ -6,6 +6,12 @@ import { logger } from "../logger";
 const BASE = "/assessment";
 const ADMIN_BASE = "/assessment/admin";
 
+interface ValidationErrorItem {
+  loc?: unknown;
+  msg?: unknown;
+  message?: unknown;
+}
+
 interface ApiErrorShape {
   message?: string;
   response?: { data?: { detail?: unknown } };
@@ -17,7 +23,7 @@ const toDetailMessage = (detail: unknown): string | undefined => {
   if (!detail) return undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    return detail.map((d: any) => {
+    return detail.map((d: string | ValidationErrorItem) => {
       if (typeof d === "string") return d;
       const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
       const msg = String(d?.msg || d?.message || "");
@@ -195,7 +201,7 @@ export const assessmentSessionApi = {
   available: async (): Promise<AvailableAssessment[]> => {
     try {
       const resp = await api.get(`${BASE}/available`);
-      return resp.data as any;
+      return resp.data as unknown as AvailableAssessment[];
     } catch (error) {
       logger.error("获取可用测评失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取可用测评失败");
@@ -205,7 +211,7 @@ export const assessmentSessionApi = {
   start: async (configId: number): Promise<SessionStartResponse> => {
     try {
       const resp = await api.post(`${BASE}/sessions/start`, { config_id: configId }, { timeout: 120000 });
-      return resp.data as any;
+      return resp.data as unknown as SessionStartResponse;
     } catch (error) {
       logger.error("开始检测失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "开始检测失败");
@@ -215,7 +221,7 @@ export const assessmentSessionApi = {
   getQuestions: async (sessionId: number): Promise<QuestionForStudent[]> => {
     try {
       const resp = await api.get(`${BASE}/sessions/${sessionId}/questions`);
-      return resp.data as any;
+      return resp.data as unknown as QuestionForStudent[];
     } catch (error) {
       logger.error("获取题目失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取题目失败");
@@ -225,7 +231,7 @@ export const assessmentSessionApi = {
   submitAnswer: async (sessionId: number, data: { answer_id: number; student_answer: string }): Promise<AnswerResult> => {
     try {
       const resp = await api.post(`${BASE}/sessions/${sessionId}/answer`, data, { timeout: 120000 });
-      return resp.data as any;
+      return resp.data as unknown as AnswerResult;
     } catch (error) {
       logger.error("提交答案失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "提交答案失败");
@@ -235,7 +241,7 @@ export const assessmentSessionApi = {
   submit: async (sessionId: number): Promise<SessionSubmitResponse> => {
     try {
       const resp = await api.post(`${BASE}/sessions/${sessionId}/submit`, {}, { timeout: 120000 });
-      return resp.data as any;
+      return resp.data as unknown as SessionSubmitResponse;
     } catch (error) {
       logger.error("提交检测失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "提交检测失败");
@@ -245,7 +251,7 @@ export const assessmentSessionApi = {
   getResult: async (sessionId: number): Promise<SessionResultResponse> => {
     try {
       const resp = await api.get(`${BASE}/sessions/${sessionId}/result`);
-      return resp.data as any;
+      return resp.data as unknown as SessionResultResponse;
     } catch (error) {
       logger.error("获取检测结果失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取检测结果失败");
@@ -255,7 +261,7 @@ export const assessmentSessionApi = {
   getBasicProfile: async (sessionId: number): Promise<BasicProfileResponse> => {
     try {
       const resp = await api.get(`${BASE}/sessions/${sessionId}/basic-profile`);
-      return resp.data as any;
+      return resp.data as unknown as BasicProfileResponse;
     } catch (error) {
       logger.error("获取初级画像失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取初级画像失败");
@@ -266,7 +272,7 @@ export const assessmentSessionApi = {
   getClassNames: async (configId: number): Promise<string[]> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/class-names`);
-      return (resp.data as any).class_names || [];
+      return (resp.data as unknown as { class_names?: string[] }).class_names || [];
     } catch (error) {
       logger.error("获取班级列表失败:", error);
       return [];
@@ -279,7 +285,7 @@ export const assessmentSessionApi = {
   }): Promise<SessionListResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/sessions`, { params });
-      return resp.data as any;
+      return resp.data as unknown as SessionListResponse;
     } catch (error) {
       logger.error("获取答题列表失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取答题列表失败");
@@ -289,7 +295,7 @@ export const assessmentSessionApi = {
   getSessionDetail: async (sessionId: number): Promise<SessionResultResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/sessions/${sessionId}`);
-      return resp.data as any;
+      return resp.data as unknown as SessionResultResponse;
     } catch (error) {
       logger.error("获取答题详情失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取答题详情失败");
@@ -299,7 +305,7 @@ export const assessmentSessionApi = {
   getAdminBasicProfile: async (sessionId: number): Promise<BasicProfileResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/sessions/${sessionId}/basic-profile`);
-      return resp.data as any;
+      return resp.data as unknown as BasicProfileResponse;
     } catch (error) {
       logger.error("获取学生画像失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取学生画像失败");
@@ -314,7 +320,7 @@ export const assessmentSessionApi = {
   }): Promise<StatisticsResponse> => {
     try {
       const resp = await api.get(`${ADMIN_BASE}/configs/${configId}/statistics`, { params });
-      return resp.data as any;
+      return resp.data as unknown as StatisticsResponse;
     } catch (error) {
       logger.error("获取统计数据失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取统计数据失败");
@@ -324,7 +330,7 @@ export const assessmentSessionApi = {
   allowRetest: async (sessionId: number): Promise<{ session_id: number; status: string; message: string }> => {
     try {
       const resp = await api.post(`${ADMIN_BASE}/sessions/${sessionId}/allow-retest`);
-      return resp.data as any;
+      return resp.data as unknown as { session_id: number; status: string; message: string };
     } catch (error) {
       logger.error("允许重测失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "允许重测失败");
@@ -334,7 +340,7 @@ export const assessmentSessionApi = {
   batchRetest: async (configId: number, params: { session_ids?: number[]; class_name?: string }): Promise<{ deleted_count: number; message: string }> => {
     try {
       const resp = await api.post(`${ADMIN_BASE}/configs/${configId}/batch-retest`, params);
-      return resp.data as any;
+      return resp.data as unknown as { deleted_count: number; message: string };
     } catch (error) {
       logger.error("批量重测失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "批量重测失败");
@@ -371,7 +377,7 @@ export const assessmentSessionApi = {
   getProfileStatus: async (sessionId: number): Promise<ProfileStatusResponse> => {
     try {
       const resp = await api.get(`${BASE}/sessions/${sessionId}/profile-status`);
-      return resp.data as any;
+      return resp.data as unknown as ProfileStatusResponse;
     } catch (error) {
       logger.error("获取画像状态失败:", error);
       throw new Error(toDetailMessage(asApiError(error).response?.data?.detail) || "获取画像状态失败");

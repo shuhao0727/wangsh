@@ -34,7 +34,7 @@ const InformaticsDetailPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       if (!noteId) {
-        navigate("/informatics");
+        void navigate("/informatics");
         return;
       }
       setLoading(true);
@@ -43,12 +43,12 @@ const InformaticsDetailPage: React.FC = () => {
         setNote(n);
       } catch (e: any) {
         showMessage.error(e?.response?.data?.detail || e?.message || "内容不存在");
-        navigate("/informatics");
+        void navigate("/informatics");
       } finally {
         setLoading(false);
       }
     };
-    load();
+    void load();
   }, [noteId, navigate]);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ const InformaticsDetailPage: React.FC = () => {
         if (renderTokenRef.current === token) setPdfLoading(false);
       }
     };
-    render();
+    void render();
   }, [note, noteId]);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ const InformaticsDetailPage: React.FC = () => {
     <div className="informatics-page">
       <div className="informatics-detail-top">
         <div className="flex items-center gap-2.5">
-          <Button variant="outline" onClick={() => navigate("/informatics")}>
+          <Button variant="outline" onClick={() => void navigate("/informatics")}>
             <ArrowLeft className="h-4 w-4" />
             返回
           </Button>

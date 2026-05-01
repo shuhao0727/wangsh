@@ -325,10 +325,12 @@ const AdminCategories: React.FC = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    loadCategories();
+    void loadCategories();
   }, [loadCategories]);
 
-  useAdminSSE("category_changed", loadCategories);
+  useAdminSSE("category_changed", () => {
+    void loadCategories();
+  });
 
   const filteredCategories = useMemo(() => {
     const kw = searchKeyword.trim().toLowerCase();
@@ -367,7 +369,7 @@ const AdminCategories: React.FC = () => {
       await categoryApi.deleteCategory(deleteTarget);
       showMessage.success("分类删除成功");
       setDeleteTarget(null);
-      loadCategories();
+      void loadCategories();
     } catch (error: any) {
       logger.error("删除分类失败:", error);
       showMessage.error(error?.response?.data?.detail || "删除分类失败");
@@ -405,7 +407,7 @@ const AdminCategories: React.FC = () => {
         }
       });
 
-      loadCategories();
+      void loadCategories();
 
       if (errorCount === 0) {
         showMessage.success(`成功删除 ${successCount} 个分类`);
@@ -424,7 +426,7 @@ const AdminCategories: React.FC = () => {
   };
 
   const handleViewArticles = useCallback((id: number, name: string) => {
-    navigate(`/admin/articles?category=${id}`);
+    void navigate(`/admin/articles?category=${id}`);
     showMessage.info(`正在查看 "${name}" 分类的文章`);
   }, [navigate]);
 
@@ -568,7 +570,7 @@ const AdminCategories: React.FC = () => {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" aria-label="更多操作">
                   <Ellipsis className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -762,7 +764,7 @@ const AdminCategories: React.FC = () => {
         onClose={() => setEditModalVisible(false)}
         onSaved={() => {
           setEditModalVisible(false);
-          loadCategories();
+          void loadCategories();
         }}
       />
       <ConfirmDialog

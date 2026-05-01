@@ -1,9 +1,12 @@
 /**
  * 答题统计页 - /admin/assessment/:id/statistics
+ *
+ * Data fetching migrated from manual useState + useEffect + API
+ * to TanStack Query hooks (useAssessmentStatisticsQuery).
  */
 import { showMessage } from "@/lib/toast";
 import { echarts } from "@/lib/echarts";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -40,17 +43,10 @@ import {
 } from "@components/ProfileView";
 import {
   assessmentSessionApi,
-  assessmentConfigApi,
-  profileApi,
-  type StatisticsResponse,
   type SessionListItem,
-  type SessionListResponse,
-  type StudentProfile,
 } from "@services/assessment";
 import type {
-  SessionResultResponse,
   AnswerDetailResponse,
-  BasicProfileResponse,
 } from "@services/assessment";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,6 +68,20 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { useAssessmentConfig } from "@/hooks/queries/useAssessmentQuery";
+import {
+  useAssessmentStatistics,
+  useAssessmentSessions,
+  useAssessmentClassNames,
+  useGradedStudents,
+  useSessionDetail,
+  useStudentProfile,
+  useAllowRetest,
+  useBatchRetest,
+  useExportXlsx,
+  useGenerateProfile,
+  useBatchGenerateProfiles,
+} from "@/hooks/queries/useAssessmentStatisticsQuery";
 
 const FILTER_ALL = "__all__";
 
@@ -87,7 +97,7 @@ type RadarOption = {
 };
 
 const statusMap: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }> = {
-  in_progress: { label: "答题中", variant: "sky" },
+  in_progress: { label: "答题中", variant: "info" },
   submitted: { label: "已提交", variant: "warning" },
   graded: { label: "已评分", variant: "success" },
 };
@@ -115,11 +125,8 @@ const StatisticsPage: React.FC = () => {
   const configId = Number(id);
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [configTitle, setConfigTitle] = useState("");
-  const [stats, setStats] = useState<StatisticsResponse | null>(null);
+  // ─── UI filter state (kept as local React state) ───
 
-  const [classNames, setClassNames] = useState<string[]>([]);
   const [filterClass, setFilterClass] = useState<string | undefined>();
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [searchText, setSearchText] = useState("");
@@ -162,40 +169,31 @@ const StatisticsPage: React.FC = () => {
     }
   };
 
+  // ─── Radar chart picker state ───
+
   const [radarLeft, setRadarLeft] = useState<RadarPick>({ type: "all" });
   const [radarRight, setRadarRight] = useState<RadarPick | null>(null);
   const [radarLeftData, setRadarLeftData] = useState<{ name: string; data: Record<string, number> } | null>(null);
   const [radarRightData, setRadarRightData] = useState<{ name: string; data: Record<string, number> } | null>(null);
-  const [allGradedStudents, setAllGradedStudents] = useState<{ id: number; user_name: string; class_name: string | null }[]>([]);
 
-  const [sessions, setSessions] = useState<SessionListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  // ─── Pagination & selection (local UI state) ───
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [listLoading, setListLoading] = useState(false);
-  const listRequestSeqRef = useRef(0);
-
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
-  const [batchRetesting, setBatchRetesting] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState<SessionResultResponse | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileData, setProfileData] = useState<BasicProfileResponse | null>(null);
-  const [advancedProfile, setAdvancedProfile] = useState<StudentProfile | null>(null);
-  const [profileTab, setProfileTab] = useState<"basic" | "advanced">("basic");
-  const [generatingProfile, setGeneratingProfile] = useState(false);
-  const [batchGenerating, setBatchGenerating] = useState(false);
-  const [profileUserId, setProfileUserId] = useState<number | null>(null);
-  const [configAgentId, setConfigAgentId] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{ message: string; onOk: () => void } | null>(null);
 
-  useEffect(() => {
-    assessmentSessionApi.getClassNames(configId).then(setClassNames).catch(() => setClassNames([]));
-  }, [configId]);
+  // ─── Dialog state ───
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailSessionId, setDetailSessionId] = useState<number | null>(null);
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileUserId, setProfileUserId] = useState<number | null>(null);
+  const [profileSessionId, setProfileSessionId] = useState<number | null>(null);
+  const [profileTab, setProfileTab] = useState<"basic" | "advanced">("basic");
+
+  // ─── Derived time params ───
 
   const timeParams = useMemo(() => {
     const params: { time_field?: string; start_date?: string; end_date?: string } = {};
@@ -207,93 +205,68 @@ const StatisticsPage: React.FC = () => {
     return params;
   }, [timeField, startDate, endDate]);
 
-  const loadStats = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [statsResp, configResp] = await Promise.all([
-        assessmentSessionApi.getStatistics(configId, { class_name: filterClass, ...timeParams }),
-        assessmentConfigApi.get(configId),
-      ]);
-      setStats(statsResp);
-      setConfigTitle(configResp.title);
-      setConfigAgentId(configResp.agent_id ?? null);
-    } catch (e: any) {
-      showMessage.error(e.message || "加载统计数据失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [configId, filterClass, timeParams]);
+  // ─── TanStack Query hooks ───
 
-  const loadSessions = useCallback(async () => {
-    const requestSeq = ++listRequestSeqRef.current;
-    try {
-      setListLoading(true);
-      const resp: SessionListResponse = await assessmentSessionApi.getConfigSessions(configId, {
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-        class_name: filterClass,
-        status: filterStatus,
-        search: searchValue || undefined,
-        ...timeParams,
-      });
-      if (requestSeq !== listRequestSeqRef.current) return;
-      setSessions(resp.items);
-      setTotal(resp.total);
-    } catch (e: any) {
-      if (requestSeq !== listRequestSeqRef.current) return;
-      showMessage.error(e.message || "加载答题列表失败");
-    } finally {
-      if (requestSeq === listRequestSeqRef.current) {
-        setListLoading(false);
-      }
-    }
-  }, [configId, page, pageSize, filterClass, filterStatus, searchValue, timeParams]);
+  const configQuery = useAssessmentConfig(configId);
+  const configTitle = configQuery.data?.title ?? "";
+  const configAgentId = configQuery.data?.agent_id ?? null;
+
+  const statsQuery = useAssessmentStatistics(configId, {
+    class_name: filterClass,
+    ...timeParams,
+  });
+  const stats = statsQuery.data ?? null;
+
+  const sessionsQuery = useAssessmentSessions(configId, {
+    skip: (page - 1) * pageSize,
+    limit: pageSize,
+    class_name: filterClass,
+    status: filterStatus,
+    search: searchValue || undefined,
+    ...timeParams,
+  });
+  const sessions = useMemo(() => sessionsQuery.data?.items ?? [], [sessionsQuery.data?.items]);
+  const total = sessionsQuery.data?.total ?? 0;
+
+  const classNamesQuery = useAssessmentClassNames(configId);
+  const classNames = useMemo(() => classNamesQuery.data ?? [], [classNamesQuery.data]);
+
+  const gradedStudentsQuery = useGradedStudents(configId);
+  const allGradedStudents = useMemo(() => gradedStudentsQuery.data ?? [], [gradedStudentsQuery.data]);
+
+  const detailQuery = useSessionDetail(detailSessionId);
+
+  const profileQuery = useStudentProfile(profileSessionId, profileUserId, configId);
+
+  // ─── Mutations ───
+
+  const allowRetestMutation = useAllowRetest();
+  const batchRetestMutation = useBatchRetest();
+  const exportMutation = useExportXlsx();
+  const generateProfileMutation = useGenerateProfile();
+  const batchGenerateMutation = useBatchGenerateProfiles();
+
+  // ─── List filter key (reset pagination on filter change) ───
 
   const listFilterKey = useMemo(
     () =>
       [
-        configId,
         filterClass ?? "",
         filterStatus ?? "",
         searchValue,
         timeParams.time_field ?? "",
         timeParams.start_date ?? "",
         timeParams.end_date ?? "",
-      ].join("\u0001"),
-    [configId, filterClass, filterStatus, searchValue, timeParams],
+      ].join(""),
+    [filterClass, filterStatus, searchValue, timeParams],
   );
-
-  useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
 
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
     setSelectedRowKeys((prev) => (prev.length ? [] : prev));
   }, [listFilterKey]);
 
-  useEffect(() => {
-    void loadSessions();
-  }, [loadSessions]);
-
-  useEffect(() => {
-    assessmentSessionApi
-      .getConfigSessions(configId, { limit: 100, status: "graded" })
-      .then((resp) =>
-        setAllGradedStudents(
-          resp.items
-            .filter((session) => session.user_name)
-            .map((session) => ({
-              id: session.id,
-              user_name: session.user_name!,
-              class_name: session.class_name,
-            })),
-        ),
-      )
-      .catch(() => {
-        setAllGradedStudents([]);
-      });
-  }, [configId]);
+  // ─── Radar data loading (complex reuse-from-cache logic kept as-is) ───
 
   const loadRadarPick = useCallback(
     async (pick: RadarPick): Promise<{ name: string; data: Record<string, number> } | null> => {
@@ -400,141 +373,106 @@ const StatisticsPage: React.FC = () => {
     };
   }, [radarRight, loadRadarPick, resolveRadarPickFromLoadedStats]);
 
-  const handleViewDetail = useCallback(async (sessionId: number) => {
-    try {
-      setDetailOpen(true);
-      setDetailLoading(true);
-      setDetailData(await assessmentSessionApi.getSessionDetail(sessionId));
-    } catch (e: any) {
-      showMessage.error(e.message || "加载答题详情失败");
-    } finally {
-      setDetailLoading(false);
-    }
+  // ─── Action handlers ───
+
+  const handleViewDetail = useCallback((sessionId: number) => {
+    setDetailOpen(true);
+    setDetailSessionId(sessionId);
   }, []);
 
-  const handleViewProfile = useCallback(async (sessionId: number, userId: number) => {
-    try {
-      setProfileOpen(true);
-      setProfileLoading(true);
-      setProfileTab("basic");
-      setProfileUserId(userId);
-      setAdvancedProfile(null);
-      const [basic, advancedResp] = await Promise.all([
-        assessmentSessionApi.getAdminBasicProfile(sessionId),
-        profileApi.list({ target_id: String(userId), limit: 1 }).catch(() => ({ items: [] })),
-      ]);
-      setProfileData(basic);
-      setAdvancedProfile(advancedResp.items.length > 0 ? advancedResp.items[0] : null);
-    } catch (e: any) {
-      showMessage.error(e.message || "加载画像失败");
-      setProfileOpen(false);
-    } finally {
-      setProfileLoading(false);
-    }
+  const handleViewProfile = useCallback((sessionId: number, userId: number) => {
+    setProfileOpen(true);
+    setProfileTab("basic");
+    setProfileUserId(userId);
+    setProfileSessionId(sessionId);
   }, []);
 
   const handleAllowRetest = useCallback((sessionId: number) => {
-    setConfirmState({ message: "允许该学生重新测试？", onOk: async () => {
-      try {
-        await assessmentSessionApi.allowRetest(sessionId);
-        showMessage.success("已允许重新测试");
-        await Promise.all([loadSessions(), loadStats()]);
-      } catch (e: any) {
-        showMessage.error(e.message || "操作失败");
-      }
-    } });
-  }, [loadSessions, loadStats]);
+    setConfirmState({
+      message: "允许该学生重新测试？",
+      onOk: () => {
+        allowRetestMutation.mutate(sessionId, {
+          onSuccess: () => showMessage.success("已允许重新测试"),
+          onError: (e: any) => showMessage.error(e.message || "操作失败"),
+        });
+      },
+    });
+  }, [allowRetestMutation]);
 
-  const handleBatchRetest = async (mode: "class" | "selection") => {
-    setBatchRetesting(true);
-    try {
-      const params = mode === "class" ? { class_name: filterClass! } : { session_ids: selectedRowKeys.map(Number) };
-      const result = await assessmentSessionApi.batchRetest(configId, params);
-      showMessage.success(result.message || `已删除 ${result.deleted_count} 条记录`);
-      setSelectedRowKeys([]);
-      await Promise.all([loadSessions(), loadStats()]);
-    } catch (e: any) {
-      showMessage.error(e.message || "批量重测失败");
-    } finally {
-      setBatchRetesting(false);
-    }
-  };
+  const handleBatchRetest = useCallback((mode: "class" | "selection") => {
+    const params = mode === "class"
+      ? { class_name: filterClass! }
+      : { session_ids: selectedRowKeys.map(Number) };
+    batchRetestMutation.mutate(
+      { configId, params },
+      {
+        onSuccess: (result) => {
+          showMessage.success(result.message || `已删除 ${result.deleted_count} 条记录`);
+          setSelectedRowKeys([]);
+        },
+        onError: (e: any) => showMessage.error(e.message || "批量重测失败"),
+      },
+    );
+  }, [configId, filterClass, selectedRowKeys, batchRetestMutation]);
 
-  const handleExport = async () => {
-    try {
-      setExporting(true);
-      await assessmentSessionApi.exportXlsx(configId, {
-        class_name: filterClass,
-        status: filterStatus,
-        search: searchValue || undefined,
-        ...timeParams,
-      });
-      showMessage.success("导出成功");
-    } catch (e: any) {
-      showMessage.error(e.message || "导出失败");
-    } finally {
-      setExporting(false);
-    }
-  };
+  const handleExport = useCallback(() => {
+    exportMutation.mutate(
+      {
+        configId,
+        params: {
+          class_name: filterClass,
+          status: filterStatus,
+          search: searchValue || undefined,
+          ...timeParams,
+        },
+      },
+      {
+        onSuccess: () => showMessage.success("导出成功"),
+        onError: (e: any) => showMessage.error(e.message || "导出失败"),
+      },
+    );
+  }, [configId, filterClass, filterStatus, searchValue, timeParams, exportMutation]);
 
-  const handleGenerateProfile = async () => {
+  const handleGenerateProfile = useCallback(() => {
     if (!profileUserId || !configAgentId) {
       showMessage.warning("缺少配置信息，无法生成画像");
       return;
     }
 
-    setGeneratingProfile(true);
-    try {
-      const result = await profileApi.generate({
-        profile_type: "individual",
-        target_id: String(profileUserId),
-        config_id: configId,
-        agent_id: configAgentId,
-      });
-      setAdvancedProfile(result);
-      setProfileTab("advanced");
-      showMessage.success("三维画像生成成功");
-    } catch (e: any) {
-      showMessage.error(e.message || "生成画像失败");
-    } finally {
-      setGeneratingProfile(false);
-    }
-  };
+    generateProfileMutation.mutate(
+      { sessionId: profileSessionId!, profileUserId, configAgentId, configId },
+      {
+        onSuccess: () => {
+          setProfileTab("advanced");
+          showMessage.success("三维画像生成成功");
+        },
+        onError: (e: any) => showMessage.error(e.message || "生成画像失败"),
+      },
+    );
+  }, [profileUserId, configAgentId, configId, profileSessionId, generateProfileMutation]);
 
-  const handleBatchGenerateProfiles = async () => {
+  const handleBatchGenerateProfiles = useCallback(() => {
     if (!configAgentId) {
       showMessage.warning("该测评未配置 AI 智能体，无法生成画像");
       return;
     }
 
-    setBatchGenerating(true);
-    try {
-      const gradedSessions = await assessmentSessionApi.getConfigSessions(configId, {
-        limit: 100,
-        status: "graded",
-        class_name: filterClass,
-      });
-      const userIds = gradedSessions.items
-        .map((session) => session.user_id)
-        .filter((value, index, arr) => arr.indexOf(value) === index);
+    batchGenerateMutation.mutate(
+      { configId, configAgentId, filterClass },
+      {
+        onSuccess: (result) => showMessage.success(`已为 ${result.count} 名学生生成画像`),
+        onError: (e: any) => {
+          if (e?.message === "NO_GRADED_STUDENTS") {
+            showMessage.info("没有已评分的学生");
+          } else {
+            showMessage.error(e.message || "批量生成失败");
+          }
+        },
+      },
+    );
+  }, [configAgentId, configId, filterClass, batchGenerateMutation]);
 
-      if (userIds.length === 0) {
-        showMessage.info("没有已评分的学生");
-        return;
-      }
-
-      const result = await profileApi.batchGenerate({
-        user_ids: userIds,
-        config_id: configId,
-        agent_id: configAgentId,
-      });
-      showMessage.success(`已为 ${result.count} 名学生生成画像`);
-    } catch (e: any) {
-      showMessage.error(e.message || "批量生成失败");
-    } finally {
-      setBatchGenerating(false);
-    }
-  };
+  // ─── Derived data ───
 
   const radarSeries = useMemo(() => {
     const arr: { name: string; data: Record<string, number> }[] = [];
@@ -808,6 +746,10 @@ const StatisticsPage: React.FC = () => {
     setSearchValue(searchText.trim());
   };
 
+  // ─── Render ───
+
+  const statsLoading = statsQuery.isLoading && !statsQuery.data;
+
   return (
     <AdminPage scrollable>
       <div className="mb-5 flex flex-wrap items-center gap-2.5">
@@ -818,7 +760,7 @@ const StatisticsPage: React.FC = () => {
         <span className="text-xl font-semibold">{configTitle || "答题统计"}</span>
       </div>
 
-      {loading ? (
+      {statsLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
         </div>
@@ -880,6 +822,7 @@ const StatisticsPage: React.FC = () => {
                   className="h-7 w-7 p-0"
                   onClick={() => { setStartDate(""); setEndDate(""); setActivePreset(null); }}
                   title="清除时间筛选"
+                  aria-label="清除时间筛选"
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>
@@ -910,18 +853,62 @@ const StatisticsPage: React.FC = () => {
                   if (e.key === "Enter") { e.preventDefault(); onSearchSubmit(); }
                 }}
               />
-              <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={onSearchSubmit}><Search className="h-3.5 w-3.5" /></Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={onSearchSubmit}
+                aria-label="搜索学生"
+                title="搜索学生"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </Button>
               <div className="flex-1" />
               {filterClass && (
-                <Button size="sm" variant="outline" disabled={batchRetesting} onClick={() => { setConfirmState({ message: `确定让「${filterClass}」全班重新测试？`, onOk: () => { void handleBatchRetest("class"); } }); }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={batchRetestMutation.isPending}
+                  onClick={() => {
+                    setConfirmState({
+                      message: `确定让「${filterClass}」全班重新测试？`,
+                      onOk: () => { handleBatchRetest("class"); },
+                    });
+                  }}
+                >
                   <Redo className="mr-1 h-3.5 w-3.5" />全班重测
                 </Button>
               )}
-              <Button size="sm" variant="outline" disabled={batchGenerating} onClick={() => { const msg = filterClass ? `为「${filterClass}」已评分学生生成三维画像？` : "为所有已评分学生生成三维画像？"; setConfirmState({ message: msg, onOk: () => { void handleBatchGenerateProfiles(); } }); }}>
-                {batchGenerating ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 h-3.5 w-3.5" />}批量画像
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={batchGenerateMutation.isPending}
+                onClick={() => {
+                  const msg = filterClass
+                    ? `为「${filterClass}」已评分学生生成三维画像？`
+                    : "为所有已评分学生生成三维画像？";
+                  setConfirmState({ message: msg, onOk: () => { handleBatchGenerateProfiles(); } });
+                }}
+              >
+                {batchGenerateMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FlaskConical className="mr-1 h-3.5 w-3.5" />
+                )}
+                批量画像
               </Button>
-              <Button size="sm" variant="outline" disabled={exporting} onClick={() => { void handleExport(); }}>
-                {exporting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}导出
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={exportMutation.isPending}
+                onClick={() => { handleExport(); }}
+              >
+                {exportMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="mr-1 h-3.5 w-3.5" />
+                )}
+                导出
               </Button>
             </div>
           </Card>
@@ -972,9 +959,12 @@ const StatisticsPage: React.FC = () => {
                     <Badge variant="info">{selectedRowKeys.length} 已选</Badge>
                     <Button
                       size="sm" variant="link" className="h-6 px-1.5"
-                      disabled={batchRetesting}
+                      disabled={batchRetestMutation.isPending}
                       onClick={() => {
-                        setConfirmState({ message: `确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`, onOk: () => { void handleBatchRetest("selection"); } });
+                        setConfirmState({
+                          message: `确定让选中的 ${selectedRowKeys.length} 名学生重新测试？`,
+                          onOk: () => { handleBatchRetest("selection"); },
+                        });
                       }}
                     >批量重测</Button>
                     <Button size="sm" variant="link" className="h-6 px-1.5" onClick={() => setSelectedRowKeys([])}>取消</Button>
@@ -988,7 +978,7 @@ const StatisticsPage: React.FC = () => {
                   className="border-0"
                   tableClassName="min-w-[860px]"
                   emptyState={
-                    listLoading ? (
+                    sessionsQuery.isFetching && !sessionsQuery.data ? (
                       <div className="py-10 text-center text-sm text-text-tertiary">
                         <span className="inline-flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />正在加载...
@@ -999,7 +989,7 @@ const StatisticsPage: React.FC = () => {
                     )
                   }
                 />
-                {listLoading && sessions.length > 0 ? (
+                {sessionsQuery.isFetching && sessions.length > 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-surface/70 backdrop-blur-[1px]">
                     <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-secondary shadow-sm">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1062,14 +1052,22 @@ const StatisticsPage: React.FC = () => {
             </Card>
           </div>
         </>
-      ) : null}
+      ) : /* Error state: stats failed to load and no cached data */
+        statsQuery.isError ? (
+          <div className="py-10 text-center text-sm text-text-tertiary">
+            <p>加载统计数据失败</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => statsQuery.refetch()}>
+              重试
+            </Button>
+          </div>
+        ) : null}
 
       <Dialog
         open={detailOpen}
         onOpenChange={(next) => {
           if (!next) {
             setDetailOpen(false);
-            setDetailData(null);
+            setDetailSessionId(null);
           }
         }}
       >
@@ -1078,19 +1076,19 @@ const StatisticsPage: React.FC = () => {
             <DialogTitle>答题详情</DialogTitle>
           </DialogHeader>
 
-          {detailLoading ? (
+          {detailQuery.isFetching && !detailQuery.data ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
-          ) : detailData ? (
+          ) : detailQuery.data ? (
             <div className="space-y-3">
               <div className="grid gap-2 rounded-lg bg-surface-2 p-3 text-sm md:grid-cols-2">
-                <div><span className="text-text-tertiary">状态：</span><StatusTag status={detailData.status} /></div>
-                <div><span className="text-text-tertiary">得分：</span><span>{detailData.earned_score ?? "-"} / {detailData.total_score}</span></div>
-                <div><span className="text-text-tertiary">开始时间：</span><span>{detailData.started_at ? new Date(detailData.started_at).toLocaleString("zh-CN") : "-"}</span></div>
-                <div><span className="text-text-tertiary">提交时间：</span><span>{detailData.submitted_at ? new Date(detailData.submitted_at).toLocaleString("zh-CN") : "-"}</span></div>
+                <div><span className="text-text-tertiary">状态：</span><StatusTag status={detailQuery.data.status} /></div>
+                <div><span className="text-text-tertiary">得分：</span><span>{detailQuery.data.earned_score ?? "-"} / {detailQuery.data.total_score}</span></div>
+                <div><span className="text-text-tertiary">开始时间：</span><span>{detailQuery.data.started_at ? new Date(detailQuery.data.started_at).toLocaleString("zh-CN") : "-"}</span></div>
+                <div><span className="text-text-tertiary">提交时间：</span><span>{detailQuery.data.submitted_at ? new Date(detailQuery.data.submitted_at).toLocaleString("zh-CN") : "-"}</span></div>
               </div>
 
               <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
-                {detailData.answers.map((answer: AnswerDetailResponse, index: number) => (
+                {detailQuery.data.answers.map((answer: AnswerDetailResponse, index: number) => (
                   <details key={answer.id} className="rounded-lg border border-border bg-surface px-3 py-2">
                     <summary className="cursor-pointer select-none text-sm font-medium">
                       <span>{`第${index + 1}题`}</span>
@@ -1133,8 +1131,8 @@ const StatisticsPage: React.FC = () => {
         onOpenChange={(next) => {
           if (!next) {
             setProfileOpen(false);
-            setProfileData(null);
-            setAdvancedProfile(null);
+            setProfileSessionId(null);
+            setProfileUserId(null);
           }
         }}
       >
@@ -1142,7 +1140,7 @@ const StatisticsPage: React.FC = () => {
           <DialogHeader className="sr-only">
             <DialogTitle>学生画像详情</DialogTitle>
           </DialogHeader>
-          {profileLoading ? (
+          {profileQuery.isFetching && !profileQuery.data ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
           ) : (
             <div className="p-4">
@@ -1153,13 +1151,22 @@ const StatisticsPage: React.FC = () => {
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-0">
-                  {profileData ? <div className="pb-2"><BasicProfileView data={profileData} /></div> : <EmptyState description="暂无初级画像数据" />}
+                  {profileQuery.data?.basic ? (
+                    <div className="pb-2"><BasicProfileView data={profileQuery.data.basic} /></div>
+                  ) : (
+                    <EmptyState description="暂无初级画像数据" />
+                  )}
                 </TabsContent>
 
                 <TabsContent value="advanced" className="mt-0">
-                  {advancedProfile
-                    ? <div className="pb-2"><AdvancedProfileView profile={advancedProfile} /></div>
-                    : <AdvancedProfileEmpty onGenerate={handleGenerateProfile} loading={generatingProfile} />}
+                  {profileQuery.data?.advanced ? (
+                    <div className="pb-2"><AdvancedProfileView profile={profileQuery.data.advanced} /></div>
+                  ) : (
+                    <AdvancedProfileEmpty
+                      onGenerate={handleGenerateProfile}
+                      loading={generateProfileMutation.isPending}
+                    />
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

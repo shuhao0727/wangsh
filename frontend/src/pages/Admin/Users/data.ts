@@ -2,7 +2,7 @@
  * 用户管理相关数据
  */
 
-import { User } from "@services";
+import type { User } from "@services";
 
 // 模拟用户数据（保留为fallback）
 export const mockUsers: User[] = [

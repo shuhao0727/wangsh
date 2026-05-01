@@ -102,6 +102,9 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
 
         // Style
         const bgColor = n.style?.backgroundColor ?? "#FFF9C4";
+        const noteTextColor = "#2f2600";
+        const noteStroke = "color-mix(in srgb, var(--ws-color-warning) 52%, transparent)";
+        const noteArrowColor = "var(--ws-color-text-secondary)";
         const opacity = n.style?.opacity ?? 1;
         const dashed = n.style?.dashed ?? true;
         
@@ -135,7 +138,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                 rx={12}
                 ry={12}
                 fill={bgColor}
-                stroke="rgba(0, 0, 0, 0.08)"
+                stroke={noteStroke}
                 strokeWidth={2}
                 strokeDasharray={dashed ? "6 4" : undefined}
                 style={{ filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }}
@@ -153,7 +156,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                          textAlign: "center",
                          wordBreak: "break-word",
                          fontSize: "14px",
-                         color: "#333",
+                         color: noteTextColor,
                          fontFamily: "sans-serif"
                      }}>
                          {n.title}
@@ -185,6 +188,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                              outline: "2px solid #0EA5E9",
                              borderRadius: "12px",
                              background: bgColor,
+                             color: noteTextColor,
                              resize: "none",
                              padding: "8px",
                              fontSize: "14px",
@@ -272,7 +276,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                                      y1={start.y}
                                      x2={end.x}
                                      y2={end.y}
-                                     stroke="#666"
+                                     stroke={noteArrowColor}
                                      strokeWidth={2}
                                      strokeDasharray="4 4"
                                  />
@@ -289,7 +293,7 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
                                      return (
                                          <polygon
                                              points={`${end.x},${end.y} ${x1},${y1} ${x2},${y2}`}
-                                             fill="#666"
+                                             fill={noteArrowColor}
                                          />
                                      );
                                  })()}

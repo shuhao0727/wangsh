@@ -3,13 +3,14 @@
  * 三个板块：基本设置 → 固定题 → 自适应知识点题
  */
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import {
   type ColumnDef,
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import dayjs from "dayjs";
 import {
@@ -25,12 +26,21 @@ import {
 import { AdminPage } from "@components/Admin";
 import {
   assessmentQuestionApi,
-  assessmentConfigApi,
   type AssessmentQuestion,
 } from "@services/assessment";
-import { aiAgentsApi } from "@services/agents";
-import type { AIAgent } from "@services/znt/types";
-import { logger } from "@services/logger";
+import {
+  useAssessmentConfigForEditor,
+  useAssessmentQuestions,
+  useSaveAssessmentConfig,
+  useCreateAssessmentQuestion,
+  useUpdateAssessmentQuestion,
+  useDeleteAssessmentQuestion,
+  useGenerateAssessmentQuestions,
+  useAdaptiveKPs,
+} from "@hooks/queries/useAssessmentQuery";
+import type { AdaptiveKP } from "@hooks/queries/useAssessmentQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
+import { useAgentsList } from "@hooks/queries/useAIAgentsQuery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -59,7 +69,7 @@ const TYPE_MAP: Record<
   string,
   { label: string; variant: React.ComponentProps<typeof Badge>["variant"] }
 > = {
-  choice: { label: "选择题", variant: "sky" },
+  choice: { label: "选择题", variant: "info" },
   fill: { label: "填空题", variant: "success" },
   short_answer: { label: "简答题", variant: "warning" },
 };
@@ -87,16 +97,6 @@ const GRADE_OPTIONS = [
 
 type QuestionType = "choice" | "fill" | "short_answer";
 type Difficulty = "easy" | "medium" | "hard";
-
-type AdaptiveKP = {
-  key: string;
-  knowledge_point: string;
-  question_type: "choice" | "fill";
-  score: number;
-  prompt_hint: string;
-  mastery_streak: number;
-  max_attempts: number;
-};
 
 type ConfigDraft = {
   title: string;
@@ -212,15 +212,10 @@ const QuestionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const configId = Number(id);
+  const queryClient = useQueryClient();
 
-  const [configLoading, setConfigLoading] = useState(false);
-  const [configSaving, setConfigSaving] = useState(false);
   const [configDraft, setConfigDraft] = useState<ConfigDraft>(initialConfigDraft);
-  const [agents, setAgents] = useState<AIAgent[]>([]);
 
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<AssessmentQuestion[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterType, setFilterType] = useState<string | undefined>();
@@ -242,92 +237,67 @@ const QuestionsPage: React.FC = () => {
   const [adaptiveKPs, setAdaptiveKPs] = useState<AdaptiveKP[]>([]);
   const [adaptiveLoading, setAdaptiveLoading] = useState(false);
 
+  // ── TanStack Query hooks ──
+
+  const configIdValid = Number.isFinite(configId) ? configId : null;
+
+  const {
+    data: configData,
+    isLoading: configLoading,
+  } = useAssessmentConfigForEditor(configIdValid);
+
+  const {
+    data: questionsData,
+    isLoading: questionsLoading,
+  } = useAssessmentQuestions(configIdValid, {
+    page,
+    pageSize,
+    question_type: filterType,
+    difficulty: filterDiff,
+  });
+  const { data: fetchedAdaptiveKPs } = useAdaptiveKPs(configIdValid);
+
+  const { data: agentsData } = useAgentsList({ page: 1, pageSize: 100 });
+
+  const saveConfigMutation = useSaveAssessmentConfig();
+  const createQuestionMutation = useCreateAssessmentQuestion();
+  const updateQuestionMutation = useUpdateAssessmentQuestion();
+  const deleteQuestionMutation = useDeleteAssessmentQuestion();
+  const generateQuestionsMutation = useGenerateAssessmentQuestions();
+
+  const agents = agentsData?.items ?? [];
+  const items = useMemo(() => {
+    if (!questionsData?.items) return [];
+    return questionsData.items.filter((q: AssessmentQuestion) => q.mode !== "adaptive");
+  }, [questionsData?.items]);
+  const total = questionsData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const loadQuestions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const resp = await assessmentQuestionApi.list(configId, {
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-        question_type: filterType,
-        difficulty: filterDiff,
-      });
-      const fixed: AssessmentQuestion[] = [];
-      const adaptive: AdaptiveKP[] = [];
-      for (const q of resp.items) {
-        if (q.mode === "adaptive") {
-          let adaptiveConfig = {
-            mastery_streak: 2,
-            max_attempts: 5,
-            prompt_hint: "",
-          };
-          if (q.adaptive_config) {
-            try {
-              adaptiveConfig = { ...adaptiveConfig, ...JSON.parse(q.adaptive_config) };
-            } catch {}
-          }
-          adaptive.push({
-            key: String(q.id),
-            knowledge_point: q.knowledge_point || "",
-            question_type: q.question_type as "choice" | "fill",
-            score: q.score,
-            prompt_hint: adaptiveConfig.prompt_hint,
-            mastery_streak: adaptiveConfig.mastery_streak,
-            max_attempts: adaptiveConfig.max_attempts,
-          });
-        } else {
-          fixed.push(q);
-        }
-      }
-      setItems(fixed);
-      setAdaptiveKPs(adaptive);
-      setTotal(resp.total);
-    } catch (e: any) {
-      showMessage.error(e.message || "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [configId, page, pageSize, filterType, filterDiff]);
-
-  const loadConfig = useCallback(async () => {
-    try {
-      setConfigLoading(true);
-      const config = await assessmentConfigApi.get(configId);
-      setConfigDraft({
-        title: config.title || "",
-        grade: config.grade || "",
-        total_score: config.total_score || 100,
-        available_start: toDateTimeLocal(config.available_start),
-        available_end: toDateTimeLocal(config.available_end),
-        agent_id: config.agent_id ? String(config.agent_id) : "",
-        knowledge_points: parseKnowledgePoints(config.knowledge_points),
-        teaching_objectives: config.teaching_objectives || "",
-        ai_prompt: config.ai_prompt || "",
-      });
-    } catch (e: any) {
-      showMessage.error(e.message || "加载配置失败");
-    } finally {
-      setConfigLoading(false);
-    }
-  }, [configId]);
-
-  const loadAgents = useCallback(async () => {
-    try {
-      const response = await aiAgentsApi.getAgents({ limit: 100 });
-      if (response.success) setAgents(response.data.items || []);
-    } catch (e) {
-      logger.error("加载智能体失败:", e);
-    }
-  }, []);
-
+  // Sync config draft from fetched config data
   useEffect(() => {
-    void loadQuestions();
-    void loadConfig();
-    void loadAgents();
-  }, [loadQuestions, loadConfig, loadAgents]);
+    if (configData) {
+      setConfigDraft({
+        title: configData.title || "",
+        grade: configData.grade || "",
+        total_score: configData.total_score || 100,
+        available_start: toDateTimeLocal(configData.available_start),
+        available_end: toDateTimeLocal(configData.available_end),
+        agent_id: configData.agent_id ? String(configData.agent_id) : "",
+        knowledge_points: parseKnowledgePoints(configData.knowledge_points),
+        teaching_objectives: configData.teaching_objectives || "",
+        ai_prompt: configData.ai_prompt || "",
+      });
+    }
+  }, [configData]);
 
-  const handleSaveConfig = async () => {
+  // Sync adaptive KPs from the dedicated adaptive query, not the paginated fixed-question list.
+  useEffect(() => {
+    if (fetchedAdaptiveKPs) {
+      setAdaptiveKPs(fetchedAdaptiveKPs);
+    }
+  }, [fetchedAdaptiveKPs]);
+
+  const handleSaveConfig = () => {
     if (!configDraft.title.trim()) {
       showMessage.warning("请输入标题");
       return;
@@ -336,33 +306,34 @@ const QuestionsPage: React.FC = () => {
       showMessage.warning("请选择智能体");
       return;
     }
-    try {
-      setConfigSaving(true);
-      const kpStr = configDraft.knowledge_points.trim();
-      const kps = kpStr ? kpStr.split(/[,，、\s]+/).filter(Boolean) : [];
-      await assessmentConfigApi.update(configId, {
-        title: configDraft.title.trim(),
-        grade: configDraft.grade || undefined,
-        total_score: configDraft.total_score,
-        available_start: configDraft.available_start
-          ? dayjs(configDraft.available_start).toISOString()
-          : undefined,
-        available_end: configDraft.available_end
-          ? dayjs(configDraft.available_end).toISOString()
-          : undefined,
-        agent_id: Number(configDraft.agent_id),
-        agent_ids: [Number(configDraft.agent_id)],
-        teaching_objectives: configDraft.teaching_objectives || undefined,
-        ai_prompt: configDraft.ai_prompt || undefined,
-        knowledge_points: JSON.stringify(kps),
-        question_config: JSON.stringify({}),
-      });
-      showMessage.success("已保存");
-    } catch (e: any) {
-      showMessage.error(e.message || "保存失败");
-    } finally {
-      setConfigSaving(false);
-    }
+    const kpStr = configDraft.knowledge_points.trim();
+    const kps = kpStr ? kpStr.split(/[,，、\s]+/).filter(Boolean) : [];
+    saveConfigMutation.mutate(
+      {
+        id: configId,
+        data: {
+          title: configDraft.title.trim(),
+          grade: configDraft.grade || undefined,
+          total_score: configDraft.total_score,
+          available_start: configDraft.available_start
+            ? dayjs(configDraft.available_start).toISOString()
+            : undefined,
+          available_end: configDraft.available_end
+            ? dayjs(configDraft.available_end).toISOString()
+            : undefined,
+          agent_id: Number(configDraft.agent_id),
+          agent_ids: [Number(configDraft.agent_id)],
+          teaching_objectives: configDraft.teaching_objectives || undefined,
+          ai_prompt: configDraft.ai_prompt || undefined,
+          knowledge_points: JSON.stringify(kps),
+          question_config: JSON.stringify({}),
+        },
+      },
+      {
+        onSuccess: () => showMessage.success("已保存"),
+        onError: (e: Error) => showMessage.error(e.message || "保存失败"),
+      },
+    );
   };
 
   const openAddQ = () => {
@@ -418,34 +389,46 @@ const QuestionsPage: React.FC = () => {
     return true;
   };
 
-  const handleSaveQuestion = async () => {
+  const handleSaveQuestion = () => {
     if (!validateQuestionDraft()) return;
-    try {
-      setQSaving(true);
-      const options =
-        questionDraft.question_type === "choice"
-          ? JSON.stringify({
-              A: questionDraft.options_A,
-              B: questionDraft.options_B,
-              C: questionDraft.options_C,
-              D: questionDraft.options_D,
-            })
-          : undefined;
-      if (editingQ) {
-        await assessmentQuestionApi.update(editingQ.id, {
-          question_type: questionDraft.question_type,
-          content: questionDraft.content.trim(),
-          options,
-          correct_answer: questionDraft.correct_answer.trim(),
-          score: questionDraft.score,
-          difficulty: questionDraft.difficulty,
-          knowledge_point: questionDraft.knowledge_point.trim() || undefined,
-          explanation: questionDraft.explanation.trim() || undefined,
-          mode: "fixed",
-        });
-        showMessage.success("已更新");
-      } else {
-        await assessmentQuestionApi.create({
+    setQSaving(true);
+    const options =
+      questionDraft.question_type === "choice"
+        ? JSON.stringify({
+            A: questionDraft.options_A,
+            B: questionDraft.options_B,
+            C: questionDraft.options_C,
+            D: questionDraft.options_D,
+          })
+        : undefined;
+    if (editingQ) {
+      updateQuestionMutation.mutate(
+        {
+          id: editingQ.id,
+          data: {
+            question_type: questionDraft.question_type,
+            content: questionDraft.content.trim(),
+            options,
+            correct_answer: questionDraft.correct_answer.trim(),
+            score: questionDraft.score,
+            difficulty: questionDraft.difficulty,
+            knowledge_point: questionDraft.knowledge_point.trim() || undefined,
+            explanation: questionDraft.explanation.trim() || undefined,
+            mode: "fixed",
+          },
+        },
+        {
+          onSuccess: () => {
+            showMessage.success("已更新");
+            setQuestionDialogOpen(false);
+          },
+          onError: (e: Error) => showMessage.error(e.message || "保存失败"),
+          onSettled: () => setQSaving(false),
+        },
+      );
+    } else {
+      createQuestionMutation.mutate(
+        {
           config_id: configId,
           question_type: questionDraft.question_type,
           content: questionDraft.content.trim(),
@@ -457,65 +440,71 @@ const QuestionsPage: React.FC = () => {
           explanation: questionDraft.explanation.trim() || undefined,
           source: "manual",
           mode: "fixed",
-        });
-        showMessage.success("已添加");
-      }
-      setQuestionDialogOpen(false);
-      await loadQuestions();
-    } catch (e: any) {
-      showMessage.error(e.message || "保存失败");
-    } finally {
-      setQSaving(false);
+        },
+        {
+          onSuccess: () => {
+            showMessage.success("已添加");
+            setQuestionDialogOpen(false);
+          },
+          onError: (e: Error) => showMessage.error(e.message || "保存失败"),
+          onSettled: () => setQSaving(false),
+        },
+      );
     }
   };
 
   const handleDeleteQ = (questionId: number) => {
-    setConfirmState({ message: "确认删除该题目？", onOk: async () => {
-      try {
-        await assessmentQuestionApi.delete(questionId);
-        showMessage.success("已删除");
-        await loadQuestions();
-      } catch (e: any) {
-        showMessage.error(e.message || "删除失败");
-      }
+    setConfirmState({ message: "确认删除该题目？", onOk: () => {
+      deleteQuestionMutation.mutate(questionId, {
+        onSuccess: () => showMessage.success("已删除"),
+        onError: (e: Error) => showMessage.error(e.message || "删除失败"),
+      });
     }});
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!Number.isFinite(genDraft.count) || genDraft.count < 1 || genDraft.count > 50) {
       showMessage.warning("生成数量需在 1 - 50 之间");
       return;
     }
-    try {
-      setGenerating(true);
-      setGenDialogOpen(false);
-      setGenProgress(0);
-      const timer = window.setInterval(() => {
-        setGenProgress((prev) => (prev >= 90 ? 90 : prev + Math.random() * 15));
-      }, 800);
-      const knowledgePoints = genDraft.knowledge_points_text
-        .split(/[,，、\s]+/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-      const result = await assessmentQuestionApi.generate(configId, {
-        count: genDraft.count,
-        question_type: genDraft.question_type || undefined,
-        difficulty: genDraft.difficulty || undefined,
-        knowledge_points: knowledgePoints.length > 0 ? knowledgePoints : undefined,
-      });
-      window.clearInterval(timer);
-      setGenProgress(100);
-      showMessage.success(result.message || `生成了 ${result.count} 道题`);
-      window.setTimeout(() => {
-        setGenerating(false);
-        setGenProgress(0);
-      }, 600);
-      await loadQuestions();
-    } catch (e: any) {
-      setGenerating(false);
-      setGenProgress(0);
-      showMessage.error(e.message || "AI 生成失败");
-    }
+    setGenerating(true);
+    setGenDialogOpen(false);
+    setGenProgress(0);
+    const timer = window.setInterval(() => {
+      setGenProgress((prev) => (prev >= 90 ? 90 : prev + Math.random() * 15));
+    }, 800);
+    const knowledgePoints = genDraft.knowledge_points_text
+      .split(/[,，、\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    generateQuestionsMutation.mutate(
+      {
+        configId,
+        params: {
+          count: genDraft.count,
+          question_type: genDraft.question_type || undefined,
+          difficulty: genDraft.difficulty || undefined,
+          knowledge_points: knowledgePoints.length > 0 ? knowledgePoints : undefined,
+        },
+      },
+      {
+        onSuccess: (result) => {
+          window.clearInterval(timer);
+          setGenProgress(100);
+          showMessage.success(result.message || `生成了 ${result.count} 道题`);
+          window.setTimeout(() => {
+            setGenerating(false);
+            setGenProgress(0);
+          }, 600);
+        },
+        onError: (e: Error) => {
+          window.clearInterval(timer);
+          setGenerating(false);
+          setGenProgress(0);
+          showMessage.error(e.message || "AI 生成失败");
+        },
+      },
+    );
   };
 
   const handleAddAdaptive = () => {
@@ -586,7 +575,7 @@ const QuestionsPage: React.FC = () => {
         }
       }
       showMessage.success("已保存");
-      await loadQuestions();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.assessmentQuestions.all });
     } catch (e: any) {
       showMessage.error(e.message || "保存失败");
     } finally {
@@ -659,6 +648,8 @@ const QuestionsPage: React.FC = () => {
               size="sm"
               className="h-7 px-1.5"
               onClick={() => setPreviewQ(row.original)}
+              aria-label={`预览题目 ${(page - 1) * pageSize + row.index + 1}`}
+              title="预览题目"
             >
               <Eye className="h-3.5 w-3.5" />
             </Button>
@@ -667,6 +658,8 @@ const QuestionsPage: React.FC = () => {
               size="sm"
               className="h-7 px-1.5"
               onClick={() => openEditQ(row.original)}
+              aria-label={`编辑题目 ${(page - 1) * pageSize + row.index + 1}`}
+              title="编辑题目"
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
@@ -675,6 +668,8 @@ const QuestionsPage: React.FC = () => {
               size="sm"
               className="h-7 px-1.5 text-destructive hover:text-destructive"
               onClick={() => void handleDeleteQ(row.original.id)}
+              aria-label={`删除题目 ${(page - 1) * pageSize + row.index + 1}`}
+              title="删除题目"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -684,7 +679,7 @@ const QuestionsPage: React.FC = () => {
   ];
 
   const fixedQuestionTable = useReactTable({
-    data: loading ? [] : items,
+    data: questionsLoading ? [] : items,
     columns: fixedQuestionColumns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -712,8 +707,8 @@ const QuestionsPage: React.FC = () => {
       <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-text-base">基本设置</h3>
-          <Button size="sm" disabled={configSaving} onClick={() => void handleSaveConfig()}>
-            {configSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <Button size="sm" disabled={saveConfigMutation.isPending} onClick={() => void handleSaveConfig()}>
+            {saveConfigMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             保存设置
           </Button>
         </div>
@@ -848,7 +843,7 @@ const QuestionsPage: React.FC = () => {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-text-base">固定题</h3>
-            <Badge variant="sky">{items.length}</Badge>
+            <Badge variant="info">{items.length}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -932,7 +927,7 @@ const QuestionsPage: React.FC = () => {
           className="border-0"
           tableClassName="min-w-[840px]"
           emptyState={
-            loading ? (
+            questionsLoading ? (
               <div className="py-10 text-center text-sm text-text-tertiary">
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1082,6 +1077,8 @@ const QuestionsPage: React.FC = () => {
                   size="sm"
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                   onClick={() => void removeAdaptive(kp)}
+                  aria-label={`删除知识点 ${kp.knowledge_point || index + 1}`}
+                  title="删除知识点"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

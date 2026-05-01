@@ -149,7 +149,7 @@ const InformaticsReaderPage: React.FC = () => {
   }, [debouncedSearch, isMobile]);
 
   useEffect(() => {
-    loadList();
+    void loadList();
   }, [loadList]);
 
   const loadNote = useCallback(async (id: number, cacheKey?: string | number) => {
@@ -186,7 +186,7 @@ const InformaticsReaderPage: React.FC = () => {
 
   useEffect(() => {
     if (!selectedId) return;
-    loadNote(selectedId, selectedItem?.updated_at || Date.now());
+    void loadNote(selectedId, selectedItem?.updated_at || Date.now());
   }, [selectedId, selectedItem?.updated_at, loadNote]);
 
   useEffect(() => {
@@ -373,7 +373,7 @@ const InformaticsReaderPage: React.FC = () => {
 
   const handlePdfLoaded = useCallback((pdf: any) => {
     const token = outlineTokenRef.current;
-    (async () => {
+    void (async () => {
       try {
         const rawOutline = await pdf.getOutline();
         const flat: PdfOutlineItem[] = [];

@@ -1,5 +1,5 @@
-import React from "react";
-import { Badge } from "@/components/ui/badge";
+import type React from "react";
+import type { Badge } from "@/components/ui/badge";
 import type { OptionItem } from "@services/classroom";
 
 export const ANALYSIS_STATUS_MAP: Record<string, { variant: React.ComponentProps<typeof Badge>["variant"]; text: string }> = {

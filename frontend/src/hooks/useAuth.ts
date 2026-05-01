@@ -230,7 +230,7 @@ const useAuthController = () => {
       // 新标签打开后台时可能只有 HttpOnly Cookie、没有可读 token；
       // 对 admin 路径额外探测一次 /auth/me 以恢复会话。
       if (token || isAdminPath) {
-        fetchCurrentUser();
+        void fetchCurrentUser();
       } else {
         // 无 token，直接设为未登录状态，不发请求
         setAuthState({

@@ -45,8 +45,8 @@ import {
   useBulkDeleteActivities,
   useDuplicateActivity,
   useRestartActivity,
-  CLASSROOM_QUERY_KEY,
 } from "@hooks/queries/useClassroomQuery";
+import { queryKeys } from "@hooks/queries/queryKeys";
 
 const FILTER_ALL = "__all__";
 
@@ -107,7 +107,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
 
   // SSE
   useAdminSSE("classroom_interaction_changed", () => {
-    queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
   });
 
   // ── Mutations ────────────────────────────────────────────
@@ -122,14 +122,14 @@ const AdminClassroomInteractionPage: React.FC = () => {
   useEffect(() => {
     if (!detailOpen || !detailActivityId || detailActivity?.status !== "active") return;
     const timer = setInterval(() => {
-      refetchDetail();
+      void refetchDetail();
     }, 3000);
     return () => clearInterval(timer);
   }, [detailOpen, detailActivityId, detailActivity?.status, refetchDetail]);
 
   // ── Handlers ─────────────────────────────────────────────
   const handleRefreshList = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
     showMessage.success("已刷新");
   }, [queryClient]);
 
@@ -166,7 +166,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
       });
       showMessage.success("活动已结束");
       if (detailActivityId === id) {
-        refetchDetail();
+        void refetchDetail();
       }
     } catch (e: any) {
       showMessage.error(parseErrorMessage(e));
@@ -419,11 +419,11 @@ const AdminClassroomInteractionPage: React.FC = () => {
         activeAgents={activeAgents}
         loadingAgents={loadingAgents}
         onRefreshAgents={() => {
-          queryClient.invalidateQueries({ queryKey: ["active-agents"] });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.activeAgents.all });
         }}
         onClose={() => setModalOpen(false)}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: [CLASSROOM_QUERY_KEY] });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.classroom.all });
         }}
       />
 

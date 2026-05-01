@@ -102,7 +102,7 @@ const TypstNotesPanel: React.FC = () => {
   }, [fetchList]);
 
   useEffect(() => {
-    if (selectedId) loadNote(selectedId);
+    if (selectedId) void loadNote(selectedId);
   }, [selectedId]);
 
   useEffect(() => {

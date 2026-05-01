@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
 import ClassSelector from './ClassSelector';
-import { DianmingClass } from '@/services/xxjs/dianming';
+import type { DianmingClass } from '@/services/xxjs/dianming';
 import { featureFlagsApi } from '@/services/system/featureFlags';
 import { logger } from '@services/logger';
 import EmptyState from "@components/Common/EmptyState";
@@ -91,7 +91,7 @@ const ITTechnologyPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { loadFlags(); }, []);
+  useEffect(() => { void loadFlags(); }, []);
 
   const handleSelectClass = (record: DianmingClass) => {
     setCurrentClass(record); setView('rollcall-player');
@@ -211,7 +211,7 @@ const ITTechnologyPage: React.FC = () => {
                   disabled={!app.available}
                   onClick={() => {
                     if (app.action === 'dianming') setView('rollcall-selector');
-                    if (app.action === 'python') navigate('/it-technology/python-lab');
+                    if (app.action === 'python') void navigate('/it-technology/python-lab');
                   }}
                 />
               ))}

@@ -78,6 +78,7 @@ export function usePythonFlowSync(params: {
   const lastAiSemanticKeyRef = useRef<string | null>(null);
   const aiFallbackInFlightRef = useRef(false);
   const aiFallbackRecentRef = useRef<Map<string, number>>(new Map());
+  const hasUserClearedCodeRef = useRef(false);
 
   const generated = useMemo(() => generatePythonFromFlow(nodes, edges), [nodes, edges]);
   const debugMap = useMemo(() => {
@@ -200,6 +201,80 @@ export function usePythonFlowSync(params: {
     });
   }, []);
 
+  const buildLocalFlowFromCode = useCallback(
+    async (sourceCode: string) => {
+      if (!sourceCode.trim()) {
+        const message = "代码为空，已清空流程图";
+        return {
+          ok: false as const,
+          clearGraph: true as const,
+          message,
+          diagnostics: [{ level: "warn", code: "W_FLOW_EMPTY_CODE", message }],
+        };
+      }
+
+      const v = validatePythonStrict(sourceCode);
+      const built = buildUnifiedFlowFromPython(sourceCode);
+
+      if (!built) {
+        const message = "流程图构建失败：暂不支持该代码结构，已保留上一次可用流程图";
+        return {
+          ok: false as const,
+          clearGraph: false as const,
+          message,
+          diagnostics: [
+            { level: "warn", code: "W_FLOW_BUILD_KEEP_LAST", message },
+            ...(v.ok
+              ? []
+              : [
+                  {
+                    level: "warn",
+                    code: "W_FLOW_STRICT_VALIDATION",
+                    message: "严格校验未通过，已尝试本地统一构图但未能生成新流程图",
+                    hint: [...v.errors, ...v.warnings].join("\n") || undefined,
+                  },
+                ]),
+          ],
+        };
+      }
+
+      const diagnostics: PythonLabFlowDiagnostic[] = [
+        ...(v.ok
+          ? v.warnings.map((message) => ({ level: "warn", code: "W_FLOW_STRICT_VALIDATION", message }))
+          : [
+              {
+                level: "warn",
+                code: "W_FLOW_STRICT_VALIDATION",
+                message: "严格校验未通过，但已使用本地统一构图结果更新流程图",
+                hint: [...v.errors, ...v.warnings].join("\n") || undefined,
+              },
+            ]),
+        ...built.warnings.map((message) => ({ level: "warn", code: "W_FLOW_BUILD", message })),
+        ...built.splitDiagnostics.map((d) => ({
+          level: d.level,
+          code: d.code,
+          message: d.message,
+          range: d.line
+            ? { startLine: d.line, startCol: 1, endLine: d.line, endCol: 1 }
+            : undefined,
+        })),
+      ];
+
+      setCodeIr(built.ir);
+      setDebugForRanges(built.debugMap.forRanges);
+      setDebugForIns(built.debugMap.forIns);
+      setDebugMapCodeSha(null);
+      await applyLayout(built.nodes, built.edges);
+
+      return {
+        ok: true as const,
+        clearGraph: false as const,
+        diagnostics,
+      };
+    },
+    [applyLayout]
+  );
+
   useEffect(() => {
     if (!starterCode) return;
     setFlowDiagnostics([]);
@@ -227,8 +302,11 @@ export function usePythonFlowSync(params: {
   useEffect(() => {
     if (code.trim()) {
       lastNonEmptyCodeRef.current = code;
+      hasUserClearedCodeRef.current = false;
+    } else if (codeMode === "manual") {
+      hasUserClearedCodeRef.current = true;
     }
-  }, [code]);
+  }, [code, codeMode]);
 
   useEffect(() => {
     if (codeMode === "auto") {
@@ -367,6 +445,28 @@ export function usePythonFlowSync(params: {
           setConnectFromId(null);
           setConnectFromPort(null);
         };
+        const keepExistingFlow = (diagnostics: PythonLabFlowDiagnostic[], fallbackMessage: string) => {
+          setFlowDiagnostics(diagnostics.length ? diagnostics : [{ level: "warn", code: "W_FLOW_KEEP_LAST", message: fallbackMessage }]);
+          setCodeIr((prev) => prev);
+          setDebugForRanges((prev) => prev);
+          setDebugForIns((prev) => prev);
+          setDebugMapCodeSha((prev) => prev);
+          settleRebuild(false, fallbackMessage);
+        };
+        const clearIfCodeEmpty = (diagnostics: PythonLabFlowDiagnostic[], fallbackMessage: string) => {
+          if (code.trim() || !hasUserClearedCodeRef.current) {
+            keepExistingFlow(diagnostics, fallbackMessage);
+            return;
+          }
+          setFlowDiagnostics(diagnostics.length ? diagnostics : [{ level: "warn", code: "W_FLOW_EMPTY_CODE", message: fallbackMessage }]);
+          resetAndClear();
+          settleRebuild(true);
+        };
+
+        if (!code.trim() && hasUserClearedCodeRef.current) {
+          clearIfCodeEmpty([{ level: "warn", code: "W_FLOW_EMPTY_CODE", message: "代码为空，已清空流程图" }], "代码为空，已清空流程图");
+          return;
+        }
 
         if (preferBackendCfg) {
           try {
@@ -374,7 +474,7 @@ export function usePythonFlowSync(params: {
             const parsed = await pythonlabFlowApi.parseFlow(code, {
               expand: { functions: flowExpandFunctions, maxDepth: 8 },
               limits: { maxParseMs: 1500, maxNodes: 2000, maxEdges: 4000 },
-            });
+            }, { silent: true, timeoutMs: 3000 });
             setFlowDiagnostics(parsed.diagnostics || []);
 
             // Render AST Flow immediately
@@ -389,39 +489,47 @@ export function usePythonFlowSync(params: {
             // Stage 2: AI Optimization (if enabled)
             return;
           } catch (e: unknown) {
-            const msg = toErrorMessage(e, "流程图解析失败");
-            setFlowDiagnostics([{ level: "error", code: "E_FLOW_PARSE", message: msg }]);
-            resetAndClear();
-            settleRebuild(false, msg);
+            const backendMessage = toErrorMessage(e, "流程图解析失败");
+            try {
+              const local = await buildLocalFlowFromCode(code);
+              if (local.ok) {
+                setFlowDiagnostics([
+                  {
+                    level: "warn",
+                    code: "W_FLOW_BACKEND_FALLBACK",
+                    message: "后端流程图解析暂不可用，已切换到本地流程图生成",
+                    hint: backendMessage,
+                  },
+                  ...local.diagnostics,
+                ]);
+                settleRebuild(true);
+                return;
+              }
+              clearIfCodeEmpty(
+                [
+                  { level: "error", code: "E_FLOW_PARSE", message: backendMessage },
+                  ...local.diagnostics,
+                ],
+                backendMessage
+              );
+            } catch (_localErr) {
+              clearIfCodeEmpty(
+                [{ level: "error", code: "E_FLOW_PARSE", message: backendMessage }],
+                backendMessage
+              );
+            }
             return;
           }
         }
 
-        const v = validatePythonStrict(code);
-        const built = v.ok ? buildUnifiedFlowFromPython(code) : null;
-        if (v.ok && built) {
-          const localDiagnostics: PythonLabFlowDiagnostic[] = [
-            ...built.warnings.map((message) => ({ level: "warn", code: "W_FLOW_BUILD", message })),
-            ...built.splitDiagnostics.map((d) => ({ level: d.level, code: d.code, message: d.message, range: d.line ? { startLine: d.line, startCol: 1, endLine: d.line, endCol: 1 } : undefined })),
-          ];
-          setFlowDiagnostics(localDiagnostics);
-          setCodeIr(built.ir);
-          setDebugForRanges(built.debugMap.forRanges);
-          setDebugForIns(built.debugMap.forIns);
-          setDebugMapCodeSha(null);
-          await applyLayout(built.nodes, built.edges);
+        const local = await buildLocalFlowFromCode(code);
+        if (local.ok) {
+          setFlowDiagnostics(local.diagnostics);
           settleRebuild(true);
           return;
         }
 
-        if (!preferBackendCfg) {
-          const msg = v.ok ? "流程图构建失败：暂不支持该代码结构" : "语法错误：无法生成流程图";
-          setFlowDiagnostics([{ level: "error", code: "E_FLOW_BUILD", message: msg }]);
-          resetAndClear();
-          settleRebuild(false, msg);
-          return;
-        }
-
+        // 本地流程图生成失败，回退到后端 parseCfg
         try {
           const cfg = await pythonlabCfgApi.parseCfg(code);
           const flow = cfgToFlow(cfg);
@@ -433,9 +541,7 @@ export function usePythonFlowSync(params: {
           settleRebuild(true);
         } catch (e: unknown) {
           const msg = toErrorMessage(e, "流程图解析失败");
-          setFlowDiagnostics([{ level: "error", code: "E_CFG_PARSE", message: msg }]);
-          resetAndClear();
-          settleRebuild(false, msg);
+          clearIfCodeEmpty([{ level: "error", code: "E_CFG_PARSE", message: msg }], msg);
         }
       })();
     }, 600); // Increased debounce for Graphviz
@@ -445,6 +551,7 @@ export function usePythonFlowSync(params: {
     code,
     codeMode,
     applyLayout,
+    buildLocalFlowFromCode,
     flowRebuildToken,
     flowExpandFunctions,
     preferBackendCfg,

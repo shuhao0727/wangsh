@@ -2,7 +2,7 @@
  * 用户管理相关类型定义
  */
 
-import { User } from "@services";
+import type { User } from "@services";
 
 // 用户表单组件 props
 export interface UserFormProps {

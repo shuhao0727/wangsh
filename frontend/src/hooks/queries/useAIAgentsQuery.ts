@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { aiAgentsApi } from "@services/agents";
 import type { AgentFormValues } from "@services/znt/types";
+import { queryKeys } from "./queryKeys";
 
+/** @deprecated Use queryKeys.aiAgents instead */
 export const AI_AGENTS_QUERY_KEY = "ai-agents";
 
 export function useAgentsList(params: {
@@ -11,7 +13,7 @@ export function useAgentsList(params: {
   agentType?: string;
 }) {
   return useQuery({
-    queryKey: [AI_AGENTS_QUERY_KEY, params],
+    queryKey: queryKeys.aiAgents.list(params),
     queryFn: async () => {
       const response = await aiAgentsApi.getAgents({
         skip: (params.page - 1) * params.pageSize,
@@ -27,7 +29,7 @@ export function useAgentsList(params: {
 
 export function useAgentStatistics() {
   return useQuery({
-    queryKey: [AI_AGENTS_QUERY_KEY, "statistics"],
+    queryKey: queryKeys.aiAgents.statistics(),
     queryFn: async () => {
       const response = await aiAgentsApi.getAgentStatistics();
       return response.data;
@@ -40,7 +42,7 @@ export function useCreateAgent() {
   return useMutation({
     mutationFn: (data: AgentFormValues) => aiAgentsApi.createAgent(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiAgents.all });
     },
   });
 }
@@ -51,7 +53,7 @@ export function useUpdateAgent() {
     mutationFn: ({ id, data }: { id: number; data: Partial<AgentFormValues> }) =>
       aiAgentsApi.updateAgent(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiAgents.all });
     },
   });
 }
@@ -61,7 +63,7 @@ export function useDeleteAgent() {
   return useMutation({
     mutationFn: (id: number) => aiAgentsApi.deleteAgent(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiAgents.all });
     },
   });
 }
@@ -76,7 +78,7 @@ export function useBatchDeleteAgents() {
       return results;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AI_AGENTS_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiAgents.all });
     },
   });
 }

@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import dayjs from "dayjs";
-import { UserDetailModalProps } from "../types";
+import type { UserDetailModalProps } from "../types";
 
 const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
@@ -46,7 +46,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             label="学年"
             value={
               currentUser.study_year ? (
-                <Badge variant="primarySubtle">
+                <Badge variant="info">
                   {currentUser.study_year}
                 </Badge>
               ) : (
@@ -69,7 +69,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
           <DetailItem
             label="角色"
             value={
-              <Badge variant="violet">
+              <Badge variant="purple">
                 {currentUser.role_code}
               </Badge>
             }

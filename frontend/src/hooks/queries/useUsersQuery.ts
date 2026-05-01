@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { userApi } from "@services/users";
 import type { UserCreateRequest, UserUpdateRequest } from "@services/users";
-
-const QUERY_KEY = "users";
+import { queryKeys } from "./queryKeys";
 
 export function useUsersList(params: {
   skip: number;
@@ -12,7 +11,7 @@ export function useUsersList(params: {
   is_active?: boolean;
 }) {
   return useQuery({
-    queryKey: [QUERY_KEY, params],
+    queryKey: queryKeys.users.list(params),
     queryFn: () => userApi.getUsers(params),
     placeholderData: (prev) => prev,
   });
@@ -23,7 +22,7 @@ export function useCreateUser() {
   return useMutation({
     mutationFn: (data: UserCreateRequest) => userApi.createUser(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 }
@@ -34,7 +33,7 @@ export function useUpdateUser() {
     mutationFn: ({ id, data }: { id: number; data: UserUpdateRequest }) =>
       userApi.updateUser(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 }
@@ -44,7 +43,7 @@ export function useDeleteUser() {
   return useMutation({
     mutationFn: (id: number) => userApi.deleteUser(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 }
@@ -54,7 +53,7 @@ export function useBatchDeleteUsers() {
   return useMutation({
     mutationFn: (ids: number[]) => userApi.batchDeleteUsers(ids),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 }
@@ -64,7 +63,7 @@ export function useImportUsers() {
   return useMutation({
     mutationFn: (file: File) => userApi.importUsers(file),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 }

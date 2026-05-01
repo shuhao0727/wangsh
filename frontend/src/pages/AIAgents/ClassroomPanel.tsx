@@ -15,8 +15,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { X, Pin, PinOff, Zap, RotateCcw, Loader2 } from "lucide-react";
-import { classroomApi, Activity, ActivityStats } from "@services/classroom";
-import { planApi, Plan } from "@services/classroomPlan";
+import type { Activity, ActivityStats } from "@services/classroom";
+import { classroomApi } from "@services/classroom";
+import type { Plan } from "@services/classroomPlan";
+import { planApi } from "@services/classroomPlan";
 import { config as appConfig } from "@services";
 import { getStoredAccessToken } from "@services/api";
 import { floatingBtnRegistry } from "@utils/floatingBtnRegistry";
@@ -581,14 +583,14 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                           if (isPending) return;
                           if (isItemActive) { void checkActive({ silent: true }); return; }
                           if (isItemDone && item.activity?.id != null) {
-                            if (isReviewing) {
-                              setView("idle");
-                              setSelectedDoneActivityId(null);
-                            } else {
-                              openReview(item.activity.id);
+                              if (isReviewing) {
+                                setView("idle");
+                                setSelectedDoneActivityId(null);
+                              } else {
+                                void openReview(item.activity.id);
+                              }
                             }
-                          }
-                        }}
+                          }}
                         style={{
                           background: dotColor,
                           color: isPending ? "var(--ws-color-text-tertiary)" : "var(--ws-color-surface)",
@@ -659,7 +661,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                         className="h-4 w-4 accent-[var(--ws-color-primary)]"
                       />
                       <span>
-                        <Badge variant="sky" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                        <Badge variant="info" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
                           {opt.key}
                         </Badge>
                         {opt.text}
@@ -679,7 +681,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                         className="h-4 w-4 accent-[var(--ws-color-primary)]"
                       />
                       <span>
-                        <Badge variant="sky" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
+                        <Badge variant="info" className="mr-[var(--ws-space-1)] px-[var(--ws-space-1)] py-0 text-xs">
                           {opt.key}
                         </Badge>
                         {opt.text}

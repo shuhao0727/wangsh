@@ -12,8 +12,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -52,15 +59,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success?: boolean; error?: string } | null>(null);
-  const {
-    register,
-    reset,
-    trigger,
-    getValues,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<FormValues>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       api_url: "",
@@ -69,6 +68,13 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
       prompt_template: "",
     },
   });
+  const {
+    reset,
+    trigger,
+    getValues,
+    setValue,
+    watch,
+  } = form;
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -92,7 +98,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
 
   useEffect(() => {
     if (visible) {
-      loadConfig();
+      void loadConfig();
       setTestResult(null);
     }
   }, [visible, loadConfig]);
@@ -211,70 +217,97 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
             <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="api-url">Agent API URL</Label>
-              <Input
-                id="api-url"
-                placeholder="例如: https://api.example.com/v1/chat/completions"
-                disabled={saving || testing}
-                {...register("api_url")}
-              />
-              {errors.api_url?.message ? (
-                <p className="text-xs text-destructive">{errors.api_url.message}</p>
-              ) : null}
-            </div>
+          <Form {...form}>
+            <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="api_url"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Agent API URL</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="例如: https://api.example.com/v1/chat/completions"
+                      disabled={saving || testing}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="api-key">API Key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="sk-..."
-                disabled={saving || testing}
-                {...register("api_key")}
-              />
-              {errors.api_key?.message ? (
-                <p className="text-xs text-destructive">{errors.api_key.message}</p>
-              ) : null}
-            </div>
+            <FormField
+              control={form.control}
+              name="api_key"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>API Key</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="sk-..."
+                      disabled={saving || testing}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="model-name">模型名称 (Model)</Label>
-              <Input
-                id="model-name"
-                placeholder="gpt-3.5-turbo"
-                disabled={saving || testing}
-                {...register("model")}
-              />
-              <p className="text-xs text-text-tertiary">
-                如果是 OpenAI 兼容接口，请填写模型名称（例如: gpt-3.5-turbo, stepfun-ai/Step-3.5-Flash）
-              </p>
-              {recommendedModel ? (
-                <p className="text-xs text-primary">
-                  检测到当前接口，推荐模型：{recommendedModel}
-                </p>
-              ) : null}
-              {hasDeepSeekModelMismatch ? (
-                <p className="text-xs text-destructive">
-                  当前 URL 是 DeepSeek，模型名称不能使用 gpt-*，请改为 deepseek-chat 或 deepseek-reasoner。
-                </p>
-              ) : null}
-            </div>
+            <FormField
+              control={form.control}
+              name="model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>模型名称 (Model)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="gpt-3.5-turbo"
+                      disabled={saving || testing}
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-text-tertiary">
+                    如果是 OpenAI 兼容接口，请填写模型名称（例如: gpt-3.5-turbo, stepfun-ai/Step-3.5-Flash）
+                  </p>
+                  {recommendedModel ? (
+                    <p className="text-xs text-primary">
+                      检测到当前接口，推荐模型：{recommendedModel}
+                    </p>
+                  ) : null}
+                  {hasDeepSeekModelMismatch ? (
+                    <p className="text-xs text-destructive">
+                      当前 URL 是 DeepSeek，模型名称不能使用 gpt-*，请改为 deepseek-chat 或 deepseek-reasoner。
+                    </p>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="prompt-template">提示词模板 (Prompt Template)</Label>
-              <Textarea
-                id="prompt-template"
-                rows={8}
-                placeholder="You are a Python expert..."
-                disabled={saving || testing}
-                {...register("prompt_template")}
-              />
-              <p className="text-xs text-text-tertiary">
-                发送给智能体的系统提示词。后端会自动注入流程图 JSON 数据。
-              </p>
-            </div>
+            <FormField
+              control={form.control}
+              name="prompt_template"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>提示词模板 (Prompt Template)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={8}
+                      placeholder="You are a Python expert..."
+                      disabled={saving || testing}
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-text-tertiary">
+                    发送给智能体的系统提示词。后端会自动注入流程图 JSON 数据。
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {testResult ? (
               <Alert
@@ -292,6 +325,7 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
               </Alert>
             ) : null}
           </div>
+          </Form>
         )}
 
         <DialogFooter className="gap-2 sm:justify-end">

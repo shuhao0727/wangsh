@@ -1,13 +1,13 @@
 import React from "react";
-import { Inbox, Search, TriangleAlert } from "lucide-react";
+import { Inbox, Search, ShieldAlert, TriangleAlert } from "lucide-react";
 
-type Variant = "no-data" | "no-results" | "error";
+type Variant = "no-data" | "no-results" | "error" | "permission-denied";
 
 interface EmptyStateProps {
   variant?: Variant;
   icon?: React.ReactNode;
   title?: string;
-  description?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
 }
@@ -28,6 +28,11 @@ const defaults: Record<Variant, { icon: React.ReactNode; title: string; descript
     title: "加载失败",
     description: "请稍后重试或联系管理员",
   },
+  "permission-denied": {
+    icon: <ShieldAlert className="h-10 w-10 text-text-tertiary" />,
+    title: "权限不足",
+    description: "请联系管理员获取访问权限",
+  },
 };
 
 const EmptyState: React.FC<EmptyStateProps> = ({
@@ -40,7 +45,11 @@ const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   const d = defaults[variant];
   return (
-    <div className={`flex flex-col items-center justify-center py-12 px-4 ${className}`}>
+    <div
+      role={variant === "error" ? "alert" : "status"}
+      aria-live={variant === "error" ? "assertive" : "polite"}
+      className={`flex flex-col items-center justify-center py-12 px-4 ${className}`}
+    >
       <div className="mb-3">{icon ?? d.icon}</div>
       <div className="text-sm font-medium text-text-secondary mb-1">{title ?? d.title}</div>
       <div className="text-xs text-text-tertiary mb-4">{description ?? d.description}</div>
