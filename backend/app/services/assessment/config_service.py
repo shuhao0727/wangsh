@@ -4,7 +4,7 @@
 
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_
 from sqlalchemy.orm import selectinload
 
 from loguru import logger
@@ -83,8 +83,12 @@ async def get_configs(
         query = query.where(AssessmentConfig.enabled == enabled)
         count_query = count_query.where(AssessmentConfig.enabled == enabled)
     if search:
-        query = query.where(AssessmentConfig.title.ilike(f"%{search}%"))
-        count_query = count_query.where(AssessmentConfig.title.ilike(f"%{search}%"))
+        search_filter = or_(
+            AssessmentConfig.title.ilike(f"%{search}%"),
+            AssessmentConfig.knowledge_points.ilike(f"%{search}%"),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
 
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0

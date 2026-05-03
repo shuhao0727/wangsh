@@ -46,6 +46,9 @@ from .classroom import ClassroomActivity, ClassroomResponse
 # 信息技术模型 (xxjs_ 前缀)
 from .xxjs.dianming import XxjsDianming
 
+# 学习进度模型 (sys_ 前缀)
+from .learning import LearningContentItem, LearningProgress
+
 __all__ = [
     "Base", 
     "User", 
@@ -80,4 +83,6 @@ __all__ = [
     "AssessmentConfigAgent",
     "ClassroomActivity",
     "ClassroomResponse",
+    "LearningProgress",
+    "LearningContentItem",
 ]

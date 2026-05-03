@@ -62,7 +62,7 @@ const useAuthController = () => {
     sharedFetchPromise = (async (): Promise<User | null> => {
       try {
         logger.debug("fetchCurrentUser: 调用authApi.getCurrentUser()");
-        const response = await authApi.getCurrentUser({ silent: true, timeout: 8000 } as any);
+        const response = await authApi.getCurrentUser({ silent: true, timeout: 8000 } as import("axios").AxiosRequestConfig & { silent?: boolean });
         logger.debug("fetchCurrentUser: API响应成功", response);
 
         let userData = response.data;
@@ -70,7 +70,7 @@ const useAuthController = () => {
 
         if (userData && typeof userData === "object" && "data" in userData) {
           logger.debug("fetchCurrentUser: 检测到ApiResponse包装，解包...");
-          userData = (userData as any).data;
+          userData = (userData as { data: User }).data;
         }
 
         if (!userData || typeof userData !== "object") {

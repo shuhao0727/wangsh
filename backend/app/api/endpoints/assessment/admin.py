@@ -13,7 +13,7 @@ from loguru import logger
 from app.utils.errors import safe_error_detail
 
 from app.db.database import get_db
-from app.core.deps import get_current_user, require_super_admin
+from app.core.deps import get_current_user, require_admin
 from app.schemas.user_info import UserInfo
 from app.core.pubsub import publish
 from app.schemas.assessment import (
@@ -121,7 +121,7 @@ def _format_config_response(config, question_count: int = 0, session_count: int 
     }
 
 
-@router.post("/configs", response_model=AssessmentConfigResponse, dependencies=[Depends(require_super_admin)])
+@router.post("/configs", response_model=AssessmentConfigResponse, dependencies=[Depends(require_admin)])
 async def api_create_config(
     config_in: AssessmentConfigCreate,
     db: AsyncSession = Depends(get_db),
@@ -143,7 +143,7 @@ async def api_create_config(
         raise HTTPException(status_code=500, detail="创建测评配置失败")
 
 
-@router.get("/configs", response_model=AssessmentConfigListResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/configs", response_model=AssessmentConfigListResponse, dependencies=[Depends(require_admin)])
 async def api_list_configs(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0),
@@ -177,7 +177,7 @@ async def api_list_configs(
         raise HTTPException(status_code=500, detail="获取测评配置列表失败")
 
 
-@router.get("/configs/{config_id}", response_model=AssessmentConfigResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}", response_model=AssessmentConfigResponse, dependencies=[Depends(require_admin)])
 async def api_get_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -192,7 +192,7 @@ async def api_get_config(
     return _format_config_response(config, qcount, scount)
 
 
-@router.put("/configs/{config_id}", response_model=AssessmentConfigResponse, dependencies=[Depends(require_super_admin)])
+@router.put("/configs/{config_id}", response_model=AssessmentConfigResponse, dependencies=[Depends(require_admin)])
 async def api_update_config(
     config_id: int,
     config_in: AssessmentConfigUpdate,
@@ -221,7 +221,7 @@ async def api_update_config(
         raise HTTPException(status_code=500, detail="更新测评配置失败")
 
 
-@router.delete("/configs/{config_id}", dependencies=[Depends(require_super_admin)])
+@router.delete("/configs/{config_id}", dependencies=[Depends(require_admin)])
 async def api_delete_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -237,7 +237,7 @@ async def api_delete_config(
     return {"message": "删除成功"}
 
 
-@router.put("/configs/{config_id}/toggle", response_model=AssessmentConfigResponse, dependencies=[Depends(require_super_admin)])
+@router.put("/configs/{config_id}/toggle", response_model=AssessmentConfigResponse, dependencies=[Depends(require_admin)])
 async def api_toggle_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -255,7 +255,7 @@ async def api_toggle_config(
 
 # ─── 题库管理 ───
 
-@router.post("/configs/{config_id}/generate-questions", dependencies=[Depends(require_super_admin)])
+@router.post("/configs/{config_id}/generate-questions", dependencies=[Depends(require_admin)])
 async def api_generate_questions(
     config_id: int,
     request: Request,
@@ -286,7 +286,7 @@ async def api_generate_questions(
         raise HTTPException(status_code=500, detail=safe_error_detail("AI 生成题目失败", e))
 
 
-@router.get("/configs/{config_id}/questions", response_model=QuestionListResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}/questions", response_model=QuestionListResponse, dependencies=[Depends(require_admin)])
 async def api_list_questions(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -310,7 +310,7 @@ async def api_list_questions(
     }
 
 
-@router.post("/questions", response_model=QuestionResponse, dependencies=[Depends(require_super_admin)])
+@router.post("/questions", response_model=QuestionResponse, dependencies=[Depends(require_admin)])
 async def api_create_question(
     question_in: QuestionCreate,
     db: AsyncSession = Depends(get_db),
@@ -326,7 +326,7 @@ async def api_create_question(
         raise HTTPException(status_code=500, detail="创建题目失败")
 
 
-@router.put("/questions/{question_id}", response_model=QuestionResponse, dependencies=[Depends(require_super_admin)])
+@router.put("/questions/{question_id}", response_model=QuestionResponse, dependencies=[Depends(require_admin)])
 async def api_update_question(
     question_id: int,
     question_in: QuestionUpdate,
@@ -347,7 +347,7 @@ async def api_update_question(
         raise HTTPException(status_code=500, detail="更新题目失败")
 
 
-@router.delete("/questions/{question_id}", dependencies=[Depends(require_super_admin)])
+@router.delete("/questions/{question_id}", dependencies=[Depends(require_admin)])
 async def api_delete_question(
     question_id: int,
     db: AsyncSession = Depends(get_db),
@@ -361,7 +361,7 @@ async def api_delete_question(
 
 # ─── 答题统计 ───
 
-@router.get("/configs/{config_id}/class-names", dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}/class-names", dependencies=[Depends(require_admin)])
 async def api_get_class_names(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -387,7 +387,7 @@ async def api_get_class_names(
         raise HTTPException(status_code=500, detail="获取班级列表失败")
 
 
-@router.get("/configs/{config_id}/sessions", response_model=SessionListResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}/sessions", response_model=SessionListResponse, dependencies=[Depends(require_admin)])
 async def api_list_sessions(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -424,7 +424,7 @@ async def api_list_sessions(
         raise HTTPException(status_code=500, detail="获取答题列表失败")
 
 
-@router.post("/sessions/{session_id}/allow-retest", dependencies=[Depends(require_super_admin)])
+@router.post("/sessions/{session_id}/allow-retest", dependencies=[Depends(require_admin)])
 async def api_allow_retest(
     session_id: int,
     db: AsyncSession = Depends(get_db),
@@ -440,7 +440,7 @@ async def api_allow_retest(
         raise HTTPException(status_code=500, detail="允许重测失败")
 
 
-@router.post("/configs/{config_id}/batch-retest", dependencies=[Depends(require_super_admin)])
+@router.post("/configs/{config_id}/batch-retest", dependencies=[Depends(require_admin)])
 async def api_batch_retest(
     config_id: int,
     request: Request,
@@ -460,7 +460,7 @@ async def api_batch_retest(
         raise HTTPException(status_code=500, detail="批量重测失败")
 
 
-@router.get("/sessions/{session_id}", dependencies=[Depends(require_super_admin)])
+@router.get("/sessions/{session_id}", dependencies=[Depends(require_admin)])
 async def api_get_session_detail(
     session_id: int,
     db: AsyncSession = Depends(get_db),
@@ -529,7 +529,7 @@ async def api_get_session_detail(
         raise HTTPException(status_code=500, detail="获取答题详情失败")
 
 
-@router.get("/sessions/{session_id}/basic-profile", dependencies=[Depends(require_super_admin)])
+@router.get("/sessions/{session_id}/basic-profile", dependencies=[Depends(require_admin)])
 async def api_admin_get_basic_profile(
     session_id: int,
     db: AsyncSession = Depends(get_db),
@@ -556,7 +556,7 @@ async def api_admin_get_basic_profile(
     }
 
 
-@router.get("/configs/{config_id}/statistics", response_model=StatisticsResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}/statistics", response_model=StatisticsResponse, dependencies=[Depends(require_admin)])
 async def api_get_statistics(
     config_id: int,
     db: AsyncSession = Depends(get_db),
@@ -610,7 +610,7 @@ def _format_profile_response(profile) -> dict:
     }
 
 
-@router.post("/profiles/generate", response_model=ProfileResponse, dependencies=[Depends(require_super_admin)])
+@router.post("/profiles/generate", response_model=ProfileResponse, dependencies=[Depends(require_admin)])
 async def api_generate_profile(
     req: ProfileGenerateRequest,
     db: AsyncSession = Depends(get_db),
@@ -628,7 +628,7 @@ async def api_generate_profile(
         raise HTTPException(status_code=500, detail=safe_error_detail("生成画像失败", e))
 
 
-@router.post("/profiles/batch-generate", dependencies=[Depends(require_super_admin)])
+@router.post("/profiles/batch-generate", dependencies=[Depends(require_admin)])
 async def api_batch_generate_profiles(
     req: ProfileBatchGenerateRequest,
     db: AsyncSession = Depends(get_db),
@@ -650,7 +650,7 @@ async def api_batch_generate_profiles(
         raise HTTPException(status_code=500, detail=safe_error_detail("批量生成画像失败", e))
 
 
-@router.get("/profiles", response_model=ProfileListResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/profiles", response_model=ProfileListResponse, dependencies=[Depends(require_admin)])
 async def api_list_profiles(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0),
@@ -671,7 +671,7 @@ async def api_list_profiles(
     }
 
 
-@router.get("/profiles/{profile_id}", response_model=ProfileResponse, dependencies=[Depends(require_super_admin)])
+@router.get("/profiles/{profile_id}", response_model=ProfileResponse, dependencies=[Depends(require_admin)])
 async def api_get_profile(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
@@ -683,7 +683,7 @@ async def api_get_profile(
     return _format_profile_response(profile)
 
 
-@router.delete("/profiles/{profile_id}", dependencies=[Depends(require_super_admin)])
+@router.delete("/profiles/{profile_id}", dependencies=[Depends(require_admin)])
 async def api_delete_profile(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
@@ -695,7 +695,7 @@ async def api_delete_profile(
     return {"message": "删除成功"}
 
 
-@router.get("/configs/{config_id}/export", dependencies=[Depends(require_super_admin)])
+@router.get("/configs/{config_id}/export", dependencies=[Depends(require_admin)])
 async def api_export_sessions(
     config_id: int,
     class_name: Optional[str] = Query(None),

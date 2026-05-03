@@ -57,7 +57,7 @@
    cp backend/app/services/agents/group_discussion.py backend/app/services/agents/group_discussion.py.backup
    
    # 运行拆分脚本
-   python scripts/split_group_discussion.py
+   # 历史记录：拆分脚本已清理，详见 docs/scripts/ARCHIVE_INDEX.md
    ```
 
 3. [ ] 验证拆分结果

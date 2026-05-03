@@ -11,22 +11,26 @@ interface RadarChartProps {
   /** 多组数据对比 */
   series?: { name: string; data: Record<string, number>; color?: string }[];
   size?: number;
+  width?: number;
+  height?: number;
   color?: string;
 }
 
 const COLORS = [
   "var(--ws-color-primary)",
+  "var(--ws-color-success)",
   "var(--ws-color-warning)",
-  "var(--ws-color-accent)",
   "var(--ws-color-purple)",
-  "var(--ws-color-error-light)",
-  "var(--ws-color-info)",
+  "var(--ws-color-error)",
+  "var(--ws-color-secondary)",
 ];
 
 const RadarChart: React.FC<RadarChartProps> = ({
   dimensions,
   series,
   size = 280,
+  width,
+  height,
   color = "var(--ws-color-primary)",
 }) => {
   const option = useMemo(() => {
@@ -56,9 +60,9 @@ const RadarChart: React.FC<RadarChartProps> = ({
             return Number(avg.toFixed(1));
           }),
           name: s.name,
-          areaStyle: { color: `${s.color || COLORS[i % COLORS.length]}22` },
-          lineStyle: { color: s.color || COLORS[i % COLORS.length], width: 2 },
-          itemStyle: { color: s.color || COLORS[i % COLORS.length] },
+          areaStyle: { color: s.color || COLORS[i % COLORS.length], opacity: 0.16 },
+          lineStyle: { color: s.color || COLORS[i % COLORS.length], width: 2.5 },
+          itemStyle: { color: s.color || COLORS[i % COLORS.length], borderColor: "var(--ws-color-surface)", borderWidth: 1 },
         }))
       : [{
           value: paddedKeys.map(k => {
@@ -68,21 +72,42 @@ const RadarChart: React.FC<RadarChartProps> = ({
             return Number(avg.toFixed(1));
           }),
           name: "掌握率",
-          areaStyle: { color: `${color}22` },
-          lineStyle: { color, width: 2 },
-          itemStyle: { color },
+          areaStyle: { color, opacity: 0.18 },
+          lineStyle: { color, width: 2.5 },
+          itemStyle: { color, borderColor: "var(--ws-color-surface)", borderWidth: 1 },
         }];
     return {
+      color: seriesData.map((item) => item.itemStyle.color),
       radar: {
         indicator,
-        radius: "55%",
-        axisName: { fontSize: 12, color: "var(--ws-color-text-secondary)" },
-        splitArea: { areaStyle: { color: ["var(--ws-color-surface)", "var(--ws-color-surface-2)"] } },
+        center: ["50%", series && series.length > 1 ? "46%" : "50%"],
+        radius: "44%",
+        axisName: {
+          fontSize: 12,
+          color: "var(--ws-color-text)",
+          lineHeight: 16,
+          overflow: "none",
+        },
+        axisLine: {
+          lineStyle: { color: "var(--ws-color-border-secondary)", opacity: 0.9 },
+        },
+        splitLine: {
+          lineStyle: { color: "var(--ws-color-border-secondary)", opacity: 0.9 },
+        },
+        splitArea: {
+          areaStyle: {
+            color: ["var(--ws-color-surface)", "var(--ws-color-surface-2)"],
+            opacity: 0.68,
+          },
+        },
       },
       legend: series && series.length > 1 ? {
         data: series.map(s => s.name),
         bottom: 0,
-        textStyle: { fontSize: 12 },
+        icon: "roundRect",
+        itemWidth: 12,
+        itemHeight: 8,
+        textStyle: { fontSize: 12, color: "var(--ws-color-text-secondary)" },
       } : undefined,
       series: [{
         type: "radar",
@@ -90,8 +115,11 @@ const RadarChart: React.FC<RadarChartProps> = ({
       }],
       tooltip: {
         trigger: "item",
-        formatter: (params: any) => {
-          const data = params.data?.value as number[];
+        backgroundColor: "var(--ws-color-surface)",
+        borderColor: "var(--ws-color-border)",
+        textStyle: { color: "var(--ws-color-text)" },
+        formatter: (params: { data?: { value?: number[]; name?: string } }) => {
+          const data = params.data?.value as number[] | undefined;
           const name = params.data?.name || "";
           if (!data) return "";
           const lines = allKeys.map((k, i) => `${k}: ${data[i]}`).join("<br/>");
@@ -107,7 +135,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
     <ReactECharts
       echarts={echarts}
       option={option}
-      style={{ width: size, height: size, margin: "0 auto" }}
+      style={{ width: width ?? size, height: height ?? size, margin: "0 auto" }}
       opts={{ renderer: "svg" }}
       notMerge
       lazyUpdate

@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-04-11
+> 最后更新：2026-05-03
 
 ## 一、健康检查
 
@@ -126,6 +126,7 @@
 | GET | `/ai-agents/usage` | 使用记录列表 | 管理员 |
 | GET | `/ai-agents/usage/statistics` | 使用统计 | 管理员 |
 | POST | `/ai-agents/usage` | 创建使用记录 | 是 |
+| GET | `/ai-agents/usage/filter-options` | 获取使用记录筛选选项 | 管理员 |
 | GET | `/ai-agents/analysis/hot-questions` | 热门问题分析 | 管理员 |
 | GET | `/ai-agents/analysis/student-chains` | 学生问题链分析 | 管理员 |
 | POST | `/ai-agents/admin/export/conversations` | 导出对话 | 管理员 |
@@ -176,6 +177,8 @@
 | GET | `.../admin/members` | 管理员成员列表 | 管理员 |
 | GET | `.../admin/classes` | 获取班级列表 | 管理员 |
 | POST | `.../admin/analyze` | AI 分析讨论 | 管理员 |
+| POST | `.../admin/student-profile` | 学生个人画像分析 | 管理员 |
+| POST | `.../admin/cross-system-analyze` | 跨系统综合分析 | 管理员 |
 | POST | `.../admin/compare-analyze` | 横向对比分析 | 管理员 |
 | GET | `.../admin/analyses` | 获取分析结果列表 | 管理员 |
 
@@ -265,39 +268,39 @@
 
 ## 十、选课系统（/xbk）
 
-### 数据管理（/xbk）
+### 数据管理（/xbk/data）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/xbk/students` | 获取学生列表 | 管理员 |
-| POST | `/xbk/students` | 创建学生 | 管理员 |
-| PUT | `/xbk/students/{student_id}` | 更新学生 | 管理员 |
-| DELETE | `/xbk/students/{student_id}` | 删除学生 | 管理员 |
-| GET | `/xbk/courses` | 获取课程列表 | 管理员 |
-| POST | `/xbk/courses` | 创建课程 | 管理员 |
-| PUT | `/xbk/courses/{course_id}` | 更新课程 | 管理员 |
-| DELETE | `/xbk/courses/{course_id}` | 删除课程 | 管理员 |
-| GET | `/xbk/selections` | 获取选课列表 | 管理员 |
-| POST | `/xbk/selections` | 创建选课 | 管理员 |
-| PUT | `/xbk/selections/{selection_id}` | 更新选课 | 管理员 |
-| DELETE | `/xbk/selections/{selection_id}` | 删除选课 | 管理员 |
-| GET | `/xbk/course-results` | 获取课程成绩 | 管理员 |
-| GET | `/xbk/meta` | 获取元数据（年级/班级） | 管理员 |
-| DELETE | `/xbk` | 清空所有数据 | 管理员 |
+| GET | `/xbk/data/students` | 获取学生列表 | 管理员 |
+| POST | `/xbk/data/students` | 创建学生 | 管理员 |
+| PUT | `/xbk/data/students/{student_id}` | 更新学生 | 管理员 |
+| DELETE | `/xbk/data/students/{student_id}` | 删除学生 | 管理员 |
+| GET | `/xbk/data/courses` | 获取课程列表 | 管理员 |
+| POST | `/xbk/data/courses` | 创建课程 | 管理员 |
+| PUT | `/xbk/data/courses/{course_id}` | 更新课程 | 管理员 |
+| DELETE | `/xbk/data/courses/{course_id}` | 删除课程 | 管理员 |
+| GET | `/xbk/data/selections` | 获取选课列表 | 管理员 |
+| POST | `/xbk/data/selections` | 创建选课 | 管理员 |
+| PUT | `/xbk/data/selections/{selection_id}` | 更新选课 | 管理员 |
+| DELETE | `/xbk/data/selections/{selection_id}` | 删除选课 | 管理员 |
+| GET | `/xbk/data/course-results` | 获取课程成绩 | 管理员 |
+| GET | `/xbk/data/meta` | 获取元数据（年级/班级） | 管理员 |
+| DELETE | `/xbk/data` | 清空所有数据 | 管理员 |
 
 补充说明（2026-03-24）：
 - `GET /xbk/data/selections` 可能包含 `id=0` 的虚拟行（用于展示未选课/休学等状态），该类虚拟行不对应真实选课主键。
 - `PUT/DELETE /xbk/data/selections/{selection_id}` 仅适用于真实记录（`selection_id > 0`）。
 
-### 统计分析（/xbk）
+### 统计分析（/xbk/analysis）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/xbk/summary` | 总体摘要 | 管理员 |
-| GET | `/xbk/course-stats` | 课程统计 | 管理员 |
-| GET | `/xbk/class-stats` | 班级统计 | 管理员 |
-| GET | `/xbk/students-with-empty-selection` | 空选课学生 | 管理员 |
-| GET | `/xbk/students-without-selection` | 未选课学生 | 管理员 |
+| GET | `/xbk/analysis/summary` | 总体摘要 | 管理员 |
+| GET | `/xbk/analysis/course-stats` | 课程统计 | 管理员 |
+| GET | `/xbk/analysis/class-stats` | 班级统计 | 管理员 |
+| GET | `/xbk/analysis/students-with-empty-selection` | 空选课学生 | 管理员 |
+| GET | `/xbk/analysis/students-without-selection` | 未选课学生 | 管理员 |
 
 ### 导入导出（/xbk）
 
@@ -401,7 +404,85 @@
 
 说明：统计接口 `pass_rate` 字段返回 `0~1` 比例值，前端再格式化为百分比。
 
-## 十四、课堂互动（/classroom）
+## 十四、学习中心（/learning）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/learning/progress/{module_key}` | 获取当前用户学习进度，`module_key` 支持 `ml`、`ai`、`agents` | 是 |
+| POST | `/learning/progress/{module_key}` | 保存当前用户学习进度 JSON，前端会按模块保留阶段状态、收藏、完成项和笔记 | 是 |
+| GET | `/learning/content/{module_key}` | 获取启用的学习内容扩展项；无数据库内容时前端回退内置内容 | 是 |
+| GET | `/learning/content/{module_key}/admin` | 管理员获取学习内容扩展项（包含禁用项） | 管理员 |
+| PUT | `/learning/content/{module_key}/{section_key}/{item_key}` | 创建或更新学习内容项，`content` 为结构化 JSON，唯一键为模块、分区、条目 | 管理员 |
+| PATCH | `/learning/content/{module_key}/{section_key}/{item_key}/enabled` | 启用或禁用学习内容项 | 管理员 |
+
+说明：`module_key` 目前限制为 `ml`、`ai`、`agents`。`section_key` 用于区分路线图、知识体系、实验、工具、资源、Prompt、安全伦理、框架、核心技术等内容分区；前端也支持 `raw` 分区作为整包覆盖扩展入口。
+
+Markdown 学习书可通过学习内容接口在后台维护。前端内置完整百科式学习书作为 fallback；当管理员写入 `section_key=raw`、`item_key=book` 且 `content` 包含 `book` 对象时，前端会使用该对象覆盖对应模块的内置学习书。外部链接应放在章节 `references` 中作为可选参考，主体知识内容应写入章节 `markdown` 字段。
+
+示例：覆盖机器学习模块学习书。
+
+```http
+PUT /learning/content/ml/raw/book
+Content-Type: application/json
+```
+
+```json
+{
+  "section_key": "raw",
+  "item_key": "book",
+  "title": "机器学习百科式学习书",
+  "summary": "后台可编辑的 Markdown 学习书覆盖内容。",
+  "content": {
+    "book": {
+      "moduleKey": "ml",
+      "title": "机器学习百科式学习书",
+      "subtitle": "从数据理解到模型作品的完整成长路径",
+      "description": "面向信息技术课堂和项目学习的机器学习教材。",
+      "audience": "适合具备基础 Python 或数据表格经验的学习者。",
+      "outcomes": [
+        "能描述机器学习项目从问题定义到复盘的完整流程",
+        "能完成可运行实验，并用指标和图表解释结果"
+      ],
+      "chapters": [
+        {
+          "slug": "overview",
+          "title": "机器学习总览：从问题到作品",
+          "summary": "建立机器学习项目全局视角。",
+          "estimatedMinutes": 35,
+          "difficulty": "beginner",
+          "goals": ["说明机器学习项目的基本流程"],
+          "markdown": "# 机器学习总览\n\n## 学习定位\n这里写后台可编辑的 Markdown 正文。",
+          "checklist": ["能画出项目流程图"],
+          "experiments": [
+            {
+              "title": "最小建模闭环",
+              "goal": "完成一次数据读取、训练、评估和报告流程。",
+              "steps": ["准备数据", "训练基线模型", "记录指标"],
+              "output": "一份实验报告",
+              "difficulty": "beginner"
+            }
+          ],
+          "glossary": [{ "term": "特征", "definition": "描述样本的输入变量。" }],
+          "references": [
+            {
+              "title": "可选延伸资料",
+              "source": "参考资料",
+              "note": "仅作为拓展阅读，不替代章节正文。"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tags": ["markdown", "book", "ml"],
+  "difficulty": "beginner",
+  "sort_order": 0,
+  "enabled": true,
+  "source_type": "admin"
+}
+```
+
+## 十五、课堂互动（/classroom）
 
 ### 管理端（/classroom/admin）
 

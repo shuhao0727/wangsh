@@ -105,9 +105,9 @@ const AdminDashboard: React.FC = () => {
 
           {/* 数据概览卡片 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} color="primary" />
-            <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} color="purple" />
-            <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} color="warning" />
+            <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} variant="horizontal" color="primary" />
+            <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} variant="horizontal" color="purple" />
+            <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} variant="horizontal" color="warning" />
           </div>
 
           {/* 健康检查详情 */}

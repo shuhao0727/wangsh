@@ -8,14 +8,20 @@ import {
   GitMerge,
   Code,
   Settings,
+  Cpu,
+  Sparkles,
+  Bot,
 } from "lucide-react";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
+import AdminMLPage from "./ml";
+import AdminAIPage from "./ai";
+import AdminAgentsPage from "./agents";
 import AgentConfigModal from "./components/AgentConfigModal";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { logger } from "@services/logger";
 
-type ViewState = 'dashboard' | 'dianming-manager';
+type ViewState = 'dashboard' | 'dianming-manager' | 'ml-manager' | 'ai-manager' | 'agents-manager';
 
 const AdminITTechnology: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
@@ -56,6 +62,30 @@ const AdminITTechnology: React.FC = () => {
       icon: <GitMerge className="h-5 w-5" />,
       color: "var(--ws-color-success)",
       hasManager: false, // 暂未实现
+    },
+    {
+      key: 'it_machine_learning',
+      title: '机器学习',
+      description: '机器学习模型训练与实验平台',
+      icon: <Cpu className="h-5 w-5" />,
+      color: "#8B5CF6",
+      hasManager: true,
+    },
+    {
+      key: 'it_ai_exploration',
+      title: '人工智能探索',
+      description: 'AI 能力体验与交互式学习探索',
+      icon: <Sparkles className="h-5 w-5" />,
+      color: "#06B6D4",
+      hasManager: true,
+    },
+    {
+      key: 'it_agent_exploration',
+      title: '智能体探索',
+      description: '多智能体协作与对话实验',
+      icon: <Bot className="h-5 w-5" />,
+      color: "#6366F1",
+      hasManager: true,
     },
   ];
 
@@ -107,6 +137,51 @@ const AdminITTechnology: React.FC = () => {
     );
   }
 
+  if (view === 'ml-manager') {
+    return (
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+        <div className="mb-4 shrink-0">
+          <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
+            ← 返回 IT 应用管理
+          </Button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <AdminMLPage embedded />
+        </div>
+      </AdminPage>
+    );
+  }
+
+  if (view === 'ai-manager') {
+    return (
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+        <div className="mb-4 shrink-0">
+          <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
+            ← 返回 IT 应用管理
+          </Button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <AdminAIPage embedded />
+        </div>
+      </AdminPage>
+    );
+  }
+
+  if (view === 'agents-manager') {
+    return (
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+        <div className="mb-4 shrink-0">
+          <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
+            ← 返回 IT 应用管理
+          </Button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <AdminAgentsPage embedded />
+        </div>
+      </AdminPage>
+    );
+  }
+
   return (
     <AdminPage padding="var(--ws-panel-padding)">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -127,6 +202,9 @@ const AdminITTechnology: React.FC = () => {
                   ? () => {
                       if (app.key === "it_dianming") setView("dianming-manager");
                       if (app.key === "it_python_lab") setAgentConfigVisible(true);
+                      if (app.key === "it_machine_learning") setView("ml-manager");
+                      if (app.key === "it_ai_exploration") setView("ai-manager");
+                      if (app.key === "it_agent_exploration") setView("agents-manager");
                     }
                   : undefined
               }

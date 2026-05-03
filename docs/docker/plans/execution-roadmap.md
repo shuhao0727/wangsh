@@ -1,5 +1,8 @@
 # WangSh项目改进执行路线图
 
+> 状态：需复核 / 部分内容过期
+> 当前总计划以 [`../../IMPROVEMENT_CHECKLIST.md`](../../IMPROVEMENT_CHECKLIST.md) 为准。
+
 ## 文档概览
 
 基于深度分析，我们创建了以下可执行文档：
@@ -10,7 +13,7 @@
    - 134个具体检查项，每个都有验收标准
    - 基于项目现状调整，避免重复劳动
 
-2. **[`week1-execution-plan-2026-04-10.md`](week1-execution-plan-2026-04-10.md)** - 第一周具体执行计划
+2. **[`../archive/plans/week1-execution-plan-2026-04-10.md`](../archive/plans/week1-execution-plan-2026-04-10.md)** - 第一周具体执行计划（历史归档）
    - 5个核心任务，每日检查点
    - 具体命令和代码示例
    - 风险控制和交付物定义
@@ -33,15 +36,15 @@
    - 测试和验证方法
 
 ### 自动化工具
-6. **[`../../../scripts/split_group_discussion_v2.py`](../../../scripts/split_group_discussion_v2.py)** - 文件拆分脚本
+6. 分组讨论拆分脚本已执行完成，历史记录见 [`../../../docs/scripts/ARCHIVE_INDEX.md`](../../../docs/scripts/ARCHIVE_INDEX.md)
    - 基于实际代码结构（34个函数）
    - 智能分类和模块化
    - 测试验证和回滚支持
 
-7. **[`../../../scripts/optimize_database_indexes.sql`](../../../scripts/optimize_database_indexes.sql)** - 数据库优化脚本
+7. **[`../../DATABASE_PERFORMANCE_GUIDE.md`](../../DATABASE_PERFORMANCE_GUIDE.md)** - 数据库性能指南
    - 索引分析和优化
    - 性能监控配置
-   - 迁移脚本模板
+   - 正式结构变更需走 Alembic migration
 
 ## 执行优先级
 
@@ -53,7 +56,7 @@
 
 2. **任务2：拆分 group_discussion.py**
    - 备份原文件
-   - 运行拆分脚本：`python scripts/split_group_discussion_v2.py`
+   - 拆分脚本已清理，历史记录见 `docs/scripts/ARCHIVE_INDEX.md`
    - 验证：功能测试通过，无循环依赖
 
 3. **任务3：前端测试基础设施**

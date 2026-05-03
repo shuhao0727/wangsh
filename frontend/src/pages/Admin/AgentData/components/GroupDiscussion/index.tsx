@@ -769,60 +769,60 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <AdminCard size="small" className="mb-4" styles={{ body: { padding: 16 } }}>
-        <div className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
+      <AdminCard size="small" className="mb-4" styles={{ body: { padding: 12 } }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-sm text-text-tertiary">时间</span>
               <Input
                 type="date"
-                className="w-[160px]"
+                className="h-8 w-[136px]"
                 value={dateRange[0]}
                 onChange={(e) => setDateRange([e.target.value, dateRange[1]])}
               />
-              <span className="text-text-tertiary">至</span>
+              <span className="text-xs text-text-tertiary">至</span>
               <Input
                 type="date"
-                className="w-[160px]"
+                className="h-8 w-[136px]"
                 value={dateRange[1]}
                 onChange={(e) => setDateRange([dateRange[0], e.target.value])}
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-sm text-text-tertiary">班级</span>
               <Input
-                className="w-[180px]"
+                className="h-8 w-[150px]"
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
                 placeholder="如：高一(1)班"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-sm text-text-tertiary">组号</span>
               <Input
-                className="w-[140px]"
+                className="h-8 w-[88px]"
                 value={groupNo}
                 onChange={(e) => setGroupNo(e.target.value)}
                 placeholder="如：1"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-sm text-text-tertiary">组名</span>
               <Input
-                className="w-[180px]"
+                className="h-8 w-[140px]"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
                 placeholder="如：学习小组"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-sm text-text-tertiary">姓名</span>
               <Input
-                className="w-[160px]"
+                className="h-8 w-[110px]"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
                 placeholder="如：张三"
@@ -830,6 +830,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </div>
 
             <Button
+              size="sm"
+              className="h-8"
               disabled={isLoading}
               onClick={() => {
                 setPage(1);
@@ -841,12 +843,12 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Select
               value={selectedAgentId ? String(selectedAgentId) : "__none__"}
               onValueChange={(value) => setSelectedAgentId(value === "__none__" ? null : Number(value))}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="h-8 w-[160px] text-xs">
                 <SelectValue placeholder="选择分析智能体" />
               </SelectTrigger>
               <SelectContent>
@@ -860,6 +862,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Select>
 
             <Button
+              size="sm"
+              className="h-8"
               variant="outline"
               disabled={selectedSessionIds.length < 2}
               onClick={() => {
@@ -872,6 +876,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Button>
 
             <Button
+              size="sm"
+              className="h-8"
               variant="outline"
               disabled={selectedSessionIds.length === 0}
               onClick={() => {
@@ -884,6 +890,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Button>
 
             <Button
+              size="sm"
+              className="h-8"
               variant="destructive"
               disabled={batchDeleting || selectedSessionIds.length === 0}
               onClick={() => {
@@ -896,6 +904,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Button>
 
             <Button
+              size="sm"
+              className="h-8"
               variant="outline"
               disabled={selectedSessionIds.length === 0}
               onClick={() => setSelectedSessionIds([])}
@@ -903,7 +913,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               清空选择
             </Button>
 
-            <div className="flex h-9 items-center gap-2 rounded-md border border-border-secondary bg-surface-2 px-2.5">
+            <div className="flex h-8 items-center gap-2 rounded-md border border-border-secondary bg-surface-2 px-2.5">
               <span className="text-sm text-text-secondary">学生端弹窗</span>
               <Badge
                 variant={frontendVisible ? "success" : "secondary"}

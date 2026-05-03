@@ -14,6 +14,7 @@
 - `verify-deployment.sh` - 部署后核验
 - `health-check-detailed.sh` - 细粒度健康检查
 - `optimize_host_for_pythonlab.sh` - PythonLab 主机调优
+- `check-version-consistency.mjs` - CI 版本一致性检查
 
 ## 常用入口
 

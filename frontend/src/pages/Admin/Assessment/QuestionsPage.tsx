@@ -713,8 +713,8 @@ const QuestionsPage: React.FC = () => {
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
-          <div className="lg:col-span-2">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-12">
+          <div className="lg:col-span-3">
             <label className="mb-1.5 block text-sm font-medium">测评标题</label>
             <Input
               maxLength={200}
@@ -723,7 +723,7 @@ const QuestionsPage: React.FC = () => {
               onChange={(e) => setConfigDraft((prev) => ({ ...prev, title: e.target.value }))}
             />
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <label className="mb-1.5 block text-sm font-medium">年级</label>
             <Select
               value={configDraft.grade || FILTER_ALL}
@@ -744,7 +744,7 @@ const QuestionsPage: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <label className="mb-1.5 block text-sm font-medium">智能体</label>
             <Select
               value={configDraft.agent_id || FILTER_ALL}
@@ -765,40 +765,7 @@ const QuestionsPage: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">开放开始时间</label>
-            <Input
-              type="datetime-local"
-              value={configDraft.available_start}
-              onChange={(e) =>
-                setConfigDraft((prev) => ({ ...prev, available_start: e.target.value }))
-              }
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">开放结束时间</label>
-            <Input
-              type="datetime-local"
-              value={configDraft.available_end}
-              onChange={(e) =>
-                setConfigDraft((prev) => ({ ...prev, available_end: e.target.value }))
-              }
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">知识点</label>
-            <Input
-              placeholder="如：for循环、while循环、递归"
-              value={configDraft.knowledge_points}
-              onChange={(e) =>
-                setConfigDraft((prev) => ({ ...prev, knowledge_points: e.target.value }))
-              }
-            />
-          </div>
-          <div>
+          <div className="lg:col-span-1">
             <label className="mb-1.5 block text-sm font-medium">总分</label>
             <Input
               type="number"
@@ -813,13 +780,42 @@ const QuestionsPage: React.FC = () => {
               }
             />
           </div>
+          <div className="lg:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium">开放开始时间</label>
+            <Input
+              type="datetime-local"
+              value={configDraft.available_start}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, available_start: e.target.value }))
+              }
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium">开放结束时间</label>
+            <Input
+              type="datetime-local"
+              value={configDraft.available_end}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, available_end: e.target.value }))
+              }
+            />
+          </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <label className="mb-1.5 block text-sm font-medium">知识点</label>
+            <Input
+              placeholder="如：for循环、while循环、递归"
+              value={configDraft.knowledge_points}
+              onChange={(e) =>
+                setConfigDraft((prev) => ({ ...prev, knowledge_points: e.target.value }))
+              }
+            />
+          </div>
+          <div className="lg:col-span-4">
             <label className="mb-1.5 block text-sm font-medium">教学目标</label>
-            <Textarea
-              rows={3}
+            <Input
               placeholder="可选，AI 出题时会参考"
               value={configDraft.teaching_objectives}
               onChange={(e) =>
@@ -827,10 +823,9 @@ const QuestionsPage: React.FC = () => {
               }
             />
           </div>
-          <div>
+          <div className="lg:col-span-4">
             <label className="mb-1.5 block text-sm font-medium">出题提示</label>
-            <Textarea
-              rows={3}
+            <Input
               placeholder="可选，如：侧重实际应用场景"
               value={configDraft.ai_prompt}
               onChange={(e) => setConfigDraft((prev) => ({ ...prev, ai_prompt: e.target.value }))}
@@ -839,8 +834,8 @@ const QuestionsPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-text-base">固定题</h3>
             <Badge variant="info">{items.length}</Badge>
@@ -924,18 +919,18 @@ const QuestionsPage: React.FC = () => {
 
         <DataTable
           table={fixedQuestionTable}
-          className="border-0"
+          className="min-h-[260px] border-0"
           tableClassName="min-w-[840px]"
           emptyState={
             questionsLoading ? (
-              <div className="py-10 text-center text-sm text-text-tertiary">
+              <div className="py-16 text-center text-sm text-text-tertiary">
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   正在加载...
                 </span>
               </div>
             ) : (
-              <div className="py-10 text-center text-sm text-text-tertiary">
+              <div className="py-16 text-center text-sm text-text-tertiary">
                 暂无固定题，可手动添加或 AI 生成
               </div>
             )
@@ -961,8 +956,8 @@ const QuestionsPage: React.FC = () => {
         ) : null}
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-text-base">自适应知识点题</h3>
@@ -985,14 +980,14 @@ const QuestionsPage: React.FC = () => {
         </div>
 
         {adaptiveKPs.length === 0 ? (
-          <div className="py-10 text-center">
+          <div className="py-16 text-center">
             <Button size="sm" variant="outline" onClick={handleAddAdaptive}>
               <Plus className="h-4 w-4" />
               添加知识点
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="min-h-[220px] space-y-3">
             <div
               className="grid gap-2 px-2 text-xs font-medium text-text-tertiary"
               style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
@@ -1009,7 +1004,7 @@ const QuestionsPage: React.FC = () => {
             {adaptiveKPs.map((kp, index) => (
               <div
                 key={kp.key}
-                className="grid items-center gap-2 rounded-md bg-surface-2 px-2 py-2"
+                className="grid items-center gap-2 rounded-md bg-surface-2 px-3 py-3"
                 style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
               >
                 <span className="text-sm font-medium text-text-secondary">{index + 1}</span>

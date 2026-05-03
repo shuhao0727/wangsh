@@ -358,7 +358,7 @@ docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
 ## 技术栈
 
 - **后端**: FastAPI + SQLAlchemy 2.0 + PostgreSQL
-- **前端**: React 19 + TypeScript + Ant Design
+- **前端**: React 19 + TypeScript + Tailwind CSS + 自定义主题
 - **网关**: Caddy 2
 - **缓存**: Redis
 - **任务队列**: Celery

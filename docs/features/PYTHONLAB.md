@@ -1,14 +1,14 @@
 # PythonLab 调试环境文档
 
-> 最后更新：2026-04-11
+> 最后更新：2026-05-02
 
 ## 概述
 
 PythonLab 是基于 Docker 沙箱的 Python 代码调试环境，支持断点调试、变量查看、代码执行等功能。
 
-## 近期事故记录
+## 历史事故记录
 
-- [2026-04-08 调试 Continue 卡死事故记录](./PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md)
+- [2026-04-08 调试 Continue 卡死事故记录](../docker/archive/plans/PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md)
 
 ### 核心功能
 
@@ -291,6 +291,15 @@ const canvasX = (clientX - rect.left) / scale - panX;
 const canvasY = (clientY - rect.top) / scale - panY;
 ```
 
+### 调试控制区交互约束
+
+PythonLab 右侧调试控制按钮是高频连续点击控件，点击可靠性优先于 tooltip 丰富度。
+
+- `Run`、`Debug`、`Pause`、`Continue`、`Step Over`、`Step Into`、`Step Out`、`Reset` 默认只使用原生 `title` 和 `aria-label`。
+- 不要给调试控制按钮套用 Radix Tooltip 或同类依赖 portal、hover 状态机、pointer outside、focus restore 的复杂弹层组件。
+- 如果确需引入 tooltip、popover、dialog 或 hover 提示，必须覆盖真实 pointer click 链路，不能只验证 JS `button.click()`。
+- 鼠标悬停在控制按钮上时连续点击，是调试控制区必须覆盖的交互场景。
+
 ---
 
 ## CI/CD 测试
@@ -313,6 +322,15 @@ const canvasY = (clientY - rect.top) / scale - panY;
 - `4` - 行为探测失败
 - `5` - 断言失败
 - `10` - 未知异常
+
+### 调试控制区真实浏览器验证
+
+只跑 Playwright 默认 Chromium smoke 不足以证明调试控制区交互可靠。只要改动调试控制按钮、tooltip、hover、pointer、focus、Radix 弹层类组件或调试状态切换 UI，应补跑：
+
+- 真实 Google Chrome channel：多断点连续 `Continue` 到程序结束。
+- WebKit：多断点连续 `Continue` 到程序结束。
+- 鼠标悬停在 `Continue` 等控制按钮上时，用真实 pointer click 连续点击。
+- 回归路径至少覆盖：`Debug -> Pause -> Continue -> Finish`、`Debug -> Continue -> Continue -> Continue -> Finish`、`Debug -> Continue -> Pause -> Continue -> Finish`。
 
 ---
 
@@ -338,6 +356,15 @@ const canvasY = (clientY - rect.top) / scale - panY;
 2. 检查镜像是否存在
 3. 检查资源限制是否合理
 4. 查看 Docker 日志
+
+### Continue 点击后疑似卡死
+
+断点暂停后点击 `Continue` 卡住时，先确认后端是否收到 DAP `continue` 请求。
+
+- 如果后端未收到，不要优先怀疑 debugpy 或 DAP 后端死循环，应先排查前端真实点击链路。
+- 优先检查 tooltip、popover、dialog、pointer capture、focus restore、outside click 管理和 hover 状态机。
+- 区分真实 pointer click 与 JS `button.click()`：后者能成功不代表真实用户点击链路可靠。
+- 相关历史事故见归档记录：[2026-04-08 调试 Continue 卡死事故记录](../docker/archive/plans/PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md)。
 
 ---
 

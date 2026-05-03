@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { X, Pin, PinOff, Zap, RotateCcw, Loader2 } from "lucide-react";
-import type { Activity, ActivityStats } from "@services/classroom";
+import type { Activity, ActivityStats, OptionItem } from "@services/classroom";
 import { classroomApi } from "@services/classroom";
 import type { Plan } from "@services/classroomPlan";
 import { planApi } from "@services/classroomPlan";
@@ -53,7 +53,7 @@ const parseBlankAnswers = (raw?: string | null): string[] => {
     if (parsed && typeof parsed === "object") {
       return Object.keys(parsed)
         .sort((a, b) => Number(a) - Number(b))
-        .map((k) => String((parsed as any)[k] ?? "").trim());
+        .map((k) => String((parsed as Record<string, unknown>)[k] ?? "").trim());
     }
   } catch {}
   return [text];
@@ -62,7 +62,7 @@ const parseBlankAnswers = (raw?: string | null): string[] => {
 const getCodeTemplate = (activity: Activity | null): string => {
   if (!activity || activity.activity_type !== "fill_blank") return "";
   if (!Array.isArray(activity.options)) return "";
-  const codeOpt = (activity.options as any[]).find((o: any) => o.key === "__code__");
+  const codeOpt = activity.options.find((o) => o.key === "__code__");
   return codeOpt?.text || "";
 };
 
@@ -776,7 +776,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
               {stats && activity.activity_type === "vote" && Array.isArray(activity.options) && (
                 <div>
                   <div className="text-sm font-semibold mb-2.5 text-text-secondary">班级投票结果 <span className="font-normal text-text-tertiary text-xs">· {stats.total_responses} 人参与</span></div>
-                  {(activity.options as any[]).map((opt: any) => {
+                  {(activity.options as OptionItem[]).map((opt) => {
                     const count = stats.option_counts?.[opt.key] || 0;
                     const pct = stats.total_responses > 0 ? Math.round(count / stats.total_responses * 100) : 0;
                     const isMyAnswer = myAnswer?.split(",").includes(opt.key);
@@ -862,7 +862,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
                     <div className="text-sm font-semibold mb-2 text-text-secondary">班级投票结果
                       {reviewStats && <span className="font-normal text-text-tertiary text-xs"> · {reviewStats.total_responses} 人参与</span>}
                     </div>
-                    {(reviewActivity.options as any[]).map((opt: any) => {
+                    {(reviewActivity.options as OptionItem[]).map((opt) => {
                       const isMyAns = ans?.my_answer?.split(",").includes(opt.key);
                       const isCorrectOpt = reviewActivity.correct_answer?.split(",").includes(opt.key);
                       const count = reviewStats?.option_counts?.[opt.key] || 0;

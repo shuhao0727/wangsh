@@ -62,21 +62,25 @@ export const StatCard: React.FC<StatCardProps> = ({
     return (
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border border-[var(--ws-color-border)] bg-[var(--ws-color-surface-2)] p-3",
+          "flex items-center justify-between gap-3 rounded-lg border border-[var(--ws-color-border)] bg-[var(--ws-color-surface-2)] px-3 py-2.5",
           className,
         )}
       >
-        {icon ? (
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: colors.bg, color: colors.icon }}
-          >
-            {icon}
+        <div className="flex min-w-0 items-center gap-2">
+          {icon ? (
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: colors.bg, color: colors.icon }}
+            >
+              {icon}
+            </div>
+          ) : null}
+          <div className="min-w-0 text-sm text-text-tertiary">
+            {label}
           </div>
-        ) : null}
-        <div className="min-w-0">
-          <div className="text-xs text-text-tertiary">{label}</div>
-          <div className="text-lg font-semibold text-text-base">{value}</div>
+        </div>
+        <div className="shrink-0 text-right text-xl font-semibold leading-6 text-text-base tabular-nums">
+          {value}
         </div>
       </div>
     );

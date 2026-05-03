@@ -4,7 +4,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, RotateCcw,
-  Volume2, Code, FileText, GitBranch, ChevronRight, TriangleAlert
+  Volume2, Code, FileText, GitBranch, ChevronRight, TriangleAlert,
+  Cpu, Sparkles, Bot
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
@@ -55,6 +56,33 @@ const APPS = [
     action: 'mindmap',
     available: false,
   },
+  {
+    key: 'it_machine_learning_enabled',
+    title: '机器学习',
+    description: '机器学习知识体系与实验平台',
+    icon: <Cpu className="h-5 w-5" />,
+    color: '#8B5CF6', bg: 'color-mix(in srgb, #8B5CF6 8%, transparent)', ring: 'color-mix(in srgb, #8B5CF6 22%, transparent)',
+    action: 'ml',
+    available: true,
+  },
+  {
+    key: 'it_ai_exploration_enabled',
+    title: '人工智能探索',
+    description: 'AI能力体验与知识探索',
+    icon: <Sparkles className="h-5 w-5" />,
+    color: '#06B6D4', bg: 'color-mix(in srgb, #06B6D4 8%, transparent)', ring: 'color-mix(in srgb, #06B6D4 22%, transparent)',
+    action: 'ai',
+    available: true,
+  },
+  {
+    key: 'it_agent_exploration_enabled',
+    title: '智能体探索',
+    description: '多智能体协作与对话实验',
+    icon: <Bot className="h-5 w-5" />,
+    color: '#6366F1', bg: 'color-mix(in srgb, #6366F1 8%, transparent)', ring: 'color-mix(in srgb, #6366F1 22%, transparent)',
+    action: 'agents',
+    available: true,
+  },
 ];
 
 const ITTechnologyPage: React.FC = () => {
@@ -68,7 +96,7 @@ const ITTechnologyPage: React.FC = () => {
   const loadFlags = async () => {
     setLoading(true); setError(null);
     try {
-      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled'];
+      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled'];
       const results = await Promise.all(
         keys.map(key => featureFlagsApi.getPublic(key).catch(() => ({ value: { enabled: false } } as any)))
       );
@@ -212,6 +240,9 @@ const ITTechnologyPage: React.FC = () => {
                   onClick={() => {
                     if (app.action === 'dianming') setView('rollcall-selector');
                     if (app.action === 'python') void navigate('/it-technology/python-lab');
+                    if (app.action === 'ml') void navigate('/it-technology/ml');
+                    if (app.action === 'ai') void navigate('/it-technology/ai');
+                    if (app.action === 'agents') void navigate('/it-technology/agents');
                   }}
                 />
               ))}

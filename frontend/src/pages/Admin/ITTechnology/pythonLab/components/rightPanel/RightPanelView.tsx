@@ -20,9 +20,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { validatePythonLite } from "../../flow/python_sync";
-import { pythonlabApiPath } from "../../services/pythonlabApiBase";
-import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "../../services/pythonlabCodeApi";
+import { validatePythonLite } from "@/pages/Admin/ITTechnology/pythonLab/flow/python_sync";
+import { pythonlabApiPath } from "@/pages/Admin/ITTechnology/pythonLab/services/pythonlabApiBase";
+import { pythonlabSyntaxApi, type PythonLabSyntaxError } from "@/pages/Admin/ITTechnology/pythonLab/services/pythonlabCodeApi";
 import { LazyMonacoPythonEditor } from "../LazyMonacoPythonEditor";
 import { PythonLabStatusBar } from "../PythonLabStatusBar";
 import XtermTerminal from "../XtermTerminal";
@@ -30,17 +30,17 @@ import PyodideTerminal from "../PyodideTerminal";
 import { FloatingPopup } from "../FloatingPopup";
 // import { AIAssistantModal } from "../AIAssistantModal";
 import type { RightPanelTabKey } from "../rightPanelTabPolicy";
-import { useCode } from "../../stores/CodeContext";
-import { useFlow } from "../../stores/FlowContext";
-import { useRunnerActions } from "../../stores/RunnerActionsContext";
-import { useUI, VARIABLE_COLUMNS } from "../../stores/UIContext";
+import { useCode } from "@/pages/Admin/ITTechnology/pythonLab/stores/CodeContext";
+import { useFlow } from "@/pages/Admin/ITTechnology/pythonLab/stores/FlowContext";
+import { useRunnerActions } from "@/pages/Admin/ITTechnology/pythonLab/stores/RunnerActionsContext";
+import { useUI, VARIABLE_COLUMNS } from "@/pages/Admin/ITTechnology/pythonLab/stores/UIContext";
 import { DebugTab } from "./DebugTab";
 import { PipelineTab } from "./PipelineTab";
-import { wsUrl } from "../../hooks/dapRunnerHelpers";
-import { useWsAccessToken } from "../../hooks/useWsAccessToken";
+import { wsUrl } from "@/pages/Admin/ITTechnology/pythonLab/hooks/dapRunnerHelpers";
+import { useWsAccessToken } from "@/pages/Admin/ITTechnology/pythonLab/hooks/useWsAccessToken";
 import { getTerminalModeHint } from "./terminalHint";
 import { shouldConnectBackendTerminal, shouldUseBackendTerminal as resolveShouldUseBackendTerminal } from "./terminalRenderer";
-import { resolveDebugControlMatrix } from "../../adapters/debugCapabilityMap";
+import { resolveDebugControlMatrix } from "@/pages/Admin/ITTechnology/pythonLab/adapters/debugCapabilityMap";
 import { logger } from "@services/logger";
 
 function PanelTooltip({

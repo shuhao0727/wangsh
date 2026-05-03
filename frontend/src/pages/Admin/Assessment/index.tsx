@@ -103,6 +103,19 @@ const DEFAULT_CREATE_VALUES: CreateFormValues = {
   knowledge_points: "",
 };
 
+const parseKnowledgePoints = (value: string | null | undefined): string[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim()).filter(Boolean);
+    }
+  } catch {
+    // Fall back to delimiter parsing for legacy/plain-text values.
+  }
+  return value.split(/[,，、\n\s]+/).map((item) => item.trim()).filter(Boolean);
+};
+
 
 const AdminAssessment: React.FC = () => {
   const navigate = useNavigate();
@@ -111,6 +124,8 @@ const AdminAssessment: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState<string>("__all__");
+  const [enabledFilter, setEnabledFilter] = useState<string>("__all__");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -126,8 +141,10 @@ const AdminAssessment: React.FC = () => {
       skip: (currentPage - 1) * pageSize,
       limit: pageSize,
       search: search.trim() || undefined,
+      grade: gradeFilter === "__all__" ? undefined : gradeFilter,
+      enabled: enabledFilter === "__all__" ? undefined : enabledFilter === "enabled",
     }),
-    [currentPage, pageSize, search],
+    [currentPage, pageSize, search, gradeFilter, enabledFilter],
   );
 
   const { data: listData, isLoading } = useAssessmentConfigs(queryParams);
@@ -221,6 +238,8 @@ const AdminAssessment: React.FC = () => {
 
   const handleClearSearch = () => {
     setSearchInput("");
+    setGradeFilter("__all__");
+    setEnabledFilter("__all__");
     if (search !== "") {
       setSearch("");
     }
@@ -255,6 +274,31 @@ const AdminAssessment: React.FC = () => {
         size: 90,
         meta: { className: "w-[90px] align-top" },
         cell: ({ row }) => row.original.grade || "-",
+      },
+      {
+        id: "knowledge_points",
+        header: "章节/知识点",
+        accessorKey: "knowledge_points",
+        size: 220,
+        meta: { className: "w-[220px] align-top" },
+        cell: ({ row }) => {
+          const points = parseKnowledgePoints(row.original.knowledge_points).slice(0, 4);
+          if (points.length === 0) return <span className="text-text-tertiary">-</span>;
+          return (
+            <div className="flex max-w-[210px] flex-wrap gap-1">
+              {points.map((point) => (
+                <Badge key={point} variant="secondary" className="max-w-[96px] truncate px-1.5 py-0 text-[11px]">
+                  {point}
+                </Badge>
+              ))}
+              {parseKnowledgePoints(row.original.knowledge_points).length > points.length ? (
+                <Badge variant="outline" className="border-border bg-transparent px-1.5 py-0 text-[11px] text-text-tertiary">
+                  +{parseKnowledgePoints(row.original.knowledge_points).length - points.length}
+                </Badge>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: "question_count",
@@ -363,9 +407,9 @@ const AdminAssessment: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <AdminFilterBar className="flex-nowrap">
+      <AdminFilterBar>
         <Input
-          placeholder="搜索测评标题"
+          placeholder="搜索标题/章节/知识点"
           className="w-[220px]"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -375,11 +419,44 @@ const AdminAssessment: React.FC = () => {
             }
           }}
         />
+        <Select
+          value={gradeFilter}
+          onValueChange={(value) => {
+            setGradeFilter(value);
+            setCurrentPage(1);
+          }}
+        >
+          <SelectTrigger className="w-[120px]">
+            <SelectValue placeholder="年级" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部年级</SelectItem>
+            {GRADE_OPTIONS.map((grade) => (
+              <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={enabledFilter}
+          onValueChange={(value) => {
+            setEnabledFilter(value);
+            setCurrentPage(1);
+          }}
+        >
+          <SelectTrigger className="w-[120px]">
+            <SelectValue placeholder="状态" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部状态</SelectItem>
+            <SelectItem value="enabled">已启用</SelectItem>
+            <SelectItem value="disabled">已停用</SelectItem>
+          </SelectContent>
+        </Select>
         <Button variant="outline" onClick={handleSearchSubmit}>
           <Search className="h-4 w-4" />
           搜索
         </Button>
-        {search || searchInput ? (
+        {search || searchInput || gradeFilter !== "__all__" || enabledFilter !== "__all__" ? (
           <Button variant="ghost" onClick={handleClearSearch}>
             清空
           </Button>
@@ -399,7 +476,7 @@ const AdminAssessment: React.FC = () => {
             emptyDescription={search ? "未找到匹配的测评" : "暂无测评配置"}
             emptyAction={<Button onClick={openCreateModal}>创建第一个测评</Button>}
           >
-            <DataTable table={table} tableClassName="min-w-[980px]" />
+            <DataTable table={table} tableClassName="min-w-[1160px]" />
           </AdminTablePanel>
         </div>
         {items.length > 0 ? (

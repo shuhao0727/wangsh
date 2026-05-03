@@ -70,7 +70,7 @@ export const getAgentDataColumns = (
     key: "student_info",
     width: 220,
     fixed: "left" as const,
-    render: (_: any, record: AgentUsageData) => {
+    render: (_: unknown, record: AgentUsageData) => {
       const user = record.user;
       if (!user) return "-";
 
@@ -104,7 +104,7 @@ export const getAgentDataColumns = (
     title: "智能体信息",
     key: "agent_info",
     width: 260,
-    render: (_: any, record: AgentUsageData) => {
+    render: (_: unknown, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
 
@@ -207,7 +207,7 @@ export const getAgentDataColumns = (
     key: "action",
     width: 80,
     fixed: "right" as const,
-    render: (_: any, record: AgentUsageData) => (
+    render: (_: unknown, record: AgentUsageData) => (
       <HoverTip title="查看详情">
         <Button
           variant="ghost"
@@ -229,7 +229,7 @@ export const getCompactAgentDataColumns = (
     title: "学生",
     key: "student",
     width: 120,
-    render: (_: any, record: AgentUsageData) => {
+    render: (_: unknown, record: AgentUsageData) => {
       const user = record.user;
       if (!user) return "-";
       return (
@@ -244,7 +244,7 @@ export const getCompactAgentDataColumns = (
     title: "智能体",
     key: "agent",
     width: 120,
-    render: (_: any, record: AgentUsageData) => {
+    render: (_: unknown, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
       return (
@@ -274,7 +274,7 @@ export const getCompactAgentDataColumns = (
     title: "操作",
     key: "action",
     width: 80,
-    render: (_: any, record: AgentUsageData) => (
+    render: (_: unknown, record: AgentUsageData) => (
       <Button
         variant="ghost"
         size="sm"

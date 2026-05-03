@@ -1,6 +1,8 @@
 # Claude AI 助手使用指南
 
-> 最后更新：2026-04-11
+> 最后更新：2026-05-02
+> 状态：reference
+> 权威 Agent 规则：[../../AGENTS.md](../../AGENTS.md)
 
 ## 概述
 
@@ -13,6 +15,7 @@
 ### 记忆文件位置
 
 Claude 的项目记忆存储在：
+<!-- 注意：此路径为旧版 Claude 项目格式，当前 Claude Code 版本路径可能已变更 -->
 ```
 ~/.claude/projects/-Users-wsh/memory/MEMORY.md
 ```
@@ -117,4 +120,4 @@ Claude 会：
 ## 相关文档
 
 - [API 文档](./API.md)
-- [部署指南](../deploy/DEPLOY.md)
+- [部署指南](../docker/deploy/DEPLOY.md)

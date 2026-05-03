@@ -1,6 +1,6 @@
 # 脚本归档索引
 
-> 更新时间：2026-04-11
+> 更新时间：2026-05-02
 > 状态：归档索引（历史脚本清理记录）
 
 ---
@@ -28,6 +28,9 @@
 | `load60_p0.py` | `scripts/load60_p0.py` | PythonLab压测脚本 | 被正式压测流程替代 |
 | `reproduce_update_400.py` | `scripts/reproduce_update_400.py` | AI智能体更新400复现脚本 | 问题已修复 |
 | `smoke_test_all.py` | `scripts/smoke_test_all.py` | 历史全量smoke入口 | 被 `scripts/prod-smoke/` 替代 |
+| `split_group_discussion.py` | `scripts/split_group_discussion.py` | 分组讨论单文件拆分脚本 | 一次性重构脚本，旧路径不适用于当前结构 |
+| `split_group_discussion_v2.py` | `scripts/split_group_discussion_v2.py` | 分组讨论精确拆分脚本 | 一次性重构脚本，拆分已完成 |
+| `optimize_database_indexes.sql` | `scripts/optimize_database_indexes.sql` | 历史数据库性能 SQL 模板 | 内容部分过时，当前以 `docs/DATABASE_PERFORMANCE_GUIDE.md` 和 Alembic 为准 |
 
 ### 2. 后端脚本（原 `backend/scripts/archive/`）
 
@@ -39,12 +42,18 @@
 | `seed_mock_agent_data.py` | `backend/scripts/seed_mock_agent_data.py` | mock智能体/用户数据脚本 | 一次性数据准备脚本 |
 | `smoke_ai_agent_key_management.py` | `backend/scripts/smoke_ai_agent_key_management.py` | 专项API key管理验证 | 被集成测试替代 |
 | `xbk_verify.py` | `backend/scripts/xbk_verify.py` | 旧版XBK验证脚本 | 被新版验证流程替代 |
+| `analyze_db_performance.py` | `backend/scripts/analyze_db_performance.py` | 静态数据库索引启发式分析脚本 | 未维护且默认写报告，当前以数据库性能指南和 Alembic 流程为准 |
+| `check_query_patterns.py` | `backend/scripts/check_query_patterns.py` | 静态查询模式扫描脚本 | 未维护且误报风险高，不作为质量门禁 |
 
 ### 3. 前端脚本（原 `frontend/scripts/archive/`）
 
 | 脚本 | 原路径 | 类型 | 删除原因 |
 |------|--------|------|----------|
 | `capture_pythonlab_task12_screenshots.cjs` | `frontend/scripts/capture_pythonlab_task12_screenshots.cjs` | PythonLab Task12截图采集脚本 | 一次性辅助脚本 |
+| `final_auth_regression.js` | `frontend/final_auth_regression.js` | 认证回归手工脚本 | 未接入正式入口且包含明文凭据，已由正式 smoke 链路替代 |
+| `verify-pdf-fix.js` | `frontend/verify-pdf-fix.js` | PDF 修复手工验证脚本 | 未接入 npm、CI 或文档入口 |
+| `test-pdf.html` | `frontend/test-pdf.html` | PDF 手工测试页 | 未作为 Vite 构建入口或正式文档入口 |
+| `test-pdf-config.html` | `frontend/test-pdf-config.html` | PDF.js 配置手工验证页 | 未作为 Vite 构建入口或正式文档入口 |
 
 ## 当前活跃脚本入口
 

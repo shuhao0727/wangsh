@@ -23,6 +23,9 @@ const InformaticsPage = lazy(() => import("./pages/Informatics"));
 const InformaticsDetailPage = lazy(() => import("./pages/Informatics/Detail"));
 const ITTechnologyPage = lazy(() => import("./pages/ITTechnology"));
 const ITTechnologyPythonLabPage = lazy(() => import("./pages/ITTechnology/PythonLab"));
+const MLPage = lazy(() => import("./pages/ITTechnology/MLPage"));
+const AIPage = lazy(() => import("./pages/ITTechnology/AIPage"));
+const AgentsPage = lazy(() => import("./pages/ITTechnology/AgentsPage"));
 const PersonalProgramsPage = lazy(() => import("./pages/PersonalPrograms"));
 const ArticlesPage = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/Articles/Detail"));
@@ -108,6 +111,9 @@ function App() {
               <Route path="/it-technology" element={<PageErrorBoundary pageName="it-technology"><ITTechnologyPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab/:id" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsPage /></PageErrorBoundary>} />
               <Route path="/personal-programs" element={<PageErrorBoundary pageName="personal-programs"><PersonalProgramsPage /></PageErrorBoundary>} />
               <Route path="/xbk" element={<PageErrorBoundary pageName="xbk"><XbkPage /></PageErrorBoundary>} />
               <Route path="/articles" element={<PageErrorBoundary pageName="articles"><ArticlesPage /></PageErrorBoundary>} />

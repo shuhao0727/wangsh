@@ -1,6 +1,6 @@
 # 文档维护规范
 
-> 最后更新：2026-04-11
+> 最后更新：2026-05-02
 
 ## 核心原则
 
@@ -14,6 +14,7 @@
 - `docs/docker/`：Docker 部署、发布记录、测试治理、阶段计划、前端专项文档和历史归档。
 - 模块专用说明优先就近放置，例如 `backend/tests/README.md`、`scripts/xbk/README.md`。
 - 新增文档前先查看 `docs/README.md`，不要把临时分析和正式文档混放。
+- 文档 owner、生命周期状态、redirect/archive/delete 条件遵守 `docs/DOCUMENTATION_OWNERSHIP.md`。
 - 统计项目文档时应排除 `venv`、`node_modules`、构建产物目录中的第三方 Markdown 文件。
 
 ---
@@ -25,7 +26,8 @@
 在进行任何代码修改前，必须：
 1. 读取相关的文档文件
 2. 了解现有的设计和实现
-3. 确认修改不会与现有设计冲突
+3. 根据 `docs/DOCUMENTATION_OWNERSHIP.md` 确认对应 owner 文档
+4. 确认修改不会与现有设计冲突
 
 **示例**：
 - 修改 API 端点 → 先读 `docs/development/API.md`
@@ -47,6 +49,8 @@
 | 修改环境变量 | `docs/docker/deploy/DEPLOY.md` + `.env.example` |
 | 修复重要 Bug | `docs/docker/RELEASE_NOTES.md` |
 | 修改 Docker 配置 | `docs/docker/deploy/DEPLOY.md` |
+
+更完整的 owner 映射见 `docs/DOCUMENTATION_OWNERSHIP.md`。
 
 ### 规则 3：文档更新检查清单
 
@@ -270,6 +274,7 @@ Claude 会自动：
 ### 核心文档
 - `docs/README.md` - 总索引
 - `README.md` - 项目入口
+- `docs/DOCUMENTATION_OWNERSHIP.md` - 文档归属、生命周期和自动整理策略
 - `docs/development/API.md` - API 接口清单
 - `docs/docker/deploy/DEPLOY.md` - 部署指南
 - `docs/docker/deploy/CICD.md` - CI/CD 说明

@@ -208,8 +208,8 @@ export const HotQuestionsPanel: React.FC = () => {
       }
       setHotData(res.data);
       setHotPage(1);
-    } catch (error: any) {
-      showMessage.error(error?.message || "查询失败");
+    } catch (error: unknown) {
+      showMessage.error(error instanceof Error ? error.message : "查询失败");
     } finally {
       setLoadingHot(false);
     }
@@ -235,8 +235,8 @@ export const HotQuestionsPanel: React.FC = () => {
         `hot_questions_${filters.agent_id}_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`,
       );
       showMessage.success("已开始下载");
-    } catch (error: any) {
-      showMessage.error(error?.message || "导出失败");
+    } catch (error: unknown) {
+      showMessage.error(error instanceof Error ? error.message : "导出失败");
     } finally {
       setExportingHot(false);
     }
@@ -445,8 +445,8 @@ export const StudentQuestionChainsPanel: React.FC = () => {
       setChains(res.data);
       setChainsPage(1);
       setExpandedSessions({});
-    } catch (error: any) {
-      showMessage.error(error?.message || "查询失败");
+    } catch (error: unknown) {
+      showMessage.error(error instanceof Error ? error.message : "查询失败");
     } finally {
       setLoadingChains(false);
     }
@@ -473,8 +473,8 @@ export const StudentQuestionChainsPanel: React.FC = () => {
         `student_chains_${filters.agent_id}_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`,
       );
       showMessage.success("已开始下载");
-    } catch (error: any) {
-      showMessage.error(error?.message || "导出失败");
+    } catch (error: unknown) {
+      showMessage.error(error instanceof Error ? error.message : "导出失败");
     } finally {
       setExportingChains(false);
     }

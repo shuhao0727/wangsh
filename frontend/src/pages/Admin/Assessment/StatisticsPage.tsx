@@ -292,9 +292,8 @@ const StatisticsPage: React.FC = () => {
         const knowledgePoints: Record<string, number> = {};
         if (profile.knowledge_scores) {
           try {
-            const raw = JSON.parse(profile.knowledge_scores);
-            for (const [key, value] of Object.entries(raw)) {
-              const score = value as any;
+            const raw: Record<string, { total: number; earned: number }> = JSON.parse(profile.knowledge_scores);
+            for (const [key, score] of Object.entries(raw)) {
               knowledgePoints[key] = score.total > 0 ? Math.round((score.earned / score.total) * 100) : 0;
             }
           } catch {}
@@ -593,7 +592,11 @@ const StatisticsPage: React.FC = () => {
         accessorKey: "user_name",
         size: 120,
         meta: { className: "w-[120px]" },
-        cell: ({ row }) => row.original.user_name || "-",
+        cell: ({ row }) => (
+          <span className={row.original.user_name ? "font-medium text-text-base" : "text-text-tertiary"}>
+            {row.original.user_name || "-"}
+          </span>
+        ),
       },
       {
         id: "class_name",
@@ -601,7 +604,11 @@ const StatisticsPage: React.FC = () => {
         accessorKey: "class_name",
         size: 120,
         meta: { className: "w-[120px]" },
-        cell: ({ row }) => row.original.class_name || "-",
+        cell: ({ row }) => (
+          <span className={row.original.class_name ? "text-text-secondary" : "text-text-tertiary"}>
+            {row.original.class_name || "-"}
+          </span>
+        ),
       },
       {
         id: "status",
@@ -617,9 +624,13 @@ const StatisticsPage: React.FC = () => {
         size: 120,
         meta: { className: "w-[120px]" },
         cell: ({ row }) =>
-          row.original.earned_score != null
-            ? `${row.original.earned_score}/${row.original.total_score}`
-            : "-",
+          row.original.earned_score != null ? (
+            <span className="font-semibold text-text-base tabular-nums">
+              {row.original.earned_score}/{row.original.total_score}
+            </span>
+          ) : (
+            <span className="text-text-tertiary">-</span>
+          ),
       },
       {
         id: "submitted_at",
@@ -628,9 +639,13 @@ const StatisticsPage: React.FC = () => {
         size: 190,
         meta: { className: "w-[190px]" },
         cell: ({ row }) =>
-          row.original.submitted_at
-            ? new Date(row.original.submitted_at).toLocaleString("zh-CN")
-            : "-",
+          row.original.submitted_at ? (
+            <span className="text-text-secondary">
+              {new Date(row.original.submitted_at).toLocaleString("zh-CN")}
+            </span>
+          ) : (
+            <span className="text-text-tertiary">-</span>
+          ),
       },
       {
         id: "actions",
@@ -701,18 +716,81 @@ const StatisticsPage: React.FC = () => {
   const trendChartOption = useMemo(() => {
     const trendData = stats?.trend_data;
     if (!trendData?.length) return null;
+    const counts = trendData.map((p) => p.count);
+    const avgScores = trendData.map((p) => p.avg_score);
     return {
-      tooltip: { trigger: "axis" },
-      legend: { data: ["提交数", "平均分"], bottom: 0, textStyle: { fontSize: 11 } },
-      grid: { top: 10, right: 10, bottom: 30, left: 40 },
-      xAxis: { type: "category", data: trendData.map((p) => p.date), axisLabel: { fontSize: 10, rotate: 30 } },
+      color: ["var(--ws-color-primary)", "var(--ws-color-warning)"],
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "cross", crossStyle: { color: "var(--ws-color-text-tertiary)" } },
+        backgroundColor: "var(--ws-color-surface)",
+        borderColor: "var(--ws-color-border)",
+        textStyle: { color: "var(--ws-color-text)" },
+        formatter: (params: any[]) => {
+          const rows = Array.isArray(params) ? params : [params];
+          const date = rows[0]?.axisValue ?? "";
+          const lines = rows.map((row) => {
+            const value = row.seriesName === "平均分" && row.value != null ? Number(row.value).toFixed(1) : row.value;
+            return `${row.marker}${row.seriesName}：${value ?? "-"}`;
+          });
+          return [`<strong>${date}</strong>`, ...lines].join("<br />");
+        },
+      },
+      legend: {
+        data: ["提交数", "平均分"],
+        top: 0,
+        right: 0,
+        itemWidth: 10,
+        itemHeight: 8,
+        textStyle: { fontSize: 11, color: "var(--ws-color-text-secondary)" },
+      },
+      grid: { top: 34, right: 44, bottom: 32, left: 38, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: trendData.map((p) => p.date),
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: "var(--ws-color-border)" } },
+        axisLabel: { fontSize: 10, color: "var(--ws-color-text-tertiary)", hideOverlap: true },
+      },
       yAxis: [
-        { type: "value", name: "提交数", axisLabel: { fontSize: 10 } },
-        { type: "value", name: "平均分", axisLabel: { fontSize: 10 } },
+        {
+          type: "value",
+          name: "提交数",
+          minInterval: 1,
+          axisLabel: { fontSize: 10, color: "var(--ws-color-text-tertiary)" },
+          axisLine: { show: false },
+          splitLine: { lineStyle: { color: "var(--ws-color-border-secondary)", type: "dashed" } },
+        },
+        {
+          type: "value",
+          name: "平均分",
+          axisLabel: { fontSize: 10, color: "var(--ws-color-text-tertiary)" },
+          axisLine: { show: false },
+          splitLine: { show: false },
+        },
       ],
       series: [
-        { name: "提交数", type: "bar", data: trendData.map((p) => p.count), itemStyle: { color: "var(--ws-color-primary)", borderRadius: [4, 4, 0, 0] } },
-        { name: "平均分", type: "line", yAxisIndex: 1, data: trendData.map((p) => p.avg_score), lineStyle: { color: "var(--ws-color-warning)", width: 2 }, itemStyle: { color: "var(--ws-color-warning)" }, symbol: "circle", symbolSize: 4 },
+        {
+          name: "提交数",
+          type: "bar",
+          data: counts,
+          barMaxWidth: 24,
+          itemStyle: { borderRadius: [6, 6, 0, 0] },
+          emphasis: { focus: "series" },
+        },
+        {
+          name: "平均分",
+          type: "line",
+          yAxisIndex: 1,
+          data: avgScores,
+          smooth: true,
+          connectNulls: true,
+          symbol: "circle",
+          symbolSize: 6,
+          lineStyle: { width: 2.5 },
+          areaStyle: { opacity: 0.08 },
+          emphasis: { focus: "series" },
+        },
       ],
     };
   }, [stats?.trend_data]);
@@ -721,22 +799,57 @@ const StatisticsPage: React.FC = () => {
     const dist = stats?.score_distribution;
     if (!dist?.length) return null;
     const totalBuckets = dist.length;
+    const totalCount = dist.reduce((sum, bucket) => sum + bucket.count, 0);
     return {
-      tooltip: { trigger: "axis" },
-      grid: { top: 10, right: 10, bottom: 25, left: 40 },
-      xAxis: { type: "category", data: dist.map((b) => b.range), axisLabel: { fontSize: 10, rotate: 30 } },
-      yAxis: { type: "value", name: "人数", axisLabel: { fontSize: 10 } },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        backgroundColor: "var(--ws-color-surface)",
+        borderColor: "var(--ws-color-border)",
+        textStyle: { color: "var(--ws-color-text)" },
+        formatter: (params: any[]) => {
+          const row = Array.isArray(params) ? params[0] : params;
+          const count = Number(row?.value ?? 0);
+          const percent = totalCount > 0 ? `${((count / totalCount) * 100).toFixed(1)}%` : "0%";
+          return [`<strong>${row?.axisValue ?? ""}</strong>`, `${row?.marker ?? ""}人数：${count}`, `占比：${percent}`].join("<br />");
+        },
+      },
+      grid: { top: 24, right: 18, bottom: 28, left: 38, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: dist.map((b) => b.range),
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: "var(--ws-color-border)" } },
+        axisLabel: { fontSize: 10, color: "var(--ws-color-text-tertiary)", hideOverlap: true },
+      },
+      yAxis: {
+        type: "value",
+        name: "人数",
+        minInterval: 1,
+        axisLabel: { fontSize: 10, color: "var(--ws-color-text-tertiary)" },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "var(--ws-color-border-secondary)", type: "dashed" } },
+      },
       series: [
         {
           name: "人数",
           type: "bar",
+          barMaxWidth: 34,
           data: dist.map((b, idx) => {
             const ratio = totalBuckets > 1 ? idx / (totalBuckets - 1) : 0;
             const color = ratio < 0.5
               ? interpolateScoreColor("#EF4444", "#F59E0B", ratio * 2)
               : interpolateScoreColor("#F59E0B", "#10B981", (ratio - 0.5) * 2);
-            return { value: b.count, itemStyle: { color, borderRadius: [4, 4, 0, 0] } };
+            return { value: b.count, itemStyle: { color, borderRadius: [6, 6, 0, 0] } };
           }),
+          label: {
+            show: true,
+            position: "top",
+            color: "var(--ws-color-text-secondary)",
+            fontSize: 10,
+            formatter: ({ value }: { value: number }) => (value > 0 ? String(value) : ""),
+          },
+          emphasis: { focus: "series" },
         },
       ],
     };
@@ -767,15 +880,16 @@ const StatisticsPage: React.FC = () => {
       ) : stats ? (
         <>
           {/* ─── 统计卡片 ─── */}
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
             {statItems.map((item, index) => (
               <StatCard
                 key={index}
                 label={item.label}
                 value={item.value}
                 icon={item.icon}
-                variant="accent"
+                variant="horizontal"
                 color={item.color}
+                className="min-h-0 px-2.5 py-2"
               />
             ))}
           </div>
@@ -918,14 +1032,17 @@ const StatisticsPage: React.FC = () => {
             <div className="mb-5 grid gap-4 lg:grid-cols-2">
               {trendChartOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    提交趋势
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      提交趋势
+                    </div>
+                    <span className="text-xs text-text-tertiary">按日期展示提交量与平均分变化</span>
                   </div>
                   <ReactECharts
                     echarts={echarts}
                     option={trendChartOption}
-                    style={{ height: 220 }}
+                    style={{ height: 240 }}
                     notMerge
                     lazyUpdate
                   />
@@ -933,14 +1050,17 @@ const StatisticsPage: React.FC = () => {
               )}
               {scoreDistributionOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                    <BarChart3 className="h-4 w-4 text-secondary" />
-                    分数分布
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <BarChart3 className="h-4 w-4 text-secondary" />
+                      分数分布
+                    </div>
+                    <span className="text-xs text-text-tertiary">查看各分数段人数和占比</span>
                   </div>
                   <ReactECharts
                     echarts={echarts}
                     option={scoreDistributionOption}
-                    style={{ height: 220 }}
+                    style={{ height: 240 }}
                     notMerge
                     lazyUpdate
                   />
@@ -1046,7 +1166,7 @@ const StatisticsPage: React.FC = () => {
                 </div>
 
                 {radarSeries.length > 0 && radarSeries.some((series) => Object.keys(series.data).length > 0)
-                  ? <RadarChart series={radarSeries} size={280} />
+                  ? <RadarChart series={radarSeries} size={320} />
                   : <EmptyState description="暂无知识点数据" />}
               </div>
             </Card>
@@ -1136,14 +1256,14 @@ const StatisticsPage: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="p-0 sm:max-w-[780px]">
+        <DialogContent className="max-h-[86vh] overflow-hidden p-0 sm:max-w-[680px]">
           <DialogHeader className="sr-only">
             <DialogTitle>学生画像详情</DialogTitle>
           </DialogHeader>
           {profileQuery.isFetching && !profileQuery.data ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
           ) : (
-            <div className="p-4">
+            <div className="max-h-[86vh] overflow-auto p-3">
               <Tabs value={profileTab} onValueChange={(value) => setProfileTab(value as "basic" | "advanced")}>
                 <TabsList className="mb-2">
                   <TabsTrigger value="basic">初级画像</TabsTrigger>
@@ -1160,7 +1280,7 @@ const StatisticsPage: React.FC = () => {
 
                 <TabsContent value="advanced" className="mt-0">
                   {profileQuery.data?.advanced ? (
-                    <div className="pb-2"><AdvancedProfileView profile={profileQuery.data.advanced} /></div>
+                    <div className="pb-1"><AdvancedProfileView profile={profileQuery.data.advanced} compact /></div>
                   ) : (
                     <AdvancedProfileEmpty
                       onGenerate={handleGenerateProfile}

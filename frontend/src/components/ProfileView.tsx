@@ -144,7 +144,7 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
               {classRates ? (
                 <RadarChart series={[
                   { name: "学生水平", data: radarDims, color: "var(--ws-color-primary)" },
-                  { name: "班级平均", data: classRates, color: "var(--ws-color-warning)" },
+                  { name: "班级平均", data: classRates, color: "var(--ws-color-success)" },
                 ]} size={radarSize} />
               ) : (
                 <RadarChart dimensions={radarDims} size={radarSize} />
@@ -203,9 +203,10 @@ function parseDataSources(raw: string | null): string[] {
 
 interface AdvancedProfileViewProps {
   profile: StudentProfile;
+  compact?: boolean;
 }
 
-export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profile }) => {
+export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profile, compact = false }) => {
   const radarDims = useMemo(() => {
     if (!profile.scores) return null;
     try {
@@ -219,7 +220,7 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
   return (
     <div>
       {/* 头部信息 */}
-      <div className="mb-4 flex items-center justify-between rounded-lg bg-surface-2 px-4 py-2.5">
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2">
         <div className="flex gap-1 flex-wrap">
           {sources.map(s => {
             const m = DATA_SOURCE_MAP[s];
@@ -241,21 +242,31 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
 
       {/* 雷达图 */}
       {radarDims && (
-        <div className="text-center mb-6">
-          <RadarChart dimensions={radarDims} size={260} />
+        <div className="mb-3 text-center">
+          <RadarChart
+            dimensions={radarDims}
+            size={compact ? 240 : 300}
+            width={compact ? 360 : 420}
+            height={compact ? 240 : 300}
+          />
         </div>
       )}
 
       {/* 画像内容 */}
       {profile.result_text && (
-        <div className="advanced-profile-md rounded-lg bg-surface-2 px-5 py-4 text-sm leading-loose text-text-secondary">
+        <div className="advanced-profile-md rounded-lg bg-surface-2 px-4 py-3 text-sm leading-relaxed text-text-secondary">
           <style>{`
             .advanced-profile-md h1, .advanced-profile-md h2, .advanced-profile-md h3,
             .advanced-profile-md h4, .advanced-profile-md h5, .advanced-profile-md h6 {
               font-size: var(--ws-text-sm);
               font-weight: 600;
-              margin: 12px 0 6px;
-              line-height: 1.6;
+              margin: 8px 0 4px;
+              line-height: 1.5;
+            }
+            .advanced-profile-md p,
+            .advanced-profile-md ul,
+            .advanced-profile-md ol {
+              margin: 6px 0;
             }
           `}</style>
           <ReactMarkdown>{profile.result_text}</ReactMarkdown>

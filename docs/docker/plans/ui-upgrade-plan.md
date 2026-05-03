@@ -1,5 +1,8 @@
 # WangSh UI 渐进式迁移计划（antd → shadcn/ui）
 
+> 状态：主体迁移已完成，保留为 UI 收尾治理参考。
+> 具体执行以当前代码和 UI 审计结果为准。
+
 ## Context
 
 项目已完成 CRA→Vite 迁移和 shadcn/ui 基础设施搭建，`antd` / `@ant-design/icons` 代码导入已清零。当前重点从“去依赖”转向“结构标准化与样式收敛”，目标：构建体验、bundle 减小、设计一致性、长期维护性。

@@ -8,6 +8,13 @@
 
 - [HISTORICAL_PLANS_SUMMARY.md](HISTORICAL_PLANS_SUMMARY.md) - 历史计划文档总结（合并版）
 
+## 阶段执行与文档治理报告
+
+- [week1-execution-plan-2026-04-10.md](week1-execution-plan-2026-04-10.md) - 第一周执行计划，历史周计划
+- [document-consolidation-report-2026-04-11.md](document-consolidation-report-2026-04-11.md) - 文档整理工作报告，已完成
+- [document-unification-report-2026-04-11.md](document-unification-report-2026-04-11.md) - 文档统一化管理工作报告，已完成
+- [PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md](PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md) - PythonLab 调试 Continue 卡死事故记录，长期约束已沉淀到功能文档
+
 ## 架构与代码分析
 
 - [PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md](PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md) - 项目与模块深度分析（压缩合并版，4.5KB）

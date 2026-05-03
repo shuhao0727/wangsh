@@ -20,6 +20,7 @@ from app.api.endpoints.xxjs import router as xxjs_router
 from app.api.endpoints.assessment import router as assessment_router
 from app.api.endpoints.classroom import router as classroom_router
 from app.api.endpoints.admin_stream import router as admin_stream_router
+from app.api.endpoints.learning import router as learning_router
 
 api_router = APIRouter()
 
@@ -42,3 +43,4 @@ api_router.include_router(xxjs_router, tags=["xxjs"], prefix="/xxjs")
 api_router.include_router(assessment_router, tags=["assessment"], prefix="/assessment")
 api_router.include_router(classroom_router, tags=["classroom"], prefix="/classroom")
 api_router.include_router(admin_stream_router, tags=["admin-stream"], prefix="/admin")
+api_router.include_router(learning_router, tags=["learning"])

@@ -67,6 +67,7 @@ async def _owner_has_other_active_session(owner_user_id: int, excluding_session_
         user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{owner_user_id}:sessions"
         raw_ids = await client.smembers(user_sessions_key)  # type: ignore[misc]
     except Exception:
+        logger.exception("_owner_has_other_active_session 获取用户活跃会话失败")
         return False
 
     active_statuses = {
@@ -142,6 +143,7 @@ def cleanup_orphans():
         try:
             active_ids = await provider.list_active_sessions()
         except Exception:
+            logger.exception("cleanup_orphans 获取活跃会话列表失败")
             return
 
         client = await cache.get_client()
@@ -165,6 +167,7 @@ def cleanup_orphans():
                     fake_meta = {"owner_user_id": user_id}
                     await provider.terminate_session("orphan", fake_meta)
                 except Exception:
+                    logger.exception("cleanup_orphans 终止用户级孤儿容器失败")
                     pass
                 continue
 
@@ -177,7 +180,7 @@ def cleanup_orphans():
             try:
                 await provider.terminate_session(sid, {})
             except Exception:
-                pass
+                logger.exception("cleanup_orphans 终止旧版孤儿会话失败")
 
     _run_async(run())
 
@@ -235,7 +238,7 @@ def cleanup_stale_sessions():
                         # Force terminate for stale sessions
                         celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid, True])
                     except Exception:
-                        pass
+                        logger.exception("cleanup_stale_sessions 发送 stop_session 任务失败")
                     meta["status"] = SESSION_STATUS_TERMINATING
                     await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
 
@@ -288,7 +291,7 @@ def stop_session(session_id: str, force: bool = False):
                 else:
                     await provider.stop_session(session_id, provider_meta)
         except Exception:
-            pass
+            logger.exception("stop_session 停止/终止沙箱资源失败")
 
         if meta:
             try:

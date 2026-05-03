@@ -7,7 +7,7 @@ function getInitial(): boolean {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "dark") return true;
   if (stored === "light") return false;
-  return true;
+  return false;
 }
 
 function applyClass(isDark: boolean): void {
