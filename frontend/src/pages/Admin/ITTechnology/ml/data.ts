@@ -40,6 +40,8 @@ export interface Experiment {
   dataset_url?: string;
   dataset_format?: string;
   answer_format?: string;
+  estimatedMinutes?: number;
+  notebookUrl?: string;
 }
 
 export interface ToolItem {
@@ -62,6 +64,7 @@ export interface ResourceItem {
   difficulty_level?: "beginner" | "intermediate" | "advanced" | "expert";
   best_for?: string;
   author?: string;
+  language?: string;
 }
 
 export const ROADMAP_STAGES: RoadmapStage[] = [
