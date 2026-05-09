@@ -78,7 +78,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0EA5E9" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0284C7" />
         </marker>
         <marker id="pyLabArrowNote" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
           <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#F59E0B" />
@@ -87,7 +87,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
           <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#D97706" />
         </marker>
         <marker id="pyLabArrowActive" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0EA5E9" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0284C7" />
         </marker>
       </defs>
       {edges.map((e) => {
@@ -96,7 +96,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
         const selected = e.id === selectedEdgeId;
         const activeEdge = !!activeEdgeIds?.has(e.id);
         const noteEdge = canvasMetrics.get(e.from)?.shape === "note";
-        const stroke = noteEdge ? (selected ? "#D97706" : "#F59E0B") : selected ? "#0EA5E9" : activeEdge ? "#0EA5E9" : "#64748B";
+        const stroke = noteEdge ? (selected ? "#D97706" : "#F59E0B") : selected ? "var(--ws-color-primary)" : activeEdge ? "var(--ws-color-primary)" : "#64748B";
         const strokeWidth = selected ? 2.2 : activeEdge ? 2.5 : 1.6;
         const anchors = geom.anchors as { x: number; y: number }[];
         
@@ -228,7 +228,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                   style={{ cursor: "grab", pointerEvents: "all" }}
                   onPointerDown={(evt) => onSourcePointerDown(evt, e.id, geom.start.x, geom.start.y)}
                 />
-                <circle cx={geom.start.x} cy={geom.start.y} r={6} fill="var(--ws-color-surface)" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
+                <circle cx={geom.start.x} cy={geom.start.y} r={6} fill="var(--ws-color-surface)" stroke="var(--ws-color-primary)" strokeWidth={2} className="pointer-events-none" />
                 <circle
                   cx={geom.end.x}
                   cy={geom.end.y}
@@ -239,7 +239,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                   style={{ cursor: "grab", pointerEvents: "all" }}
                   onPointerDown={(evt) => onTargetPointerDown(evt, e.id, geom.end.x, geom.end.y)}
                 />
-                <circle cx={geom.end.x} cy={geom.end.y} r={6} fill="var(--ws-color-surface)" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
+                <circle cx={geom.end.x} cy={geom.end.y} r={6} fill="var(--ws-color-surface)" stroke="var(--ws-color-primary)" strokeWidth={2} className="pointer-events-none" />
               </>
             )}
             {selected &&
@@ -270,7 +270,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
                     style={{ cursor: "grab", pointerEvents: "all" }}
                     onPointerDown={(evt) => onAnchorPointerDown(evt, e.id, idx, a.x, a.y)}
                   />
-                  <circle cx={a.x} cy={a.y} r={6} fill="var(--ws-color-surface)" stroke="#0EA5E9" strokeWidth={2} className="pointer-events-none" />
+                  <circle cx={a.x} cy={a.y} r={6} fill="var(--ws-color-surface)" stroke="var(--ws-color-primary)" strokeWidth={2} className="pointer-events-none" />
                 </g>
               ))}
               

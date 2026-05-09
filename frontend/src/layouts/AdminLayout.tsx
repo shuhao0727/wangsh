@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -133,8 +134,8 @@ const AdminLayout: React.FC = () => {
           ? "学生用户"
           : "访客";
 
-  const sidebarExpandedWidth = 236;
-  const sidebarCollapsedWidth = 84;
+  const sidebarExpandedWidth = "var(--ws-sidebar-width)";
+  const sidebarCollapsedWidth = "var(--ws-sidebar-collapsed-width)";
   const sidebarWidth = isMobile ? sidebarExpandedWidth : collapsed ? sidebarCollapsedWidth : sidebarExpandedWidth;
   const contentMarginLeft = isMobile ? 0 : collapsed ? sidebarCollapsedWidth : sidebarExpandedWidth;
 
@@ -157,7 +158,7 @@ const AdminLayout: React.FC = () => {
         aria-current={active ? "page" : undefined}
       >
         <span className="shrink-0">{item.icon}</span>
-        {!collapsed ? <span className="truncate">{item.label}</span> : null}
+        <span className={cn("truncate transition-opacity duration-150", collapsed ? "opacity-0 w-0" : "opacity-100")}>{item.label}</span>
       </button>
     );
   };
@@ -178,7 +179,8 @@ const AdminLayout: React.FC = () => {
       ) : null}
 
       <aside
-        className="fixed left-0 top-0 bottom-0 z-[var(--ws-z-header)] border-r border-border-secondary bg-surface transition-all duration-200"
+        role="navigation" aria-label="管理导航"
+        className="fixed left-0 top-0 bottom-0 z-[var(--ws-z-header)] border-r border-border-secondary bg-surface transition-[transform,box-shadow] duration-200"
         style={{
           width: sidebarWidth,
           transform: isMobile && collapsed ? "translateX(-100%)" : "translateX(0)",
@@ -228,6 +230,7 @@ const AdminLayout: React.FC = () => {
                         ? "bg-primary-soft text-primary"
                         : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
                     }`}
+                    aria-expanded={agentsOpen} aria-controls="agents-submenu"
                     title={collapsed ? item.label : undefined}
                   >
                     <span className="shrink-0">{item.icon}</span>
@@ -242,11 +245,17 @@ const AdminLayout: React.FC = () => {
                       </>
                     ) : null}
                   </button>
-                  {!collapsed && agentsOpen ? (
-                    <div className="ml-6 space-y-1">
-                      {item.children.map((child) => renderMenuButton(child))}
+                  <div id="agents-submenu" role="group" aria-label="智能体子菜单"
+                    className={cn(
+                      "grid transition-[grid-template-rows] duration-200 ml-6",
+                      !collapsed && agentsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                    )}>
+                    <div className="overflow-hidden">
+                      <div className="space-y-1">
+                        {item.children.map((child) => renderMenuButton(child))}
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -281,6 +290,7 @@ const AdminLayout: React.FC = () => {
             variant="ghost"
             className="w-full text-xs text-text-secondary"
             onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
           >
             {collapsed ? <Menu className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             {!collapsed ? "收起" : null}
@@ -289,7 +299,7 @@ const AdminLayout: React.FC = () => {
       </aside>
 
       <div
-        className="flex h-full min-h-0 flex-col transition-all duration-200"
+        className="flex h-full min-h-0 flex-col transition-[margin-left] duration-200 ease-out motion-reduce:transition-none"
         style={{ marginLeft: contentMarginLeft }}
       >
         <header
@@ -372,7 +382,7 @@ const AdminLayout: React.FC = () => {
 
         <main
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          style={{ height: "calc(100vh - var(--ws-header-height))" }}
+          style={{ height: "calc(100dvh - var(--ws-header-height))" }}
         >
           {auth.isLoggedIn() && auth.isAdmin() ? (
             <div className="flex min-h-0 flex-1 flex-col">

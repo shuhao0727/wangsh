@@ -1,6 +1,6 @@
 """add learning content items table
 
-Revision ID: 20260503_0002_learning_content_items
+Revision ID: 20260503_0002_learning_content
 Revises: 20260503_0001_learning_progress
 Create Date: 2026-05-03
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy import text
 
 
-revision = "20260503_0002_learning_content_items"
+revision = "20260503_0002_learning_content"
 down_revision = "20260503_0001_learning_progress"
 branch_labels = None
 depends_on = None

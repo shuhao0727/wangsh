@@ -1,9 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2, Circle, Clock, Star, BookOpen, FlaskConical, ListChecks, Quote, Code2 } from "lucide-react";
-import type { LearningBook } from "./types";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { CheckCircle2, Circle, Clock, Star, BookOpen, ListTree, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { LearningBook, LearningBookChapter } from "./types";
+import "./BookReader.css";
 
 interface BookReaderProps {
   book: LearningBook;
@@ -16,185 +21,442 @@ interface BookReaderProps {
 }
 
 const difficultyLabel: Record<string, string> = {
-  beginner: "入门",
-  intermediate: "进阶",
-  advanced: "高级",
-  expert: "专家",
+  beginner: "入门", intermediate: "进阶", advanced: "高级", expert: "专家",
 };
 
-const renderInline = (text: string) => {
-  const parts = text.split(/(`[^`]+`)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={index} className="rounded bg-muted px-1 py-0.5 text-[0.85em]">{part.slice(1, -1)}</code>;
-    }
-    return <React.Fragment key={index}>{part}</React.Fragment>;
-  });
+const difficultyColor: Record<string, string> = {
+  beginner: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  intermediate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  advanced: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  expert: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
+
+/* ─── Group derivation ─── */
+
+interface ChapterGroup { name: string; chapters: LearningBookChapter[] }
+
+const useChapterGroups = (chapters: LearningBookChapter[]): { groups: ChapterGroup[]; standalone: LearningBookChapter[] } => {
+  return useMemo(() => {
+    const map = new Map<string, LearningBookChapter[]>();
+    const standalone: LearningBookChapter[] = [];
+    const orderedGroups: ChapterGroup[] = [];
+    const seen = new Set<string>();
+    chapters.forEach((ch) => {
+      if (ch.group) {
+        const list = map.get(ch.group) ?? [];
+        list.push(ch);
+        map.set(ch.group, list);
+        if (!seen.has(ch.group)) { seen.add(ch.group); orderedGroups.push({ name: ch.group, chapters: list }); }
+      } else { standalone.push(ch); }
+    });
+    return { groups: orderedGroups, standalone };
+  }, [chapters]);
+};
+
+/* ─── Extract headings from markdown ─── */
+
+const slugify = (text: string) => text.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9一-鿿\-_]/g, "");
+
+interface TocItem { id: string; level: 2 | 3; text: string }
+
+const useHeadings = (markdown: string): TocItem[] => {
+  return useMemo(() => {
+    const items: TocItem[] = [];
+    const numbered = addChineseNumbering(preprocessMath(markdown));
+    const lines = numbered.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("## ")) {
+        const text = line.slice(3).trim();
+        items.push({ id: slugify(text), level: 2, text });
+      } else if (line.startsWith("### ")) {
+        const text = line.slice(4).trim();
+        items.push({ id: slugify(text), level: 3, text });
+      }
+    }
+    return items;
+  }, [markdown]);
+};
+
+/* ─── Math preprocessor ─── */
+
+const preprocessMath = (md: string): string => {
+  // Inline \(...\) → code span
+  let result = md.replace(/\\\(([\s\S]*?)\\\)/g, '`math-inline:$1`');
+  // Display \[...\] → fenced math block
+  result = result.replace(/\\\[([\s\S]*?)\\\]/g, '```math\n$1\n```');
+  // Standalone \begin{align} → open fence, \end{align} → close fence
+  result = result.replace(/\\begin\{align\}/g, '```math\n\\begin{align}');
+  result = result.replace(/\\end\{align\}/g, '\\end{align}\n```');
+  // Cleanup: remove empty/duplicate math fences
+  result = result.replace(/```math\s*```/g, '');
+  result = result.replace(/```\s*```/g, '');
+  return result;
+};
+
+/* ─── Chinese numbering ─── */
+
+const CN_H2 = ['一','二','三','四','五','六','七','八','九','十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+const CN_H3 = CN_H2.map(n => '（' + n + '）');
+
+const addChineseNumbering = (md: string): string => {
+  let h2Idx = 0, h3Idx = 0;
+  return md.split('\n').map(line => {
+    if (line.startsWith('## ')) { h2Idx++; h3Idx = 0; const n = CN_H2[h2Idx - 1] || ''; return `## ${n}、${line.slice(3)}`; }
+    if (line.startsWith('### ')) { h3Idx++; const n = CN_H3[h3Idx - 1] || ''; return `### ${n} ${line.slice(4)}`; }
+    return line;
+  }).join('\n');
+};
+
+/* ─── Mermaid pre component ─── */
+const MermaidPre: React.FC<{ code: string }> = ({ code }) => {
+  const ref = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    const pre = ref.current;
+    if (!pre || !(window as any).mermaid) return;
+    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+    (window as any).mermaid.render(id, code).then((r: any) => {
+      if (pre) pre.innerHTML = r.svg;
+    }).catch(() => {});
+  }, [code]);
+  return <pre ref={ref} className="mermaid">{code}</pre>;
+};
+
+/* ─── Markdown Body (react-markdown) ─── */
 
 const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
-  const blocks = useMemo(() => {
-    const lines = markdown.trim().split("\n");
-    const result: { type: string; content: string[] }[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line.trim()) {
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("```")) {
-        const code: string[] = [];
-        i += 1;
-        while (i < lines.length && !lines[i].startsWith("```")) {
-          code.push(lines[i]);
-          i += 1;
-        }
-        result.push({ type: "code", content: code });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("### ")) {
-        result.push({ type: "h3", content: [line.slice(4)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("## ")) {
-        result.push({ type: "h2", content: [line.slice(3)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("# ")) {
-        result.push({ type: "h1", content: [line.slice(2)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("> ")) {
-        const quote: string[] = [];
-        while (i < lines.length && lines[i].startsWith("> ")) {
-          quote.push(lines[i].slice(2));
-          i += 1;
-        }
-        result.push({ type: "quote", content: quote });
-        continue;
-      }
-      if (/^[-*] /.test(line)) {
-        const list: string[] = [];
-        while (i < lines.length && /^[-*] /.test(lines[i])) {
-          list.push(lines[i].replace(/^[-*] /, ""));
-          i += 1;
-        }
-        result.push({ type: "ul", content: list });
-        continue;
-      }
-      if (/^\d+\. /.test(line)) {
-        const list: string[] = [];
-        while (i < lines.length && /^\d+\. /.test(lines[i])) {
-          list.push(lines[i].replace(/^\d+\. /, ""));
-          i += 1;
-        }
-        result.push({ type: "ol", content: list });
-        continue;
-      }
-      const paragraph: string[] = [line];
-      i += 1;
-      while (i < lines.length && lines[i].trim() && !/^(#|>|[-*] |\d+\. |```)/.test(lines[i])) {
-        paragraph.push(lines[i]);
-        i += 1;
-      }
-      result.push({ type: "p", content: [paragraph.join(" ")] });
-    }
-    return result;
+  const articleRef = useRef<HTMLElement>(null);
+
+  const processed = useMemo(() => {
+    let md = markdown;
+    md = addChineseNumbering(md);
+    md = preprocessMath(md);
+    return md;
   }, [markdown]);
 
+  // Track library readiness
+  const [libsReady, setLibsReady] = useState(false);
+  useEffect(() => {
+    const check = () => !!(window as any).katex && !!(window as any).hljs;
+    if (check()) { setLibsReady(true); return; }
+    const id = setInterval(() => { if (check()) { setLibsReady(true); clearInterval(id); } }, 100);
+    return () => clearInterval(id);
+  }, []);
+  const katex = libsReady ? (window as any).katex : null;
+  const hljsLib = libsReady ? (window as any).hljs : null;
+
   return (
-    <article className="space-y-4 text-sm leading-7 text-text-base">
-      {blocks.map((block, index) => {
-        if (block.type === "h1") return <h1 key={index} className="text-2xl font-bold tracking-tight">{block.content[0]}</h1>;
-        if (block.type === "h2") return <h2 key={index} className="border-b border-border pb-2 text-xl font-semibold">{block.content[0]}</h2>;
-        if (block.type === "h3") return <h3 key={index} className="text-base font-semibold">{block.content[0]}</h3>;
-        if (block.type === "quote") return <blockquote key={index} className="rounded-lg border-l-4 border-primary bg-muted/40 p-3 text-muted-foreground"><Quote className="mb-1 h-4 w-4" />{block.content.join(" ")}</blockquote>;
-        if (block.type === "code") return <pre key={index} className="overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100"><Code2 className="mb-2 h-4 w-4" />{block.content.join("\n")}</pre>;
-        if (block.type === "ul") return <ul key={index} className="ml-5 list-disc space-y-1">{block.content.map((item) => <li key={item}>{renderInline(item)}</li>)}</ul>;
-        if (block.type === "ol") return <ol key={index} className="ml-5 list-decimal space-y-1">{block.content.map((item) => <li key={item}>{renderInline(item)}</li>)}</ol>;
-        return <p key={index}>{renderInline(block.content[0])}</p>;
-      })}
+    <article className="br-article" ref={articleRef}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h2: ({ children }) => {
+            const text = typeof children === 'string' ? children : String(children);
+            return <h2 id={slugify(text)} className="scroll-mt-20">{children}</h2>;
+          },
+          h3: ({ children }) => {
+            const text = typeof children === 'string' ? children : String(children);
+            return <h3 id={slugify(text)} className="scroll-mt-20">{children}</h3>;
+          },
+          code: ({ className, children, ...props }) => {
+            const text = Array.isArray(children) ? children.join('') : String(children ?? '');
+            const clean = text.replace(/\n$/, '');
+            if (clean.startsWith('math-inline:')) {
+              const latex = clean.slice(12);
+              if (katex) {
+                try {
+                  const html = katex.renderToString(latex, { throwOnError: false, displayMode: false, trust: true });
+                  return <span className="math-inline" dangerouslySetInnerHTML={{ __html: html }} />;
+                } catch (e) {}
+              }
+              return <span className="math-inline">{latex}</span>;
+            }
+            if (className === 'language-math') {
+              if (katex) {
+                try {
+                  const html = katex.renderToString(clean, { throwOnError: false, displayMode: true, trust: true });
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: html }} />;
+                } catch (e) {}
+              }
+              return <div className="math-block">{clean}</div>;
+            }
+            // Inline code: just return as-is (react-markdown handles the wrapping)
+            return <>{children}</>;
+          },
+          pre: ({ children }) => {
+            const codeEl = children as any;
+            const lang = codeEl?.props?.className?.replace('language-', '') || '';
+            const codeText = codeEl?.props?.children || String(children ?? '');
+            if (lang === 'mermaid') return <MermaidPre code={codeText} />;
+            if (lang === 'math') {
+              const tex = codeText.replace(/^```math\n?/, '').replace(/\n?```$/, '');
+              if (katex) {
+                try {
+                  const html = katex.renderToString(tex, { throwOnError: false, displayMode: true, trust: true });
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: html }} />;
+                } catch (e) {}
+              }
+              return <div className="math-block">{tex}</div>;
+            }
+            if (hljsLib && lang) {
+              try {
+                const highlighted = hljsLib.highlight(codeText, { language: lang, ignoreIllegals: true }).value;
+                return <pre><code className={`hljs language-${lang}`} dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>;
+              } catch {}
+            }
+            return <pre><code className={lang ? `language-${lang}` : undefined}>{codeText}</code></pre>;
+          },
+        }}
+      >
+        {processed}
+      </ReactMarkdown>
     </article>
   );
 };
 
-export const BookReader: React.FC<BookReaderProps> = ({ book, activeSlug, completedChapters, favoriteChapters, onSelectChapter, onToggleComplete, onToggleFavorite }) => {
-  const activeChapter = book.chapters.find((chapter) => chapter.slug === activeSlug) ?? book.chapters[0];
-  const completedCount = book.chapters.filter((chapter) => completedChapters[chapter.slug]).length;
+/* ─── Left Sidebar (chapters / page TOC tab switching) ─── */
+
+type SidebarTab = "chapters" | "toc";
+
+const ChapterSidebar: React.FC<{
+  book: LearningBook; groups: ChapterGroup[]; standalone: LearningBookChapter[];
+  activeSlug: string; completedChapters: Record<string, boolean>;
+  completedCount: number; progress: number;
+  tocItems: TocItem[]; activeHeading: string;
+  onSelectChapter: (slug: string) => void; onTocClick: (id: string) => void;
+}> = ({ book, groups, standalone, activeSlug, completedChapters, completedCount, progress, tocItems, activeHeading, onSelectChapter, onTocClick }) => {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<SidebarTab>("chapters");
+
+  useEffect(() => {
+    const activeGroup = groups.find((g) => g.chapters.some((c) => c.slug === activeSlug));
+    if (activeGroup && collapsed[activeGroup.name]) {
+      setCollapsed((prev) => { const next = { ...prev }; delete next[activeGroup.name]; return next; });
+    }
+  }, [activeSlug]);
+
+  const toggleGroup = (name: string) => setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
+  const groupCompleted = (group: ChapterGroup) => group.chapters.filter((c) => completedChapters[c.slug]).length;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className="shrink-0 flex border-b border-border">
+        <button
+          type="button"
+          onClick={() => setTab("chapters")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+            tab === "chapters" ? "text-primary border-b-2 border-primary" : "text-text-tertiary hover:text-text-secondary"
+          }`}
+        >章节目录</button>
+        <button
+          type="button"
+          onClick={() => setTab("toc")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+            tab === "toc" ? "text-primary border-b-2 border-primary" : "text-text-tertiary hover:text-text-secondary"
+          }`}
+        >内容大纲</button>
+      </div>
+
+      {/* Tab content */}
+      <ScrollArea className="flex-1">
+        {tab === "chapters" ? (
+          <div className="p-2">
+            {groups.map((group) => {
+              const isOpen = !collapsed[group.name];
+              const done = groupCompleted(group);
+              return (
+                <div key={group.name}>
+                  <button type="button" onClick={() => toggleGroup(group.name)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary hover:bg-accent transition-colors">
+                    {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                    <span className="flex-1">{group.name}</span>
+                    <span className="text-[10px] tabular-nums font-normal normal-case text-text-tertiary">{done}/{group.chapters.length}</span>
+                  </button>
+                  {isOpen && group.chapters.map((ch) => (
+                    <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
+                      className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-xs transition-colors ${
+                        ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
+                      }`}>
+                      {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                      <span className="truncate flex-1">{ch.title}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+            {standalone.map((ch) => (
+              <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
+                className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-3 text-left text-xs transition-colors ${
+                  ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
+                }`}>
+                {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                <span className="truncate flex-1">{ch.title}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="p-2">
+            {tocItems.length === 0 ? (
+              <p className="px-2 py-4 text-xs text-text-tertiary">暂无大纲</p>
+            ) : (
+              tocItems.map((item) => (
+                <button key={item.id} type="button" onClick={() => onTocClick(item.id)}
+                  className={`block w-full rounded-md py-1.5 text-left text-xs transition-colors hover:bg-accent ${
+                    item.level === 2 ? "pl-2" : "pl-5"
+                  } ${item.id === activeHeading ? "text-primary font-medium" : "text-text-secondary"}`}>
+                  {item.text}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </ScrollArea>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════
+   Main BookReader
+   ══════════════════════════════════════════════ */
+
+export const BookReader: React.FC<BookReaderProps> = ({
+  book, activeSlug, completedChapters, favoriteChapters,
+  onSelectChapter, onToggleComplete, onToggleFavorite,
+}) => {
+  const activeChapter = book.chapters.find((c) => c.slug === activeSlug) ?? book.chapters[0];
+  const { groups, standalone } = useChapterGroups(book.chapters);
+  const tocItems = useHeadings(activeChapter?.markdown ?? "");
+  const completedCount = book.chapters.filter((c) => completedChapters[c.slug]).length;
   const progress = book.chapters.length > 0 ? Math.round((completedCount / book.chapters.length) * 100) : 0;
+
+  // Sidebar resize
+  const [sidebarW, setSidebarW] = useState(260);
+  const dragging = useRef(false);
+  const startDragX = useRef(0);
+  const startW = useRef(260);
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startDragX.current = e.clientX;
+    startW.current = sidebarW;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [sidebarW]);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = e.clientX - startDragX.current;
+      setSidebarW(Math.max(200, Math.min(500, startW.current + delta)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // Scroll tracking
+  const mainRef = useRef<HTMLElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [activeHeading, setActiveHeading] = useState("");
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const handler = () => {
+      setShowScrollTop(el.scrollTop > 400);
+      // Detect which heading is closest to the top
+      if (tocItems.length === 0) return;
+      let current = tocItems[0]?.id ?? "";
+      for (const item of tocItems) {
+        const h = el.querySelector<HTMLElement>(`[id="${item.id}"]`);
+        if (h && h.getBoundingClientRect().top < 120) current = item.id;
+      }
+      setActiveHeading(current);
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    handler();
+    return () => el.removeEventListener("scroll", handler);
+  }, [tocItems]);
+
+  const scrollToTop = () => mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  const scrollToHeading = useCallback((id: string) => {
+    const el = mainRef.current?.querySelector<HTMLElement>(`[id="${id}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  // Mobile sheet
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const handleSelectChapter = useCallback((slug: string) => { onSelectChapter(slug); setMobileNavOpen(false); }, [onSelectChapter]);
 
   if (!activeChapter) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{book.title}</CardTitle>
-          <CardDescription>暂无章节内容，请在后台配置 Markdown 学习书章节。</CardDescription>
-        </CardHeader>
-      </Card>
+      <Card><CardHeader><CardTitle>{book.title}</CardTitle><CardDescription>暂无章节内容，请在后台配置 Markdown 学习书章节。</CardDescription></CardHeader></Card>
     );
   }
 
   return (
-    <div className="grid min-h-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-      <aside className="min-h-0 rounded-lg border bg-card">
-        <div className="border-b border-border p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4 text-primary" />{book.title}</div>
-          <p className="mt-1 text-xs text-muted-foreground">{completedCount}/{book.chapters.length} 章 · {progress}%</p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
-        </div>
-        <nav className="max-h-[calc(100vh-260px)] overflow-auto p-2">
-          {book.chapters.map((chapter, index) => (
-            <button key={chapter.slug} type="button" onClick={() => onSelectChapter(chapter.slug)} className={`mb-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors ${chapter.slug === activeChapter.slug ? "bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-              {completedChapters[chapter.slug] ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-              <span className="min-w-0 flex-1"><span className="mr-1 text-muted-foreground">{index + 1}.</span>{chapter.title}</span>
-            </button>
-          ))}
-        </nav>
+    <div className="flex min-h-0 flex-col lg:flex lg:flex-row h-full">
+      {/* Desktop sidebar */}
+      <aside
+        className="hidden lg:flex lg:flex-col lg:min-h-0 lg:shrink-0"
+        style={{ width: sidebarW }}
+      >
+        <ChapterSidebar
+          book={book} groups={groups} standalone={standalone}
+          activeSlug={activeSlug} completedChapters={completedChapters}
+          completedCount={completedCount} progress={progress}
+          tocItems={tocItems} activeHeading={activeHeading}
+          onSelectChapter={handleSelectChapter} onTocClick={scrollToHeading}
+        />
       </aside>
 
-      <main className="min-w-0 rounded-lg border bg-card p-5">
-        <div className="mb-5 border-b border-border pb-4">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{difficultyLabel[activeChapter.difficulty]}</Badge>
-            <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" />{activeChapter.estimatedMinutes} 分钟</Badge>
-          </div>
-          <h1 className="text-2xl font-bold">{activeChapter.title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{activeChapter.summary}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant={completedChapters[activeChapter.slug] ? "secondary" : "outline"} onClick={() => onToggleComplete(activeChapter.slug)}>{completedChapters[activeChapter.slug] ? "已完成" : "标记完成"}</Button>
-            <Button size="sm" variant={favoriteChapters[activeChapter.slug] ? "secondary" : "outline"} onClick={() => onToggleFavorite(activeChapter.slug)}><Star className="mr-1 h-3.5 w-3.5" />{favoriteChapters[activeChapter.slug] ? "已收藏" : "收藏本章"}</Button>
-          </div>
+      {/* Resize handle */}
+      <div
+        className="hidden lg:block w-2 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+        onMouseDown={onMouseDown}
+      />
+
+      {/* Main content */}
+      <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
+        <div className="mx-auto px-6 py-8 lg:px-12 lg:py-12" style={{ maxWidth: 1200 }}>
+          <MarkdownBody markdown={activeChapter.markdown} />
+          <div className="h-16" />
         </div>
-        <MarkdownBody markdown={activeChapter.markdown} />
+
+        {/* Back to top */}
+        <button type="button" onClick={scrollToTop}
+          className={`fixed bottom-8 right-8 z-10 rounded-full p-3 shadow-lg bg-primary text-primary-foreground transition-all duration-300 ${
+            showScrollTop ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"}`}
+          aria-label="回到顶部">
+          <ArrowUp className="h-5 w-5" />
+        </button>
       </main>
 
-      <aside className="space-y-3">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">本章目标</CardTitle><CardDescription>读完后应该能做到</CardDescription></CardHeader>
-          <CardContent><ul className="space-y-1.5 text-xs text-muted-foreground">{activeChapter.goals.map((goal) => <li key={goal}>• {goal}</li>)}</ul></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-1.5 text-sm"><ListChecks className="h-4 w-4" />检查清单</CardTitle></CardHeader>
-          <CardContent><ul className="space-y-1.5 text-xs text-muted-foreground">{activeChapter.checklist.map((item) => <li key={item}>□ {item}</li>)}</ul></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-1.5 text-sm"><FlaskConical className="h-4 w-4" />实验任务</CardTitle></CardHeader>
-          <CardContent className="space-y-3">{activeChapter.experiments.map((experiment) => <div key={experiment.title} className="rounded-md border border-border/70 p-2"><div className="text-xs font-semibold">{experiment.title}</div><p className="mt-1 text-[11px] text-muted-foreground">{experiment.goal}</p><div className="mt-1 text-[11px] text-muted-foreground">产出：{experiment.output}</div></div>)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">术语表</CardTitle></CardHeader>
-          <CardContent className="space-y-2">{activeChapter.glossary.map((item) => <div key={item.term}><div className="text-xs font-semibold">{item.term}</div><div className="text-[11px] text-muted-foreground">{item.definition}</div></div>)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">延伸参考</CardTitle></CardHeader>
-          <CardContent className="space-y-2">{activeChapter.references.map((item) => <div key={item.title} className="text-xs"><div className="font-medium">{item.title}</div><div className="text-[11px] text-muted-foreground">{item.note}</div></div>)}</CardContent>
-        </Card>
-      </aside>
+      {/* Mobile: floating nav */}
+      <div className="fixed bottom-5 right-5 z-10 lg:hidden">
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetTrigger asChild>
+            <Button size="sm" variant="secondary" className="rounded-full shadow-lg gap-1.5">
+              <ListTree className="h-4 w-4" />目录
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+            <ChapterSidebar
+              book={book} groups={groups} standalone={standalone}
+              activeSlug={activeSlug} completedChapters={completedChapters}
+              completedCount={completedCount} progress={progress}
+              tocItems={tocItems} activeHeading={activeHeading}
+              onSelectChapter={handleSelectChapter} onTocClick={scrollToHeading}
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
     </div>
   );
 };

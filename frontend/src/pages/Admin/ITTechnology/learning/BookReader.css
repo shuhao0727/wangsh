@@ -1,0 +1,244 @@
+/* ═══════════════════════════════════════════
+   BookReader — 专业排版样式
+   参考 Typst my_style.typ 设计规范
+   ═══════════════════════════════════════════ */
+
+/* ── 阅读容器 ── */
+.br-content {
+  background: var(--ws-color-surface);
+}
+
+/* ── 正文排版（对标 Typst 12pt 正文字号） ── */
+.br-article {
+  color: var(--ws-color-text);
+  font-family: "Times New Roman", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", serif;
+  font-size: 1.05rem;
+  line-height: 1.95;
+  text-align: justify;
+  word-break: break-word;
+  letter-spacing: 0.02em;
+}
+
+/* 段落间距 + 首行缩进 */
+.br-article p {
+  margin: 0.8em 0;
+  text-indent: 2em;
+}
+
+/* 段落首行和紧跟标题的段落不缩进 */
+.br-article h1 + p,
+.br-article h2 + p,
+.br-article h3 + p,
+.br-article h4 + p,
+.br-article blockquote p,
+.br-article li p {
+  text-indent: 0;
+}
+
+/* ── 标题层级 ── */
+.br-article h1,
+.br-article h2,
+.br-article h3,
+.br-article h4 {
+  font-family: "STKaiti", "KaiTi", "Kaiti SC", "Noto Serif CJK SC", serif;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ws-color-text);
+  text-indent: 0;
+}
+
+.br-article h1 {
+  font-size: 1.6em;
+  margin: 1.6em 0 0.6em 0;
+  padding-bottom: 0.4em;
+  border-bottom: 2px solid var(--ws-color-primary);
+}
+
+.br-article h2 {
+  font-size: 1.35em;
+  margin: 1.4em 0 0.5em 0;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--ws-color-border);
+}
+
+.br-article h3 {
+  font-size: 1.15em;
+  margin: 1.2em 0 0.4em 0;
+}
+
+/* ── 引用块 ── */
+.br-article blockquote {
+  margin: 1.2em 0;
+  padding: 0.8em 1.2em;
+  border-left: 4px solid var(--ws-color-primary);
+  background: linear-gradient(90deg, var(--ws-color-primary-soft), transparent);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: var(--ws-color-text-secondary);
+  text-indent: 0;
+}
+
+.br-article blockquote p {
+  margin: 0.3em 0;
+}
+
+/* ── 代码块 ── */
+.br-article pre {
+  margin: 1.2em 0;
+  padding: 1em 1.2em;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.88em;
+  line-height: 1.6;
+  text-indent: 0;
+  background: var(--ws-color-code-bg);
+  color: var(--ws-color-code-text);
+}
+.br-article pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+.br-article pre code {
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.br-article code {
+  font-family: "Courier New", "Menlo", "Monaco", "Consolas", monospace;
+  font-size: 0.88em;
+  background: var(--ws-color-primary-soft);
+  color: var(--ws-color-primary-active);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+/* ── 表格 ── */
+.br-article table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  text-indent: 0;
+}
+
+.br-article th {
+  background: var(--ws-color-surface-2);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.6em 0.8em;
+  border-bottom: 2px solid var(--ws-color-border);
+  font-family: "STKaiti", "Kaiti SC", serif;
+}
+
+.br-article td {
+  padding: 0.5em 0.8em;
+  border-bottom: 1px solid var(--ws-color-border-secondary);
+}
+
+.br-article tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+/* ── 列表 ── */
+.br-article ul,
+.br-article ol {
+  margin: 0.8em 0;
+  padding-left: 2em;
+  text-indent: 0;
+}
+
+.br-article li {
+  margin: 0.3em 0;
+  line-height: 1.85;
+}
+
+/* ── 图片 ── */
+.br-article img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 1.2em auto;
+  display: block;
+  box-shadow: var(--ws-shadow-sm);
+}
+
+/* ── 数学公式 ── */
+.br-article .math-inline {
+  padding: 0 0.15em;
+}
+
+.br-article .math-block {
+  display: block;
+  margin: 1em 0;
+  overflow-x: auto;
+  border-left: 3px solid var(--ws-color-primary);
+  padding-left: 1em;
+  font-size: 1.05em;
+  text-indent: 0;
+}
+
+/* ── KaTeX 样式 ── */
+.br-article .katex-display { margin: 0 !important; }
+.br-article .katex .katex-html { background: var(--ws-color-surface) !important; }
+.br-article .katex,
+.br-article .katex .mord,
+.br-article .katex .mbin,
+.br-article .katex .mrel,
+.br-article .katex .mopen,
+.br-article .katex .mclose,
+.br-article .katex .mpunct,
+.br-article .katex .minner,
+.br-article .katex .mathit,
+.br-article .katex .mathrm,
+.br-article .katex .mathcal,
+.br-article .katex .mathbf,
+.br-article .katex .boldsymbol { color: var(--ws-color-text) !important; }
+.br-article .math-inline { padding: 0 0.1em; }
+.br-article .math-block { margin: 0.6em 0; padding: 0; border-left: 3px solid var(--ws-color-primary); padding-left: 0.6em; }
+/* Math + Mermaid pre: remove dark hljs background */
+.br-article pre:has(.math-block),
+.br-article pre:has(code.language-math),
+.br-article pre:has(code.language-mermaid),
+.br-article .mermaid { background: transparent !important; padding: 0 !important; }
+.br-article .mermaid svg { max-width: 100%; max-height: 350px; }
+
+/* ── 思维导图 ── */
+.mindmap-container { overflow: hidden; }
+.mindmap-container svg { width: 100% !important; height: 100% !important; }
+
+/* ── 水平线 ── */
+.br-article hr {
+  border: none;
+  height: 1px;
+  background: var(--ws-color-border);
+  margin: 2em 0;
+}
+
+/* ── 链接 ── */
+.br-article a {
+  color: var(--ws-color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.br-article a:hover {
+  border-bottom-color: var(--ws-color-primary);
+}
+
+/* ── 移动端适配 ── */
+@media (max-width: 768px) {
+  .br-article {
+    font-size: 0.98rem;
+    line-height: 1.8;
+    letter-spacing: 0.01em;
+  }
+
+  .br-article h1 { font-size: 1.4em; }
+  .br-article h2 { font-size: 1.2em; }
+  .br-article h3 { font-size: 1.08em; }
+  .br-article p { text-indent: 1.5em; }
+}

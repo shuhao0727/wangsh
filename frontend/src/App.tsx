@@ -26,6 +26,9 @@ const ITTechnologyPythonLabPage = lazy(() => import("./pages/ITTechnology/Python
 const MLPage = lazy(() => import("./pages/ITTechnology/MLPage"));
 const AIPage = lazy(() => import("./pages/ITTechnology/AIPage"));
 const AgentsPage = lazy(() => import("./pages/ITTechnology/AgentsPage"));
+const MLFullPage = lazy(() => import("./pages/ITTechnology/MLFullPage"));
+const AIFullPage = lazy(() => import("./pages/ITTechnology/AIFullPage"));
+const AgentsFullPage = lazy(() => import("./pages/ITTechnology/AgentsFullPage"));
 const PersonalProgramsPage = lazy(() => import("./pages/PersonalPrograms"));
 const ArticlesPage = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/Articles/Detail"));
@@ -51,6 +54,9 @@ const AdminAssessmentPage = lazy(() => import("./pages/Admin/Assessment"));
 const AdminAssessmentEditorPage = lazy(() => import("./pages/Admin/Assessment/EditorPage"));
 const AdminAssessmentQuestionsPage = lazy(() => import("./pages/Admin/Assessment/QuestionsPage"));
 const AdminAssessmentStatisticsPage = lazy(() => import("./pages/Admin/Assessment/StatisticsPage"));
+const AdminLearningEditorPage = lazy(() => import("./pages/Admin/ITTechnology/learning/EditorPage"));
+const AdminTabEditorPage = lazy(() => import("./pages/Admin/ITTechnology/learning/TabEditorPage"));
+const AdminMindMapEditorPage = lazy(() => import("./pages/Admin/ITTechnology/learning/MindMapEditor"));
 const AdminClassroomInteractionPage = lazy(() => import("./pages/Admin/ClassroomInteraction"));
 const AdminClassroomPlanPage = lazy(() => import("./pages/Admin/ClassroomPlan/PlanPage"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
@@ -102,6 +108,9 @@ function App() {
             <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLFullPage /></PageErrorBoundary>} />
+            <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />
+            <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsFullPage /></PageErrorBoundary>} />
 
             <Route element={<BasicLayout />}>
               <Route path="/home" element={<PageErrorBoundary pageName="home"><HomePage /></PageErrorBoundary>} />
@@ -111,9 +120,6 @@ function App() {
               <Route path="/it-technology" element={<PageErrorBoundary pageName="it-technology"><ITTechnologyPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab/:id" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
-              <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLPage /></PageErrorBoundary>} />
-              <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIPage /></PageErrorBoundary>} />
-              <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsPage /></PageErrorBoundary>} />
               <Route path="/personal-programs" element={<PageErrorBoundary pageName="personal-programs"><PersonalProgramsPage /></PageErrorBoundary>} />
               <Route path="/xbk" element={<PageErrorBoundary pageName="xbk"><XbkPage /></PageErrorBoundary>} />
               <Route path="/articles" element={<PageErrorBoundary pageName="articles"><ArticlesPage /></PageErrorBoundary>} />
@@ -156,6 +162,9 @@ function App() {
               <Route path="/admin/articles/editor/:id" element={<PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
               <Route path="/admin/articles/edit/:id" element={<ArticleEditRedirect />} />
+              <Route path="/admin/it-technology/learning/:moduleKey" element={<PageErrorBoundary pageName="learning-editor"><AdminLearningEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology/learning/:moduleKey/:section" element={<PageErrorBoundary pageName="tab-editor"><AdminTabEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology/mindmap/:moduleKey" element={<PageErrorBoundary pageName="mindmap-editor"><AdminMindMapEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/informatics/editor/new" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/informatics/editor/:id" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/assessment/editor/new" element={<PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>} />

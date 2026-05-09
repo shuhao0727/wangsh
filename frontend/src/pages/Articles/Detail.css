@@ -139,10 +139,8 @@
 }
 
 .article-content {
-  font-size: var(--ws-text-sm);
+  font-size: var(--ws-text-md);
   line-height: 1.85;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
 /* Override Markdown Styles for Article Detail */

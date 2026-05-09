@@ -18,6 +18,7 @@ import {
   Clock3,
   BookOpen,
   TriangleAlert,
+  Copy,
 } from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import dayjs from "dayjs";
@@ -26,6 +27,7 @@ import remarkGfm from "remark-gfm";
 import { articleApi } from "@services";
 import type { ArticleWithRelations } from "@services";
 import { logger } from "@services/logger";
+import { showMessage } from "@/lib/toast";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import { toScopedCss } from "@utils/scopedCss";
 import SplitPanePage from "@components/Layout/SplitPanePage";
@@ -398,6 +400,25 @@ const ArticleDetailPage: React.FC = () => {
                   img: ({ node: _node, ...props }) => (
                     <img alt={(props as any).alt ?? "文章配图"} loading="lazy" decoding="async" {...props} />
                   ),
+                  pre: ({ node: _node, children, ...props }) => {
+                    const codeText = nodeToText(children);
+                    return (
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-[var(--ws-color-surface-2)] px-2 py-1 text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+                          onClick={() => {
+                            navigator.clipboard.writeText(codeText);
+                            showMessage.success("代码已复制到剪贴板");
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          复制
+                        </button>
+                        <pre {...props}>{children}</pre>
+                      </div>
+                    );
+                  },
                 }}
               >
                 {article.content}

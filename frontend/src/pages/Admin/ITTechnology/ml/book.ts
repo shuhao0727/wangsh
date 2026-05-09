@@ -1,4 +1,5 @@
 import type { LearningBook, LearningBookChapter } from "../learning/types";
+import { chapterMarkdown } from "./chapters";
 
 type ChapterDifficulty = LearningBookChapter["difficulty"];
 
@@ -13,6 +14,9 @@ interface ChapterSeed {
   method: string;
   output: string;
   terms: [string, string][];
+  group?: string;
+  markdown?: string;
+  references?: { title: string; source: string; note: string; url?: string }[];
 }
 
 const buildMarkdown = (chapter: ChapterSeed) => `# ${chapter.title}
@@ -43,7 +47,8 @@ const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
     "把概念转化为可执行的数据与建模步骤",
     "用指标和记录说明模型改进是否真实有效",
   ],
-  markdown: buildMarkdown(seed),
+  group: seed.group,
+  markdown: chapterMarkdown[seed.slug] ?? seed.markdown ?? buildMarkdown(seed),
   checklist: [
     "能写出本章主题的输入、处理、输出和风险",
     "能建立一个最小可运行实验并保存结果",
@@ -63,7 +68,7 @@ const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
     },
   ],
   glossary: seed.terms.map(([term, definition]) => ({ term, definition })),
-  references: [
+  references: seed.references ?? [
     {
       title: `${seed.title} 延伸阅读`,
       source: "可选参考",
@@ -75,10 +80,11 @@ const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
 const chapters: ChapterSeed[] = [
   {
     slug: "overview",
-    title: "机器学习全景：从问题到模型作品",
-    summary: "建立机器学习的整体地图，理解它如何从数据、任务、模型、评估和部署组成完整学习路径。",
+    title: "第1章：机器学习是什么",
+    summary: "建立机器学习的整体地图，理解核心定义、三大学习范式、八阶段项目工作流，以及传统编程与机器学习的本质区别。",
     difficulty: "beginner",
-    minutes: 28,
+    minutes: 35,
+    group: "认知篇",
     focus: "机器学习全流程",
     scenario: "校园成绩分析、社团活动预测或学习行为观察",
     method: "问题定义、数据画像、基线建模和结果复盘",
@@ -87,10 +93,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "math-foundations",
-    title: "数学基础：线性代数、概率与优化直觉",
-    summary: "用工程直觉理解向量、矩阵、概率分布、损失函数和梯度下降，避免数学与建模脱节。",
+    title: "第2章：K近邻（KNN）",
+    summary: "用工程直觉理解向量与矩阵、概率与不确定性、以及如何找到最优解，每一步都配 ML 场景和代码。",
     difficulty: "beginner",
-    minutes: 35,
+    minutes: 40,
+    group: "认知篇",
     focus: "数学基础",
     scenario: "用表格数据解释多个因素如何共同影响一个结果",
     method: "向量化表达、概率估计、损失函数比较和梯度更新演示",
@@ -99,10 +106,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "python-data-stack",
-    title: "Python 数据栈：NumPy、Pandas 与可视化",
-    summary: "掌握机器学习项目中最常用的数据读取、整理、统计和可视化工具，让实验可以快速迭代。",
+    title: "第3章：朴素贝叶斯",
+    summary: "掌握 ML 项目中最常用的数据读取、清洗、统计和可视化工具——NumPy、Pandas、Matplotlib/Seaborn，让实验可以快速迭代。",
     difficulty: "beginner",
-    minutes: 32,
+    minutes: 35,
+    group: "认知篇",
     focus: "Python 数据分析工具链",
     scenario: "分析一份学生学习行为或课程选择数据表",
     method: "Pandas 数据框操作、统计汇总、缺失检查和图表表达",
@@ -111,10 +119,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "data-cleaning",
-    title: "数据清洗：质量、偏差与可用数据集",
-    summary: "理解缺失值、异常值、重复记录、格式不一致和数据偏差如何影响模型可信度。",
+    title: "第4章：决策树",
+    summary: "理解缺失值、异常值、重复记录和格式不一致的处理策略，掌握数据偏差的检测方法，建立数据质量治理的系统意识。",
     difficulty: "intermediate",
-    minutes: 36,
+    minutes: 40,
+    group: "认知篇",
     focus: "数据质量治理",
     scenario: "把多来源学习记录整理成可建模的数据集",
     method: "缺失分析、异常检测、字段标准化、数据字典和清洗日志",
@@ -123,10 +132,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "supervised-learning",
-    title: "监督学习：分类、回归与基线模型",
-    summary: "学习有标签任务的基本范式，区分分类与回归，建立可解释的第一版模型。",
+    title: "第5章：随机森林",
+    summary: "掌握分类与回归两种核心预测任务，理解数据划分的必要性，建立第一个可运行的基线模型。",
     difficulty: "intermediate",
-    minutes: 40,
+    minutes: 45,
+    group: "监督学习",
     focus: "监督学习",
     scenario: "预测学生是否需要学习支持或估计作业完成时间",
     method: "训练验证划分、逻辑回归、决策树和误差分析",
@@ -135,10 +145,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "unsupervised-learning",
-    title: "无监督学习：聚类、降维与结构发现",
+    title: "第6章：支持向量机（SVM）",
     summary: "在没有标签的情况下发现数据结构，理解聚类和降维如何服务观察、分组和解释。",
     difficulty: "intermediate",
     minutes: 38,
+    group: "监督学习",
     focus: "无监督学习",
     scenario: "根据学习行为把学生或资源分成可解释群组",
     method: "标准化、KMeans、PCA、轮廓系数和二维可视化",
@@ -147,10 +158,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "model-evaluation",
-    title: "模型评估：指标、验证与可信证据",
+    title: "第7章：逻辑回归",
     summary: "建立评估意识，理解准确率、召回率、F1、AUC、MAE 等指标与业务目标的关系。",
     difficulty: "intermediate",
     minutes: 42,
+    group: "监督学习",
     focus: "模型评估",
     scenario: "比较不同模型对学习风险识别的可靠性",
     method: "混淆矩阵、交叉验证、阈值调节和错误案例分析",
@@ -159,10 +171,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "feature-engineering",
-    title: "特征工程：把业务理解变成模型信号",
+    title: "第8章：线性回归",
     summary: "学习如何构造、筛选和解释特征，让模型不只是吃原始字段，而能利用更有意义的信号。",
     difficulty: "intermediate",
     minutes: 44,
+    group: "监督学习",
     focus: "特征工程",
     scenario: "从学习日志中提取频率、间隔、趋势和完成质量特征",
     method: "类别编码、时间窗口统计、交互特征和特征重要性分析",
@@ -171,10 +184,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "ensemble-learning",
-    title: "集成学习：随机森林、Boosting 与稳健提升",
+    title: "第9章：模型评估",
     summary: "理解多个弱模型如何组合成更强系统，掌握随机森林和梯度提升的适用场景。",
     difficulty: "advanced",
     minutes: 46,
+    group: "监督学习",
     focus: "集成学习",
     scenario: "在表格预测任务中提升稳定性并控制过拟合",
     method: "Bagging、Boosting、参数对比、特征重要性和验证曲线",
@@ -183,10 +197,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "deep-learning",
-    title: "深度学习：神经网络、表示学习与训练策略",
+    title: "第10章：K-Means聚类",
     summary: "从感知机到多层网络理解深度学习，关注表示学习、激活函数、反向传播和训练稳定性。",
     difficulty: "advanced",
     minutes: 50,
+    group: "无监督学习",
     focus: "深度学习",
     scenario: "用简单神经网络处理图像、文本或表格表示任务",
     method: "张量表示、网络结构、训练循环、正则化和学习曲线诊断",
@@ -195,10 +210,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "nlp",
-    title: "自然语言处理：文本表示、分类与语义检索",
+    title: "第11章：PCA降维",
     summary: "学习文本如何进入机器学习系统，理解分词、向量化、文本分类、相似度和语义检索。",
     difficulty: "advanced",
     minutes: 45,
+    group: "无监督学习",
     focus: "自然语言处理",
     scenario: "分析学生提问、课程反馈或文章摘要数据",
     method: "文本清洗、TF-IDF、嵌入向量、分类器和相似度搜索",
@@ -207,10 +223,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "computer-vision",
-    title: "计算机视觉：图像数据、卷积与视觉任务",
+    title: "第12章：强化学习基础",
     summary: "理解图像数据如何表示，掌握分类、检测、分割等视觉任务的基本思路和实验方法。",
     difficulty: "advanced",
     minutes: 48,
+    group: "强化学习与深度学习",
     focus: "计算机视觉",
     scenario: "识别课堂板书、实验器材或简单手写图像",
     method: "图像预处理、卷积特征、数据增强、分类评估和错误可视化",
@@ -219,10 +236,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "recommendation-systems",
-    title: "推荐系统：用户、物品与个性化学习路径",
+    title: "第13章：神经网络基础",
     summary: "学习推荐系统如何连接用户行为和资源内容，理解协同过滤、内容推荐和冷启动问题。",
     difficulty: "advanced",
     minutes: 44,
+    group: "强化学习与深度学习",
     focus: "推荐系统",
     scenario: "为学生推荐练习、文章、实验或下一步学习主题",
     method: "用户物品矩阵、相似度、排序指标、内容标签和反馈闭环",
@@ -231,10 +249,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "rag",
-    title: "RAG：检索增强生成与知识库问答",
+    title: "第14章：卷积神经网络（CNN）",
     summary: "理解检索增强生成如何把资料库与大模型连接起来，形成可引用、可更新的问答系统。",
     difficulty: "advanced",
     minutes: 46,
+    group: "强化学习与深度学习",
     focus: "RAG",
     scenario: "基于课程资料、实验文档或校内知识库构建问答助手",
     method: "文档切分、向量索引、召回排序、上下文组装和答案校验",
@@ -243,10 +262,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "mlops",
-    title: "MLOps：从 Notebook 到可维护系统",
+    title: "第15章：特征工程",
     summary: "把机器学习从一次性实验推进到可复现、可部署、可监控的工程系统。",
     difficulty: "expert",
     minutes: 52,
+    group: "核心工具",
     focus: "MLOps",
     scenario: "让一个课堂预测模型能够定期更新并被前端页面调用",
     method: "版本管理、数据校验、训练流水线、模型注册、API 服务和监控",
@@ -255,10 +275,11 @@ const chapters: ChapterSeed[] = [
   },
   {
     slug: "portfolio",
-    title: "作品集：把学习转化为可展示成果",
+    title: "第16章：损失函数",
     summary: "学习如何把零散练习整理成项目作品，形成可复盘、可演示、可评价的学习成果。",
     difficulty: "expert",
     minutes: 40,
+    group: "核心工具",
     focus: "机器学习作品集",
     scenario: "把一个学期的实验整理成个人或班级机器学习项目展",
     method: "项目叙事、代码整理、指标证据、限制说明和演示页面",

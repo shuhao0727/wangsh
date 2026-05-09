@@ -1,1044 +1,254 @@
 /**
- * 智能体探索学习板块
- * 6 Tab 页面：学习路线图、Agent 知识体系、核心技术分析、框架对比、动手实验、学习进度
+ * 智能体学习板块
+ *
+ * 完整的学习知识体系展示平台，包含：
+ * - 学习书 (Book)
+ * - 学习地图 (Knowledge Map)
+ * - 动手实验 (Experiments)
+ * - 工具箱 (Tools)
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdminPage } from "@/components/Admin";
 import { api } from "@/services/api";
-import { logger } from "@/services/logger";
 import { showMessage } from "@/lib/toast";
-
+import { cn } from "@/lib/utils";
 import {
-  ArrowUpFromLine,
-  BarChart3,
-  BookOpen,
-  Bot,
-  Brain,
-  Circle,
-  Cpu,
-  Database,
-  FileCode,
-  FlaskConical,
-  FlaskRound,
-  GitCompare,
-  Layers,
-  Map,
-  NotebookPen,
-  Puzzle,
-  Rocket,
-  ScrollText,
-  Trophy,
-  Users,
-  Waypoints,
-} from "lucide-react";
-import {
-  type AgentLearningProgress,
-  agentCoreArchitecture,
-  agentTypeComparison,
-  coreTechs,
-  defaultProgress,
+  DIFFICULTY_LABELS,
+  RESOURCE_TYPE_CONFIG,
   experimentLevels,
-  frameworkData,
-  roadmapStages,
+  TOOLS_DATA,
+  RESOURCES_DATA,
+  AGENT_TOOL_CATEGORY_LABELS,
+  type Experiment,
+  type ResourceItem,
+  type ToolItem,
 } from "./data";
 import { fetchLearningContentPayload, filterByKeyword } from "../learning/helpers";
 import { BookReader } from "../learning/BookReader";
+import MindMapViewer from "../learning/MindMapViewer";
 import { AGENTS_BOOK } from "./book";
+import mindmapMd from "./chapters/mindmap.md?raw";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+import {
+  Map,
+  FlaskConical,
+  Wrench,
+  BookOpen,
+  BarChart3,
+  CheckCircle2,
+  ExternalLink,
+  Star,
+  Bot,
+  Cpu,
+  Layers,
+  Puzzle,
+  Copy,
+  Download,
+  BookMarked,
+} from "lucide-react";
 
-type TabKey = "book" | "roadmap" | "knowledge" | "core-tech" | "frameworks" | "experiments" | "progress";
+// ────────────────────────────────────────
+// 类型定义
+// ────────────────────────────────────────
 
-type LearningProgress = AgentLearningProgress & {
-  completedChapters?: Record<string, boolean>;
-  favoriteChapters?: Record<string, boolean>;
-};
+type TabKey = "book" | "knowledge" | "experiments" | "tools";
 
-type AgentCoreTech = (typeof coreTechs)[number];
+interface NormalizedProgress {
+  overall_percent: number;
+  notes: string;
+  completedItems: Record<string, boolean>;
+  favoriteItems: Record<string, boolean>;
+  completedChapters: Record<string, boolean>;
+  favoriteChapters: Record<string, boolean>;
+}
 
-interface AgentExplorationContentPayload {
-  roadmapStages?: typeof roadmapStages;
-  architecture?: typeof agentCoreArchitecture;
-  agentTypes?: typeof agentTypeComparison;
-  coreTechs?: AgentCoreTech[];
-  frameworks?: typeof frameworkData;
-  experiments?: typeof experimentLevels;
+interface AgentsLearningContentPayload {
+  experiments?: Record<string, Experiment[]>;
+  tools?: ToolItem[];
+  resources?: ResourceItem[];
   book?: typeof AGENTS_BOOK;
 }
 
-interface LearningProgressResponse {
-  data?: LearningProgress;
-}
+// ────────────────────────────────────────
+// 难度映射
+// ────────────────────────────────────────
 
-interface ProgressTabProps {
-  bookProgress?: Pick<LearningProgress, "completedChapters" | "favoriteChapters">;
-}
-
-interface AgentExplorationProps {
-  embedded?: boolean;
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const normalizeTab = (tab: string | null): TabKey => {
-  const valid: TabKey[] = ["book", "roadmap", "knowledge", "core-tech", "frameworks", "experiments", "progress"];
-  if (tab && valid.includes(tab as TabKey)) return tab as TabKey;
-  return "book";
+const CN_DIFFICULTY_TO_KEY: Record<string, Experiment["difficulty"]> = {
+  "初级": "beginner",
+  "中级": "intermediate",
+  "高级": "advanced",
+  "专家": "expert",
 };
 
-const tabConfigs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "book",       label: "学习书", icon: <BookOpen className="h-3.5 w-3.5" /> },
-  { key: "roadmap",    label: "学习路线图", icon: <Map className="h-3.5 w-3.5" /> },
-  { key: "knowledge",  label: "Agent 知识体系", icon: <BookOpen className="h-3.5 w-3.5" /> },
-  { key: "core-tech",  label: "核心技术分析", icon: <Cpu className="h-3.5 w-3.5" /> },
-  { key: "frameworks", label: "框架对比", icon: <GitCompare className="h-3.5 w-3.5" /> },
-  { key: "experiments",label: "动手实验", icon: <FlaskConical className="h-3.5 w-3.5" /> },
-  { key: "progress",   label: "学习进度",  icon: <BarChart3 className="h-3.5 w-3.5" /> },
-];
-
-const CORE_TECH_ICON_BY_KEY: Record<string, React.ReactNode> = {
-  "scroll-text": <ScrollText className="h-4 w-4" />,
-  database: <Database className="h-4 w-4" />,
-  brain: <Brain className="h-4 w-4" />,
-  layers: <Layers className="h-4 w-4" />,
-  puzzle: <Puzzle className="h-4 w-4" />,
-  users: <Users className="h-4 w-4" />,
-};
-
-const EXPERIMENT_ICON_BY_KEY: Record<string, React.ReactNode> = {
-  rocket: <Rocket className="h-4 w-4" />,
-  "bar-chart": <BarChart3 className="h-4 w-4" />,
-  cpu: <Cpu className="h-4 w-4" />,
-  trophy: <Trophy className="h-4 w-4" />,
-};
-
-const normalizeProgress = (value: unknown): LearningProgress | null => {
-  if (!value || typeof value !== "object") return null;
-  const data = value as Partial<LearningProgress>;
-  if (!Array.isArray(data.stages)) return null;
-  const stages = defaultProgress.stages.map((stage) => {
-    const saved = data.stages?.find((item) => item?.stage === stage.stage);
-    return {
-      ...stage,
-      ...saved,
-      completed: typeof saved?.completed === "number" ? saved.completed : stage.completed,
-      total: typeof saved?.total === "number" ? saved.total : stage.total,
-      status: saved?.status ?? stage.status,
-    };
-  });
-  const totalCompleted = stages.reduce((sum, stage) => sum + stage.completed, 0);
-  const totalItems = stages.reduce((sum, stage) => sum + stage.total, 0);
+/** 将 experimentLevels 中的 agent 实验条目映射为标准 Experiment */
+function agentItemToExperiment(item: Record<string, unknown>): Experiment {
+  const rawDiff = (item.difficulty as string) || "初级";
   return {
-      stages,
-      overall_progress: totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0,
-      total_completed: totalCompleted,
-      total_items: totalItems,
-      notes: typeof data.notes === "string" ? data.notes : undefined,
-      completedChapters: isBooleanRecord(data.completedChapters) ? data.completedChapters : {},
-      favoriteChapters: isBooleanRecord(data.favoriteChapters) ? data.favoriteChapters : {},
+    name: (item.name as string) || "",
+    difficulty: CN_DIFFICULTY_TO_KEY[rawDiff] || "beginner",
+    data: (item.desc as string) || "",
+    tools: Array.isArray(item.tools) ? item.tools : [],
+    skills: [],
+    goal: (item.goal as string) || "",
+    estimated_time: (item.estimated_time as string) || "",
+    deliverables: (item.desc as string) || "",
+    steps: Array.isArray(item.steps) ? item.steps : undefined,
+    code: (item.code as string) || undefined,
+    expected_output: (item.expected_output as string) || undefined,
+    reflection: Array.isArray(item.reflection) ? item.reflection : undefined,
+    download_url: undefined,
+    data_source: (item.data_source as string) || undefined,
   };
+}
+
+/** 从本地 experimentLevels 构建分组实验 */
+function buildFallbackExperiments(): Record<string, Experiment[]> {
+  const grouped: Record<string, Experiment[]> = {};
+  for (const level of experimentLevels) {
+    const key = level.badge as string;
+    grouped[key] = (level.items || []).map((item: Record<string, unknown>) =>
+      agentItemToExperiment(item),
+    );
+  }
+  return grouped;
+}
+
+const FALLBACK_EXPERIMENTS = buildFallbackExperiments();
+
+/** 工具类别图标 */
+const CATEGORY_ICON_BY_KEY: Record<string, React.ReactNode> = {
+  "核心框架": <Layers className="h-4 w-4" />,
+  "开发工具": <Wrench className="h-4 w-4" />,
+  "MCP生态": <Puzzle className="h-4 w-4" />,
+  "向量数据库": <Cpu className="h-4 w-4" />,
+  "可观测性": <BarChart3 className="h-4 w-4" />,
 };
+const MINDMAP_MARKDOWN = mindmapMd;
+
+
+const DEFAULT_PROGRESS: NormalizedProgress = {
+  overall_percent: 0,
+  notes: "",
+  completedItems: {},
+  favoriteItems: {},
+  completedChapters: {},
+  favoriteChapters: {},
+};
+
+// ────────────────────────────────────────
+// 工具函数
+// ────────────────────────────────────────
+
+/** 标准化实验数据 */
+function normalizeExperiments(raw: unknown): Record<string, Experiment[]> {
+  if (!raw || typeof raw !== "object") return FALLBACK_EXPERIMENTS;
+  // experimentLevels 数组格式 [{level, badge, items: [...]}]
+  if (Array.isArray(raw)) return buildFallbackExperimentsFromArray(raw as Record<string, unknown>[]);
+  const vals = Object.values(raw);
+  if (vals.length === 0) return FALLBACK_EXPERIMENTS;
+  // 已是分组格式 {difficulty: Experiment[]}
+  if (Array.isArray(vals[0])) return raw as Record<string, Experiment[]>;
+  // DB 扁平格式 {name: Experiment} -> 按 difficulty 重新分组
+  const grouped: Record<string, Experiment[]> = {};
+  for (const exp of vals as Experiment[]) {
+    const d = exp.difficulty || "beginner";
+    (grouped[d] ??= []).push(exp);
+  }
+  return grouped;
+}
+
+function buildFallbackExperimentsFromArray(arr: Record<string, unknown>[]): Record<string, Experiment[]> {
+  const grouped: Record<string, Experiment[]> = {};
+  for (const level of arr) {
+    const badge = (level.badge as string) || "beginner";
+    const items = Array.isArray(level.items) ? level.items : [];
+    grouped[badge] = items.map((item: Record<string, unknown>) => agentItemToExperiment(item));
+  }
+  return grouped;
+}
+
+/** 标准化数组数据 */
+function normalizeArray<T>(raw: unknown, fallback: T[]): T[] {
+  if (!raw || typeof raw !== "object") return fallback;
+  const vals = Object.values(raw);
+  if (vals.length === 0) return fallback;
+  if (Array.isArray(vals[0])) return vals.flat() as T[];
+  return vals as T[];
+}
 
 const isBooleanRecord = (value: unknown): value is Record<string, boolean> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.values(value).every((item) => typeof item === "boolean");
+  const item = value as Record<string, unknown>;
+  return Object.values(item).every((entry) => typeof entry === "boolean");
 };
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ────────────────────────────────────────
+// 主组件
+// ────────────────────────────────────────
 
-/** 进度环 */
-const ProgressRing: React.FC<{ value: number; size?: number; strokeWidth?: number; color?: string }> = ({
-  value,
-  size = 80,
-  strokeWidth = 6,
-  color = "var(--ws-color-primary)",
-}) => {
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (value / 100) * circ;
-  return (
-    <svg width={size} height={size} className="shrink-0" style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ws-color-border)" strokeWidth={strokeWidth} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.6s ease" }}
-      />
-      <text
-        x={size / 2}
-        y={size / 2}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={size * 0.22}
-        fontWeight={600}
-        fill="currentColor"
-        style={{ transform: "rotate(90deg)", transformOrigin: "center" }}
-      >
-        {Math.round(value)}%
-      </text>
-    </svg>
-  );
+const normalizeTab = (tab: string | null): TabKey => {
+  if (tab === "book" || tab === "knowledge" || tab === "experiments" || tab === "tools") return tab;
+  return "book";
 };
 
-/** Mermaid 架构图容器 */
-const MermaidDiagram: React.FC<{ chart: string; active?: boolean }> = ({ chart, active = true }) => {
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
-  const [loaded, setLoaded] = useState(false);
+const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
+  const [activeTabKey, setActiveTabKey] = useState<TabKey>(normalizeTab(urlSearchParams.get("tab")));
 
-  useEffect(() => {
-    if (!active) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    setLoaded(false);
-    if (iframe.contentDocument) {
-      renderMermaid(iframe.contentDocument);
-      setLoaded(true);
-      return;
-    }
-    iframe.onload = () => {
-      if (iframe.contentDocument) {
-        renderMermaid(iframe.contentDocument);
-        setLoaded(true);
-      }
-    };
-  }, [active, chart]);
+  // 进度状态
+  const [progress, setProgress] = useState<NormalizedProgress>(DEFAULT_PROGRESS);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [notesText, setNotesText] = useState("");
+  const [experimentKeyword, setExperimentKeyword] = useState("");
+  const [experimentDifficulty, setExperimentDifficulty] = useState<"all" | Experiment["difficulty"]>("all");
+  const [toolKeyword, setToolKeyword] = useState("");
+  const [toolCategory, setToolCategory] = useState("all");
+  const [resourceKeyword, setResourceKeyword] = useState("");
+  const [resourceType, setResourceType] = useState<"all" | ResourceItem["type"]>("all");
+  const [mindmapMarkdown, setMindmapMarkdown] = useState(MINDMAP_MARKDOWN);
+  const [contentPayload, setContentPayload] = useState<AgentsLearningContentPayload | null>(null);
+  const [activeBookSlug, setActiveBookSlug] = useState(AGENTS_BOOK.chapters[0]?.slug ?? "agent-concept");
 
-  const renderMermaid = (doc: Document) => {
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script>
-  <style>
-    body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: transparent; }
-    #mermaid { max-width: 100%; }
-  </style>
-</head>
-<body>
-  <div class="mermaid" id="mermaid">${chart}</div>
-  <script>mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { primaryColor: 'var(--ws-color-primary)', primaryBorderColor: 'var(--ws-color-primary)', primaryTextColor: 'var(--ws-color-text)', lineColor: 'var(--ws-color-border)', secondaryColor: 'var(--ws-color-surface-2)', tertiaryColor: 'var(--ws-color-surface)' } });<\/script>
-</body>
-</html>`;
-    doc.open();
-    doc.write(html);
-    doc.close();
-  };
-
-  if (!active) {
-    return (
-      <div className="rounded-lg border bg-card/50 p-6 text-center text-sm text-muted-foreground">
-        切换到知识体系页后加载架构图
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-lg border bg-card/50 p-4">
-      <iframe
-        ref={iframeRef}
-        title="Mermaid Diagram"
-        className="w-full"
-        style={{ minHeight: 320, border: "none" }}
-        sandbox="allow-scripts allow-same-origin"
-      />
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-card/70 text-sm text-muted-foreground">
-          加载架构图中...
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── Tab Content Components ───────────────────────────────────────────────────
-
-/** Tab 1: 学习路线图 */
-const RoadmapTab: React.FC<{ stages?: typeof roadmapStages }> = ({ stages = roadmapStages }) => (
-  <div className="flex flex-col gap-6">
-    <div className="mb-2">
-      <h3 className="text-lg font-semibold">智能体学习路径</h3>
-      <p className="text-sm text-muted-foreground">
-        从零基础到前沿探索的系统化学习路线，建议按阶段循序渐进
-      </p>
-    </div>
-
-    {/* 时间线式路线图 */}
-    <div className="relative">
-      {/* 中间竖线 */}
-      <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-border hidden md:block" />
-
-      <div className="flex flex-col gap-6">
-        {stages.map((stage, idx) => (
-          <div key={stage.stage} className="relative flex flex-col md:flex-row gap-4 md:gap-6">
-            {/* 阶段编号 + 竖线节点 */}
-            <div className="flex md:flex-col items-center gap-3 md:w-24 shrink-0">
-              <div
-                className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shrink-0"
-                style={{ backgroundColor: stage.color }}
-              >
-                {stage.stage}
-              </div>
-              <div className="hidden md:block text-center">
-                <Badge variant={stage.badgeVariant} className="text-[10px] px-1.5">
-                  {stage.badge}
-                </Badge>
-                <div className="text-xs text-muted-foreground mt-1">{stage.period}</div>
-              </div>
-            </div>
-
-            {/* 内容卡片 */}
-            <div className="flex-1 min-w-0">
-              <Card className="border-l-4" style={{ borderLeftColor: stage.color }}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-base">{stage.title}</CardTitle>
-                      <Badge variant={stage.badgeVariant} className="md:hidden text-[10px] px-1.5">
-                        {stage.badge}
-                      </Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground hidden sm:inline">{stage.period}</span>
-                  </div>
-                  <CardDescription>学习内容与核心技能</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ul className="space-y-1.5">
-                    {stage.items.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <Circle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">推荐项目：</span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {stage.projects.map((proj, i) => (
-                        <Badge key={i} variant="secondary" className="text-[11px]">
-                          {proj}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-/** Tab 2: Agent 知识体系 */
-const KnowledgeTab: React.FC<{
-  active?: boolean;
-  architecture?: typeof agentCoreArchitecture;
-  agentTypes?: typeof agentTypeComparison;
-}> = ({ active = true, architecture = agentCoreArchitecture, agentTypes = agentTypeComparison }) => {
-  const architectureChart = `graph LR
-    subgraph Perception["感知层 (Perception)"]
-        A1["文本"] --> A2["语音"] --> A3["图像"] --> A4["结构化数据"]
-    end
-    subgraph Planning["规划层 (Planning)"]
-        B1["任务分解"] --> B2["路径规划"] --> B3["资源分配"]
-    end
-    subgraph Memory["记忆层 (Memory)"]
-        C1["工作记忆"] --> C2["情景记忆"] --> C3["语义记忆"] --> C4["程序记忆"]
-    end
-    subgraph Execution["执行层 (Execution)"]
-        D1["工具调用"] --> D2["代码执行"] --> D3["API 调用"] --> D4["外部交互"]
-    end
-    subgraph Tools["工具层 (Tools)"]
-        E1["Function\nCalling"] --> E2["MCP 协议"] --> E3["Web 搜索"] --> E4["自定义工具"]
-    end
-
-    Perception -->|"输入"| Planning
-    Planning -->|"决策"| Memory
-    Memory -->|"上下文"| Execution
-    Execution -->|"调用"| Tools
-    Tools -.->|"反馈循环"| Perception`;
-
-  const evolutionChart = `timeline
-    title Agent 架构演进
-    1950s-1980s : 符号主义 AI：物理符号系统
-               : 专家系统：规则推理
-    1990s-2000s : 反应式 Agent：Brooks 行为主义
-               : BDI Agent：信念-愿望-意图
-    2010s : 深度强化学习 Agent
-          : 多 Agent 强化学习
-    2020-2022 : 预训练语言模型
-              : Prompt-based Agent：ChatGPT
-    2023 : LLM-based Agent 爆发
-         : AutoGPT, BabyAGI
-         : ReAct, Tool Use
-    2024 : 多 Agent 框架：CrewAI, AutoGen
-         : MCP 协议 (Model Context Protocol)
-    2025+ : A2A 标准 (Agent-to-Agent)
-           : 自治 Agent 社会
-           : 具身 Agent + AGI 探索`;
-
-  return (
-    <div className="flex flex-col gap-8 pb-4">
-      {/* 核心组件架构 */}
-      <section>
-        <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-          <Layers className="h-4 w-4" style={{ color: "var(--ws-color-primary)" }} />
-          Agent 核心组件架构
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-          {architecture.map((item) => (
-            <Card key={item.step} className="text-center">
-              <CardContent className="p-4">
-                <div className="text-2xl mb-2">{item.icon}</div>
-                <div className="text-sm font-semibold">{item.step}</div>
-                <div className="text-xs text-muted-foreground mt-1">{item.desc}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <MermaidDiagram chart={architectureChart} active={active} />
-      </section>
-
-      {/* Agent 类型对比 */}
-      <section>
-        <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-          <GitCompare className="h-4 w-4" style={{ color: "var(--ws-color-warning)" }} />
-          五种 Agent 类型对比
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {agentTypes.map((item) => (
-            <Card key={item.type} className="border-t-4" style={{ borderTopColor: item.color }}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{item.type}</CardTitle>
-                <CardDescription>{item.desc}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-xs">
-                <div>
-                  <span className="font-semibold text-success">优势：</span>
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    {item.pros.map((p, i) => (<li key={i}>{p}</li>))}
-                  </ul>
-                </div>
-                <div>
-                  <span className="font-semibold text-error">局限：</span>
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">
-                    {item.cons.map((c, i) => (<li key={i}>{c}</li>))}
-                  </ul>
-                </div>
-                <div>
-                  <span className="font-semibold text-muted-foreground">代表：</span>
-                  <span className="text-muted-foreground">{item.example}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* 架构演进 */}
-      <section>
-        <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-          <ArrowUpFromLine className="h-4 w-4" style={{ color: "var(--ws-color-accent)" }} />
-          架构演进时间线
-        </h3>
-        <MermaidDiagram chart={evolutionChart} active={active} />
-      </section>
-    </div>
-  );
-};
-
-/** Tab 3: 核心技术分析 */
-const CoreTechTab: React.FC<{ items?: AgentCoreTech[] }> = ({ items = coreTechs }) => (
-  <div className="flex flex-col gap-4 pb-4">
-    <div className="mb-1">
-      <h3 className="text-lg font-semibold">六大核心技术</h3>
-      <p className="text-sm text-muted-foreground">
-        深度解析构建 Agent 所需的核心技术能力
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {items.map((tech) => (
-        <Card key={tech.title} className="overflow-hidden">
-          <CardHeader className="pb-3" style={{ borderBottom: "1px solid var(--ws-color-border)" }}>
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-lg"
-                style={{ backgroundColor: "color-mix(in srgb, " + tech.color + " 12%, transparent)", color: tech.color }}
-              >
-                {CORE_TECH_ICON_BY_KEY[tech.icon] ?? <Cpu className="h-4 w-4" />}
-              </div>
-              <div>
-                <CardTitle className="text-sm">{tech.title}</CardTitle>
-                <CardDescription className="text-xs">{tech.desc}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-3 space-y-3">
-            {/* Prompt Engineering 四层结构 */}
-            {tech.levels && (
-              <div className="space-y-1.5">
-                {tech.levels.map((level, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <div
-                      className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white shrink-0"
-                      style={{ backgroundColor: tech.color }}
-                    >
-                      {i + 1}
-                    </div>
-                    <span className="font-medium shrink-0">{level.name}：</span>
-                    <span className="text-muted-foreground">{level.desc}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* RAG 步骤 */}
-            {tech.steps && (
-              <div className="flex flex-wrap gap-1.5">
-                {tech.steps.map((step, i) => (
-                  <Badge key={i} variant="secondary" className="text-[10px]">
-                    {i + 1}. {step}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* 推理模式 */}
-            {tech.modes && (
-              <div className="space-y-1.5">
-                {tech.modes.map((mode, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs border-b border-border/50 pb-1.5 last:border-0">
-                    <span className="font-medium w-20 shrink-0" style={{ color: tech.color }}>{mode.name}</span>
-                    <span className="text-muted-foreground flex-1">{mode.desc}</span>
-                    <span className="text-muted-foreground/60">{mode.use}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 记忆系统 */}
-            {tech.memories && (
-              <div className="space-y-1.5">
-                {tech.memories.map((mem, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="font-medium w-20 shrink-0" style={{ color: tech.color }}>{mem.name}</span>
-                    <span className="text-muted-foreground flex-1">{mem.desc}</span>
-                    <Badge variant="outline" className="text-[10px]">{mem.duration}</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 工具调用协议 */}
-            {tech.protocols && (
-              <div className="space-y-1.5">
-                {tech.protocols.map((proto, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="font-medium w-28 shrink-0" style={{ color: tech.color }}>{proto.name}</span>
-                    <span className="text-muted-foreground flex-1">{proto.desc}</span>
-                    <Badge variant="outline" className="text-[10px]">{proto.style}</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 多 Agent 协作模式 */}
-            {tech.patterns && (
-              <div className="space-y-1.5">
-                {tech.patterns.map((pat, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs border-b border-border/50 pb-1.5 last:border-0">
-                    <span className="font-medium w-24 shrink-0" style={{ color: tech.color }}>{pat.name}</span>
-                    <span className="text-muted-foreground flex-1">{pat.desc}</span>
-                    <span className="text-muted-foreground/60">{pat.use}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="text-xs text-muted-foreground italic pt-1 border-t border-border/50">
-              适用场景：{tech.bestFor}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  </div>
-);
-
-/** Tab 4: 框架对比 */
-const FrameworksTab: React.FC<{ items?: typeof frameworkData }> = ({ items = frameworkData }) => {
-  const [selectedFramework, setSelectedFramework] = useState<string | null>(null);
-  const [keyword, setKeyword] = useState("");
-  const [scenario, setScenario] = useState("all");
-
-  const scenarioOptions = useMemo(() => Array.from(new Set(items.map((fw) => fw.scenario))), [items]);
-  const filteredFrameworks = useMemo(() => {
-    const byScenario = scenario === "all" ? items : items.filter((fw) => fw.scenario === scenario);
-    return filterByKeyword(
-      byScenario.map((fw) => ({ ...fw, title: fw.name, summary: fw.desc, description: fw.scenario, tags: [fw.ease, fw.curve, fw.completeness, fw.githubStars] })),
-      keyword,
-    );
-  }, [items, keyword, scenario]);
-
-  return (
-    <div className="flex flex-col gap-6 pb-4">
-      <div>
-        <h3 className="text-lg font-semibold">主流 Agent 框架对比</h3>
-        <p className="text-sm text-muted-foreground">
-          横向对比 13 个主流框架，帮助选择最适合你项目的方案
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card/50 p-3 sm:grid-cols-[1fr_220px]">
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder="搜索框架、场景、难度或 Stars"
-          className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-        />
-        <select
-          value={scenario}
-          onChange={(event) => setScenario(event.target.value)}
-          className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-        >
-          <option value="all">全部场景</option>
-          {scenarioOptions.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* 对比表格 */}
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-muted/50 border-b">
-              <th className="text-left p-3 font-semibold">框架</th>
-              <th className="text-left p-3 font-semibold">易用性</th>
-              <th className="text-left p-3 font-semibold">功能完整度</th>
-              <th className="text-left p-3 font-semibold">学习曲线</th>
-              <th className="text-left p-3 font-semibold hidden md:table-cell">适合场景</th>
-              <th className="text-left p-3 font-semibold hidden lg:table-cell">GitHub Stars</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredFrameworks.map((fw) => (
-              <tr
-                key={fw.name}
-                className={`border-b border-border/40 cursor-pointer transition-colors hover:bg-muted/30 ${
-                  selectedFramework === fw.name ? "bg-muted/40" : ""
-                }`}
-                onClick={() => setSelectedFramework(selectedFramework === fw.name ? null : fw.name)}
-              >
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: fw.color }}
-                    />
-                    <span className="font-medium">{fw.name}</span>
-                  </div>
-                </td>
-                <td className="p-3">{fw.ease}</td>
-                <td className="p-3">{fw.completeness}</td>
-                <td className="p-3">{fw.curve}</td>
-                <td className="p-3 text-muted-foreground hidden md:table-cell">{fw.scenario}</td>
-                <td className="p-3 text-muted-foreground hidden lg:table-cell">{fw.githubStars}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 选中框架详情 */}
-      {selectedFramework && (
-        <Card>
-          <CardContent className="p-4">
-            {(() => {
-              const fw = items.find((f) => f.name === selectedFramework);
-              if (!fw) return null;
-              return (
-                <div className="flex items-start gap-3 text-sm">
-                  <div
-                    className="h-3 w-3 rounded-full mt-1 shrink-0"
-                    style={{ backgroundColor: fw.color }}
-                  />
-                  <div>
-                    <div className="font-semibold">{fw.name}</div>
-                    <div className="text-muted-foreground mt-0.5">{fw.desc}</div>
-                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground">
-                      <span>易用性：{fw.ease}</span>
-                      <span>功能：{fw.completeness}</span>
-                      <span>学习曲线：{fw.curve}</span>
-                      <span>Stars：{fw.githubStars}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 框架选择决策树 */}
-      <Card className="border-t-4" style={{ borderTopColor: "var(--ws-color-primary)" }}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Waypoints className="h-4 w-4" />
-            框架选择决策树
-          </CardTitle>
-          <CardDescription>根据你的需求选择最合适的框架</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <DecisionItem
-              question="你是初学者，想快速上手？"
-              answer={<span>→ 选 <strong>CrewAI</strong>（最简单）或 <strong>OpenAI Agents SDK</strong>（开箱即用）</span>}
-            />
-            <DecisionItem
-              question="你需要最丰富的工具生态？"
-              answer={<span>→ 选 <strong>LangChain</strong>（生态最广，社区最大）</span>}
-            />
-            <DecisionItem
-              question="你需要构建多 Agent 协作系统？"
-              answer={<span>→ 选 <strong>AutoGen</strong>（对话驱动）或 <strong>CrewAI</strong>（角色驱动）</span>}
-            />
-            <DecisionItem
-              question="你是全栈/非开发者，需要可视化搭建？"
-              answer={<span>→ 选 <strong>Dify</strong>（拖拽式工作流，无需编码）</span>}
-            />
-            <DecisionItem
-              question="你在 .NET / Azure 生态？"
-              answer={<span>→ 选 <strong>Semantic Kernel</strong>（微软原生集成）</span>}
-            />
-            <DecisionItem
-              question="你需要自治/全自动 Agent？"
-              answer={<span>→ 选 <strong>AutoGPT</strong>（自治先驱）或 <strong>BabyAGI</strong>（轻量学习）</span>}
-            />
-            <DecisionItem
-              question="你在做软件工程自动化？"
-              answer={<span>→ 选 <strong>MetaGPT</strong>（模拟软件公司流程）</span>}
-            />
-            <DecisionItem
-              question="你在做 Agent 研究/学术探索？"
-              answer={<span>→ 选 <strong>Camel</strong>（研究型框架）</span>}
-            />
-            <DecisionItem
-              question="你需要轻量级、现代感框架？"
-              answer={<span>→ 选 <strong>Agno</strong>（新一代轻量级框架）</span>}
-            />
-            <DecisionItem
-              question="你使用 Hugging Face 模型生态？"
-              answer={<span>→ 选 <strong>Smolagents</strong>（HF 官方轻量 Agent 框架）</span>}
-            />
-            <DecisionItem
-              question="你需要类型安全的 Python Agent？"
-              answer={<span>→ 选 <strong>Pydantic AI</strong>（类型安全，企业级友好）</span>}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-const DecisionItem: React.FC<{ question: string; answer: React.ReactNode }> = ({ question, answer }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 border-b border-border/30 pb-2 last:border-0">
-    <span className="font-medium shrink-0">{question}</span>
-    <span className="text-muted-foreground">{answer}</span>
-  </div>
-);
-
-/** Tab 5: 动手实验 */
-const ExperimentsTab: React.FC<{ levels?: typeof experimentLevels }> = ({ levels = experimentLevels }) => {
-  const [keyword, setKeyword] = useState("");
-  const [difficulty, setDifficulty] = useState("all");
-
-  const filteredLevels = useMemo(() => levels.map((level) => {
-    const items = filterByKeyword(
-      level.items.map((item) => ({ ...item, title: item.name, summary: item.desc, tags: [item.tech, level.level] })),
-      keyword,
-    );
-    return { ...level, items };
-  }).filter((level) => (difficulty === "all" || level.badge === difficulty) && level.items.length > 0), [difficulty, keyword, levels]);
-
-  return (
-  <div className="flex flex-col gap-6 pb-4">
-    <div>
-      <h3 className="text-lg font-semibold">动手实验项目</h3>
-      <p className="text-sm text-muted-foreground">
-        4 个难度层级、16 个实战项目，从入门到前沿
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card/50 p-3 sm:grid-cols-[1fr_180px]">
-      <input
-        value={keyword}
-        onChange={(event) => setKeyword(event.target.value)}
-        placeholder="搜索实验、技术栈或目标能力"
-        className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-      />
-      <select
-        value={difficulty}
-        onChange={(event) => setDifficulty(event.target.value)}
-        className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-      >
-        <option value="all">全部难度</option>
-        {levels.map((level) => (
-          <option key={level.badge} value={level.badge}>{level.level}</option>
-        ))}
-      </select>
-    </div>
-
-    {filteredLevels.map((level) => (
-      <section key={level.level}>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: level.color }}>
-            {EXPERIMENT_ICON_BY_KEY[level.icon] ?? <FlaskRound className="h-4 w-4" />}
-            <span>{level.level}</span>
-          </div>
-          <Badge variant={level.badgeVariant} className="text-[10px]">{level.items.length} 个项目</Badge>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {level.items.map((item) => (
-            <Card key={item.name} className="group cursor-default transition-shadow hover:shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold flex items-center gap-1.5">
-                      <FlaskRound className="h-3.5 w-3.5 shrink-0" style={{ color: level.color }} />
-                      {item.name}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <FileCode className="h-3 w-3 text-muted-foreground/60" />
-                  <span className="text-[10px] text-muted-foreground/70">{item.tech}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-    ))}
-  </div>
-  );
-};
-
-/** Tab 6: 学习进度 */
-const ProgressTab: React.FC<ProgressTabProps> = ({ bookProgress }) => {
-  const [progress, setProgress] = useState<LearningProgress>(defaultProgress);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  // 读取进度
   const loadProgress = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setProgressLoading(true);
     try {
-      const response = await api.get<LearningProgressResponse>("/learning/progress/agents");
-      const normalized = normalizeProgress(response.data?.data);
-      if (normalized) {
-        setProgress(normalized);
+      const res = await api.get("/learning/progress/agents");
+      const rawPayload = res.data?.data;
+      if (rawPayload && typeof rawPayload === "object") {
+        const payload = rawPayload as Record<string, unknown>;
+        setProgress((prev) => ({
+          overall_percent: (payload.overall_percent as number) ?? (payload.overall_progress as number) ?? prev.overall_percent,
+          notes: (payload.notes as string) || "",
+          completedItems: isBooleanRecord(payload.completedItems) ? payload.completedItems : {},
+          favoriteItems: isBooleanRecord(payload.favoriteItems) ? payload.favoriteItems : {},
+          completedChapters: isBooleanRecord(payload.completedChapters) ? payload.completedChapters : {},
+          favoriteChapters: isBooleanRecord(payload.favoriteChapters) ? payload.favoriteChapters : {},
+        }));
+        setNotesText((payload.notes as string) || "");
       }
-    } catch (err) {
-      logger.error("Failed to load learning progress", err);
-      setError("加载学习进度失败，显示默认数据");
+    } catch {
+      // 首次访问无数据是正常情况
     } finally {
-      setLoading(false);
+      setProgressLoading(false);
     }
   }, []);
-
-  const updateStageStatus = useCallback((stageNo: number, status: LearningProgress["stages"][number]["status"]) => {
-    setProgress((prev) => {
-      const stages = prev.stages.map((stage) => {
-        if (stage.stage !== stageNo) return stage;
-        const completed = status === "completed" ? stage.total : status === "in_progress" ? Math.max(stage.completed, Math.ceil(stage.total / 2)) : 0;
-        return { ...stage, status, completed };
-      });
-      const totalCompleted = stages.reduce((sum, stage) => sum + stage.completed, 0);
-      const totalItems = stages.reduce((sum, stage) => sum + stage.total, 0);
-      return {
-        ...prev,
-        stages,
-        total_completed: totalCompleted,
-        total_items: totalItems,
-        overall_progress: totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0,
-      };
-    });
-  }, []);
-
-  const saveProgress = useCallback(async () => {
-    setSaving(true);
-    try {
-      await api.post("/learning/progress/agents", { ...progress, ...bookProgress });
-      showMessage.success("进度已保存");
-    } catch (err) {
-      logger.error("Failed to save learning progress", err);
-      showMessage.error("保存失败，请重试");
-    } finally {
-      setSaving(false);
-    }
-  }, [bookProgress, progress]);
 
   useEffect(() => {
     void loadProgress();
   }, [loadProgress]);
 
-  const stageColors = [
-    "var(--ws-color-primary)",
-    "var(--ws-color-info)",
-    "var(--ws-color-warning)",
-    "var(--ws-color-error)",
-    "var(--ws-color-accent)",
-  ];
-
-  const statusBadge = (status: LearningProgress["stages"][0]["status"]) => {
-    switch (status) {
-      case "completed":
-        return <Badge variant="success" className="text-[10px]">已完成</Badge>;
-      case "in_progress":
-        return <Badge variant="warning" className="text-[10px]">进行中</Badge>;
-      default:
-        return <Badge variant="neutral" className="text-[10px]">未开始</Badge>;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="text-sm text-muted-foreground">加载学习进度...</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-6 pb-4">
-      <div>
-        <h3 className="text-lg font-semibold">学习进度追踪</h3>
-        <p className="text-sm text-muted-foreground">
-          追踪你的 Agent 学习之旅，记录每个阶段的完成情况
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded-lg bg-warning-soft border border-warning/30 px-3 py-2 text-xs text-warning">
-          {error}
-        </div>
-      )}
-
-      {/* 总体进度 */}
-      <Card>
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6">
-          <ProgressRing value={progress.overall_progress} size={100} strokeWidth={8} />
-          <div className="text-center sm:text-left">
-            <div className="text-lg font-bold">{Math.round(progress.overall_progress)}%</div>
-            <div className="text-sm text-muted-foreground">总体进度</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              已完成 {progress.total_completed} / {progress.total_items} 项
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 各阶段进度 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {progress.stages.map((stage, idx) => {
-          const stagePct = stage.total > 0 ? (stage.completed / stage.total) * 100 : 0;
-          const stageColor = stageColors[idx % stageColors.length];
-          return (
-            <Card key={stage.stage}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                      style={{ backgroundColor: stageColor }}
-                    >
-                      {stage.stage}
-                    </div>
-                    <span className="text-sm font-semibold">{stage.name}</span>
-                  </div>
-                  {statusBadge(stage.status)}
-                </div>
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>进度</span>
-                    <span>{stage.completed}/{stage.total}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${stagePct}%`,
-                        backgroundColor: stageColor,
-                      }}
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <Button size="sm" variant={stage.status === "not_started" ? "secondary" : "ghost"} onClick={() => updateStageStatus(stage.stage, "not_started")}>未开始</Button>
-                    <Button size="sm" variant={stage.status === "in_progress" ? "secondary" : "ghost"} onClick={() => updateStageStatus(stage.stage, "in_progress")}>进行中</Button>
-                    <Button size="sm" variant={stage.status === "completed" ? "secondary" : "ghost"} onClick={() => updateStageStatus(stage.stage, "completed")}>完成</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {progress.notes && (
-        <Card>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            <NotebookPen className="h-4 w-4 inline mr-1.5" />
-            {progress.notes}
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="sticky bottom-0 flex justify-end border-t border-border bg-surface/95 pt-3 backdrop-blur">
-        <Button onClick={saveProgress} disabled={saving}>{saving ? "保存中..." : "保存进度"}</Button>
-      </div>
-    </div>
-  );
-};
-
-// ─── Main Page ───────────────────────────────────────────────────────────────
-
-const AgentExploration: React.FC<AgentExplorationProps> = ({ embedded = false }) => {
-  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
-  const [activeTabKey, setActiveTabKey] = useState<TabKey>(normalizeTab(urlSearchParams.get("tab")));
-  const [contentPayload, setContentPayload] = useState<AgentExplorationContentPayload | null>(null);
-  const [bookProgress, setBookProgress] = useState<Pick<LearningProgress, "completedChapters" | "favoriteChapters">>({
-    completedChapters: {},
-    favoriteChapters: {},
-  });
-  const [activeBookSlug, setActiveBookSlug] = useState(AGENTS_BOOK.chapters[0]?.slug ?? "agent-concept");
-  const [savingBookProgress, setSavingBookProgress] = useState(false);
-
   useEffect(() => {
     let mounted = true;
-    void fetchLearningContentPayload<AgentExplorationContentPayload>("agents").then((payload) => {
+    void fetchLearningContentPayload<AgentsLearningContentPayload>("agents").then((payload) => {
       if (mounted && payload) setContentPayload(payload);
     });
     return () => {
@@ -1046,150 +256,511 @@ const AgentExploration: React.FC<AgentExplorationProps> = ({ embedded = false })
     };
   }, []);
 
-  const roadmapStagesData = contentPayload?.roadmapStages ?? roadmapStages;
-  const architectureData = contentPayload?.architecture ?? agentCoreArchitecture;
-  const agentTypesData = contentPayload?.agentTypes ?? agentTypeComparison;
-  const coreTechsData = contentPayload?.coreTechs ?? coreTechs;
-  const frameworksData = contentPayload?.frameworks ?? frameworkData;
-  const experimentsData = contentPayload?.experiments ?? experimentLevels;
+  const experimentsData = normalizeExperiments(contentPayload?.experiments);
+  const toolsData = normalizeArray(contentPayload?.tools, TOOLS_DATA);
+  const resourcesData = normalizeArray(contentPayload?.resources, RESOURCES_DATA);
   const bookData = contentPayload?.book ?? AGENTS_BOOK;
 
+  // 从数据库加载思维导图
   useEffect(() => {
-    let mounted = true;
-    void api.get<LearningProgressResponse>("/learning/progress/agents").then((response) => {
-      if (!mounted) return;
-      const normalized = normalizeProgress(response.data?.data);
-      if (normalized) {
-        setBookProgress({
-          completedChapters: normalized.completedChapters ?? {},
-          favoriteChapters: normalized.favoriteChapters ?? {},
-        });
-      }
-    }).catch(() => {
-      // 首次访问无数据时使用空状态。
-    });
-    return () => {
-      mounted = false;
-    };
+    (async () => {
+      try {
+        const res = await fetch("/api/v1/learning/content/agents");
+        if (!res.ok) return;
+        const items = await res.json();
+        const mindmapItem = (items || []).find(
+          (d: any) => d.section_key === "mindmap" && d.item_key === "overview",
+        );
+        if (mindmapItem?.content?.markdown) {
+          setMindmapMarkdown(mindmapItem.content.markdown);
+        }
+      } catch {}
+    })();
   }, []);
 
-  useEffect(() => {
-    const next = normalizeTab(urlSearchParams.get("tab"));
-    if (next !== activeTabKey) setActiveTabKey(next);
-  }, [urlSearchParams, activeTabKey]);
+  // 保存进度
+  const saveProgress = useCallback(async () => {
+    try {
+      await api.post("/learning/progress/agents", {
+        notes: notesText,
+        overall_percent: progress.overall_percent,
+        completedItems: progress.completedItems,
+        favoriteItems: progress.favoriteItems,
+        completedChapters: progress.completedChapters,
+        favoriteChapters: progress.favoriteChapters,
+      });
+      showMessage.success("进度已保存");
+    } catch {
+      showMessage.error("保存失败，请重试");
+    }
+  }, [progress, notesText]);
 
+  const toggleCompletedItem = (itemKey: string) => {
+    setProgress((prev) => ({
+      ...prev,
+      completedItems: { ...prev.completedItems, [itemKey]: !prev.completedItems[itemKey] },
+    }));
+  };
+
+  const toggleFavoriteItem = (itemKey: string) => {
+    setProgress((prev) => ({
+      ...prev,
+      favoriteItems: { ...prev.favoriteItems, [itemKey]: !prev.favoriteItems[itemKey] },
+    }));
+  };
+
+  const toggleCompletedChapter = (slug: string) => {
+    setProgress((prev) => ({
+      ...prev,
+      completedChapters: { ...prev.completedChapters, [slug]: !prev.completedChapters[slug] },
+    }));
+  };
+
+  const toggleFavoriteChapter = (slug: string) => {
+    setProgress((prev) => ({
+      ...prev,
+      favoriteChapters: { ...prev.favoriteChapters, [slug]: !prev.favoriteChapters[slug] },
+    }));
+  };
+
+  // Tab 切换
   const handleTabChange = (key: string) => {
     const next = normalizeTab(key);
     setActiveTabKey(next);
-    const nextParams = new URLSearchParams(urlSearchParams);
-    nextParams.set("tab", next);
-    setUrlSearchParams(nextParams, { replace: true });
+    const params = new URLSearchParams(urlSearchParams);
+    params.set("tab", next);
+    setUrlSearchParams(params, { replace: true });
   };
 
-  const toggleCompletedChapter = useCallback((slug: string) => {
-    setBookProgress((prev) => ({
-      ...prev,
-      completedChapters: { ...(prev.completedChapters ?? {}), [slug]: !prev.completedChapters?.[slug] },
-    }));
-  }, []);
+  const completedItemCount = Object.values(progress.completedItems).filter(Boolean).length;
+  const favoriteItemCount = Object.values(progress.favoriteItems).filter(Boolean).length;
 
-  const toggleFavoriteChapter = useCallback((slug: string) => {
-    setBookProgress((prev) => ({
-      ...prev,
-      favoriteChapters: { ...(prev.favoriteChapters ?? {}), [slug]: !prev.favoriteChapters?.[slug] },
-    }));
-  }, []);
+  const experimentList = useMemo(() => Object.values(experimentsData).flat(), [experimentsData]);
+  const filteredExperiments = useMemo(() => {
+    const byDifficulty =
+      experimentDifficulty === "all"
+        ? experimentList
+        : experimentList.filter((item) => item.difficulty === experimentDifficulty);
+    return filterByKeyword(
+      byDifficulty.map((item) => ({
+        ...item,
+        title: item.name,
+        summary: item.data,
+        tags: [...(item.tools || []), ...(item.skills || [])],
+      })),
+      experimentKeyword,
+    );
+  }, [experimentDifficulty, experimentKeyword, experimentList]);
 
-  const saveBookProgress = useCallback(async () => {
-    setSavingBookProgress(true);
-    try {
-      const response = await api.get<LearningProgressResponse>("/learning/progress/agents");
-      const normalized = normalizeProgress(response.data?.data) ?? defaultProgress;
-      await api.post("/learning/progress/agents", { ...normalized, ...bookProgress });
-      showMessage.success("学习书进度已保存");
-    } catch (err) {
-      logger.error("Failed to save book progress", err);
-      showMessage.error("保存失败，请重试");
-    } finally {
-      setSavingBookProgress(false);
-    }
-  }, [bookProgress]);
+  const filteredTools = useMemo(() => {
+    const byCategory =
+      toolCategory === "all"
+        ? toolsData
+        : toolsData.filter((tool) => tool.category === toolCategory);
+    return filterByKeyword(
+      byCategory.map((tool) => ({
+        ...tool,
+        title: tool.name,
+        summary: tool.description,
+        tags: [(AGENT_TOOL_CATEGORY_LABELS[tool.category] ?? tool.category)],
+      })),
+      toolKeyword,
+    );
+  }, [toolCategory, toolKeyword, toolsData]);
+
+  const toolsByCategory = useMemo(
+    () =>
+      filteredTools.reduce<Record<string, ToolItem[]>>((acc, tool) => {
+        if (!acc[tool.category]) acc[tool.category] = [];
+        acc[tool.category].push(tool);
+        return acc;
+      }, {}),
+    [filteredTools],
+  );
+
+  const filteredResources = useMemo(() => {
+    const byType =
+      resourceType === "all"
+        ? resourcesData
+        : resourcesData.filter((resource) => resource.type === resourceType);
+    return filterByKeyword(
+      byType.map((resource) => ({
+        ...resource,
+        tags: [RESOURCE_TYPE_CONFIG[resource.type]?.label ?? resource.type],
+      })),
+      resourceKeyword,
+    );
+  }, [resourceKeyword, resourceType, resourcesData]);
 
   const content = (
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        {/* 页面标题 */}
-        <div className="shrink-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Bot className="h-5 w-5 text-primary" />
-                智能体探索
-              </h2>
-              <p className="text-sm text-text-secondary mt-0.5">
-                系统化学习 AI Agent 的概念、架构、技术与实践
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      {/* 页面标题 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Bot className="h-6 w-6 text-[var(--ws-color-primary)]" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-bold text-text-base sm:text-lg">智能体学习中心</h1>
+          <p className="text-xs text-text-tertiary">系统化学习路径 / 知识体系 / 实战项目</p>
+        </div>
+        {activeTabKey === "book" && (
+          <button
+            type="button"
+            onClick={saveProgress}
+            disabled={progressLoading}
+            className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {progressLoading ? "保存中..." : "保存进度"}
+          </button>
+        )}
+      </div>
+
+      {/* Tab 导航 */}
+      <Tabs value={activeTabKey} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
+        <TabsList className="inline-flex h-auto min-h-10 w-full flex-wrap justify-start gap-1 shrink-0">
+          <TabsTrigger value="book" className="gap-1.5">
+            <BookMarked className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">学习书</span>
+          </TabsTrigger>
+          <TabsTrigger value="knowledge" className="gap-1.5">
+            <Map className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">学习地图</span>
+          </TabsTrigger>
+          <TabsTrigger value="experiments" className="gap-1.5">
+            <FlaskConical className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">动手实验</span>
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="gap-1.5">
+            <Wrench className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">工具箱</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab: 学习书 */}
+        <TabsContent value="book" className="flex-1 overflow-auto pt-3 outline-none">
+          <BookReader
+            book={bookData}
+            activeSlug={activeBookSlug}
+            completedChapters={progress.completedChapters}
+            favoriteChapters={progress.favoriteChapters}
+            onSelectChapter={setActiveBookSlug}
+            onToggleComplete={toggleCompletedChapter}
+            onToggleFavorite={toggleFavoriteChapter}
+          />
+        </TabsContent>
+
+        {/* Tab: 学习地图 */}
+        <TabsContent value="knowledge" className="flex-1 overflow-hidden pt-3 outline-none">
+          <MindMapViewer
+            markdown={mindmapMarkdown}
+            onNodeClick={(text: string) => {
+              const mapping: Record<string, string> = {
+                "Agent 定义": "agent-concept",
+                "ReAct 推理-行动模式": "react-pattern",
+                "Prompt 工程": "prompt-engineering",
+                "Function Calling": "function-calling",
+                "RAG 检索增强生成": "rag",
+                "Supervisor-Worker 模式": "multi-agent-arch",
+              };
+              const slug = mapping[text];
+              if (slug) {
+                setActiveBookSlug(slug);
+                handleTabChange("book");
+              }
+            }}
+          />
+        </TabsContent>
+
+        {/* Tab: 动手实验 */}
+        <TabsContent value="experiments" className="flex-1 overflow-auto pt-3 outline-none">
+          <div className="space-y-6">
+            <div className="rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
+              <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
+                <Input
+                  value={experimentKeyword}
+                  onChange={(event) => setExperimentKeyword(event.target.value)}
+                  placeholder="搜索实验、工具或技能"
+                  className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                />
+                <Select
+                  value={experimentDifficulty}
+                  onValueChange={(value) =>
+                    setExperimentDifficulty(value as typeof experimentDifficulty)
+                  }
+                >
+                  <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部难度</SelectItem>
+                    <SelectItem value="beginner">入门</SelectItem>
+                    <SelectItem value="intermediate">中级</SelectItem>
+                    <SelectItem value="advanced">高级</SelectItem>
+                    <SelectItem value="expert">专家</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="mt-2 text-xs text-text-tertiary">
+                匹配 {filteredExperiments.length} 个实验，可直接标记完成或收藏。
               </p>
             </div>
-            {activeTabKey === "book" && (
-              <Button size="sm" onClick={saveBookProgress} disabled={savingBookProgress}>
-                {savingBookProgress ? "保存中..." : "保存学习书进度"}
-              </Button>
+
+            {filteredExperiments.length === 0 && (
+              <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
+                未找到匹配的实验，请调整关键词或难度筛选。
+              </div>
+            )}
+
+            {/* 入门 */}
+            <div>
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-success)] text-xs text-white">1</span>
+                入门级实验
+                <Badge variant="success" className="text-xs">适合新手</Badge>
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredExperiments
+                  .filter((exp) => exp.difficulty === "beginner")
+                  .map((exp) => (
+                    <ExperimentCard
+                      key={exp.name}
+                      experiment={exp}
+                      completed={Boolean(progress.completedItems[`experiment:${exp.name}`])}
+                      favorite={Boolean(progress.favoriteItems[`experiment:${exp.name}`])}
+                      onToggleCompleted={() => toggleCompletedItem(`experiment:${exp.name}`)}
+                      onToggleFavorite={() => toggleFavoriteItem(`experiment:${exp.name}`)}
+                    />
+                  ))}
+              </div>
+            </div>
+
+            {/* 中级 */}
+            <div>
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-warning)] text-xs text-white">2</span>
+                中级实验
+                <Badge variant="warning" className="text-xs">需要基础</Badge>
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredExperiments
+                  .filter((exp) => exp.difficulty === "intermediate")
+                  .map((exp) => (
+                    <ExperimentCard
+                      key={exp.name}
+                      experiment={exp}
+                      completed={Boolean(progress.completedItems[`experiment:${exp.name}`])}
+                      favorite={Boolean(progress.favoriteItems[`experiment:${exp.name}`])}
+                      onToggleCompleted={() => toggleCompletedItem(`experiment:${exp.name}`)}
+                      onToggleFavorite={() => toggleFavoriteItem(`experiment:${exp.name}`)}
+                    />
+                  ))}
+              </div>
+            </div>
+
+            {/* 高级 */}
+            <div>
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-error)] text-xs text-white">3</span>
+                高级实验
+                <Badge variant="danger" className="text-xs">需深度学习基础</Badge>
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredExperiments
+                  .filter((exp) => exp.difficulty === "advanced")
+                  .map((exp) => (
+                    <ExperimentCard
+                      key={exp.name}
+                      experiment={exp}
+                      completed={Boolean(progress.completedItems[`experiment:${exp.name}`])}
+                      favorite={Boolean(progress.favoriteItems[`experiment:${exp.name}`])}
+                      onToggleCompleted={() => toggleCompletedItem(`experiment:${exp.name}`)}
+                      onToggleFavorite={() => toggleFavoriteItem(`experiment:${exp.name}`)}
+                    />
+                  ))}
+              </div>
+            </div>
+
+            {/* 专家 */}
+            {filteredExperiments.some((exp) => exp.difficulty === "expert") && (
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-purple text-xs text-white">4</span>
+                  专家实验
+                  <Badge variant="info" className="text-xs">需工程实践基础</Badge>
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredExperiments
+                    .filter((exp) => exp.difficulty === "expert")
+                    .map((exp) => (
+                      <ExperimentCard
+                        key={exp.name}
+                        experiment={exp}
+                        completed={Boolean(progress.completedItems[`experiment:${exp.name}`])}
+                        favorite={Boolean(progress.favoriteItems[`experiment:${exp.name}`])}
+                        onToggleCompleted={() => toggleCompletedItem(`experiment:${exp.name}`)}
+                        onToggleFavorite={() => toggleFavoriteItem(`experiment:${exp.name}`)}
+                      />
+                    ))}
+                </div>
+              </div>
             )}
           </div>
-        </div>
+        </TabsContent>
 
-        {/* Tab 导航 */}
-        <Tabs
-          value={activeTabKey}
-          onValueChange={handleTabChange}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <TabsList className="inline-flex h-auto min-h-10 w-full justify-start gap-1 shrink-0 flex-wrap">
-            {tabConfigs.map((tab) => (
-              <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
-                {tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {/* 内容面板 */}
-          <div className="flex-1 min-h-0 pt-3">
-            <ScrollArea className="h-full">
-              <div className="pr-3">
-                <TabsContent value="roadmap" className="mt-0">
-                  <RoadmapTab stages={roadmapStagesData} />
-                </TabsContent>
-                <TabsContent value="book" className="mt-0">
-                  <BookReader
-                    book={bookData}
-                    activeSlug={activeBookSlug}
-                    completedChapters={bookProgress.completedChapters ?? {}}
-                    favoriteChapters={bookProgress.favoriteChapters ?? {}}
-                    onSelectChapter={setActiveBookSlug}
-                    onToggleComplete={toggleCompletedChapter}
-                    onToggleFavorite={toggleFavoriteChapter}
-                  />
-                </TabsContent>
-                <TabsContent value="knowledge" className="mt-0">
-                  <KnowledgeTab active={activeTabKey === "knowledge"} architecture={architectureData} agentTypes={agentTypesData} />
-                </TabsContent>
-                <TabsContent value="core-tech" className="mt-0">
-                  <CoreTechTab items={coreTechsData} />
-                </TabsContent>
-                <TabsContent value="frameworks" className="mt-0">
-                  <FrameworksTab items={frameworksData} />
-                </TabsContent>
-                <TabsContent value="experiments" className="mt-0">
-                  <ExperimentsTab levels={experimentsData} />
-                </TabsContent>
-                <TabsContent value="progress" className="mt-0">
-                  <ProgressTab bookProgress={bookProgress} />
-                </TabsContent>
+        {/* Tab: 工具箱 */}
+        <TabsContent value="tools" className="flex-1 overflow-auto pt-3 outline-none">
+          <div className="space-y-4">
+            <div className="rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
+              <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+                <Input
+                  value={toolKeyword}
+                  onChange={(event) => setToolKeyword(event.target.value)}
+                  placeholder="搜索工具名称、用途或类别"
+                  className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                />
+                <Select
+                  value={toolCategory}
+                  onValueChange={(value) => setToolCategory(value)}
+                >
+                  <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部类别</SelectItem>
+                    {Object.entries(AGENT_TOOL_CATEGORY_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </ScrollArea>
+              <p className="mt-2 text-xs text-text-tertiary">匹配 {filteredTools.length} 个工具，支持按类别快速聚焦。</p>
+            </div>
+
+            {filteredTools.length === 0 && (
+              <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
+                未找到匹配的工具，请调整关键词或类别筛选。
+              </div>
+            )}
+
+            {Object.entries(toolsByCategory).map(([category, tools]) => (
+              <Card key={category}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                    {CATEGORY_ICON_BY_KEY[category] ?? <Wrench className="h-4 w-4" />}
+                    {AGENT_TOOL_CATEGORY_LABELS[category] || category}
+                    <span className="ml-1 text-xs font-normal text-text-tertiary">({tools.length} 个工具)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {tools.map((tool) => (
+                      <div
+                        key={tool.name}
+                        className="rounded-md border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)] hover:bg-[var(--ws-color-primary-soft)]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-text-base">{tool.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            {tool.difficulty && (
+                              <Badge variant={DIFFICULTY_LABELS[tool.difficulty]?.variant as any} className="text-[10px] px-1.5 py-0">
+                                {DIFFICULTY_LABELS[tool.difficulty]?.label}
+                              </Badge>
+                            )}
+                            {tool.url && (
+                              <a
+                                href={tool.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-text-tertiary hover:text-[var(--ws-color-primary)]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <p className="mt-1.5 text-xs text-text-secondary leading-relaxed">{tool.description}</p>
+                        {tool.pip_install && (
+                          <p className="mt-2 font-mono text-[10px] text-text-tertiary bg-[var(--ws-color-surface)] rounded px-1.5 py-0.5 select-all">
+                            {tool.pip_install}
+                          </p>
+                        )}
+                        {tool.related_experiments && tool.related_experiments.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {tool.related_experiments.slice(0, 3).map((exp) => (
+                              <span
+                                key={exp}
+                                className="text-[10px] text-[var(--ws-color-primary)] bg-[var(--ws-color-primary-soft)] rounded px-1.5 py-0.5"
+                              >
+                                {exp}
+                              </span>
+                            ))}
+                            {tool.related_experiments.length > 3 && (
+                              <span className="text-[10px] text-text-tertiary">
+                                +{tool.related_experiments.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* ── 学习资源 ── */}
+            <div className="mt-6 border-t border-[var(--ws-color-border-secondary)] pt-6">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                <BookOpen className="h-4 w-4 text-[var(--ws-color-primary)]" />
+                学习资源
+                <span className="text-xs font-normal text-text-tertiary">({filteredResources.length} 个资源)</span>
+              </h3>
+
+              <div className="mb-4 rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
+                  <Input
+                    value={resourceKeyword}
+                    onChange={(event) => setResourceKeyword(event.target.value)}
+                    placeholder="搜索资源名称、描述或类型"
+                    className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                  />
+                  <Select
+                    value={resourceType}
+                    onValueChange={(value) => setResourceType(value as typeof resourceType)}
+                  >
+                    <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部类型</SelectItem>
+                      {Object.entries(RESOURCE_TYPE_CONFIG).map(([value, config]) => (
+                        <SelectItem key={value} value={value}>{config.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {filteredResources.length === 0 ? (
+                <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
+                  未找到匹配的资源，请调整关键词或类型筛选。
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredResources.map((resource) => (
+                    <ResourceCard
+                      key={resource.title}
+                      item={resource}
+                      favorite={Boolean(progress.favoriteItems[`resource:${resource.title}`])}
+                      onToggleFavorite={() => toggleFavoriteItem(`resource:${resource.title}`)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </Tabs>
-      </div>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 
   if (embedded) return content;
@@ -1198,6 +769,312 @@ const AgentExploration: React.FC<AgentExplorationProps> = ({ embedded = false })
     <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
       {content}
     </AdminPage>
+  );
+};
+
+// ────────────────────────────────────────
+// 子卡片组件
+// ────────────────────────────────────────
+
+type SectionKey = "steps" | "code" | "data" | "reflection";
+
+const TAB_CONFIG: { key: SectionKey; label: string; icon: string }[] = [
+  { key: "steps", label: "实验步骤", icon: "📋" },
+  { key: "code", label: "实验代码", icon: "💻" },
+  { key: "data", label: "实验数据", icon: "📊" },
+  { key: "reflection", label: "思考题", icon: "🤔" },
+];
+
+/** 实验卡片 */
+const ExperimentCard: React.FC<{
+  experiment: Experiment;
+  completed: boolean;
+  favorite: boolean;
+  onToggleCompleted: () => void;
+  onToggleFavorite: () => void;
+}> = ({ experiment, completed, favorite, onToggleCompleted, onToggleFavorite }) => {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<SectionKey>("steps");
+  const diff = DIFFICULTY_LABELS[experiment.difficulty];
+
+  return (
+    <>
+      {/* Compact list card */}
+      <div
+        className={cn(
+          "rounded-md border bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)] hover:bg-[var(--ws-color-primary-soft)] cursor-pointer",
+          completed ? "border-[var(--ws-color-success)]" : "border-[var(--ws-color-border-secondary)]",
+        )}
+        onClick={() => {
+          setOpen(true);
+          setTab("steps");
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-medium text-text-base">{experiment.name}</h3>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite();
+              }}
+              className={cn(
+                "rounded p-1 transition-colors",
+                favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", favorite && "fill-[var(--ws-color-warning)]")} />
+            </button>
+            <Badge variant={diff.variant as any} className="text-xs">{diff.label}</Badge>
+          </div>
+        </div>
+        <div className="mt-2 space-y-1 text-xs text-text-tertiary">
+          <p>{experiment.data}</p>
+          <p>⏱ {experiment.estimated_time} · 🎯 {experiment.goal}</p>
+          <div className="flex flex-wrap gap-1">
+            {experiment.tools.slice(0, 4).map((t) => (
+              <span key={t} className="rounded bg-[var(--ws-color-surface)] px-1.5 py-0.5">{t}</span>
+            ))}
+            {experiment.tools.length > 4 && <span className="text-text-tertiary">+{experiment.tools.length - 4}</span>}
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCompleted();
+            }}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+              completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary",
+            )}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {completed ? "已完成" : "标记"}
+          </button>
+          <span className="text-xs text-[var(--ws-color-primary)]">点击查看详情 →</span>
+        </div>
+      </div>
+
+      {/* ── Single Modal with Tabs ── */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ws-color-overlay)] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${experiment.name} - 实验详情`}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-surface shadow-2xl"
+            ref={(el) => {
+              if (el) {
+                const first = el.querySelector<HTMLElement>("button, [tabindex]");
+                first?.focus();
+              }
+            }}
+          >
+            {/* Header */}
+            <div className="shrink-0 border-b border-border px-6 pt-5 pb-3">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold">{experiment.name}</h2>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded p-1 hover:bg-accent text-lg leading-none"
+                  aria-label="关闭"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                <Badge variant={diff.variant as any} className="text-[10px]">{diff.label}</Badge>
+                <span>⏱ {experiment.estimated_time}</span>
+                <span>{experiment.data}</span>
+              </div>
+              <p className="mt-2 text-xs text-text-secondary">🎯 {experiment.goal}</p>
+            </div>
+
+            {/* Tab bar */}
+            <div className="shrink-0 flex border-b border-border bg-[var(--ws-color-surface-2)] px-3">
+              {TAB_CONFIG.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={cn(
+                    "relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px]",
+                    tab === t.key
+                      ? "border-[var(--ws-color-primary)] text-[var(--ws-color-primary)]"
+                      : "border-transparent text-text-tertiary hover:text-text-secondary",
+                  )}
+                >
+                  <span className="text-base">{t.icon}</span>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 min-h-0 overflow-auto p-6 animate-ws-fade-in-up">
+              {/* Steps */}
+              {tab === "steps" && experiment.steps && (
+                <div className="space-y-3">
+                  <ol className="space-y-3 ml-5 list-decimal text-sm text-text-secondary leading-relaxed">
+                    {experiment.steps.map((s, i) => (
+                      <li key={i} className="pl-1">{s}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Code */}
+              {tab === "code" && experiment.code && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-text-tertiary">可复制到 Jupyter Notebook / Google Colab 运行</p>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
+                      onClick={() => {
+                        navigator.clipboard.writeText(experiment.code || "");
+                        showMessage.success("代码已复制到剪贴板");
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />复制代码
+                    </button>
+                  </div>
+                  <pre className="overflow-auto rounded-lg bg-[var(--ws-color-code-bg)] p-5 text-[13px] leading-relaxed text-[var(--ws-color-code-text)]">
+                    {experiment.code}
+                  </pre>
+                </div>
+              )}
+
+              {/* Data */}
+              {tab === "data" && (
+                <div>
+                  <div className="rounded-lg border border-border bg-[var(--ws-color-surface-2)] p-5 mb-4">
+                    <p className="text-sm text-text-secondary leading-relaxed">
+                      {experiment.data_source || experiment.data}
+                    </p>
+                  </div>
+                  {experiment.download_url ? (
+                    <a
+                      href={experiment.download_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md bg-[var(--ws-color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity no-underline mb-5"
+                    >
+                      <Download className="h-4 w-4" />
+                      下载数据文件
+                    </a>
+                  ) : (
+                    <div className="mb-5 rounded-md bg-[var(--ws-color-surface-2)] px-4 py-2.5 text-sm text-text-secondary">
+                      此实验的数据通过代码中的 API 调用或内置数据集加载，无需手动下载。
+                    </div>
+                  )}
+                  {experiment.expected_output && (
+                    <>
+                      <h3 className="text-sm font-semibold mb-2.5">预期输出</h3>
+                      <div className="rounded-lg border border-border bg-[var(--ws-color-surface-2)] p-4">
+                        <p className="text-sm text-text-secondary leading-relaxed">{experiment.expected_output}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Reflection */}
+              {tab === "reflection" && experiment.reflection && (
+                <div>
+                  <p className="text-xs text-text-tertiary mb-4">动手完成后思考以下问题，加深理解</p>
+                  <ul className="space-y-4">
+                    {experiment.reflection.map((r, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ws-color-surface-2)] text-xs font-bold text-text-tertiary">
+                          {i + 1}
+                        </span>
+                        <span className="text-sm text-text-secondary leading-relaxed pt-0.5">{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 flex items-center justify-between border-t border-border px-6 py-3 bg-[var(--ws-color-surface-2)]">
+              <Button size="sm" variant={completed ? "secondary" : "outline"} onClick={onToggleCompleted}>
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                {completed ? "已完成" : "标记完成"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>关闭</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+/** 资源卡片 */
+const ResourceCard: React.FC<{
+  item: ResourceItem;
+  favorite: boolean;
+  onToggleFavorite: () => void;
+}> = ({ item, favorite, onToggleFavorite }) => {
+  const config = RESOURCE_TYPE_CONFIG[item.type];
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-md border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)]"
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-text-base">{item.title}</span>
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+              style={{ backgroundColor: config?.color || "var(--ws-color-primary)" }}
+            >
+              {config?.label || item.type}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-text-tertiary">{item.description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            onToggleFavorite();
+          }}
+          className={cn(
+            "ml-2 rounded p-1",
+            favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]",
+          )}
+          aria-label={favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
+        >
+          <Star className={cn("h-3 w-3", favorite && "fill-[var(--ws-color-warning)]")} />
+        </button>
+        <ExternalLink className="ml-1 h-3 w-3 shrink-0 text-text-tertiary" />
+      </div>
+      {item.rating && (
+        <div className="mt-1.5 flex items-center gap-0.5">
+          {Array.from({ length: item.rating }).map((_, i) => (
+            <Star key={i} className="h-3 w-3 fill-[var(--ws-color-warning)] text-[var(--ws-color-warning)]" />
+          ))}
+        </div>
+      )}
+    </a>
   );
 };
 

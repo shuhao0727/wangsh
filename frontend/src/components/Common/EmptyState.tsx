@@ -1,5 +1,6 @@
 import React from "react";
 import { Inbox, Search, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type Variant = "no-data" | "no-results" | "error" | "permission-denied";
 
@@ -9,6 +10,8 @@ interface EmptyStateProps {
   title?: string;
   description?: React.ReactNode;
   action?: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
   className?: string;
 }
 
@@ -41,6 +44,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
   action,
+  actionLabel,
+  onAction,
   className = "",
 }) => {
   const d = defaults[variant];
@@ -53,6 +58,13 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       <div className="mb-3">{icon ?? d.icon}</div>
       <div className="text-sm font-medium text-text-secondary mb-1">{title ?? d.title}</div>
       <div className="text-xs text-text-tertiary mb-4">{description ?? d.description}</div>
+      {actionLabel && onAction && (
+        <div className="mb-3">
+          <Button variant="outline" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        </div>
+      )}
       {action && <div>{action}</div>}
     </div>
   );

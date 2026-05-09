@@ -5,13 +5,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, RotateCcw,
   Volume2, Code, FileText, GitBranch, ChevronRight, TriangleAlert,
-  Cpu, Sparkles, Bot
+  Cpu, Sparkles, Network
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
 import ClassSelector from './ClassSelector';
 import type { DianmingClass } from '@/services/xxjs/dianming';
 import { featureFlagsApi } from '@/services/system/featureFlags';
+import { api } from '@services';
 import { logger } from '@services/logger';
 import EmptyState from "@components/Common/EmptyState";
 import AppLauncherCard from "@components/Common/AppLauncherCard";
@@ -59,7 +60,7 @@ const APPS = [
   {
     key: 'it_machine_learning_enabled',
     title: '机器学习',
-    description: '机器学习知识体系与实验平台',
+    description: '17 章学习书 · 5 阶段路线 · 9 大知识域 · 14 个实验',
     icon: <Cpu className="h-5 w-5" />,
     color: '#8B5CF6', bg: 'color-mix(in srgb, #8B5CF6 8%, transparent)', ring: 'color-mix(in srgb, #8B5CF6 22%, transparent)',
     action: 'ml',
@@ -68,7 +69,7 @@ const APPS = [
   {
     key: 'it_ai_exploration_enabled',
     title: '人工智能探索',
-    description: 'AI能力体验与知识探索',
+    description: '14 章学习书 · 6 阶段路线 · 8 大 AI 领域 · 14 项提示技术',
     icon: <Sparkles className="h-5 w-5" />,
     color: '#06B6D4', bg: 'color-mix(in srgb, #06B6D4 8%, transparent)', ring: 'color-mix(in srgb, #06B6D4 22%, transparent)',
     action: 'ai',
@@ -77,9 +78,9 @@ const APPS = [
   {
     key: 'it_agent_exploration_enabled',
     title: '智能体探索',
-    description: '多智能体协作与对话实验',
-    icon: <Bot className="h-5 w-5" />,
-    color: '#6366F1', bg: 'color-mix(in srgb, #6366F1 8%, transparent)', ring: 'color-mix(in srgb, #6366F1 22%, transparent)',
+    description: '13 章学习书 · 5 阶段路线 · 13 种框架 · 16 个动手实验',
+    icon: <Network className="h-5 w-5" />,
+    color: '#10B981', bg: 'color-mix(in srgb, #10B981 8%, transparent)', ring: 'color-mix(in srgb, #10B981 22%, transparent)',
     action: 'agents',
     available: true,
   },
@@ -92,6 +93,7 @@ const ITTechnologyPage: React.FC = () => {
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [progressData, setProgressData] = useState<Record<string, { overall: number; label: string }>>({});
 
   const loadFlags = async () => {
     setLoading(true); setError(null);
@@ -111,6 +113,34 @@ const ITTechnologyPage: React.FC = () => {
         newFlags[k] = enabled;
       });
       setFlags(newFlags);
+
+      // Fetch learning progress for enabled modules
+      const moduleMap: Record<string, string> = {
+        it_machine_learning_enabled: 'ml',
+        it_ai_exploration_enabled: 'ai',
+        it_agent_exploration_enabled: 'agents',
+      };
+      const enabledLearningKeys = Object.keys(moduleMap).filter(k => newFlags[k]);
+      if (enabledLearningKeys.length > 0) {
+        const progressResults = await Promise.allSettled(
+          enabledLearningKeys.map(key =>
+            api.get(`/learning/progress/${moduleMap[key]}`).catch(() => null)
+          )
+        );
+        const newProgress: Record<string, { overall: number; label: string }> = {};
+        progressResults.forEach((result, i) => {
+          const data = (result.status === 'fulfilled' ? result.value?.data?.data : undefined) as
+            | { overall_progress?: number; total_completed?: number; total_items?: number }
+            | undefined;
+          if (data && data.overall_progress !== undefined) {
+            newProgress[enabledLearningKeys[i]] = {
+              overall: data.overall_progress ?? 0,
+              label: `已完成 ${data.total_completed ?? 0}/${data.total_items ?? '?'} 项`,
+            };
+          }
+        });
+        setProgressData(newProgress);
+      }
     } catch (e: any) {
       logger.error(e);
       setError(e?.message || '加载配置失败，请检查网络或刷新重试');
@@ -216,6 +246,34 @@ const ITTechnologyPage: React.FC = () => {
   }
 
   const visibleApps = APPS.filter(app => flags[app.key]);
+  const learningAppKeys = new Set(['it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled']);
+  const utilityApps = visibleApps.filter(app => !learningAppKeys.has(app.key));
+  const learningApps = visibleApps.filter(app => learningAppKeys.has(app.key));
+
+  const renderCard = (app: typeof APPS[number]) => {
+    const progress = progressData[app.key];
+    return (
+      <AppLauncherCard
+        key={app.key}
+        title={app.title}
+        description={app.description}
+        icon={app.icon}
+        color={app.color}
+        bg={app.bg}
+        ring={app.ring}
+        disabled={!app.available}
+        progress={progress?.overall}
+        progressLabel={progress?.label}
+        onClick={() => {
+          if (app.action === 'dianming') setView('rollcall-selector');
+          if (app.action === 'python') void navigate('/it-technology/python-lab');
+          if (app.action === 'ml') window.open('/it-technology/ml', '_blank');
+          if (app.action === 'ai') window.open('/it-technology/ai', '_blank');
+          if (app.action === 'agents') window.open('/it-technology/agents', '_blank');
+        }}
+      />
+    );
+  };
 
   return (
     <div className="it-technology-page w-full flex-1 mx-auto px-[var(--ws-space-3)] py-[var(--ws-space-4)] md:px-[var(--ws-space-4)] flex flex-col" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
@@ -226,26 +284,24 @@ const ITTechnologyPage: React.FC = () => {
               <EmptyState description="暂无可用应用，请联系管理员在后台开启。" />
             </div>
           ) : (
-          <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {visibleApps.map(app => (
-                <AppLauncherCard
-                  key={app.key}
-                  title={app.title}
-                  description={app.description}
-                  icon={app.icon}
-                  color={app.color}
-                  bg={app.bg}
-                  ring={app.ring}
-                  disabled={!app.available}
-                  onClick={() => {
-                    if (app.action === 'dianming') setView('rollcall-selector');
-                    if (app.action === 'python') void navigate('/it-technology/python-lab');
-                    if (app.action === 'ml') void navigate('/it-technology/ml');
-                    if (app.action === 'ai') void navigate('/it-technology/ai');
-                    if (app.action === 'agents') void navigate('/it-technology/agents');
-                  }}
-                />
-              ))}
+            <div className="space-y-[var(--ws-layout-gap)]">
+              {utilityApps.length > 0 && (
+                <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                  {utilityApps.map(renderCard)}
+                </div>
+              )}
+              {learningApps.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-xs font-medium uppercase tracking-wider text-text-tertiary whitespace-nowrap">AI 学习系列</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                  <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                    {learningApps.map(renderCard)}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>

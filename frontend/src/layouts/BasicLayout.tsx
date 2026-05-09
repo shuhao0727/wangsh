@@ -266,7 +266,10 @@ const BasicLayout: React.FC = () => {
       <main
         className={cn("main-content", isFullHeight && "main-content--full-height")}
         style={isFullHeight ? {
-          padding: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          paddingLeft: "var(--ws-space-3)",
+          paddingRight: "var(--ws-space-3)",
           margin: 0,
           flex: 1,
           minHeight: 0,

@@ -2,6 +2,76 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.9（2026-05-09）
+
+### 1. 变更范围
+
+前端 UI/体验/稳定性一轮系统性提升，覆盖 10 个 Phase：
+
+- **Phase 0 — Button 过渡修复**：`button-variants.ts` 中 `transition-colors` 与 `transition-transform` 互相覆盖导致颜色过渡失效的 bug，合并为 `transition-[color,background-color,border-color,transform,box-shadow] duration-150`
+- **Phase 1 — 组件交互状态补齐**：`Input` 新增 hover 状态；`Card` 在传入 `onClick` 时自动进入交互模式（`tabIndex`/`role=button`/键盘 Enter/Space/`focus-visible` ring/hover 阴影）；`TableRow` 同步自动化
+- **Phase 2 — a11y 审计**：24 处 `size="icon"` 图标按钮全部确认带 `aria-label`（审计确认已合规，无需修改）
+- **Phase 3 — 排版语义化**：`styles/index.css` 新增 `.ws-heading-page / .ws-heading-section / .ws-heading-card / .ws-text-body / .ws-text-meta` 语义类
+- **Phase 4 — 间距工具**：新增 `.ws-stack / .ws-stack-sm / .ws-grid-cards` 容器级栅格助手
+- **Phase 5 — 加载/错误态**：`DataTable` 新增 `loading` + `loadingRows` prop（骨架行替代空正文）；新建 `components/Common/SectionErrorBoundary.tsx` 支持 section 级错误隔离 + retry
+- **Phase 6 — 布局动效**：`AdminLayout` content 容器 `transition-all` 缩到 `transition-[margin-left]`，减少重排影响范围；`motion-reduce:transition-none` 兜底
+- **Phase 7 — 响应式**：全仓 `100vh` → `100dvh`（8 处），修复移动浏览器工具栏截断问题
+- **Phase 8 — 色彩一致性**：`FlowEdgesSvg / FlowAnnotationsSvg` 中硬编码旧 primary `#0EA5E9` 替换为 `var(--ws-color-primary)` 或新 primary `#0284C7`（保持 WCAG AA 对比度 ≥ 4.5:1）
+- **Phase 9 — 色彩规范文档**：新建 `frontend/src/styles/COLORS.md` 列出每个语义色用途/反例/对比度要求
+- **AI Agents 页面边距**：`BasicLayout` fullHeight 模式增加左右 `var(--ws-space-3)` 留白，避免对话内容贴屏幕边沿
+
+### 2. Bug 修复（代码审查发现并修复）
+
+- **[confidence=95]** DataTable ↔ TableRow 键盘事件重复触发：`data-table.tsx` 原本手工给 TableRow 传 `role/tabIndex/onKeyDown`，新 TableRow 组件自带相同逻辑，导致 Enter/Space 触发 `onRowClick` 两次。移除 DataTable 端的手工处理，职责下沉组件
+- **[confidence=85]** `[role="dialog"]` 小屏全屏选择器过激：缩窄为 `[role="dialog"][aria-modal="true"]`，避免影响 Popover/非 modal 浮层
+- **[confidence=82]** SVG marker 箭头与边线色差：FlowEdgesSvg 中 marker path `fill="#0EA5E9"` 同步改为 `#0284C7`，与边线 `var(--ws-color-primary)` 对齐
+
+### 3. 类型错误修复（生产构建）
+
+修复 30 个阻塞 `npm run build` 的 TypeScript 错误：
+
+- `pages/ITTechnology/index.tsx`：`result.value.data.data` 类型窄化为带可选字段 object
+- `pages/Admin/ITTechnology/ml/index.tsx`：`MLLearningContentPayload` 补 `roadmap / knowledge` 可选字段；清理 tab 字面量不可达分支
+- `pages/Admin/ITTechnology/ai/index.tsx` 和 `agents/index.tsx`：API 返回 `rawPayload` 先断言为 `Record<string, unknown>` 再解构
+
+### 4. 配置影响
+
+- `.env`、`.env.dev`、`.env.example`、`docker-compose.yml`、`docker-compose.dev.yml`、`frontend/package.json`、`frontend/package-lock.json` 当前版本引用均更新到 `1.5.9`
+- PythonLab sandbox 镜像默认标签同步到 `shuhao07/pythonlab-sandbox:1.5.9`
+- `docs/docker/deploy/DEPLOY.md` 与 `scripts/deploy.sh` 中示例版本号同步
+
+### 5. 构建与部署
+
+```bash
+# 构建全部生产镜像
+./build_images.sh 1.5.9
+
+# 推送到 Docker Hub
+docker compose push
+
+# 拉取并更新
+docker compose pull && docker compose up -d
+
+# 健康检查
+curl http://localhost:6608/api/health
+```
+
+### 6. 验证
+
+- `frontend npm run build`：✅ 通过（1.85s，零类型错误）
+- ESLint：✅ 0 error / 409 warn（`any` 技术债，非阻塞）
+- `scripts/check-version-consistency.mjs`：✅ 通过
+- 7 个 Docker 容器：✅ 全部 Up
+- 后端 `/health`：✅ 200 持续响应
+
+### 7. 回滚
+
+```bash
+IMAGE_TAG=1.5.8 docker compose up -d
+```
+
+---
+
 ## v1.5.6（2026-04-27）
 
 ### 1. 变更范围

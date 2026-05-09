@@ -50,7 +50,7 @@ export const StatCard: React.FC<StatCardProps> = ({
             ) : null}
             {label}
           </div>
-          <div className="stat-card-value text-xl font-bold text-text-base leading-tight">
+          <div className="stat-card-value text-xl font-bold text-text-base leading-tight tabular-nums">
             {value}
           </div>
         </div>
@@ -95,7 +95,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       )}
     >
       <div className="mb-1 text-xs text-text-tertiary">{label}</div>
-      <div className="text-xl font-bold text-text-base">{value}</div>
+      <div className="text-xl font-bold text-text-base tabular-nums">{value}</div>
     </div>
   );
 };

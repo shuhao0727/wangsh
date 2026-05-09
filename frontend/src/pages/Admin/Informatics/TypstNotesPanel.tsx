@@ -235,7 +235,7 @@ const TypstNotesPanel: React.FC = () => {
           ) : items.length === 0 ? (
             <EmptyState description="暂无笔记" />
           ) : (
-            <div className="flex flex-col gap-2 max-h-[calc(100vh-220px)] overflow-auto">
+            <div className="flex flex-col gap-2 max-h-[calc(100dvh-220px)] overflow-auto">
               {items.map((it) => (
                 <div
                   key={it.id}

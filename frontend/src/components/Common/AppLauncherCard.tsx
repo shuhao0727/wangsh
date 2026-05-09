@@ -2,6 +2,8 @@ import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+type StatItem = { label: string; value: string };
+
 type Props = {
   title: string;
   description: string;
@@ -15,6 +17,9 @@ type Props = {
   disabledLabel?: string;
   badgeText?: string;
   className?: string;
+  stats?: StatItem[];
+  progress?: number;
+  progressLabel?: string;
 };
 
 const AppLauncherCard: React.FC<Props> = ({
@@ -30,6 +35,9 @@ const AppLauncherCard: React.FC<Props> = ({
   disabledLabel = "敬请期待",
   badgeText,
   className,
+  stats,
+  progress,
+  progressLabel,
 }) => {
   return (
     <button
@@ -60,6 +68,32 @@ const AppLauncherCard: React.FC<Props> = ({
 
       <div className="mb-1.5 text-[var(--ws-text-md)] font-semibold text-text-base">{title}</div>
       <div className="mb-2.5 text-[var(--ws-text-caption)] leading-relaxed text-text-secondary">{description}</div>
+
+      {stats && stats.length > 0 ? (
+        <div className="mb-2.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+          {stats.map((s, i) => (
+            <span key={i} className="inline-flex items-center gap-1 rounded-md bg-[var(--app-bg)] px-1.5 py-0.5 text-[11px] text-text-tertiary">
+              <span className="font-semibold text-[var(--app-color)]">{s.value}</span>
+              {s.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {progress !== undefined && progress >= 0 ? (
+        <div className="mb-2 w-full space-y-1">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-text-tertiary">{progressLabel || "学习进度"}</span>
+            <span className="font-medium text-[var(--app-color)]">{Math.round(progress)}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--app-bg)]">
+            <div
+              className="h-full rounded-full bg-[var(--app-color)] transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {disabled ? (
         <div className="text-sm text-text-tertiary">{disabledLabel}</div>

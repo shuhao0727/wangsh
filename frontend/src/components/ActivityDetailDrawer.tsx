@@ -318,7 +318,7 @@ export const ActivityDetailDrawer: React.FC<Props> = ({ open, activity, stats, o
       <SheetHeader className="border-b border-border px-6 py-4">
         <SheetTitle>{activity?.title || "活动详情"}</SheetTitle>
       </SheetHeader>
-      <div className="h-[calc(100vh-64px)] overflow-y-auto px-6 py-4">
+      <div className="h-[calc(100dvh-64px)] overflow-y-auto px-6 py-4">
         {activity ? <ActivityDetailContent activity={activity} stats={stats} /> : null}
         {extra}
       </div>

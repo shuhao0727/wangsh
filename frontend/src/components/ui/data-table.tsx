@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -28,6 +29,10 @@ type DataTableProps<TData> = {
   tableWrapperClassName?: string
   tableScrollContainer?: boolean
   emptyState?: React.ReactNode
+  /** 加载状态：true 时用骨架行替代正文 */
+  loading?: boolean
+  /** 骨架行数，默认 5 */
+  loadingRows?: number
   getRowClassName?: (row: Row<TData>) => string | undefined
   onRowClick?: (row: Row<TData>) => void
   /** 表格密度预设 */
@@ -70,6 +75,8 @@ function DataTable<TData>({
   tableWrapperClassName,
   tableScrollContainer = true,
   emptyState = defaultEmptyState,
+  loading = false,
+  loadingRows = 5,
   getRowClassName,
   onRowClick,
   density = "default",
@@ -119,29 +126,23 @@ function DataTable<TData>({
           ))}
         </TableHeader>
         <TableBody>
-          {rows.length ? (
+          {loading ? (
+            Array.from({ length: loadingRows }).map((_, idx) => (
+              <TableRow key={`skeleton-${idx}`} aria-hidden="true">
+                {Array.from({ length: columnCount }).map((__, cIdx) => (
+                  <TableCell key={`skeleton-cell-${idx}-${cIdx}`}>
+                    <Skeleton className="h-4 w-full max-w-[220px]" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : rows.length ? (
             rows.map((row) => (
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() ? "selected" : undefined}
-                className={cn(
-                  onRowClick &&
-                    "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-inset",
-                  getRowClassName?.(row),
-                )}
+                className={cn(getRowClassName?.(row))}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                {...(onRowClick
-                  ? {
-                      role: "button",
-                      tabIndex: 0,
-                      onKeyDown: (e: React.KeyboardEvent) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          onRowClick(row)
-                        }
-                      },
-                    }
-                  : {})}
               >
                 {row.getVisibleCells().map((cell) => {
                   return (
