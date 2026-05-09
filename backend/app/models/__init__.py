@@ -49,6 +49,9 @@ from .xxjs.dianming import XxjsDianming
 # 学习进度模型 (sys_ 前缀)
 from .learning import LearningChapter, LearningContentItem, LearningProgress
 
+# ML 学习书模型 (ml_ 前缀)
+from .ml import MLBook, MLBookChapter  # noqa: F401
+
 __all__ = [
     "Base", 
     "User", 
@@ -86,4 +89,6 @@ __all__ = [
     "LearningProgress",
     "LearningContentItem",
     "LearningChapter",
+    "MLBook",
+    "MLBookChapter",
 ]

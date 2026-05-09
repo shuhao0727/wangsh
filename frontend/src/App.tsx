@@ -59,6 +59,7 @@ const AdminTabEditorPage = lazy(() => import("./pages/Admin/ITTechnology/learnin
 const AdminMindMapEditorPage = lazy(() => import("./pages/Admin/ITTechnology/learning/MindMapEditor"));
 const AdminClassroomInteractionPage = lazy(() => import("./pages/Admin/ClassroomInteraction"));
 const AdminClassroomPlanPage = lazy(() => import("./pages/Admin/ClassroomPlan/PlanPage"));
+const AdminMLBookEditorPage = lazy(() => import("./pages/Admin/ITTechnology/ml/editor/MlBookEditor"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
 
 // 加载中组件
@@ -148,6 +149,7 @@ function App() {
               <Route path="/admin/assessment/:id/statistics" element={<PageErrorBoundary pageName="admin-assessment-statistics"><AdminAssessmentStatisticsPage /></PageErrorBoundary>} />
               <Route path="/admin/classroom-interaction" element={<PageErrorBoundary pageName="admin-classroom-interaction"><AdminClassroomInteractionPage /></PageErrorBoundary>} />
               <Route path="/admin/classroom-plan" element={<PageErrorBoundary pageName="admin-classroom-plan"><AdminClassroomPlanPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology/ml-book-editor" element={<PageErrorBoundary pageName="admin-ml-book-editor"><AdminMLBookEditorPage /></PageErrorBoundary>} />
               <Route path="/admin/system" element={<PageErrorBoundary pageName="admin-system"><AdminSystemPage /></PageErrorBoundary>} />
             </Route>
 

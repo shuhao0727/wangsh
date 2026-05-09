@@ -99,6 +99,20 @@ export type {
   TypstStyleResponse,
 } from "./informatics";
 
+// ML 学习书相关服务
+export { mlBookAdminApi, mlBookPublicApi } from "./ml";
+export type {
+  MLBookMetadata,
+  MLBookChapter,
+  MLBookResponse,
+  MLChapterResponse,
+  ExperimentData,
+  GlossaryItem,
+  ReferenceItem,
+  QuizItem,
+  ReorderItem,
+} from "./ml";
+
 /**
  * 使用示例：
  *

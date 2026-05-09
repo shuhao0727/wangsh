@@ -1,0 +1,113 @@
+{
+  "book": {
+    "module_key": "ml",
+    "title": "机器学习百科式学习书",
+    "subtitle": "从数据理解到模型作品的完整成长路径",
+    "description": "面向信息技术课堂和项目学习的机器学习内置教材，以西瓜书和深度学习书为结构参考，强调概念、实验、证据和作品产出。",
+    "audience": "具备基础 Python 或数据表格经验的学习者",
+    "outcomes": [
+      "能独立描述机器学习项目从问题定义到部署复盘的完整流程",
+      "能完成至少三个可运行实验并用指标和图表解释结果",
+      "能用数学公式和代码说明常见算法的原理和适用场景"
+    ],
+    "enabled": true
+  },
+  "chapters": [
+    {
+      "slug": "introduction",
+      "chapter_number": 1,
+      "title": "绪论：什么是机器学习",
+      "summary": "建立机器学习整体地图，理解定义、发展历程、核心任务类型和学习范式。",
+      "difficulty": "beginner",
+      "estimated_minutes": 30,
+      "markdown": "# 绪论：什么是机器学习\n\n## 学习定位\n\n本章是整本书的地图。在深入任何算法前先建立大画面：机器学习解决什么问题、怎么解决、如何判断解决得好不好。\n\n## 什么是机器学习\n\nTom Mitchell (1997) 的经典定义：\n\n> 对于某类任务 T 和性能度量 P，如果一个计算机程序在 T 上以 P 衡量的性能随着经验 E 而自我完善，那么称这个程序从经验 E 中学习。\n\n### 一个具体例子\n\n| 要素 | 符号 | 示例 |\n|------|------|------|\n| 任务 T | 预测学生是否需要辅导 | 二分类 |\n| 经验 E | 500 名学生的历史数据 | 训练集 |\n| 性能 P | 预测准确率 | 评估指标 |\n\n### 传统编程 vs 机器学习\n\n- 传统编程：人写规则，计算机执行 → `if attendance < 60 and score < 40: need_help = True`\n- 机器学习：人提供数据和期待的输出，计算机自己归纳规则\n\n## 机器学习三大范式\n\n### 监督学习 (Supervised Learning)\n\n训练数据包含**输入特征**和**已知标签**。\n\n| 子类型 | 标签类型 | 示例 |\n|--------|----------|------|\n| 分类 | 离散类别 | 垃圾邮件检测 |\n| 回归 | 连续数值 | 房价预测 |\n| 排序 | 有序列表 | 搜索结果排序 |\n\n```python\nfrom sklearn.linear_model import LogisticRegression\nX = [[85, 90], [40, 35], [70, 75]]  # features\ny = [0, 1, 0]  # labels: 0=no help, 1=needs help\nmodel = LogisticRegression().fit(X, y)\nprint(model.predict([[60, 55]]))  # [1] needs help\n```\n\n### 无监督学习 (Unsupervised Learning)\n\n数据**没有标签**，目标是发现内在结构。\n\n| 子类型 | 目标 | 示例 |\n|--------|------|------|\n| 聚类 | 相似样本分组 | 客户分群 |\n| 降维 | 用更少维度表达信息 | 基因数据可视化 |\n| 关联规则 | 发现频繁模式 | 购物篮分析 |\n\n### 强化学习 (Reinforcement Learning)\n\n智能体在环境中采取行动，根据奖励信号学习：\n\n$$\\pi^*(s) = \\arg\\max_a Q^*(s, a)$$\n\n## 机器学习项目工作流\n\n| 阶段 | 关键问题 |\n|------|----------|\n| 1. 问题定义 | ML 是正确的工具吗？成功的标准是什么？ |\n| 2. 数据收集 | 数据从哪里来？够不够多？质量如何？ |\n| 3. 探索分析(EDA) | 数据长什么样？有缺失值吗？ |\n| 4. 数据预处理 | 清洗、标准化、编码、划分数据集 |\n| 5. 特征工程 | 创造更好的特征，筛选有用的特征 |\n| 6. 模型训练 | 先用简单基线，再尝试复杂模型 |\n| 7. 评估调优 | 交叉验证、超参数搜索、错误分析 |\n| 8. 部署监控 | 上线、日志、漂移检测、A/B 测试 |\n\n## 关键概念速查\n\n| 术语 | 英文 | 定义 |\n|------|------|------|\n| 特征 | Feature | 描述样本属性的变量 |\n| 标签 | Label | 希望预测的目标值 |\n| 模型 | Model | 从数据中学到的映射函数 |\n| 训练 | Training | 用数据调整模型参数 |\n| 泛化 | Generalization | 在新数据上保持表现的能力 |\n| 过拟合 | Overfitting | 死记硬背训练数据，新数据表现差 |\n\n## 本章实验\n\n用 scikit-learn 运行第一个分类器：\n\n```python\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import classification_report\n\niris = load_iris()\nX_train, X_test, y_train, y_test = train_test_split(\n    iris.data, iris.target, test_size=0.2, random_state=42\n)\nmodel = LogisticRegression(max_iter=200).fit(X_train, y_train)\nprint(classification_report(y_test, model.predict(X_test)))\n```\n\n## 延伸参考\n\n- 《机器学习》(西瓜书) 第1章 — 中文 ML 最佳入门\n- Andrew Ng Machine Learning (Coursera) — 零基础友好\n- scikit-learn Getting Started — 代码实践入门",
+      "goals": [
+        "解释机器学习的核心定义和三大学习范式",
+        "区分分类、回归、聚类等任务类型",
+        "说出完整 ML 项目的 8 个阶段"
+      ],
+      "checklist": [
+        "能用白话解释什么是机器学习",
+        "能举出 3 个监督学习和 2 个无监督学习实例",
+        "能画出 ML 项目工作流图"
+      ],
+      "experiments": [
+        {
+          "title": "第一个分类器",
+          "goal": "用 scikit-learn 运行分类和聚类感受差异",
+          "steps": [
+            "加载 iris 数据集",
+            "训练 LogisticRegression",
+            "训练 KMeans",
+            "比较输出"
+          ],
+          "output": "对比 Notebook",
+          "difficulty": "beginner"
+        }
+      ],
+      "glossary": [
+        {
+          "term": "特征",
+          "definition": "描述样本属性的变量，如出勤率、作业成绩"
+        },
+        {
+          "term": "标签",
+          "definition": "监督学习中希望预测的目标值"
+        },
+        {
+          "term": "模型",
+          "definition": "从数据中学到的输入到输出的映射函数"
+        },
+        {
+          "term": "泛化",
+          "definition": "模型在未见过的数据上保持良好表现的能力"
+        },
+        {
+          "term": "过拟合",
+          "definition": "模型死记硬背训练数据导致新数据表现差"
+        }
+      ],
+      "references": [
+        {
+          "title": "西瓜书第1章",
+          "source": "周志华",
+          "note": "ML 入门经典",
+          "url": "https://cs.nju.edu.cn/zhouzh/zhouzh.files/publication/MLbook2016.htm"
+        },
+        {
+          "title": "Andrew Ng ML Course",
+          "source": "Coursera",
+          "note": "零基础英文课程",
+          "url": "https://www.coursera.org/specializations/machine-learning-introduction"
+        }
+      ],
+      "prerequisites": [],
+      "keywords": [
+        "机器学习",
+        "ML",
+        "监督学习",
+        "无监督学习",
+        "强化学习",
+        "分类",
+        "回归",
+        "泛化",
+        "过拟合"
+      ],
+      "quiz": [
+        {
+          "question": "监督学习的核心特征是什么？",
+          "options": [
+            "从未标注数据发现结构",
+            "从已标注数据学习输入到输出映射",
+            "通过试错学习",
+            "压缩数据维度"
+          ],
+          "correctIndex": 1,
+          "explanation": "监督学习的关键是有标签数据，模型学习 f: X -> Y 的映射关系。"
+        }
+      ],
+      "sort_order": 1,
+      "enabled": true
+    }
+  ]
+}

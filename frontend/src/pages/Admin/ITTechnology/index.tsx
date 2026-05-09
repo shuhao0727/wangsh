@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect } from "react";
 
@@ -24,6 +25,7 @@ import { logger } from "@services/logger";
 type ViewState = 'dashboard' | 'dianming-manager' | 'ml-manager' | 'ai-manager' | 'agents-manager';
 
 const AdminITTechnology: React.FC = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState<ViewState>('dashboard');
   const [agentConfigVisible, setAgentConfigVisible] = useState(false);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
@@ -217,7 +219,7 @@ const AdminITTechnology: React.FC = () => {
                   ? () => {
                       if (app.key === "it_dianming") setView("dianming-manager");
                       if (app.key === "it_python_lab") setAgentConfigVisible(true);
-                      if (app.key === "it_machine_learning") setView("ml-manager");
+                      if (app.key === "it_machine_learning") navigate("/admin/it-technology/ml-book-editor");
                       if (app.key === "it_ai_exploration") setView("ai-manager");
                       if (app.key === "it_agent_exploration") setView("agents-manager");
                     }

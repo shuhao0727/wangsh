@@ -1,7 +1,7 @@
 """add learning chapters table
 
 Revision ID: 20260509_lrn_chapters
-Revises: 20260503_0002_learning_content
+Revises: 20260503_0003_ml_book
 Create Date: 2026-05-09
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision = "20260509_lrn_chapters"
-down_revision = "20260503_0002_learning_content"
+down_revision = "20260503_0003_ml_book"
 branch_labels = None
 depends_on = None
 
