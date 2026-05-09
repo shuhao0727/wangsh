@@ -29,6 +29,7 @@ import ArticleMarkdownEditorCard from "./components/ArticleMarkdownEditorCard";
 import ArticleMarkdownPreviewCard from "./components/ArticleMarkdownPreviewCard";
 import MarkdownStyleManagerModal from "./components/MarkdownStyleManagerModal";
 import "./EditForm.css";
+import "../../../styles/editor.css";
 import "../../../styles/markdown.css";
 
 const formSchema = z.object({

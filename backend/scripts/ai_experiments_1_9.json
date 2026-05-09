@@ -1,0 +1,236 @@
+[
+  {
+    "name": "你的第一个 LLM API 调用",
+    "difficulty": "beginner",
+    "data": "无需外部数据，直接使用内置 prompt 文本",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["API 调用", "消息构造", "响应解析"],
+    "goal": "学会使用 OpenAI SDK 调用 DeepSeek API，理解 system/user 消息的区别，掌握基本的 API 调用流程",
+    "estimated_time": "30分钟",
+    "deliverables": "一个完整的 Python 脚本，成功调用 DeepSeek API 并打印返回结果",
+    "data_source": "无需数据源，使用内置 prompt 文本",
+    "download_url": "",
+    "steps": [
+      "步骤1：安装 openai 库 pip install openai，注册 DeepSeek 并获取 API Key",
+      "步骤2：设置 OpenAI client，base_url 指向 https://api.deepseek.com/v1",
+      "步骤3：构造 messages 列表，包含 system 消息（设定助手角色）和 user 消息（提问）",
+      "步骤4：调用 client.chat.completions.create()，指定 model 和 messages",
+      "步骤5：解析 response.choices[0].message.content 并打印结果"
+    ],
+    "code": "# 你的第一个 LLM API 调用\n# 使用 DeepSeek API 进行对话\nfrom openai import OpenAI\n\n# 初始化客户端，指向 DeepSeek API\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 构造消息：system 设定角色，user 提出问题\nmessages = [\n    {\"role\": \"system\", \"content\": \"你是一个友好的编程助手，回答简洁明了。\"},\n    {\"role\": \"user\", \"content\": \"请用一句话解释什么是 API？\"}\n]\n\n# 调用 API\nresponse = client.chat.completions.create(\n    model=model,\n    messages=messages,\n    temperature=0.7,\n    max_tokens=200\n)\n\n# 解析并打印结果\nanswer = response.choices[0].message.content\nprint(\"AI 回复:\", answer)\n\n# 打印 token 使用情况\nprint(f\"\\nToken 使用: 输入={response.usage.prompt_tokens}, 输出={response.usage.completion_tokens}\")",
+    "expected_output": "AI 回复: API(应用程序接口)是一套规则和协议，允许不同软件应用之间进行通信和数据交换。\n\nToken 使用: 输入=25, 输出=30",
+    "reflection": [
+      "如果把 temperature 从 0.7 改成 0.1，回答会发生什么变化？改成 1.5 呢？",
+      "system 消息和 user 消息的区别是什么？如果去掉 system 消息会怎样？",
+      "max_tokens 设置太小(比如10)会发生什么？"
+    ]
+  },
+  {
+    "name": "Prompt 角色扮演",
+    "difficulty": "beginner",
+    "data": "同一个问题「请解释什么是机器学习」，用三种角色回答",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["Prompt 工程", "角色设定", "对比分析"],
+    "goal": "理解 system prompt 对 AI 回答风格的影响，学会通过角色设定控制输出风格",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，依次用三种角色解释同一概念，对比输出差异",
+    "data_source": "无需数据源",
+    "download_url": "",
+    "steps": [
+      "步骤1：定义三个角色——老师(teacher)、医生(doctor)、诗人(poet)",
+      "步骤2：为每个角色编写对应的 system prompt",
+      "步骤3：循环调用 API，分别用三种角色回答同一问题",
+      "步骤4：打印每种角色的回答内容",
+      "步骤5：对比分析三种回答的风格差异"
+    ],
+    "code": "# Prompt 角色扮演实验\n# 用三种不同角色回答同一个问题，对比风格差异\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 定义三种角色及其 system prompt\nroles = {\n    \"老师\": \"你是一位小学科学老师，用简单生动的语言解释概念，多举生活中的例子。\",\n    \"医生\": \"你是一位资深医学专家，用严谨专业的术语解释事物，注重逻辑和证据。\",\n    \"诗人\": \"你是一位浪漫主义诗人，用诗意的语言和比喻来描述一切，充满想象力。\"\n}\n\nquestion = \"请解释什么是机器学习？\"\n\n# 依次用三种角色提问\nfor role_name, system_prompt in roles.items():\n    messages = [\n        {\"role\": \"system\", \"content\": system_prompt},\n        {\"role\": \"user\", \"content\": question}\n    ]\n\n    response = client.chat.completions.create(\n        model=model,\n        messages=messages,\n        temperature=0.8,\n        max_tokens=300\n    )\n\n    answer = response.choices[0].message.content\n    print(f\"{'='*50}\")\n    print(f\"【{role_name}的回答】\")\n    print(f\"{'='*50}\")\n    print(answer)\n    print()",
+    "expected_output": "老师风格：用「教小朋友认动物」类比，语言亲切简单。\n医生风格：用「临床诊断经验积累」类比，术语精准严谨。\n诗人风格：用「星辰学习黑夜的深邃」比喻，语言优美富有想象力。\n\n三种回答内容相同但风格迥异，充分展示了 system prompt 对输出风格的强大控制力。",
+    "reflection": [
+      "为什么同样的问题，老师、医生、诗人的回答差别这么大？prompt 具体影响了什么？",
+      "如果让「诗人」角色写一份技术文档，会有什么问题？这说明角色设定的边界在哪里？",
+      "你能否设计一个「厨师」角色来解释机器学习？尝试修改代码加入第四种角色。"
+    ]
+  },
+  {
+    "name": "AI 图片理解入门",
+    "difficulty": "beginner",
+    "data": "使用本地图片文件，编码为 base64 后发送给 AI 分析",
+    "tools": ["OpenAI SDK", "base64", "PIL/Pillow"],
+    "skills": ["多模态 AI", "base64 编码", "视觉理解"],
+    "goal": "了解多模态 AI 的基本用法，学会将图片编码后发送给大模型进行理解和分析",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，读取本地图片并让 AI 描述图片内容",
+    "data_source": "任意本地图片文件（如 photo.jpg），建议使用包含人物/场景的照片",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备一张图片（人物照、风景照或截图），放到脚本同目录",
+      "步骤2：用 Python open() + base64.b64encode() 将图片编码为 base64 字符串",
+      "步骤3：构造包含 image_url 的 messages，图片以 data:image/jpeg;base64,<编码> 格式传入",
+      "步骤4：调用 DeepSeek API（支持 vision 的模型，或用通义千问兼容接口）",
+      "步骤5：打印 AI 对图片的描述和分析结果"
+    ],
+    "code": "# AI 图片理解入门\n# 将本地图片编码为 base64，发送给 AI 进行分析\nimport base64\nfrom openai import OpenAI\n\n# 初始化客户端\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 读取本地图片并编码为 base64\ndef encode_image(image_path):\n    with open(image_path, \"rb\") as img_file:\n        return base64.b64encode(img_file.read()).decode(\"utf-8\")\n\n# 请将这里替换为你的实际图片路径\nimage_path = \"photo.jpg\"\nbase64_image = encode_image(image_path)\n\n# 构造多模态消息\nmessages = [\n    {\"role\": \"system\", \"content\": \"你是一个图片分析助手，请详细描述图片内容。\"},\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"text\", \"text\": \"请描述这张图片中有什么内容，包括人物、场景、色调等。\"},\n        {\"type\": \"image_url\", \"image_url\": {\n            \"url\": f\"data:image/jpeg;base64,{base64_image}\"\n        }}\n    ]}\n]\n\n# 调用 API\nresponse = client.chat.completions.create(\n    model=model,\n    messages=messages,\n    max_tokens=500\n)\n\nprint(\"AI 图片分析结果:\")\nprint(response.choices[0].message.content)",
+    "expected_output": "AI 图片分析结果:\n这张图片展示了一个阳光明媚的户外场景。画面中有一片绿色的草地，远处可以看到蓝天和白云。照片的色调偏暖，整体给人宁静舒适的感觉...[具体描述取决于图片内容]",
+    "reflection": [
+      "图片太大怎么办？base64 编码后字符串会很长，有没有优化办法？",
+      "DeepSeek 的 deepseek-chat 模型是否支持图片？如果不支持，应该换什么模型？",
+      "AI 能识别图片中的文字吗？试试截一张有文字的图看看效果。"
+    ]
+  },
+  {
+    "name": "Few-shot 提示学习",
+    "difficulty": "beginner",
+    "data": "5个中文情感分析示例，涵盖正面和负面评价",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["Few-shot 学习", "Prompt 设计", "零样本对比"],
+    "goal": "理解 Few-shot 提示对模型输出的影响，对比 0-shot 和 3-shot 的分类准确率差异",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，对比 0-shot 和 3-shot 对相同评论的分类结果",
+    "data_source": "内置示例评论数据",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备5条测试评论（电影/餐厅评价）作为测试数据",
+      "步骤2：0-shot 模式——不提供任何示例，直接要求 AI 判断情感",
+      "步骤3：3-shot 模式——在 prompt 中提供3个标注好的示例，再要求判断",
+      "步骤4：分别运行两种模式，收集分类结果",
+      "步骤5：对比两种模式的结果差异，理解 Few-shot 的作用"
+    ],
+    "code": "# Few-shot 提示学习实验\n# 对比 0-shot 和 3-shot 的情感分类效果\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 测试数据\nreviews = [\n    \"这部电影太精彩了，看得我热泪盈眶！\",\n    \"服务态度很差，等了一个小时才上菜。\",\n    \"还行吧，不好不坏，性价比一般。\",\n    \"物流超快，第二天就到了，包装也很用心。\",\n    \"完全不值这个价，质量太差了，很失望。\"\n]\n\n# 3-shot 示例（标注好的样本）\nfew_shot_prefix = \"\"\"请判断以下评论的情感倾向（正面/负面/中性），只输出一个词。\n\n示例1: \"这个手机真好用\" => 正面\n示例2: \"太烂了，后悔买了\" => 负面\n示例3: \"配置还行\" => 中性\n\n现在请判断：\n\"\"\"\n\n# 0-shot prompt\nzero_shot_prefix = \"请判断以下评论的情感倾向（正面/负面/中性），只输出一个词。\\n\"\n\nprint(\"=\" * 60)\nprint(\"【0-shot 模式】—— 不提供任何示例\")\nprint(\"=\" * 60)\n\nfor i, review in enumerate(reviews):\n    response = client.chat.completions.create(\n        model=model,\n        messages=[{\"role\": \"user\", \"content\": f\"{zero_shot_prefix}{review}\"}],\n        temperature=0.1,\n        max_tokens=20\n    )\n    print(f\"评论{i+1}: {review}\")\n    print(f\"  0-shot 判断: {response.choices[0].message.content.strip()}\")\n\nprint()\nprint(\"=\" * 60)\nprint(\"【3-shot 模式】—— 提供3个示例\")\nprint(\"=\" * 60)\n\nfor i, review in enumerate(reviews):\n    response = client.chat.completions.create(\n        model=model,\n        messages=[{\"role\": \"user\", \"content\": f\"{few_shot_prefix}{review}\"}],\n        temperature=0.1,\n        max_tokens=20\n    )\n    print(f\"评论{i+1}: {review}\")\n    print(f\"  3-shot 判断: {response.choices[0].message.content.strip()}\")",
+    "expected_output": "0-shot 模式可能将中性评论误判为正面或负面，输出格式不够一致。\n3-shot 模式输出格式统一（只返回情感标签），对中性评论的判断更准确，分类更符合预期。\n\n具体输出示例：\n评论5: 完全不值这个价...\n  0-shot 判断: 负面\n  3-shot 判断: 负面",
+    "reflection": [
+      "为什么 3-shot 的输出格式比 0-shot 更规范？示例起到了什么作用？",
+      "如果把示例从3个增加到8个，效果会继续提升吗？为什么？",
+      "示例中的「正面/负面/中性」比例需要平衡吗？如果全是正面示例会怎样？"
+    ]
+  },
+  {
+    "name": "AI 翻译对比",
+    "difficulty": "beginner",
+    "data": "5句涵盖日常、商务、文学的中文句子",
+    "tools": ["OpenAI SDK", "DeepSeek API", "googletrans 库"],
+    "skills": ["机器翻译", "API 对比", "翻译质量评估"],
+    "goal": "对比 DeepSeek 大模型翻译与 Google 翻译的效果差异，理解 AI 翻译的优势",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，输出两份翻译结果的逐句对比",
+    "data_source": "内置5句中英文测试句子",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备5句不同类型的中文测试文本",
+      "步骤2：用 DeepSeek API 逐句翻译为英文",
+      "步骤3：用 googletrans 库逐句翻译为英文",
+      "步骤4：逐句对比两种翻译结果",
+      "步骤5：分析翻译质量差异，特别是成语、口语、专业术语的处理"
+    ],
+    "code": "# AI 翻译对比实验\n# 对比 DeepSeek 和 Google Translate 的翻译效果\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 测试句子：涵盖日常、商务、成语、文学\nsentences = [\n    \"今天天气真好，我们出去散步吧。\",\n    \"我司将于下周三举行新产品发布会。\",\n    \"他这个人啊，就是不到黄河心不死。\",\n    \"人生若只如初见，何事秋风悲画扇。\",\n    \"这个项目的截止日期是下周五，请大家抓紧时间。\"\n]\n\nprint(\"=\" * 60)\nprint(\"DeepSeek 翻译结果\")\nprint(\"=\" * 60)\n\ndeepseek_results = []\nfor i, text in enumerate(sentences):\n    response = client.chat.completions.create(\n        model=model,\n        messages=[\n            {\"role\": \"system\", \"content\": \"你是一个专业翻译，将中文准确翻译为英文。只输出翻译结果。\"},\n            {\"role\": \"user\", \"content\": f\"翻译为英文: {text}\"}\n        ],\n        temperature=0.3,\n        max_tokens=200\n    )\n    result = response.choices[0].message.content.strip()\n    deepseek_results.append(result)\n    print(f\"{i+1}. [原文] {text}\")\n    print(f\"   [翻译] {result}\")\n    print()\n\n# 使用 googletrans 翻译\nprint(\"=\" * 60)\nprint(\"Google Translate 翻译结果\")\nprint(\"=\" * 60)\n\ntry:\n    from googletrans import Translator\n    translator = Translator()\n    for i, text in enumerate(sentences):\n        result = translator.translate(text, src=\"zh-cn\", dest=\"en\")\n        print(f\"{i+1}. [原文] {text}\")\n        print(f\"   [翻译] {result.text}\")\n        print()\nexcept ImportError:\n    print(\"请先安装 googletrans: pip install googletrans==3.1.0a0\")\n\nprint(\"=\" * 60)\nprint(\"对比总结\")\nprint(\"=\" * 60)\nfor i in range(len(sentences)):\n    print(f\"第{i+1}句 DeepSeek 翻译: {deepseek_results[i]}\")",
+    "expected_output": "DeepSeek 翻译通常更自然流畅，能准确处理成语「不到黄河心不死」翻译为 until all hope is gone 等意译，古诗词翻译兼顾意境。\nGoogle Translate 在简单句上表现良好，但对成语和古诗词的翻译可能偏直译，缺乏文化理解。\n\n第3句 DeepSeek: He's the type who won't give up until all hope is gone.\n第3句 Google: He is just not seeing the Yellow River.",
+    "reflection": [
+      "为什么 DeepSeek 翻译成语和古诗词比 Google Translate 更自然？大模型有什么优势？",
+      "如果把翻译方向反过来（英译中），两种工具的表现会有什么不同？",
+      "对于商务文档翻译，你应该更信任哪种工具？为什么？"
+    ]
+  },
+  {
+    "name": "情感分析实战",
+    "difficulty": "beginner",
+    "data": "10条社交媒体帖子，涵盖正面、负面、中性情感",
+    "tools": ["OpenAI SDK", "DeepSeek API", "Matplotlib"],
+    "skills": ["情感分析", "批量处理", "数据可视化"],
+    "goal": "使用 AI 对10条社交媒体帖子进行情感分析，输出分类结果并可视化情感分布",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，包含情感分类逻辑和结果可视化",
+    "data_source": "内置10条模拟社交媒体帖子",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备10条模拟社交媒体帖子数据",
+      "步骤2：编写情感分析 prompt，要求返回 JSON 格式的结果",
+      "步骤3：逐条调用 API 进行情感分类",
+      "步骤4：解析 JSON 结果，统计正面/负面/中性数量",
+      "步骤5：用 matplotlib 绘制情感分布饼图"
+    ],
+    "code": "# 情感分析实战\n# 对10条社交媒体帖子进行情感分析并可视化\nimport json\nfrom collections import Counter\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 10条模拟社交媒体帖子\nposts = [\n    \"今天天气真好，心情也跟着好起来了！😊\",\n    \"又加班到晚上10点，这个项目什么时候是个头啊...\",\n    \"刚吃了碗面，味道还可以吧，不功不过。\",\n    \"新买的耳机音质太棒了，强烈推荐给大家！\",\n    \"堵在路上已经一个小时了，真的要疯了！！！\",\n    \"今天的会议取消了，也不知道是好消息还是坏消息。\",\n    \"周末去了海边，吹着海风太惬意了~\",\n    \"客服态度极其恶劣，以后再也不会在这家店买东西了。\",\n    \"天气转凉了，大家注意添衣保暖哦。\",\n    \"买了个新手机，挺好看的，用着也还行。\"\n]\n\nsystem_prompt = \"\"\"你是一个情感分析助手。分析用户帖子的情感倾向，返回 JSON 格式:\n{\"情感\": \"正面/负面/中性\", \"置信度\": 0.0-1.0, \"关键词\": [\"词1\", \"词2\"]}\n只返回 JSON，不要有其他内容。\"\"\"\n\nsentiments = []\nprint(\"情感分析结果:\")\nprint(\"-\" * 50)\n\nfor i, post in enumerate(posts):\n    response = client.chat.completions.create(\n        model=model,\n        messages=[\n            {\"role\": \"system\", \"content\": system_prompt},\n            {\"role\": \"user\", \"content\": post}\n        ],\n        temperature=0.1,\n        max_tokens=150\n    )\n    result = json.loads(response.choices[0].message.content.strip())\n    sentiments.append(result[\"情感\"])\n    print(f\"{i+1}. {post}\")\n    print(f\"   => {result}\")\n    print()\n\n# 统计并可视化\ncounter = Counter(sentiments)\nprint(\"=\" * 50)\nprint(\"情感分布统计:\")\nfor sentiment, count in counter.items():\n    print(f\"  {sentiment}: {count} 条 ({count/len(posts)*100:.1f}%)\")\n\n# 简单文本可视化\nprint(\"\\n情感分布条形图(文本版):\")\nfor sentiment in [\"正面\", \"中性\", \"负面\"]:\n    count = counter.get(sentiment, 0)\n    bar = \"█\" * count\n    print(f\"{sentiment}: {bar} {count}\")",
+    "expected_output": "情感分布统计:\n  正面: 4 条 (40.0%)\n  负面: 3 条 (30.0%)\n  中性: 3 条 (30.0%)\n\n情感分布条形图(文本版):\n正面: ████ 4\n中性: ███ 3\n负面: ███ 3",
+    "reflection": [
+      "AI 能否准确识别带有表情符号（如😊）的帖子情感？表情符号对判断有多大帮助？",
+      "第6条「会议取消，不知道是好消息还是坏消息」算中性吗？边界模糊的情况怎么处理？",
+      "如果把 temperature 设置得更高（如0.9），分类结果会不稳定吗？试试看。"
+    ]
+  },
+  {
+    "name": "多轮对话记忆",
+    "difficulty": "beginner",
+    "data": "无外部数据，通过手动维护 messages 列表实现对话记忆",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["对话管理", "上下文维护", "状态管理"],
+    "goal": "理解多轮对话的实现原理，学会通过维护 messages 列表让 AI 记住上下文",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，实现5轮对话并验证 AI 记住了之前的信息",
+    "data_source": "无需数据源",
+    "download_url": "",
+    "steps": [
+      "步骤1：初始化 messages 列表，只包含 system 消息",
+      "步骤2：实现对话循环，每轮接收用户输入并追加到 messages",
+      "步骤3：每次调用 API 时传入完整的 messages 历史",
+      "步骤4：将 AI 回复也追加到 messages 中保持状态",
+      "步骤5：测试5轮对话，验证 AI 是否记住了前面的信息"
+    ],
+    "code": "# 多轮对话记忆实验\n# 通过维护 messages 列表让 AI 记住上下文\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 初始化对话历史（system 消息只在最开始）\nmessages = [\n    {\"role\": \"system\", \"content\": \"你是一个友好的助手，请记住用户说的每一句话。回答要简洁。\"}\n]\n\n# 模拟多轮对话（实际使用时可以换成 input() 交互）\nuser_inputs = [\n    \"你好！我叫小明，我是一名程序员。\",\n    \"我喜欢用 Python 编程，你呢？\",\n    \"你还记得我的名字和职业吗？\",\n    \"那你能给我推荐一个适合程序员的学习项目吗？\",\n    \"谢谢！这个推荐很好，请用我之前告诉你的名字称呼我。\"\n]\n\nfor i, user_msg in enumerate(user_inputs):\n    print(f\"\\n{'='*50}\")\n    print(f\"第 {i+1} 轮对话\")\n    print(f\"{'='*50}\")\n\n    # 追加用户消息\n    messages.append({\"role\": \"user\", \"content\": user_msg})\n    print(f\"用户: {user_msg}\")\n\n    # 调用 API（传入完整历史）\n    response = client.chat.completions.create(\n        model=model,\n        messages=messages,\n        temperature=0.7,\n        max_tokens=200\n    )\n\n    # 获取回复并追加到历史\n    assistant_msg = response.choices[0].message.content\n    messages.append({\"role\": \"assistant\", \"content\": assistant_msg})\n    print(f\"助手: {assistant_msg}\")\n\n# 验证记忆：统计 messages 列表长度\nprint(f\"\\n对话结束！共维护了 {len(messages)} 条消息（含 system）\")",
+    "expected_output": "第3轮时 AI 应能回答「你叫小明，是一名程序员」，证明它记住了之前的对话。\n第5轮时 AI 应在回复中使用「小明」这个称呼。\n\n对话结束！共维护了 11 条消息（含 system）",
+    "reflection": [
+      "如果对话持续100轮，messages 列表会很长。这会导致什么问题？（提示：token 上限和费用）",
+      "如何实现「选择性记忆」——只记住重要的信息，而不是全部对话？",
+      "如果用户说「忘掉我之前说的所有话」，你应该怎么处理 messages 列表？"
+    ]
+  },
+  {
+    "name": "文本摘要生成",
+    "difficulty": "beginner",
+    "data": "一段约500字的科技新闻长文本",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["文本摘要", "信息提取", "Prompt 优化"],
+    "goal": "学会使用 LLM 对长文本生成简洁准确的摘要，对比不同 prompt 策略的影响",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，输出原文字数、三种摘要（短/中/长）及压缩比",
+    "data_source": "内置一篇科技新闻长文本",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备一篇约500字的科技新闻作为原文",
+      "步骤2：设计短摘要（50字）、中摘要（100字）、长摘要（200字）三种 prompt",
+      "步骤3：分别调用 API 生成三种长度的摘要",
+      "步骤4：计算每种摘要的字数和压缩比",
+      "步骤5：展示原文与三种摘要的对比"
+    ],
+    "code": "# 文本摘要生成实验\n# 对长文本生成不同长度的摘要，对比压缩效果\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 原文：一篇科技新闻\noriginal_text = \"\"\"\n2024年，人工智能领域迎来了新一轮的爆发式增长。各大科技公司纷纷加大在 AI 领域的投入，\n从基础模型到应用层创新不断涌现。OpenAI 发布了具备多模态能力的 GPT-4，能够同时理解\n文本、图像和音频输入，在多项基准测试中达到了人类水平的表现。与此同时，Google 推出了\nGemini 系列模型，Anthropic 发布了 Claude 系列，Meta 开源了 Llama 系列模型，全球 AI\n竞争进入白热化阶段。\n\n在应用层面，AI 编程助手成为最热门的落地场景之一。GitHub Copilot 用户数突破1亿，\nCursor、Windsurf 等新一代 AI IDE 迅速崛起。AI 不仅能够自动补全代码，还能理解复杂的\n工程需求，完成从需求分析到测试部署的全流程开发。\n\n中国市场同样表现活跃。百度文心一言、阿里通义千问、字节豆包等国产大模型持续迭代，\n在中文理解、垂直行业应用等方面展现出独特优势。AI 技术正在加速渗透教育、医疗、金融、\n制造等传统行业，推动产业数字化转型深入发展。据预测，到2027年全球 AI 市场规模将突破\n5000亿美元。\n\"\"\"\n\n# 三种摘要 prompt\nsummaries_config = {\n    \"短摘要(约50字)\": \"请用约50字概括以下文章的核心内容，只输出摘要。\",\n    \"中摘要(约100字)\": \"请用约100字概括以下文章的主要内容和关键信息，只输出摘要。\",\n    \"长摘要(约200字)\": \"请用约200字详细概括以下文章的所有要点，保持逻辑结构，只输出摘要。\"\n}\n\nprint(f\"原文长度: {len(original_text)} 字符\")\nprint(\"=\" * 60)\n\nfor title, prompt in summaries_config.items():\n    response = client.chat.completions.create(\n        model=model,\n        messages=[\n            {\"role\": \"system\", \"content\": \"你是一个专业的文本摘要助手。\"},\n            {\"role\": \"user\", \"content\": f\"{prompt}\\n\\n原文:\\n{original_text}\"}\n        ],\n        temperature=0.3,\n        max_tokens=400\n    )\n    summary = response.choices[0].message.content\n    ratio = len(summary) / len(original_text) * 100\n    print(f\"\\n【{title}】(压缩比: {ratio:.1f}%)\")\n    print(\"-\" * 40)\n    print(summary)\n    print()",
+    "expected_output": "短摘要压缩比约 10-15%，仅保留最核心事件。\n中摘要压缩比约 20-30%，包含主要参与方和关键数据。\n长摘要压缩比约 40-50%，涵盖原文大部分要点但更精炼。\n\n三种摘要均能准确提取原文关键信息，随长度增加细节丰富度递增。",
+    "reflection": [
+      "短摘要丢失了哪些信息？长摘要是否包含了一些不那么重要的细节？",
+      "如果原文是一篇法律合同，摘要需要注意什么？和新闻摘要有何不同？",
+      "如何让 AI 生成「带要点的摘要」（bullet points）而不是段落式摘要？"
+    ]
+  },
+  {
+    "name": "AI 代码解释器",
+    "difficulty": "beginner",
+    "data": "3段不同难度的 Python 代码示例",
+    "tools": ["OpenAI SDK", "DeepSeek API"],
+    "skills": ["代码理解", "技术文档", "Prompt 设计"],
+    "goal": "学会使用 AI 解释代码逻辑，能将复杂代码转化为通俗易懂的中文解释",
+    "estimated_time": "30分钟",
+    "deliverables": "Python 脚本，对3段代码生成详细的中文解释",
+    "data_source": "内置3段 Python 代码示例（列表推导、装饰器、递归）",
+    "download_url": "",
+    "steps": [
+      "步骤1：准备3段不同难度的 Python 代码",
+      "步骤2：设计代码解释 prompt，要求 AI 逐行解释+总结",
+      "步骤3：逐段调用 API 获取解释",
+      "步骤4：打印代码和对应的解释",
+      "步骤5：对比三段代码的解释风格差异"
+    ],
+    "code": "# AI 代码解释器实验\n# 让 AI 解释 Python 代码，将复杂逻辑转化为易懂的中文描述\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=\"your-key\",\n    base_url=\"https://api.deepseek.com/v1\"\n)\nmodel = \"deepseek-chat\"\n\n# 三段不同难度的 Python 代码\ncode_samples = [\n    {\n        \"name\": \"列表推导式\",\n        \"code\": \"\"\"\nsquares = [x**2 for x in range(1, 11) if x % 2 == 0]\nprint(squares)\n\"\"\"\n    },\n    {\n        \"name\": \"装饰器\",\n        \"code\": \"\"\"\ndef timer(func):\n    import time\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        print(f\"耗时: {time.time() - start:.4f}秒\")\n        return result\n    return wrapper\n\n@timer\ndef slow_add(a, b):\n    import time\n    time.sleep(1)\n    return a + b\n\"\"\"\n    },\n    {\n        \"name\": \"递归函数\",\n        \"code\": \"\"\"\ndef fibonacci(n, memo={}):\n    if n in memo:\n        return memo[n]\n    if n <= 1:\n        return n\n    memo[n] = fibonacci(n - 1) + fibonacci(n - 2)\n    return memo[n]\n\nprint(fibonacci(10))\n\"\"\"\n    }\n]\n\nsystem_prompt = \"\"\"你是一个 Python 编程老师。请对代码进行讲解:\n1. 先简要说明这段代码的整体功能\n2. 逐行解释每行代码的作用\n3. 指出代码中的关键概念或技巧\n4. 解释要通俗易懂，适合初学者\"\"\"\n\nfor sample in code_samples:\n    print(\"=\" * 60)\n    print(f\"代码示例: {sample['name']}\")\n    print(\"=\" * 60)\n    print(\"【源代码】\")\n    print(sample[\"code\"])\n    print()\n\n    response = client.chat.completions.create(\n        model=model,\n        messages=[\n            {\"role\": \"system\", \"content\": system_prompt},\n            {\"role\": \"user\", \"content\": f\"请解释以下 Python 代码:\\n{sample['code']}\"}\n        ],\n        temperature=0.5,\n        max_tokens=500\n    )\n\n    print(\"【AI 解释】\")\n    print(response.choices[0].message.content)\n    print()",
+    "expected_output": "三段代码各有侧重：\n1. 列表推导式：解释了生成偶数平方的简洁写法，介绍了 [表达式 for in if] 语法\n2. 装饰器：详细讲解了闭包、*args/**kwargs、@语法糖，解释了计时装饰器的执行流程\n3. 递归函数：解释了记忆化搜索优化斐波那契数列的计算，说明了 memo 字典如何避免重复计算\n\nAI 对三段代码均能准确解释逻辑、指出关键概念并给出学习建议。",
+    "reflection": [
+      "AI 能否准确识别代码中的语法错误或逻辑 bug？试试故意写一段有 bug 的代码让它解释。",
+      "如果把代码从 Python 换成 JavaScript 或 Go，解释质量会一样好吗？",
+      "如何让 AI 不仅解释代码，还能「画出」代码的执行流程图？（提示：Mermaid 语法）"
+    ]
+  }
+]

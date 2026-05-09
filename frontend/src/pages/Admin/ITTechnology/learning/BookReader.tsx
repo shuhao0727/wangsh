@@ -1,8 +1,13 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2, Circle, Clock, Star, BookOpen, FlaskConical, ListChecks, Quote, Code2 } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Star, BookOpen, FlaskConical, ListChecks } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import type { LearningBook } from "./types";
 
 interface BookReaderProps {
@@ -22,104 +27,72 @@ const difficultyLabel: Record<string, string> = {
   expert: "专家",
 };
 
-const renderInline = (text: string) => {
-  const parts = text.split(/(`[^`]+`)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={index} className="rounded bg-muted px-1 py-0.5 text-[0.85em]">{part.slice(1, -1)}</code>;
-    }
-    return <React.Fragment key={index}>{part}</React.Fragment>;
-  });
-};
-
 const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
-  const blocks = useMemo(() => {
-    const lines = markdown.trim().split("\n");
-    const result: { type: string; content: string[] }[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line.trim()) {
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("```")) {
-        const code: string[] = [];
-        i += 1;
-        while (i < lines.length && !lines[i].startsWith("```")) {
-          code.push(lines[i]);
-          i += 1;
-        }
-        result.push({ type: "code", content: code });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("### ")) {
-        result.push({ type: "h3", content: [line.slice(4)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("## ")) {
-        result.push({ type: "h2", content: [line.slice(3)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("# ")) {
-        result.push({ type: "h1", content: [line.slice(2)] });
-        i += 1;
-        continue;
-      }
-      if (line.startsWith("> ")) {
-        const quote: string[] = [];
-        while (i < lines.length && lines[i].startsWith("> ")) {
-          quote.push(lines[i].slice(2));
-          i += 1;
-        }
-        result.push({ type: "quote", content: quote });
-        continue;
-      }
-      if (/^[-*] /.test(line)) {
-        const list: string[] = [];
-        while (i < lines.length && /^[-*] /.test(lines[i])) {
-          list.push(lines[i].replace(/^[-*] /, ""));
-          i += 1;
-        }
-        result.push({ type: "ul", content: list });
-        continue;
-      }
-      if (/^\d+\. /.test(line)) {
-        const list: string[] = [];
-        while (i < lines.length && /^\d+\. /.test(lines[i])) {
-          list.push(lines[i].replace(/^\d+\. /, ""));
-          i += 1;
-        }
-        result.push({ type: "ol", content: list });
-        continue;
-      }
-      const paragraph: string[] = [line];
-      i += 1;
-      while (i < lines.length && lines[i].trim() && !/^(#|>|[-*] |\d+\. |```)/.test(lines[i])) {
-        paragraph.push(lines[i]);
-        i += 1;
-      }
-      result.push({ type: "p", content: [paragraph.join(" ")] });
-    }
-    return result;
-  }, [markdown]);
+  if (!markdown?.trim()) {
+    return <p className="text-sm text-muted-foreground">暂无内容。</p>;
+  }
 
   return (
-    <article className="space-y-4 text-sm leading-7 text-text-base">
-      {blocks.map((block, index) => {
-        if (block.type === "h1") return <h1 key={index} className="text-2xl font-bold tracking-tight">{block.content[0]}</h1>;
-        if (block.type === "h2") return <h2 key={index} className="border-b border-border pb-2 text-xl font-semibold">{block.content[0]}</h2>;
-        if (block.type === "h3") return <h3 key={index} className="text-base font-semibold">{block.content[0]}</h3>;
-        if (block.type === "quote") return <blockquote key={index} className="rounded-lg border-l-4 border-primary bg-muted/40 p-3 text-muted-foreground"><Quote className="mb-1 h-4 w-4" />{block.content.join(" ")}</blockquote>;
-        if (block.type === "code") return <pre key={index} className="overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100"><Code2 className="mb-2 h-4 w-4" />{block.content.join("\n")}</pre>;
-        if (block.type === "ul") return <ul key={index} className="ml-5 list-disc space-y-1">{block.content.map((item) => <li key={item}>{renderInline(item)}</li>)}</ul>;
-        if (block.type === "ol") return <ol key={index} className="ml-5 list-decimal space-y-1">{block.content.map((item) => <li key={item}>{renderInline(item)}</li>)}</ol>;
-        return <p key={index}>{renderInline(block.content[0])}</p>;
-      })}
-    </article>
+    <div className="ws-markdown text-sm leading-7 text-text-base">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          h1: ({ children, ...props }) => <h1 className="text-2xl font-bold tracking-tight mb-4" {...props}>{children}</h1>,
+          h2: ({ children, ...props }) => <h2 className="border-b border-border pb-2 text-xl font-semibold mt-6 mb-3" {...props}>{children}</h2>,
+          h3: ({ children, ...props }) => <h3 className="text-base font-semibold mt-4 mb-2" {...props}>{children}</h3>,
+          h4: ({ children, ...props }) => <h4 className="text-sm font-semibold mt-3 mb-1" {...props}>{children}</h4>,
+          p: ({ children, ...props }) => <p className="mb-3" {...props}>{children}</p>,
+          ul: ({ children, ...props }) => <ul className="ml-5 list-disc space-y-1 mb-3" {...props}>{children}</ul>,
+          ol: ({ children, ...props }) => <ol className="ml-5 list-decimal space-y-1 mb-3" {...props}>{children}</ol>,
+          li: ({ children, ...props }) => <li {...props}>{children}</li>,
+          blockquote: ({ children, ...props }) => <blockquote className="rounded-lg border-l-4 border-primary bg-muted/40 p-3 mb-3 text-muted-foreground" {...props}>{children}</blockquote>,
+          code: ({ className, children, ...props }: any) => {
+            const codeString = String(children).replace(/\n$/, "");
+            const isInline = !className;
+            const match = /language-(\w+)/.exec(className || "");
+            const language = match ? match[1] : "";
+
+            if (language === "mermaid") {
+              return (
+                <div className="my-4 rounded-lg border border-border bg-surface-2 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-xs text-text-tertiary">
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">Mermaid 图表</span>
+                    <span>渲染需 Mermaid.js 支持</span>
+                  </div>
+                  <pre className="overflow-x-auto text-xs text-text-secondary font-mono whitespace-pre-wrap">{codeString}</pre>
+                </div>
+              );
+            }
+
+            if (isInline) {
+              return <code className="rounded bg-muted px-1 py-0.5 text-[0.85em]" {...props}>{children}</code>;
+            }
+            return (
+              <pre className="overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100 mb-4">
+                <code className={className} {...props}>{children}</code>
+              </pre>
+            );
+          },
+          a: ({ children, href, ...props }: any) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline" {...props}>{children}</a>
+          ),
+          img: ({ alt, src, ...props }: any) => (
+            <img alt={alt || ""} src={src} loading="lazy" decoding="async" className="rounded-lg max-w-full my-3" {...props} />
+          ),
+          table: ({ children, ...props }) => (
+            <div className="overflow-x-auto mb-4">
+              <table className="min-w-full border-collapse border border-border text-xs" {...props}>{children}</table>
+            </div>
+          ),
+          th: ({ children, ...props }) => <th className="border border-border bg-surface-2 px-3 py-1.5 text-left font-semibold" {...props}>{children}</th>,
+          td: ({ children, ...props }) => <td className="border border-border px-3 py-1.5" {...props}>{children}</td>,
+          hr: ({ ...props }) => <hr className="my-6 border-border" {...props} />,
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </div>
   );
 };
 

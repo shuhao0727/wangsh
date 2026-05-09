@@ -38,6 +38,8 @@ import {
 import { fetchLearningContentPayload, filterByKeyword } from "../learning/helpers";
 import { BookReader } from "../learning/BookReader";
 import { ML_BOOK } from "./book";
+import { mlBookPublicApi } from "@/services/ml/books";
+import type { LearningBook } from "../learning/types";
 
 import {
   Map,
@@ -63,6 +65,10 @@ import {
   Building2,
   Zap,
   Database,
+  Code2,
+  FileText,
+  MessageSquare,
+  ListChecks,
 } from "lucide-react";
 
 // ────────────────────────────────────────
@@ -106,15 +112,20 @@ const StageIcon: React.FC<{ status: StageStatus }> = ({ status }) => {
 };
 
 /** 可折叠知识树节点 */
-const TreeNode: React.FC<{ node: KnowledgeNode; depth?: number }> = ({ node, depth = 0 }) => {
+const TreeNode: React.FC<{ node: KnowledgeNode; depth?: number; onNavigate?: (nodeId: string) => void }> = ({ node, depth = 0, onNavigate }) => {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
+
+  const handleClick = () => {
+    if (onNavigate) onNavigate(node.id);
+    if (hasChildren) setExpanded(!expanded);
+  };
 
   return (
     <div>
       <button
         type="button"
-        onClick={() => hasChildren && setExpanded(!expanded)}
+        onClick={handleClick}
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--ws-color-surface-2)]",
           depth === 0 && "font-semibold text-text-base",
@@ -129,6 +140,7 @@ const TreeNode: React.FC<{ node: KnowledgeNode; depth?: number }> = ({ node, dep
           <span className="inline-block w-3.5 shrink-0" />
         )}
         <span className="flex-1">{node.label}</span>
+        {onNavigate && <ExternalLink className="ml-1 h-3 w-3 shrink-0 text-text-tertiary opacity-40" />}
         {node.description && depth >= 1 && (
           <span className="hidden truncate text-xs text-text-tertiary lg:inline-block max-w-[200px]">
             {node.description}
@@ -138,7 +150,7 @@ const TreeNode: React.FC<{ node: KnowledgeNode; depth?: number }> = ({ node, dep
       {hasChildren && expanded && (
         <div>
           {node.children!.map((child) => (
-            <TreeNode key={child.id} node={child} depth={depth + 1} />
+            <TreeNode key={child.id} node={child} depth={depth + 1} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -192,6 +204,7 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
   const [resourceType, setResourceType] = useState<"all" | ResourceItem["type"]>("all");
   const [contentPayload, setContentPayload] = useState<MLLearningContentPayload | null>(null);
   const [activeBookSlug, setActiveBookSlug] = useState(ML_BOOK.chapters[0]?.slug ?? "overview");
+  const [apiBook, setApiBook] = useState<LearningBook | null>(null);
 
   // 读取进度
   const loadProgress = useCallback(async () => {
@@ -240,12 +253,47 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
     };
   }, []);
 
+  // 从新 API 读取书籍（转换 snake_case → camelCase）
+  useEffect(() => {
+    let mounted = true;
+    mlBookPublicApi.getBook("ml").then((res) => {
+      const raw = (res.data as unknown as Record<string, unknown>)?.book as Record<string, unknown> | null;
+      if (!mounted || !raw || !Array.isArray(raw.chapters) || raw.chapters.length === 0) return;
+      const book: LearningBook = {
+        moduleKey: "ml",
+        title: (raw.title as string) || "机器学习",
+        subtitle: (raw.subtitle as string) || "",
+        description: (raw.description as string) || "",
+        audience: (raw.audience as string) || "",
+        outcomes: Array.isArray(raw.outcomes) ? raw.outcomes as string[] : [],
+        chapters: (raw.chapters as any[]).map((ch: any) => ({
+          slug: ch.slug || "",
+          title: ch.title || "",
+          summary: ch.summary || "",
+          estimatedMinutes: ch.estimated_minutes ?? ch.estimatedMinutes ?? 30,
+          difficulty: ch.difficulty || "beginner",
+          goals: Array.isArray(ch.goals) ? ch.goals : [],
+          markdown: ch.markdown || "",
+          checklist: Array.isArray(ch.checklist) ? ch.checklist : [],
+          experiments: Array.isArray(ch.experiments) ? ch.experiments : [],
+          glossary: Array.isArray(ch.glossary) ? ch.glossary : [],
+          references: Array.isArray(ch.references) ? ch.references : [],
+        })),
+      };
+      setApiBook(book);
+      if (!book.chapters.find((ch) => ch.slug === activeBookSlug)) {
+        setActiveBookSlug(book.chapters[0]?.slug ?? "overview");
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   const roadmapStagesData = contentPayload?.roadmapStages ?? ROADMAP_STAGES;
   const knowledgeTreeData = contentPayload?.knowledgeTree ?? KNOWLEDGE_TREE;
   const experimentsData = contentPayload?.experiments ?? EXPERIMENTS;
   const toolsData = contentPayload?.tools ?? TOOLS_DATA;
   const resourcesData = contentPayload?.resources ?? RESOURCES_DATA;
-  const bookData = contentPayload?.book ?? ML_BOOK;
+  const bookData = apiBook ?? contentPayload?.book ?? ML_BOOK;
 
   // 保存进度
   const saveProgress = useCallback(async () => {
@@ -318,6 +366,92 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
     setUrlSearchParams(params, { replace: true });
   };
 
+  // 跨 Tab 导航 + 关键词筛选 + 可选滚动
+  const navigateToTabAndFilter = (tab: TabKey, keyword?: string, scrollToId?: string) => {
+    setActiveTabKey(tab);
+    const params = new URLSearchParams(urlSearchParams);
+    params.set("tab", tab);
+    setUrlSearchParams(params, { replace: true });
+    if (keyword) {
+      if (tab === "tools") setToolKeyword(keyword);
+      else if (tab === "experiments") setExperimentKeyword(keyword);
+      else if (tab === "resources") setResourceKeyword(keyword);
+    }
+    if (scrollToId) {
+      setTimeout(() => {
+        document.getElementById(scrollToId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+    }
+  };
+
+  // 阶段颜色映射
+  const stageColorDot = (stageId: string): string => {
+    const map: Record<string, string> = {
+      basics: "var(--ws-color-primary)",
+      "core-algorithms": "var(--ws-color-success)",
+      "deep-learning": "var(--ws-color-info)",
+      advanced: "var(--ws-color-warning)",
+      production: "var(--ws-color-error)",
+    };
+    return map[stageId] ?? "var(--ws-color-primary)";
+  };
+
+  // 话题 → 导航目标
+  const resolveTopicNav = (topic: string): { tab: TabKey; keyword: string } | null => {
+    const t = topic.toLowerCase();
+    if (t.includes("numpy") || t.includes("pandas")) return { tab: "tools", keyword: "NumPy" };
+    if (t.includes("matplotlib") || t.includes("seaborn")) return { tab: "tools", keyword: "Matplotlib" };
+    if (t.includes("scikit-learn")) return { tab: "tools", keyword: "scikit-learn" };
+    if (t.includes("pytorch")) return { tab: "tools", keyword: "PyTorch" };
+    if (t.includes("tensorflow")) return { tab: "tools", keyword: "TensorFlow" };
+    if (t.includes("xgboost") || t.includes("lightgbm") || t.includes("catboost")) return { tab: "tools", keyword: "XGBoost" };
+    if (t.includes("fastapi") || t.includes("docker")) return { tab: "tools", keyword: "Docker" };
+    if (t.includes("huggingface") || t.includes("transformers")) return { tab: "tools", keyword: "Hugging Face" };
+    if (t.includes("langchain")) return { tab: "tools", keyword: "LangChain" };
+    if (t.includes("mlflow")) return { tab: "tools", keyword: "MLflow" };
+    if (t.includes("cnn") || t.includes("resnet")) return { tab: "experiments", keyword: "CIFAR-10" };
+    if (t.includes("bert") || t.includes("gpt")) return { tab: "experiments", keyword: "BERT" };
+    if (t.includes("yolo") || t.includes("目标检测")) return { tab: "experiments", keyword: "YOLOv8" };
+    if (t.includes("gan") || t.includes("生成对抗") || t.includes("dcgan")) return { tab: "experiments", keyword: "DCGAN" };
+    if (t.includes("lstm") || t.includes("循环") || t.includes("rnn")) return { tab: "experiments", keyword: "IMDB" };
+    if (t.includes("rag") || t.includes("知识库")) return { tab: "experiments", keyword: "RAG" };
+    if (t.includes("推荐系统") || t.includes("协同过滤")) return { tab: "experiments", keyword: "推荐" };
+    return null;
+  };
+
+  // 里程碑 → 导航目标
+  const resolveMilestoneNav = (ms: string): { tab: TabKey; keyword: string } | null => {
+    const m = ms.toLowerCase();
+    if (m.includes("titanic")) return { tab: "experiments", keyword: "Titanic" };
+    if (m.includes("cifar-10")) return { tab: "experiments", keyword: "CIFAR-10" };
+    if (m.includes("mnist")) return { tab: "experiments", keyword: "MNIST" };
+    if (m.includes("bert")) return { tab: "experiments", keyword: "BERT" };
+    if (m.includes("yolo")) return { tab: "experiments", keyword: "YOLOv8" };
+    if (m.includes("kaggle")) return { tab: "experiments", keyword: "Kaggle" };
+    if (m.includes("fastapi") || m.includes("docker")) return { tab: "tools", keyword: "Docker" };
+    if (m.includes("mlflow")) return { tab: "tools", keyword: "MLflow" };
+    if (m.includes("pytorch") || m.includes("onnx")) return { tab: "tools", keyword: "PyTorch" };
+    return null;
+  };
+
+  // 知识树节点 → 导航目标
+  const knowledgeNavMap: Record<string, { tab: TabKey; keyword?: string; scrollToId?: string }> = {
+    "linear-regression": { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    "logistic-regression": { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    "decision-tree": { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    svm: { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    knn: { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    "naive-bayes": { tab: "roadmap", scrollToId: "stage-core-algorithms" },
+    cnn: { tab: "experiments", keyword: "CIFAR-10" },
+    mlp: { tab: "experiments", keyword: "MNIST" },
+    lstm: { tab: "experiments", keyword: "IMDB" },
+    bert: { tab: "experiments", keyword: "BERT" },
+    gan: { tab: "experiments", keyword: "DCGAN" },
+    xgboost: { tab: "experiments", keyword: "House Prices" },
+    kmeans: { tab: "experiments", keyword: "KMeans" },
+    resnet: { tab: "experiments", keyword: "CIFAR-10" },
+  };
+
   // 计算进度百分比
   const completedStages = Object.values(progress.stages).filter((s) => s === "completed").length;
   const totalStages = Object.keys(progress.stages).length;
@@ -326,6 +460,16 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
   const percent = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
 
   const experimentList = useMemo(() => Object.values(experimentsData).flat(), [experimentsData]);
+  const toolExperimentMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const exp of Object.values(experimentsData).flat()) {
+      for (const tool of exp.tools) {
+        if (!map[tool]) map[tool] = [];
+        if (!map[tool].includes(exp.name)) map[tool].push(exp.name);
+      }
+    }
+    return map;
+  }, [experimentsData]);
   const filteredExperiments = useMemo(() => {
     const byDifficulty = experimentDifficulty === "all" ? experimentList : experimentList.filter((item) => item.difficulty === experimentDifficulty);
     return filterByKeyword(byDifficulty.map((item) => ({ ...item, title: item.name, summary: item.data, tags: [...item.tools, ...item.skills] })), experimentKeyword);
@@ -443,7 +587,7 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                 {roadmapStagesData.map((stage, index) => {
                   const stageStatus = progress.stages[stage.id] || "pending";
                   return (
-                    <div key={stage.id} className="relative flex gap-4 pb-6 last:pb-0">
+                    <div key={stage.id} id={`stage-${stage.id}`} className={cn("relative flex gap-4 pb-6 last:pb-0", stageStatus === "in-progress" && "rounded-lg border-2 border-[var(--ws-color-warning)] bg-[var(--ws-color-surface-2)] p-3")}>
                       {/* 时间线节点 */}
                       <button type="button" className="relative z-10 mt-1 flex shrink-0" onClick={() => {
                         const next: StageStatus = stageStatus === "pending" ? "in-progress" : stageStatus === "in-progress" ? "completed" : "pending";
@@ -455,19 +599,22 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                       {/* 阶段内容 */}
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ws-color-primary)] text-xs font-bold text-white">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: stageColorDot(stage.id) }}>
                             {index + 1}
                           </span>
                           <h3 className="text-base font-semibold text-text-base">{stage.name}</h3>
                           <Badge variant="neutral" className="text-xs">
                             <Clock className="mr-1 h-3 w-3" />
-                            {stage.duration}
+                            {stageStatus === "in-progress" ? `还剩 ${stage.duration}` : stage.duration}
                           </Badge>
                           {stageStatus === "completed" && (
                             <Badge variant="success">已完成</Badge>
                           )}
                           {stageStatus === "in-progress" && (
-                            <Badge variant="warning">进行中</Badge>
+                            <>
+                              <Badge variant="warning">进行中</Badge>
+                              <span className="text-xs font-medium text-[var(--ws-color-warning)]">← 当前进度</span>
+                            </>
                           )}
                         </div>
 
@@ -476,12 +623,23 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                           <div>
                             <p className="mb-1 text-xs font-medium text-text-secondary">核心主题</p>
                             <ul className="space-y-0.5">
-                              {stage.topics.map((topic) => (
-                                <li key={topic} className="flex items-start gap-1.5 text-xs text-text-tertiary">
-                                  <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-[var(--ws-color-primary)]" />
-                                  {topic}
-                                </li>
-                              ))}
+                              {stage.topics.map((topic) => {
+                                const nav = resolveTopicNav(topic);
+                                return (
+                                  <li
+                                    key={topic}
+                                    className={cn(
+                                      "flex items-start gap-1.5 text-xs text-text-tertiary",
+                                      nav && "cursor-pointer hover:text-[var(--ws-color-primary)]",
+                                    )}
+                                    onClick={nav ? () => navigateToTabAndFilter(nav.tab, nav.keyword) : undefined}
+                                  >
+                                    <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: stageColorDot(stage.id) }} />
+                                    {topic}
+                                    {nav && <ExternalLink className="ml-1 mt-0.5 h-3 w-3 shrink-0 opacity-40" />}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div>
@@ -490,12 +648,23 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                               里程碑目标
                             </p>
                             <ul className="space-y-0.5">
-                              {stage.milestones.map((ms) => (
-                                <li key={ms} className="flex items-start gap-1.5 text-xs text-text-tertiary">
-                                  <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-[var(--ws-color-success)]" />
-                                  {ms}
-                                </li>
-                              ))}
+                              {stage.milestones.map((ms) => {
+                                const nav = resolveMilestoneNav(ms);
+                                return (
+                                  <li
+                                    key={ms}
+                                    className={cn(
+                                      "flex items-start gap-1.5 text-xs text-text-tertiary",
+                                      nav && "cursor-pointer hover:text-[var(--ws-color-primary)]",
+                                    )}
+                                    onClick={nav ? () => navigateToTabAndFilter(nav.tab, nav.keyword) : undefined}
+                                  >
+                                    <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-[var(--ws-color-success)]" />
+                                    {ms}
+                                    {nav && <ExternalLink className="ml-1 mt-0.5 h-3 w-3 shrink-0 opacity-40" />}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         </div>
@@ -518,7 +687,10 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                       机器学习知识体系
                     </h3>
                     {knowledgeTreeData.map((node) => (
-                      <TreeNode key={node.id} node={node} />
+                      <TreeNode key={node.id} node={node} onNavigate={(nodeId) => {
+                        const target = knowledgeNavMap[nodeId];
+                        if (target) navigateToTabAndFilter(target.tab, target.keyword, target.scrollToId);
+                      }} />
                     ))}
                   </div>
                 </CardContent>
@@ -701,19 +873,41 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-text-base">{tool.name}</span>
-                            {tool.url && (
-                              <a
-                                href={tool.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-text-tertiary hover:text-[var(--ws-color-primary)]"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <ExternalLink className="h-3 w-3" />
+                            <div className="flex items-center gap-1">
+                              {tool.difficulty && (
+                                <span className="rounded px-1 py-0.5 text-[10px] bg-[var(--ws-color-surface)] text-text-tertiary">
+                                  {DIFFICULTY_LABELS[tool.difficulty]?.label ?? tool.difficulty}
+                                </span>
+                              )}
+                              {tool.url && (
+                                <a href={tool.url} target="_blank" rel="noopener noreferrer"
+                                  className="text-text-tertiary hover:text-[var(--ws-color-primary)]" onClick={(e) => e.stopPropagation()}>
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-1 text-xs text-text-tertiary">{tool.description}</p>
+                          {toolExperimentMap[tool.name] && toolExperimentMap[tool.name].length > 0 && (
+                            <button
+                              type="button"
+                              className="mt-1 flex items-center gap-1 text-[10px] text-[var(--ws-color-primary)] hover:underline"
+                              onClick={() => navigateToTabAndFilter("experiments", toolExperimentMap[tool.name]?.[0])}
+                            >
+                              <FlaskConical className="h-3 w-3" />
+                              用于实验: {toolExperimentMap[tool.name].slice(0, 3).join(", ")}
+                              {toolExperimentMap[tool.name].length > 3 && ` 等${toolExperimentMap[tool.name].length}个`}
+                            </button>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-2 text-[10px]">
+                            {tool.pricing && <span className="text-text-tertiary">{tool.pricing}</span>}
+                            {tool.gettingStarted && (
+                              <a href={tool.gettingStarted} target="_blank" rel="noopener noreferrer"
+                                className="text-[var(--ws-color-primary)] hover:underline" onClick={(e) => e.stopPropagation()}>
+                                入门指南 →
                               </a>
                             )}
                           </div>
-                          <p className="mt-1 text-xs text-text-tertiary">{tool.description}</p>
                         </div>
                       ))}
                     </div>
@@ -743,6 +937,9 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                     <option value="book">书籍</option>
                     <option value="course">课程</option>
                     <option value="github">GitHub</option>
+                    <option value="video">视频</option>
+                    <option value="paper">论文</option>
+                    <option value="blog">博客</option>
                     <option value="competition">竞赛</option>
                   </select>
                 </div>
@@ -807,7 +1004,50 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
                 </div>
               </div>
 
-              {/* 数据竞赛 */}
+              {/* 视频 */}
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                  <Sparkles className="h-4 w-4 text-[var(--ws-color-purple, #8B5CF6)]" />
+                  精选视频
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredResources.filter((r) => r.type === "video").map((item) => (
+                    <ResourceCard key={item.title} item={item} favorite={Boolean(progress.favoriteItems[`resource:${item.title}`])}
+                      onToggleFavorite={() => toggleFavoriteItem(`resource:${item.title}`)} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 论文 */}
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                  <FileText className="h-4 w-4 text-[var(--ws-color-info)]" />
+                  必读论文
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredResources.filter((r) => r.type === "paper").map((item) => (
+                    <ResourceCard key={item.title} item={item} favorite={Boolean(progress.favoriteItems[`resource:${item.title}`])}
+                      onToggleFavorite={() => toggleFavoriteItem(`resource:${item.title}`)} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 博客 */}
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
+                  <MessageSquare className="h-4 w-4 text-[var(--ws-color-success)]" />
+                  优质博客
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredResources.filter((r) => r.type === "blog").map((item) => (
+                    <ResourceCard key={item.title} item={item} favorite={Boolean(progress.favoriteItems[`resource:${item.title}`])}
+                      onToggleFavorite={() => toggleFavoriteItem(`resource:${item.title}`)} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 数据竞赛 */
+}
               <div>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                   <Trophy className="h-4 w-4 text-[var(--ws-color-warning)]" />
@@ -991,7 +1231,7 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
 // 子卡片组件
 // ────────────────────────────────────────
 
-/** 实验卡片 */
+/** 实验卡片（可展开） */
 const ExperimentCard: React.FC<{
   experiment: Experiment;
   completed: boolean;
@@ -1000,20 +1240,39 @@ const ExperimentCard: React.FC<{
   onToggleFavorite: () => void;
 }> = ({ experiment, completed, favorite, onToggleCompleted, onToggleFavorite }) => {
   const diff = DIFFICULTY_LABELS[experiment.difficulty];
+  const [expanded, setExpanded] = useState(false);
+  const hasDetail = !!(experiment.goal || experiment.steps?.length || experiment.code || experiment.expectedOutput);
+
   return (
     <div className={cn(
-      "rounded-md border bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)]",
+      "rounded-md border bg-[var(--ws-color-surface-2)] p-3 transition-colors",
       completed ? "border-[var(--ws-color-success)]" : "border-[var(--ws-color-border-secondary)]",
     )}>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-text-base">{experiment.name}</span>
+        <button type="button" onClick={() => hasDetail && setExpanded(!expanded)} className="flex-1 min-w-0 text-left">
+          <div className="flex items-center flex-wrap gap-1.5">
+            <span className="text-sm font-medium text-text-base hover:text-[var(--ws-color-primary)] transition-colors">{experiment.name}</span>
+            {experiment.estimatedMinutes && (
+              <Badge variant="neutral" className="text-[10px] gap-0.5 px-1 py-0">
+                <Clock className="h-2.5 w-2.5" />{experiment.estimatedMinutes}m
+              </Badge>
+            )}
+            {experiment.datasetUrl && (
+              <a
+                href={experiment.datasetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-0.5 text-[10px] rounded bg-[var(--ws-color-primary-soft, rgba(99,102,241,0.1))] px-1.5 py-0 text-[var(--ws-color-primary)] hover:underline"
+              >
+                <Database className="h-2.5 w-2.5" />数据集
+              </a>
+            )}
+          </div>
+        </button>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={onToggleFavorite}
-            className={cn("rounded p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
-            aria-label={favorite ? `取消收藏 ${experiment.name}` : `收藏 ${experiment.name}`}
-          >
+          <button type="button" onClick={onToggleFavorite} className={cn("rounded p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
+            aria-label={favorite ? `取消收藏 ${experiment.name}` : `收藏 ${experiment.name}`}>
             <Star className={cn("h-3.5 w-3.5", favorite && "fill-[var(--ws-color-warning)]")} />
           </button>
           <Badge variant={diff.variant as any} className="text-xs">{diff.label}</Badge>
@@ -1041,17 +1300,62 @@ const ExperimentCard: React.FC<{
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onToggleCompleted}
-        className={cn(
-          "mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
-          completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary hover:text-text-base",
-        )}
-      >
+      {hasDetail && expanded && (
+        <div className="mt-3 space-y-2 border-t border-[var(--ws-color-border-secondary)] pt-3">
+          {experiment.goal && (
+            <div className="rounded bg-[var(--ws-color-surface)] p-2">
+              <span className="text-xs font-medium text-text-base flex items-center gap-1"><Target className="h-3 w-3 text-[var(--ws-color-success)]" />目标</span>
+              <p className="mt-0.5 text-xs text-text-secondary">{experiment.goal}</p>
+            </div>
+          )}
+          {experiment.steps && experiment.steps.length > 0 && (
+            <div className="rounded bg-[var(--ws-color-surface)] p-2">
+              <span className="text-xs font-medium text-text-base flex items-center gap-1"><ListChecks className="h-3 w-3 text-[var(--ws-color-primary)]" />步骤</span>
+              <ol className="mt-1 ml-4 list-decimal space-y-0.5 text-xs text-text-secondary">
+                {experiment.steps.map((step, i) => <li key={i}>{step}</li>)}
+              </ol>
+            </div>
+          )}
+          {experiment.code && (
+            <div className="rounded bg-slate-950 p-3">
+              <span className="text-[10px] text-slate-400 flex items-center gap-1 mb-1"><Code2 className="h-3 w-3" />启动代码</span>
+              <pre className="overflow-x-auto text-xs text-slate-100 leading-5">{experiment.code}</pre>
+            </div>
+          )}
+          {experiment.expectedOutput && (
+            <div className="rounded bg-[var(--ws-color-surface)] p-2">
+              <span className="text-xs font-medium text-text-base">预期产出</span>
+              <p className="mt-0.5 text-xs text-text-secondary">{experiment.expectedOutput}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {experiment.datasetUrl && (
+              <a href={experiment.datasetUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded bg-[var(--ws-color-primary)] px-2 py-1 text-[10px] text-white hover:opacity-90">
+                <ExternalLink className="h-3 w-3" />数据集
+              </a>
+            )}
+            {experiment.notebookUrl && (
+              <a href={experiment.notebookUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded bg-[var(--ws-color-surface)] px-2 py-1 text-[10px] text-text-secondary hover:text-text-base">
+                <ExternalLink className="h-3 w-3" />Notebook
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={onToggleCompleted}
+        className={cn("mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+          completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary hover:text-text-base")}>
         <CheckCircle2 className="h-3.5 w-3.5" />
         {completed ? "已完成" : "标记完成"}
       </button>
+      {hasDetail && (
+        <button type="button" onClick={() => setExpanded(!expanded)}
+          className="ml-2 mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-text-tertiary hover:text-text-base">
+          {expanded ? "收起 ▲" : "展开详情 ▼"}
+        </button>
+      )}
     </div>
   );
 };
@@ -1079,6 +1383,7 @@ const ResourceCard: React.FC<{ item: ResourceItem; favorite: boolean; onToggleFa
             </span>
           </div>
           <p className="mt-1 text-xs text-text-tertiary">{item.description}</p>
+          {item.author && <p className="mt-0.5 text-[11px] text-text-tertiary">作者: {item.author}{item.language ? ` · ${item.language === "zh" ? "中文" : "English"}` : ""}</p>}
         </div>
         <button
           type="button"
