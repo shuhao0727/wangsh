@@ -55,6 +55,7 @@ export interface ToolItem {
   pip_install?: string;
   related_experiments?: string[];
   gettingStarted?: string;
+  pricing?: string;
 }
 
 export interface ResourceItem {
