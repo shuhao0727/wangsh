@@ -37,6 +37,9 @@ export interface Experiment {
   reflection?: string[];
   download_url?: string;
   data_source?: string;
+  dataset_url?: string;
+  dataset_format?: string;
+  answer_format?: string;
 }
 
 export interface ToolItem {
@@ -58,6 +61,7 @@ export interface ResourceItem {
   rating?: number;
   difficulty_level?: "beginner" | "intermediate" | "advanced" | "expert";
   best_for?: string;
+  author?: string;
 }
 
 export const ROADMAP_STAGES: RoadmapStage[] = [
