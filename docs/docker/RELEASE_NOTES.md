@@ -2,6 +2,55 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.10（2026-05-09）
+
+### 1. 变更范围
+
+**关键修复** — v1.5.9 的 backend 镜像遗漏了 ML/AI/Agents 章节 API 后端代码，因为相关文件未 commit 到 Git，用户从 GitHub 构建时拿不到。v1.5.10 将所有遗漏文件纳入版本控制并重做镜像。
+
+**后端新增**：
+- ML/AI/Agents 章节 CRUD API（`learning/chapters.py`）：`GET/PUT/DELETE /learning/chapters/{module_key}/{slug}`
+- `LearningChapter` 模型（`sys_learning_chapters` 表）
+- Alembic migration `20260509_lrn_chapters`（建表 `sys_learning_chapters`）
+
+**Alembic 修复**：
+- 重命名 revision `20260503_0002_learning_content_items` → `20260503_0002_learning_content`（36→30 字符，解决 VARCHAR(32) 超限）
+
+**前端**：Phase 0-9 全面优化（与 v1.5.9 相同内容，因 v1.5.9 未 commit 到 Git）
+
+### 2. 配置影响
+
+- 所有部署文件版本引用统一升级到 `1.5.10`
+- `IMAGE_TAG=1.5.10` 为新的默认值
+- PythonLab sandbox 镜像同步到 `shuhao07/pythonlab-sandbox:1.5.10`
+
+### 3. 构建与部署
+
+```bash
+git fetch origin claude/inspiring-gould-f407ac && git merge origin/claude/inspiring-gould-f407ac
+./build_images.sh 1.5.10
+docker compose push
+IMAGE_TAG=1.5.10 docker compose pull && IMAGE_TAG=1.5.10 docker compose up -d
+curl http://wangsh.cn:6608/api/v1/health
+```
+
+### 4. Docker Hub 备选镜像源
+
+如直连超时，使用 `docker.1ms.run`：
+```bash
+docker pull docker.1ms.run/shuhao07/wangsh-backend:1.5.10
+docker tag docker.1ms.run/shuhao07/wangsh-backend:1.5.10 shuhao07/wangsh-backend:1.5.10
+# 同理拉取其他 6 个镜像
+```
+
+### 5. 回滚
+
+```bash
+IMAGE_TAG=1.5.9 docker compose up -d
+```
+
+---
+
 ## v1.5.9（2026-05-09）
 
 ### 1. 变更范围
