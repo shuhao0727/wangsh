@@ -10,6 +10,7 @@ export interface RoadmapStage {
   status: StageStatus;
   prerequisites?: string[];
   skills_gained?: string[];
+  color?: string;
 }
 
 export interface KnowledgeNode {
@@ -29,8 +30,8 @@ export interface Experiment {
   tools: string[];
   skills: string[];
   goal: string;
-  estimated_time: string;
-  deliverables: string;
+  estimated_time?: string;
+  deliverables?: string;
   steps?: string[];
   code?: string;
   expected_output?: string;
@@ -53,11 +54,12 @@ export interface ToolItem {
   best_for?: string;
   pip_install?: string;
   related_experiments?: string[];
+  gettingStarted?: string;
 }
 
 export interface ResourceItem {
   title: string;
-  type: "book" | "course" | "paper" | "website" | "competition" | "community" | "github";
+  type: "book" | "course" | "paper" | "website" | "competition" | "community" | "github" | "video" | "blog";
   description: string;
   url: string;
   rating?: number;
