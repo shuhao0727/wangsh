@@ -31,7 +31,7 @@ clf = KNeighborsClassifier(n_neighbors=3)
 clf.fit(X_train, y_train)
 print(classification_report(y_test, clf.predict(X_test), target_names=iris.target_names))`,
       expected_output: "准确率 > 95%，混淆矩阵仅对角线上有小量错误",
-      datasetUrl: "https://scikit-learn.org/stable/datasets/toy_dataset.html#iris-dataset",
+      dataset_url: "https://scikit-learn.org/stable/datasets/toy_dataset.html#iris-dataset",
       estimatedMinutes: 30,
     },
     {
@@ -65,7 +65,7 @@ y_pred = model.predict(X_test)
 print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.2f}")
 print(f"R²: {r2_score(y_test, y_pred):.3f}")`,
       expected_output: "RMSE ≈ 4.5-5.5，R² > 0.70，残差近似正态分布",
-      datasetUrl: "https://www.kaggle.com/datasets/altavish/boston-housing-dataset",
+      dataset_url: "https://www.kaggle.com/datasets/altavish/boston-housing-dataset",
       estimatedMinutes: 30,
     },
     {
@@ -102,7 +102,7 @@ clf = RandomForestClassifier(n_estimators=100, random_state=42)
 clf.fit(X, y)
 print(f"Train accuracy: {clf.score(X, y):.3f}")`,
       expected_output: "Kaggle Public Leaderboard 准确率 > 77%",
-      datasetUrl: "https://www.kaggle.com/competitions/titanic/data",
+      dataset_url: "https://www.kaggle.com/competitions/titanic/data",
       estimatedMinutes: 60,
     },
     {
@@ -140,7 +140,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 print(f"Model ready, params: {sum(p.numel() for p in model.parameters())}")`,
       expected_output: "测试准确率 > 97%，loss 曲线平滑下降",
-      datasetUrl: "https://pytorch.org/vision/stable/datasets.html#mnist",
+      dataset_url: "https://pytorch.org/vision/stable/datasets.html#mnist",
       estimatedMinutes: 45,
     },
     {
@@ -175,7 +175,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratif
 rf = RandomForestClassifier(n_estimators=100, random_state=42).fit(X_train, y_train)
 print(classification_report(y_test, rf.predict(X_test), target_names=["Poor", "Average", "Excellent"]))`,
       expected_output: "F1 macro > 0.75，特征重要性中 alcohol/volatile acidity 排前",
-      datasetUrl: "https://archive.ics.uci.edu/ml/datasets/wine+quality",
+      dataset_url: "https://archive.ics.uci.edu/ml/datasets/wine+quality",
       estimatedMinutes: 40,
     },
     {
@@ -206,7 +206,7 @@ for model, name in [(Ridge(alpha=1.0), "Ridge"), (Lasso(alpha=0.1), "Lasso")]:
     scores = cross_val_score(model, X_train, y_train, cv=5, scoring="neg_mean_squared_error")
     print(f"{name}: RMSE = {np.sqrt(-scores.mean()):.2f} (+/- {scores.std():.2f})")`,
       expected_output: "Ridge RMSE ≈ 54-56，Lasso 将 3-4 个不重要特征系数压缩为零",
-      datasetUrl: "https://scikit-learn.org/stable/datasets/toy_dataset.html#diabetes-dataset",
+      dataset_url: "https://scikit-learn.org/stable/datasets/toy_dataset.html#diabetes-dataset",
       estimatedMinutes: 35,
     },
   ],
@@ -256,7 +256,7 @@ class SimpleCNN(nn.Module):
 
 print(f"Model ready. GPU: {torch.cuda.is_available()}")`,
       expected_output: "CNN from scratch: > 85% | ResNet18 微调: > 92%",
-      datasetUrl: "https://www.cs.toronto.edu/~kriz/cifar.html",
+      dataset_url: "https://www.cs.toronto.edu/~kriz/cifar.html",
       estimatedMinutes: 90,
     },
     {
@@ -304,7 +304,7 @@ class SentimentLSTM(nn.Module):
 
 print(f"Vocab size: {len(vocab)}, Model ready")`,
       expected_output: "验证准确率 > 87%，对自定义影评能正确判断正负面",
-      datasetUrl: "https://ai.stanford.edu/~amaas/data/sentiment/",
+      dataset_url: "https://ai.stanford.edu/~amaas/data/sentiment/",
       estimatedMinutes: 90,
     },
     {
@@ -336,7 +336,7 @@ smote = SMOTE(random_state=42)
 X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
 print(f"After SMOTE: {len(X_resampled)} samples, fraud ratio: {y_resampled.mean():.1%}")`,
       expected_output: "Recall > 85%，Precision > 5%（高 Precision 意味着低误报率），PR-AUC > 0.80",
-      datasetUrl: "https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud",
+      dataset_url: "https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud",
       estimatedMinutes: 75,
     },
     {
@@ -373,7 +373,7 @@ labels = kmeans.fit_predict(X)
 print(f"Silhouette: {silhouette_score(X, labels):.3f}")
 print(f"Cluster sizes: {pd.Series(labels).value_counts().to_dict()}")`,
       expected_output: "轮廓系数 > 0.4，5 个分群可视化清晰分离，各有区分度高的消费画像",
-      datasetUrl: "https://www.kaggle.com/datasets/vjchoudhary7/customer-segmentation-tutorial-in-python",
+      dataset_url: "https://www.kaggle.com/datasets/vjchoudhary7/customer-segmentation-tutorial-in-python",
       estimatedMinutes: 60,
     },
     {
@@ -411,7 +411,7 @@ xgb = XGBRegressor(n_estimators=1000, learning_rate=0.05, max_depth=3, random_st
 scores = cross_val_score(xgb, X, y, cv=5, scoring="neg_mean_squared_error")
 print(f"CV RMSE: {np.sqrt(-scores.mean()):.4f}")`,
       expected_output: "CV RMSE < 0.13，Kaggle Public LB Top 30%",
-      datasetUrl: "https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques",
+      dataset_url: "https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques",
       notebookUrl: "https://www.kaggle.com/code/alexisbcook/xgboost",
       estimatedMinutes: 120,
     },
@@ -446,7 +446,7 @@ for name, model in [("NB", MultinomialNB()), ("LR", LogisticRegression(max_iter=
     acc = pipe.score(test.data, test.target)
     print(f"{name} Accuracy: {acc:.3f}")`,
       expected_output: "LogisticRegression Accuracy > 90%，NB > 85%",
-      datasetUrl: "https://scikit-learn.org/stable/datasets/real_world.html#newsgroups-dataset",
+      dataset_url: "https://scikit-learn.org/stable/datasets/real_world.html#newsgroups-dataset",
       estimatedMinutes: 50,
     },
     {
@@ -482,7 +482,7 @@ model = auto_arima(train, seasonal=True, m=7, trace=False)
 forecast = model.predict(n_periods=90)
 print(f"ARIMA RMSE: {((forecast - test.values) ** 2).mean() ** 0.5:.2f}")`,
       expected_output: "LSTM RMSE < ARIMA RMSE，两者都能捕捉周期性模式，LSTM 对突发峰值更敏感",
-      datasetUrl: "https://www.kaggle.com/competitions/walmart-recruiting-store-sales-forecasting",
+      dataset_url: "https://www.kaggle.com/competitions/walmart-recruiting-store-sales-forecasting",
       estimatedMinutes: 100,
     },
   ],
@@ -518,7 +518,7 @@ results = model("street.jpg")
 annotated = results[0].plot()
 cv2.imwrite("output.jpg", annotated)`,
       expected_output: "mAP50-95 > 0.50 (COCO)，FPS > 30 (GPU 实时推理)",
-      datasetUrl: "https://cocodataset.org/#download",
+      dataset_url: "https://cocodataset.org/#download",
       notebookUrl: "https://colab.research.google.com/github/ultralytics/ultralytics/blob/main/examples/tutorial.ipynb",
       estimatedMinutes: 150,
     },
@@ -557,7 +557,7 @@ qa = RetrievalQA.from_chain_type(
 )
 print(qa.invoke({"query": "公司年假政策是什么？"}))`,
       expected_output: "系统能准确回答基于文档的事实性问题，检索命中率 > 90%",
-      datasetUrl: "https://python.langchain.com/docs/integrations/document_loaders/",
+      dataset_url: "https://python.langchain.com/docs/integrations/document_loaders/",
       notebookUrl: "https://github.com/langchain-ai/langchain/blob/master/cookbook/rag.ipynb",
       estimatedMinutes: 120,
     },
@@ -595,7 +595,7 @@ print(qa.invoke({"query": "公司年假政策是什么？"}))`,
 #   --per_device_train_batch_size 2 \
 #   --gradient_accumulation_steps 8`,
       expected_output: "训练 loss 平稳下降至 < 1.0，微调后模型对领域问题回答更精准，BLEU/ROUGE 提升 10%+",
-      datasetUrl: "https://huggingface.co/datasets/silk-road/alpaca-data-gpt4-chinese",
+      dataset_url: "https://huggingface.co/datasets/silk-road/alpaca-data-gpt4-chinese",
       notebookUrl: "https://colab.research.google.com/drive/1eWAmesrW99p7e1T3D_mY3wqO-3tO6KYZ",
       estimatedMinutes: 180,
     },
@@ -639,7 +639,7 @@ class Generator(nn.Module):
 
 print(f"Generator ready. Input: (batch, 100, 1, 1) -> Output: (batch, 1, 64, 64)")`,
       expected_output: "生成的 MNIST 数字清晰可辨（肉眼难分真假），FID < 50；CelebA 人脸基本可识别",
-      datasetUrl: "https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html",
+      dataset_url: "https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html",
       notebookUrl: "https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html",
       estimatedMinutes: 150,
     },
@@ -678,7 +678,7 @@ training_args = TrainingArguments(
 trainer = Trainer(model=model, args=training_args, train_dataset=encoded["train"], eval_dataset=encoded["validation"])
 trainer.train()`,
       expected_output: "测试集准确率 > 85%（取决于任务难度），Gradio Demo 可正常运行",
-      datasetUrl: "https://huggingface.co/datasets/clue",
+      dataset_url: "https://huggingface.co/datasets/clue",
       notebookUrl: "https://colab.research.google.com/github/huggingface/notebooks/blob/main/examples/text_classification.ipynb",
       estimatedMinutes: 120,
     },
@@ -721,7 +721,7 @@ scores = [(mid, model.predict(user_id, mid).est) for mid in list(candidates)[:10
 top10 = sorted(scores, key=lambda x: x[1], reverse=True)[:10]
 print(f"Top-10 recommendations: {top10}")`,
       expected_output: "RMSE < 0.85，NDCG@10 > 0.5，API 响应 < 200ms (with Redis cache)",
-      datasetUrl: "https://grouplens.org/datasets/movielens/25m/",
+      dataset_url: "https://grouplens.org/datasets/movielens/25m/",
       notebookUrl: "https://github.com/NVIDIA-Merlin/Movielens-Recommendation-Systems",
       estimatedMinutes: 150,
     },
@@ -768,7 +768,7 @@ print(f"Run logged to MLflow: {mlflow.active_run().info.run_id}")
 # async def predict(features: list[float]):
 #     return {"prediction": float(model.predict([features])[0])}`,
       expected_output: "MLflow UI 可查看实验记录，FastAPI /predict 返回正确结果，Docker 容器可一键启动",
-      datasetUrl: "https://mlflow.org/docs/latest/tracking.html",
+      dataset_url: "https://mlflow.org/docs/latest/tracking.html",
       notebookUrl: "https://github.com/mlflow/mlflow/tree/master/examples",
       estimatedMinutes: 150,
     },
