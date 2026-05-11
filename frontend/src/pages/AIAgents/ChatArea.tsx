@@ -426,7 +426,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col h-full overflow-hidden pr-[var(--ws-space-3)]">
         {/* 对话头部 */}
         <div className="flex items-center justify-between px-[var(--ws-space-3)] py-[var(--ws-space-2)] flex-shrink-0 bg-surface border-b border-[var(--ws-color-border-secondary)] min-h-14">
           <div className="flex items-center gap-2">
