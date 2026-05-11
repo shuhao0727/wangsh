@@ -55,7 +55,7 @@ const APPS = [
     icon: <GitBranch className="h-5 w-5" />,
     color: 'var(--ws-color-warning)', bg: 'color-mix(in srgb, var(--ws-color-warning) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-warning) 22%, transparent)',
     action: 'mindmap',
-    available: false,
+    available: true,
   },
   {
     key: 'it_machine_learning_enabled',
@@ -270,6 +270,7 @@ const ITTechnologyPage: React.FC = () => {
           if (app.action === 'ml') window.open('/it-technology/ml', '_blank');
           if (app.action === 'ai') window.open('/it-technology/ai', '_blank');
           if (app.action === 'agents') window.open('/it-technology/agents', '_blank');
+          if (app.action === 'mindmap') window.open('/mindmaps', '_blank');
         }}
       />
     );
