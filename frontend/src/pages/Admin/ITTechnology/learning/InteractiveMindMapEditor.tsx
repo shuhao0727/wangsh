@@ -66,7 +66,7 @@ function deleteNode(root: MindMapNode, id: string): MindMapNode | null {
 }
 
 /* ═══════════════════════ 布局引擎 ═══════════════════════ */
-const NODE_W = 150, NODE_H = 40, H_GAP = 22, V_GAP = 12;
+const NODE_W = 160, NODE_H = 44, H_GAP = 60, V_GAP = 18;
 
 type LayoutNode = { node: MindMapNode; x: number; y: number; w: number; h: number; children: LayoutNode[] };
 
@@ -333,66 +333,79 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
           >
             {/* SVG 连线层 */}
             <svg className="absolute inset-0 pointer-events-none" style={{ overflow: "visible", zIndex: 0 }}>
+              <defs>
+                {paths.map((p, i) => (
+                  <linearGradient key={i} id={`lg-${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor={p.color} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={p.color} stopOpacity={0.15} />
+                  </linearGradient>
+                ))}
+              </defs>
               {paths.map((p, i) => (
-                <path key={i} d={p.d} stroke={p.color} strokeWidth={2.5} fill="none" opacity={0.4}
+                <path key={i} d={p.d} stroke={`url(#lg-${i})`} strokeWidth={2.5}
+                  fill="none" strokeLinecap="round"
                   style={{ transition: "d 0.35s ease" }} />
               ))}
             </svg>
 
             {/* 节点层 */}
-            {flat.map((ln) => (
+            {flat.map((ln) => {
+              const isRoot = ln.node.id === tree.id;
+              const depth = isRoot ? 0 : ln.node.text.length; // rough depth
+              return (
               <div
                 key={ln.node.id}
                 className={`mindmap-visual-node ${selectedId === ln.node.id ? "selected" : ""} ${ln.node.collapsed ? "collapsed" : ""}`}
                 style={{
+                  "--mm-color": ln.node.color || PALETTE[0],
                   position: "absolute", left: ln.x, top: ln.y,
                   width: ln.w, minHeight: ln.h,
-                  borderColor: ln.node.color || PALETTE[0],
-                  transition: "left 0.35s ease, top 0.35s ease, border-color 0.2s, box-shadow 0.2s, opacity 0.2s",
-                }}
+                  transition: "left 0.35s ease, top 0.35s ease, opacity 0.2s, transform 0.2s ease",
+                } as React.CSSProperties}
                 onClick={(e) => { e.stopPropagation(); setSelectedId(ln.node.id); }}
                 onDoubleClick={() => startEdit(ln.node.id, ln.node.text)}
               >
-                <div className="mindmap-visual-node-inner">
-                  {editingId === ln.node.id ? (
-                    <input
-                      className="mindmap-inline-input"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onBlur={() => handleRename(ln.node.id, editText)}
-                      onKeyDown={(e) => {
-                        e.stopPropagation();
-                        if (e.key === "Enter") handleRename(ln.node.id, editText);
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span className="mindmap-visual-text">{ln.node.text}</span>
-                  )}
+                {editingId === ln.node.id ? (
+                  <input
+                    className="mindmap-inline-input-v2"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onBlur={() => handleRename(ln.node.id, editText)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") handleRename(ln.node.id, editText);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="mindmap-visual-text-v2">{ln.node.text}</span>
+                )}
 
-                  <span className="mindmap-visual-actions">
-                    <button className="mm-btn add" title="添加子节点 (Tab)"
-                      onClick={(e) => { e.stopPropagation(); handleAddChild(ln.node.id); }}><Plus size={12} /></button>
-                    {ln.node.id !== tree.id && (
-                      <button className="mm-btn add" title="添加兄弟节点 (Enter)"
-                        onClick={(e) => { e.stopPropagation(); handleAddSibling(ln.node.id); }}><ChevronRight size={12} /></button>
-                    )}
-                    {ln.node.id !== tree.id && (
-                      <button className="mm-btn del" title="删除 (Delete)"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(ln.node.id); }}><X size={12} /></button>
-                    )}
-                  </span>
-                </div>
+                {/* 折叠/展开 */}
                 {ln.node.children.length > 0 && (
-                  <span className="mindmap-collapse-dot"
+                  <span className="mindmap-collapse-dot-v2"
                     onClick={(e) => { e.stopPropagation(); handleToggleCollapse(ln.node.id); }}>
                     {ln.node.collapsed ? "+" : "−"}
                   </span>
                 )}
+
+                {/* 操作按钮 */}
+                <span className="mindmap-visual-actions-v2">
+                  <button className="mm-btn-v2 mm-add" title="子节点 (Tab)"
+                    onClick={(e) => { e.stopPropagation(); handleAddChild(ln.node.id); }}><Plus size={12} /></button>
+                  {!isRoot && (
+                    <button className="mm-btn-v2 mm-sibling" title="兄弟节点 (Enter)"
+                      onClick={(e) => { e.stopPropagation(); handleAddSibling(ln.node.id); }}><ChevronRight size={12} /></button>
+                  )}
+                  {!isRoot && (
+                    <button className="mm-btn-v2 mm-del" title="删除 (Del)"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(ln.node.id); }}><X size={12} /></button>
+                  )}
+                </span>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}
@@ -409,49 +422,63 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
       )}
 
       <style>{`
-        /* 导图节点 */
+        /* 导图节点 v2 */
         .mindmap-visual-node {
-          border: 2px solid; border-radius: 10px;
-          background: var(--ws-color-surface, #fff);
-          cursor: pointer; padding: 4px 2px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-        .mindmap-visual-node:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .mindmap-visual-node.selected { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 30%, transparent), 0 4px 12px rgba(0,0,0,0.1); }
-        .mindmap-visual-node.collapsed { opacity: 0.5; }
-        .mindmap-visual-node-inner {
+          border-radius: 22px;
+          background: linear-gradient(135deg, var(--mm-color)15, color-mix(in srgb, var(--mm-color) 12%, transparent));
+          cursor: pointer; padding: 6px 14px;
           display: flex; align-items: center; justify-content: center;
-          min-height: 32px; padding: 4px 8px; position: relative;
+          position: relative;
+          border: 1.5px solid color-mix(in srgb, var(--mm-color) 35%, transparent);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 0.5px color-mix(in srgb, var(--mm-color) 18%, transparent) inset;
         }
-        .mindmap-visual-text { font-size: 13px; font-weight: 500; text-align: center; line-height: 1.3; word-break: break-word; }
-        .mindmap-inline-input {
-          border: none; outline: none; background: transparent; text-align: center;
-          font-size: 13px; font-weight: 500; width: 120px;
-          border-bottom: 2px solid var(--ws-color-primary, #3B82F6);
+        .mindmap-visual-node:hover {
+          box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 0.5px color-mix(in srgb, var(--mm-color) 25%, transparent) inset;
+          transform: translateY(-1px);
         }
-        .mindmap-visual-actions {
-          display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s;
-          position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-          background: var(--ws-color-surface, #fff); border-radius: 6px; padding: 1px 2px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        .mindmap-visual-node.selected {
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--mm-color) 40%, transparent), 0 6px 20px color-mix(in srgb, var(--mm-color) 25%, transparent);
+          border-color: color-mix(in srgb, var(--mm-color) 70%, transparent);
+          transform: translateY(-2px);
         }
-        .mindmap-visual-node:hover .mindmap-visual-actions { opacity: 1; }
-        .mm-btn {
+        .mindmap-visual-node.collapsed { opacity: 0.45; }
+        .mindmap-visual-text-v2 {
+          font-size: 13px; font-weight: 600; text-align: center; line-height: 1.35;
+          color: color-mix(in srgb, var(--mm-color) 50%, #111827);
+          max-width: 130px; word-break: break-word;
+          text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+        }
+        .mindmap-inline-input-v2 {
+          border: none; outline: none; background: rgba(255,255,255,0.8); text-align: center;
+          font-size: 13px; font-weight: 600; width: 110px; border-radius: 6px;
+          padding: 2px 6px;
+          box-shadow: 0 0 0 2px var(--mm-color);
+        }
+        .mindmap-visual-actions-v2 {
+          display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s;
+          position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+          background: #fff; border-radius: 8px; padding: 2px 3px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+        }
+        .mindmap-visual-node:hover .mindmap-visual-actions-v2 { opacity: 1; }
+        .mm-btn-v2 {
           display: flex; align-items: center; justify-content: center;
-          width: 18px; height: 18px; border: none; border-radius: 4px;
-          cursor: pointer; background: transparent; color: var(--ws-color-text-tertiary, #9ca3af);
+          width: 20px; height: 20px; border: none; border-radius: 5px;
+          cursor: pointer; background: transparent; color: #94a3b8;
           transition: all 0.12s;
         }
-        .mm-btn.add:hover { background: #22c55e20; color: #16a34a; }
-        .mm-btn.del:hover { background: #ef444420; color: #dc2626; }
-        .mindmap-collapse-dot {
-          position: absolute; right: -9px; top: 50%; transform: translateY(-50%);
-          width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: 700;
+        .mm-btn-v2.mm-add:hover { background: #22c55e18; color: #16a34a; }
+        .mm-btn-v2.mm-sibling:hover { background: #3b82f618; color: #3b82f6; }
+        .mm-btn-v2.mm-del:hover { background: #ef444418; color: #dc2626; }
+        .mindmap-collapse-dot-v2 {
+          position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+          width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 700;
           display: flex; align-items: center; justify-content: center;
-          background: var(--ws-color-surface, #fff); border: 1.5px solid currentColor;
-          opacity: 0.5; cursor: pointer; transition: opacity 0.15s;
+          background: #fff; border: 2px solid color-mix(in srgb, var(--mm-color) 40%, transparent);
+          color: color-mix(in srgb, var(--mm-color) 70%, #64748b);
+          cursor: pointer; transition: all 0.15s; opacity: 0.5;
         }
-        .mindmap-collapse-dot:hover { opacity: 1; }
+        .mindmap-collapse-dot-v2:hover { opacity: 1; transform: translateY(-50%) scale(1.1); }
 
         /* 大纲模式 */
         .mm-outline-node { position: relative; }
