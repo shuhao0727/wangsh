@@ -42,7 +42,22 @@ class LearningContentItemOut(LearningContentItemIn):
 
     id: int
     module_key: str
+    owner_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MindmapCreate(BaseModel):
+    """创建思维导图请求。"""
+    title: str = Field(..., min_length=1, max_length=255)
+    module_key: str = Field(default="mindmap", max_length=50)
+    content: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MindmapUpdate(BaseModel):
+    """更新思维导图请求。"""
+    title: Optional[str] = Field(None, max_length=255)
+    content: Optional[Dict[str, Any]] = None
+    enabled: Optional[bool] = None

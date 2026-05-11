@@ -31,6 +31,7 @@ class LearningContentItem(Base):
     sort_order = Column(Integer, nullable=False, default=0, server_default="0", comment="排序")
     enabled = Column(Boolean, nullable=False, default=True, server_default="true", comment="是否启用")
     source_type = Column(String(50), nullable=False, default="admin", server_default="admin", comment="来源")
+    owner_id = Column(Integer, nullable=True, index=True, comment="所有者用户ID，NULL表示公共")
     created_at = Column(DateTime, server_default=func.now(), nullable=False, comment="创建时间")
     updated_at = Column(
         DateTime,

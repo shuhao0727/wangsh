@@ -19,10 +19,11 @@ import AdminMLPage from "./ml";
 import AdminAIPage from "./ai";
 import AdminAgentsPage from "./agents";
 import AgentConfigModal from "./components/AgentConfigModal";
+import MindMapManager from "./learning/MindMapManager";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { logger } from "@services/logger";
 
-type ViewState = 'dashboard' | 'dianming-manager' | 'ml-manager' | 'ai-manager' | 'agents-manager';
+type ViewState = 'dashboard' | 'dianming-manager' | 'ml-manager' | 'ai-manager' | 'agents-manager' | 'mindmap-manager';
 
 const AdminITTechnology: React.FC = () => {
   const navigate = useNavigate();
@@ -63,7 +64,7 @@ const AdminITTechnology: React.FC = () => {
       description: '在线脑图编辑与知识梳理',
       icon: <GitMerge className="h-5 w-5" />,
       color: "var(--ws-color-success)",
-      hasManager: false, // 暂未实现
+      hasManager: true,
     },
     {
       key: 'it_machine_learning',
@@ -199,6 +200,14 @@ const AdminITTechnology: React.FC = () => {
     );
   }
 
+  if (view === 'mindmap-manager') {
+    return (
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+        <MindMapManager />
+      </AdminPage>
+    );
+  }
+
   return (
     <AdminPage padding="var(--ws-panel-padding)">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -222,6 +231,7 @@ const AdminITTechnology: React.FC = () => {
                       if (app.key === "it_machine_learning") navigate("/admin/it-technology/ml-book-editor");
                       if (app.key === "it_ai_exploration") setView("ai-manager");
                       if (app.key === "it_agent_exploration") setView("agents-manager");
+                      if (app.key === "it_mindmap") setView("mindmap-manager");
                     }
                   : undefined
               }
