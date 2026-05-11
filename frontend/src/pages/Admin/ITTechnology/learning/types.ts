@@ -73,6 +73,7 @@ export interface LearningBookChapter {
   experiments: LearningBookExperiment[];
   glossary: { term: string; definition: string }[];
   references: LearningBookReference[];
+  group?: string;
 }
 
 export interface LearningBook {

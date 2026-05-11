@@ -139,7 +139,7 @@
 }
 
 .article-content {
-  font-size: var(--ws-text-sm);
+  font-size: var(--ws-text-md);
   line-height: 1.85;
 }
 

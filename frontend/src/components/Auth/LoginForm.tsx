@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, Lock, Loader2 } from "lucide-react";
+import { User, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
 }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const auth = useAuth();
 
@@ -96,6 +97,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const handleClose = () => {
     setUsername("");
     setPassword("");
+    setShowPassword(false);
     setErrors({});
     onClose();
   };
@@ -141,15 +143,23 @@ const LoginForm: React.FC<LoginFormProps> = ({
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
                 }}
                 placeholder="请输入密码"
-                className="h-[var(--ws-control-height)] pl-[var(--ws-search-input-padding-start)]"
+                className="h-[var(--ws-control-height)] pl-[var(--ws-search-input-padding-start)] pr-9"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
+                aria-label={showPassword ? "隐藏密码" : "显示密码"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
             {errors.password && (
               <p className="text-xs text-destructive">{errors.password}</p>

@@ -78,7 +78,7 @@ const AdminITTechnology: React.FC = () => {
       title: '人工智能探索',
       description: 'AI 能力体验与交互式学习探索',
       icon: <Sparkles className="h-5 w-5" />,
-      color: "#06B6D4",
+      color: "#2563EB",
       hasManager: true,
     },
     {
@@ -86,7 +86,7 @@ const AdminITTechnology: React.FC = () => {
       title: '智能体探索',
       description: '多智能体协作与对话实验',
       icon: <Bot className="h-5 w-5" />,
-      color: "#6366F1",
+      color: "#0D9488",
       hasManager: true,
     },
   ];
@@ -140,45 +140,60 @@ const AdminITTechnology: React.FC = () => {
   }
 
   if (view === 'ml-manager') {
+    const links = [
+      { label: '📖 学习书（章节）', href: '/admin/it-technology/learning/ml' },
+      { label: '🧠 学习地图', href: '/admin/it-technology/mindmap/ml' },
+      { label: '🔬 动手实验', href: '/admin/it-technology/learning/ml/experiments' },
+      { label: '🔧 工具箱', href: '/admin/it-technology/learning/ml/tools' },
+    ];
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
-        <div className="mb-4 shrink-0">
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
+        <div className="mb-4">
           <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
-        <div className="flex-1 min-h-0">
-          <AdminMLPage embedded />
+        <h2 className="text-lg font-bold mb-4">机器学习 · 内容管理</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {links.map(l => (
+            <a key={l.href} href={l.href} target="_blank"
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-accent transition-colors no-underline">
+              <span className="text-2xl">{l.label.slice(0, 2)}</span>
+              <span className="text-sm font-medium text-text-base">{l.label.slice(3)}</span>
+              <span className="ml-auto text-xs text-text-tertiary">→</span>
+            </a>
+          ))}
         </div>
       </AdminPage>
     );
   }
 
-  if (view === 'ai-manager') {
+  if (view === 'ai-manager' || view === 'agents-manager') {
+    const mod = view === 'ai-manager' ? 'ai' : 'agents';
+    const label = view === 'ai-manager' ? '人工智能探索' : '智能体探索';
+    const links = [
+      { label: '📖 学习书（章节）', href: `/admin/it-technology/learning/${mod}` },
+      { label: '🧠 学习地图', href: `/admin/it-technology/mindmap/${mod}` },
+      { label: '🔬 动手实验', href: `/admin/it-technology/learning/${mod}/experiments` },
+      { label: '🔧 工具箱', href: `/admin/it-technology/learning/${mod}/tools` },
+    ];
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
-        <div className="mb-4 shrink-0">
+      <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
+        <div className="mb-4">
           <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
-        <div className="flex-1 min-h-0">
-          <AdminAIPage embedded />
-        </div>
-      </AdminPage>
-    );
-  }
-
-  if (view === 'agents-manager') {
-    return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
-        <div className="mb-4 shrink-0">
-          <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
-            ← 返回 IT 应用管理
-          </Button>
-        </div>
-        <div className="flex-1 min-h-0">
-          <AdminAgentsPage embedded />
+        <h2 className="text-lg font-bold mb-4">{label} · 内容管理</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {links.map(l => (
+            <a key={l.href} href={l.href} target="_blank"
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-accent transition-colors no-underline">
+              <span className="text-2xl">{l.label.slice(0, 2)}</span>
+              <span className="text-sm font-medium text-text-base">{l.label.slice(3)}</span>
+              <span className="ml-auto text-xs text-text-tertiary">→</span>
+            </a>
+          ))}
         </div>
       </AdminPage>
     );

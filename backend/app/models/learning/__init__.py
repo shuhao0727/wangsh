@@ -4,8 +4,10 @@
 
 from .progress import LearningProgress
 from .content import LearningContentItem
+from .chapter import LearningChapter
 
 __all__ = [
     "LearningProgress",
     "LearningContentItem",
+    "LearningChapter",
 ]

@@ -1,7 +1,7 @@
 """创建 ML 学习书表 (ml_books, ml_book_chapters)。
 
 Revision ID: 20260503_0003_ml_book
-Revises: 20260503_0002_learning_content_items
+Revises: 20260503_0002_learning_content
 Create Date: 2026-05-03
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import text
 
 revision = "20260503_0003_ml_book"
-down_revision = "20260503_0002_learning_content_items"
+down_revision = "20260503_0002_learning_content"
 branch_labels = None
 depends_on = None
 

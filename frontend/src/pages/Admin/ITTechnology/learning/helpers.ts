@@ -29,8 +29,10 @@ export const mergeContentItems = <T extends LearningContentItem>(fallback: T[], 
 
 export const fetchLearningContent = async (moduleKey: LearningModuleKey): Promise<LearningContentItem[] | null> => {
   try {
-    const response = await api.get<ApiResponse<LearningContentItem[]>>(`/learning/content/${moduleKey}`);
-    return Array.isArray(response.data?.data) ? response.data.data : null;
+    const res = await fetch(`/api/v1/learning/content/${moduleKey}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : null;
   } catch {
     return null;
   }
@@ -43,13 +45,23 @@ export const fetchLearningContentPayload = async <T>(moduleKey: LearningModuleKe
   return items.reduce<Partial<T>>((acc, item) => {
     if (item.enabled === false) return acc;
     const value = item.content as unknown;
+
+    // "raw" section: spread content directly (e.g. full book object)
     if (item.section_key === "raw" && isRecord(value)) {
       return { ...acc, ...(value as Partial<T>) };
     }
-    if (isRecord(value) && Object.prototype.hasOwnProperty.call(value, item.item_key)) {
-      return { ...acc, [item.item_key]: value[item.item_key] } as Partial<T>;
-    }
-    return { ...acc, [item.item_key]: value } as Partial<T>;
+
+    // Extract entry value — if content is a record keyed by item_key, unwrap
+    const entryValue = (isRecord(value) && Object.prototype.hasOwnProperty.call(value, item.item_key))
+      ? value[item.item_key]
+      : value;
+
+    // Group by section_key instead of storing at root level
+    const sectionData = (acc as Record<string, unknown>)[item.section_key] || {};
+    return {
+      ...acc,
+      [item.section_key]: { ...(sectionData as Record<string, unknown>), [item.item_key]: entryValue },
+    } as Partial<T>;
   }, {});
 };
 

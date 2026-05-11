@@ -428,7 +428,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     <TooltipProvider delayDuration={120}>
       <div className="flex flex-col h-full overflow-hidden pr-[var(--ws-space-3)]">
         {/* 对话头部 */}
-        <div className="flex items-center justify-between px-[var(--ws-space-3)] py-[var(--ws-space-2)] flex-shrink-0 bg-surface border-b border-[var(--ws-color-border-secondary)] min-h-14">
+        <div className="flex items-center justify-between px-[var(--ws-space-4)] py-[var(--ws-space-2)] flex-shrink-0 bg-surface border-b border-[var(--ws-color-border-secondary)] min-h-14">
           <div className="flex items-center gap-2">
             {!historyVisible && (
               <Tooltip>
@@ -478,7 +478,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
 
         {/* 消息列表 */}
-        <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-[var(--ws-space-3)] py-[var(--ws-space-3)] bg-surface-2">
+        <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-[var(--ws-space-4)] py-[var(--ws-space-3)] bg-surface-2">
           {visibleMessages.map((message) => {
             const messageWorkflows = workflowGroups?.filter((group) => group.messageId === message.id) || [];
             return (
@@ -498,7 +498,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
 
         {/* 输入区域 */}
-        <div className="flex-shrink-0 px-[var(--ws-space-3)] pt-[var(--ws-space-2)] pb-[var(--ws-space-3)] bg-surface border-t border-[var(--ws-color-border-secondary)]">
+        <div className="flex-shrink-0 px-[var(--ws-space-4)] pt-[var(--ws-space-2)] pb-[var(--ws-space-3)] bg-surface border-t border-[var(--ws-color-border-secondary)]">
           <Textarea
             id="message-input"
             aria-label="输入消息"

@@ -46,7 +46,7 @@ const AdminEditorLayout: React.FC = () => {
           "flex flex-1 flex-col overflow-hidden",
           isFullscreenEditor ? "p-0" : "p-4"
         )}
-        style={{ height: "calc(100vh - 56px)" }}
+        style={{ height: "calc(100dvh - 56px)" }}
       >
         <div
           className={cn(

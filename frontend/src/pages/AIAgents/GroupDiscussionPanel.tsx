@@ -1121,7 +1121,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               ) : null}
             </div>
           </SheetHeader>
-          <div className="h-[calc(100vh-4rem)] overflow-y-auto p-4">
+          <div className="h-[calc(100dvh-4rem)] overflow-y-auto p-4">
         {membersLoading ? (
           <div className="p-6 flex justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />

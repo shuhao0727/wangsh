@@ -36,6 +36,10 @@ module.exports = {
           hover: "var(--ws-color-purple-hover)",
           soft: "var(--ws-color-purple-soft)",
         },
+        info: "var(--ws-color-info)",
+        bg: "var(--ws-color-bg)",
+        skeleton: "var(--ws-color-border)",
+        scrollbar: "var(--ws-color-scrollbar)",
         "text-base": "var(--ws-color-text)",
         "text-secondary": "var(--ws-color-text-secondary)",
         "text-tertiary": "var(--ws-color-text-tertiary)",
@@ -113,7 +117,7 @@ module.exports = {
       transitionTimingFunction: {
         ws: "cubic-bezier(0.4, 0, 0.2, 1)",
       },
-      // shadcn/ui 动画关键帧
+      // 动画关键帧
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -123,10 +127,20 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "ws-fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "ws-fade-in-up": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "ws-fade-in": "ws-fade-in 0.2s ease-out",
+        "ws-fade-in-up": "ws-fade-in-up 0.25s ease-out",
       },
     },
   },

@@ -1,4 +1,5 @@
 import type { LearningBook, LearningBookChapter } from "../learning/types";
+import { chapterMarkdown } from "./chapters";
 
 type ChapterDifficulty = LearningBookChapter["difficulty"];
 
@@ -13,20 +14,22 @@ interface ChapterSeed {
   practice: string;
   output: string;
   terms: [string, string][];
+  group: string;
 }
 
 const buildMarkdown = (chapter: ChapterSeed) => `# ${chapter.title}
 
 ## 学习定位
-${chapter.summary}人工智能不是一个单一工具，而是一组关于表示、推理、学习、生成、交互和治理的技术体系。学习 ${chapter.focus} 时，要避免把所有能力都归因于“模型很聪明”，而要追问：输入如何表示，系统如何得到中间证据，输出如何验证，失败时如何回退。这样才能从使用者变成设计者。
+${chapter.summary}
 
 ## 知识脉络
-${chapter.history}在课堂和项目环境中，AI 的价值不在于替代所有思考，而在于把重复的信息处理、模式发现和交互生成变成可控流程。你需要理解符号方法、机器学习方法、深度学习方法和大模型方法之间的差异：符号系统重规则，机器学习重数据统计，深度学习重表示，大模型重通用生成与上下文适配。它们不是互相取代，而是在不同约束下组合。
+${chapter.history}
 
 ## 实践方法
-围绕 ${chapter.practice}，本章建议采用“观察—拆解—实验—评估—反思”的节奏。先观察一个真实 AI 功能，拆出输入、模型、工具、知识库、安全边界和用户反馈；再设计一个小实验验证其中一个环节；最后记录成功案例、失败案例和改进策略。学习成果必须包含证据，而不是只展示漂亮截图。
+围绕 ${chapter.practice}，本章建议先观察、再动手、最后反思。
 
-> 一个可靠的 AI 学习者，既能说清能力边界，也能把复杂概念转化为可运行的小系统和可讨论的伦理判断。
+## 本章小结
+一个可靠的 AI 学习者，既能说清能力边界，也能把复杂概念转化为可运行的小系统和可讨论的伦理判断。
 `;
 
 const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
@@ -40,11 +43,12 @@ const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
     "把 AI 能力拆解为输入、处理、输出和反馈环节",
     "设计一个小型实践任务并形成证据化记录",
   ],
-  markdown: buildMarkdown(seed),
+  group: seed.group,
+  markdown: chapterMarkdown[seed.slug] ?? buildMarkdown(seed),
   checklist: [
-    "能用自己的话解释本章主题与其他 AI 范式的关系",
-    "能列出一个真实应用中的数据、模型、工具和风险",
-    "能完成一次实践并写出成功、失败和改进记录",
+    "能用自己的话解释本章主题",
+    "能列出一个真实应用中的数据、模型和风险",
+    "能完成一次实践并写出记录",
   ],
   experiments: [
     {
@@ -52,51 +56,58 @@ const makeChapter = (seed: ChapterSeed): LearningBookChapter => ({
       goal: `通过 ${seed.practice} 理解 ${seed.focus} 的真实作用`,
       steps: [
         "选择一个具体场景，写出用户目标和 AI 系统边界",
-        "构造最小实验，记录输入、提示、输出、评价和异常情况",
-        "把观察结果整理成一页实践报告，指出可用性和风险点",
+        "构造最小实验，记录输入、输出和异常情况",
       ],
       output: seed.output,
       difficulty: seed.difficulty,
     },
   ],
   glossary: seed.terms.map(([term, definition]) => ({ term, definition })),
-  references: [
-    {
-      title: `${seed.title} 可选延伸参考`,
-      source: "可选参考",
-      note: "这些资料只作为拓展阅读，不替代本章内置内容与实践任务；课堂使用时可按需要选择。",
-    },
-  ],
+  references: [],
 });
 
 const chapters: ChapterSeed[] = [
-  { slug: "history", title: "AI 发展史：从规则推理到生成智能", summary: "梳理人工智能的关键阶段，理解不同技术路线为什么兴起、受限并再次融合。", difficulty: "beginner", minutes: 30, focus: "AI 历史脉络", history: "从早期符号主义、专家系统，到统计学习、深度学习和生成式 AI，人工智能的发展始终围绕“知识从哪里来、如何表示、如何泛化”展开。", practice: "制作一条 AI 技术时间线并标注代表系统", output: "一张带解释的 AI 技术演进时间线", terms: [["符号主义", "用规则和逻辑表达智能的方法。"], ["连接主义", "用神经网络连接权重表达能力的方法。"], ["AI 冬天", "AI 期望过高但落地不足导致投入下降的时期。"]] },
-  { slug: "core-concepts", title: "核心概念：智能、表示、推理与学习", summary: "建立 AI 的概念底座，区分智能行为、知识表示、推理机制和学习机制。", difficulty: "beginner", minutes: 32, focus: "AI 基础概念", history: "AI 系统看似多样，但都离不开表示、搜索、推理、学习和反馈。理解这些概念有助于判断一个功能究竟是规则驱动、模型驱动还是混合系统。", practice: "拆解一个校园 AI 助手的输入输出结构", output: "一份 AI 系统概念拆解图", terms: [["表示", "把现实对象转成系统可处理形式。"], ["推理", "根据已知信息得出结论的过程。"], ["反馈", "用于改进系统表现的外部或内部信号。"]] },
-  { slug: "symbolic-ai", title: "符号 AI：规则、知识库与专家系统", summary: "理解规则系统的优势和局限，学习如何用显式知识构建可解释的智能功能。", difficulty: "intermediate", minutes: 34, focus: "符号 AI", history: "符号 AI 曾长期代表人工智能主流，它擅长表达明确规则、流程和约束，但面对模糊语义、噪声数据和开放环境时维护成本很高。", practice: "设计一个课堂设备故障诊断规则库", output: "一个规则表和推理流程说明", terms: [["规则库", "由条件和动作组成的知识集合。"], ["专家系统", "模拟专家决策流程的程序。"], ["可解释性", "系统决策可被人理解和追踪。"]] },
-  { slug: "machine-learning-paradigm", title: "机器学习范式：从规则编写到数据归纳", summary: "理解机器学习如何通过样本归纳规律，并掌握任务、数据、模型和评估的关系。", difficulty: "intermediate", minutes: 36, focus: "机器学习范式", history: "当规则难以手写时，机器学习通过数据学习模式。它改变了 AI 系统的构建方式：工程重点从写规则转向收集数据、定义目标、训练模型和评估泛化。", practice: "比较规则分类器和学习分类器的表现", output: "一份规则方法与学习方法对比报告", terms: [["训练", "用数据调整模型参数。"], ["泛化", "模型在新样本上保持效果的能力。"], ["评估", "用指标和案例判断模型质量。"]] },
-  { slug: "deep-learning-paradigm", title: "深度学习范式：表示学习与端到端训练", summary: "理解深度学习如何自动学习表示，以及为什么它推动视觉、语音和语言任务突破。", difficulty: "advanced", minutes: 40, focus: "深度学习范式", history: "深度学习把特征学习和任务学习结合起来，用多层网络从原始数据中形成表示。它依赖算力、数据和优化技巧，也带来了可解释性和资源消耗问题。", practice: "观察一个小型神经网络的训练曲线", output: "一份训练曲线与过拟合分析", terms: [["表示学习", "模型自动形成有用特征的能力。"], ["端到端", "从原始输入直接训练到目标输出。"], ["过拟合", "模型记住训练数据但泛化较差。"]] },
-  { slug: "transformer", title: "Transformer：注意力机制与通用架构", summary: "掌握 Transformer 的基本直觉，理解注意力机制为什么适合序列和多模态建模。", difficulty: "advanced", minutes: 42, focus: "Transformer", history: "Transformer 用自注意力替代传统递归结构，使模型能并行处理序列并捕捉长距离依赖。它逐渐成为语言、视觉、语音和多模态模型的基础架构。", practice: "用示意图解释一句话中词语之间的注意力关系", output: "一张注意力关系图和文字说明", terms: [["注意力", "根据上下文为不同信息分配权重。"], ["Token", "模型处理文本或其他数据的基本单元。"], ["位置编码", "给序列元素加入顺序信息的方法。"]] },
-  { slug: "llm", title: "大语言模型：预训练、对齐与上下文学习", summary: "理解大语言模型如何通过预训练获得通用能力，并通过提示、对齐和工具扩展应用。", difficulty: "advanced", minutes: 45, focus: "大语言模型", history: "大语言模型通过海量文本预训练学习语言和世界知识的统计结构，再通过指令微调、人类反馈和安全策略更适合对话与任务执行。", practice: "比较不同提示方式对同一任务输出的影响", output: "一份提示对比和输出质量评价表", terms: [["预训练", "在大规模数据上学习通用模式。"], ["对齐", "让模型行为更符合人类意图和安全要求。"], ["上下文学习", "模型根据当前输入示例临时适配任务。"]] },
-  { slug: "generative-ai", title: "生成式 AI：文本、图像、音频与视频生成", summary: "理解生成式 AI 的能力谱系，学会从创作流程、版权、质量控制和安全角度使用它。", difficulty: "advanced", minutes: 40, focus: "生成式 AI", history: "生成式 AI 将模型从识别和预测扩展到内容生成。它能提升创作效率，也会带来真实性、版权、偏见和滥用风险，需要以流程和规范管理。", practice: "设计一个图文生成工作流并进行质量审查", output: "一个生成作品样例和质量检查清单", terms: [["扩散模型", "逐步去噪生成图像等内容的模型。"], ["采样", "从模型概率分布中生成具体结果。"], ["版权风险", "生成内容可能涉及来源、授权或相似性问题。"]] },
-  { slug: "prompt-engineering", title: "Prompt 工程：任务说明、约束与评估", summary: "把提示词从玄学变成工程方法，学习目标、上下文、格式、示例和评价标准。", difficulty: "intermediate", minutes: 36, focus: "Prompt 工程", history: "Prompt 工程不是堆砌修饰词，而是把任务边界、背景材料、输出格式、判断标准和反例组织清楚，让模型更稳定地完成任务。", practice: "为同一任务设计三版提示并比较输出", output: "一份 Prompt 迭代记录和最佳版本说明", terms: [["系统提示", "定义模型角色和全局约束的提示。"], ["Few-shot", "通过少量示例引导模型完成任务。"], ["输出格式", "约束结果结构以便阅读或程序处理。"]] },
-  { slug: "rag", title: "RAG：让 AI 基于资料回答", summary: "学习检索增强生成如何降低幻觉，让模型回答可追溯、可更新的知识问题。", difficulty: "advanced", minutes: 42, focus: "RAG", history: "RAG 把外部知识库检索结果放入模型上下文，使回答能引用资料而不是只依赖参数记忆。它适合课程问答、制度查询和资料助手。", practice: "用三篇课程资料设计一个检索问答流程", output: "一份 RAG 流程图和问答样例", terms: [["召回", "从知识库中找出候选片段。"], ["重排", "对候选片段按相关性再次排序。"], ["引用", "把答案依据指向原始资料片段。"]] },
-  { slug: "multimodal-ai", title: "多模态 AI：文本、图像与行动的统一理解", summary: "理解多模态模型如何处理不同类型输入，以及它在教育、创作和机器人中的应用。", difficulty: "advanced", minutes: 40, focus: "多模态 AI", history: "多模态 AI 把文本、图像、音频、视频和动作放到统一表示空间中，使系统能看图回答、理解屏幕、生成图文并辅助真实世界任务。", practice: "分析一个看图问答或屏幕理解任务", output: "一份多模态输入输出拆解报告", terms: [["模态", "信息的表现形式，如文本、图像、声音。"], ["对齐", "让不同模态表达相同语义时接近。"], ["视觉语言模型", "同时处理图像和文本的模型。"]] },
-  { slug: "ai-tools", title: "AI 工具生态：从单点工具到工作流", summary: "学习如何选择和组合 AI 工具，让它们服务真实学习、教学、办公和开发流程。", difficulty: "intermediate", minutes: 34, focus: "AI 工具体系", history: "AI 工具包括对话助手、写作工具、编程助手、图像生成、知识库、自动化和智能体平台。关键不是收藏工具，而是建立可复用工作流。", practice: "设计一个教师备课或学生项目的 AI 工作流", output: "一张工具选择矩阵和工作流说明", terms: [["工作流", "由多个步骤和工具组成的稳定流程。"], ["自动化", "让系统按规则或触发器执行任务。"], ["人机协作", "人负责目标、判断和责任，AI 负责辅助处理。"]] },
-  { slug: "safety-ethics", title: "安全与伦理：偏见、隐私、责任和边界", summary: "理解 AI 应用中的安全伦理问题，建立可执行的课堂和项目治理清单。", difficulty: "advanced", minutes: 44, focus: "AI 安全伦理", history: "AI 系统会继承数据偏见，可能泄露隐私、生成错误信息或被滥用。伦理不是附加章节，而是每个 AI 项目的设计约束。", practice: "对一个 AI 应用做风险评估和改进建议", output: "一份 AI 风险清单和治理建议", terms: [["偏见", "系统对不同群体产生不公平表现。"], ["隐私", "个人信息收集、使用和保护问题。"], ["责任", "明确 AI 输出由谁审核和承担后果。"]] },
-  { slug: "industry-cases", title: "行业案例：教育、医疗、制造与公共服务", summary: "通过行业案例理解 AI 的落地条件、价值来源和失败原因。", difficulty: "advanced", minutes: 38, focus: "AI 行业应用", history: "AI 在不同行业的成功取决于数据质量、流程嵌入、合规要求、用户接受度和持续维护。案例学习能帮助我们避免只看演示效果。", practice: "选择一个行业案例分析价值链和风险点", output: "一页行业案例分析卡片", terms: [["场景适配", "技术能力与真实流程匹配。"], ["合规", "满足法律、行业和组织规范。"], ["ROI", "投入产出或价值回报。"]] },
-  { slug: "future", title: "未来趋势：AI 原生应用与学习者能力", summary: "面向未来理解 AI 原生软件、智能体、具身智能和个人能力结构的变化。", difficulty: "expert", minutes: 36, focus: "AI 未来趋势", history: "未来 AI 会更深地嵌入软件、设备和组织流程。学习者需要同时具备问题定义、工具组合、数据判断、伦理意识和持续学习能力。", practice: "设计一个未来校园 AI 应用并评估可行性", output: "一份未来 AI 应用概念稿和能力清单", terms: [["AI 原生", "围绕 AI 能力重新设计的软件或流程。"], ["具身智能", "能感知并作用于物理世界的智能系统。"], ["终身学习", "持续更新知识与能力以适应变化。"]] },
+  // ===== 📖 第一篇：符号主义AI =====
+  { slug: "symbolic-search", title: "走迷宫：教会电脑找路", summary: "从走迷宫理解状态空间搜索——BFS 逐层探索，DFS 一条路走到黑，A* 聪明地找捷径。", difficulty: "beginner", minutes: 30, group: "📖 符号主义AI", focus: "搜索与规划", history: "搜索是 AI 最古老的能力之一。从走迷宫到下棋，搜索算法让电脑能在无数可能性中找到最优解。", practice: "在方格迷宫上手工运行 BFS 和 A*", output: "一张标注搜索过程的迷宫图", terms: [["状态空间", "所有可能局面的集合"], ["启发式", "经验规则帮助快速找到答案"], ["A*", "结合实际代价和预估代价的最优搜索"]] },
+  { slug: "knowledge-representation", title: "知识如何存进电脑", summary: "语义网络像思维导图，知识图谱像超大关系网——理解电脑如何组织知识。", difficulty: "intermediate", minutes: 32, group: "📖 符号主义AI", focus: "知识表示", history: "知识表示决定了 AI 能推理什么。从逻辑公式到语义网络再到知识图谱，人类一直在寻找更好的知识组织方式。", practice: "用思维导图工具画出学校知识网络", output: "一张包含 20+ 节点的学校知识图谱", terms: [["语义网络", "用节点和连线表示概念关系"], ["本体", "对领域知识的形式化描述"], ["知识图谱", "大规模结构化的实体关系网"]] },
+  { slug: "expert-systems", title: "电脑当医生：规则引擎", summary: "用 if-then 规则做推理——像医生问诊一样，电脑也能根据症状推理疾病。", difficulty: "intermediate", minutes: 34, group: "📖 符号主义AI", focus: "专家系统", history: "专家系统是 AI 最早的成功应用。它把人类专家的知识写成规则，让电脑替人诊断、配置、排故。", practice: "设计一个选课推荐规则引擎", output: "一个规则表和推理示例", terms: [["规则引擎", "根据条件触发动作的系统"], ["前向链", "从事实推导结论"], ["不确定性", "不是非黑即白的推理"]] },
+
+  // ===== 📊 第二篇：机器学习 =====
+  { slug: "supervised-learning", title: "认猫还是认狗：学会分类", summary: "用标记数据训练模型——给它看 100 张猫狗照片，它自己学会区分。", difficulty: "beginner", minutes: 32, group: "📊 机器学习", focus: "监督学习", history: "监督学习是 ML 最常见的范式。从垃圾邮件过滤到人脸识别，都是它的杰作。", practice: "用 Excel 或 Python 训练一个简单分类器", output: "一个分类决策表格和可视化", terms: [["训练集", "用来学习的标记数据"], ["测试集", "用来验证效果的未见过数据"], ["过拟合", "背答案不会解题——记住了训练数据但无法泛化"]] },
+  { slug: "unsupervised-learning", title: "物以类聚：没有标签也能分", summary: "没标签怎么办？K-Means 自动把相似的东西分到一组——就像整理房间。", difficulty: "intermediate", minutes: 34, group: "📊 机器学习", focus: "无监督学习", history: "现实中大部分数据没有标签。无监督学习让电脑自己发现数据中的隐藏结构。", practice: "用 K-Means 对班级同学的兴趣分组", output: "一个聚类散点图和各组特征描述", terms: [["聚类", "把相似数据放到一起"], ["降维", "把高维数据压缩到可视化维度"], ["PCA", "找出数据方差最大的方向"]] },
+  { slug: "reinforcement-learning", title: "打游戏练级：AI 的试错之旅", summary: "AlphaGo 怎么学会下棋？靠试错！赢了加分输了扣分——AI 自己找到最优策略。", difficulty: "intermediate", minutes: 36, group: "📊 机器学习", focus: "强化学习", history: "强化学习让 AI 通过与环境互动来学习。从游戏到机器人控制，试错法让 AI 超越人类。", practice: "玩一局理解 Q-Learning 的更新过程", output: "一张 Q 表更新示意图", terms: [["Agent", "做出决策的行动者"], ["环境", "Agent 交互的世界"], ["奖励", "告诉 Agent 做得好不好的信号"]] },
+
+  // ===== 🧠 第三篇：深度学习 =====
+  { slug: "neural-networks", title: "叠乐高：搭一个数字大脑", summary: "神经元就像乐高积木——一个个简单的计算单元堆叠起来，能解决复杂问题。", difficulty: "intermediate", minutes: 36, group: "🧠 深度学习", focus: "神经网络基础", history: "神经网络受大脑启发，但远比大脑简单。多层网络+反向传播让深度学习成为可能。", practice: "手动计算一个简单神经元的输出", output: "一个前向传播计算表", terms: [["神经元", "接收输入计算加权和输出结果的单元"], ["激活函数", "决定神经元是否激活的开关"], ["反向传播", "从错误中学习——往减少损失的方向调整"]] },
+  { slug: "cnn-vision", title: "AI 的眼睛：卷积神经网络", summary: "CNN 像用滤镜修图——一个卷积核检测边缘，另一个检测纹理，层层叠加看懂图片。", difficulty: "intermediate", minutes: 38, group: "🧠 深度学习", focus: "CNN 视觉", history: "CNN 让电脑看懂图片。从 LeNet 到 ResNet，视觉 AI 的准确率已经超过人类。", practice: "用在线工具可视化 CNN 的每一层输出", output: "一张 CNN 各层特征可视化图", terms: [["卷积", "用小窗口在图片上滑动检测特征"], ["池化", "缩小图片保留重要信息"], ["迁移学习", "借用一个已训练的模型来加速学习"]] },
+  { slug: "transformer-attention", title: "团战注意力：Transformer 的秘密", summary: "Self-Attention 就像王者团战——你不需要看全图，只盯关键目标就行。", difficulty: "advanced", minutes: 40, group: "🧠 深度学习", focus: "Transformer", history: "2017 年 Transformer 问世，彻底改变了 AI 格局。注意力机制让模型并行处理、捕捉长距离依赖。", practice: "用示意图画出 Q K V 如何计算注意力", output: "一张注意力权重热力图", terms: [["Q", "你想找什么"], ["K", "我有什么特征"], ["V", "我的实际内容是什么"]] },
+
+  // ===== 🤖 第四篇：大语言模型 =====
+  { slug: "llm-pretraining", title: "海量阅读：让 AI 读完整个互联网", summary: "GPT 怎么学会说话的？读了几万亿个字之后，它自己就懂了语法、逻辑和常识。", difficulty: "intermediate", minutes: 34, group: "🤖 大语言模型", focus: "LLM 预训练", history: "LLM 的魔力来自规模——海量数据+超多参数=涌现能力。GPT-3 的 1750 亿参数让世界震惊。", practice: "对比不同规模模型在同一任务上的输出差异", output: "一个模型能力对比表", terms: [["预训练", "不针对特定任务的大规模学习"], ["Token", "文本的最小处理单元"], ["涌现", "规模变大后自动出现的新能力"]] },
+  { slug: "finetune-alignment", title: "家教辅导：让 AI 听话", summary: "预训练只是打基础——还要微调和 RLHF，才能让 AI 变得有用。", difficulty: "advanced", minutes: 38, group: "🤖 大语言模型", focus: "微调与对齐", history: "GPT-3 虽然强大但经常胡说八道。通过指令微调和人类反馈，ChatGPT 变得好用多了。", practice: "理解 DPO 和 RLHF 的核心区别", output: "一张对齐方法对比表", terms: [["SFT", "用优质问答对来训练"], ["RLHF", "人类打分指导模型优化"], ["DPO", "直接从偏好数据中学习"]] },
+  { slug: "inference-deploy", title: "压缩饼干：让大模型跑得快", summary: "200GB 的模型怎么塞进手机？量化压缩 4 倍、蒸馏变小 10 倍——模型减肥术。", difficulty: "advanced", minutes: 36, group: "🤖 大语言模型", focus: "推理与部署", history: "大模型虽强但不实用。量化、蒸馏、剪枝让它们跑在消费级硬件上。", practice: "用 Ollama 在本地运行一个量化模型", output: "一张量化对比速度和精度表", terms: [["量化", "降低数值精度减少存储"], ["蒸馏", "大模型教小模型"], ["Ollama", "一键本地运行开源 LLM"]] },
+
+  // ===== 🚀 第五篇：AI 应用 =====
+  { slug: "nlp-rag", title: "带小抄考试：AI 的知识外挂", summary: "RAG 让 AI 先翻书再回答——告别幻觉，每条答案都有出处。", difficulty: "intermediate", minutes: 38, group: "🚀 AI 应用", focus: "NLP 与 RAG", history: "RAG 把检索和生成结合起来。AI 不再只靠记忆回答，而是实时查资料再组织答案。", practice: "用 DeepSeek API + 本地文档搭建简易 RAG", output: "一个可运行的 RAG Demo", terms: [["检索", "从知识库找相关资料"], ["幻觉", "AI 编造不存在的信息"], ["引用", "答案指向原始出处"]] },
+  { slug: "computer-vision", title: "AI 的五官：看懂世界", summary: "从人脸识别到自动驾驶——CV 如何让电脑拥有眼睛。", difficulty: "intermediate", minutes: 34, group: "🚀 AI 应用", focus: "计算机视觉", history: "CV 经历了从手工特征到深度学习的革命。如今 AI 不仅能识别物体，还能理解场景。", practice: "用通义千问 VL 分析一张课堂照片", output: "一张标注了检测结果的图片", terms: [["目标检测", "找到并框出图中的物体"], ["分割", "把每个像素分类"], ["VLM", "视觉语言模型——看得见也说得清"]] },
+  { slug: "generative-ai-apps", title: "AI 画家：从噪声中创造美", summary: "Stable Diffusion 怎么画画的？从一团随机噪声开始，一步一步去噪直到画面清晰。", difficulty: "intermediate", minutes: 36, group: "🚀 AI 应用", focus: "生成式 AI", history: "扩散模型让 AI 绘画从实验室走进日常生活。Midjourney、DALL-E、通义万相都是它的后代。", practice: "用通义万相生成一组风格统一的图片", output: "一组对比图：不同 prompt 的生成效果", terms: [["扩散", "逐步去噪的过程"], ["提示词", "描述你想要什么的文字指令"], ["ControlNet", "精确控制生成内容的结构"]] },
+
+  // ===== ⚖️ 第六篇：安全与未来 =====
+  { slug: "ai-safety", title: "AI 也会犯错：幻觉、偏见与越狱", summary: "AI 不是完美的——它会胡说八道、歧视用户、被恶意操控。理解风险才能安全使用。", difficulty: "intermediate", minutes: 36, group: "⚖️ 安全与未来", focus: "AI 安全", history: "随着 AI 能力增强，安全问题日益重要。从社交媒体偏见到深度伪造，AI 的双刃剑越来越锋利。", practice: "测试并记录一次 AI 幻觉或偏见案例", output: "一份 AI 安全风险报告", terms: [["幻觉", "AI 自信地说出错误信息"], ["偏见", "AI 对特定群体不公平"], ["越狱", "绕过 AI 的安全限制"]] },
+  { slug: "ai-ethics", title: "谁为 AI 的错误负责", summary: "AI 写的文章侵权怎么办？AI 做的医疗决策出错怪谁？探讨 AI 时代的伦理困境。", difficulty: "intermediate", minutes: 34, group: "⚖️ 安全与未来", focus: "AI 伦理", history: "AI 伦理不是空谈——从自动驾驶事故到 AI 换脸诈骗，伦理问题已进入法庭和立法机构。", practice: "对一款 AI 产品做伦理评估", output: "一份 AI 伦理评估清单", terms: [["版权", "AI 生成内容的归属问题"], ["隐私", "训练数据中的个人信息"], ["问责", "谁为 AI 决策负责"]] },
+  { slug: "ai-future", title: "十年后的 AI 世界", summary: "AGI 还有多远？AI Agent 会取代 App 吗？具身智能会让机器人走进千家万户吗？", difficulty: "beginner", minutes: 32, group: "⚖️ 安全与未来", focus: "AI 未来", history: "预测未来很难，但我们可以基于当前趋势展望 AI 的演进方向。从专用 AI 到通用 AI，路还很长。", practice: "写出你对 2035 年 AI 生活的想象", output: "一篇 2035 AI 与我的一天短文", terms: [["AGI", "通用人工智能——能完成任何智力任务"], ["具身智能", "有身体的 AI 能物理交互"], ["AI Agent", "能规划执行学习的自主系统"]] },
 ];
 
 export const AI_BOOK: LearningBook = {
   moduleKey: "ai",
   title: "人工智能探索百科式学习书",
-  subtitle: "从技术脉络到负责任应用的系统化学习路径",
+  subtitle: "从符号推理到生成智能的系统化学习路径",
   description: "将 AI 历史、核心范式、大模型、工具生态和安全伦理组织成可编辑的 Markdown 学习书。",
   audience: "适合希望理解 AI 全貌、开展课堂项目或建设 AI 应用原型的学习者。",
   outcomes: [
     "能解释 AI 主要技术路线及其边界",
-    "能设计并评估一个小型 AI 应用或工作流",
-    "能从安全、伦理和可用性角度审查 AI 输出",
+    "能选择合适的工具组合完成 AI 实践任务",
+    "能识别 AI 应用中的安全伦理风险",
   ],
   chapters: chapters.map(makeChapter),
 };

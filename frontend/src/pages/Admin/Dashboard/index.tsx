@@ -12,8 +12,8 @@ import { StatCard } from "@components/Common/StatCard";
 import { api, config } from "@services";
 
 const dot = (ok: boolean) => ok
-  ? <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-success)]" />
-  : <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-error)]" />;
+  ? <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-success)]" role="status" aria-label="运行正常" />
+  : <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-error)]" role="status" aria-label="异常" />;
 
 interface StatusRowProps { label: string; value: React.ReactNode; ok?: boolean; }
 const StatusRow: React.FC<StatusRowProps> = ({ label, value, ok }) => (
@@ -58,7 +58,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <AdminPage>
       {/* 页头 */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-5" aria-live="polite">
         <div>
           <div className="text-lg font-semibold text-text-base">系统状态</div>
           <div className="text-base mt-0.5 text-text-secondary">实时监控系统运行状态与核心指标</div>
