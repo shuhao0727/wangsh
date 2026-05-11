@@ -120,6 +120,44 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
   const [history, setHistory] = useState<MindMapNode[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const svgRef = useRef<SVGSVGElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const panning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, sx: 0, sy: 0 });
+
+  /* ── 布局 ── */
+  const layout = useMemo(() => layoutTree(tree), [tree]);
+  const flat = useMemo(() => flattenLayout(layout), [layout]);
+  const nodeMap = useMemo(() => new Map(flat.map((l) => [l.node.id, l])), [flat]);
+
+  /* ── 贝塞尔连线 ── */
+  const paths: { d: string; color: string; collapsed: boolean }[] = useMemo(() => {
+    const result: { d: string; color: string; collapsed: boolean }[] = [];
+    function walk(ln: LayoutNode) {
+      if (ln.node.collapsed) return;
+      const pc = getCenter(ln);
+      for (const ch of ln.children) {
+        const cc = getCenter(ch);
+        const cx1 = pc.x + Math.abs(cc.x - pc.x) * 0.5;
+        const d = `M ${pc.x} ${pc.y} C ${cx1} ${pc.y}, ${cx1} ${cc.y}, ${cc.x} ${cc.y}`;
+        result.push({ d, color: ch.node.color || PALETTE[0], collapsed: false });
+        walk(ch);
+      }
+    }
+    walk(layout);
+    return result;
+  }, [layout]);
+
+  // 首次加载居中到根节点
+  useEffect(() => {
+    if (mode === "mindmap" && viewportRef.current) {
+      const el = viewportRef.current;
+      const rootCenter = getCenter(layout);
+      requestAnimationFrame(() => {
+        el.scrollLeft = Math.max(0, rootCenter.x - el.clientWidth * 0.3);
+        el.scrollTop = Math.max(0, rootCenter.y - el.clientHeight / 2);
+      });
+    }
+  }, [mode, layout]);
 
   useEffect(() => {
     if (initialMarkdown && initialTitle) {
@@ -219,29 +257,6 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
     return () => window.removeEventListener("keydown", h);
   }, [selectedId, tree.id]);
 
-  /* ── 布局 ── */
-  const layout = useMemo(() => layoutTree(tree), [tree]);
-  const flat = useMemo(() => flattenLayout(layout), [layout]);
-  const nodeMap = useMemo(() => new Map(flat.map((l) => [l.node.id, l])), [flat]);
-
-  /* ── 贝塞尔连线 ── */
-  const paths: { d: string; color: string; collapsed: boolean }[] = useMemo(() => {
-    const result: { d: string; color: string; collapsed: boolean }[] = [];
-    function walk(ln: LayoutNode) {
-      if (ln.node.collapsed) return;
-      const pc = getCenter(ln);
-      for (const ch of ln.children) {
-        const cc = getCenter(ch);
-        const cx1 = pc.x + Math.abs(cc.x - pc.x) * 0.5;
-        const d = `M ${pc.x} ${pc.y} C ${cx1} ${pc.y}, ${cx1} ${cc.y}, ${cc.x} ${cc.y}`;
-        result.push({ d, color: ch.node.color || PALETTE[0], collapsed: false });
-        walk(ch);
-      }
-    }
-    walk(layout);
-    return result;
-  }, [layout]);
-
   /* ── 双击重命名 ── */
   const startEdit = (id: string, text: string) => {
     setEditingId(id);
@@ -284,8 +299,38 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
 
       {/* ── 导图模式 ── */}
       {mode === "mindmap" && (
-        <div className="flex-1 overflow-auto relative" style={{ minHeight: Math.max(400, layout.h + 80) }}>
-          <div className="absolute" style={{ left: 40, top: 40 + Math.max(0, -layout.y), width: layout.w + 100, height: layout.h + 80 }}>
+        <div
+          ref={viewportRef}
+          className="flex-1 overflow-auto relative"
+          style={{
+            minHeight: Math.max(400, layout.h + 200),
+            cursor: "grab",
+            overscrollBehavior: "contain",
+            userSelect: "none",
+          }}
+          onMouseDown={(e) => {
+            if (!viewportRef.current) return;
+            panning.current = true;
+            panStart.current = { x: e.clientX, y: e.clientY, sx: viewportRef.current.scrollLeft, sy: viewportRef.current.scrollTop };
+            (e.target as HTMLElement).style.cursor = "grabbing";
+          }}
+          onMouseMove={(e) => {
+            if (!panning.current || !viewportRef.current) return;
+            viewportRef.current.scrollLeft = panStart.current.sx - (e.clientX - panStart.current.x);
+            viewportRef.current.scrollTop = panStart.current.sy - (e.clientY - panStart.current.y);
+          }}
+          onMouseUp={() => { panning.current = false; if (viewportRef.current) viewportRef.current.style.cursor = "grab"; }}
+          onMouseLeave={() => { panning.current = false; if (viewportRef.current) viewportRef.current.style.cursor = "grab"; }}
+        >
+          <div
+            className="absolute"
+            style={{
+              left: 60,
+              top: 60 + Math.max(0, -layout.y),
+              width: layout.w + 200,
+              height: layout.h + 160,
+            }}
+          >
             {/* SVG 连线层 */}
             <svg className="absolute inset-0 pointer-events-none" style={{ overflow: "visible", zIndex: 0 }}>
               {paths.map((p, i) => (
