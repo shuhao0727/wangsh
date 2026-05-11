@@ -6,6 +6,7 @@ from app.models.learning.content import LearningContentItem
 from sqlalchemy import delete
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "archive")
 
 async def seed_module(db, module_key: str, json_path: str):
     if not os.path.exists(json_path):
@@ -46,13 +47,13 @@ async def main():
         print("Cleared old experiments")
 
         # Seed AI
-        n1 = await seed_module(db, "ai", os.path.join(SCRIPT_DIR, "ai_experiments_1_9.json"))
-        n2 = await seed_module(db, "ai", os.path.join(SCRIPT_DIR, "ai_experiments_10_18.json"))
+        n1 = await seed_module(db, "ai", os.path.join(ARCHIVE_DIR, "ai_experiments_1_9.json"))
+        n2 = await seed_module(db, "ai", os.path.join(ARCHIVE_DIR, "ai_experiments_10_18.json"))
         print(f"AI experiments: {n1 + n2} seeded")
 
         # Seed Agents
-        n3 = await seed_module(db, "agents", os.path.join(SCRIPT_DIR, "agents_experiments_1_12.json"))
-        n4 = await seed_module(db, "agents", os.path.join(SCRIPT_DIR, "agents_experiments_13_23.json"))
+        n3 = await seed_module(db, "agents", os.path.join(ARCHIVE_DIR, "agents_experiments_1_12.json"))
+        n4 = await seed_module(db, "agents", os.path.join(ARCHIVE_DIR, "agents_experiments_13_23.json"))
         print(f"Agents experiments: {n3 + n4} seeded")
 
     print("Done!")

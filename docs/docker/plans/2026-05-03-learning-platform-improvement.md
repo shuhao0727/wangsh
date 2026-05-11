@@ -1,3 +1,9 @@
+---
+status: active
+owner: frontend
+最近复核: 2026-05-10
+---
+
 # Learning Platform Improvement Implementation Plan
 > **For agentic workers:** Use subagent-driven-development or executing-plans
 

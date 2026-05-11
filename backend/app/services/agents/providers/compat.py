@@ -31,6 +31,9 @@ def chat_completions_endpoint(api_endpoint: str, flags: Dict[str, bool]) -> str:
         if base.endswith("/v1"):
             return f"{base}/chat/completions"
         return f"{base}/v1/chat/completions"
+    # 未知域名但 URL 以 /v1 结尾，默认按 OpenAI 兼容中转站处理
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
     return base
 
 

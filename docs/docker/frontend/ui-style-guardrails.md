@@ -3,7 +3,7 @@
 Reference workflow:
 - `../plans/ui-single-page-governance.md`
 - `../plans/ui-page-health-template.md`
-- `../plans/ui-page-tracker.md`
+- ~~`../plans/ui-page-tracker.md`~~（已归档至 `../../archive/plans/ui-page-tracker.md`）
 
 ## Allowed
 - Use global tokens in `src/styles/index.css` (typography, spacing, radius, shell width).

@@ -8,15 +8,12 @@
 - [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) - 文档维护规范和落位规则
 - [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md) - 文档归属、生命周期和自动整理策略
 - [docker/README.md](docker/README.md) - Docker 文档中心（部署、测试、计划、前端专项、归档）
-- [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) - 当前仍在维护的总检查清单
 
 ## 核心文档
 
-- [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) - 当前总检查清单和执行顺序（主计划文档）
 - [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md) - 文档 owner、生命周期状态、清理和归档策略
 - [DATABASE_PERFORMANCE_GUIDE.md](DATABASE_PERFORMANCE_GUIDE.md) - 数据库性能分析与优化指南（整合版）
 - [DATABASE_PERFORMANCE_ANALYSIS.md](DATABASE_PERFORMANCE_ANALYSIS.md) - 数据库性能分析指南旧入口（redirect）
-- [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
 - [docker/RELEASE_NOTES.md](docker/RELEASE_NOTES.md) - 发布与运维记录
 - [development/API.md](development/API.md) - API 接口文档
 - [docker/deploy/DEPLOY.md](docker/deploy/DEPLOY.md) - 完整部署指南（开发/生产环境）
@@ -29,13 +26,19 @@
 - [docker/deploy/CICD.md](docker/deploy/CICD.md) - 工作流、镜像与 CI 门禁说明
 - [docker/testing/README.md](docker/testing/README.md) - 测试与验证入口
 - [docker/frontend/README.md](docker/frontend/README.md) - 前端专项文档入口
+- [docker/frontend/ACCESSIBILITY_GUIDE.md](docker/frontend/ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与治理入口
 - [docker/archive/README.md](docker/archive/README.md) - 历史归档入口
 
 ### 当前计划与治理 (`docker/plans/`)
 
-- [docker/plans/execution-roadmap.md](docker/plans/execution-roadmap.md) - 阶段执行路线图（需复核，当前总计划以 `IMPROVEMENT_CHECKLIST.md` 为准）
 - [docker/plans/pythonlab-capability-inventory.md](docker/plans/pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
+- [docker/plans/sse-redis-pubsub-migration.md](docker/plans/sse-redis-pubsub-migration.md) - SSE pub/sub 迁移方案
+- [docker/plans/ui-single-page-governance.md](docker/plans/ui-single-page-governance.md) - 单页治理基线
+- [docker/plans/2026-05-03-learning-platform-improvement.md](docker/plans/2026-05-03-learning-platform-improvement.md) - ML/AI/Agents 学习平台改进实施计划
+- [docker/plans/2026-05-03-it-technology-markdown-book-system.md](docker/plans/2026-05-03-it-technology-markdown-book-system.md) - IT Technology Markdown Book 系统实施计划
+
+> 已归档计划详见 [docker/archive/plans/README.md](docker/archive/plans/README.md)
 
 ## 功能模块 (`features/`)
 
@@ -57,8 +60,8 @@
 ## 开发协作 (`development/`)
 
 - [development/API.md](development/API.md) - API 接口文档
-- [development/CLAUDE_GUIDE.md](development/CLAUDE_GUIDE.md) - AI 协作指南
-- [development/CLAUDE_MEMORY.md](development/CLAUDE_MEMORY.md) - 项目知识快照
+- [development/CLAUDE_GUIDE.md](development/CLAUDE_GUIDE.md) - AI 协作指南（参考文档，部署信息以 DEPLOY.md 为准）
+- [development/CLAUDE_MEMORY.md](development/CLAUDE_MEMORY.md) - 项目知识快照（快照型文档，可能滞后）
 
 ## 脚本与测试文档 (`scripts/`)
 

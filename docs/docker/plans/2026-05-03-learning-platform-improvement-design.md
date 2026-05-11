@@ -1,3 +1,9 @@
+---
+status: reference
+owner: frontend
+最近复核: 2026-05-10
+---
+
 # IT Technology Learning Platform Improvement Design
 
 > Date: 2026-05-03

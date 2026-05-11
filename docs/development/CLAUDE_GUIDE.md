@@ -1,6 +1,13 @@
+---
+status: reference
+owner: docs
+最近复核: 2026-05-10
+注意: 不作为 source of truth; 部署信息以 docs/docker/deploy/DEPLOY.md 为准
+---
+
 # Claude AI 助手使用指南
 
-> 最后更新：2026-05-02
+> 最后更新：2026-05-10
 > 状态：reference
 > 权威 Agent 规则：[../../AGENTS.md](../../AGENTS.md)
 
@@ -14,11 +21,13 @@
 
 ### 记忆文件位置
 
-Claude 的项目记忆存储在：
-<!-- 注意：此路径为旧版 Claude 项目格式，当前 Claude Code 版本路径可能已变更 -->
-```
-~/.claude/projects/-Users-wsh/memory/MEMORY.md
-```
+Claude 的项目长期规则以仓库文件为准：
+
+- Agent 默认规则：`AGENTS.md`
+- Claude 入口规则：`CLAUDE.md`
+- 项目知识快照：`docs/development/CLAUDE_MEMORY.md`
+
+Claude 客户端自身的本地记忆路径可能随版本变化，不作为项目文档的权威来源。
 
 ### 记忆内容
 

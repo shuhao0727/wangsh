@@ -1,3 +1,9 @@
+---
+status: archived
+archived_reason: 带日期的阶段性分析报告，关键结论已沉淀到 owner 文档
+archived_date: 2026-05-10
+---
+
 # WangSh 项目分析报告
 
 > 日期：2026-05-02

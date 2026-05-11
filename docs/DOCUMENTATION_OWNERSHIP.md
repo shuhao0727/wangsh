@@ -58,7 +58,7 @@
 | `docs/docker/deploy/` | 部署、环境变量、CI/CD | 功能设计、测试实现细节 | `docs/docker/archive/` |
 | `docs/docker/testing/` | 测试入口、验证策略、smoke/soak 归属 | 单个脚本完整实现说明 | 脚本 README |
 | `docs/docker/plans/` | 当前仍有用的计划、治理台账、迁移方案 | 已完成报告、过期周计划 | `docs/docker/archive/` |
-| `docs/docker/frontend/` | 前端专项治理、UI 迁移和页面清单 | 具体页面临时截图排查 | `docs/docker/archive/` 或删除 |
+| `docs/docker/frontend/` | 前端专项治理、UI 迁移、页面清单和无障碍指南 | 具体页面临时截图排查 | `docs/docker/archive/` 或删除 |
 | `docs/docker/archive/` | 历史记录、已完成报告、不可作为当前指南的文档 | 当前操作指南 | 恢复到 owner 文档 |
 | `scripts/README.md` | 根层运维和统一入口脚本 | 后端/前端内部脚本细节 | 对应脚本目录 README |
 | `backend/scripts/README.md` | 后端 smoke、soak、DB 初始化脚本 | 根层部署脚本 | `scripts/README.md` |
@@ -189,12 +189,17 @@ redirect 文档只保留：
 | 候选 | 当前问题 | 建议动作 |
 |---|---|---|
 | `README.md` 的 PythonLab CI 长段落 | 根 README 过载 | 将细节迁移到 `docs/docker/deploy/CICD.md`、`docs/docker/testing/README.md`、`docs/features/PYTHONLAB.md`，README 只保留链接 |
-| `docs/DATABASE_PERFORMANCE_ANALYSIS.md` | 已标注整合但仍有大量正文 | 转为 redirect 或移入 archive |
+| `docs/DATABASE_PERFORMANCE_ANALYSIS.md` | 已是 redirect | 已处理 |
 | `docs/development/CLAUDE_GUIDE.md` | 可能存在旧部署链接 | 修正为 `docs/docker/deploy/DEPLOY.md` 相关路径 |
 | `docs/development/CLAUDE_MEMORY.md` | 可能包含旧版本号和历史状态 | 标记为 snapshot，不作为 source of truth |
 | `docs/docker/archive/plans/PYTHONLAB_DEBUG_CONTINUE_REGRESSION_2026-04-08.md` | 日期型回归报告 | 长期经验已沉淀到 `docs/features/PYTHONLAB.md`，原文归档保留 |
-| `docs/docker/plans/*2026-04-*.md` | 计划/报告生命周期不清 | 增加状态，完成项归档 |
-| 脚本 README 的 archive 引用 | 相对链接不够明确 | 改成明确 Markdown 相对链接 |
+| ~~`docs/ACCESSIBILITY_GUIDE.md`~~ | 已迁移到 `docs/docker/frontend/` | 已处理，原位留 redirect |
+| ~~`docs/IMPROVEMENT_CHECKLIST.md`~~ | 已归档 | 已处理，原位留 redirect |
+| ~~`docs/analysis/AGENT_ANALYSIS_2026-05-02.md`~~ | 已归档到 `docs/docker/archive/analysis/` | 已处理 |
+| ~~`docs/docker/plans/ui-page-tracker.md`~~ | 已归档 | 已处理，原位留 redirect |
+| ~~`docs/docker/plans/three-module-improvement.md`~~ | 已归档 | 已处理，原位留 redirect |
+| ~~`docs/docker/plans/ui-upgrade-plan.md`~~ | 已归档 | 已处理，原位留 redirect |
+| ~~`docs/docker/plans/execution-roadmap.md`~~ | 已归档 | 已处理，原位留 redirect |
 
 ## 整理批次建议
 

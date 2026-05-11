@@ -2,7 +2,7 @@
 
 > 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
 
-`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。
+`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。归档的一次性脚本、种子数据和历史富化脚本请查看 `archive/` 子目录。
 
 ## 当前入口
 
@@ -19,6 +19,10 @@
 - `smoke_pythonlab_low_memory_start_failure.py` - PythonLab 低内存启动失败故障注入
 - `smoke_pythonlab_print_visibility_probe.py` - PythonLab print 可见性探针
 - `soak_pythonlab_phasec.py` - PythonLab Phase C 专项门禁
+
+## 归档目录
+
+- `archive/` - 一次性 enrichment 脚本、旧种子数据、历史生成物
 
 ## 分层说明
 

@@ -14,3 +14,7 @@
 ## 计划与治理历史
 
 - [plans/README.md](plans/README.md) - 历史计划、分析和单页报告索引
+
+## 其他归档
+
+- [analysis/AGENT_ANALYSIS_2026-05-02.md](analysis/AGENT_ANALYSIS_2026-05-02.md) - 阶段性分析报告

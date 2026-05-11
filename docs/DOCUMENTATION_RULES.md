@@ -291,8 +291,9 @@ Claude 会自动：
 
 ### 其他文档
 - `docs/development/CLAUDE_GUIDE.md` - Claude 使用指南
-- `docs/IMPROVEMENT_CHECKLIST.md` - 当前改进检查清单（主计划文档）
-- `docs/ACCESSIBILITY_GUIDE.md` - 无障碍访问改进指南
+- `docs/development/CLAUDE_MEMORY.md` - Claude 项目知识快照
+- `docs/docker/archive/plans/IMPROVEMENT_CHECKLIST.md` - 已归档改进检查清单
+- `docs/docker/frontend/ACCESSIBILITY_GUIDE.md` - 无障碍访问改进指南
 - `docs/docker/archive/deploy/database-migration-fix.md` - 数据库迁移
 - `docs/docker/archive/deploy/migration_analysis.md` - 迁移链分析
 - `docs/docker/plans/README.md` - 计划与分析索引

@@ -29,6 +29,12 @@ npm run build:check
 npm run pythonlab:smoke
 ```
 
+## 生成产物与配置文件
+
+- `ui-audit-baseline.json` 是 UI 审计基线文件，属于受控生成产物；只有在确认 UI 变化符合预期后才更新基线。
+- `ui-visual-routes.json` 是 UI 审计路由清单；新增、删除或重命名页面后必须同步更新。
+- 单页治理报告默认生成到 `../docs/docker/archive/plans/ui-page-reports/`，不再写入根目录 `plans/`。
+
 ## 维护规则
 
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。

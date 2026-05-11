@@ -30,6 +30,7 @@ import AssessmentPanel from "./AssessmentPanel";
 import ClassroomPanel from "./ClassroomPanel";
 import AgentErrorBoundary from "./AgentErrorBoundary";
 import useAuth from "@hooks/useAuth";
+import { useAdminSSE } from "@hooks/useAdminSSE";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type {
   Agent,
@@ -92,15 +93,12 @@ const AIAgentsPage: React.FC = () => {
   const { startStream: startStreamEngine, stopStream } = useStreamEngine();
 
   // 加载启用的智能体
-  useEffect(() => {
-    const loadAgents = async () => {
-      try {
-        // 获取所有启用的智能体
-        const response = await aiAgentsApi.getActiveAgents();
-        const activeAgents: AIAgent[] = response.data || [];
+  const loadAgents = useCallback(async () => {
+    try {
+      const response = await aiAgentsApi.getActiveAgents();
+      const activeAgents: AIAgent[] = response.data || [];
 
-        // 映射后端智能体到前端Agent类型
-        const mappedAgents: Agent[] = activeAgents.map((agent, index) => {
+      const mappedAgents: Agent[] = activeAgents.map((agent, index) => {
           // 根据索引分配图标和颜色
           const icons = [
             <BookOpen className="h-4 w-4" />,
@@ -198,11 +196,18 @@ const AIAgentsPage: React.FC = () => {
         ];
         setAgents(defaultAgents);
         setCurrentAgent(defaultAgents[0]);
-      } finally {}
-    };
-
-    void loadAgents();
+      }
   }, []);
+
+  // 首次加载
+  useEffect(() => {
+    void loadAgents();
+  }, [loadAgents]);
+
+  // 监听 agent_changed SSE 事件，自动刷新列表
+  useAdminSSE("agent_changed", () => {
+    void loadAgents();
+  });
 
   // 监听认证状态变化，登录后显示欢迎消息
   useEffect(() => {

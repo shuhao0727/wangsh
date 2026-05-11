@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { copyFileSync } from "fs";
+import { copyFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
 type VisualizerModule = {

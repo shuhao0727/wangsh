@@ -1,22 +1,29 @@
 # 计划与分析索引
 
-`docs/docker/plans/` 用来存放阶段性计划、迁移方案、审计结果和治理台账，不作为长期产品文档入口。已经稳定下来的结论应沉淀到 [`docs/`](../../README.md)，测试治理文档请放到 [`../testing/README.md`](../testing/README.md)，纯前端 UI 专项文档请放到 [`../frontend/README.md`](../frontend/README.md)。
+`docs/docker/plans/` 只保留当前仍在推进的计划、治理基线和复用模板。已经完成、已经被后续结论覆盖、或者仅保留追溯价值的内容，应优先转到 `../archive/plans/`。
 
 ## 当前活跃文档
 
-- [execution-roadmap.md](execution-roadmap.md) - 当前阶段执行路线图
 - [pythonlab-capability-inventory.md](pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
 - [sse-redis-pubsub-migration.md](sse-redis-pubsub-migration.md) - SSE pub/sub 从进程内迁移到 Redis 的方案
-- [three-module-improvement.md](three-module-improvement.md) - 点名系统、系统管理、选课系统联合改进计划
-
-> **注意**：`improvement-plan.md` 已归档到 `../archive/plans/improvement-plan-2026-04-10.md`，当前主计划文档为 `../../IMPROVEMENT_CHECKLIST.md`。
-## UI 治理与回归
-
-- [ui-upgrade-plan.md](ui-upgrade-plan.md) - UI 渐进式迁移计划
+- [2026-05-03-learning-platform-improvement.md](2026-05-03-learning-platform-improvement.md) - ML/AI/Agents 学习平台改进实施计划
+- [2026-05-03-it-technology-markdown-book-system.md](2026-05-03-it-technology-markdown-book-system.md) - IT Technology Markdown Book 系统实施计划
+- [2026-05-03-learning-platform-improvement-design.md](2026-05-03-learning-platform-improvement-design.md) - 学习平台设计说明
 - [ui-single-page-governance.md](ui-single-page-governance.md) - 单页治理基线
-- [ui-page-tracker.md](ui-page-tracker.md) - 页面治理台账
-- [ui-final-regression-checklist.md](ui-final-regression-checklist.md) - UI 回归检查清单
 - [ui-page-health-template.md](ui-page-health-template.md) - 单页体检模板
+- [ui-final-regression-checklist.md](ui-final-regression-checklist.md) - UI 回归检查清单
+
+## 已归档计划入口
+
+下列文档已归档，原位保留 redirect：
+
+- `execution-roadmap.md`
+- `three-module-improvement.md`
+- `ui-page-tracker.md`
+- `ui-upgrade-plan.md`
+- `IMPROVEMENT_CHECKLIST.md`
+
+归档总览请查看 [`../archive/plans/README.md`](../archive/plans/README.md)。
 
 ## 当前策略
 
@@ -24,22 +31,3 @@
 - 测试脚本清理、测试目录索引、烟测治理等跨模块测试文档统一转入 [`../testing/`](../testing/README.md)。
 - 已完成、明显带时间戳、或内容已经被后续改动覆盖的分析报告统一转入 [`../archive/plans/`](../archive/plans/README.md)。
 - 当前没有活跃的单页体检报告；如后续再做单页治理，建议新报告先生成到 `plans/`，完成后再归档。
-
-## 历史归档
-
-- [../archive/plans/README.md](../archive/plans/README.md) - 归档目录总览
-- [../archive/plans/week1-execution-plan-2026-04-10.md](../archive/plans/week1-execution-plan-2026-04-10.md) - 第一周执行计划（历史归档）
-- [../archive/plans/document-consolidation-report-2026-04-11.md](../archive/plans/document-consolidation-report-2026-04-11.md) - 文档整理工作报告（已完成）
-- [../archive/plans/document-unification-report-2026-04-11.md](../archive/plans/document-unification-report-2026-04-11.md) - 文档统一化管理工作报告（已完成）
-- [../archive/plans/HISTORICAL_PLANS_SUMMARY.md](../archive/plans/HISTORICAL_PLANS_SUMMARY.md) - 历史计划文档总结（合并版）
-- [../archive/plans/PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md](../archive/plans/PROJECT_AND_MODULE_ANALYSIS-COMPRESSED.md) - 项目与模块深度分析（压缩合并版）
-- [../archive/plans/code-quality-audit.md](../archive/plans/code-quality-audit.md) - 代码质量与安全清理审查快照
-- [../archive/plans/auth-analysis.md](../archive/plans/auth-analysis.md) - 认证系统深度分析和访客权限方案
-- [../archive/plans/responsive-analysis.md](../archive/plans/responsive-analysis.md) - 响应式布局问题分析与修复方案
-- [../archive/plans/ui-page-reports/ai-agents.md](../archive/plans/ui-page-reports/ai-agents.md) - `/ai-agents` 单页体检历史报告
-
-## 保留 / 归档 / 删除
-
-- 保留：仍在推进的计划、治理规则、回归台账、复用模板。
-- 归档：已完成、已被后续结论覆盖、仅保留追溯价值的报告。
-- 删除：自动生成且可重建、没有历史价值的中间产物。本轮未直接删除作者撰写的计划文档。

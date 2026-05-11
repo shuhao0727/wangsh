@@ -141,8 +141,6 @@
 .article-content {
   font-size: var(--ws-text-sm);
   line-height: 1.85;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
 /* Override Markdown Styles for Article Detail */

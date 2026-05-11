@@ -2,7 +2,7 @@
  * AI智能体表单组件
  */
 import { showMessage } from "@/lib/toast";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,6 +48,7 @@ import {
   Eye,
   Loader2,
   PlayCircle,
+  RefreshCw,
 } from "lucide-react";
 
 import { aiAgentsApi } from "@/services/znt/api";
@@ -184,11 +185,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
   }, [editingAgent, form, visible]);
 
   const resetTestState = () => {
-    if (testResult || availableModels.length > 0 || modelDiscoveryResult) {
-      setTestResult(null);
-      setAvailableModels([]);
-      setModelDiscoveryResult(null);
-    }
+    setTestResult(null);
   };
 
   const setField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
@@ -196,7 +193,14 @@ const AgentForm: React.FC<AgentFormProps> = ({
       shouldDirty: true,
       shouldValidate: true,
     });
-    resetTestState();
+    // 修改 API 端点时清掉旧模型列表
+    if (key === "api_endpoint" && availableModels.length > 0) {
+      setAvailableModels([]);
+      setModelDiscoveryResult(null);
+    }
+    if (key !== "model_name") {
+      resetTestState();
+    }
   };
 
   const handleFormSubmit = async (values: FormValues) => {
@@ -239,14 +243,50 @@ const AgentForm: React.FC<AgentFormProps> = ({
     }
   };
 
+  const discoverModels = useCallback(async () => {
+    const values = form.getValues();
+    const apiEndpoint = values.api_endpoint.trim();
+    const apiKey = values.api_key.trim();
+    const hasStoredApiKey = Boolean(editingAgent?.id && editingAgent.has_api_key);
+    if (!apiEndpoint) return;
+    if (!apiKey && !hasStoredApiKey) return;
+
+    setDiscoveringModels(true);
+    setModelDiscoveryResult(null);
+    setAvailableModels([]);
+
+    try {
+      const useAgentId = editingAgent?.id && !apiKey && hasStoredApiKey;
+      const result = useAgentId
+        ? await aiAgentsApi.discoverModelsByAgentId(editingAgent.id)
+        : await aiAgentsApi.discoverModels({
+            api_endpoint: apiEndpoint,
+            api_key: apiKey,
+          });
+      setModelDiscoveryResult(result);
+      if (result.success && result.models.length > 0) {
+        setAvailableModels(result.models);
+      }
+    } catch (error) {
+      logger.warn("模型发现失败:", error);
+      setModelDiscoveryResult({
+        success: false,
+        provider: "custom",
+        models: [],
+        total_count: 0,
+        error_message: "模型发现请求失败，请检查 API 地址和密钥",
+        response_time_ms: 0,
+      });
+    } finally {
+      setDiscoveringModels(false);
+    }
+  }, [form, editingAgent]);
+
   const handleTest = async () => {
     if (!canTest) return;
     try {
       setTesting(true);
-      setDiscoveringModels(true);
       setTestResult(null);
-      setAvailableModels([]);
-      setModelDiscoveryResult(null);
 
       const values = form.getValues();
       const apiEndpoint = values.api_endpoint.trim();
@@ -255,6 +295,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (!apiEndpoint) throw new Error("API端点不能为空");
       if (!apiKey && !hasStoredApiKey) throw new Error("请先填写API密钥");
 
+      // 新建智能体时先保存 API 密钥
       if (editingAgent?.id && apiKey?.trim()) {
         try {
           await aiAgentsApi.updateAgent(editingAgent.id, { api_key: apiKey.trim() });
@@ -267,119 +308,38 @@ const AgentForm: React.FC<AgentFormProps> = ({
       if (editingAgent?.id) {
         try {
           const testResp = await aiAgentsApi.testAgent(editingAgent.id, "测试API连接");
-          if (testResp.success) {
-            const testData = (testResp.data || {}) as Record<string, unknown>;
-            connectivityResult = {
-              success: true,
-              message: String(testData.message || testResp.message || "连接测试成功"),
-              timestamp: new Date().toISOString(),
-              response_time:
-                typeof testData.response_time === "number"
-                  ? testData.response_time
-                  : undefined,
-            };
-          } else {
-            connectivityResult = {
-              success: false,
-              message: testResp.message || "测试失败",
-              timestamp: new Date().toISOString(),
-            };
-          }
+          connectivityResult = {
+            success: testResp.success,
+            message: testResp.success
+              ? String((testResp.data as Record<string,unknown>)?.message || testResp.message || "连接测试成功")
+              : testResp.message || "测试失败",
+            timestamp: new Date().toISOString(),
+            response_time:
+              typeof (testResp.data as Record<string,unknown>)?.response_time === "number"
+                ? ((testResp.data as Record<string,unknown>).response_time as number)
+                : undefined,
+          };
         } catch (error) {
           logger.warn("智能体测试失败:", error);
-          connectivityResult = {
-            success: false,
-            message: "测试失败",
-            timestamp: new Date().toISOString(),
-          };
+          connectivityResult = { success: false, message: "测试失败", timestamp: new Date().toISOString() };
         }
       }
 
-      const useAgentId = editingAgent?.id && !apiKey && hasStoredApiKey;
-      try {
-        const discoveryResult = useAgentId
-          ? await aiAgentsApi.discoverModelsByAgentId(editingAgent.id)
-          : await aiAgentsApi.discoverModels({
-              api_endpoint: apiEndpoint,
-              api_key: apiKey,
-            });
-        setModelDiscoveryResult(discoveryResult);
-        if (discoveryResult.success) {
-          setAvailableModels(discoveryResult.models);
-          if (discoveryResult.models.length === 1) {
-            setField("model_name", discoveryResult.models[0].id);
-          }
-          setTestResult(
-            connectivityResult?.success === false
-              ? {
-                  ...connectivityResult,
-                  success: true,
-                  message: `${connectivityResult.message}，并发现 ${discoveryResult.total_count} 个可用模型`,
-                  provider: discoveryResult.provider,
-                  model_count: discoveryResult.total_count,
-                  response_time:
-                    discoveryResult.response_time_ms ??
-                    connectivityResult.response_time,
-                }
-              : {
-                  success: true,
-                  message:
-                    connectivityResult?.message ||
-                    `发现 ${discoveryResult.total_count} 个可用模型`,
-                  timestamp: new Date().toISOString(),
-                  response_time:
-                    discoveryResult.response_time_ms ??
-                    connectivityResult?.response_time,
-                  provider: discoveryResult.provider,
-                  model_count: discoveryResult.total_count,
-                },
-          );
-        } else {
-          setTestResult(
-            connectivityResult?.success
-              ? {
-                  ...connectivityResult,
-                  message: `连接成功，但模型发现失败: ${
-                    discoveryResult.error_message || "未知错误"
-                  }`,
-                  provider: discoveryResult.provider,
-                }
-              : {
-                  success: false,
-                  message: `测试失败: ${
-                    discoveryResult.error_message ||
-                    connectivityResult?.message ||
-                    "未知错误"
-                  }`,
-                  timestamp: new Date().toISOString(),
-                  provider: discoveryResult.provider,
-                },
-          );
-        }
-      } catch (error) {
-        logger.warn("模型发现失败:", error);
-        setTestResult(
-          connectivityResult?.success
-            ? { ...connectivityResult, message: "连接成功，但无法获取模型列表" }
-            : {
-                success: false,
-                message: "测试失败：无法获取模型列表",
-                timestamp: new Date().toISOString(),
-              },
-        );
+      // 连接测试完后刷新模型列表
+      await discoverModels();
+
+      if (connectivityResult) {
+        setTestResult(connectivityResult);
       }
     } catch (error) {
       logger.error("测试失败:", error);
       setTestResult({
         success: false,
-        message: `测试异常: ${
-          error instanceof Error ? error.message : "未知错误"
-        }`,
+        message: `测试异常: ${error instanceof Error ? error.message : "未知错误"}`,
         timestamp: new Date().toISOString(),
       });
     } finally {
       setTesting(false);
-      setDiscoveringModels(false);
     }
   };
 
@@ -481,7 +441,9 @@ const AgentForm: React.FC<AgentFormProps> = ({
                   name="api_endpoint"
                   render={() => (
                     <FormItem>
-                      <FormLabel>API 地址</FormLabel>
+                      <div className="flex items-center gap-2">
+                        <FormLabel>API 地址</FormLabel>
+                      </div>
                       <FormControl>
                         <Input
                           placeholder="https://api.siliconflow.cn/v1"
@@ -544,41 +506,74 @@ const AgentForm: React.FC<AgentFormProps> = ({
                       <FormLabel>模型</FormLabel>
                       {discoveringModels ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />
-                      ) : null}
-                      {!discoveringModels && modelDiscoveryResult?.success === false ? (
-                        <CircleX className="h-3.5 w-3.5 text-destructive" />
-                      ) : null}
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 text-xs text-text-tertiary hover:text-text-base"
+                          onClick={discoverModels}
+                          disabled={!watchedApiEndpoint?.trim()}
+                          title="重新获取可用模型列表"
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" />
+                          刷新模型
+                        </Button>
+                      )}
                     </div>
                     <FormControl>
-                      <Input
-                        list="agent-model-options"
-                        placeholder={
-                          discoveringModels
-                            ? "正在发现可用模型..."
-                            : availableModels.length > 0
-                              ? "请选择或输入模型名称"
-                              : "测试连接后可快速选择"
-                        }
-                        value={formValues.model_name}
-                        onChange={(e) => setField("model_name", e.target.value)}
-                        disabled={discoveringModels}
-                      />
+                      {availableModels.length > 0 ? (
+                        <Select
+                          value={formValues.model_name || ""}
+                          onValueChange={(v) => {
+                            if (v === "__custom__") return;
+                            setField("model_name", v);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="请选择模型" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableModels.map((model) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                {model.id}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">
+                              ✏️ 手动输入其他模型...
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          placeholder={
+                            discoveringModels
+                              ? "正在发现可用模型..."
+                              : "测试连接或点击「刷新模型」获取列表"
+                          }
+                          value={formValues.model_name}
+                          onChange={(e) => setField("model_name", e.target.value)}
+                          disabled={discoveringModels}
+                        />
+                      )}
                     </FormControl>
-                    <datalist id="agent-model-options">
-                      {availableModels.map((model) => (
-                        <option key={model.id} value={model.id} />
-                      ))}
-                    </datalist>
+                    {formValues.model_name &&
+                      availableModels.length > 0 &&
+                      !availableModels.some((m) => m.id === formValues.model_name) && (
+                        <p className="text-xs text-amber-500">
+                          当前模型不在发现列表中，请确认模型名称正确
+                        </p>
+                      )}
                     <p className="text-xs text-text-tertiary">
                       {discoveringModels
                         ? "正在发现可用模型..."
                         : modelDiscoveryResult?.success
-                          ? `发现 ${availableModels.length} 个模型`
-                          : modelDiscoveryResult
+                          ? `已发现 ${availableModels.length} 个模型`
+                          : modelDiscoveryResult?.success === false
                             ? `发现失败: ${
                                 modelDiscoveryResult.error_message || "未知错误"
                               }`
-                            : "点击「测试连接」获取可用模型"}
+                            : "点击「刷新模型」或「测试连接」获取可用模型列表"}
                     </p>
                     <FormMessage />
                   </FormItem>

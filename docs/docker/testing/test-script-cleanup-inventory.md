@@ -76,7 +76,7 @@
   - 原因：仍保留在 npm 脚本和治理文档中。
   - 引用：
     - `frontend/package.json`
-    - `docs/docker/plans/ui-upgrade-plan.md`
+    - `docs/docker/archive/plans/ui-upgrade-plan.md`（已归档）
   - 风险：删除会破坏现有治理命令。
 - `frontend/scripts/ui-page-workflow.mjs`
   - 原因：仍保留在 npm 脚本中，属于人工治理工具。

@@ -7,7 +7,7 @@ from app.db.database import AsyncSessionLocal
 from app.models.learning.content import LearningContentItem
 from sqlalchemy import select
 
-SEED_FILE = os.path.join(os.path.dirname(__file__), "experiments_seed.json")
+SEED_FILE = os.path.join(os.path.dirname(__file__), "archive", "experiments_seed.json")
 
 
 async def seed():

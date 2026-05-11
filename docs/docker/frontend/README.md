@@ -6,6 +6,7 @@
 
 - [UI-PAGES.md](UI-PAGES.md) - 前端可见页面清单
 - [ui-style-guardrails.md](ui-style-guardrails.md) - UI 风格护栏和视觉约束
+- [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) - 无障碍访问改进指南
 
 ## 归档报告
 

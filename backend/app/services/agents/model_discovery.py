@@ -266,30 +266,40 @@ class ModelDiscoveryService:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    for model_data in data.get("data", []):
+                    raw_models = data.get("data", [])
+                    if not isinstance(raw_models, list):
+                        raise ValueError(f"模型列表格式异常: {type(raw_models).__name__}")
+                    for model_data in raw_models:
                         model_id = model_data.get("id", "")
-                        
-                        # 跳过某些模型
+                        if not model_id:
+                            continue
+                        # 跳过旧模型
                         if model_id.startswith("babbage") or model_id.startswith("davinci"):
                             continue
-                        
-                        # 提取模型信息
                         model_info = AIModelInfo(
                             id=model_id,
                             name=self._format_model_name(model_id),
                             provider=AIServiceProvider.OPENAI,
-                            description=f"OpenAI {model_id}",
+                            description=f"OpenAI-compatible {model_id}",
                             is_chat="chat" in model_id.lower() or "gpt" in model_id.lower(),
                             is_vision="vision" in model_id.lower() or "4o" in model_id.lower(),
                         )
                         models.append(model_info)
-        
-        except Exception as e:
-            # 如果API调用失败，返回预设模型
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.OPENAI, [])
-        
+                elif response.status_code == 401 or response.status_code == 403:
+                    raise PermissionError(f"API 密钥无效 (HTTP {response.status_code})")
+                else:
+                    raise ConnectionError(
+                        f"模型接口返回 HTTP {response.status_code}: {response.text[:300]}"
+                    )
+
+        except (PermissionError, ConnectionError, ValueError):
+            raise
+        except Exception:
+            # 不静默回退预设模型，由上层决定
+            raise
+
         return models
-    
+
     async def discover_models_deepseek(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
         """发现DeepSeek模型"""
         models = []
@@ -592,8 +602,21 @@ class ModelDiscoveryService:
                     # 如果OpenAI兼容接口失败，返回预设模型
                     models = COMMON_MODEL_PRESETS.get(AIServiceProvider.DIFY, [])
             else:
-                # 其他服务商或自定义，返回预设模型或空列表
-                models = COMMON_MODEL_PRESETS.get(detection_result.provider, [])
+                # 未知服务商：优先尝试 OpenAI 兼容的 /v1/models 查询
+                try:
+                    models = await self.discover_models_openai(config)
+                except Exception as e:
+                    response_time_ms = (time.time() - start_time) * 1000
+                    return ModelDiscoveryResponse(
+                        success=False,
+                        provider=detection_result.provider,
+                        models=[],
+                        total_count=0,
+                        error_message=f"模型发现失败：端点返回格式不兼容 ({str(e)[:200]})",
+                        detection_method=detection_result.detection_method,
+                        request_url=f"{config.base_url}/models",
+                        response_time_ms=response_time_ms,
+                    )
             
             # 4. 计算响应时间
             response_time_ms = (time.time() - start_time) * 1000
