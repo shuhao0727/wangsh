@@ -16,7 +16,7 @@ import {
 import { Loader2, Plus, Pencil, Trash2, Globe, ArrowLeft, BookOpen } from "lucide-react";
 import { showMessage } from "@/lib/toast";
 import MindMapViewer from "./MindMapViewer";
-import MindMapEditor from "./MindMapEditor";
+import InteractiveMindMapEditor from "./InteractiveMindMapEditor";
 
 type MindmapItem = {
   id: number;
@@ -135,7 +135,7 @@ const MindMapManager: React.FC = () => {
   // 全屏编辑模式
   if (editing) {
     return (
-      <MindMapEditor
+      <InteractiveMindMapEditor
         mindmapId={editing.id}
         initialTitle={editing.title}
         initialMarkdown={editing.content?.markdown || ""}
