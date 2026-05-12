@@ -111,7 +111,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
           className="h-7 w-36 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-1" />
         <span className="text-[10px] text-text-tertiary">Ctrl+S 保存 · 数据自动同步</span>
         <div className="ml-auto flex items-center gap-1">
-          <a href="/mindmap-demo/" target="_blank" rel="noopener noreferrer">
+          <a href="/mindmap-demo/index.html" target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
               <span><ExternalLink className="h-3 w-3" />新窗口</span>
             </Button>
