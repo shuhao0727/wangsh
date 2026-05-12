@@ -70,11 +70,11 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     try { localStorage.setItem(LS_KEY, JSON.stringify(demoData)); } catch {}
   }, [initialTitle, initialMarkdown]);
 
-  const handleSaveData = useCallback(async (data: LibNode) => {
+  const handleSaveData = useCallback(async (data: LibNode, silent = false) => {
     const id = mindmapIdRef.current;
     const currentTitle = titleRef.current;
     if (!data || id == null) return;
-    setSaving(true);
+    if (!silent) setSaving(true);
     try {
       const md = libDataToMd(data).replace(/^# /, "");
       const token = getToken();
@@ -85,24 +85,24 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
         body: JSON.stringify({ title: currentTitle, content: { markdown: `# ${currentTitle}\n${md}` } }),
       });
       if (res.ok) {
-        showMessage.success("导图已保存");
-        onSavedRef.current?.();
-      } else if (res.status === 401) {
-        showMessage.error("未登录，请先登录后再保存");
-      } else {
-        showMessage.error(`保存失败 (${res.status})`);
+        if (!silent) showMessage.success("导图已保存");
+        // 只有手动保存才触发 onSaved（不静默保存）
+        if (!silent) onSavedRef.current?.();
+      } else if (!silent) {
+        if (res.status === 401) showMessage.error("未登录，请先登录后再保存");
+        else showMessage.error(`保存失败 (${res.status})`);
       }
     } catch {
-      showMessage.error("网络错误，保存失败");
+      if (!silent) showMessage.error("网络错误，保存失败");
     }
-    setSaving(false);
+    if (!silent) setSaving(false);
   }, []);
 
   // 监听 postMessage 保存
   useEffect(() => {
     const h = (e: MessageEvent) => {
       if (e.data?.type === "mindmap:save" && e.data.data) {
-        handleSaveData(e.data.data);
+        handleSaveData(e.data.data, true); // 静默保存，不退出编辑
       }
     };
     window.addEventListener("message", h);
