@@ -94,7 +94,7 @@
         if (!window.takeOverApp) return
         const data = await getDataFromBackend()
         setTakeOverAppMethods(data)
-        window.$bus.$on('app_inited', mindMap => { console.log('mindmap ready'); if (!window._wangsh_readonly) document.getElementById('ws-save-btn').style.display='block' })
+        window.$bus.$on('app_inited', mindMap => { console.log('mindmap ready'); if (window._wangsh_readonly) { mindMap.setMode('readonly') } else { document.getElementById('ws-save-btn').style.display='block' } })
         window.initApp()
       }
     </script>
