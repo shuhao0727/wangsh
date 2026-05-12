@@ -123,8 +123,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
 
       {/* iframe */}
       <iframe ref={iframeRef} src={iframeSrc} className="flex-1 w-full border-0"
-        title="思维导图编辑器" allow="clipboard-write"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />
+        title="思维导图编辑器" />
 
       {/* 新窗口模式 */}
       {openExt && (
