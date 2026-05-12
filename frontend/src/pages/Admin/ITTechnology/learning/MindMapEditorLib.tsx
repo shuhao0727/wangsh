@@ -102,18 +102,18 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
   };
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "#fff", display: "flex", flexDirection: "column" }}>
       <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
         <Button variant="ghost" size="sm" onClick={onBack} className="h-7 text-xs gap-1">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <Input value={title} onChange={(e) => setTitle(e.target.value)}
           className="h-7 w-36 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-1" />
-        <span className="text-[10px] text-text-tertiary">Ctrl+S 保存 · 数据自动同步</span>
+        <span className="text-[10px] text-text-tertiary">Ctrl+S 保存</span>
         <div className="ml-auto flex items-center gap-1">
           <a href="/mindmap-demo/index.html" target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
-              <span><ExternalLink className="h-3 w-3" />新窗口</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+              <ExternalLink className="h-3 w-3" />新窗口
             </Button>
           </a>
           <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-1">
@@ -121,14 +121,8 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
           </Button>
         </div>
       </div>
-
-      {loading && (
-        <div className="flex items-center justify-center py-4 text-xs text-text-tertiary bg-surface-2 border-b border-border">
-          正在加载...
-        </div>
-      )}
-
-      <iframe ref={iframeRef} src="/mindmap-demo/index.html" className="flex-1 w-full border-0"
+      <iframe ref={iframeRef} src="/mindmap-demo/index.html"
+        style={{ flex: 1, width: "100%", border: "none", minHeight: 0 }}
         title="思维导图编辑器" onLoad={() => setLoading(false)} />
     </div>
   );
