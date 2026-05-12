@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { showMessage } from "@/lib/toast";
 import { ArrowLeft, Save, ExternalLink } from "lucide-react";
 
+/* ═══════ 数据格式转换 ═══════ */
 interface LibNode { data: { text: string; uid?: string; [key: string]: unknown }; children: LibNode[]; }
 function mdToLibData(md: string, rootText: string): LibNode {
   let uid = 0; const nextUid = () => `n${++uid}`;
@@ -34,11 +35,25 @@ interface Props {
   onBack?: () => void; onSaved?: () => void;
 }
 
+const LS_KEY = "_wangsh_mindmap_data";
+const TOKEN_KEY = "ws_access_token";
+
+function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+}
+
 const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdown, onBack, onSaved }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [title, setTitle] = useState(initialTitle || "未命名导图");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 用 ref 避免 stale closure
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const mindmapIdRef = useRef(mindmapId);
+  mindmapIdRef.current = mindmapId;
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
 
   // 通过 localStorage 把初始数据传给 iframe
   useEffect(() => {
@@ -52,19 +67,47 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
       config: {},
       view: null,
     };
-    try { localStorage.setItem("_wangsh_mindmap_data", JSON.stringify(demoData)); } catch {}
+    try { localStorage.setItem(LS_KEY, JSON.stringify(demoData)); } catch {}
   }, [initialTitle, initialMarkdown]);
 
-  // 监听保存
+  const handleSaveData = useCallback(async (data: LibNode) => {
+    const id = mindmapIdRef.current;
+    const currentTitle = titleRef.current;
+    if (!data || id == null) return;
+    setSaving(true);
+    try {
+      const md = libDataToMd(data).replace(/^# /, "");
+      const token = getToken();
+      const headers: Record<string,string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`/api/v1/learning/mindmaps/${id}`, {
+        method: "PUT", headers, credentials: "include",
+        body: JSON.stringify({ title: currentTitle, content: { markdown: `# ${currentTitle}\n${md}` } }),
+      });
+      if (res.ok) {
+        showMessage.success("导图已保存");
+        onSavedRef.current?.();
+      } else if (res.status === 401) {
+        showMessage.error("未登录，请先登录后再保存");
+      } else {
+        showMessage.error(`保存失败 (${res.status})`);
+      }
+    } catch {
+      showMessage.error("网络错误，保存失败");
+    }
+    setSaving(false);
+  }, []);
+
+  // 监听 postMessage 保存
   useEffect(() => {
     const h = (e: MessageEvent) => {
-      if (e.data?.type === "mindmap:save") {
+      if (e.data?.type === "mindmap:save" && e.data.data) {
         handleSaveData(e.data.data);
       }
     };
     window.addEventListener("message", h);
     return () => window.removeEventListener("message", h);
-  }, []); // eslint-disable-line
+  }, [handleSaveData]);
 
   // Ctrl+S
   useEffect(() => {
@@ -73,36 +116,19 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, []); // eslint-disable-line
+  }, []);
 
-  const handleSave = () => {
-    // Demo 在 takeOverApp 模式下，Ctrl+S 会自动调用 saveMindMapData
-    // 我们额外触发一次主动获取
+  const handleSave = useCallback(() => {
     try {
       const w = iframeRef.current?.contentWindow as any;
       if (w?._mmData) {
         handleSaveData(w._mmData.root || w._mmData);
+      } else {
+        // fallback: request data from iframe
+        iframeRef.current?.contentWindow?.postMessage({ type: "mindmap:getData" }, "*");
       }
     } catch {}
-  };
-
-  const handleSaveData = async (data: LibNode) => {
-    if (!data || mindmapId == null) return;
-    setSaving(true);
-    try {
-      const md = libDataToMd(data).replace(/^# /, "");
-      const token = localStorage.getItem("ws_access_token") || sessionStorage.getItem("ws_access_token");
-      const headers: Record<string,string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch(`/api/v1/learning/mindmaps/${mindmapId}`, {
-        method: "PUT", headers, credentials: "include",
-        body: JSON.stringify({ title, content: { markdown: `# ${title}\n${md}` } }),
-      });
-      if (res.ok) { showMessage.success("导图已保存"); onSaved?.(); }
-      else showMessage.error("保存失败");
-    } catch { showMessage.error("保存失败"); }
-    setSaving(false);
-  };
+  }, [handleSaveData]);
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "#fff", display: "flex", flexDirection: "column" }}>

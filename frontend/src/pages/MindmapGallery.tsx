@@ -26,6 +26,16 @@ type MindmapItem = {
 };
 
 const API_BASE = "/api/v1/learning/mindmaps";
+const TOKEN_KEY = "ws_access_token";
+
+function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+}
+
+function authHeaders(): Record<string,string> {
+  const token = getToken();
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
 
 const MindmapGallery: React.FC = () => {
   const [tab, setTab] = useState("pub");
@@ -46,14 +56,14 @@ const MindmapGallery: React.FC = () => {
 
   const fetchPub = useCallback(async () => {
     try {
-      const res = await fetch(API_BASE, { credentials: "include" });
+      const res = await fetch(API_BASE, { headers: authHeaders(), credentials: "include" });
       if (res.ok) setPubMaps(await res.json());
     } catch {}
   }, []);
 
   const fetchMy = useCallback(async () => {
     try {
-      const res = await fetch(API_BASE + "/my", { credentials: "include" });
+      const res = await fetch(API_BASE + "/my", { headers: authHeaders(), credentials: "include" });
       if (res.ok) setMyMaps(await res.json());
     } catch {}
   }, []);
@@ -72,7 +82,7 @@ const MindmapGallery: React.FC = () => {
     try {
       const res = await fetch(API_BASE, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ title: newTitle.trim(), content: { markdown: `# ${newTitle.trim()}\n` } }),
       });
