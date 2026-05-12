@@ -91,7 +91,6 @@ export default defineConfig(async ({ mode }) => {
       },
       headers: {
         "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "require-corp",
       },
       proxy: {
         // SSE 流式代理 — 需要特殊处理以禁用缓冲
