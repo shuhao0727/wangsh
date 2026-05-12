@@ -15,6 +15,9 @@
   <body>
     <noscript><strong>We're sorry but thoughts doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript>
     <div id="app"></div>
+    <!-- 保存到服务器的浮动按钮 -->
+    <div id="ws-save-btn" style="position:fixed;top:10px;right:20px;z-index:9999;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.2);display:none">💾 保存到服务器</div>
+    <script>document.getElementById('ws-save-btn').onclick=function(){if(window._mmData){var r=window._mmData.root||window._mmData;function t(n,l){l=l||1;var m='#'.repeat(l)+' '+(n.data?n.data.text:'');if(n.children)for(var i=0;i<n.children.length;i++)m+='\n'+t(n.children[i],l+1);return m}var mk=t(r),id=new URLSearchParams(location.search).get('id'),tk=localStorage.getItem('ws_access_token')||sessionStorage.getItem('ws_access_token'),h={'Content-Type':'application/json'};if(tk)h['Authorization']='Bearer '+tk;fetch('/api/v1/learning/mindmaps/'+id,{method:'PUT',headers:h,credentials:'include',body:JSON.stringify({title:r.data?r.data.text:'未命名',content:{markdown:mk}})}).then(function(res){alert(res.ok?'已保存':'保存失败('+res.status+')')}).catch(function(){alert('网络错误')})}};</script>
     <!-- built files will be auto injected -->
     <script>
       const getDataFromBackend = () => {
@@ -87,7 +90,7 @@
         if (!window.takeOverApp) return
         const data = await getDataFromBackend()
         setTakeOverAppMethods(data)
-        window.$bus.$on('app_inited', mindMap => { console.log('mindmap ready') })
+        window.$bus.$on('app_inited', mindMap => { console.log('mindmap ready'); document.getElementById('ws-save-btn').style.display='block' })
         window.initApp()
       }
     </script>

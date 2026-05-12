@@ -100,8 +100,14 @@ const MindmapGallery: React.FC = () => {
   };
 
   const handlePreview = (item: MindmapItem) => {
-    localStorage.setItem("_wangsh_preview_data", JSON.stringify(item));
-    window.open(`/mindmap-preview?id=${item.id}`, "_blank");
+    const title = item.title || "未命名";
+    const md = item.content?.markdown || `# ${title}`;
+    localStorage.setItem("_wangsh_mindmap_data", JSON.stringify({
+      root: parseMarkdownToTree(md, title),
+      theme: { template: "classic4", config: {} },
+      layout: "logicalStructure", config: {}, view: null,
+    }));
+    window.open(`/mindmap-demo/index.html?id=${item.id}&readonly=1`, "_blank");
   };
 
   const handleDelete = async (id: number) => {
@@ -118,7 +124,7 @@ const MindmapGallery: React.FC = () => {
     <div key={item.id} className="group relative rounded-lg border border-border bg-surface transition-shadow hover:shadow-md">
       <div className="h-40 w-full cursor-pointer overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
         onClick={() => handleEdit(item)}>
-        <MindMapViewer markdown={item.content?.markdown || `# ${item.title}`} />
+        <MindMapViewer compact markdown={item.content?.markdown || `# ${item.title}`} />
       </div>
       <div className="flex items-center justify-between px-3 py-2">
         <div className="min-w-0 flex-1">

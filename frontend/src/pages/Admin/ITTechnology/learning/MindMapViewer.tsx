@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 
-interface Props { markdown: string; onNodeClick?: (text: string) => void; }
+interface Props { markdown: string; onNodeClick?: (text: string) => void; compact?: boolean; }
 
-const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick }) => {
+const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick, compact }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef(false);
 
@@ -41,7 +41,7 @@ const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick }) => {
 
   return (
     <div ref={containerRef} className="mindmap-container"
-      style={{ width: "100%", height: "100%", minHeight: 500 }} />
+      style={{ width: "100%", height: compact ? 160 : "100%", minHeight: compact ? 160 : 500, overflow: "hidden" }} />
   );
 };
 
