@@ -3,44 +3,74 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta
-      name="viewport"
-      content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0"
-    />
+    <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0" />
     <link rel="icon" href="logo.ico" />
     <title>思绪思维导图</title>
     <script>
       window.externalPublicPath = '/mindmap-demo/'
       localStorage.setItem('webUseTip', '1')
-      // 接管模式：数据通过 localStorage + postMessage 与 React 通信
       window.takeOverApp = true
-      window._mmData = null
-      window.takeOverAppMethods = {
-        getMindMapData: function() {
-          if (window._mmData) return window._mmData
-          // 从 localStorage 读取初始数据
-          try {
-            var raw = localStorage.getItem('_wangsh_mindmap_data')
-            if (raw) { window._mmData = JSON.parse(raw); return window._mmData }
-          } catch(e) {}
-          return { root: { data: { text: '中心主题' }, children: [] }, theme: { template: 'classic4', config: {} }, layout: 'logicalStructure', config: {}, view: null }
-        },
-        saveMindMapData: function(data) {
-          window._mmData = data
-          // 通过 postMessage 通知父窗口保存
-          try { window.parent.postMessage({ type: 'mindmap:save', data: data.root || data }, '*') } catch(e) {}
-        },
-        getMindMapConfig: function() { return {} },
-        saveMindMapConfig: function() {},
-        getLanguage: function() { return 'zh' },
-        saveLanguage: function() {},
-        getLocalConfig: function() { return null },
-        saveLocalConfig: function() {},
-      }
     </script>
   </head>
   <body>
     <noscript><strong>We're sorry but thoughts doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript>
     <div id="app"></div>
+    <!-- built files will be auto injected -->
+    <script>
+      const getDataFromBackend = () => {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            // 先从 WangSh localStorage 读取
+            try {
+              const raw = localStorage.getItem('_wangsh_mindmap_data')
+              if (raw) {
+                const data = JSON.parse(raw)
+                resolve({
+                  mindMapData: data,
+                  mindMapConfig: {},
+                  lang: 'zh',
+                  localConfig: null
+                })
+                return
+              }
+            } catch(e) {}
+            // fallback: 默认数据
+            resolve({
+              mindMapData: {
+                root: { data: { text: '中心主题' }, children: [] },
+                theme: { template: 'classic4', config: {} },
+                layout: 'logicalStructure',
+                config: {},
+                view: null
+              },
+              mindMapConfig: {},
+              lang: 'zh',
+              localConfig: null
+            })
+          }, 200)
+        })
+      }
+      const setTakeOverAppMethods = data => {
+        window.takeOverAppMethods = {}
+        window.takeOverAppMethods.getMindMapData = () => data.mindMapData
+        window.takeOverAppMethods.saveMindMapData = mindMapData => {
+          data.mindMapData = mindMapData
+          try { window.parent.postMessage({ type: 'mindmap:save', data: mindMapData.root || mindMapData }, '*') } catch(e) {}
+        }
+        window.takeOverAppMethods.getMindMapConfig = () => data.mindMapConfig
+        window.takeOverAppMethods.saveMindMapConfig = config => { data.mindMapConfig = config }
+        window.takeOverAppMethods.getLanguage = () => data.lang
+        window.takeOverAppMethods.saveLanguage = lang => { data.lang = lang }
+        window.takeOverAppMethods.getLocalConfig = () => data.localConfig
+        window.takeOverAppMethods.saveLocalConfig = config => { data.localConfig = config }
+      }
+      window.onload = async () => {
+        if (!window.takeOverApp) return
+        const data = await getDataFromBackend()
+        setTakeOverAppMethods(data)
+        window.$bus.$on('app_inited', mindMap => { console.log('mindmap ready') })
+        window.initApp()
+      }
+    </script>
   </body>
 </html>
