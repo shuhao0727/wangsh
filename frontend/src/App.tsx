@@ -30,6 +30,7 @@ const MLFullPage = lazy(() => import("./pages/ITTechnology/MLFullPage"));
 const AIFullPage = lazy(() => import("./pages/ITTechnology/AIFullPage"));
 const AgentsFullPage = lazy(() => import("./pages/ITTechnology/AgentsFullPage"));
 const MindmapGalleryPage = lazy(() => import("./pages/MindmapGallery"));
+const MindmapPreviewPage = lazy(() => import("./pages/MindmapPreview"));
 const PersonalProgramsPage = lazy(() => import("./pages/PersonalPrograms"));
 const ArticlesPage = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/Articles/Detail"));
@@ -114,6 +115,7 @@ function App() {
             <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsFullPage /></PageErrorBoundary>} />
             <Route path="/mindmaps" element={<PageErrorBoundary pageName="mindmap-gallery"><MindmapGalleryPage /></PageErrorBoundary>} />
+            <Route path="/mindmap-preview" element={<PageErrorBoundary pageName="mindmap-preview"><MindmapPreviewPage /></PageErrorBoundary>} />
 
             <Route element={<BasicLayout />}>
               <Route path="/home" element={<PageErrorBoundary pageName="home"><HomePage /></PageErrorBoundary>} />

@@ -50,12 +50,31 @@
           }, 200)
         })
       }
+      const mmId = new URLSearchParams(location.search).get('id')
       const setTakeOverAppMethods = data => {
         window.takeOverAppMethods = {}
         window.takeOverAppMethods.getMindMapData = () => data.mindMapData
         window.takeOverAppMethods.saveMindMapData = mindMapData => {
           data.mindMapData = mindMapData
-          try { window.parent.postMessage({ type: 'mindmap:save', data: mindMapData.root || mindMapData }, '*') } catch(e) {}
+          // 直接调 API 保存
+          if (mmId) {
+            const root = mindMapData.root || mindMapData
+            // 将树结构转为 markdown
+            function toMd(node, level) {
+              level = level || 1
+              var md = '#'.repeat(level) + ' ' + (node.data ? node.data.text : '')
+              if (node.children) for (var i = 0; i < node.children.length; i++) md += '\n' + toMd(node.children[i], level + 1)
+              return md
+            }
+            const markdown = toMd(root)
+            const token = localStorage.getItem('ws_access_token') || sessionStorage.getItem('ws_access_token')
+            const h = { 'Content-Type': 'application/json' }
+            if (token) h['Authorization'] = 'Bearer ' + token
+            fetch('/api/v1/learning/mindmaps/' + mmId, {
+              method: 'PUT', headers: h, credentials: 'include',
+              body: JSON.stringify({ title: root.data ? root.data.text : '未命名', content: { markdown: markdown } })
+            }).catch(function(){})
+          }
         }
         window.takeOverAppMethods.getMindMapConfig = () => data.mindMapConfig
         window.takeOverAppMethods.saveMindMapConfig = config => { data.mindMapConfig = config }
