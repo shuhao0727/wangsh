@@ -91,9 +91,12 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     setSaving(true);
     try {
       const md = libDataToMd(data).replace(/^# /, "");
+      const token = localStorage.getItem("ws_access_token") || sessionStorage.getItem("ws_access_token");
+      const headers: Record<string,string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch(`/api/v1/learning/mindmaps/${mindmapId}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        credentials: "include", body: JSON.stringify({ title, content: { markdown: `# ${title}\n${md}` } }),
+        method: "PUT", headers, credentials: "include",
+        body: JSON.stringify({ title, content: { markdown: `# ${title}\n${md}` } }),
       });
       if (res.ok) { showMessage.success("导图已保存"); onSaved?.(); }
       else showMessage.error("保存失败");
