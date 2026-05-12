@@ -138,9 +138,9 @@ const MindmapGallery: React.FC = () => {
   }
 
   const renderCard = (item: MindmapItem, isMine: boolean) => (
-    <div key={item.id} className="group relative rounded-lg border border-border bg-surface transition-shadow hover:shadow-md">
-      <div className="h-40 w-full cursor-pointer overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
-        onClick={() => handleView(item)}>
+    <div key={item.id} className="group relative rounded-lg border border-border bg-surface transition-shadow hover:shadow-md cursor-pointer"
+      onClick={(e) => { if ((e.target as HTMLElement).closest('button')) return; setEditing(item); }}>
+      <div className="h-40 w-full overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2">
         <MindMapViewer markdown={item.content?.markdown || `# ${item.title}`} />
       </div>
       <div className="flex items-center justify-between px-3 py-2">
@@ -148,14 +148,14 @@ const MindmapGallery: React.FC = () => {
           <p className="truncate text-sm font-medium">{item.title}</p>
           <p className="text-xs text-text-tertiary">{new Date(item.updated_at).toLocaleDateString("zh-CN")}</p>
         </div>
-        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 relative z-10">
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
             onClick={() => handleView(item)} title="查看">
             <Eye className="h-3.5 w-3.5" />
           </Button>
           {isMine && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-              onClick={() => setEditing(item)} title="编辑">
+              onClick={(e) => { e.stopPropagation(); setEditing(item); }} title="编辑">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
