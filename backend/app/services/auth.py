@@ -67,7 +67,7 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
         # 管理员认证：username + password
         query = select(User).where(
             User.username == identifier,
-            User.role_code.in_(['admin', 'super_admin']),
+            User.role_code.in_(['teacher', 'admin', 'super_admin']),
             User.is_deleted.is_(False),
             User.is_active.is_(True)
         )
@@ -153,7 +153,7 @@ async def authenticate_user_auto(db, identifier: str, credential: str):
     # 先尝试管理员认证：username + password
     admin_query = select(User).where(
         User.username == identifier,
-        User.role_code.in_(['admin', 'super_admin']),
+        User.role_code.in_(['teacher', 'admin', 'super_admin']),
         User.is_deleted.is_(False),
         User.is_active.is_(True)
     )
@@ -221,7 +221,7 @@ async def get_current_user(token: str, db = None):
     if db:
         if user_type == "admin":
             # 根据令牌中的role_code查询，如果令牌中有role_code则使用，否则默认查admin
-            role_condition = User.role_code == role_code if role_code else User.role_code.in_(['admin', 'super_admin'])
+            role_condition = User.role_code == role_code if role_code else User.role_code.in_(['teacher', 'admin', 'super_admin'])
             query = select(User).where(
                 User.username == subject,
                 role_condition,

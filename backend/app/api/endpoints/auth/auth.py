@@ -51,7 +51,7 @@ async def login_for_access_token(
         "role_code": user.get("role_code", "guest"),
         "name": user.get("full_name", ""),
         "username": user.get("username", ""),
-        "type": "admin" if user.get("role_code") in ["admin", "super_admin"] else "student"
+        "type": "admin" if user.get("role_code") in ["teacher", "admin", "super_admin"] else "student"
     }
     
     # 会话绑定：为该登录颁发会话nonce，并处理IP唯一性
@@ -216,7 +216,7 @@ async def refresh_access_token(
         "role_code": user_info.get("role_code", "guest"),
         "name": user_info.get("full_name", ""),
         "username": user_info.get("username", ""),
-        "type": "admin" if user_info.get("role_code") in ["admin", "super_admin"] else "student"
+        "type": "admin" if user_info.get("role_code") in ["teacher", "admin", "super_admin"] else "student"
     }
     
     # 从会话守卫读取当前nonce；若不存在则基于当前请求自举新会话nonce
