@@ -107,6 +107,7 @@ class UserCreate(BaseModel):
     student_id: Optional[str] = Field(None, max_length=50, description="学号")
     username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
     full_name: str = Field(..., max_length=100, description="全名")
+    password: Optional[str] = Field(None, min_length=6, max_length=128, description="密码（仅教职工需要）")
     class_name: Optional[str] = Field(None, max_length=50, description="班级名称")
     study_year: Optional[str] = Field(None, max_length=10, description="学年")
     role_code: Optional[str] = Field("student", max_length=20, description="角色代码")
@@ -304,10 +305,16 @@ async def create_user(
                     )
         
         # 创建新用户
+        hashed_password = None
+        if user_data.password:
+            from app.services.auth import get_password_hash
+            hashed_password = get_password_hash(user_data.password)
+
         new_user = User(
             student_id=user_data.student_id,
             username=user_data.username,
             full_name=user_data.full_name,
+            hashed_password=hashed_password,
             class_name=user_data.class_name,
             study_year=user_data.study_year,
             role_code=user_data.role_code or "student",
