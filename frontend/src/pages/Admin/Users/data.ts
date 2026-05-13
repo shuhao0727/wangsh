@@ -68,8 +68,13 @@ export const mockUsers: User[] = [
   },
 ];
 
-// 角色选项（用户管理只显示学生，管理员角色已由后端过滤）
-export const roleOptions = [{ value: "student", label: "学生" }];
+// 角色选项
+export const roleOptions = [
+  { value: "super_admin", label: "超级管理员" },
+  { value: "admin", label: "管理员" },
+  { value: "teacher", label: "教师" },
+  { value: "student", label: "学生" },
+];
 
 // 状态选项
 export const statusOptions = [
@@ -92,7 +97,7 @@ export const defaultPagination = {
 };
 
 // Excel模板列头
-export const excelTemplateHeaders = ["学号", "姓名", "学年", "班级", "状态"];
+export const excelTemplateHeaders = ["学号", "姓名", "学年", "班级", "状态", "用户名", "角色"];
 
 // 表单验证规则
 export const formRules = {

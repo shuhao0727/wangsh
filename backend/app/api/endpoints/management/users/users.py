@@ -24,13 +24,13 @@ from app.core.pubsub import publish
 
 router = APIRouter()
 
-USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名"]
+USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名", "角色"]
 USER_IMPORT_REQUIRED_FIELDS = ["学号", "姓名"]
 USER_IMPORT_TEMPLATE_ROWS = [
-    ["20230001", "张三", "2025", "高一(1)班", "true", "zhangsan"],
-    ["20230002", "李四", "2025", "高一(2)班", "true", "lisi"],
-    ["20230003", "王五", "2025", "高一(3)班", "false", "wangwu"],
-    ["20230004", "赵六", "2025", "高一(1)班", "true", ""],
+    ["20230001", "张三", "2025", "高一(1)班", "true", "zhangsan", "student"],
+    ["20230002", "李四", "2025", "高一(2)班", "true", "lisi", "student"],
+    ["20230003", "王五", "2025", "高一(3)班", "false", "wangwu", "student"],
+    ["20230004", "赵六", "2025", "高一(1)班", "true", "", "teacher"],
 ]
 
 
@@ -588,7 +588,7 @@ async def download_user_import_template(
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(USER_IMPORT_HEADERS)
-        writer.writerow(["# 注意：只能导入学生用户，不允许导入管理员"])
+        writer.writerow(["# 注意：角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
         writer.writerow(["# 状态：true=激活，false=未激活（可选，默认为true）"])
         writer.writerow(["# 用户名：可选字段，如果不填将使用学号作为登录账号"])
         writer.writerow(["# 示例数据："])
@@ -612,7 +612,7 @@ async def download_user_import_template(
 
     notes_sheet = workbook.create_sheet(title="填写说明")
     notes_sheet.append(["说明"])
-    notes_sheet.append(["1. 只能导入学生用户，不允许导入管理员"])
+    notes_sheet.append(["1. 角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
     notes_sheet.append(["2. 状态字段可填 true/false（默认为 true）"])
     notes_sheet.append(["3. 用户名字段可选，不填将使用学号作为登录账号"])
     notes_sheet.append(["4. 学号、姓名为必填字段"])
@@ -635,7 +635,7 @@ async def import_users(
 ) -> UserImportResult:
     """
     批量导入用户（CSV / XLSX 格式，需要管理员权限）
-    注意：只能导入学生用户，不允许导入管理员
+    注意：角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)
     """
     try:
         # 检查文件类型
@@ -691,8 +691,10 @@ async def import_users(
                 elif status_str not in ['true', '1', 'yes', '是', '']:
                     raise ValueError(f"状态值无效: {status_str}")
                 
-                # 验证角色代码（不允许导入管理员）
-                role_code = "student"
+                # 读取角色（默认 student，支持 teacher/admin/super_admin）
+                role_code = row.get('角色', 'student').strip() or 'student'
+                if role_code not in ('student', 'teacher', 'admin', 'super_admin'):
+                    role_code = 'student'
                 
                 # 检查是否已存在（按学号）
                 existing_query = select(User).where(

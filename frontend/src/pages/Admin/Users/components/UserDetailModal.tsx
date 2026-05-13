@@ -70,7 +70,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             label="角色"
             value={
               <Badge variant="purple">
-                {currentUser.role_code}
+                {{ super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生" }[currentUser.role_code] || currentUser.role_code}
               </Badge>
             }
           />
