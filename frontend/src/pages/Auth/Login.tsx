@@ -1,5 +1,6 @@
 import { showMessage } from "@/lib/toast";
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import AnimatedLoginCharacters from "@/components/Auth/AnimatedLoginCharacters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ const LoginPage: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isFocused, setIsFocused] = useState(false);
   const redirect = useMemo(() => {
     const sp = new URLSearchParams(location.search);
     const raw = sp.get("redirect") || "/admin/dashboard";
@@ -88,24 +90,9 @@ const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Center: geometric code shapes */}
+        {/* Center: animated characters */}
         <div className="relative z-20 flex items-center justify-center" style={{ height: 400 }}>
-          <div className="login-animation active">
-            {/* Code bracket shapes */}
-            <svg viewBox="0 0 320 200" className="w-80 h-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <g opacity="0.9">
-                <text x="40" y="45" fill="rgba(255,255,255,0.85)" fontFamily="monospace" fontSize="18" fontWeight="700">{`<WangSh>`}</text>
-                <text x="40" y="75" fill="rgba(255,255,255,0.55)" fontFamily="monospace" fontSize="14">{`  discover()`}</text>
-                <text x="40" y="97" fill="rgba(255,255,255,0.55)" fontFamily="monospace" fontSize="14">{`  learn()`}</text>
-                <text x="40" y="119" fill="rgba(255,255,255,0.7)" fontFamily="monospace" fontSize="14">{`  build()`}</text>
-                <text x="40" y="149" fill="rgba(255,255,255,0.85)" fontFamily="monospace" fontSize="18" fontWeight="700">{`</WangSh>`}</text>
-              </g>
-            </svg>
-            {/* Decorative floating dots */}
-            <div className="login-dot login-dot-1" />
-            <div className="login-dot login-dot-2" />
-            <div className="login-dot login-dot-3" />
-          </div>
+          <AnimatedLoginCharacters isFocused={isFocused} />
         </div>
 
         {/* Bottom links */}
@@ -156,7 +143,10 @@ const LoginPage: React.FC = () => {
                   className="h-11 pl-9"
                   placeholder={requireAdmin ? "请输入管理员账号" : "请输入用户名"}
                   autoComplete="username"
-                  {...register("username")}
+                  {...register("username", {
+                    onBlur: () => setIsFocused(false),
+                  })}
+                  onFocus={() => setIsFocused(true)}
                 />
               </div>
               {errors.username?.message ? (
@@ -193,34 +183,6 @@ const LoginPage: React.FC = () => {
           </form>
         </div>
       </div>
-      <style>{`
-        .login-animation svg text { transition: opacity 0.4s ease; }
-        .login-animation.active text:nth-child(3) { opacity: 0.8; }
-        .login-animation.active text:nth-child(4) { opacity: 0.8; }
-
-        .login-dot {
-          position: absolute;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.3);
-          pointer-events: none;
-        }
-        .login-dot-1 { width: 8px; height: 8px; top: 20%; left: 15%; animation: loginFloatA 4s ease-in-out infinite; }
-        .login-dot-2 { width: 6px; height: 6px; top: 65%; right: 20%; animation: loginFloatB 5s ease-in-out infinite; }
-        .login-dot-3 { width: 10px; height: 10px; bottom: 30%; left: 60%; animation: loginFloatA 3.5s ease-in-out infinite 1s; }
-
-        @keyframes loginFloatA {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-          50% { transform: translateY(-16px) scale(1.6); opacity: 0.7; }
-        }
-        @keyframes loginFloatB {
-          0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.25; }
-          50% { transform: translateY(-12px) translateX(8px) scale(1.8); opacity: 0.65; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .login-dot { animation: none; }
-        }
-      `}</style>
     </div>
   );
 };
