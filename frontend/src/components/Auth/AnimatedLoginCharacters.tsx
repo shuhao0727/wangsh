@@ -158,6 +158,7 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
           <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 3 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? 4 : undefined} />
           <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 3 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? 4 : undefined} />
         </div>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-12 h-[4px] bg-[#042F2E] rounded-full transition-all duration-200 ease-out" />
       </div>
 
       {/* Dark Teal — Center: looks away when password visible */}
@@ -168,6 +169,7 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
           <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 0 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? -4 : undefined} />
           <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 0 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? -4 : undefined} />
         </div>
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-8 h-[3px] bg-[#FFFFFF] rounded-full transition-all duration-200 ease-out" />
       </div>
 
       {/* Violet semi-circle — Front left: peeks at password when visible */}
@@ -178,6 +180,7 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
         </div>
+        <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-10 h-[4px] bg-[#FFFFFF] rounded-full transition-all duration-200 ease-out" />
       </div>
 
       {/* Light Teal — Front right: looks down when password visible */}
