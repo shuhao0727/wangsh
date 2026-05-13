@@ -28,6 +28,7 @@ import { logger } from "@services/logger";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import { useDarkMode } from "@hooks/useDarkMode";
+import { useBreakpoint } from "@hooks/useBreakpoint";
 
 // 这些页面需要 overflow:hidden + flex-col（子页面自己处理滚动）
 const FULL_HEIGHT_PATHS = [
@@ -49,23 +50,11 @@ const NAV_ITEMS = [
   { key: "/articles", icon: FileText, label: "文章" },
 ];
 
-// 简单的响应式 hook
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
-  );
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < breakpoint);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, [breakpoint]);
-  return isMobile;
-}
-
 const BasicLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useIsMobile();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   const {
     isLoading,
     isAuthenticated,

@@ -123,14 +123,8 @@ const AdminLayout: React.FC = () => {
   const currentTitle =
     flatItems.find((item) => item.key === path)?.label || "管理后台";
 
-  const roleLabel =
-    auth.user?.role_code === "super_admin"
-      ? "超级管理员"
-      : auth.user?.role_code === "admin"
-        ? "管理员"
-        : auth.user?.role_code === "student"
-          ? "学生用户"
-          : "访客";
+  const ROLE_LABELS: Record<string, string> = { super_admin: "超级管理员", admin: "管理员", student: "学生用户" };
+  const roleLabel = ROLE_LABELS[auth.user?.role_code || ""] || "访客";
 
   const sidebarExpandedWidth = "var(--ws-sidebar-width)";
   const sidebarCollapsedWidth = "var(--ws-sidebar-collapsed-width)";

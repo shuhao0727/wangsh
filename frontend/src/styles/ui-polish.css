@@ -18,12 +18,6 @@ html, body {
   }
 }
 
-@media (max-width: 430px) {
-  .ws-admin-page {
-    padding: var(--ws-space-2);
-  }
-}
-
 .ws-page-card {
   margin-bottom: var(--ws-space-3);
 }
@@ -128,5 +122,11 @@ html, body {
 @media (max-width: 576px) {
   .ws-admin-page {
     padding: 10px;
+  }
+}
+
+@media (max-width: 430px) {
+  .ws-admin-page {
+    padding: var(--ws-space-2);
   }
 }

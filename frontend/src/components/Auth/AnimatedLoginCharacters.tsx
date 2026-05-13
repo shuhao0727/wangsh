@@ -2,6 +2,21 @@
 
 import { useState, useEffect, useRef } from "react";
 
+/* ── useBlink hook ── */
+function useBlink(intervalMin = 3000, intervalMax = 7000, offDuration = 150): boolean {
+  const [blinking, setBlinking] = useState(false);
+  useEffect(() => {
+    const schedule = (): ReturnType<typeof setTimeout> =>
+      setTimeout(() => {
+        setBlinking(true);
+        setTimeout(() => { setBlinking(false); schedule(); }, offDuration);
+      }, Math.random() * (intervalMax - intervalMin) + intervalMin);
+    const t = schedule();
+    return () => clearTimeout(t);
+  }, [intervalMin, intervalMax, offDuration]);
+  return blinking;
+}
+
 /* ── Pupil ── */
 interface PupilProps {
   size?: number;
@@ -88,8 +103,8 @@ interface Props {
 const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassword = false, passwordLength = 0 }) => {
   const [mouseX, setMouseX] = useState<number>(0);
   const [mouseY, setMouseY] = useState<number>(0);
-  const [tealBlinking, setTealBlinking] = useState(false);
-  const [darkBlinking, setDarkBlinking] = useState(false);
+  const tealBlinking = useBlink();
+  const darkBlinking = useBlink();
   const [violetPeeking, setVioletPeeking] = useState(false);
   const [lookingAtEachOther, setLookingAtEachOther] = useState(false);
   const tealRef = useRef<HTMLDivElement>(null);
@@ -101,20 +116,6 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
     const h = (e: MouseEvent) => { setMouseX(e.clientX); setMouseY(e.clientY); };
     window.addEventListener("mousemove", h);
     return () => window.removeEventListener("mousemove", h);
-  }, []);
-
-  // blink — Teal
-  useEffect(() => {
-    const schedule = (): ReturnType<typeof setTimeout> => setTimeout(() => { setTealBlinking(true); setTimeout(() => { setTealBlinking(false); schedule(); }, 150); }, Math.random() * 4000 + 3000);
-    const t = schedule();
-    return () => clearTimeout(t);
-  }, []);
-
-  // blink — Dark Teal
-  useEffect(() => {
-    const schedule = (): ReturnType<typeof setTimeout> => setTimeout(() => { setDarkBlinking(true); setTimeout(() => { setDarkBlinking(false); schedule(); }, 150); }, Math.random() * 4000 + 3000);
-    const t = schedule();
-    return () => clearTimeout(t);
   }, []);
 
   // look at each other on focus
@@ -152,7 +153,7 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
     <div className="relative" style={{ width: 550, height: 400 }}>
       {/* Teal — Back: stares when password hidden, stands straight when visible */}
       <div ref={tealRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 70, width: 180, height: (isFocused || isHiding) ? 440 : 400, backgroundColor: "#0D9488", borderRadius: "10px 10px 0 0", zIndex: 1, transform: isShowing ? "skewX(0deg)" : isFocused ? `skewX(${(tealP.skew || 0) - 12}deg) translateX(40px)` : isHiding ? `skewX(${(tealP.skew || 0) - 12}deg) translateX(40px)` : `skewX(${tealP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 70, width: 180, height: (isFocused || isHiding) ? 440 : 400, backgroundColor: "#0D9488", borderRadius: "10px 10px 0 0", zIndex: 1, transform: isShowing ? "skewX(0deg)" : (isFocused || isHiding) ? `skewX(${tealP.skew - 12}deg) translateX(40px)` : `skewX(${tealP.skew}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-8 transition-all duration-700 ease-in-out"
           style={{ left: isShowing ? 20 : lookingAtEachOther ? 55 : 45 + tealP.faceX, top: isShowing ? 35 : lookingAtEachOther ? 65 : 40 + tealP.faceY }}>
           <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 3 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? 4 : undefined} />
@@ -162,7 +163,7 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
 
       {/* Dark Teal — Center: looks away when password visible */}
       <div ref={darkRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 240, width: 120, height: 310, backgroundColor: "#0F766E", borderRadius: "8px 8px 0 0", zIndex: 2, transform: isShowing ? "skewX(0deg)" : lookingAtEachOther ? `skewX(${(darkP.skew || 0) * 1.5 + 10}deg) translateX(20px)` : (isFocused || isHiding) ? `skewX(${(darkP.skew || 0) * 1.5}deg)` : `skewX(${darkP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 240, width: 120, height: 310, backgroundColor: "#0F766E", borderRadius: "8px 8px 0 0", zIndex: 2, transform: isShowing ? "skewX(0deg)" : lookingAtEachOther ? `skewX(${(darkP.skew) * 1.5 + 10}deg) translateX(20px)` : (isFocused || isHiding) ? `skewX(${(darkP.skew) * 1.5}deg)` : `skewX(${darkP.skew}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-6 transition-all duration-700 ease-in-out"
           style={{ left: isShowing ? 10 : lookingAtEachOther ? 32 : 26 + darkP.faceX, top: isShowing ? 28 : lookingAtEachOther ? 12 : 32 + darkP.faceY }}>
           <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 0 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? -4 : undefined} />
@@ -172,9 +173,9 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
 
       {/* Violet semi-circle — Front left: peeks at password when visible */}
       <div ref={violetRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 0, width: 240, height: 200, backgroundColor: "#7C3AED", borderRadius: "120px 120px 0 0", zIndex: 3, transform: isShowing ? "skewX(0deg)" : `skewX(${violetP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 0, width: 240, height: 200, backgroundColor: "#7C3AED", borderRadius: "120px 120px 0 0", zIndex: 3, transform: isShowing ? "skewX(0deg)" : `skewX(${violetP.skew}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-8 transition-all duration-200 ease-out"
-          style={{ left: isShowing ? 50 : 82 + (violetP.faceX || 0), top: isShowing ? 85 : 90 + (violetP.faceY || 0) }}>
+          style={{ left: isShowing ? 50 : 82 + (violetP.faceX), top: isShowing ? 85 : 90 + (violetP.faceY) }}>
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
         </div>
@@ -182,14 +183,14 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassw
 
       {/* Light Teal — Front right: looks down when password visible */}
       <div ref={lightRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 310, width: 140, height: 230, backgroundColor: "#14B8A6", borderRadius: "70px 70px 0 0", zIndex: 4, transform: isShowing ? "skewX(0deg)" : `skewX(${lightP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 310, width: 140, height: 230, backgroundColor: "#14B8A6", borderRadius: "70px 70px 0 0", zIndex: 4, transform: isShowing ? "skewX(0deg)" : `skewX(${lightP.skew}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-6 transition-all duration-200 ease-out"
-          style={{ left: isShowing ? 20 : 52 + (lightP.faceX || 0), top: isShowing ? 35 : 40 + (lightP.faceY || 0) }}>
+          style={{ left: isShowing ? 20 : 52 + (lightP.faceX), top: isShowing ? 35 : 40 + (lightP.faceY) }}>
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? -5 : undefined} forceLookY={isShowing ? -4 : undefined} />
           <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? -5 : undefined} forceLookY={isShowing ? -4 : undefined} />
         </div>
         <div className="absolute w-20 h-[4px] bg-[#042F2E] rounded-full transition-all duration-200 ease-out"
-          style={{ left: isShowing ? 10 : 40 + (lightP.faceX || 0), top: isShowing ? 88 : 88 + (lightP.faceY || 0) }} />
+          style={{ left: isShowing ? 10 : 40 + (lightP.faceX), top: isShowing ? 88 : 88 + (lightP.faceY) }} />
       </div>
     </div>
   );
