@@ -14,7 +14,6 @@ const LoginPage: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
   const redirect = useMemo(() => {
     const sp = new URLSearchParams(location.search);
     const raw = sp.get("redirect") || "/admin/dashboard";
@@ -42,10 +41,7 @@ const LoginPage: React.FC = () => {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-    },
+    defaultValues: { username: "", password: "" },
   });
 
   useEffect(() => {
@@ -77,47 +73,87 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--ws-color-primary) 6%, white) 0%, color-mix(in srgb, var(--ws-color-primary) 12%, white) 50%, color-mix(in srgb, var(--ws-color-secondary) 8%, white) 100%)" }}>
-
-      {/* 背景装饰 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-[var(--ws-opacity-decoration-strong)]"
-          style={{ background: "radial-gradient(circle, rgba(14,165,233,0.3) 0%, transparent 70%)" }} />
-        <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full opacity-[var(--ws-opacity-decoration-soft)]"
-          style={{ background: "radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%)" }} />
-      </div>
-
-      <div className="relative w-full max-w-sm">
-        {/* Logo 区 */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-[calc(var(--ws-control-height)+var(--ws-space-1))] h-[calc(var(--ws-control-height)+var(--ws-space-1))] rounded-2xl mb-4 text-white text-2xl font-bold shadow-lg"
-            style={{ background: "linear-gradient(135deg, var(--ws-color-primary) 0%, var(--ws-color-secondary) 100%)" }}>
-            W
-          </div>
-          <div className="text-xl sm:text-2xl font-bold tracking-tight text-text-base">
-            {requireAdmin ? "管理员登录" : "登录"}
-          </div>
-          <div className="text-sm mt-1 text-text-secondary">
-            {requireAdmin ? "仅管理员账号可进入后台" : "请输入账号密码继续"}
+    <div className="min-h-screen max-h-screen overflow-hidden grid lg:grid-cols-2">
+      {/* ── Left: Brand / Visual Panel ── */}
+      <div className="relative hidden lg:flex flex-col justify-between p-10 overflow-hidden"
+        style={{ background: "linear-gradient(160deg, #0D9488 0%, #14B8A6 35%, #7C3AED 100%)" }}>
+        {/* Logo */}
+        <div className="relative z-20">
+          <div className="flex items-center gap-3 text-lg font-semibold text-white">
+            <div className="grid h-9 w-9 shrink-0 place-content-center rounded-xl text-sm font-bold"
+              style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)" }}>
+              W
+            </div>
+            <span>WangSh 平台</span>
           </div>
         </div>
 
-        {/* 表单卡片 */}
-        <div className="rounded-2xl p-8 shadow-sm"
-          style={{ background: "var(--ws-glass-bg)", backdropFilter: "var(--ws-glass-blur)" }}>
-          <form
-            onSubmit={handleSubmit(onFinish)}
-            className="space-y-[var(--ws-space-3)]"
-            autoComplete="off"
-          >
+        {/* Center: geometric code shapes */}
+        <div className="relative z-20 flex items-center justify-center" style={{ height: 400 }}>
+          <div className="login-animation active">
+            {/* Code bracket shapes */}
+            <svg viewBox="0 0 320 200" className="w-80 h-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g opacity="0.9">
+                <text x="40" y="45" fill="rgba(255,255,255,0.85)" fontFamily="monospace" fontSize="18" fontWeight="700">{`<WangSh>`}</text>
+                <text x="40" y="75" fill="rgba(255,255,255,0.55)" fontFamily="monospace" fontSize="14">{`  discover()`}</text>
+                <text x="40" y="97" fill="rgba(255,255,255,0.55)" fontFamily="monospace" fontSize="14">{`  learn()`}</text>
+                <text x="40" y="119" fill="rgba(255,255,255,0.7)" fontFamily="monospace" fontSize="14">{`  build()`}</text>
+                <text x="40" y="149" fill="rgba(255,255,255,0.85)" fontFamily="monospace" fontSize="18" fontWeight="700">{`</WangSh>`}</text>
+              </g>
+            </svg>
+            {/* Decorative floating dots */}
+            <div className="login-dot login-dot-1" />
+            <div className="login-dot login-dot-2" />
+            <div className="login-dot login-dot-3" />
+          </div>
+        </div>
+
+        {/* Bottom links */}
+        <div className="relative z-20 flex items-center gap-6 text-sm text-white/60">
+          <a href="/home" className="hover:text-white transition-colors">返回首页</a>
+          <span className="text-white/30">v1.5.11</span>
+        </div>
+
+        {/* Decorative blobs */}
+        <div className="absolute top-1/4 right-1/4 size-64 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/4 size-96 bg-white/8 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 size-48 bg-violet-400/20 rounded-full blur-2xl" />
+      </div>
+
+      {/* ── Right: Login Form ── */}
+      <div className="flex items-center justify-center p-8"
+        style={{ background: "var(--ws-color-bg)" }}>
+        <div className="w-full max-w-[400px]">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center justify-center gap-2 mb-10">
+            <div className="grid h-9 w-9 shrink-0 place-content-center rounded-xl text-sm font-bold text-white"
+              style={{ background: "var(--ws-gradient-primary)" }}>
+              W
+            </div>
+            <span className="text-lg font-semibold">WangSh 平台</span>
+          </div>
+
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold tracking-tight mb-2">
+              {requireAdmin ? "管理员登录" : "欢迎回来"}
+            </h1>
+            <p className="text-sm text-text-secondary">
+              {requireAdmin ? "仅管理员账号可进入后台" : "课程、训练与工具入口"}
+            </p>
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleSubmit(onFinish)} className="space-y-4" autoComplete="off">
             <div className="space-y-2">
-              <Label htmlFor="username">{requireAdmin ? "管理员账号" : "用户名"}</Label>
+              <Label htmlFor="username" className="text-sm font-medium">
+                {requireAdmin ? "管理员账号" : "用户名"}
+              </Label>
               <div className="relative">
                 <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                 <Input
                   id="username"
-                  className="h-[var(--ws-control-height)] pl-[var(--ws-search-input-padding-start)]"
+                  className="h-11 pl-9"
                   placeholder={requireAdmin ? "请输入管理员账号" : "请输入用户名"}
                   autoComplete="username"
                   {...register("username")}
@@ -129,13 +165,13 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password" className="text-sm font-medium">密码</Label>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                 <Input
                   id="password"
                   type="password"
-                  className="h-[var(--ws-control-height)] pl-[var(--ws-search-input-padding-start)]"
+                  className="h-11 pl-9"
                   placeholder="请输入密码"
                   autoComplete="current-password"
                   {...register("password")}
@@ -148,7 +184,7 @@ const LoginPage: React.FC = () => {
 
             <Button
               type="submit"
-              className="h-[var(--ws-control-height)] w-full text-base font-semibold"
+              className="h-11 w-full text-base font-semibold"
               disabled={auth.isLoading}
             >
               {auth.isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -157,6 +193,34 @@ const LoginPage: React.FC = () => {
           </form>
         </div>
       </div>
+      <style>{`
+        .login-animation svg text { transition: opacity 0.4s ease; }
+        .login-animation.active text:nth-child(3) { opacity: 0.8; }
+        .login-animation.active text:nth-child(4) { opacity: 0.8; }
+
+        .login-dot {
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.3);
+          pointer-events: none;
+        }
+        .login-dot-1 { width: 8px; height: 8px; top: 20%; left: 15%; animation: loginFloatA 4s ease-in-out infinite; }
+        .login-dot-2 { width: 6px; height: 6px; top: 65%; right: 20%; animation: loginFloatB 5s ease-in-out infinite; }
+        .login-dot-3 { width: 10px; height: 10px; bottom: 30%; left: 60%; animation: loginFloatA 3.5s ease-in-out infinite 1s; }
+
+        @keyframes loginFloatA {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+          50% { transform: translateY(-16px) scale(1.6); opacity: 0.7; }
+        }
+        @keyframes loginFloatB {
+          0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.25; }
+          50% { transform: translateY(-12px) translateX(8px) scale(1.8); opacity: 0.65; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .login-dot { animation: none; }
+        }
+      `}</style>
     </div>
   );
 };
