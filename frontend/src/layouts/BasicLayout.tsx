@@ -18,7 +18,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { showMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import "./BasicLayout.css";
 import useAuth from "@hooks/useAuth";

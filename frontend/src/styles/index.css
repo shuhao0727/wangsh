@@ -86,6 +86,7 @@
   --ws-color-error: #DC2626;
   --ws-color-error-dark: #B91C1C;
   --ws-color-error-light: #FCA5A5;
+  --ws-color-danger: #DC2626;
   --ws-color-info: #0EA5E9;
 
   /* 交互 */
@@ -692,6 +693,7 @@ tr:hover td {
   --ws-color-error: #F87171;
   --ws-color-error-dark: #FCA5A5; /* 深色模式下明度反转：dark=更突出(bright pink)，light=更柔和(dark red) */
   --ws-color-error-light: #7F1D1D;
+  --ws-color-danger: #F87171;
   --ws-color-purple: #E879F9;
   --ws-color-purple-hover: #F0ABFC;
   --ws-color-purple-active: #D946EF;
