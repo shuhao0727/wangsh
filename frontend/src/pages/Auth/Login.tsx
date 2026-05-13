@@ -74,6 +74,7 @@ const LoginPage: React.FC = () => {
       await auth.logout();
       return;
     }
+    localStorage.removeItem("ws_guest_mode");
     showMessage.success("登录成功");
     void navigate(redirect, { replace: true });
   };
@@ -196,7 +197,7 @@ const LoginPage: React.FC = () => {
             <div className="text-center text-sm text-text-secondary mt-6">
               <button
                 type="button"
-                onClick={() => navigate("/home")}
+                onClick={() => { localStorage.setItem("ws_guest_mode", "1"); navigate("/home"); }}
                 className="text-text-tertiary hover:text-text-secondary transition-colors underline underline-offset-4"
               >
                 访客模式进入

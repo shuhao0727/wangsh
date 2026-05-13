@@ -94,6 +94,9 @@ const UserMenu: React.FC<UserMenuProps> = ({
 
   // 如果用户未登录，显示登录按钮
   if (!auth.isLoggedIn()) {
+    const isGuest = typeof window !== "undefined" && localStorage.getItem("ws_guest_mode") === "1";
+    const guestLabel = "访客模式";
+    const loginLabel = "登录";
     const replayStoredAuthExpiredReason = () => {
       if (typeof window === "undefined") return;
       const detail = (
@@ -116,7 +119,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
           style={style}
         >
           <User className="mr-2 h-4 w-4" />
-          登录
+          {isGuest ? guestLabel : loginLabel}
         </Button>
       );
     }
@@ -136,14 +139,14 @@ const UserMenu: React.FC<UserMenuProps> = ({
             logger.warn("UserMenu - onMenuClick 回调未定义");
           }
         }}
-        title="点击登录"
+        title={isGuest ? "访客模式" : "点击登录"}
       >
         <Avatar className={`${showName ? "mr-2" : ""} h-8 w-8`}>
           <AvatarFallback className="bg-muted">
             <User className="h-4 w-4 text-muted-foreground" />
           </AvatarFallback>
         </Avatar>
-        {showName && <span className="text-[length:var(--ws-text-nav)] text-muted-foreground">未登录</span>}
+        {showName && <span className="text-[length:var(--ws-text-nav)] text-muted-foreground">{isGuest ? guestLabel : "未登录"}</span>}
       </div>
     );
   }
@@ -216,8 +219,9 @@ const UserMenu: React.FC<UserMenuProps> = ({
           className="text-destructive focus:text-destructive"
           onClick={() => {
             handleMenuClick("logout");
+            localStorage.removeItem("ws_guest_mode");
             void auth.logout();
-            void navigate("/home");
+            void navigate("/login");
           }}
         >
           <LogOut className="mr-2 h-4 w-4" />
