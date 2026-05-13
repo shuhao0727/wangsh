@@ -171,10 +171,9 @@ async def list_users(
         # 使用SQLAlchemy正确的语法
         conditions.append(User.is_deleted == False)
         
-        # 默认排除管理员角色（admin 和 super_admin）
-        # 只有当用户显式指定 role_code 时才不过滤
+        # 默认排除超级管理员（安全考虑），管理员/教师/学生可见
         if not role_code:
-            conditions.append(User.role_code.notin_(['admin', 'super_admin']))
+            conditions.append(User.role_code.notin_(['super_admin']))
         
         if search:
             search_term = f"%{search}%"
