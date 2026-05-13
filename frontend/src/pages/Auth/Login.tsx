@@ -73,6 +73,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
+    <>
     <div className="min-h-screen max-h-screen overflow-hidden grid lg:grid-cols-2">
       {/* ── Left: Brand / Visual Panel ── */}
       <div className="relative hidden lg:flex flex-col justify-between p-10 overflow-hidden"
@@ -221,7 +222,7 @@ const LoginPage: React.FC = () => {
           .login-dot { animation: none; }
         }
       `}</style>
-    </div>
+    </>
   );
 };
 
