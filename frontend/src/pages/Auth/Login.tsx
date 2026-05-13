@@ -4,7 +4,7 @@ import AnimatedLoginCharacters from "@/components/Auth/AnimatedLoginCharacters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, User, Loader2 } from "lucide-react";
+import { Lock, User, Loader2, Eye, EyeOff } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "@hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -16,6 +16,7 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isFocused, setIsFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const redirect = useMemo(() => {
     const sp = new URLSearchParams(location.search);
     const raw = sp.get("redirect") || "/admin/dashboard";
@@ -160,12 +161,20 @@ const LoginPage: React.FC = () => {
                 <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                 <Input
                   id="password"
-                  type="password"
-                  className="h-11 pl-9"
+                  type={showPassword ? "text" : "password"}
+                  className="h-11 pl-9 pr-10"
                   placeholder="请输入密码"
                   autoComplete="current-password"
                   {...register("password")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {errors.password?.message ? (
                 <p className="text-xs text-destructive" aria-live="polite">{errors.password.message}</p>
