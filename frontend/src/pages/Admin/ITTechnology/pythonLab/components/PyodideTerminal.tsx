@@ -70,7 +70,7 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         background: readToken("--ws-color-bg", dark ? "#0f1117" : "#ffffff"),
         foreground: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
         cursor: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
-        selectionBackground: "rgba(37, 99, 235, 0.2)",
+        selectionBackground: "color-mix(in srgb, var(--ws-color-primary) 20%, transparent)",
       };
     }, []);
 

@@ -72,7 +72,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
         background: dark ? "#0F172A" : "#F0FDFA",
         foreground: dark ? "#F1F5F9" : "#1E293B",
         cursor: dark ? "#F1F5F9" : "#1E293B",
-        selectionBackground: "rgba(37, 99, 235, 0.2)",
+        selectionBackground: "color-mix(in srgb, var(--ws-color-primary) 20%, transparent)",
       };
     }
   }, []);

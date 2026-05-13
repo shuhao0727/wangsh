@@ -730,6 +730,9 @@ tr:hover td {
   --ws-tag-indigo: #818CF8;
   --ws-tag-sky: #7DD3FC;
   --ws-tag-gray: #94A3B8;
+  --ws-color-code-bg: #0F172A;
+  --ws-color-code-text: #E2E8F0;
+  --ws-color-code-purple: #A78BFA;
 }
 
 .dark .home-welcome-strip {
