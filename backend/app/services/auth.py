@@ -48,71 +48,34 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 
 async def authenticate_user(db, identifier: str, credential: str, user_type: str = "admin"):
     """
-    统一用户认证 - 支持管理员和学生登录
-    
-    Args:
-        db: 数据库会话
-        identifier: 用户标识符（管理员用username，学生用student_id或username）
-        credential: 凭证（管理员用password，学生用name）
-        user_type: 用户类型 'admin' 或 'student'
-        
-    Returns:
-        用户信息字典或None
+    统一用户认证 — 所有角色均使用 姓名(identifier) + 学号(credential)
+
+    支持 identifier 为 full_name 或 student_id（反向兼容）
+    credential 匹配 student_id；有 hashed_password 的账号也可用密码登录
     """
     from sqlalchemy import select, or_
     from app.models import User
     from app.utils.security import verify_password
-    
-    if user_type == "admin":
-        # 教职工认证：支持 username+password 或 full_name+student_id
-        query = select(User).where(
-            or_(
-                User.username == identifier,
-                User.full_name == identifier,
-            ),
-            User.role_code.in_(['teacher', 'admin', 'super_admin']),
-            User.is_deleted.is_(False),
-            User.is_active.is_(True)
-        )
-    elif user_type == "student":
-        # 学生认证：full_name + student_id（或反向兼容）
-        query = select(User).where(
-            or_(
-                User.full_name == identifier,
-                User.student_id == identifier
-            ),
-            User.role_code == 'student',
-            User.is_deleted.is_(False),
-            User.is_active.is_(True)
-        )
-    else:
-        return None
 
+    query = select(User).where(
+        or_(User.full_name == identifier, User.student_id == identifier, User.username == identifier),
+        User.is_deleted.is_(False),
+        User.is_active.is_(True)
+    )
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
         return None
 
-    if user_type == "admin":
-        # 验证教职工凭证：支持 hashed_password 或 student_id
-        if user.hashed_password and verify_password(credential, user.hashed_password):
-            pass  # 密码验证通过
-        elif user.student_id and user.student_id == credential:
-            pass  # 学号作为密码验证通过
-        else:
-            return None
-    elif user_type == "student":
-        # 验证学生凭证：student_id 或 full_name
-        if user.full_name == identifier:
-            if user.student_id != credential:
-                return None
-        elif user.student_id == identifier:
-            if user.full_name != credential:
-                return None
-        else:
-            return None
-    
+    # 验证凭证：优先匹配 student_id，其次匹配 hashed_password
+    if user.student_id and user.student_id == credential:
+        pass
+    elif user.hashed_password and verify_password(credential, user.hashed_password):
+        pass
+    else:
+        return None
+
     # 返回用户信息
     return {
         "id": user.id,
@@ -129,11 +92,8 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
 
 
 async def authenticate_user_auto(db, identifier: str, credential: str):
-    """自动识别用户类型进行认证（先尝试教职工，再尝试学生）"""
-    user = await authenticate_user(db, identifier, credential, "admin")
-    if user:
-        return user
-    return await authenticate_user(db, identifier, credential, "student")
+    """统一认证 — 所有角色使用 姓名+学号"""
+    return await authenticate_user(db, identifier, credential)
 
 
 async def get_current_user(token: str, db = None):
@@ -157,28 +117,12 @@ async def get_current_user(token: str, db = None):
     
     # 如果有数据库连接，从数据库获取用户
     if db:
-        if user_type == "admin":
-            role_condition = User.role_code == role_code if role_code else User.role_code.in_(['teacher', 'admin', 'super_admin'])
-            query = select(User).where(
-                or_(
-                    User.username == subject,
-                    User.full_name == subject,
-                    User.student_id == subject,
-                ),
-                role_condition,
-                User.is_deleted.is_(False),
-                User.is_active.is_(True)
-            )
-        elif user_type == "student":
-            query = select(User).where(
-                User.student_id == subject,
-                User.role_code == 'student',
-                User.is_deleted.is_(False),
-                User.is_active.is_(True)
-            )
-        else:
-            return None
-        
+        query = select(User).where(
+            or_(User.username == subject, User.full_name == subject, User.student_id == subject),
+            User.is_deleted.is_(False),
+            User.is_active.is_(True)
+        )
+
         result = await db.execute(query)
         user = result.scalar_one_or_none()
         
@@ -196,26 +140,16 @@ async def get_current_user(token: str, db = None):
                 "updated_at": user.updated_at
             }
     
-    # 如果没有数据库连接或用户不存在，返回令牌中的基本用户信息
-    if user_type == "student":
-        return {
-            "id": 0,
-            "role_code": "student",
-            "student_id": subject,
-            "full_name": payload.get("name", ""),
-            "is_active": True,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
-    else:
-        return {
-            "id": 0,
-            "role_code": "admin",
-            "username": subject,
-            "is_active": True,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
+    # 没有数据库连接时，返回令牌中的基本用户信息
+    return {
+        "id": 0,
+        "role_code": role_code or "guest",
+        "username": subject,
+        "full_name": payload.get("name", ""),
+        "is_active": True,
+        "created_at": datetime.now(),
+        "updated_at": datetime.now()
+    }
 
 
 async def get_current_user_or_student(
