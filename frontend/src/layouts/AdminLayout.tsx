@@ -122,7 +122,7 @@ const AdminLayout: React.FC = () => {
     if (auth.isTeacher()) return new Set([
       "/admin/dashboard",
       "/admin/classroom-interaction", "/admin/classroom-plan",
-      "/admin/assessment",
+      "/admin/assessment", "/admin/group-discussion",
       "/admin/informatics", "/admin/it-technology",
     ]);
     return new Set<string>();
