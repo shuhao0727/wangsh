@@ -68,15 +68,26 @@ const LoginPage: React.FC = () => {
       return;
     }
     const role = res.user?.role_code || "";
-    const isAdminUser = role === "admin" || role === "super_admin";
-    if (requireAdmin && !isAdminUser) {
-      showMessage.warning("当前账号不是管理员，无法访问管理后台");
+    const isStaffUser = role === "teacher" || role === "admin" || role === "super_admin";
+    if (requireAdmin && !isStaffUser) {
+      showMessage.warning("当前账号没有管理后台权限");
       await auth.logout();
       return;
     }
     localStorage.removeItem("ws_guest_mode");
     showMessage.success("登录成功");
-    void navigate(redirect, { replace: true });
+    // Role-based redirect
+    if (!requireAdmin) {
+      if (role === "teacher") {
+        void navigate("/admin/classroom-interaction", { replace: true });
+      } else if (isStaffUser) {
+        void navigate("/admin/dashboard", { replace: true });
+      } else {
+        void navigate(redirect, { replace: true });
+      }
+    } else {
+      void navigate(redirect, { replace: true });
+    }
   };
 
   return (

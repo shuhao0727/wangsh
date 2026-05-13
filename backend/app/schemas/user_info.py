@@ -11,7 +11,7 @@ from typing_extensions import TypedDict, NotRequired
 class UserInfo(TypedDict):
     """认证链路中传递的用户信息结构"""
     id: int
-    role_code: str  # 'super_admin', 'admin', 'student', 'guest'
+    role_code: str  # 'super_admin', 'admin', 'teacher', 'student', 'guest'
     username: NotRequired[Optional[str]]
     student_id: NotRequired[Optional[str]]
     full_name: str

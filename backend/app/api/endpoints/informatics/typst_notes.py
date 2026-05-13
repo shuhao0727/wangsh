@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_staff
 from app.utils.rate_limit import rate_limiter
 from app.tasks.typst_compile import compile_typst_note
 from app.utils.typst_pdf_storage import abs_pdf_path
@@ -70,7 +70,7 @@ async def api_list_notes(
     limit: int = Query(50, ge=1, le=100),
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     notes = await list_notes(db=db, skip=skip, limit=limit, search=search)
     return [_to_list_item(n) for n in notes]
@@ -80,7 +80,7 @@ async def api_list_notes(
 async def api_create_note(
     payload: TypstNoteCreate,
     db: AsyncSession = Depends(get_db),
-    user: Dict[str, Any] = Depends(require_admin),
+    user: Dict[str, Any] = Depends(require_staff),
 ):
     note = await create_note(
         db=db,
@@ -107,7 +107,7 @@ async def api_create_note(
 async def api_get_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -120,7 +120,7 @@ async def api_update_note(
     note_id: int,
     payload: TypstNoteUpdate,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -145,7 +145,7 @@ async def api_update_note(
 async def api_list_assets(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -171,7 +171,7 @@ async def api_upload_asset(
     path: str = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_admin),
+    current_user: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -217,7 +217,7 @@ async def api_delete_asset(
     note_id: int,
     asset_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -231,7 +231,7 @@ async def api_download_asset(
     note_id: int,
     asset_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -251,7 +251,7 @@ async def api_download_asset(
 async def api_delete_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -264,7 +264,7 @@ async def api_delete_note(
 async def api_export_typ(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:
@@ -281,7 +281,7 @@ async def api_export_typ(
 async def api_compile_pdf(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_admin),
+    current_user: Dict[str, Any] = Depends(require_staff),
 ):
     await rate_limiter.check(
         f"typst_compile:{current_user.get('id')}:{note_id}",
@@ -400,7 +400,7 @@ async def api_compile_pdf(
 async def api_compile_pdf_async(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_admin),
+    current_user: Dict[str, Any] = Depends(require_staff),
 ):
     await rate_limiter.check(
         f"typst_compile_async:{current_user.get('id')}:{note_id}",
@@ -419,7 +419,7 @@ async def api_compile_pdf_async(
 async def api_compile_job_status(
     job_id: str,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     r = celery.AsyncResult(job_id)
     state = str(getattr(r, "state", "PENDING") or "PENDING")
@@ -444,7 +444,7 @@ async def api_compile_job_status(
 @router.post("/compile-jobs/{job_id}/cancel")
 async def api_compile_job_cancel(
     job_id: str,
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     try:
         celery.control.revoke(job_id, terminate=True)
@@ -457,7 +457,7 @@ async def api_compile_job_cancel(
 async def api_export_pdf(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_staff),
 ):
     note = await get_note(db=db, note_id=note_id)
     if not note:

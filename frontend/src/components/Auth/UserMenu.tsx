@@ -65,6 +65,8 @@ const UserMenu: React.FC<UserMenuProps> = ({
         return "超级管理员";
       case "admin":
         return "管理员";
+      case "teacher":
+        return "教师";
       case "student":
         return "学生";
       default:
@@ -80,6 +82,8 @@ const UserMenu: React.FC<UserMenuProps> = ({
         return "bg-[var(--ws-color-error)]";
       case "admin":
         return "bg-primary";
+      case "teacher":
+        return "bg-[var(--ws-color-warning)]";
       case "student":
         return "bg-[var(--ws-color-success)]";
       default:

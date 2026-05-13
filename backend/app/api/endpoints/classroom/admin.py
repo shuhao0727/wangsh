@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.core.deps import require_admin
+from app.core.deps import require_staff
 from app.schemas.user_info import UserInfo
 from app.schemas.classroom import ActivityCreate, ActivityUpdate, ActivityEndRequest, ActivityResponse, ActivityStats
 from app.services import classroom as svc
@@ -22,7 +22,7 @@ router = APIRouter()
 async def create_activity(
     data: ActivityCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         activity = await svc.create_activity(db, data.dict(), current_user.get("id"))
@@ -36,7 +36,7 @@ async def update_activity(
     activity_id: int,
     data: ActivityUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         activity = await svc.update_activity(db, activity_id, data.dict(exclude_unset=True))
@@ -49,7 +49,7 @@ async def update_activity(
 async def delete_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         await svc.delete_activity(db, activity_id)
@@ -62,7 +62,7 @@ async def delete_activity(
 async def duplicate_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     """复制活动为新草稿"""
     try:
@@ -76,7 +76,7 @@ async def duplicate_activity(
 async def restart_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     """重新开始已结束的活动"""
     try:
@@ -90,7 +90,7 @@ async def restart_activity(
 async def bulk_delete_activities(
     ids: List[int] = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     """批量删除活动（只删除 draft 状态）"""
     if not ids:
@@ -106,7 +106,7 @@ async def list_activities(
     limit: int = Query(20, ge=1, le=100),
     status: str = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     rows, rc_map, total = await svc.list_activities(db, skip=skip, limit=limit, status=status)
     items = [_to_response(a, response_count=rc_map.get(a.id, 0)) for a in rows]
@@ -117,7 +117,7 @@ async def list_activities(
 async def get_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         activity = await svc.get_activity(db, activity_id)
@@ -133,7 +133,7 @@ async def get_activity(
 async def start_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         activity = await svc.start_activity(db, activity_id)
@@ -147,7 +147,7 @@ async def end_activity(
     activity_id: int,
     req: ActivityEndRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         activity = await svc.end_activity(
@@ -165,7 +165,7 @@ async def end_activity(
 async def get_statistics(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return await svc.get_statistics(db, activity_id)
@@ -175,7 +175,7 @@ async def get_statistics(
 
 @router.get("/stream")
 async def admin_stream(
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     user_id = current_user.get("id")
     channel = f"admin_{user_id}"

@@ -175,12 +175,41 @@ async def require_student(
     return current_user
 
 
+async def require_teacher(
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """
+    要求用户必须是教师（包括管理员和超级管理员）
+    """
+    if current_user.get("role_code") not in ["teacher", "admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要教师权限",
+        )
+    return current_user
+
+
+async def require_staff(
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """
+    要求用户必须是教职工（教师/管理员/超级管理员均可）
+    用于课堂互动、课堂计划、测评等教学共享模块
+    """
+    if current_user.get("role_code") not in ["teacher", "admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要教职工权限",
+        )
+    return current_user
+
+
 async def require_user(
     current_user: UserInfo = Depends(get_current_user)
 ) -> UserInfo:
     """
     要求用户必须是已认证用户（任何角色）
-    
+
     返回:
         用户信息字典
     """

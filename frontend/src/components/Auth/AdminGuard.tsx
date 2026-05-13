@@ -34,13 +34,13 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
     return null;
   }
 
-  if (!auth.isAdmin()) {
+  if (!auth.isStaff()) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <ShieldX className="h-16 w-16 text-error mx-auto mb-4" />
           <div className="text-2xl font-bold text-text-base mb-2">权限不足</div>
-          <div className="text-base text-text-secondary mb-6">需要管理员权限才能访问管理后台</div>
+          <div className="text-base text-text-secondary mb-6">需要教职工权限才能访问管理后台</div>
           <div className="flex items-center justify-center gap-3">
             <Button onClick={() => void navigate("/home", { replace: true })}>
               返回首页

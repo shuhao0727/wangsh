@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_super_admin
 from app.models.core.feature_flag import FeatureFlag
 
 router = APIRouter(prefix="/system")
@@ -27,7 +27,7 @@ class FeatureFlagSchema(BaseModel):
 @router.get("/feature-flags", response_model=List[FeatureFlagSchema])
 async def list_feature_flags(
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Any:
     stmt = select(FeatureFlag)
     result = await db.execute(stmt)
@@ -38,7 +38,7 @@ async def list_feature_flags(
 async def get_feature_flag(
     key: str,
     db: AsyncSession = Depends(get_db),
-    user: Dict[str, Any] = Depends(require_admin),
+    user: Dict[str, Any] = Depends(require_super_admin),
 ) -> Any:
     stmt = select(FeatureFlag).where(FeatureFlag.key == key)
     result = await db.execute(stmt)
@@ -52,7 +52,7 @@ async def get_feature_flag(
 async def create_or_update_feature_flag(
     data: FeatureFlagSchema,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Any:
     stmt = select(FeatureFlag).where(FeatureFlag.key == data.key)
     result = await db.execute(stmt)

@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_super_admin
 from app.utils.metrics import collect_db_pool_metrics, collect_http_metrics
 
 router = APIRouter(prefix="/system")
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/system")
 @router.get("/overview")
 async def system_overview(
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Dict[str, Any]:
     users = await db.execute(text("SELECT COUNT(1) FROM sys_users WHERE is_deleted = false"))
     articles = await db.execute(text("SELECT COUNT(1) FROM wz_articles"))
@@ -50,7 +50,7 @@ async def system_overview(
 
 @router.get("/settings")
 async def system_settings(
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Dict[str, Any]:
     return {
         "project": {

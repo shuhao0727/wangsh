@@ -194,6 +194,17 @@ const useAuthController = () => {
     return role === "admin" || role === "super_admin";
   }, [getUserRole]);
 
+  // 检查用户是否是教师
+  const isTeacher = useCallback(() => {
+    return getUserRole() === "teacher";
+  }, [getUserRole]);
+
+  // 检查用户是否是教职工（教师/管理员/超级管理员均可）
+  const isStaff = useCallback(() => {
+    const role = getUserRole();
+    return role === "teacher" || role === "admin" || role === "super_admin";
+  }, [getUserRole]);
+
   // 检查用户是否是学生
   const isStudent = useCallback(() => {
     return getUserRole() === "student";
@@ -300,6 +311,8 @@ const useAuthController = () => {
     getUserRole,
     isSuperAdmin,
     isAdmin,
+    isTeacher,
+    isStaff,
     isStudent,
     isLoggedIn,
     getDisplayName,

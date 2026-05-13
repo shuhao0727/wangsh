@@ -30,7 +30,7 @@ class User(Base):
     study_year = Column(String(10), nullable=True, comment="学年（如'2025'）")
     
     # 角色标识
-    role_code = Column(String(20), nullable=False, default='student', server_default='student', comment="角色代码: super_admin, admin, student, guest")
+    role_code = Column(String(20), nullable=False, default='student', server_default='student', comment="角色代码: super_admin, admin, teacher, student, guest")
     
     # 状态
     is_active = Column(Boolean, default=True, server_default=expression.true(), comment="是否激活")

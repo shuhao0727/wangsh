@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_super_admin
 from app.services.informatics.typst_pdf_cleanup import cleanup_unreferenced_pdfs
 from app.utils.metrics import (
     collect_db_pool_metrics,
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/system")
 
 @router.get("/typst-metrics")
 async def typst_metrics(
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Dict[str, Any]:
     typst = await collect_typst_metrics()
     return {
@@ -46,7 +46,7 @@ async def typst_pdf_cleanup(
     dry_run: bool = True,
     retention_days: int | None = None,
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Dict[str, Any]:
     days = int(retention_days) if retention_days is not None else int(settings.TYPST_PDF_RETENTION_DAYS)
     return await cleanup_unreferenced_pdfs(db=db, retention_days=days, dry_run=bool(dry_run))
@@ -54,7 +54,7 @@ async def typst_pdf_cleanup(
 
 @router.get("/metrics")
 async def prometheus_metrics(
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ):
     """Prometheus 格式指标端点
 

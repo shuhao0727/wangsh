@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user, require_staff
 from app.schemas.user_info import UserInfo
 from app.services import classroom_plan as svc
 from app.models.classroom import ClassroomPlanItem
@@ -64,7 +64,7 @@ def _format_plan(plan) -> dict:
 async def create_plan(
     data: PlanCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         plan = await svc.create_plan(db, data.title, data.activity_ids, current_user.get("id"))
@@ -78,7 +78,7 @@ async def update_plan(
     plan_id: int,
     data: PlanUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         plan = await svc.update_plan(db, plan_id, data.title, data.activity_ids)
@@ -91,7 +91,7 @@ async def update_plan(
 async def delete_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         await svc.delete_plan(db, plan_id)
@@ -105,7 +105,7 @@ async def list_plans(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     plans, total = await svc.list_plans(db, skip=skip, limit=limit)
     return {"items": [_format_plan(p) for p in plans], "total": total}
@@ -115,7 +115,7 @@ async def list_plans(
 async def get_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.get_plan(db, plan_id))
@@ -127,7 +127,7 @@ async def get_plan(
 async def start_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.start_plan(db, plan_id))
@@ -139,7 +139,7 @@ async def start_plan(
 async def reset_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.reset_plan(db, plan_id))
@@ -151,7 +151,7 @@ async def reset_plan(
 async def next_item(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.next_item(db, plan_id))
@@ -163,7 +163,7 @@ async def next_item(
 async def end_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.end_plan(db, plan_id))
@@ -176,7 +176,7 @@ async def start_item(
     plan_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.start_item(db, plan_id, item_id))
@@ -189,7 +189,7 @@ async def end_item(
     plan_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_admin),
+    current_user: UserInfo = Depends(require_staff),
 ):
     try:
         return _format_plan(await svc.end_item(db, plan_id, item_id))
