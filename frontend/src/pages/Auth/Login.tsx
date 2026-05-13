@@ -19,9 +19,9 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const redirect = useMemo(() => {
     const sp = new URLSearchParams(location.search);
-    const raw = sp.get("redirect") || "/admin/dashboard";
+    const raw = sp.get("redirect") || "/home";
     if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-    return "/admin/dashboard";
+    return "/home";
   }, [location.search]);
 
   const requireAdmin = useMemo(() => redirect.startsWith("/admin"), [redirect]);
