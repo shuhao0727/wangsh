@@ -348,7 +348,7 @@ const AdminLayout: React.FC = () => {
                     管理员资料
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void navigate("/")}>
+                  <DropdownMenuItem onClick={() => window.location.href = "/login"}>
                     <Home className="mr-2 h-4 w-4" />
                     返回首页
                   </DropdownMenuItem>
@@ -357,7 +357,7 @@ const AdminLayout: React.FC = () => {
                     onClick={async () => {
 	                      await auth.logout();
 	                      showMessage.success("已退出登录");
-	                      void navigate("/");
+	                      window.location.href = "/login";
 	                    }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />

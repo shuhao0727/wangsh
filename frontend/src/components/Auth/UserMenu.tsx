@@ -220,8 +220,9 @@ const UserMenu: React.FC<UserMenuProps> = ({
           onClick={() => {
             handleMenuClick("logout");
             localStorage.removeItem("ws_guest_mode");
-            void auth.logout();
-            void navigate("/login");
+            void auth.logout().then(() => {
+              window.location.href = "/login";
+            });
           }}
         >
           <LogOut className="mr-2 h-4 w-4" />
