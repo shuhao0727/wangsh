@@ -690,7 +690,7 @@ tr:hover td {
   --ws-color-success: #34D399;
   --ws-color-warning: #FBBF24;
   --ws-color-error: #F87171;
-  --ws-color-error-dark: #FCA5A5;
+  --ws-color-error-dark: #FCA5A5; /* 深色模式下明度反转：dark=更突出(bright pink)，light=更柔和(dark red) */
   --ws-color-error-light: #7F1D1D;
   --ws-color-purple: #E879F9;
   --ws-color-purple-hover: #F0ABFC;
