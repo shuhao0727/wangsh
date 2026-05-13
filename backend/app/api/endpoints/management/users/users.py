@@ -163,7 +163,7 @@ async def list_users(
     """
     获取用户列表（需要管理员权限）
     支持分页、搜索和过滤
-    默认排除管理员角色（admin 和 super_admin）
+    默认排除超级管理员（安全考虑），管理员/教师/学生可见
     """
     try:
         # 构建查询条件
@@ -371,9 +371,9 @@ async def update_user(
                 detail="用户不存在"
             )
 
-        # 普通管理员不能修改超级管理员和其他管理员
+        # 普通管理员不能修改超级管理员和其他管理员（允许修改自己）
         is_current_admin = current_user.get("role_code") == "admin"
-        if is_current_admin and user.role_code in ("super_admin", "admin"):
+        if is_current_admin and user.role_code in ("super_admin", "admin") and user.id != current_user.get("id"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权修改该用户信息"
@@ -490,7 +490,15 @@ async def delete_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
-        
+
+        # 普通管理员不能删除管理员或超级管理员
+        is_current_admin = current_user.get("role_code") == "admin"
+        if is_current_admin and user.role_code in ("super_admin", "admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权删除该用户"
+            )
+
         # 软删除：标记为已删除
         # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
         user.is_deleted = True  # type: ignore
@@ -709,6 +717,9 @@ async def import_users(
                 # 读取角色（默认 student，支持 teacher/admin/super_admin）
                 role_code = row.get('角色', 'student').strip() or 'student'
                 if role_code not in ('student', 'teacher', 'admin', 'super_admin'):
+                    role_code = 'student'
+                # 普通管理员只能导入学生和教师
+                if current_user.get("role_code") == "admin" and role_code in ('admin', 'super_admin'):
                     role_code = 'student'
                 
                 # 检查是否已存在（按学号）
