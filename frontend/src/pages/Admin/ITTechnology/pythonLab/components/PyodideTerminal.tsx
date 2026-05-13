@@ -68,8 +68,8 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       };
       return {
         background: readToken("--ws-color-bg", dark ? "#0f1117" : "#ffffff"),
-        foreground: readToken("--ws-color-text", dark ? "var(--ws-color-text)" : "var(--ws-color-text)"),
-        cursor: readToken("--ws-color-text", dark ? "var(--ws-color-text)" : "var(--ws-color-text)"),
+        foreground: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
+        cursor: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
         selectionBackground: "rgba(37, 99, 235, 0.2)",
       };
     }, []);

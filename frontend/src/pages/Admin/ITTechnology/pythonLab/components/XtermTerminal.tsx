@@ -59,19 +59,19 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     const dark = isDarkRef.current;
     try {
       const styles = getComputedStyle(document.documentElement);
-      const bg = styles.getPropertyValue("--ws-color-bg").trim() || (dark ? "#0f1117" : "#ffffff");
-      const fg = styles.getPropertyValue("--ws-color-text").trim() || (dark ? "#e4e6ed" : "#1e293b");
+      const bg = styles.getPropertyValue("--ws-color-bg").trim() || (dark ? "#0F172A" : "#F0FDFA");
+      const fg = styles.getPropertyValue("--ws-color-text").trim() || (dark ? "#F1F5F9" : "#1E293B");
       return {
         background: bg,
         foreground: fg,
         cursor: fg,
-        selectionBackground: "rgba(37, 99, 235, 0.2)",
+        selectionBackground: "color-mix(in srgb, var(--ws-color-primary) 20%, transparent)",
       };
     } catch {
       return {
-        background: dark ? "#0f1117" : "#ffffff",
-        foreground: dark ? "#e4e6ed" : "#1e293b",
-        cursor: dark ? "#e4e6ed" : "#1e293b",
+        background: dark ? "#0F172A" : "#F0FDFA",
+        foreground: dark ? "#F1F5F9" : "#1E293B",
+        cursor: dark ? "#F1F5F9" : "#1E293B",
         selectionBackground: "rgba(37, 99, 235, 0.2)",
       };
     }
