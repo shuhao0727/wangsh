@@ -32,7 +32,7 @@ const LoginPage: React.FC = () => {
           .string()
           .trim()
           .min(1, requireAdmin ? "请输入管理员账号" : "请输入用户名"),
-        password: z.string().min(6, "密码至少6个字符"),
+        password: z.string().min(1, "请输入密码"),
       }),
     [requireAdmin],
   );

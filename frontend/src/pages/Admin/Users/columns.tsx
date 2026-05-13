@@ -77,7 +77,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
           super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生",
         };
         const variantMap: Record<string, "purple" | "info" | "warning" | "success"> = {
-          super_admin: "purple", admin: "info", teacher: "warning", student: "success",
+          super_admin: "purple", admin: "purple", teacher: "info", student: "success",
         };
         return (
           <Badge variant={variantMap[row.original.role_code] || "purple"}>

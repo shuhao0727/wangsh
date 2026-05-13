@@ -161,7 +161,7 @@ const UserForm: React.FC<UserFormProps> = ({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {roleOptions.map((role) => (
+                        {(editingUser ? roleOptions.filter(r => r.value !== "super_admin") : roleOptions).map((role) => (
                           <SelectItem key={role.value} value={role.value}>
                             {role.label}
                           </SelectItem>
