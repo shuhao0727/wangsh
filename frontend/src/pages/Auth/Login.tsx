@@ -100,12 +100,6 @@ const LoginPage: React.FC = () => {
           <AnimatedLoginCharacters isFocused={isFocused} showPassword={showPassword} passwordLength={password.length} />
         </div>
 
-        {/* Bottom links */}
-        <div className="relative z-20 flex items-center gap-6 text-sm text-white/60">
-          <a href="/home" className="hover:text-white transition-colors">返回首页</a>
-          <span className="text-white/30">v1.5.11</span>
-        </div>
-
         {/* Decorative blobs */}
         <div className="absolute top-1/4 right-1/4 size-64 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 left-1/4 size-96 bg-white/8 rounded-full blur-3xl" />
