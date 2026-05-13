@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import useAuth from "@hooks/useAuth";
 import { notifyAuthExpired } from "@services/api";
+import { getAuthExpiredReason } from "@/lib/auth-expired";
 import { logger } from "@services/logger";
 
 interface UserMenuProps {
@@ -98,13 +99,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
     const guestLabel = "访客模式";
     const loginLabel = "登录";
     const replayStoredAuthExpiredReason = () => {
-      if (typeof window === "undefined") return;
-      const detail = (
-        window as typeof window & {
-          __wsLastAuthExpiredDetail?: { reason?: string } | null;
-        }
-      ).__wsLastAuthExpiredDetail;
-      const reason = typeof detail?.reason === "string" ? detail.reason.trim() : "";
+      const reason = getAuthExpiredReason();
       if (reason) notifyAuthExpired(reason);
     };
     if (mode === "button") {

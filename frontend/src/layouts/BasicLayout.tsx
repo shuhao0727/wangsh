@@ -29,6 +29,7 @@ import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 import { useDarkMode } from "@hooks/useDarkMode";
 import { useBreakpoint } from "@hooks/useBreakpoint";
+import { getAuthExpiredReason } from "@/lib/auth-expired";
 
 // 这些页面需要 overflow:hidden + flex-col（子页面自己处理滚动）
 const FULL_HEIGHT_PATHS = [
@@ -66,25 +67,8 @@ const BasicLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
   const { isDark, toggle: toggleDark } = useDarkMode();
-  const authExpiredBannerReason = (() => {
-    const authError = String(error || "").trim();
-    if (authError) return authError;
-    if (typeof window === "undefined") return "";
-    const detail = (
-      window as typeof window & {
-        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string } | null;
-      }
-    ).__wsLastAuthExpiredDetail;
-    const reason = typeof detail?.reason === "string" ? detail.reason.trim() : "";
-    const kind = typeof detail?.kind === "string" ? detail.kind : "";
-    if (kind === "replaced" || reason.includes("其他地方登录")) {
-      return "你的账号已在其他地方登录，当前设备已下线，请重新登录";
-    }
-    if (kind === "ip_changed" || reason.includes("环境已变更")) {
-      return reason || "登录环境已变更，请重新登录";
-    }
-    return reason;
-  })();
+  const authError = String(error || "").trim();
+  const authExpiredBannerReason = authError || getAuthExpiredReason();
 
   const isFullHeight = FULL_HEIGHT_PATHS.some((re) => re.test(location.pathname));
 
