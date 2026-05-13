@@ -64,22 +64,22 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
     from app.utils.security import verify_password
     
     if user_type == "admin":
-        # 管理员认证：username + password
+        # 教职工认证：支持 username+password 或 full_name+student_id
         query = select(User).where(
-            User.username == identifier,
+            or_(
+                User.username == identifier,
+                User.full_name == identifier,
+            ),
             User.role_code.in_(['teacher', 'admin', 'super_admin']),
             User.is_deleted.is_(False),
             User.is_active.is_(True)
         )
     elif user_type == "student":
-        # 学生认证：支持多种登录方式
-        # 1. 姓名（full_name）作为用户名 + 学号（student_id）作为密码
-        # 2. 学号（student_id）作为用户名 + 姓名（full_name）作为密码（向后兼容）
-        # 查询时同时检查 full_name 和 student_id
+        # 学生认证：full_name + student_id（或反向兼容）
         query = select(User).where(
             or_(
-                User.full_name == identifier,  # 方式1：姓名作为用户名
-                User.student_id == identifier   # 方式2：学号作为用户名（向后兼容）
+                User.full_name == identifier,
+                User.student_id == identifier
             ),
             User.role_code == 'student',
             User.is_deleted.is_(False),
@@ -87,33 +87,31 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
         )
     else:
         return None
-    
+
     result = await db.execute(query)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         return None
-    
+
     if user_type == "admin":
-        # 验证管理员密码
-        if not user.hashed_password or not verify_password(credential, user.hashed_password):
+        # 验证教职工凭证：支持 hashed_password 或 student_id
+        if user.hashed_password and verify_password(credential, user.hashed_password):
+            pass  # 密码验证通过
+        elif user.student_id and user.student_id == credential:
+            pass  # 学号作为密码验证通过
+        else:
             return None
     elif user_type == "student":
-        # 验证学生登录凭证
-        # 学生登录有两种方式：
-        # 1. 姓名作为用户名 + 学号作为密码（主模式）
-        # 2. 学号作为用户名 + 姓名作为密码（向后兼容）
-        
-        # 如果identifier匹配的是full_name（方式1），那么credential应该是student_id
+        # 验证学生凭证：student_id 或 full_name
         if user.full_name == identifier:
             if user.student_id != credential:
                 return None
-        # 如果identifier匹配的是student_id（方式2），那么credential应该是full_name（向后兼容）
         elif user.student_id == identifier:
             if user.full_name != credential:
                 return None
         else:
-            return None  # 不应该发生，但作为安全措施
+            return None
     
     # 返回用户信息
     return {
@@ -131,71 +129,11 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
 
 
 async def authenticate_user_auto(db, identifier: str, credential: str):
-    """
-    自动识别用户类型进行认证
-    
-    简化认证逻辑：
-    1. 管理员用户：username + password（密码验证）
-    2. 学生用户：全名（full_name） + 学号（student_id）
-    
-    Args:
-        db: 数据库会话
-        identifier: 用户标识符
-        credential: 凭证
-        
-    Returns:
-        用户信息字典或None
-    """
-    from sqlalchemy import select, or_
-    from app.models import User
-    from app.utils.security import verify_password
-    
-    # 先尝试管理员认证：username + password
-    admin_query = select(User).where(
-        User.username == identifier,
-        User.role_code.in_(['teacher', 'admin', 'super_admin']),
-        User.is_deleted.is_(False),
-        User.is_active.is_(True)
-    )
-    result = await db.execute(admin_query)
-    admin_user = result.scalar_one_or_none()
-    
-    if admin_user and admin_user.hashed_password and verify_password(credential, admin_user.hashed_password):
-        return {
-            "id": admin_user.id,
-            "role_code": admin_user.role_code,
-            "username": admin_user.username,
-            "full_name": admin_user.full_name,
-            "is_active": admin_user.is_active,
-            "created_at": admin_user.created_at,
-            "updated_at": admin_user.updated_at
-        }
-    
-    # 再尝试学生认证：全名（full_name） + 学号（student_id）
-    # 只支持这一种方式：identifier是全名，credential是学号
-    student_query = select(User).where(
-        User.full_name == identifier,
-        User.role_code == 'student',
-        User.is_deleted.is_(False),
-        User.is_active.is_(True)
-    )
-    result = await db.execute(student_query)
-    student_user = result.scalar_one_or_none()
-    
-    if student_user and student_user.student_id == credential:
-        return {
-            "id": student_user.id,
-            "role_code": student_user.role_code,
-            "student_id": student_user.student_id,
-            "full_name": student_user.full_name,
-            "class_name": student_user.class_name,
-            "study_year": student_user.study_year,
-            "is_active": student_user.is_active,
-            "created_at": student_user.created_at,
-            "updated_at": student_user.updated_at
-        }
-    
-    return None
+    """自动识别用户类型进行认证（先尝试教职工，再尝试学生）"""
+    user = await authenticate_user(db, identifier, credential, "admin")
+    if user:
+        return user
+    return await authenticate_user(db, identifier, credential, "student")
 
 
 async def get_current_user(token: str, db = None):
@@ -220,10 +158,13 @@ async def get_current_user(token: str, db = None):
     # 如果有数据库连接，从数据库获取用户
     if db:
         if user_type == "admin":
-            # 根据令牌中的role_code查询，如果令牌中有role_code则使用，否则默认查admin
             role_condition = User.role_code == role_code if role_code else User.role_code.in_(['teacher', 'admin', 'super_admin'])
             query = select(User).where(
-                User.username == subject,
+                or_(
+                    User.username == subject,
+                    User.full_name == subject,
+                    User.student_id == subject,
+                ),
                 role_condition,
                 User.is_deleted.is_(False),
                 User.is_active.is_(True)
