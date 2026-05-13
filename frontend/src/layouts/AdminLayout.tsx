@@ -40,7 +40,6 @@ import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
 import { useDarkMode } from "@hooks/useDarkMode";
-import LoginForm from "@/components/Auth/LoginForm";
 import { Breadcrumbs } from "@/components/Common/Breadcrumbs";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 
@@ -97,7 +96,6 @@ const AdminLayout: React.FC = () => {
   const { isDark, toggle: toggleDark } = useDarkMode();
 
   const [collapsed, setCollapsed] = useState(false);
-  const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const { version, envLabel } = useAppMeta();
 
   const path = location.pathname;
@@ -165,12 +163,6 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div className="h-screen overflow-hidden bg-surface">
-      <LoginForm
-        visible={isLoginModalVisible}
-        onClose={() => setIsLoginModalVisible(false)}
-        isAdmin
-      />
-
       {isMobile && !collapsed ? (
         <div
           className="fixed inset-0 z-[var(--ws-z-overlay)] bg-black/30"
@@ -374,7 +366,7 @@ const AdminLayout: React.FC = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button size="sm" onClick={() => setIsLoginModalVisible(true)}>
+              <Button size="sm" onClick={() => navigate("/login")}>
                 管理员登录
               </Button>
             )}
@@ -397,7 +389,7 @@ const AdminLayout: React.FC = () => {
               <Lock className="h-12 w-12 text-text-tertiary" />
               <h3 className="text-xl font-semibold">需要管理员权限</h3>
               <p className="text-sm text-text-tertiary">只有管理员可以访问此页面</p>
-              <Button onClick={() => setIsLoginModalVisible(true)}>管理员登录</Button>
+              <Button onClick={() => navigate("/login")}>管理员登录</Button>
             </div>
           )}
         </main>

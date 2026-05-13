@@ -22,7 +22,7 @@ import { showMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import "./BasicLayout.css";
 import useAuth from "@hooks/useAuth";
-import { LoginForm, UserMenu } from "@components/Auth";
+import { UserMenu } from "@components/Auth";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 import { logger } from "@services/logger";
 import { featureFlagsApi } from "@/services/system/featureFlags";
@@ -74,7 +74,6 @@ const BasicLayout: React.FC = () => {
     getToken,
     isLoggedIn,
   } = useAuth();
-  const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
   const { isDark, toggle: toggleDark } = useDarkMode();
@@ -107,9 +106,6 @@ const BasicLayout: React.FC = () => {
     });
   }, [isLoading, isAuthenticated, user, isLoggedIn, getToken]);
 
-  useEffect(() => {
-    logger.debug("BasicLayout - 登录模态框状态:", isLoginModalVisible);
-  }, [isLoginModalVisible]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -143,11 +139,6 @@ const BasicLayout: React.FC = () => {
   const isNavItemActive = (key: string) =>
     location.pathname === key || location.pathname.startsWith(key + "/");
 
-  const handleLoginSuccess = () => {
-    setIsLoginModalVisible(false);
-    showMessage.success("登录成功！");
-    void navigate(0);
-  };
 
   return (
     <div className="basic-layout">
@@ -215,7 +206,7 @@ const BasicLayout: React.FC = () => {
             )}
             <UserMenu
               showName={!isMobile}
-              onMenuClick={(key) => { if (key === "login") setIsLoginModalVisible(true); }}
+              onMenuClick={(key) => { if (key === "login") navigate("/login"); }}
             />
           </div>
         </div>
@@ -255,13 +246,6 @@ const BasicLayout: React.FC = () => {
         </SheetContent>
       </Sheet>
 
-      {/* 登录弹窗 */}
-      <LoginForm
-        visible={isLoginModalVisible}
-        onClose={() => setIsLoginModalVisible(false)}
-        onSuccess={handleLoginSuccess}
-      />
-
       {/* 内容区域 — 统一两种模式 */}
       <main
         className={cn("main-content", isFullHeight && "main-content--full-height")}
@@ -287,7 +271,7 @@ const BasicLayout: React.FC = () => {
                 size="sm"
                 variant="outline"
                 className="w-full border-[color:var(--ws-color-error)]/30 text-[color:var(--ws-color-error)] hover:bg-[color:var(--ws-color-error)]/5 sm:w-auto"
-                onClick={() => setIsLoginModalVisible(true)}
+                onClick={() => navigate("/login")}
               >
                 重新登录
               </Button>
