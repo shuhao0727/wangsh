@@ -173,6 +173,50 @@ pytest -q tests/group_discussion
 - 工作区可能有用户或其他 agent 的改动。不要回滚、覆盖或整理不属于当前任务的改动。
 - 修改前后按需检查 `git status` 和相关 diff，但不要把 unrelated changes 当作自己的改动。
 
+## 角色权限系统
+
+WangSh 有 5 级角色层级：`super_admin` > `admin` > `teacher` > `student` > `guest`。详细权限矩阵见 `frontend/src/styles/ROLES.md`。
+
+### 前端角色检查
+
+```typescript
+import useAuth from "@hooks/useAuth";
+const auth = useAuth();
+auth.isSuperAdmin();  // 仅 super_admin
+auth.isAdmin();       // admin OR super_admin
+auth.isTeacher();     // 仅 teacher
+auth.isStaff();       // teacher OR admin OR super_admin
+auth.isStudent();     // 仅 student
+```
+
+- `AdminGuard.tsx` 用 `isStaff()` 做路由准入（教师也可进 `/admin/*`）
+- `AdminLayout.tsx` 用 `menuWhitelist` 按角色过滤侧边栏菜单
+- `Login.tsx` 登录后按角色跳转：teacher → classroom，admin → dashboard，student → home
+
+### 后端权限依赖
+
+```python
+from app.core.deps import require_super_admin, require_admin, require_staff, require_student
+```
+
+- `require_staff()` = teacher/admin/super_admin
+- `require_admin()` = admin/super_admin
+- `require_super_admin()` = super_admin only
+
+### 用户管理保护
+
+- 管理员**不能**修改/删除超级管理员和其他管理员
+- 管理员**只能**将角色改为 student 或 teacher
+- 导入时管理员**只能**导入 student/teacher 角色
+- 超级管理员默认不在用户列表中显示
+
+### 修改角色系统 checklist
+
+1. 后端：`deps.py`、`services/auth.py`、`endpoints/auth/auth.py`、`endpoints/management/users/users.py`
+2. 前端：`useAuth.ts`、`AdminGuard.tsx`、`AdminLayout.tsx`、`UserMenu.tsx`、`Login.tsx`
+3. 用户管理：`Users/data.ts`、`Users/columns.tsx`、`Users/UserForm.tsx`
+4. 文档：`ROLES.md`
+
 ## 项目特殊风险
 
 - PythonLab 涉及 Docker、WebSocket、沙箱、并发和可见性验证，风险高。相关改动要阅读对应脚本/测试说明，并按范围运行 smoke/soak。
