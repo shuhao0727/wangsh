@@ -21,9 +21,9 @@ const Card = React.forwardRef<
       tabIndex={isInteractive ? (tabIndex ?? 0) : tabIndex}
       role={isInteractive ? (role ?? "button") : role}
       className={cn(
-        "rounded-lg bg-card text-card-foreground",
+        "rounded-lg bg-card text-card-foreground border border-[var(--ws-color-border-secondary)] shadow-sm",
         isInteractive &&
-          "cursor-pointer transition-[border-color,box-shadow,transform] duration-150 hover:shadow-sm hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2",
+          "cursor-pointer transition-[border-color,box-shadow,transform] duration-150 hover:shadow-md hover:border-[var(--ws-color-secondary)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2",
         className
       )}
       {...props}

@@ -1036,9 +1036,7 @@ const PythonLabStudioInner: React.FC<{
                   height: "100%",
                   minHeight: 0,
                   position: "relative",
-                  background:
-                    "linear-gradient(0deg, color-mix(in srgb, var(--ws-color-border) 72%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ws-color-border) 72%, transparent) 1px, transparent 1px), var(--ws-color-bg)",
-                  backgroundSize: "20px 20px",
+                  background: "var(--ws-color-bg)",
                   overflow: "hidden",
                   cursor: panMode ? (panning ? "grabbing" : "grab") : "default",
                 }}

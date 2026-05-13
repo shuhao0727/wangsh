@@ -99,14 +99,14 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
     >
       <style>{`
         @keyframes wsFollowPulseA {
-          0% { opacity: 0.95; transform: scale(0.92); box-shadow: 0 0 0 0 rgba(22,119,255,0.0); }
-          35% { opacity: 0.85; transform: scale(1.02); box-shadow: 0 0 0 8px rgba(22,119,255,0.10); }
-          100% { opacity: 0; transform: scale(1.28); box-shadow: 0 0 0 18px rgba(22,119,255,0.0); }
+          0% { opacity: 0.95; transform: scale(0.92); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ws-color-primary) 0%, transparent); }
+          35% { opacity: 0.85; transform: scale(1.02); box-shadow: 0 0 0 8px color-mix(in srgb, var(--ws-color-primary) 10%, transparent); }
+          100% { opacity: 0; transform: scale(1.28); box-shadow: 0 0 0 18px color-mix(in srgb, var(--ws-color-primary) 0%, transparent); }
         }
         @keyframes wsFollowPulseB {
-          0% { opacity: 0.95; transform: scale(0.92); box-shadow: 0 0 0 0 rgba(22,119,255,0.0); }
-          35% { opacity: 0.85; transform: scale(1.02); box-shadow: 0 0 0 8px rgba(22,119,255,0.10); }
-          100% { opacity: 0; transform: scale(1.28); box-shadow: 0 0 0 18px rgba(22,119,255,0.0); }
+          0% { opacity: 0.95; transform: scale(0.92); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ws-color-primary) 0%, transparent); }
+          35% { opacity: 0.85; transform: scale(1.02); box-shadow: 0 0 0 8px color-mix(in srgb, var(--ws-color-primary) 10%, transparent); }
+          100% { opacity: 0; transform: scale(1.28); box-shadow: 0 0 0 18px color-mix(in srgb, var(--ws-color-primary) 0%, transparent); }
         }
       `}</style>
       {nodes.filter(n => n.type !== "annotation").map((n) => {
@@ -121,8 +121,8 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
         const pulse = !!followMode && !!active && typeof followTick === "number";
         const size = nodeSizeForTitle(n.shape, n.title);
         const borderColor = selected ? "var(--ws-color-primary)" : active ? "var(--ws-color-primary)" : shapeColor(n.shape);
-        const bgColor = active ? "rgba(22,119,255,0.14)" : "var(--ws-color-surface)";
-        const textColor = n.shape === "note" ? "#2f2600" : "var(--ws-color-text)";
+        const bgColor = active ? "color-mix(in srgb, var(--ws-color-primary) 14%, transparent)" : "var(--ws-color-surface)";
+        const textColor = n.shape === "note" ? "var(--ws-color-text)" : "var(--ws-color-text)";
         const strokeWidth = selected ? 2.5 : active ? 3 : 2;
         const dashed = connectMode && connectFromId === n.id;
         const w = size.w;
@@ -175,7 +175,7 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                   position: "absolute",
                   inset: -10,
                   borderRadius: 16,
-                  border: "2px solid rgba(22,119,255,0.55)",
+                  border: "2px solid color-mix(in srgb, var(--ws-color-primary) 55%, transparent)",
                   pointerEvents: "none",
                   animation: `${(followTick ?? 0) % 2 ? "wsFollowPulseA" : "wsFollowPulseB"} 760ms ease-out`,
                 }}
@@ -342,14 +342,14 @@ export const FlowNodesLayer = React.memo(function FlowNodesLayer(props: {
                     cy={h * 0.42}
                     rx={(w - pad * 2) * 0.48}
                     ry={(h - pad * 2) * 0.32}
-                    fill="#fff9c4"
+                    fill="var(--ws-color-primary-muted)"
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}
                   />
                   <path
                     d={`M ${w * 0.58} ${h * 0.64} Q ${w * 0.62} ${h * 0.83} ${w * 0.48} ${h * 0.72} Z`}
-                    fill="#fff9c4"
+                    fill="var(--ws-color-primary-muted)"
                     stroke={borderColor}
                     strokeWidth={strokeWidth}
                     strokeDasharray={dashed ? "6 4" : undefined}

@@ -101,8 +101,8 @@ export const FlowAnnotationsSvg = React.memo(function FlowAnnotationsSvg(props: 
         const isEditing = editingNodeId === n.id;
 
         // Style
-        const bgColor = n.style?.backgroundColor ?? "#FFF9C4";
-        const noteTextColor = "#2f2600";
+        const bgColor = n.style?.backgroundColor ?? "var(--ws-color-primary-muted)";
+        const noteTextColor = "var(--ws-color-text)";
         const noteStroke = "color-mix(in srgb, var(--ws-color-warning) 52%, transparent)";
         const noteArrowColor = "var(--ws-color-text-secondary)";
         const opacity = n.style?.opacity ?? 1;

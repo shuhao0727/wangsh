@@ -113,7 +113,7 @@ export const ROADMAP_STAGES: RoadmapStage[] = [
     id: "production",
     name: "工程实践",
     duration: "6-10 周",
-    color: "var(--ws-color-purple, #8B5CF6)",
+    color: "var(--ws-color-purple)",
     topics: [
       "FastAPI 模型服务：pydantic Schema/异步端点/后台任务",
       "Docker 容器化：Dockerfile/多阶段构建/Docker Compose/GPU 驱动配置",

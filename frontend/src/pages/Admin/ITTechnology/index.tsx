@@ -12,6 +12,9 @@ import {
   Cpu,
   Sparkles,
   Bot,
+  BookOpen,
+  Brain,
+  Wrench,
 } from "lucide-react";
 import { AdminAppCard, AdminPage } from "@/components/Admin";
 import DianmingManager from "./DianmingManager";
@@ -71,7 +74,7 @@ const AdminITTechnology: React.FC = () => {
       title: '机器学习',
       description: '机器学习模型训练与实验平台',
       icon: <Cpu className="h-5 w-5" />,
-      color: "#8B5CF6",
+      color: "var(--ws-color-purple)",
       hasManager: true,
     },
     {
@@ -79,7 +82,7 @@ const AdminITTechnology: React.FC = () => {
       title: '人工智能探索',
       description: 'AI 能力体验与交互式学习探索',
       icon: <Sparkles className="h-5 w-5" />,
-      color: "#2563EB",
+      color: "var(--ws-tag-blue)",
       hasManager: true,
     },
     {
@@ -87,7 +90,7 @@ const AdminITTechnology: React.FC = () => {
       title: '智能体探索',
       description: '多智能体协作与对话实验',
       icon: <Bot className="h-5 w-5" />,
-      color: "#0D9488",
+      color: "var(--ws-color-primary)",
       hasManager: true,
     },
   ];
@@ -142,10 +145,10 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'ml-manager') {
     const links = [
-      { label: '📖 学习书（章节）', href: '/admin/it-technology/learning/ml' },
-      { label: '🧠 学习地图', href: '/admin/it-technology/mindmap/ml' },
-      { label: '🔬 动手实验', href: '/admin/it-technology/learning/ml/experiments' },
-      { label: '🔧 工具箱', href: '/admin/it-technology/learning/ml/tools' },
+      { icon: <BookOpen className="h-5 w-5" />, label: '学习书（章节）', href: '/admin/it-technology/learning/ml' },
+      { icon: <Brain className="h-5 w-5" />, label: '学习地图', href: '/admin/it-technology/mindmap/ml' },
+      { icon: <FlaskConical className="h-5 w-5" />, label: '动手实验', href: '/admin/it-technology/learning/ml/experiments' },
+      { icon: <Wrench className="h-5 w-5" />, label: '工具箱', href: '/admin/it-technology/learning/ml/tools' },
     ];
     return (
       <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
@@ -158,10 +161,9 @@ const AdminITTechnology: React.FC = () => {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {links.map(l => (
             <a key={l.href} href={l.href} target="_blank"
-              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-accent transition-colors no-underline">
-              <span className="text-2xl">{l.label.slice(0, 2)}</span>
-              <span className="text-sm font-medium text-text-base">{l.label.slice(3)}</span>
-              <span className="ml-auto text-xs text-text-tertiary">→</span>
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline">
+              <span className="text-primary">{l.icon}</span>
+              <span className="text-sm font-medium text-text-base">{l.label}</span>
             </a>
           ))}
         </div>
@@ -173,10 +175,10 @@ const AdminITTechnology: React.FC = () => {
     const mod = view === 'ai-manager' ? 'ai' : 'agents';
     const label = view === 'ai-manager' ? '人工智能探索' : '智能体探索';
     const links = [
-      { label: '📖 学习书（章节）', href: `/admin/it-technology/learning/${mod}` },
-      { label: '🧠 学习地图', href: `/admin/it-technology/mindmap/${mod}` },
-      { label: '🔬 动手实验', href: `/admin/it-technology/learning/${mod}/experiments` },
-      { label: '🔧 工具箱', href: `/admin/it-technology/learning/${mod}/tools` },
+      { icon: <BookOpen className="h-5 w-5" />, label: '学习书（章节）', href: `/admin/it-technology/learning/${mod}` },
+      { icon: <Brain className="h-5 w-5" />, label: '学习地图', href: `/admin/it-technology/mindmap/${mod}` },
+      { icon: <FlaskConical className="h-5 w-5" />, label: '动手实验', href: `/admin/it-technology/learning/${mod}/experiments` },
+      { icon: <Wrench className="h-5 w-5" />, label: '工具箱', href: `/admin/it-technology/learning/${mod}/tools` },
     ];
     return (
       <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
@@ -189,10 +191,9 @@ const AdminITTechnology: React.FC = () => {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {links.map(l => (
             <a key={l.href} href={l.href} target="_blank"
-              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-accent transition-colors no-underline">
-              <span className="text-2xl">{l.label.slice(0, 2)}</span>
-              <span className="text-sm font-medium text-text-base">{l.label.slice(3)}</span>
-              <span className="ml-auto text-xs text-text-tertiary">→</span>
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline">
+              <span className="text-primary">{l.icon}</span>
+              <span className="text-sm font-medium text-text-base">{l.label}</span>
             </a>
           ))}
         </div>

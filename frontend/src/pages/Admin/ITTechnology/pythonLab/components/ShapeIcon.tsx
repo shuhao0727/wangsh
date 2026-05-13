@@ -62,7 +62,7 @@ export function ShapeIcon({ shape }: { shape: FlowNodeShape }) {
   if (shape === "note") {
     return (
       <svg width="36" height="24" viewBox="0 0 36 24" fill="none">
-        <rect x="3" y="3" width="30" height="18" rx="3" fill="#fff9c4" stroke={c} strokeWidth="2" />
+        <rect x="3" y="3" width="30" height="18" rx="3" fill="var(--ws-color-primary-muted)" stroke={c} strokeWidth="2" />
         <path d="M8 9 H28" stroke={c} strokeWidth="2" />
         <path d="M8 14 H24" stroke={c} strokeWidth="2" />
       </svg>

@@ -87,7 +87,7 @@ export const ROADMAP_STAGES = [
       { name: "Fast.ai —— Practical Deep Learning for Coders", type: "课程" },
       { name: "DeepLearning.AI —— Deep Learning Specialization", type: "Coursera" },
     ],
-    color: "#8B5CF6",
+    color: "var(--ws-tag-purple)",
   },
   {
     id: "stage-4",
@@ -111,7 +111,7 @@ export const ROADMAP_STAGES = [
       { name: "《Attention Is All You Need》(Vaswani et al., 2017)", type: "论文" },
       { name: "MMDetection / Detectron2 目标检测框架文档", type: "文档" },
     ],
-    color: "#06B6D4",
+    color: "var(--ws-tag-teal)",
   },
   {
     id: "stage-5",
@@ -135,7 +135,7 @@ export const ROADMAP_STAGES = [
       { name: "HuggingFace —— Diffusion Models Course", type: "教程" },
       { name: "Anthropic —— Prompt Engineering Interactive Tutorial", type: "教程" },
     ],
-    color: "#F59E0B",
+    color: "var(--ws-tag-amber)",
   },
   {
     id: "stage-6",
@@ -159,7 +159,7 @@ export const ROADMAP_STAGES = [
       { name: "A16Z AI Canon & Sequoia Generative AI Act 2", type: "行业报告" },
       { name: "Lil'Log (Lilian Weng) —— OpenAI 研究博客", type: "博客" },
     ],
-    color: "#10B981",
+    color: "var(--ws-tag-green)",
   },
 ];
 
@@ -201,7 +201,7 @@ export const AI_DOMAINS = [
     key_technologies: ["Transformer", "BERT/GPT 预训练模型", "注意力机制", "Seq2Seq 架构", "分词算法 (BPE/WordPiece)"],
     applications: ["智能客服", "搜索引擎", "机器同传", "内容审核", "法律文书分析"],
     difficulty: "intermediate",
-    color: "#3B82F6",
+    color: "var(--ws-tag-blue)",
   },
   {
     name: "计算机视觉 (CV)",
@@ -210,7 +210,7 @@ export const AI_DOMAINS = [
     key_technologies: ["CNN 骨干网络 (ResNet/EfficientNet)", "ViT (Vision Transformer)", "YOLO 检测系列", "SAM 分割大模型", "CLIP 视觉-语言对齐"],
     applications: ["自动驾驶感知", "医疗影像诊断", "工业缺陷检测", "安防监控", "AR/VR"],
     difficulty: "advanced",
-    color: "#8B5CF6",
+    color: "var(--ws-tag-purple)",
   },
   {
     name: "语音识别与合成",
@@ -219,7 +219,7 @@ export const AI_DOMAINS = [
     key_technologies: ["CTC/RNN-T 端到端 ASR", "WaveNet / Tacotron", "Whisper 多语言 ASR", "VALL-E / Voicebox 神经编解码", "自监督语音预训练 (wav2vec/HuBERT)"],
     applications: ["语音助手", "会议转录", "有声读物", "多语言配音", "辅助沟通设备"],
     difficulty: "advanced",
-    color: "#06B6D4",
+    color: "var(--ws-tag-teal)",
   },
   {
     name: "强化学习 (RL)",
@@ -228,7 +228,7 @@ export const AI_DOMAINS = [
     key_technologies: ["Deep Q-Network (DQN)", "Proximal Policy Optimization (PPO)", "Soft Actor-Critic (SAC)", "RLHF (RL from Human Feedback)", "Multi-Agent RL (MADDPG/QMIX)"],
     applications: ["游戏 AI (AlphaGo/AlphaStar)", "机器人控制", "自动驾驶决策", "LLM 对齐 (RLHF)", "芯片布局优化"],
     difficulty: "expert",
-    color: "#EF4444",
+    color: "var(--ws-tag-red)",
   },
   {
     name: "生成式 AI (Generative AI)",
@@ -237,7 +237,7 @@ export const AI_DOMAINS = [
     key_technologies: ["GPT 系列架构", "扩散模型 (DDPM/Stable Diffusion)", "DiT (Diffusion Transformer)", "Sora 类时空 Patch 建模", "自回归 Token 生成"],
     applications: ["内容创作辅助", "游戏美术/音乐", "影视前期概念", "营销素材生成", "AI 编程"],
     difficulty: "advanced",
-    color: "#F59E0B",
+    color: "var(--ws-tag-amber)",
   },
   {
     name: "AI Agent 与多智能体系统",
@@ -246,7 +246,7 @@ export const AI_DOMAINS = [
     key_technologies: ["ReAct / Plan-Act 推理范式", "Function Calling / Tool Use", "RAG + Agent 混合架构", "Model Context Protocol (MCP)", "Long-term Memory (MemGPT/Letta)"],
     applications: ["自动化工作流", "客户服务 Agent", "代码代理 (Devin/Cline)", "数据分析 Agent", "网络安全运营"],
     difficulty: "advanced",
-    color: "#EC4899",
+    color: "var(--ws-tag-pink)",
   },
   {
     name: "机器人学 (Robotics)",
@@ -255,7 +255,7 @@ export const AI_DOMAINS = [
     key_technologies: ["ROS/ROS2 机器人操作系统", "SLAM (ORB-SLAM/Cartographer)", "模仿学习与 Sim-to-Real", "RT-2/Octo 视觉-语言-动作模型", "深度强化学习控制"],
     applications: ["工业协作机器人", "自动驾驶", "仓储物流", "手术机器人", "家庭服务机器人"],
     difficulty: "expert",
-    color: "#10B981",
+    color: "var(--ws-tag-green)",
   },
   {
     name: "AI for Science",
@@ -264,7 +264,7 @@ export const AI_DOMAINS = [
     key_technologies: ["AlphaFold 系列 (Evoformer/扩散模块)", "分子图神经网络 (GNN)", "神经算子 (Neural Operator/FNO)", "AI 辅助定理证明 (Lean/AlphaProof)", "物理信息神经网络 (PINN)"],
     applications: ["蛋白质设计", "药物分子筛选", "新材料发现", "天气预测 (GraphCast/GenCast)", "核聚变控制"],
     difficulty: "expert",
-    color: "#14B8A6",
+    color: "var(--ws-tag-teal)",
   },
   {
     name: "知识表示与推理 (KRR)",
@@ -273,7 +273,7 @@ export const AI_DOMAINS = [
     key_technologies: ["RDF/OWL 语义网标准", "知识图谱嵌入 (TransE/RotatE/ComplEx)", "Graph Neural Networks (GCN/GAT/GIN)", "Neural Theorem Proving", "GraphRAG 图检索增强"],
     applications: ["企业知识管理", "医疗决策支持", "推荐系统", "情报分析", "供应链推理"],
     difficulty: "advanced",
-    color: "#A855F7",
+    color: "var(--ws-tag-purple)",
   },
   {
     name: "AI 安全与对齐",
@@ -282,7 +282,7 @@ export const AI_DOMAINS = [
     key_technologies: ["RLHF / DPO / Constitutional AI", "红队测试与自动化越狱检测", "模型可解释性 (SHAP/LIME/SAE)", "差分隐私与联邦学习", "安全分类器与宪法 AI"],
     applications: ["大模型安全护栏", "高风险决策审计", "内容审核系统", "金融风控合规", "选举信息诚信"],
     difficulty: "expert",
-    color: "#F97316",
+    color: "var(--ws-tag-amber)",
   },
 ];
 
@@ -298,7 +298,7 @@ export const PROMPT_LEVELS = [
       { title: "上下文限定", desc: "提供背景信息、知识边界和时间范围，限定回答的深度和范围", example: "基于以下 2024 年财报数据回答问题，不要使用外部知识：{数据}", when_to_use: "需要精确范围和知识边界时" },
       { title: "负面约束 (Negative Prompting)", desc: "明确告知'不要做什么'，如禁止幻觉、禁止推测、禁止特定格式", example: "如果答案不确定，请直接说'我无法确定'，不要编造信息。", when_to_use: "防止模型生成不可靠内容" },
     ],
-    color: "#10B981",
+    color: "var(--ws-tag-green)",
   },
   {
     level: "进阶 (L2)",
@@ -310,7 +310,7 @@ export const PROMPT_LEVELS = [
       { title: "温度与解码参数调优", desc: "根据场景调整 temperature (创造性)、top_p (多样性)、frequency_penalty (重复控制)", example: "temperature=0.1 (事实性问答) / temperature=0.8 (创意写作)", when_to_use: "事实性 vs 创造性任务的区分" },
       { title: "对抗性审查 (Self-Critique)", desc: "要求模型在回答后自我审查：指出可能错误、局限性和改进空间", example: "请回答后，列出你的回答可能存在的 3 个局限或不确定之处。", when_to_use: "需要高质量和可靠性保证的场景" },
     ],
-    color: "#F59E0B",
+    color: "var(--ws-tag-amber)",
   },
   {
     level: "高级 (L3)",
@@ -323,7 +323,7 @@ export const PROMPT_LEVELS = [
       { title: "System Prompt 工程设计", desc: "设计系统级提示定义模型全局行为：角色、规则、输出格式、安全边界、知识范围", example: "System: 你是专业代码审查员。始终检查：安全漏洞 > 性能 > 可读性。不确定时标注 [待确认]。", when_to_use: "构建 AI 产品或 Agent 时" },
       { title: "MCP 提示资源模板化", desc: "通过 Model Context Protocol 将 Prompt 模板标准化、版本化，支持参数化和团队复用", example: "使用 MCP Prompt Resource 定义'代码审查模板'，团队通过参数注入代码语言和审查重点", when_to_use: "团队协作和 Prompt 资产化管理" },
     ],
-    color: "#8B5CF6",
+    color: "var(--ws-tag-purple)",
   },
   {
     level: "专家 (L4)",
@@ -335,7 +335,7 @@ export const PROMPT_LEVELS = [
       { title: "多 Agent 角色 Prompting", desc: "为不同 Agent 分配不同角色/Prompt，通过辩论、协作或审查提升综合输出质量", example: "Agent A: 激进创新方案 | Agent B: 风险评估 | Agent C: 综合仲裁。请三方分别输出后综合。", when_to_use: "复杂决策、方案评审、内容审核" },
       { title: "RAG 上下文工程", desc: "精细设计检索片段的注入格式、引用标记、冲突处理策略，而非简单拼接", example: "检索到 {N} 条相关文献，如有冲突请标注来源并说明差异，不确定处标注 [待查证]。", when_to_use: "知识密集型任务、长文档问答" },
     ],
-    color: "#EC4899",
+    color: "var(--ws-tag-pink)",
   },
   {
     level: "研究前沿 (L5)",
@@ -346,7 +346,7 @@ export const PROMPT_LEVELS = [
       { title: "上下文压缩与记忆管理", desc: "长对话中通过摘要、关键信息提取和遗忘策略管理 Token 预算", example: "对超过 10 轮的历史对话进行逐层摘要压缩，保留关键决策点和用户偏好。", when_to_use: "长对话、长期 Agent 运行" },
       { title: "Adaptive In-Context Learning", desc: "基于当前上下文动态选择最优 Few-shot 示例和推理策略", example: "从示例库中通过语义相似度检索最相关的 5 个示例注入 Prompt，而非固定示例。", when_to_use: "任务多样、示例库庞大的场景" },
     ],
-    color: "#14B8A6",
+    color: "var(--ws-tag-teal)",
   },
 ];
 

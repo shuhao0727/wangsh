@@ -102,14 +102,14 @@ function dotNodeShape(n: FlowNode): { shape: string; style?: string; peripheries
 function themeColors(theme: FlowBeautifyTheme) {
   if (theme === "light") {
     return {
-      bg: "#ffffff",
-      text: "#1e293b", // Slate 800
+      bg: "var(--ws-color-surface)",
+      text: "var(--ws-color-text)", // Slate 800
       edge: "#64748b", // Slate 500
       nodeBorder: "#64748b", // Slate 500
-      nodeFill: "#ffffff",
+      nodeFill: "var(--ws-color-surface)",
     };
   }
-  return { bg: "#ffffff", text: "#1e293b", edge: "#64748b", nodeBorder: "#64748b", nodeFill: "#ffffff" };
+  return { bg: "var(--ws-color-surface)", text: "var(--ws-color-text)", edge: "#64748b", nodeBorder: "#64748b", nodeFill: "var(--ws-color-surface)" };
 }
 
 function buildNameMaps(nodes: FlowNode[], reuse?: Map<string, string>) {

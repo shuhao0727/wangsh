@@ -10,17 +10,17 @@ export type TitleSplitDiagnostic = {
 };
 
 export function shapeColor(shape: FlowNodeShape) {
-  if (shape === "start_end") return "#2563eb"; // Blue 600
-  if (shape === "process") return "#0891b2"; // Cyan 600
-  if (shape === "subroutine") return "#10b981"; // Emerald 500
-  if (shape === "list_op" || shape === "collection") return "#0ea5a4"; // Teal 500
-  if (shape === "dict_op") return "#14b8a6"; // Teal 400
-  if (shape === "str_op") return "#8b5cf6"; // Violet 500
-  if (shape === "jump") return "#ef4444"; // Red 500
-  if (shape === "note") return "#d4b106";
-  if (shape === "decision") return "#7c3aed"; // Violet 600
-  if (shape === "io") return "#f59e0b"; // Amber 500
-  return "#3b82f6"; // Blue 500
+  if (shape === "start_end") return "var(--ws-tag-blue)"; // Blue 600
+  if (shape === "process") return "var(--ws-tag-teal)"; // Cyan 600
+  if (shape === "subroutine") return "var(--ws-tag-green)"; // Emerald 500
+  if (shape === "list_op" || shape === "collection") return "var(--ws-color-primary)"; // Teal 500
+  if (shape === "dict_op") return "var(--ws-color-primary-hover)"; // Teal 400
+  if (shape === "str_op") return "var(--ws-color-purple)"; // Violet 500
+  if (shape === "jump") return "var(--ws-color-error)"; // Red 500
+  if (shape === "note") return "var(--ws-color-warning)";
+  if (shape === "decision") return "var(--ws-color-accent)"; // Violet 600
+  if (shape === "io") return "var(--ws-color-warning)"; // Amber 500
+  return "var(--ws-tag-blue)"; // Blue 500
 }
 
 export function nodeSize(shape: FlowNodeShape) {

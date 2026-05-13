@@ -67,7 +67,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
     >
       <defs>
         <marker id="pyLabArrow" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#64748B" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="var(--ws-color-text-secondary)" />
         </marker>
         <marker
           id="pyLabArrowSelected"
@@ -78,16 +78,16 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0284C7" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="var(--ws-color-primary)" />
         </marker>
         <marker id="pyLabArrowNote" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#F59E0B" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="var(--ws-color-warning)" />
         </marker>
         <marker id="pyLabArrowNoteSelected" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#D97706" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="var(--ws-color-warning)" />
         </marker>
         <marker id="pyLabArrowActive" markerWidth="12" markerHeight="12" refX="12" refY="5" orient="auto" markerUnits="strokeWidth">
-          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="#0284C7" />
+          <path d="M 0 0 L 10 5 L 0 10 L 2 5 z" fill="var(--ws-color-primary)" />
         </marker>
       </defs>
       {edges.map((e) => {
@@ -96,7 +96,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
         const selected = e.id === selectedEdgeId;
         const activeEdge = !!activeEdgeIds?.has(e.id);
         const noteEdge = canvasMetrics.get(e.from)?.shape === "note";
-        const stroke = noteEdge ? (selected ? "#D97706" : "#F59E0B") : selected ? "var(--ws-color-primary)" : activeEdge ? "var(--ws-color-primary)" : "#64748B";
+        const stroke = noteEdge ? (selected ? "#B45309" : "var(--ws-color-warning)") : selected ? "var(--ws-color-primary)" : activeEdge ? "var(--ws-color-primary)" : "var(--ws-color-text-secondary)";
         const strokeWidth = selected ? 2.2 : activeEdge ? 2.5 : 1.6;
         const anchors = geom.anchors as { x: number; y: number }[];
         

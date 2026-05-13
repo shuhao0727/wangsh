@@ -23,7 +23,7 @@ let nodeCounter = 0;
 const newNodeId = () => `n${++nodeCounter}`;
 function cloneTree(n: MindMapNode): MindMapNode { return { ...n, children: n.children.map(cloneTree) }; }
 
-const PALETTE = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899","#06B6D4","#F97316"];
+const PALETTE = ["#0D9488","#14B8A6","#7C3AED","#0EA5E9","#059669","#F59E0B","#EC4899","#6366F1"];
 
 /* ── Markdown ↔ Tree ── */
 function markdownToTree(md: string, rootText: string): MindMapNode {
@@ -444,7 +444,7 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
         .mindmap-visual-node.collapsed { opacity: 0.45; }
         .mindmap-visual-text-v2 {
           font-size: 13px; font-weight: 600; text-align: center; line-height: 1.35;
-          color: color-mix(in srgb, var(--mm-color) 50%, #111827);
+          color: color-mix(in srgb, var(--mm-color) 50%, var(--ws-color-text));
           max-width: 130px; word-break: break-word;
           text-shadow: 0 1px 0 rgba(255,255,255,0.5);
         }
@@ -457,25 +457,25 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
         .mindmap-visual-actions-v2 {
           display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s;
           position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
-          background: #fff; border-radius: 8px; padding: 2px 3px;
+          background: var(--ws-color-surface); border-radius: 8px; padding: 2px 3px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
         }
         .mindmap-visual-node:hover .mindmap-visual-actions-v2 { opacity: 1; }
         .mm-btn-v2 {
           display: flex; align-items: center; justify-content: center;
           width: 20px; height: 20px; border: none; border-radius: 5px;
-          cursor: pointer; background: transparent; color: #94a3b8;
+          cursor: pointer; background: transparent; color: var(--ws-color-text-tertiary);
           transition: all 0.12s;
         }
-        .mm-btn-v2.mm-add:hover { background: #22c55e18; color: #16a34a; }
-        .mm-btn-v2.mm-sibling:hover { background: #3b82f618; color: #3b82f6; }
-        .mm-btn-v2.mm-del:hover { background: #ef444418; color: #dc2626; }
+        .mm-btn-v2.mm-add:hover { background: var(--ws-color-success-soft); color: var(--ws-color-success); }
+        .mm-btn-v2.mm-sibling:hover { background: var(--ws-color-primary-soft); color: var(--ws-color-primary); }
+        .mm-btn-v2.mm-del:hover { background: var(--ws-color-error-soft); color: var(--ws-color-error); }
         .mindmap-collapse-dot-v2 {
           position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
           width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 700;
           display: flex; align-items: center; justify-content: center;
-          background: #fff; border: 2px solid color-mix(in srgb, var(--mm-color) 40%, transparent);
-          color: color-mix(in srgb, var(--mm-color) 70%, #64748b);
+          background: var(--ws-color-surface); border: 2px solid color-mix(in srgb, var(--mm-color) 40%, transparent);
+          color: color-mix(in srgb, var(--mm-color) 70%, var(--ws-color-text-secondary));
           cursor: pointer; transition: all 0.15s; opacity: 0.5;
         }
         .mindmap-collapse-dot-v2:hover { opacity: 1; transform: translateY(-50%) scale(1.1); }
@@ -494,7 +494,7 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
         .mm-outline-text { min-width: 20px; font-weight: 450; }
         .mm-outline-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s; }
         .mm-outline-row:hover .mm-outline-actions { opacity: 1; }
-        .mm-outline-kids { border-left: 2px solid var(--ws-color-border-secondary, #e5e7eb); margin-left: 11px; padding-left: 13px; }
+        .mm-outline-kids { border-left: 2px solid var(--ws-color-border-secondary); margin-left: 11px; padding-left: 13px; }
       `}</style>
     </div>
   );

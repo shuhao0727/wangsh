@@ -53,59 +53,59 @@
   --ws-shell-max-width: var(--ws-page-max-width-wide);
   --ws-header-height: clamp(60px, 3.2vw, 72px);
 
-  /* 背景 — 标准白色系 */
-  --ws-color-bg: #FFFFFF;
+  /* 背景 — Mint 白 */
+  --ws-color-bg: #F0FDFA;
   --ws-color-surface: #FFFFFF;
-  --ws-color-surface-2: #F8FAFC;
+  --ws-color-surface-2: #E6F5F3;
   --ws-color-overlay: rgba(0, 0, 0, 0.4);
 
   /* 边框 */
-  --ws-color-border: rgba(0, 0, 0, 0.06);
-  --ws-color-border-secondary: rgba(0, 0, 0, 0.04);
+  --ws-color-border: rgba(0, 0, 0, 0.08);
+  --ws-color-border-secondary: rgba(0, 0, 0, 0.05);
 
   /* 文字 */
   --ws-color-text: #1E293B;
-  --ws-color-text-secondary: #64748B;
-  --ws-color-text-tertiary: #94A3B8;
+  --ws-color-text-secondary: #475569;
+  --ws-color-text-tertiary: #64748B;
 
-  /* 主色 — Sky Blue */
-  --ws-color-primary: #0284C7;
-  --ws-color-primary-hover: #0EA5E9;
-  --ws-color-primary-active: #0284C7;
+  /* 主色 — Tech Teal */
+  --ws-color-primary: #0D9488;
+  --ws-color-primary-hover: #14B8A6;
+  --ws-color-primary-active: #0F766E;
 
-  /* 辅色 — 靛蓝 */
-  --ws-color-secondary: #6366F1;
-  --ws-color-secondary-active: #4F46E5;
+  /* 辅色 — Violet (装饰/强调) */
+  --ws-color-secondary: #7C3AED;
+  --ws-color-secondary-active: #6D28D9;
 
-  /* 强调 — 琥珀 */
-  --ws-color-accent: #F97316;
+  /* 强调 — Violet */
+  --ws-color-accent: #7C3AED;
 
   /* 语义色 */
-  --ws-color-success: #10B981;
-  --ws-color-warning: #F59E0B;
-  --ws-color-error: #EF4444;
-  --ws-color-error-dark: #DC2626;
+  --ws-color-success: #059669;
+  --ws-color-warning: #D97706;
+  --ws-color-error: #DC2626;
+  --ws-color-error-dark: #B91C1C;
   --ws-color-error-light: #FCA5A5;
   --ws-color-info: #0EA5E9;
 
   /* 交互 */
-  --ws-color-hover-bg: rgba(2, 132, 199, 0.04);
-  --ws-color-focus-ring: #0284C7;
+  --ws-color-hover-bg: rgba(13, 148, 136, 0.08);
+  --ws-color-focus-ring: #7C3AED;
 
   /* 柔和背景 */
-  --ws-color-primary-soft: rgba(2, 132, 199, 0.04);
-  --ws-color-primary-light: rgba(2, 132, 199, 0.08);
-  --ws-color-primary-muted: #E0F2FE;
-  --ws-color-success-soft: rgba(16, 185, 129, 0.06);
-  --ws-color-warning-soft: rgba(245, 158, 11, 0.06);
-  --ws-color-error-soft: rgba(239, 68, 68, 0.06);
-  --ws-color-info-soft: rgba(14, 165, 233, 0.04);
+  --ws-color-primary-soft: rgba(13, 148, 136, 0.08);
+  --ws-color-primary-light: rgba(13, 148, 136, 0.12);
+  --ws-color-primary-muted: #CCFBF1;
+  --ws-color-success-soft: rgba(5, 150, 105, 0.08);
+  --ws-color-warning-soft: rgba(217, 119, 6, 0.08);
+  --ws-color-error-soft: rgba(220, 38, 38, 0.08);
+  --ws-color-info-soft: rgba(14, 165, 233, 0.08);
 
-  /* 课堂互动 / 评测专属紫色 */
-  --ws-color-purple: #8B5CF6;
-  --ws-color-purple-hover: #7C3AED;
-  --ws-color-purple-active: #7C3AED;
-  --ws-color-purple-soft: rgba(139, 92, 246, 0.06);
+  /* 课堂互动 / 评测 */
+  --ws-color-purple: #C026D3;
+  --ws-color-purple-hover: #A21CAF;
+  --ws-color-purple-active: #86198F;
+  --ws-color-purple-soft: rgba(192, 38, 211, 0.08);
 
   /* 代码块 */
   --ws-color-code-bg: #1e1e1e;
@@ -114,22 +114,35 @@
   --ws-color-tooltip: rgba(15, 23, 42, 0.92);
 
   /* 渐变 */
-  --ws-gradient-primary: linear-gradient(135deg, #0284C7, #6366F1);
+  --ws-gradient-primary: linear-gradient(135deg, #0D9488, #7C3AED);
+
+  /* 数据标签 Palette */
+  --ws-tag-blue: #2563EB;
+  --ws-tag-teal: #0D9488;
+  --ws-tag-green: #059669;
+  --ws-tag-amber: #D97706;
+  --ws-tag-red: #DC2626;
+  --ws-tag-pink: #DB2777;
+  --ws-tag-purple: #C026D3;
+  --ws-tag-indigo: #4F46E5;
+  --ws-tag-sky: #0284C7;
+  --ws-tag-gray: #64748B;
 
   /* 毛玻璃 */
   --ws-glass-bg: rgba(255, 255, 255, 0.85);
   --ws-glass-blur: blur(16px);
 
-  /* 圆角 */
-  --ws-radius-sm: clamp(4px, calc(0.12vw + 3.6px), 6px);
-  --ws-radius-md: clamp(6px, calc(0.16vw + 5.4px), 10px);
-  --ws-radius-lg: clamp(10px, calc(0.24vw + 8px), 14px);
-  --ws-radius-xl: 16px;
+  /* 圆角 — Bento Grids (16-20px) */
+  --ws-radius-sm: clamp(6px, calc(0.12vw + 5px), 8px);
+  --ws-radius-md: clamp(10px, calc(0.2vw + 8px), 14px);
+  --ws-radius-lg: clamp(14px, calc(0.3vw + 12px), 20px);
+  --ws-radius-xl: 24px;
 
-  /* 阴影 — 极淡阴影 */
-  --ws-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --ws-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --ws-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.08);
+  /* 阴影 — Bento soft multi-layer */
+  --ws-shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
+  --ws-shadow-lg: 0 2px 8px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --ws-shadow-xl: 0 4px 12px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.08);
+  --ws-shadow-floating: 0 6px 16px rgba(15, 23, 42, 0.22);
 
   /* 侧边栏 */
   --ws-sidebar-width: 236px;
@@ -351,8 +364,8 @@ tr:hover td {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--ws-color-primary) 4%, white) 0%, var(--ws-color-surface-2) 100%);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+    linear-gradient(135deg, var(--ws-color-primary-muted) 0%, var(--ws-color-surface) 50%, var(--ws-color-surface-2) 100%);
+  border: 1px solid var(--ws-color-accent);
 }
 
 .home-welcome-strip::before {
@@ -360,46 +373,49 @@ tr:hover td {
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: linear-gradient(180deg, var(--ws-color-primary), color-mix(in srgb, var(--ws-color-primary) 48%, white));
+  background: var(--ws-gradient-primary);
   opacity: 0.85;
 }
 
 .module-card {
-  transition: background 0.15s, box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+  background: var(--ws-color-surface);
+  border: 1px solid var(--ws-color-border-secondary);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .module-card:hover {
-  background: var(--ws-color-primary-soft) !important;
-  border-color: transparent !important;
-  transform: translateY(-1px);
+  border-color: var(--ws-color-accent) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.15);
+  transform: translateY(-2px);
 }
 
 .module-card:hover .module-arrow {
-  transform: translateX(2px);
+  transform: translateX(3px);
+  opacity: 1;
 }
 
-.module-card:hover .module-icon { transform: scale(1.06); }
+.module-card:hover .module-icon { transform: scale(1.08); }
 .module-icon { transition: transform 0.15s; }
 .module-arrow {
-  opacity: 0.72;
+  opacity: 0.5;
   transition: opacity 0.15s, transform 0.15s;
 }
 
 /* Home 页面外部链接 hover 效果 */
 .ext-card {
-  transition: background 0.15s, box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .ext-card:hover {
-  background: var(--ws-color-primary-soft) !important;
-  border-color: transparent !important;
-  transform: translateY(-1px);
+  border-color: var(--ws-color-accent) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.15);
+  transform: translateY(-2px);
 }
 
-.ext-card:hover .ext-arrow { transform: translateX(2px); }
+.ext-card:hover .ext-arrow { transform: translateX(3px); opacity: 1; }
 
 .ext-arrow {
-  opacity: 0.72;
+  opacity: 0.5;
   transition: opacity 0.15s, transform 0.15s;
 }
 
@@ -447,7 +463,7 @@ tr:hover td {
 
 /* 文章列表项 hover */
 .article-item-hover { transition: background 0.15s, border-color 0.15s; border-bottom-color: rgba(0,0,0,0.04); }
-.article-item-hover:hover { background: rgba(14,165,233,0.04); border-bottom-color: transparent; }
+.article-item-hover:hover { background: var(--ws-color-primary-soft); border-bottom-color: transparent; }
 
 /* AdminLayout 用户菜单 hover */
 .admin-user-menu { transition: background 0.15s; }
@@ -463,7 +479,7 @@ tr:hover td {
   font-size: var(--ws-text-sm) !important;
   font-weight: 600 !important;
   line-height: 1 !important;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22) !important;
+  box-shadow: var(--ws-shadow-floating) !important;
 }
 
 .ws-floating-entry-btn svg {
@@ -481,21 +497,21 @@ tr:hover td {
 }
 
 .ws-floating-entry-btn--assessment {
-  background: var(--ws-color-secondary) !important;
+  background: var(--ws-color-primary-hover) !important;
   color: var(--ws-color-surface) !important;
 }
 
 .ws-floating-entry-btn--assessment:hover {
-  background: var(--ws-color-secondary-active) !important;
+  background: var(--ws-color-primary-active) !important;
 }
 
 .ws-floating-entry-btn--classroom {
-  background: var(--ws-color-purple) !important;
+  background: var(--ws-color-accent) !important;
   color: var(--ws-color-surface) !important;
 }
 
 .ws-floating-entry-btn--classroom:hover {
-  background: var(--ws-color-purple-active) !important;
+  background: var(--ws-color-secondary-active) !important;
 }
 
 .ws-floating-panel {
@@ -520,11 +536,11 @@ tr:hover td {
 }
 
 .ws-floating-panel-header--assessment {
-  background: var(--ws-color-secondary);
+  background: var(--ws-color-primary-hover);
 }
 
 .ws-floating-panel-header--classroom {
-  background: var(--ws-color-purple);
+  background: var(--ws-color-accent);
 }
 
 .ws-floating-panel-header-action {
@@ -580,8 +596,8 @@ tr:hover td {
 .stat-card {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--ws-color-surface-2), #fff);
-  border: 1px solid var(--ws-color-border);
+  background: linear-gradient(135deg, var(--ws-color-primary-muted), var(--ws-color-surface));
+  border: 1px solid var(--ws-color-accent);
   border-radius: var(--ws-radius-md);
   padding: var(--ws-space-2) var(--ws-space-2) var(--ws-space-2) calc(var(--ws-space-2) + 3px);
   transition: transform 0.15s, box-shadow 0.15s;
@@ -654,40 +670,75 @@ tr:hover td {
   --ws-color-surface: #1E293B;
   --ws-color-surface-2: #334155;
   --ws-color-overlay: rgba(0, 0, 0, 0.6);
-  --ws-color-scrollbar: rgba(255, 255, 255, 0.1);
+  --ws-color-scrollbar: rgba(255, 255, 255, 0.12);
 
-  --ws-color-border: rgba(255, 255, 255, 0.08);
-  --ws-color-border-secondary: rgba(255, 255, 255, 0.04);
+  --ws-color-border: rgba(255, 255, 255, 0.1);
+  --ws-color-border-secondary: rgba(255, 255, 255, 0.06);
 
   --ws-color-text: #F1F5F9;
   --ws-color-text-secondary: #94A3B8;
   --ws-color-text-tertiary: #64748B;
 
-  --ws-color-hover-bg: rgba(14, 165, 233, 0.08);
-  --ws-color-focus-ring: #38BDF8;
+  --ws-color-primary: #2DD4BF;
+  --ws-color-primary-hover: #5EEAD4;
+  --ws-color-primary-active: #14B8A6;
+  --ws-color-primary-muted: #134E4A;
+  --ws-color-secondary: #A78BFA;
+  --ws-color-secondary-active: #8B5CF6;
+  --ws-color-accent: #A78BFA;
+  --ws-color-info: #38BDF8;
+  --ws-color-success: #34D399;
+  --ws-color-warning: #FBBF24;
+  --ws-color-error: #F87171;
+  --ws-color-error-dark: #FCA5A5;
+  --ws-color-error-light: #7F1D1D;
+  --ws-color-purple: #E879F9;
+  --ws-color-purple-hover: #F0ABFC;
+  --ws-color-purple-active: #D946EF;
 
-  --ws-color-primary-soft: rgba(14, 165, 233, 0.1);
-  --ws-color-primary-light: rgba(14, 165, 233, 0.15);
-  --ws-color-success-soft: rgba(16, 185, 129, 0.1);
-  --ws-color-warning-soft: rgba(245, 158, 11, 0.1);
-  --ws-color-error-soft: rgba(239, 68, 68, 0.1);
-  --ws-color-info-soft: rgba(14, 165, 233, 0.1);
-  --ws-color-purple-soft: rgba(139, 92, 246, 0.1);
+  --ws-color-hover-bg: rgba(45, 212, 191, 0.1);
+  --ws-color-focus-ring: #2DD4BF;
+
+  --ws-color-primary-soft: rgba(45, 212, 191, 0.12);
+  --ws-color-primary-light: rgba(45, 212, 191, 0.18);
+  --ws-color-success-soft: rgba(52, 211, 153, 0.12);
+  --ws-color-warning-soft: rgba(251, 191, 36, 0.12);
+  --ws-color-error-soft: rgba(248, 113, 113, 0.12);
+  --ws-color-info-soft: rgba(56, 189, 248, 0.12);
+  --ws-color-purple-soft: rgba(232, 121, 249, 0.12);
 
   --ws-glass-bg: rgba(30, 41, 59, 0.85);
   --ws-color-tooltip: rgba(228, 230, 237, 0.92);
 
-  --ws-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.28);
-  --ws-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.35);
+  --ws-shadow-sm: 0 1px 2px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.2);
+  --ws-shadow-lg: 0 2px 8px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.4);
+  --ws-shadow-xl: 0 4px 12px rgba(0,0,0,0.3), 0 16px 40px rgba(0,0,0,0.5);
+  --ws-shadow-floating: 0 6px 20px rgba(0,0,0,0.4);
+  --destructive-foreground: #7F1D1D;
+
+  --primary-foreground: #042F2E;
+  --ws-gradient-primary: linear-gradient(135deg, #2DD4BF, #A78BFA);
+
+  /* 深色模式标签色 */
+  --ws-tag-blue: #60A5FA;
+  --ws-tag-teal: #2DD4BF;
+  --ws-tag-green: #34D399;
+  --ws-tag-amber: #FBBF24;
+  --ws-tag-red: #F87171;
+  --ws-tag-pink: #F472B6;
+  --ws-tag-purple: #E879F9;
+  --ws-tag-indigo: #818CF8;
+  --ws-tag-sky: #7DD3FC;
+  --ws-tag-gray: #94A3B8;
 }
 
 .dark .home-welcome-strip {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ws-color-primary) 6%, var(--ws-color-surface)) 0%, var(--ws-color-surface-2) 100%);
-  border-color: var(--ws-color-border);
+  background: linear-gradient(135deg, var(--ws-color-primary-muted) 0%, var(--ws-color-surface) 60%, var(--ws-color-surface-2) 100%);
+  border-color: var(--ws-color-accent);
 }
 
 .dark .home-welcome-strip::before {
-  background: linear-gradient(180deg, var(--ws-color-primary), color-mix(in srgb, var(--ws-color-primary) 48%, var(--ws-color-surface)));
+  background: var(--ws-gradient-primary);
 }
 
 .dark .admin-btn-hover {
@@ -700,7 +751,7 @@ tr:hover td {
 }
 
 .dark .stat-card {
-  background: linear-gradient(135deg, var(--ws-color-surface-2), var(--ws-color-surface));
+  background: linear-gradient(135deg, var(--ws-color-primary-muted), var(--ws-color-surface));
 }
 
 .dark .admin-user-menu:hover {
@@ -713,7 +764,7 @@ tr:hover td {
 }
 
 .dark .article-item-hover:hover {
-  background: rgba(14, 165, 233, 0.06);
+  background: var(--ws-color-primary-soft);
 }
 
 .dark ::-webkit-scrollbar-thumb {

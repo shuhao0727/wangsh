@@ -17,7 +17,7 @@ module.exports = {
           hover: "var(--ws-color-primary-hover)",
           active: "var(--ws-color-primary-active)",
           soft: "var(--ws-color-primary-soft)",
-          foreground: "#FFFFFF",
+          foreground: "var(--primary-foreground)",
         },
         success: {
           DEFAULT: "var(--ws-color-success)",
@@ -62,7 +62,7 @@ module.exports = {
         },
         destructive: {
           DEFAULT: "var(--ws-color-error)",
-          foreground: "#FFFFFF",
+          foreground: "var(--destructive-foreground)",
         },
         muted: {
           DEFAULT: "var(--ws-color-surface-2)",
@@ -102,6 +102,8 @@ module.exports = {
         "2xl": "var(--ws-text-2xl)",
       },
       boxShadow: {
+        sm: "var(--ws-shadow-sm)",
+        md: "var(--ws-shadow-sm)",
         lg: "var(--ws-shadow-lg)",
         xl: "var(--ws-shadow-xl)",
       },

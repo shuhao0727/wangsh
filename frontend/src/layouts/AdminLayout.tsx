@@ -151,8 +151,8 @@ const AdminLayout: React.FC = () => {
         }}
         className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
           active
-            ? "bg-primary-soft text-primary"
-            : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
+            ? "bg-primary-soft text-primary shadow-[inset_3px_0_0_var(--ws-color-accent)]"
+            : "text-text-secondary hover:bg-[var(--ws-color-primary-muted)]"
         }`}
         title={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
@@ -180,8 +180,9 @@ const AdminLayout: React.FC = () => {
 
       <aside
         role="navigation" aria-label="管理导航"
-        className="fixed left-0 top-0 bottom-0 z-[var(--ws-z-header)] border-r border-border-secondary bg-surface transition-[transform,box-shadow] duration-200"
+        className="fixed left-0 top-0 bottom-0 z-[var(--ws-z-header)] border-r border-border-secondary transition-[transform,box-shadow] duration-200"
         style={{
+          background: "linear-gradient(180deg, var(--ws-color-surface-2), var(--ws-color-surface))",
           width: sidebarWidth,
           transform: isMobile && collapsed ? "translateX(-100%)" : "translateX(0)",
           boxShadow: isMobile ? "var(--ws-shadow-xl)" : "none",

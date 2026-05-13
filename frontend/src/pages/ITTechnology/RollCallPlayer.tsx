@@ -116,7 +116,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
              </h1>
              {!isRunning && students.length > 0 && currentName !== '点击开始' && (
                <div className="mt-6 text-2xl opacity-60 text-primary-hover">
-                 🎉 幸运儿诞生
+                 幸运儿诞生
                </div>
              )}
           </div>

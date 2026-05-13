@@ -118,7 +118,7 @@ export function usePythonLabActions(params: {
       x: Math.max(0, xBase + Math.floor(Math.random() * 60) - 30),
       y: Math.max(0, yBase + Math.floor(Math.random() * 60) - 30),
       ...(tpl.key === "note"
-        ? { style: { backgroundColor: "#FFF9C4", opacity: 1, dashed: true } }
+        ? { style: { backgroundColor: "var(--ws-color-primary-muted)", opacity: 1, dashed: true } }
         : {}),
     };
     setNodes((prev) => [...prev, node]);

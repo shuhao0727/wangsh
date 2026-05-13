@@ -49,6 +49,10 @@ import {
   Copy,
   Download,
   Sparkles,
+  ClipboardList,
+  Monitor,
+  BarChart3,
+  Lightbulb,
 } from "lucide-react";
 
 // ────────────────────────────────────────
@@ -82,11 +86,11 @@ interface AILearningContentPayload {
 
 type SectionKey = "steps" | "code" | "data" | "reflection";
 
-const TAB_CONFIG: { key: SectionKey; label: string; icon: string }[] = [
-  { key: "steps", label: "实验步骤", icon: "📋" },
-  { key: "code", label: "实验代码", icon: "💻" },
-  { key: "data", label: "实验数据", icon: "📊" },
-  { key: "reflection", label: "思考题", icon: "🤔" },
+const TAB_CONFIG: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
+  { key: "steps", label: "实验步骤", icon: <ClipboardList className="h-4 w-4" /> },
+  { key: "code", label: "实验代码", icon: <Monitor className="h-4 w-4" /> },
+  { key: "data", label: "实验数据", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "reflection", label: "思考题", icon: <Lightbulb className="h-4 w-4" /> },
 ];
 
 /** 实验卡片 */

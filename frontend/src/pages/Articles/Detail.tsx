@@ -19,6 +19,7 @@ import {
   BookOpen,
   TriangleAlert,
   Copy,
+  FileText,
 } from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import dayjs from "dayjs";
@@ -426,7 +427,7 @@ const ArticleDetailPage: React.FC = () => {
             </div>
           ) : (
             <div className="text-center px-5 py-16">
-              <div className="mb-6 text-5xl text-text-secondary">📝</div>
+              <div className="mb-6 text-text-secondary"><FileText className="h-12 w-12 mx-auto" /></div>
               <h3 className="mb-4 text-2xl font-semibold text-text-secondary">文章内容正在建设中</h3>
               <p className="mx-auto max-w-prose text-sm text-text-secondary">
                 这篇文章的详细内容正在编写中，敬请期待。

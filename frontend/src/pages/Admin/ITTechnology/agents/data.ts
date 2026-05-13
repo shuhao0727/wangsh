@@ -366,7 +366,7 @@ export const agentTypeComparison = [
     pros: ["天然支持人机混合团队", "任务处理更可靠（多人/多 Agent 校验）", "沟通带来的可解释性提升"],
     cons: ["协调开销降低系统效率", "需要复杂的通信协议与共识机制", "角色/责任边界模糊时易冲突"],
     example: "Multi-Agent DevOps Team（监控+诊断+修复）、科研协作 Agent 团队、CrewAI 多角色内容创作",
-    color: "#8B5CF6",
+    color: "var(--ws-tag-purple)",
     real_world_examples: ["ChatDev: 模拟软件公司角色（CEO/CTO/程序员/测试）协作完成项目", "AutoGen 医疗诊断团队: 全科医生+专科医生+药剂师 Agent 协作诊断", "MetaGPT 软件开发: 产品经理+架构师+工程师+QA 协作完成完整项目"],
   },
 ];
@@ -459,7 +459,7 @@ export const coreTechs = [
   {
     title: "Function Calling",
     icon: "code",
-    color: "#3B82F6",
+    color: "var(--ws-tag-blue)",
     desc: "LLM 原生的结构化 API 调用能力。通过提供函数签名（名称、描述、参数 JSON Schema），LLM 能在推理过程中自动判断是否需要调用工具、选择哪个工具、并生成正确的调用参数。这是所有 LLM-based Agent 工具使用的基础机制，也是一切高级 Agent 框架的底层依赖",
     key_concepts: ["并行 Function Calling（一次决策调用多个独立工具）", "严格 JSON Schema 模式（structured outputs）", "流式 Function Calling（边生成边执行）", "工具选择策略（LLM 自主 vs 规则路由）", "函数调用结果注入回 LLM 上下文的协议"],
     tools: ["OpenAI Function Calling API", "Anthropic Tool Use API", "Instructor (结构化输出增强)", "Outlines (受控生成)", "Marvin (声明式工具定义)"],
@@ -470,7 +470,7 @@ export const coreTechs = [
   {
     title: "MCP 协议",
     icon: "plug",
-    color: "#10B981",
+    color: "var(--ws-tag-green)",
     desc: "Model Context Protocol (MCP) 由 Anthropic 于 2024 年开源，定义了一套标准化的 Client-Server 协议，使 LLM 应用能安全、标准化地访问本地和远程资源。MCP 提供三大原语：Resources（数据暴露）、Prompts（模板化提示）、Tools（可执行功能），取代了 N 对 M 的工具集成方式为统一的 1 对多 Client-Server 架构",
     key_concepts: ["MCP Client-Server 架构", "三大原语 (Resources/Prompts/Tools)", "Transport 层 (stdio/SSE/Streamable HTTP)", "MCP Server 开发与部署", "工具发现与动态注册", "MCP 与 Function Calling 的关系"],
     tools: ["MCP Python SDK", "MCP TypeScript SDK", "Claude Desktop MCP Client", "MCP Inspector (调试工具)", "mcp.run (MCP Server 托管平台)"],
@@ -481,7 +481,7 @@ export const coreTechs = [
   {
     title: "规划算法",
     icon: "route",
-    color: "#F59E0B",
+    color: "var(--ws-tag-amber)",
     desc: "Agent 规划是将复杂目标分解为可执行步骤序列的计算过程。从简单的 Chain-of-Thought 逐步推理，到 Tree-of-Thoughts 多路径搜索，再到基于 LLM 的启发式规划（LLM-as-Planner），以及结合经典规划算法（STRIPS/PDDL）的混合方案。规划质量直接决定 Agent 处理复杂多步骤任务的上限",
     key_concepts: ["任务分解与依赖图构建", "启发式搜索 (BFS/DFS/A* 在思维空间)", "LLM-as-Planner 范式", "PDDL/STRIPS 经典规划与 LLM 融合", "执行监控与动态重规划", "分层规划 (Hierarchical Planning)"],
     tools: ["LangGraph (状态图规划)", "TaskWeaver (任务分解)", "OpenAI o1/o3 (内置规划)", "DSPy (可编程推理)", "HuggingGPT (任务规划 + 模型路由)"],
@@ -510,7 +510,7 @@ export const coreTechs = [
   {
     title: "Agent 评估",
     icon: "check-square",
-    color: "#EC4899",
+    color: "var(--ws-tag-pink)",
     desc: "Agent Evaluation 是确保 Agent 系统可靠性的基石。与传统 ML 的单一指标不同，Agent 评估是多维度的：任务成功率、工具调用准确率、推理链质量、安全合规性、用户体验、Token 效率。业界正在从手工测试向自动化评估流水线演进（Agent-as-Judge / LLM-as-Evaluator），并建立标准化的评估基准",
     key_concepts: ["多维评估指标体系", "LLM-as-Evaluator 范式", "Agent-as-Judge 自我评估", "Golden Dataset 构建与维护", "对抗性与边界测试", "回归测试与 CI 集成"],
     tools: ["LangSmith (全链路评测)", "Ragas (RAG 专用评测)", "Deepeval (断言式评测)", "AgentBench (标准化基准)", "WebArena (Web Agent 评测)"],
@@ -610,7 +610,7 @@ export const frameworkData = [
     scenario: "工具标准化接入、Agent 生态基础协议",
     github_stars: "35k+",
     githubStars: "35k+",
-    color: "#6366F1",
+    color: "var(--ws-tag-indigo)",
   },
   {
     name: "Google ADK",
@@ -625,7 +625,7 @@ export const frameworkData = [
     scenario: "Google Cloud 生态 Agent 开发、企业级 AI 助手",
     github_stars: "15k+",
     githubStars: "15k+",
-    color: "#4285F4",
+    color: "var(--ws-tag-blue)",
   },
   {
     name: "Pydantic AI",
@@ -640,7 +640,7 @@ export const frameworkData = [
     scenario: "类型安全的企业级 Python Agent、结构化输出场景",
     github_stars: "12k+",
     githubStars: "12k+",
-    color: "#E92063",
+    color: "var(--ws-tag-pink)",
   },
   {
     name: "Smolagents",
@@ -655,7 +655,7 @@ export const frameworkData = [
     scenario: "HuggingFace 生态快速原型、开源模型 Agent 实验",
     github_stars: "18k+",
     githubStars: "18k+",
-    color: "#FFB347",
+    color: "var(--ws-tag-amber)",
   },
   {
     name: "Dify",
@@ -670,7 +670,7 @@ export const frameworkData = [
     scenario: "非开发者快速搭建 Agent、企业内部 AI 应用平台",
     github_stars: "90k+",
     githubStars: "90k+",
-    color: "#8B5CF6",
+    color: "var(--ws-tag-purple)",
   },
   {
     name: "Semantic Kernel",
@@ -685,7 +685,7 @@ export const frameworkData = [
     scenario: ".NET/Java 企业系统集成、Azure 云原生 Agent 开发",
     github_stars: "25k+",
     githubStars: "25k+",
-    color: "#06B6D4",
+    color: "var(--ws-tag-teal)",
   },
   {
     name: "Camel",
@@ -700,7 +700,7 @@ export const frameworkData = [
     scenario: "Agent 社会研究、角色扮演模拟、多 Agent 博弈实验",
     github_stars: "7k+",
     githubStars: "7k+",
-    color: "#F97316",
+    color: "var(--ws-tag-amber)",
   },
   {
     name: "AutoGPT",
@@ -715,7 +715,7 @@ export const frameworkData = [
     scenario: "全自动研究、探索性 Agent 实验、学习 Agent 原理",
     github_stars: "172k+",
     githubStars: "172k+",
-    color: "#10B981",
+    color: "var(--ws-tag-green)",
   },
   {
     name: "BabyAGI",
@@ -730,7 +730,7 @@ export const frameworkData = [
     scenario: "Agent 原理教学、轻量级自主任务实验",
     github_stars: "21k+",
     githubStars: "21k+",
-    color: "#F43F5E",
+    color: "var(--ws-tag-red)",
   },
   {
     name: "Agno",
@@ -760,7 +760,7 @@ export const frameworkData = [
     scenario: "企业数据 Agent、大规模文档智能、结构化数据 NL 查询",
     github_stars: "40k+",
     githubStars: "40k+",
-    color: "#7C3AED",
+    color: "var(--ws-tag-purple)",
   },
   {
     name: "LangGraph",
@@ -775,7 +775,7 @@ export const frameworkData = [
     scenario: "复杂 Agent 工作流编排、多 Agent 状态机、人机协同流程",
     github_stars: "12k+",
     githubStars: "12k+",
-    color: "#2563EB",
+    color: "var(--ws-tag-blue)",
   },
   {
     name: "TaskWeaver",
@@ -790,7 +790,7 @@ export const frameworkData = [
     scenario: "数据分析 Agent、结构化数据处理自动化",
     github_stars: "6k+",
     githubStars: "6k+",
-    color: "#0891B2",
+    color: "var(--ws-tag-teal)",
   },
 ];
 
@@ -2675,7 +2675,7 @@ ray.shutdown()`,
     badge: "research",
     badgeVariant: "purple" as const,
     icon: "flask-conical",
-    color: "#EC4899",
+    color: "var(--ws-tag-pink)",
     items: [
       {
         name: "自我进化 Agent",

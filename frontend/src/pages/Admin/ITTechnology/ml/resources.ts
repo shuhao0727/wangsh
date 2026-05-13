@@ -4,11 +4,11 @@ import type { ResourceItem } from "./data";
 export const RESOURCE_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   book: { label: "书籍", color: "var(--ws-color-primary)" },
   course: { label: "课程", color: "var(--ws-color-success)" },
-  github: { label: "GitHub", color: "var(--ws-color-purple, #8B5CF6)" },
+  github: { label: "GitHub", color: "var(--ws-color-purple)" },
   competition: { label: "竞赛", color: "var(--ws-color-warning)" },
   video: { label: "视频", color: "var(--ws-color-danger)" },
-  paper: { label: "论文", color: "var(--ws-color-info, #3B82F6)" },
-  blog: { label: "博客", color: "var(--ws-color-secondary, #6B7280)" },
+  paper: { label: "论文", color: "var(--ws-color-info)" },
+  blog: { label: "博客", color: "var(--ws-color-secondary)" },
 };
 
 export const RESOURCES_DATA: ResourceItem[] = [

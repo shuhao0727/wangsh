@@ -82,6 +82,48 @@ html, body {
   margin-bottom: var(--ws-space-2);
 }
 
+/* ── 色彩层次增强工具 ── */
+
+/* Section 背景交替 */
+.ws-section-alt {
+  background: var(--ws-color-surface-2);
+}
+
+/* 表格表头 */
+.ws-table-header {
+  background: var(--ws-color-primary-muted);
+}
+.ws-table-header th {
+  color: var(--ws-color-primary);
+  font-weight: 600;
+}
+
+/* 空状态 */
+.ws-empty-state {
+  background: var(--ws-color-primary-muted);
+  border: 2px dashed var(--ws-color-accent);
+  border-radius: var(--ws-radius-lg);
+}
+
+/* 卡片左侧彩色点缀条 */
+.ws-accent-strip {
+  position: relative;
+  overflow: hidden;
+}
+.ws-accent-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--ws-gradient-primary);
+  opacity: 0.85;
+}
+
+/* PanelCard 头部 — accent 色分割线 */
+.panel-card-header {
+  border-bottom-color: var(--ws-color-accent) !important;
+}
+
 /* 576px 小屏适配 — 管理后台表格 */
 @media (max-width: 576px) {
   .ws-admin-page {
