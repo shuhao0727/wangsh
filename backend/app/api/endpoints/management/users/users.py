@@ -371,15 +371,16 @@ async def update_user(
                 detail="用户不存在"
             )
 
-        # 普通管理员不能修改超级管理员
-        if user.role_code == "super_admin" and current_user.get("role_code") != "super_admin":
+        # 普通管理员不能修改超级管理员和其他管理员
+        is_current_admin = current_user.get("role_code") == "admin"
+        if is_current_admin and user.role_code in ("super_admin", "admin"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="无权修改超级管理员信息"
+                detail="无权修改该用户信息"
             )
 
         # 普通管理员只能将角色改为 student 或 teacher
-        if current_user.get("role_code") == "admin":
+        if is_current_admin:
             if user_data.role_code and user_data.role_code not in ("student", "teacher"):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
