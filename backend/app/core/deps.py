@@ -175,20 +175,6 @@ async def require_student(
     return current_user
 
 
-async def require_teacher(
-    current_user: UserInfo = Depends(get_current_user)
-) -> UserInfo:
-    """
-    要求用户必须是教师（包括管理员和超级管理员）
-    """
-    if current_user.get("role_code") not in ["teacher", "admin", "super_admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="需要教师权限",
-        )
-    return current_user
-
-
 async def require_staff(
     current_user: UserInfo = Depends(get_current_user)
 ) -> UserInfo:
