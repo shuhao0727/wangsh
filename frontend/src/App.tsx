@@ -109,7 +109,7 @@ function App() {
         <GlobalErrorBoundary>
           <Suspense fallback={LoadingIndicator}>
             <Routes>
-            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />

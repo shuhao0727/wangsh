@@ -41,11 +41,14 @@ const LoginPage: React.FC = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { username: "", password: "" },
   });
+
+  const password = watch("password");
 
   useEffect(() => {
     if (auth.isLoading) return;
@@ -93,7 +96,7 @@ const LoginPage: React.FC = () => {
 
         {/* Center: animated characters */}
         <div className="relative z-20 flex items-center justify-center" style={{ height: 400 }}>
-          <AnimatedLoginCharacters isFocused={isFocused} />
+          <AnimatedLoginCharacters isFocused={isFocused} showPassword={showPassword} passwordLength={password.length} />
         </div>
 
         {/* Bottom links */}
@@ -123,12 +126,9 @@ const LoginPage: React.FC = () => {
 
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold tracking-tight mb-2">
-              {requireAdmin ? "管理员登录" : "欢迎回来"}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {requireAdmin ? "管理员登录" : "登录"}
             </h1>
-            <p className="text-sm text-text-secondary">
-              {requireAdmin ? "仅管理员账号可进入后台" : "课程、训练与工具入口"}
-            </p>
           </div>
 
           {/* Login Form */}
@@ -190,6 +190,19 @@ const LoginPage: React.FC = () => {
               {requireAdmin ? "管理员登录" : "登录"}
             </Button>
           </form>
+
+          {/* Guest mode */}
+          {!requireAdmin && (
+            <div className="text-center text-sm text-text-secondary mt-6">
+              <button
+                type="button"
+                onClick={() => navigate("/home")}
+                className="text-text-tertiary hover:text-text-secondary transition-colors underline underline-offset-4"
+              >
+                访客模式进入
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

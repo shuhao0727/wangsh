@@ -81,13 +81,16 @@ const EyeBall = ({ size = 48, pupilSize = 16, maxDistance = 10, eyeColor = "whit
 /* ── AnimatedLoginCharacters ── */
 interface Props {
   isFocused?: boolean;
+  showPassword?: boolean;
+  passwordLength?: number;
 }
 
-const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false }) => {
+const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false, showPassword = false, passwordLength = 0 }) => {
   const [mouseX, setMouseX] = useState<number>(0);
   const [mouseY, setMouseY] = useState<number>(0);
   const [tealBlinking, setTealBlinking] = useState(false);
   const [darkBlinking, setDarkBlinking] = useState(false);
+  const [violetPeeking, setVioletPeeking] = useState(false);
   const [lookingAtEachOther, setLookingAtEachOther] = useState(false);
   const tealRef = useRef<HTMLDivElement>(null);
   const darkRef = useRef<HTMLDivElement>(null);
@@ -120,6 +123,18 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false }) => {
     else setLookingAtEachOther(false);
   }, [isFocused]);
 
+  // violet peeks when password is visible
+  useEffect(() => {
+    if (passwordLength > 0 && showPassword) {
+      const schedule = (): ReturnType<typeof setTimeout> => setTimeout(() => { setVioletPeeking(true); setTimeout(() => { setVioletPeeking(false); schedule(); }, 800); }, Math.random() * 3000 + 2000);
+      const t = schedule();
+      return () => clearTimeout(t);
+    } else { setVioletPeeking(false); }
+  }, [passwordLength, showPassword]);
+
+  const isShowing = passwordLength > 0 && showPassword;
+  const isHiding = passwordLength > 0 && !showPassword;
+
   const calc = (ref: React.RefObject<HTMLDivElement | null>) => {
     if (!ref.current) return { faceX: 0, faceY: 0, skew: 0 };
     const r = ref.current.getBoundingClientRect();
@@ -135,46 +150,46 @@ const AnimatedLoginCharacters: React.FC<Props> = ({ isFocused = false }) => {
 
   return (
     <div className="relative" style={{ width: 550, height: 400 }}>
-      {/* Teal — Back */}
+      {/* Teal — Back: stares when password hidden, stands straight when visible */}
       <div ref={tealRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 70, width: 180, height: isFocused ? 440 : 400, backgroundColor: "#0D9488", borderRadius: "10px 10px 0 0", zIndex: 1, transform: isFocused ? `skewX(${(tealP.skew || 0) - 12}deg) translateX(40px)` : `skewX(${tealP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 70, width: 180, height: (isFocused || isHiding) ? 440 : 400, backgroundColor: "#0D9488", borderRadius: "10px 10px 0 0", zIndex: 1, transform: isShowing ? "skewX(0deg)" : isFocused ? `skewX(${(tealP.skew || 0) - 12}deg) translateX(40px)` : isHiding ? `skewX(${(tealP.skew || 0) - 12}deg) translateX(40px)` : `skewX(${tealP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-8 transition-all duration-700 ease-in-out"
-          style={{ left: lookingAtEachOther ? 55 : 45 + tealP.faceX, top: lookingAtEachOther ? 65 : 40 + tealP.faceY }}>
-          <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={lookingAtEachOther ? 3 : undefined} forceLookY={lookingAtEachOther ? 4 : undefined} />
-          <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={lookingAtEachOther ? 3 : undefined} forceLookY={lookingAtEachOther ? 4 : undefined} />
+          style={{ left: isShowing ? 20 : lookingAtEachOther ? 55 : 45 + tealP.faceX, top: isShowing ? 35 : lookingAtEachOther ? 65 : 40 + tealP.faceY }}>
+          <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 3 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? 4 : undefined} />
+          <EyeBall size={18} pupilSize={7} maxDistance={5} eyeColor="white" pupilColor="#042F2E" isBlinking={tealBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 3 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? 4 : undefined} />
         </div>
       </div>
 
-      {/* Dark Teal — Center */}
+      {/* Dark Teal — Center: looks away when password visible */}
       <div ref={darkRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 240, width: 120, height: 310, backgroundColor: "#0F766E", borderRadius: "8px 8px 0 0", zIndex: 2, transform: lookingAtEachOther ? `skewX(${(darkP.skew || 0) * 1.5 + 10}deg) translateX(20px)` : isFocused ? `skewX(${(darkP.skew || 0) * 1.5}deg)` : `skewX(${darkP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 240, width: 120, height: 310, backgroundColor: "#0F766E", borderRadius: "8px 8px 0 0", zIndex: 2, transform: isShowing ? "skewX(0deg)" : lookingAtEachOther ? `skewX(${(darkP.skew || 0) * 1.5 + 10}deg) translateX(20px)` : (isFocused || isHiding) ? `skewX(${(darkP.skew || 0) * 1.5}deg)` : `skewX(${darkP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-6 transition-all duration-700 ease-in-out"
-          style={{ left: lookingAtEachOther ? 32 : 26 + darkP.faceX, top: lookingAtEachOther ? 12 : 32 + darkP.faceY }}>
-          <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={lookingAtEachOther ? 0 : undefined} forceLookY={lookingAtEachOther ? -4 : undefined} />
-          <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={lookingAtEachOther ? 0 : undefined} forceLookY={lookingAtEachOther ? -4 : undefined} />
+          style={{ left: isShowing ? 10 : lookingAtEachOther ? 32 : 26 + darkP.faceX, top: isShowing ? 28 : lookingAtEachOther ? 12 : 32 + darkP.faceY }}>
+          <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 0 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? -4 : undefined} />
+          <EyeBall size={16} pupilSize={6} maxDistance={4} eyeColor="white" pupilColor="#042F2E" isBlinking={darkBlinking} forceLookX={isShowing ? -4 : lookingAtEachOther ? 0 : undefined} forceLookY={isShowing ? -4 : lookingAtEachOther ? -4 : undefined} />
         </div>
       </div>
 
-      {/* Violet semi-circle — Front left */}
+      {/* Violet semi-circle — Front left: peeks at password when visible */}
       <div ref={violetRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 0, width: 240, height: 200, backgroundColor: "#7C3AED", borderRadius: "120px 120px 0 0", zIndex: 3, transform: `skewX(${violetP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 0, width: 240, height: 200, backgroundColor: "#7C3AED", borderRadius: "120px 120px 0 0", zIndex: 3, transform: isShowing ? "skewX(0deg)" : `skewX(${violetP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-8 transition-all duration-200 ease-out"
-          style={{ left: 82 + (violetP.faceX || 0), top: 90 + (violetP.faceY || 0) }}>
-          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" />
-          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" />
+          style={{ left: isShowing ? 50 : 82 + (violetP.faceX || 0), top: isShowing ? 85 : 90 + (violetP.faceY || 0) }}>
+          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
+          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? (violetPeeking ? 4 : -5) : undefined} forceLookY={isShowing ? (violetPeeking ? 5 : -4) : undefined} />
         </div>
       </div>
 
-      {/* Light Teal — Front right */}
+      {/* Light Teal — Front right: looks down when password visible */}
       <div ref={lightRef} className="absolute bottom-0 transition-all duration-700 ease-in-out"
-        style={{ left: 310, width: 140, height: 230, backgroundColor: "#14B8A6", borderRadius: "70px 70px 0 0", zIndex: 4, transform: `skewX(${lightP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
+        style={{ left: 310, width: 140, height: 230, backgroundColor: "#14B8A6", borderRadius: "70px 70px 0 0", zIndex: 4, transform: isShowing ? "skewX(0deg)" : `skewX(${lightP.skew || 0}deg)`, transformOrigin: "bottom center" }}>
         <div className="absolute flex gap-6 transition-all duration-200 ease-out"
-          style={{ left: 52 + (lightP.faceX || 0), top: 40 + (lightP.faceY || 0) }}>
-          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" />
-          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" />
+          style={{ left: isShowing ? 20 : 52 + (lightP.faceX || 0), top: isShowing ? 35 : 40 + (lightP.faceY || 0) }}>
+          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? -5 : undefined} forceLookY={isShowing ? -4 : undefined} />
+          <Pupil size={12} maxDistance={5} pupilColor="#042F2E" forceLookX={isShowing ? -5 : undefined} forceLookY={isShowing ? -4 : undefined} />
         </div>
         <div className="absolute w-20 h-[4px] bg-[#042F2E] rounded-full transition-all duration-200 ease-out"
-          style={{ left: 40 + (lightP.faceX || 0), top: 88 + (lightP.faceY || 0) }} />
+          style={{ left: isShowing ? 10 : 40 + (lightP.faceX || 0), top: isShowing ? 88 : 88 + (lightP.faceY || 0) }} />
       </div>
     </div>
   );
