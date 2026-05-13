@@ -111,14 +111,46 @@ const AdminLayout: React.FC = () => {
     if (isMobile) setCollapsed(true);
   }, [isMobile]);
 
+  // Role-based menu item keys: super_admin sees all, admin excludes system/articles, teacher sees teaching only
+  const menuWhitelist = useMemo(() => {
+    if (auth.isSuperAdmin()) return null; // null = show all
+    if (auth.isAdmin()) return new Set([
+      "/admin/dashboard", "/admin/ai-agents", "/admin/users",
+      "/admin/agent-data", "/admin/group-discussion", "/admin/assessment",
+      "/admin/classroom-interaction", "/admin/classroom-plan",
+      "/admin/informatics", "/admin/it-technology", "/admin/personal-programs",
+    ]);
+    if (auth.isTeacher()) return new Set([
+      "/admin/dashboard",
+      "/admin/classroom-interaction", "/admin/classroom-plan",
+      "/admin/assessment", "/admin/group-discussion",
+      "/admin/informatics", "/admin/it-technology",
+    ]);
+    return new Set<string>();
+  }, [auth]);
+
+  const visibleMenuItems = useMemo(() => {
+    if (!menuWhitelist) return adminMenuItems;
+    return adminMenuItems
+      .map((item) => {
+        if (item.children) {
+          const filtered = item.children.filter((c) => menuWhitelist.has(c.key));
+          if (filtered.length === 0) return null;
+          return { ...item, children: filtered };
+        }
+        return menuWhitelist.has(item.key) ? item : null;
+      })
+      .filter((item): item is AdminMenuItem => item !== null);
+  }, [menuWhitelist]);
+
   const flatItems = useMemo(() => {
     const result: AdminMenuItem[] = [];
-    adminMenuItems.forEach((item) => {
+    visibleMenuItems.forEach((item) => {
       if (item.children) result.push(...item.children);
       else result.push(item);
     });
     return result;
-  }, []);
+  }, [visibleMenuItems]);
 
   const currentTitle =
     flatItems.find((item) => item.key === path)?.label || "管理后台";
@@ -198,7 +230,7 @@ const AdminLayout: React.FC = () => {
 
         <div className="h-[calc(100%-148px)] overflow-y-auto px-3 pb-3">
           <div className="space-y-1">
-            {adminMenuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               if (!item.children) return renderMenuButton(item);
               return (
                 <div key={item.key} className="space-y-1">
@@ -319,7 +351,7 @@ const AdminLayout: React.FC = () => {
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            {auth.isLoggedIn() && auth.isAdmin() ? (
+            {auth.isLoggedIn() && auth.isStaff() ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -371,7 +403,7 @@ const AdminLayout: React.FC = () => {
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
           style={{ height: "calc(100dvh - var(--ws-header-height))" }}
         >
-          {auth.isLoggedIn() && auth.isAdmin() ? (
+          {auth.isLoggedIn() && auth.isStaff() ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <Breadcrumbs />
               <PageTransitionShell variant="fade">
@@ -381,7 +413,7 @@ const AdminLayout: React.FC = () => {
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-4">
               <Lock className="h-12 w-12 text-text-tertiary" />
-              <h3 className="text-xl font-semibold">需要管理员权限</h3>
+              <h3 className="text-xl font-semibold">需要教职工权限</h3>
               <p className="text-sm text-text-tertiary">只有管理员可以访问此页面</p>
               <Button onClick={() => navigate("/login")}>管理员登录</Button>
             </div>

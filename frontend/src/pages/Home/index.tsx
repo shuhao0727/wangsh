@@ -107,7 +107,7 @@ const HomePage: React.FC = () => {
                   <div className="text-sm text-text-secondary mt-1.5">常用模块和外部工具都集中在这里</div>
                 </div>
               </div>
-              {(auth.isAdmin() || auth.isSuperAdmin()) && (
+              {auth.isStaff() && (
                 <button
                   onClick={() => navigate("/admin/dashboard")}
                   className="appearance-none flex-shrink-0 flex items-center justify-center gap-1.5 rounded-lg border-0 px-3.5 py-2 text-sm font-medium text-primary cursor-pointer transition-all admin-btn-hover"
