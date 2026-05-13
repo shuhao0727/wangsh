@@ -76,11 +76,11 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
         const labels: Record<string, string> = {
           super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生",
         };
-        const variantMap: Record<string, string> = {
+        const variantMap: Record<string, "danger" | "purple" | "warning" | "success"> = {
           super_admin: "danger", admin: "purple", teacher: "warning", student: "success",
         };
         return (
-          <Badge variant={variantMap[row.original.role_code] || "purple"}>
+          <Badge variant={variantMap[row.original.role_code] || "neutral"}>
             {labels[row.original.role_code] || row.original.role_code}
           </Badge>
         );
