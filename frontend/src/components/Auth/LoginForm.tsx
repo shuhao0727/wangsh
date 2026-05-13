@@ -49,10 +49,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
     if (!username.trim()) {
       newErrors.username = isAdmin ? "请输入管理员账号" : "请输入用户名";
     }
-    if (!password) {
+    if (!password.trim()) {
       newErrors.password = "请输入密码";
-    } else if (password.length < 6) {
-      newErrors.password = "密码至少6个字符";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
