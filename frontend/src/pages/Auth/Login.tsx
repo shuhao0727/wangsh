@@ -82,7 +82,7 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen max-h-screen overflow-hidden grid lg:grid-cols-2">
       {/* ── Left: Brand / Visual Panel ── */}
-      <div className="relative hidden lg:flex flex-col justify-between p-10 overflow-hidden"
+      <div className="relative hidden lg:flex flex-col justify-center p-10 overflow-hidden gap-8"
         style={{ background: "linear-gradient(160deg, #0D9488 0%, #14B8A6 35%, #7C3AED 100%)" }}>
         {/* Logo */}
         <div className="relative z-20">
