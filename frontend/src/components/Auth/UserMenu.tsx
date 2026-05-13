@@ -179,7 +179,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {auth.isAdmin() ? (
+        {auth.isStaff() ? (
           <DropdownMenuItem
             onClick={() => {
               handleMenuClick("/admin/dashboard");

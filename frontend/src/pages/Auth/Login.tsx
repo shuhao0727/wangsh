@@ -53,8 +53,8 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     if (auth.isLoading) return;
     if (!auth.isLoggedIn()) return;
-    if (requireAdmin && !auth.isAdmin()) {
-      showMessage.warning("当前账号不是管理员，请使用管理员账号登录");
+    if (requireAdmin && !auth.isStaff()) {
+      showMessage.warning("当前账号没有管理后台权限");
       void auth.logout();
       return;
     }
