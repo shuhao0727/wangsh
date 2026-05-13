@@ -370,7 +370,22 @@ async def update_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
-        
+
+        # 普通管理员不能修改超级管理员
+        if user.role_code == "super_admin" and current_user.get("role_code") != "super_admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权修改超级管理员信息"
+            )
+
+        # 普通管理员只能将角色改为 student 或 teacher
+        if current_user.get("role_code") == "admin":
+            if user_data.role_code and user_data.role_code not in ("student", "teacher"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="管理员只能设置学生或教师角色"
+                )
+
         # 检查唯一性约束（排除当前用户）
         existing_checks = []
         

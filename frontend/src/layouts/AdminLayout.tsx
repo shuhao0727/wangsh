@@ -118,7 +118,6 @@ const AdminLayout: React.FC = () => {
       "/admin/dashboard", "/admin/ai-agents", "/admin/users",
       "/admin/agent-data", "/admin/group-discussion", "/admin/assessment",
       "/admin/classroom-interaction", "/admin/classroom-plan",
-      "/admin/informatics", "/admin/it-technology", "/admin/personal-programs",
     ]);
     if (auth.isTeacher()) return new Set([
       "/admin/dashboard",

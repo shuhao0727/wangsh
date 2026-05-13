@@ -70,7 +70,6 @@ export const mockUsers: User[] = [
 
 // 角色选项
 export const roleOptions = [
-  { value: "super_admin", label: "超级管理员" },
   { value: "admin", label: "管理员" },
   { value: "teacher", label: "教师" },
   { value: "student", label: "学生" },
