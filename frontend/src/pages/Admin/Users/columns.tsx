@@ -67,6 +67,26 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
         ),
     },
     {
+      id: "role_code",
+      header: "角色",
+      accessorKey: "role_code",
+      size: 100,
+      meta: { headerClassName: "w-[100px]", cellClassName: "w-[100px] align-top" },
+      cell: ({ row }) => {
+        const labels: Record<string, string> = {
+          super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生",
+        };
+        const variantMap: Record<string, "purple" | "info" | "warning" | "success"> = {
+          super_admin: "purple", admin: "info", teacher: "warning", student: "success",
+        };
+        return (
+          <Badge variant={variantMap[row.original.role_code] || "purple"}>
+            {labels[row.original.role_code] || row.original.role_code}
+          </Badge>
+        );
+      },
+    },
+    {
       id: "is_active",
       header: "状态",
       accessorKey: "is_active",
