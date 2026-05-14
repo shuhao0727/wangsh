@@ -60,11 +60,14 @@ async def init_super_admin():
                 existing_admin.role_code = "super_admin"  # type: ignore[assignment]
                 existing_admin.is_active = True  # type: ignore
                 existing_admin.full_name = admin_full_name if admin_full_name else existing_admin.full_name  # type: ignore[assignment]
+                if not existing_admin.student_id:
+                    existing_admin.student_id = "A001"  # type: ignore[assignment]
                 logger.info(f"超级管理员账户已更新: {admin_username}")
             else:
                 new_admin = User(
                     username=admin_username,
                     hashed_password=hashed_password,
+                    student_id="A001",
                     full_name=admin_full_name if admin_full_name else "系统超级管理员",
                     role_code="super_admin",
                     is_active=True,
