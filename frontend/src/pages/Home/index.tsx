@@ -64,7 +64,7 @@ const HomePage: React.FC = () => {
   const roleLabel = role === "super_admin" ? "超级管理员" : role === "admin" ? "管理员" : role === "teacher" ? "教师" : null;
 
   return (
-    <div className="home-hero relative flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: "calc(100vh - var(--ws-header-height))" }}>
+    <div className="home-page-wrapper home-hero relative flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: "calc(100vh - var(--ws-header-height))" }}>
       {/* Decorative blobs */}
       <div className="home-hero-blob home-hero-blob-1" />
       <div className="home-hero-blob home-hero-blob-2" />
