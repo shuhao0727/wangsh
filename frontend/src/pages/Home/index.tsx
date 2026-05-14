@@ -113,16 +113,19 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* ═══ External tools ═══ */}
-        <div className="flex items-center justify-center gap-5 text-sm text-white/45">
+        <div className="flex items-center justify-center gap-6 text-sm">
           {externalLinks.map((link, i) => (
             <a
               key={i}
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-white/45 hover:text-white/75 transition-colors no-underline"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full no-underline transition-all"
+              style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.16)"; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
             >
-              <link.icon className="h-3.5 w-3.5" style={{ color: link.color }} />
+              <link.icon className="h-4 w-4" style={{ color: link.color }} />
               {link.title}
             </a>
           ))}
