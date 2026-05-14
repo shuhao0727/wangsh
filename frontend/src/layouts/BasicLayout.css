@@ -236,3 +236,32 @@
   }
 }
 
+/* ═══ Home page: auto-hide nav bar ═══ */
+.basic-layout.home-page .nav-trigger {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 40px;
+  z-index: 99;
+}
+
+.basic-layout.home-page .top-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  transform: translateY(-100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.basic-layout.home-page .nav-trigger:hover + .top-header,
+.basic-layout.home-page .top-header:hover {
+  transform: translateY(0);
+}
+
+.basic-layout.home-page .top-header::after {
+  display: none;
+}
+

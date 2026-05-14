@@ -40,7 +40,6 @@ import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
 import { useDarkMode } from "@hooks/useDarkMode";
-import { Breadcrumbs } from "@/components/Common/Breadcrumbs";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 
 type AdminMenuItem = {
@@ -142,20 +141,33 @@ const AdminLayout: React.FC = () => {
       .filter((item): item is AdminMenuItem => item !== null);
   }, [menuWhitelist]);
 
-  const flatItems = useMemo(() => {
-    const result: AdminMenuItem[] = [];
-    visibleMenuItems.forEach((item) => {
-      if (item.children) result.push(...item.children);
-      else result.push(item);
-    });
-    return result;
-  }, [visibleMenuItems]);
-
-  const currentTitle =
-    flatItems.find((item) => item.key === path)?.label || "管理后台";
-
   const ROLE_LABELS: Record<string, string> = { super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生用户" };
   const roleLabel = ROLE_LABELS[auth.user?.role_code || ""] || "访客";
+
+  const renderUserDropdownItems = () => (
+    <>
+      <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
+        <User className="mr-2 h-4 w-4" />
+        管理员资料
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => window.location.href = "/login"}>
+        <Home className="mr-2 h-4 w-4" />
+        返回首页
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        className="text-destructive"
+        onClick={async () => {
+          await auth.logout();
+          showMessage.success("已退出登录");
+          window.location.href = "/login";
+        }}
+      >
+        <LogOut className="mr-2 h-4 w-4" />
+        退出登录
+      </DropdownMenuItem>
+    </>
+  );
 
   const sidebarExpandedWidth = "var(--ws-sidebar-width)";
   const sidebarCollapsedWidth = "var(--ws-sidebar-collapsed-width)";
@@ -282,26 +294,69 @@ const AdminLayout: React.FC = () => {
 
         <div className="absolute bottom-0 left-0 right-0 border-t border-border-secondary px-3 py-2.5">
           {!collapsed ? (
-            <div className="mb-2 flex items-center gap-2">
-              <Avatar className="h-7 w-7 shrink-0 bg-primary/10">
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <User className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium text-text-base">
-                  {auth.user?.full_name || auth.user?.username || "管理员"}
-                </div>
-                <div className="truncate text-xs text-text-tertiary">{roleLabel}</div>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-[var(--ws-color-hover-bg)] appearance-none border-0 bg-transparent cursor-pointer">
+                    <Avatar className="h-7 w-7 shrink-0 bg-primary/10">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-medium text-text-base">
+                        {auth.user?.full_name || auth.user?.username || "管理员"}
+                      </div>
+                      <div className="truncate text-xs text-text-tertiary">{roleLabel}</div>
+                    </div>
+                    <ChevronDown className="h-3 w-3 shrink-0 text-text-tertiary" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" sideOffset={8}>
+                  {renderUserDropdownItems()}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="mb-2 flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={toggleDark}
+                  aria-label="切换暗色模式"
+                  title={isDark ? "切换亮色模式" : "切换暗色模式"}
+                >
+                  {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                </Button>
+                {version ? (
+                  <span className="text-xs text-text-tertiary">v{version}</span>
+                ) : null}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="mb-2 flex justify-center">
-              <Avatar className="h-7 w-7 bg-primary/10">
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <User className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
+            <div className="mb-2 flex flex-col items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="appearance-none border-0 bg-transparent cursor-pointer">
+                    <Avatar className="h-7 w-7 bg-primary/10">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" sideOffset={8}>
+                  {renderUserDropdownItems()}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={toggleDark}
+                aria-label="切换暗色模式"
+              >
+                {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              </Button>
             </div>
           )}
           <Button
@@ -320,91 +375,23 @@ const AdminLayout: React.FC = () => {
         className="flex h-full min-h-0 flex-col transition-[margin-left] duration-200 ease-out motion-reduce:transition-none"
         style={{ marginLeft: contentMarginLeft }}
       >
-        <header
-          className="sticky top-0 z-[var(--ws-z-sticky)] flex items-center justify-between border-b border-border-secondary bg-surface px-4 md:px-6"
-          style={{ height: "var(--ws-header-height)" }}
-        >
-          <div className="flex items-center gap-3">
-            {isMobile ? (
-              <Button variant="ghost" size="icon" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
-                <Menu className="h-4 w-4" />
-              </Button>
-            ) : null}
-            <span className="font-semibold text-text-base" style={{ fontSize: "var(--ws-text-nav)" }}>
-              {currentTitle}
-            </span>
-            {version ? (
-              <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs text-primary">
-                v{version}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleDark}
-              aria-label="切换暗色模式"
-              title={isDark ? "切换亮色模式" : "切换暗色模式"}
-            >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        {isMobile && (
+          <header
+            className="sticky top-0 z-[var(--ws-z-sticky)] flex items-center border-b border-border-secondary bg-surface px-4"
+            style={{ height: "var(--ws-header-height)" }}
+          >
+            <Button variant="ghost" size="icon" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
+              <Menu className="h-4 w-4" />
             </Button>
-            {auth.isLoggedIn() && auth.isStaff() ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="admin-user-menu appearance-none border-0 bg-transparent flex items-center gap-2 rounded-lg px-2 py-1 text-text-base"
-                  >
-                    <Avatar className="h-7 w-7 shrink-0 bg-primary/10">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        <User className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden text-sm font-medium sm:inline">
-                      {auth.user?.full_name || auth.user?.username || "管理员"}
-                    </span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8}>
-                  <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
-                    <User className="mr-2 h-4 w-4" />
-                    管理员资料
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => window.location.href = "/login"}>
-                    <Home className="mr-2 h-4 w-4" />
-                    返回首页
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={async () => {
-	                      await auth.logout();
-	                      showMessage.success("已退出登录");
-	                      window.location.href = "/login";
-	                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    退出登录
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button size="sm" onClick={() => navigate("/login")}>
-                管理员登录
-              </Button>
-            )}
-          </div>
-        </header>
+          </header>
+        )}
 
         <main
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          style={{ height: "calc(100dvh - var(--ws-header-height))" }}
+          style={{ height: isMobile ? "calc(100dvh - var(--ws-header-height))" : "100%" }}
         >
           {auth.isLoggedIn() && auth.isStaff() ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <Breadcrumbs />
               <PageTransitionShell variant="fade">
                 <Outlet key={location.pathname} />
               </PageTransitionShell>

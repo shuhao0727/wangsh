@@ -146,8 +146,8 @@
   --ws-shadow-floating: 0 6px 16px rgba(15, 23, 42, 0.22);
 
   /* 侧边栏 */
-  --ws-sidebar-width: 236px;
-  --ws-sidebar-collapsed-width: 84px;
+  --ws-sidebar-width: 216px;
+  --ws-sidebar-collapsed-width: 72px;
 
   /* 滚动条 */
   --ws-color-scrollbar: rgba(0, 0, 0, 0.08);
@@ -925,12 +925,33 @@ html.dark {
 .home-hero-blob-1 { width: 500px; height: 500px; top: -200px; right: -100px; background: rgba(255,255,255,0.08); }
 .home-hero-blob-2 { width: 400px; height: 400px; bottom: -100px; left: -100px; background: rgba(124,58,237,0.15); }
 .home-hero-blob-3 { width: 300px; height: 300px; top: 40%; left: 50%; background: rgba(255,255,255,0.05); }
-.home-hero-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  height: 48px; padding: 0 28px; border-radius: 12px; font-size: 15px; font-weight: 600;
-  border: none; cursor: pointer; transition: all 0.2s;
+
+/* Module pills */
+.home-hero-module-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px; border-radius: 9999px;
+  font-size: 14px; font-weight: 500; white-space: nowrap;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  border: none; cursor: pointer;
+  transition: all 0.2s;
 }
-.home-hero-btn-primary { background: #fff; color: #0D9488; }
-.home-hero-btn-primary:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
-.home-hero-btn-secondary { background: rgba(255,255,255,0.15); color: #fff; backdrop-filter: blur(8px); }
-.home-hero-btn-secondary:hover { background: rgba(255,255,255,0.25); transform: translateY(-1px); }
+.home-hero-module-pill:hover {
+  background: rgba(255,255,255,0.2); color: #fff;
+  transform: translateY(-1px);
+}
+
+/* Tool links — larger glass pills for Dify, NAS etc. */
+.home-hero-tool-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px; border-radius: 9999px;
+  font-size: 15px; font-weight: 500;
+  text-decoration: none;
+  background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s;
+}
+.home-hero-tool-link:hover {
+  background: rgba(255,255,255,0.16); color: #fff;
+  transform: translateY(-1px);
+}

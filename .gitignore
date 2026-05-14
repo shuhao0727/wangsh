@@ -340,3 +340,4 @@ docker-compose.local.yml
 
 # ==================== 个人笔记/说明 ====================
 注意.txt
+frontend/src/.uimax-reviews.json

@@ -70,6 +70,7 @@ const BasicLayout: React.FC = () => {
   const authExpiredBannerReason = authError || getAuthExpiredReason();
 
   const isFullHeight = FULL_HEIGHT_PATHS.some((re) => re.test(location.pathname));
+  const isHomePage = /^\/home(\/|$)/.test(location.pathname);
 
   useEffect(() => {
     logger.debug("BasicLayout - 认证状态:", {
@@ -113,7 +114,9 @@ const BasicLayout: React.FC = () => {
 
 
   return (
-    <div className="basic-layout">
+    <div className={cn("basic-layout", isHomePage && "home-page")}>
+      {/* Home page nav hover trigger */}
+      {isHomePage && <div className="nav-trigger" />}
       {/* 顶部导航栏 */}
       <header className="top-header">
         <div className="top-header-inner">
@@ -224,8 +227,8 @@ const BasicLayout: React.FC = () => {
         style={isFullHeight ? {
           paddingTop: 0,
           paddingBottom: 0,
-          paddingLeft: "var(--ws-space-3)",
-          paddingRight: "var(--ws-space-3)",
+          paddingLeft: isHomePage ? 0 : "var(--ws-space-3)",
+          paddingRight: isHomePage ? 0 : "var(--ws-space-3)",
           margin: 0,
           flex: 1,
           minHeight: 0,
