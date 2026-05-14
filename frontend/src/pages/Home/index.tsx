@@ -92,18 +92,6 @@ const HomePage: React.FC = () => {
           </p>
         )}
 
-        {/* CTA buttons */}
-        <div className="flex items-center justify-center gap-4 mb-12">
-          {!auth.isLoggedIn() ? (
-            <button onClick={() => navigate("/login")} className="home-hero-btn home-hero-btn-primary">开始探索</button>
-          ) : (
-            <button onClick={() => navigate("/ai-agents")} className="home-hero-btn home-hero-btn-primary">开始学习</button>
-          )}
-          {auth.isStaff() && (
-            <button onClick={() => navigate("/admin/dashboard")} className="home-hero-btn home-hero-btn-secondary">管理后台</button>
-          )}
-        </div>
-
         {/* ═══ Module pills ═══ */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
           {visibleModules.map((mod) => {
