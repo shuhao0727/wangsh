@@ -236,13 +236,3 @@
   }
 }
 
-/* Home page — transparent nav blends with hero gradient */
-.basic-layout:has(.home-page-wrapper) .top-header {
-  background: transparent;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.basic-layout:has(.home-page-wrapper) .nav-item { color: rgba(255,255,255,0.7); }
-.basic-layout:has(.home-page-wrapper) .nav-item-active { color: #fff; }
-.basic-layout:has(.home-page-wrapper) .logo-text { color: #fff; }
-.basic-layout:has(.home-page-wrapper) .top-header button { color: rgba(255,255,255,0.7); }
