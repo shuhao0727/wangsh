@@ -78,24 +78,56 @@ pytest -q tests/group_discussion
 
 按改动范围选择最小可靠验证。前端样式和 TS 改动至少运行 `npm run type-check`。
 
+## 设计系统
+
+WangSh 使用 Tech Cyan + Bento Grids 设计风格。所有颜色通过 `--ws-*` CSS 变量三层架构管理：
+
+```
+CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui 别名
+```
+
+### 关键文档
+- `frontend/src/styles/COLORS.md` — 色彩语义规范
+- `frontend/src/styles/ROLES.md` — 角色权限矩阵
+
+### 核心色彩
+| Token | 值 | 用途 |
+|-------|-----|------|
+| `--ws-color-primary` | `#0D9488` (Teal) | 按钮、链接、主色 |
+| `--ws-color-accent` | `#7C3AED` (Violet) | 强调、焦点环 |
+| `--ws-color-bg` | `#F0FDFA` (Mint) | 页面背景 |
+| `--ws-color-primary-muted` | `#CCFBF1` | 柔色背景 |
+
+### 禁止事项
+- ❌ 硬编码色值（`#xxx`、`bg-sky-500`）
+- ❌ 使用不存在于 `index.css` 的 CSS 变量
+- ✅ 始终使用 `var(--ws-color-*)` 或 Tailwind token
+
 ## 前端约定
 
-- 使用项目已有 UI 组件，优先使用 `frontend/src/components/ui` 和 `frontend/src/components/Admin`。
+- 使用项目已有 UI 组件，优先使用 `frontend/src/components/ui`（shadcn/ui）和 `frontend/src/components/Admin`。
 - Admin 页面优先使用 `AdminPage`、`AdminTablePanel`、`AdminFilterBar`、`DataTable`、`DataTablePagination`。
 - 数据请求优先走 `frontend/src/services` 和 `frontend/src/hooks/queries` 中已有模式。
 - TanStack Query 必须使用 `queryKeys`，不要新增散落的字符串 query key。
 - Toast 优先使用 `showMessage`。
 - 表格列宽、分页、空状态优先复用 `frontend/src/components/ui/data-table.tsx` 和 `frontend/src/constants/tableDefaults.ts`。
-- 深浅主题都必须考虑，颜色优先使用主题 token：
-  - `text-text-base`
-  - `text-text-secondary`
-  - `text-text-tertiary`
-  - `bg-surface`
-  - `bg-surface-2`
-  - `border-border`
-  - `border-border-secondary`
-  - `text-primary`
-- 不要在 ECharts/SVG 中使用不存在的颜色变量。项目文本 CSS 变量是 `--ws-color-text`、`--ws-color-text-secondary`、`--ws-color-text-tertiary`。
+- 深浅主题都必须考虑，颜色优先使用 Tailwind token（映射到 `--ws-*` 变量）：
+  - `text-primary` / `bg-primary` / `bg-primary-soft`
+  - `text-text-base` / `text-text-secondary` / `text-text-tertiary`
+  - `bg-surface` / `bg-surface-2`
+  - `border-border` / `border-border-secondary`
+  - `text-accent` / `bg-[var(--ws-color-primary-muted)]`
+- ECharts/SVG/Canvas 使用 `var(--ws-color-*)` 变量，确保深色模式可读。
+
+## 登录系统
+
+统一登录：所有角色（super_admin/admin/teacher/student）使用 **姓名 + 学号** 登录。
+
+- 姓名 = full_name，学号 = student_id
+- 向后兼容：有 `hashed_password` 的账号也可用密码登录
+- Guest 模式：未登录可浏览，右上角显示"访客模式"
+- 登录页：分栏布局 + 4 个动画角色（Tech Cyan 配色），眼睛跟随鼠标
+- 登录后跳转：teacher → 课堂互动，admin → Dashboard，student → 首页
 - 不要随意新增 CSS 文件。确有必要时，优先确认现有 Tailwind token 和全局样式无法满足。
 - 避免破坏懒加载和重型模块拆分，尤其是 Monaco、Graphviz、Typst、PDF、Xterm、PythonLab 相关模块。
 - `body` 可能由全局布局控制滚动，页面滚动应按现有 Admin/Layout 模式处理。
