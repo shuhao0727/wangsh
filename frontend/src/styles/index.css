@@ -908,3 +908,67 @@ html.dark {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ═══ Home Page Hero ═══ */
+.home-hero {
+  background: linear-gradient(160deg, #0D9488 0%, #14B8A6 40%, #7C3AED 100%);
+}
+.home-hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.home-hero-blob {
+  position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none;
+}
+.home-hero-blob-1 { width: 500px; height: 500px; top: -200px; right: -100px; background: rgba(255,255,255,0.08); }
+.home-hero-blob-2 { width: 400px; height: 400px; bottom: -100px; left: -100px; background: rgba(124,58,237,0.15); }
+.home-hero-blob-3 { width: 300px; height: 300px; top: 40%; left: 50%; background: rgba(255,255,255,0.05); }
+.home-hero-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 48px; padding: 0 28px; border-radius: 12px; font-size: 15px; font-weight: 600;
+  border: none; cursor: pointer; transition: all 0.2s;
+}
+.home-hero-btn-primary { background: #fff; color: #0D9488; }
+.home-hero-btn-primary:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+.home-hero-btn-secondary { background: rgba(255,255,255,0.15); color: #fff; backdrop-filter: blur(8px); }
+.home-hero-btn-secondary:hover { background: rgba(255,255,255,0.25); transform: translateY(-1px); }
+
+/* ═══ Module Cards ═══ */
+.home-card {
+  position: relative; overflow: hidden;
+  background: var(--ws-color-surface); border: 1px solid var(--ws-color-border-secondary);
+  border-radius: 16px; padding: 24px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  cursor: pointer;
+}
+.home-card:hover {
+  border-color: var(--ws-color-accent);
+  box-shadow: 0 8px 30px rgba(124,58,237,0.12);
+  transform: translateY(-2px);
+}
+.home-card-accent {
+  position: absolute; top: 0; left: 0; right: 0; height: 4px; opacity: 0.8;
+}
+.home-card-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ═══ Tool Cards ═══ */
+.home-tool-card {
+  position: relative; overflow: hidden;
+  background: var(--ws-color-surface); border: 1px solid var(--ws-color-border-secondary);
+  border-radius: 14px; padding: 18px 22px; text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.home-tool-card:hover {
+  border-color: var(--ws-color-accent);
+  box-shadow: 0 4px 16px rgba(124,58,237,0.1);
+  transform: translateY(-1px);
+}
+.home-tool-strip {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 4px; opacity: 0.5;
+}

@@ -1,57 +1,48 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Rocket, BookOpen, Laptop, LayoutGrid, FileText,
-  Database, ArrowRight, User,
+  Database, ArrowRight, User, ChevronDown,
 } from "lucide-react";
 import { config } from "@services";
-import useAppMeta from "@hooks/useAppMeta";
 import useAuth from "@hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
 
-// 动态颜色配置（保留 inline style，因为颜色是动态的）
-const moduleColors: Record<string, { icon: string; bg: string; ring: string }> = {
-  "ai-agents":         { icon: "var(--ws-color-primary)", bg: "color-mix(in srgb, var(--ws-color-primary) 8%, transparent)", ring: "color-mix(in srgb, var(--ws-color-primary) 22%, transparent)" },
-  "informatics":       { icon: "var(--ws-color-secondary)", bg: "color-mix(in srgb, var(--ws-color-secondary) 8%, transparent)", ring: "color-mix(in srgb, var(--ws-color-secondary) 22%, transparent)" },
-  "it-technology":     { icon: "var(--ws-color-warning)", bg: "color-mix(in srgb, var(--ws-color-warning) 8%, transparent)", ring: "color-mix(in srgb, var(--ws-color-warning) 22%, transparent)" },
-  "personal-programs": { icon: "var(--ws-color-success)", bg: "color-mix(in srgb, var(--ws-color-success) 8%, transparent)", ring: "color-mix(in srgb, var(--ws-color-success) 22%, transparent)" },
-  "articles":          { icon: "var(--ws-color-accent)", bg: "color-mix(in srgb, var(--ws-color-accent) 8%, transparent)", ring: "color-mix(in srgb, var(--ws-color-accent) 22%, transparent)" },
+const MODULE_COLORS: Record<string, { accent: string; bg: string; ring: string }> = {
+  "ai-agents":         { accent: "var(--ws-color-primary)", bg: "color-mix(in srgb, var(--ws-color-primary) 12%, transparent)", ring: "color-mix(in srgb, var(--ws-color-primary) 25%, transparent)" },
+  "informatics":       { accent: "var(--ws-color-purple)",  bg: "color-mix(in srgb, var(--ws-color-purple) 12%, transparent)",  ring: "color-mix(in srgb, var(--ws-color-purple) 25%, transparent)" },
+  "it-technology":     { accent: "var(--ws-color-info)",    bg: "color-mix(in srgb, var(--ws-color-info) 12%, transparent)",    ring: "color-mix(in srgb, var(--ws-color-info) 25%, transparent)" },
+  "personal-programs": { accent: "var(--ws-color-success)", bg: "color-mix(in srgb, var(--ws-color-success) 12%, transparent)", ring: "color-mix(in srgb, var(--ws-color-success) 25%, transparent)" },
+  "articles":          { accent: "var(--ws-color-warning)", bg: "color-mix(in srgb, var(--ws-color-warning) 12%, transparent)", ring: "color-mix(in srgb, var(--ws-color-warning) 25%, transparent)" },
 };
 
-const platformModules = [
-  { id: "ai-agents",         title: "AI 智能体",   description: "智能对话与文档分析",   icon: <Rocket className="h-5 w-5" />,     path: "/ai-agents" },
-  { id: "informatics",       title: "信息学竞赛", description: "笔记、题库与竞赛指导", icon: <BookOpen className="h-5 w-5" />,   path: "/informatics" },
-  { id: "it-technology",     title: "信息技术",   description: "IT 课程与实践工具",   icon: <Laptop className="h-5 w-5" />,     path: "/it-technology" },
-  { id: "personal-programs", title: "个人项目",   description: "程序展示与项目管理",   icon: <LayoutGrid className="h-5 w-5" />, path: "/personal-programs" },
-  { id: "articles",          title: "文章",       description: "技术文章与知识分享",   icon: <FileText className="h-5 w-5" />,   path: "/articles" },
+const MODULES = [
+  { id: "ai-agents", title: "AI 智能体", desc: "智能对话 · 文档分析 · 知识检索", icon: Rocket, path: "/ai-agents", wide: true },
+  { id: "informatics", title: "信息学竞赛", desc: "笔记管理 · 题库练习 · GitHub 同步", icon: BookOpen, path: "/informatics", wide: false },
+  { id: "it-technology", title: "信息技术", desc: "Python 编程 · ML 实验 · Agent 开发", icon: Laptop, path: "/it-technology", wide: false },
+  { id: "personal-programs", title: "个人项目", desc: "程序展示 · 项目管理", icon: LayoutGrid, path: "/personal-programs", wide: false },
+  { id: "articles", title: "文章", desc: "技术分享 · 知识沉淀", icon: FileText, path: "/articles", wide: true },
 ];
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { version, envLabel } = useAppMeta();
   const auth = useAuth();
-  const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
+  const [navVisibleMap, setNavVisibleMap] = React.useState<Record<string, boolean>>({});
 
   const externalLinks = [
-    { title: "Dify AI 平台", description: "AI 智能体开发与部署", url: config.difyUrl, icon: <Rocket className="h-5 w-5" />, color: "var(--ws-color-primary)", surfaceBg: "color-mix(in srgb, var(--ws-color-primary) 7%, transparent)", iconBg: "color-mix(in srgb, var(--ws-color-primary) 12%, transparent)" },
-    { title: "NAS 文件服务", description: "网络附加存储管理",   url: config.nasUrl,  icon: <Database className="h-5 w-5" />, color: "var(--ws-color-secondary)", surfaceBg: "color-mix(in srgb, var(--ws-color-secondary) 7%, transparent)", iconBg: "color-mix(in srgb, var(--ws-color-secondary) 12%, transparent)" },
+    { title: "Dify AI 平台", desc: "AI 智能体开发与部署平台", url: config.difyUrl, icon: Rocket, color: "var(--ws-color-primary)" },
+    { title: "NAS 文件服务", desc: "网络附加存储管理", url: config.nasUrl, icon: Database, color: "var(--ws-color-info)" },
   ].filter((l) => l.url);
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
-      const pairs = await Promise.all(
-        NAV_VISIBILITY_ITEMS.map(async (it) => {
-          try {
-            const res = await featureFlagsApi.getPublic(it.flagKey);
-            return [it.path, res?.value?.enabled !== false] as const;
-          } catch {
-            return [it.path, true] as const;
-          }
-        }),
-      );
+      const pairs = await Promise.all(NAV_VISIBILITY_ITEMS.map(async (it) => {
+        try { const res = await featureFlagsApi.getPublic(it.flagKey); return [it.path, res?.value?.enabled !== false] as const; }
+        catch { return [it.path, true] as const; }
+      }));
       if (!mounted) return;
       const next: Record<string, boolean> = {};
       for (const [path, visible] of pairs) next[path] = visible;
@@ -61,133 +52,150 @@ const HomePage: React.FC = () => {
   }, []);
 
   const visibleModules = useMemo(() => {
-    if (Object.keys(navVisibleMap).length === 0) return platformModules;
-    return platformModules.filter((m) => {
+    if (Object.keys(navVisibleMap).length === 0) return MODULES;
+    return MODULES.filter((m) => {
       const item = NAV_VISIBILITY_ITEMS.find((n) => n.id === m.id);
-      if (!item) return true;
-      return navVisibleMap[item.path] !== false;
+      return !item || navVisibleMap[item.path] !== false;
     });
   }, [navVisibleMap]);
 
-  const isLoggedIn = auth.isLoggedIn();
-  const displayName = auth.getDisplayName();
-  const roleCode = auth.user?.role_code;
-  const roleLabel =
-    roleCode === "super_admin" ? "超级管理员" :
-    roleCode === "admin" ? "管理员" :
-    roleCode === "student" ? "学生" : null;
   const greeting = (() => {
     const h = new Date().getHours();
-    if (h < 6) return "夜深了";
+    if (h < 6) return "夜深了，注意休息";
     if (h < 11) return "早上好";
     if (h < 14) return "中午好";
     if (h < 18) return "下午好";
     return "晚上好";
   })();
 
+  const role = auth.user?.role_code;
+  const roleLabel = role === "super_admin" ? "超级管理员" : role === "admin" ? "管理员" : role === "teacher" ? "教师" : null;
+
   return (
-    <div className="home-page w-full flex-1 flex flex-col overflow-hidden bg-surface">
-      <div
-        className="flex-1 min-h-0 mx-auto w-full px-4 md:px-6 py-4 md:py-5 flex flex-col gap-0 overflow-y-auto"
-        style={{ maxWidth: "var(--ws-page-max-width)" }}
-      >
-        {/* ─── 欢迎条 ─── */}
-        <div className="home-welcome-strip rounded-xl px-5 py-5 md:px-7 md:py-7 mb-[var(--ws-space-4)]">
-          {isLoggedIn ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3 min-w-0 sm:items-center">
-                <div className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl bg-primary/12 text-primary">
-                  <User className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[1.25rem] md:text-[1.375rem] font-bold tracking-tight text-text-base leading-tight sm:truncate">
-                    {greeting}，{displayName || "同学"}
-                    {roleLabel && <Badge variant="info" className="ml-2 text-xs align-middle">{roleLabel}</Badge>}
-                  </div>
-                  <div className="text-sm text-text-secondary mt-1.5">常用模块和外部工具都集中在这里</div>
-                </div>
-              </div>
-              {auth.isStaff() && (
-                <button
-                  onClick={() => navigate("/admin/dashboard")}
-                  className="appearance-none flex-shrink-0 flex items-center justify-center gap-1.5 rounded-lg border-0 px-3.5 py-2 text-sm font-medium text-primary cursor-pointer transition-all admin-btn-hover"
-                >
-                  <User className="h-4 w-4" /> 管理后台
-                </button>
-              )}
+    <div className="flex-1 overflow-y-auto">
+      {/* ═══ Hero ═══ */}
+      <section className="home-hero relative flex items-center justify-center overflow-hidden" style={{ minHeight: "calc(100vh - var(--ws-header-height))" }}>
+        {/* Decorative blobs */}
+        <div className="home-hero-blob home-hero-blob-1" />
+        <div className="home-hero-blob home-hero-blob-2" />
+        <div className="home-hero-blob home-hero-blob-3" />
+
+        <div className="relative z-10 text-center px-6 max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-white/10 backdrop-blur text-white/80 text-sm">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            探索 · 学习 · 创造
+          </div>
+
+          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight leading-tight">
+            WangSh <span className="text-white/60">学习平台</span>
+          </h1>
+
+          {auth.isLoggedIn() ? (
+            <div className="text-white/70 text-lg mb-8">
+              {greeting}，{auth.getDisplayName() || "同学"}
+              {roleLabel && <Badge variant="outline" className="ml-2 text-white/80 border-white/30">{roleLabel}</Badge>}
             </div>
           ) : (
-            <div>
-              <div className="text-[1.375rem] md:text-[1.625rem] font-bold tracking-tight text-text-base">WangSh 平台</div>
-              <div className="text-sm text-text-secondary mt-2">课程、训练与工具入口 — 探索学习资源，管理个人项目</div>
-            </div>
+            <p className="text-white/60 text-lg mb-8 max-w-xl mx-auto leading-relaxed">
+              课程、训练与工具入口 — 从 AI 智能体到 Python 编程，一站式学习平台
+            </p>
           )}
+
+          <div className="flex items-center justify-center gap-4">
+            {!auth.isLoggedIn() ? (
+              <button onClick={() => navigate("/login")} className="home-hero-btn home-hero-btn-primary">
+                开始探索
+              </button>
+            ) : (
+              <button onClick={() => navigate("/ai-agents")} className="home-hero-btn home-hero-btn-primary">
+                开始学习
+              </button>
+            )}
+            {auth.isStaff() && (
+              <button onClick={() => navigate("/admin/dashboard")} className="home-hero-btn home-hero-btn-secondary">
+                管理后台
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* ─── 平台模块 ─── */}
-        <section className="pb-[var(--ws-space-3)] mb-[var(--ws-space-3)]" style={{ borderBottom: "1px solid var(--ws-color-border-secondary)" }}>
-          <h2 className="text-sm font-semibold text-text-secondary mb-[var(--ws-space-3)] tracking-wide uppercase opacity-70">进入模块</h2>
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 animate-bounce">
+          <ChevronDown className="h-6 w-6" />
+        </div>
+      </section>
+
+      {/* ═══ Modules ═══ */}
+      <section className="py-16 md:py-24 px-4 md:px-8" style={{ background: "var(--ws-color-bg)" }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold tracking-tight mb-3">探索模块</h2>
+            <p className="text-text-secondary">选择你感兴趣的领域开始学习</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {visibleModules.map((mod) => {
-              const c = moduleColors[mod.id] ?? {
-                icon: "var(--ws-color-text-secondary)",
-                bg: "color-mix(in srgb, var(--ws-color-text-secondary) 8%, transparent)",
-                ring: "color-mix(in srgb, var(--ws-color-text-secondary) 22%, transparent)",
-              };
+              const c = MODULE_COLORS[mod.id] ?? { accent: "var(--ws-color-text-secondary)", bg: "transparent", ring: "transparent" };
+              const Icon = mod.icon;
               return (
                 <button
                   key={mod.id}
                   onClick={() => navigate(mod.path)}
-                  className="appearance-none module-card relative flex h-full flex-col items-start text-left rounded-xl px-4 py-4 sm:px-5 sm:py-5 border border-[color:var(--ws-color-border-secondary)] cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  style={{ "--mc-bg": c.bg, "--mc-ring": c.ring, minHeight: 120 } as React.CSSProperties}
+                  className={`home-card group text-left ${mod.wide ? "md:col-span-2" : ""}`}
                 >
-                  <div className="module-icon flex items-center justify-center w-10 h-10 rounded-lg mb-2.5 transition-transform"
-                    style={{ background: c.bg }}>
-                    <span style={{ color: c.icon }}>{mod.icon}</span>
+                  <div className="home-card-accent" style={{ background: c.accent }} />
+                  <div className="flex gap-4 items-start">
+                    <div className="home-card-icon shrink-0" style={{ background: c.bg }}>
+                      <Icon className="h-6 w-6" style={{ color: c.accent }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-lg mb-1">{mod.title}</h3>
+                      <p className="text-sm text-text-secondary leading-relaxed">{mod.desc}</p>
+                    </div>
+                    <ArrowRight className="h-5 w-5 shrink-0 text-text-tertiary group-hover:text-[var(--ws-color-accent)] transition-all group-hover:translate-x-1" />
                   </div>
-                  <div className="text-[0.95rem] font-semibold tracking-tight text-text-base mb-1">{mod.title}</div>
-                  <div className="text-[13px] leading-6 text-text-secondary">{mod.description}</div>
-                  <ArrowRight className="module-arrow absolute top-4 right-4 h-4 w-4 transition-all" style={{ color: c.icon }} />
                 </button>
               );
             })}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* ─── 外部服务 ─── */}
-        {externalLinks.length > 0 && (
-          <section className="pb-[var(--ws-space-3)] mb-[var(--ws-space-3)]" style={{ borderBottom: "1px solid var(--ws-color-border-secondary)" }}>
-            <h2 className="text-sm font-semibold text-text-secondary mb-[var(--ws-space-3)] tracking-wide uppercase opacity-70">工具与服务</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* ═══ External Tools ═══ */}
+      {externalLinks.length > 0 && (
+        <section className="py-12 md:py-16 px-4 md:px-8" style={{ background: "var(--ws-color-surface-2)" }}>
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl font-bold tracking-tight mb-2">工具与服务</h2>
+              <p className="text-text-secondary">连接外部平台与资源</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
               {externalLinks.map((link, i) => (
                 <button
                   key={i}
                   onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
-                  className="appearance-none ext-card flex items-center gap-3.5 rounded-xl px-4 py-3.5 sm:px-5 sm:py-4 text-left border border-[color:var(--ws-color-border-secondary)] cursor-pointer w-full bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  style={{ "--ec-bg": link.surfaceBg } as React.CSSProperties}
+                  className="home-tool-card group flex items-center gap-4"
                 >
-                  <div className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0"
-                    style={{ background: link.iconBg, color: link.color }}>
-                    {link.icon}
+                  <div className="home-tool-strip" style={{ background: link.color }} />
+                  <div className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `color-mix(in srgb, ${link.color} 12%, transparent)`, color: link.color }}>
+                    <link.icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm tracking-tight text-text-base">{link.title}</div>
-                    <div className="text-[13px] mt-0.5 text-text-secondary">{link.description}</div>
+                    <div className="font-semibold text-sm">{link.title}</div>
+                    <div className="text-xs text-text-secondary mt-0.5">{link.desc}</div>
                   </div>
-                  <ArrowRight className="ext-arrow flex-shrink-0 h-4 w-4 transition-all" style={{ color: link.color }} />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-text-tertiary group-hover:text-[var(--ws-color-accent)] transition-all group-hover:translate-x-1" />
                 </button>
               ))}
             </div>
-          </section>
-        )}
+          </div>
+        </section>
+      )}
 
-        {/* ─── 底部 ─── */}
-        <div className="mt-auto pt-[var(--ws-space-3)] pb-1 text-center">
-          <span className="text-xs text-text-tertiary">
-            WangSh 平台 · v{version} · {envLabel || "本地开发"}
-          </span>
-        </div>
-      </div>
+      {/* ═══ Footer ═══ */}
+      <footer className="py-8 text-center text-xs text-text-tertiary" style={{ background: "var(--ws-color-surface)" }}>
+        WangSh 学习平台 · v1.5.12
+      </footer>
     </div>
   );
 };
