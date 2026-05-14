@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { config } from "@services";
 import useAuth from "@hooks/useAuth";
+import useAppMeta from "@hooks/useAppMeta";
 import { useNavigate } from "react-router-dom";
 
 const MODULES = [
@@ -19,6 +20,7 @@ const MODULES = [
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
+  const { version } = useAppMeta();
 
   const externalLinks = [
     { title: "Dify AI", url: config.difyUrl, icon: Rocket, color: "var(--ws-color-primary)" },
@@ -97,7 +99,7 @@ const HomePage: React.FC = () => {
               {link.title}
             </a>
           ))}
-          <span className="text-white/25 text-xs">v1.5.12</span>
+          <span className="text-white/25 text-xs">v{version}</span>
         </div>
       </div>
     </div>
