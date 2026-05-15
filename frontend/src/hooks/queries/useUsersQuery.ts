@@ -17,6 +17,14 @@ export function useUsersList(params: {
   });
 }
 
+export function useUsersStats() {
+  return useQuery({
+    queryKey: [...queryKeys.users.all, "stats"] as const,
+    queryFn: () => userApi.getUsersStats(),
+    staleTime: 60_000,
+  });
+}
+
 export function useCreateUser() {
   const queryClient = useQueryClient();
   return useMutation({

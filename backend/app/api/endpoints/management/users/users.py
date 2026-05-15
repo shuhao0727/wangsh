@@ -150,6 +150,41 @@ class UserListResponse(BaseModel):
     has_more: bool
 
 
+class UserStatsResponse(BaseModel):
+    """用户统计响应"""
+    total: int = Field(..., description="用户总数（未删除）")
+    active: int = Field(..., description="激活用户数")
+    inactive: int = Field(..., description="禁用用户数")
+    by_role: Dict[str, int] = Field(default_factory=dict, description="按角色分组计数")
+
+
+@router.get("/stats", response_model=UserStatsResponse)
+async def get_user_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """获取用户统计数据（总数、激活数、角色分布）"""
+    base = select(func.count(User.id)).where(User.is_deleted == False)
+    total_query = select(func.count(User.id)).where(User.is_deleted == False)
+    total = (await db.execute(total_query)).scalar() or 0
+    active = (await db.execute(
+        base.where(User.is_active == True)
+    )).scalar() or 0
+    inactive = (await db.execute(
+        base.where(User.is_active == False)
+    )).scalar() or 0
+
+    role_query = (
+        select(User.role_code, func.count(User.id))
+        .where(User.is_deleted == False)
+        .group_by(User.role_code)
+    )
+    role_rows = (await db.execute(role_query)).all()
+    by_role = {row.role_code: row.count for row in role_rows if row.role_code}
+
+    return UserStatsResponse(total=total, active=active, inactive=inactive, by_role=by_role)
+
+
 @router.get("/", response_model=UserListResponse)
 async def list_users(
     skip: int = Query(0, ge=0, description="跳过记录数"),

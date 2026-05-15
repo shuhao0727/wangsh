@@ -70,7 +70,7 @@ const adminMenuItems: AdminMenuItem[] = [
     icon: <Bot className="h-4 w-4" />,
     label: "智能体",
     children: [
-      { key: "/admin/ai-agents", icon: <Bot className="h-4 w-4" />, label: "AI智能体管理" },
+      { key: "/admin/ai-agents", icon: <Bot className="h-4 w-4" />, label: "AI智能体" },
       { key: "/admin/users", icon: <Users className="h-4 w-4" />, label: "用户管理" },
       { key: "/admin/agent-data", icon: <Database className="h-4 w-4" />, label: "智能体数据" },
       { key: "/admin/group-discussion", icon: <Monitor className="h-4 w-4" />, label: "小组讨论" },

@@ -186,7 +186,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
           isEmpty={!isLoading && data.length === 0}
           emptyDescription="暂无使用记录"
         >
-          <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1700px] table-fixed" />
+          <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1180px] table-fixed" />
         </AdminTablePanel>
         {total > 0 ? (
           <div className="flex-none flex justify-end border-t border-border-secondary px-4 py-3">

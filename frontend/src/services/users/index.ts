@@ -123,6 +123,21 @@ export const userApi = {
     }
   },
 
+  getUsersStats: async (config?: AxiosRequestConfig) => {
+    try {
+      const response = await api.client.get<{
+        total: number;
+        active: number;
+        inactive: number;
+        by_role: Record<string, number>;
+      }>("/users/stats", config);
+      return response.data;
+    } catch (error) {
+      logger.error("获取用户统计失败:", error);
+      throw error;
+    }
+  },
+
   /**
    * 获取用户详情（需要管理员权限）
    * @param userId 用户ID

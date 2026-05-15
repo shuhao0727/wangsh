@@ -68,7 +68,7 @@ export const getAgentDataColumns = (
   {
     title: "学生信息",
     key: "student_info",
-    width: 220,
+    width: 170,
     fixed: "left" as const,
     render: (_: unknown, record: AgentUsageData) => {
       const user = record.user;
@@ -77,7 +77,7 @@ export const getAgentDataColumns = (
       return (
         <div className="space-y-0.5">
           <div className="flex min-w-0 items-center gap-1">
-            <User className="h-4 w-4 flex-shrink-0 text-primary" />
+            <User className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
             <span
               className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
               title={user.name}
@@ -103,7 +103,7 @@ export const getAgentDataColumns = (
   {
     title: "智能体信息",
     key: "agent_info",
-    width: 260,
+    width: 200,
     render: (_: unknown, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
@@ -137,10 +137,10 @@ export const getAgentDataColumns = (
     title: "问题内容",
     dataIndex: "question",
     key: "question",
-    width: 280,
+    width: 220,
     render: (question: string) => (
       <HoverTip title={question} contentClassName="max-w-[460px] break-words">
-        <div className="max-w-[280px] truncate">
+        <div className="truncate max-w-full">
           <MessageCircle className="mr-1 inline h-4 w-4 align-text-bottom text-[var(--ws-color-success)]" />
           {question}
         </div>
@@ -151,10 +151,10 @@ export const getAgentDataColumns = (
     title: "回答摘要",
     dataIndex: "answer",
     key: "answer_summary",
-    width: 300,
+    width: 240,
     render: (answer: string) => (
       <HoverTip title={answer} contentClassName="max-w-[460px] break-words">
-        <div className="max-w-[300px] truncate text-text-secondary">
+        <div className="truncate max-w-full text-text-secondary">
           {answer}
         </div>
       </HoverTip>
@@ -164,7 +164,7 @@ export const getAgentDataColumns = (
     title: "响应时间",
     dataIndex: "response_time_ms",
     key: "response_time",
-    width: 120,
+    width: 100,
     render: (responseTime?: number) => (
       <div className="flex items-center whitespace-nowrap">
         <Clock className="mr-1 h-4 w-4 text-[var(--ws-color-warning)]" />
@@ -178,7 +178,7 @@ export const getAgentDataColumns = (
     title: "使用时间",
     dataIndex: "used_at",
     key: "used_at",
-    width: 150,
+    width: 120,
     render: (date: string) => (
       <div className="flex items-center whitespace-nowrap">
         <Calendar className="mr-1 h-4 w-4 text-primary" />
@@ -190,22 +190,9 @@ export const getAgentDataColumns = (
     defaultSortOrder: "descend" as const,
   },
   {
-    title: "会话ID",
-    dataIndex: "session_id",
-    key: "session_id",
-    width: 160,
-    render: (sessionId?: string) => (
-      <HoverTip title={sessionId} contentClassName="max-w-[460px] break-words">
-        <div className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-xs bg-surface-2">
-          {sessionId || "-"}
-        </div>
-      </HoverTip>
-    ),
-  },
-  {
     title: "操作",
     key: "action",
-    width: 80,
+    width: 60,
     fixed: "right" as const,
     render: (_: unknown, record: AgentUsageData) => (
       <HoverTip title="查看详情">

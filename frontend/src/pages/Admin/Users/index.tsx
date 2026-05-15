@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { useUsers } from "./hooks/useUsers";
+import { useUsersStats } from "@hooks/queries/useUsersQuery";
 import { getUserColumns } from "./columns";
 import UserForm from "./components/UserForm";
 import UserDetailModal from "./components/UserDetailModal";
@@ -46,9 +47,13 @@ import type { User } from "./types";
 import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import { useBreakpoint } from "@hooks/useBreakpoint";
 
 const AdminUsers: React.FC = () => {
   const { state, actions, closeForm, closeDetail } = useUsers();
+  const { data: stats } = useUsersStats();
+  const screens = useBreakpoint();
+  const compact = !screens.lg;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const {
@@ -144,6 +149,34 @@ const AdminUsers: React.FC = () => {
   return (
     <AdminPage scrollable={false}>
       <AdminFilterBar>
+        {stats && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2.5 h-9">
+              <span className="text-text-tertiary">用户</span>
+              <span className="font-semibold text-primary tabular-nums">{stats.total}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-success-soft)] px-2.5 h-9">
+              <span className="text-text-tertiary">激活</span>
+              <span className="font-semibold tabular-nums" style={{ color: "var(--ws-color-success)" }}>{stats.active}</span>
+            </span>
+            {stats.inactive > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
+                <span className="text-text-tertiary">禁用</span>
+                <span className="font-semibold text-text-base tabular-nums">{stats.inactive}</span>
+              </span>
+            )}
+            {!compact && stats.by_role && Object.entries(stats.by_role).map(([role, count]) => {
+              const label = role === "student" ? "学生" : role === "teacher" ? "教师" : role === "admin" ? "管理" : role === "super_admin" ? "超管" : role;
+              return (
+                <span key={role} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
+                  <span className="text-text-tertiary">{label}</span>
+                  <span className="font-semibold text-text-base tabular-nums">{count}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {stats && <div className="mx-1 h-6 w-px bg-border-secondary" />}
         <div className="relative w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
