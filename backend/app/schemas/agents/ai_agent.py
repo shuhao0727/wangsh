@@ -294,10 +294,18 @@ class KeywordItem(BaseModel):
     count: int
 
 
+class MainQuestionChainItem(BaseModel):
+    stage: str
+    question: str
+    reason: Optional[str] = None
+    evidence: List[str] = []
+
+
 class TaskAnalysisResponse(BaseModel):
     word_cloud: List[KeywordItem] = []
     covered: List[TaskComparisonItem] = []
     uncovered: List[TaskComparisonItem] = []
+    main_question_chain: List[MainQuestionChainItem] = []
     bloom: Dict[str, int] = {}
 
 

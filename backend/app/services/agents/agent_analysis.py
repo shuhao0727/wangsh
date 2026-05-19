@@ -69,7 +69,8 @@ async def _call_llm_analysis(
             "1. 提取任务单覆盖的核心知识点（精确匹配，不泛化）\n"
             "2. 将学生提问按主题聚类\n"
             "3. 判断每个主题是否直接对应任务单的知识点\n"
-            "4. 用 Bloom 认知分类法标注每个问题的认知层级\n\n"
+            "4. 用 Bloom 认知分类法标注每个问题的认知层级\n"
+            "5. 综合全班提问，生成一条 AI 总结的主问题链：它应体现学生认知/问题递进主线，不需要逐字来自同一个学生，但每个节点必须给出真实代表问题 evidence\n\n"
             "Bloom 认知层级说明：\n"
             "- 记忆：回忆事实、术语、基本概念（如\"for循环语法是什么\"）\n"
             "- 理解：解释、归纳、举例（如\"为什么用for而不是while\"）\n"
@@ -89,8 +90,9 @@ async def _call_llm_analysis(
             "只输出 JSON：\n"
             '{"covered":[{"topic":"主题","questions":["典型问题"],"count":次数}],'
             '"uncovered":[{"topic":"主题","questions":["代表问题1","代表问题2"],"count":次数}],'
+            '"main_question_chain":[{"stage":"阶段名","question":"AI总结出的主问题","reason":"为什么这是主线中的这一环","evidence":["真实代表问题1","真实代表问题2"]}],'
             '"bloom":{"记忆":0,"理解":0,"应用":0,"分析":0,"评价":0,"创造":0}}'
-            "\n其中 count 为该主题下所有问题的总出现次数，bloom 为各认知层级的提问总数"
+            "\n其中 count 为该主题下所有问题的总出现次数，bloom 为各认知层级的提问总数，main_question_chain 控制在 4-6 个节点"
         )
 
         if agent_type == "dify":
@@ -190,7 +192,7 @@ async def stream_task_sheet_analysis(
     yield {"event": "step_finished", "step_id": "questions", "message": "学生提问提取完成", "progress": 30}
 
     if not all_questions_raw:
-        result = {"word_cloud": [], "covered": [], "uncovered": [], "bloom": {}}
+        result = {"word_cloud": [], "covered": [], "uncovered": [], "bloom": {}, "main_question_chain": []}
         yield {
             "event": "analysis_finished",
             "message": "没有找到符合条件的学生提问",
@@ -233,6 +235,7 @@ async def stream_task_sheet_analysis(
         "result": {
             "covered": comparison.get("covered", []),
             "uncovered": comparison.get("uncovered", []),
+            "main_question_chain": comparison.get("main_question_chain", []),
         },
     }
     yield {"event": "step_finished", "step_id": "llm", "message": "任务单对比完成", "progress": 90}
@@ -241,6 +244,7 @@ async def stream_task_sheet_analysis(
         "word_cloud": word_cloud,
         "covered": comparison.get("covered", []),
         "uncovered": comparison.get("uncovered", []),
+        "main_question_chain": comparison.get("main_question_chain", []),
     }
     yield {
         "event": "analysis_finished",
@@ -297,7 +301,7 @@ async def analyze_task_sheet(
     all_questions_raw = [r.get("content", "") for r in rows]
 
     if not all_questions_raw:
-        return {"word_cloud": [], "covered": [], "uncovered": []}
+        return {"word_cloud": [], "covered": [], "uncovered": [], "main_question_chain": []}
 
     # 1. jieba word cloud
     combined = "\n".join(all_questions_raw)
@@ -326,6 +330,7 @@ async def analyze_task_sheet(
         "word_cloud": word_cloud,
         "covered": comparison.get("covered", []),
         "uncovered": comparison.get("uncovered", []),
+        "main_question_chain": comparison.get("main_question_chain", []),
         "bloom": comparison.get("bloom", {}),
     }
 

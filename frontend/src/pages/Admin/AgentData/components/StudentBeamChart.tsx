@@ -16,6 +16,7 @@ type Session = {
 
 interface Props {
   sessions: Session[];
+  height?: number;
 }
 
 const COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899", "#06B6D4", "#10B981", "#EF4444", "#8B5CF6", "#F43F5E"];
@@ -69,7 +70,7 @@ const formatTime = (value: number) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-const StudentBeamChart: React.FC<Props> = ({ sessions }) => {
+const StudentBeamChart: React.FC<Props> = ({ sessions, height = 360 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
@@ -243,10 +244,10 @@ const StudentBeamChart: React.FC<Props> = ({ sessions }) => {
   }, []);
 
   if (sessions.length === 0 || empty) {
-    return <div className="flex h-[360px] w-full items-center justify-center rounded-lg bg-surface-2 text-sm text-text-tertiary">暂无可绘制的学生提问链条</div>;
+    return <div className="flex w-full items-center justify-center rounded-lg bg-surface-2 text-sm text-text-tertiary" style={{ height }}>暂无可绘制的学生提问链条</div>;
   }
 
-  return <div ref={ref} className="h-[360px] w-full" aria-label="学生提问语义光束图" />;
+  return <div ref={ref} className="w-full" style={{ height }} aria-label="学生提问语义光束图" />;
 };
 
 export default StudentBeamChart;
