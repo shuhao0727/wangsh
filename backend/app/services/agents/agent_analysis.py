@@ -432,8 +432,8 @@ async def analyze_student_chains(
         user = user_result.scalar_one_or_none()
         resolved_user_id = int(user.id) if user else None
 
-    if resolved_user_id is None and not class_name:
-        return []
+    if resolved_user_id is None and student_id is None and not class_name:
+        pass  # allow querying all chains when no filter specified
 
     if limit_sessions <= 0:
         limit_sessions = 5

@@ -65,7 +65,7 @@ window.addEventListener("resize",function(){chart.resize()});
 </script></body></html>`;
 }
 
-const TaskAnalysisListPanel: React.FC = () => {
+const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView = "wordcloud" }) => {
   const [records, setRecords] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -164,7 +164,7 @@ const TaskAnalysisListPanel: React.FC = () => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <a href={`/task-analysis/${r.id}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`/task-analysis/${r.id}?view=${detailView}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                         <ExternalLink className="h-3 w-3" />查看
                       </a>

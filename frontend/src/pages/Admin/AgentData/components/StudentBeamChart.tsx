@@ -1,8 +1,7 @@
 /**
- * 学生光束图 — 曲线·密度亮度·缩放·中央趋向
- * X=时间 | 同时间堆叠 | 曲线连接 | 越多越亮 | dataZoom | 中央=整体趋向
+ * 学生光束图 — 时间推进 | 主题汇聚 | 学生链条
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
 
 type Message = { message_type: string; content: string; created_at: string };
@@ -15,116 +14,239 @@ type Session = {
   messages: Message[];
 };
 
-const COLORS = ["#0D9488","#7C3AED","#3B82F6","#F59E0B","#EC4899","#06B6D4","#10B981","#EF4444","#8B5CF6","#F43F5E"];
+interface Props {
+  sessions: Session[];
+}
 
-interface Props { sessions: Session[] }
+const COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899", "#06B6D4", "#10B981", "#EF4444", "#8B5CF6", "#F43F5E"];
+const STOP_WORDS = new Set(["怎么", "如何", "为什么", "什么", "可以", "这个", "那个", "一下", "请问", "老师", "就是", "还是", "如果", "没有", "问题", "请", "呢", "吗", "啊", "的", "了", "和", "与", "在", "是", "我", "要", "能"]);
+
+const normalizeText = (text: string) => text
+  .toLowerCase()
+  .replace(/[\s\p{P}\p{S}]+/gu, "")
+  .slice(0, 80);
+
+const extractTerms = (text: string) => {
+  const cleaned = text
+    .replace(/[\s\p{P}\p{S}]+/gu, " ")
+    .trim();
+  const latinTerms = cleaned.match(/[a-zA-Z][a-zA-Z0-9_+#-]{1,}/g) || [];
+  const chinese = cleaned.replace(/[a-zA-Z0-9_+#-]+/g, "").replace(/\s+/g, "");
+  const chineseTerms: string[] = [];
+  for (let size = 4; size >= 2; size -= 1) {
+    for (let i = 0; i <= chinese.length - size; i += size) {
+      const term = chinese.slice(i, i + size);
+      if (!STOP_WORDS.has(term)) chineseTerms.push(term);
+    }
+  }
+  return [...latinTerms, ...chineseTerms]
+    .map((term) => term.toLowerCase())
+    .filter((term) => term.length >= 2 && !STOP_WORDS.has(term))
+    .slice(0, 8);
+};
+
+const similarity = (a: Set<string>, b: Set<string>) => {
+  if (a.size === 0 || b.size === 0) return 0;
+  let same = 0;
+  a.forEach((term) => { if (b.has(term)) same += 1; });
+  return same / Math.min(a.size, b.size);
+};
+
+const makeTopicLabel = (content: string, terms: string[]) => {
+  if (terms.length > 0) return terms.slice(0, 3).join(" / ");
+  const normalized = normalizeText(content);
+  return normalized.slice(0, 14) || "未命名主题";
+};
+
+const escapeHtml = (value: string) => value
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;");
+
+const formatTime = (value: number) => {
+  const d = new Date(value);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 const StudentBeamChart: React.FC<Props> = ({ sessions }) => {
   const ref = useRef<HTMLDivElement>(null);
-  const cRef = useRef<echarts.ECharts | null>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
+
+  const empty = useMemo(() => sessions.every((session) => !session.messages.some((message) => message.message_type === "question")), [sessions]);
 
   useEffect(() => {
-    if (!ref.current || sessions.length === 0) return;
-    if (!cRef.current) cRef.current = echarts.init(ref.current);
+    if (!ref.current) return;
+    if (!chartRef.current) chartRef.current = echarts.init(ref.current);
 
-    // Flatten all questions
-    const allQ: Array<{ name: string; time: string; content: string }> = [];
-    const names = new Set<string>();
-    sessions.forEach((s) => {
-      const name = s.user_name || s.session_id;
-      names.add(name);
-      s.messages.filter((m) => m.message_type === "question").forEach((m) => {
-        allQ.push({ name, time: m.created_at, content: m.content.slice(0, 36) });
+    const questions = sessions.flatMap((session) => {
+      const name = session.user_name || session.session_id;
+      return session.messages
+        .filter((message) => message.message_type === "question" && message.content.trim())
+        .map((message) => ({
+          name,
+          sessionId: session.session_id,
+          className: session.class_name,
+          content: message.content.trim(),
+          time: new Date(message.created_at).getTime(),
+          createdAt: message.created_at,
+        }));
+    }).filter((question) => Number.isFinite(question.time));
+
+    if (questions.length === 0) {
+      chartRef.current.clear();
+      return;
+    }
+
+    questions.sort((a, b) => a.time - b.time);
+
+    const clusters: Array<{ label: string; terms: Set<string>; items: typeof questions }> = [];
+    questions.forEach((question) => {
+      const terms = new Set(extractTerms(question.content));
+      const normalized = normalizeText(question.content);
+      const match = clusters.find((cluster) => {
+        if (similarity(cluster.terms, terms) >= 0.45) return true;
+        const clusterLabel = normalizeText(cluster.label);
+        return normalized.includes(clusterLabel) || clusterLabel.includes(normalized.slice(0, 8));
       });
-    });
-    if (allQ.length === 0) return;
-
-    // Bucket by minute
-    const buckets: Record<string, typeof allQ> = {};
-    allQ.forEach((q) => {
-      const b = q.time.slice(0, 16);
-      if (!buckets[b]) buckets[b] = [];
-      buckets[b].push(q);
-    });
-
-    const SPACING = 0.5;
-    const times = Object.keys(buckets).sort();
-    let maxY = 0;
-    // Assign Y within each bucket with tighter spacing
-    const yMap: Record<string, number> = {};
-    times.forEach((t) => {
-      buckets[t].forEach((item, idx) => {
-        yMap[item.name + "|" + t] = idx * SPACING;
-      });
-      const bucketMaxY = (buckets[t].length - 1) * SPACING;
-      if (bucketMaxY > maxY) maxY = bucketMaxY;
-    });
-
-    const nameArr = [...names];
-    const scatterData: any[] = [];
-    const lineSeries: any[] = [];
-
-    nameArr.forEach((name, si) => {
-      const pts = allQ.filter((q) => q.name === name);
-      if (pts.length < 1) return;
-      pts.sort((a, b) => a.time.localeCompare(b.time));
-      const color = COLORS[si % COLORS.length];
-
-      pts.forEach((p) => {
-        const b = p.time.slice(0, 16);
-        const y = yMap[p.name + "|" + b] ?? 0;
-        const crowd = buckets[b]?.length || 1;
-        const alpha = 0.6 + (crowd / Math.max(maxY / SPACING + 1, 1)) * 0.4;
-        scatterData.push({ value: [p.time.slice(11, 16), y, p.name, p.content, crowd], itemStyle: { color, opacity: alpha }, name: p.name, symbolSize: 9 + Math.min(crowd, 8) * 2 });
-      });
-
-      // Curved line
-      if (pts.length >= 2) {
-        lineSeries.push({
-          type: "line",
-          data: pts.map((p) => { const b = p.time.slice(0, 16); return [p.time.slice(11, 16), yMap[p.name + "|" + b] ?? 0]; }),
-          lineStyle: { color, width: 2.5, opacity: 0.3 }, smooth: 0.4, symbol: "none", silent: true, z: 1,
-        });
+      if (match) {
+        terms.forEach((term) => match.terms.add(term));
+        match.items.push(question);
+      } else {
+        clusters.push({ label: makeTopicLabel(question.content, [...terms]), terms, items: [question] });
       }
     });
 
-    const timeLabels = times.map((t) => t.slice(11, 16));
-    const step = Math.max(1, Math.floor(timeLabels.length / 14));
+    const orderedClusters = clusters.sort((a, b) => b.items.length - a.items.length);
+    const laneMap = new Map<string, { y: number; count: number }>();
+    orderedClusters.forEach((cluster, index) => {
+      const lane = index === 0 ? 0 : Math.ceil(index / 2) * (index % 2 === 1 ? -1 : 1);
+      laneMap.set(cluster.label, { y: lane, count: cluster.items.length });
+    });
 
-    cRef.current.setOption({
+    const enriched = orderedClusters.flatMap((cluster) => cluster.items.map((item) => ({ ...item, topic: cluster.label, ...laneMap.get(cluster.label)! })));
+    const students = [...new Set(enriched.map((item) => item.name))];
+    const maxCount = Math.max(...orderedClusters.map((cluster) => cluster.items.length), 1);
+    const maxLane = Math.max(1, ...[...laneMap.values()].map((lane) => Math.abs(lane.y)));
+
+    const topicGuideSeries = orderedClusters.map((cluster) => {
+      const lane = laneMap.get(cluster.label)!;
+      return {
+        type: "line",
+        name: cluster.label,
+        data: [[questions[0].time, lane.y], [questions[questions.length - 1].time, lane.y]],
+        lineStyle: { color: lane.y === 0 ? "rgba(13,148,136,0.22)" : "rgba(148,163,184,0.16)", width: lane.count >= 3 ? 2 : 1, type: "dashed" },
+        symbol: "none",
+        silent: true,
+        z: 0,
+      };
+    });
+
+    const beamSeries = students.map((student, index) => {
+      const items = enriched.filter((item) => item.name === student).sort((a, b) => a.time - b.time);
+      return {
+        type: "line",
+        name: student,
+        data: items.map((item) => [item.time, item.y, item.topic, item.content, item.count]),
+        smooth: 0.55,
+        symbol: "none",
+        lineStyle: { color: COLORS[index % COLORS.length], width: 2.4, opacity: 0.32 },
+        emphasis: { lineStyle: { width: 4, opacity: 0.75 } },
+        z: 2,
+      };
+    });
+
+    const scatterData = enriched.map((item) => ({
+      value: [item.time, item.y, item.name, item.content, item.topic, item.count],
+      name: item.topic,
+      itemStyle: {
+        color: COLORS[students.indexOf(item.name) % COLORS.length],
+        opacity: 0.62 + (item.count / maxCount) * 0.32,
+        shadowBlur: 4 + Math.min(item.count, 8) * 2,
+        shadowColor: "rgba(13,148,136,0.28)",
+      },
+    }));
+
+    chartRef.current.setOption({
+      animationDuration: 650,
+      animationEasing: "cubicOut",
       tooltip: {
-        formatter(p: any) {
-          if (!p?.value) return "";
-          const [, , name, content, crowd] = p.value;
-          return `<b>${name}</b><br/>${content}${crowd > 1 ? `<br/><span style="color:#F59E0B">同时段 ${crowd} 人</span>` : ""}`;
+        trigger: "item",
+        confine: true,
+        formatter(param: any) {
+          const value = param?.value;
+          if (!value) return "";
+          const [time, , name, content, topic, count] = value;
+          return `<b>${escapeHtml(String(topic))}</b><br/>${escapeHtml(String(name))} · ${formatTime(time)}<br/><span style="color:#64748b">${escapeHtml(String(content))}</span><br/><span style="color:#F59E0B">同主题 ${Number(count) || 0} 条提问</span>`;
         },
       },
-      grid: { left: 6, right: 6, top: 30, bottom: 58 },
-      xAxis: { type: "category", data: timeLabels, name: "时间", nameLocation: "start", nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 10, interval: step }, axisLine: { show: false }, axisTick: { show: false } },
-      yAxis: { show: false, min: -0.3, max: maxY + 0.3 },
+      grid: { left: 16, right: 24, top: 24, bottom: 58 },
+      xAxis: {
+        type: "time",
+        axisLabel: { fontSize: 10, formatter: formatTime },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.14)" } },
+        name: "时间",
+        nameLocation: "start",
+        nameTextStyle: { fontSize: 11, color: "#94a3b8" },
+      },
+      yAxis: {
+        type: "value",
+        min: -maxLane - 0.7,
+        max: maxLane + 0.7,
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+      },
       dataZoom: [
-        { type: "slider", start: 0, end: 100, height: 20, bottom: 8, fillerColor: "rgba(13,148,136,0.1)", borderColor: "#e2e8f0", handleStyle: { color: "#0D9488" }, textStyle: { fontSize: 10 }, moveOnMouseWheel: false },
+        { type: "slider", start: 0, end: 100, height: 20, bottom: 8, fillerColor: "rgba(13,148,136,0.12)", borderColor: "#e2e8f0", handleStyle: { color: "#0D9488" }, textStyle: { fontSize: 10 }, moveOnMouseWheel: false },
         { type: "inside", zoomOnMouseWheel: true, moveOnMouseMove: true },
       ],
       series: [
-        ...lineSeries,
+        ...topicGuideSeries,
+        ...beamSeries,
         {
-          type: "scatter", data: scatterData, symbolSize: (v: any) => Math.max(10, ((v?.[4] || 1)) * 2 + 8),
-          label: { show: true, formatter(p: any) { const c = p.value?.[4] || 0; return c >= 3 ? c + "人" : ""; }, fontSize: 10, position: "right", color: "#F59E0B", fontWeight: "bold" },
-          emphasis: { scale: 1.6, label: { show: true, formatter(p: any) { return (p.value?.[2] || "") + ": " + (p.value?.[3] || ""); }, fontSize: 11 } },
-          z: 2,
+          type: "scatter",
+          data: scatterData,
+          symbolSize: (value: any) => 10 + Math.min(value?.[5] || 1, 8) * 2.4,
+          label: {
+            show: true,
+            formatter(param: any) {
+              const count = param.value?.[5] || 0;
+              return count >= 2 ? param.value?.[4] : "";
+            },
+            color: "#0f766e",
+            fontSize: 10,
+            fontWeight: 600,
+            position: "right",
+          },
+          emphasis: {
+            scale: 1.55,
+            label: { show: true, formatter: (param: any) => `${param.value?.[2] || ""}：${param.value?.[3] || ""}`, color: "#0f172a", fontSize: 11 },
+          },
+          z: 4,
         },
       ],
     }, true);
   }, [sessions]);
 
   useEffect(() => {
-    const onResize = () => cRef.current?.resize();
-    window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); cRef.current?.dispose(); cRef.current = null; };
+    const resize = () => chartRef.current?.resize();
+    window.addEventListener("resize", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      chartRef.current?.dispose();
+      chartRef.current = null;
+    };
   }, []);
 
-  return <div ref={ref} className="h-[360px] w-full" />;
+  if (sessions.length === 0 || empty) {
+    return <div className="flex h-[360px] w-full items-center justify-center rounded-lg bg-surface-2 text-sm text-text-tertiary">暂无可绘制的学生提问链条</div>;
+  }
+
+  return <div ref={ref} className="h-[360px] w-full" aria-label="学生提问语义光束图" />;
 };
 
 export default StudentBeamChart;

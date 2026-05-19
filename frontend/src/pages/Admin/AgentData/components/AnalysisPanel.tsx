@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import dayjs from "dayjs";
 import aiAgentsApi from "@services/znt/api/ai-agents-api";
 import { agentDataApi } from "@services/znt/api";
@@ -463,12 +463,16 @@ export const StudentQuestionChainsPanel: React.FC = () => {
     limit_sessions: 5,
   }));
   const [filterOptions, setFilterOptions] = useState<{ classNames: string[] }>({ classNames: [] });
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     void agentDataApi.getFilterOptions().then((res) => {
       if (res.success) setFilterOptions({ classNames: res.data.class_names || [] });
     });
   }, []);
+
+  // Auto-query on mount
+  useEffect(() => { const id = filters.agent_id; if (id) loadChains(); }, [filters.agent_id]);
 
   useEffect(() => {
     if (filters.agent_id || agentOptions.length === 0) return;
@@ -695,118 +699,28 @@ export const StudentQuestionChainsPanel: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-none">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-[170px]">
-            <div className="mb-1 text-xs text-text-tertiary">智能体</div>
-            <Select
-              value={filters.agent_id || "__empty__"}
-              onValueChange={(value) =>
-                setFilters((prev) => ({ ...prev, agent_id: value === "__empty__" ? "" : value }))
-              }
-              disabled={loadingAgents}
-            >
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder={loadingAgents ? "加载中..." : "选择智能体"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__empty__">请选择智能体</SelectItem>
-                {agentOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-[160px]">
-            <div className="mb-1 text-xs text-text-tertiary">开始时间</div>
-            <Input
-              type="date"
-              value={filters.start_at}
-              onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))}
-              className="h-9"
-            />
-          </div>
-          <div className="w-[160px]">
-            <div className="mb-1 text-xs text-text-tertiary">结束时间</div>
-            <Input
-              type="date"
-              value={filters.end_at}
-              onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))}
-              className="h-9"
-            />
-          </div>
-          <div className="w-[80px]">
-            <div className="mb-1 text-xs text-text-tertiary">最多会话</div>
-            <Input
-              type="number"
-              min={1}
-              max={20}
-              value={String(filters.limit_sessions)}
-              onChange={(e) => setFilters((prev) => ({ ...prev, limit_sessions: Number(e.target.value || 1) }))}
-              className="h-8"
-            />
-          </div>
-          <div className="w-[130px]">
-            <div className="mb-1 text-xs text-text-tertiary">班级</div>
-            <Select value={filters.class_name || "__none__"} onValueChange={(v) => setFilters((prev) => ({ ...prev, class_name: v === "__none__" ? "" : v }))}>
-              <SelectTrigger className="h-8"><SelectValue placeholder="全部班级" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">全部班级</SelectItem>
-                {filterOptions.classNames.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-[110px]">
-            <div className="mb-1 text-xs text-text-tertiary">学号</div>
-            <Input
-              placeholder="筛选学号"
-              value={filters.student_id}
-              onChange={(e) => setFilters((prev) => ({ ...prev, student_id: e.target.value }))}
-              className="h-8"
-            />
-          </div>
-          <div className="w-[110px]">
-            <div className="mb-1 text-xs text-text-tertiary">姓名</div>
-            <Input
-              placeholder="筛选姓名"
-              value={filters.student_name}
-              onChange={(e) => setFilters((prev) => ({ ...prev, student_name: e.target.value }))}
-              className="h-8"
-            />
-          </div>
-          <div className="flex gap-1.5 items-end pb-px">
-            <Button size="sm" className="h-8" onClick={loadChains} disabled={loadingChains}>
-              {loadingChains ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              查询
-            </Button>
-            <Button variant="outline" size="sm" className="h-8" onClick={exportChains} disabled={exportingChains || loadingChains}>
-              {exportingChains ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              导出
-            </Button>
-            <Button variant="default" size="sm" className="h-8" onClick={() => window.open("/task-analysis/new", "_blank")}>
-              + 开始分析
-            </Button>
-          </div>
+      {/* Search bar — matching hot tab */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="relative flex-1 max-w-[340px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+          <Input placeholder="搜索学生或问题..." value={searchText} onChange={e => setSearchText(e.target.value)} className="pl-9 h-9" />
         </div>
+        <Button variant="default" size="sm" className="h-9" onClick={() => window.open("/task-analysis/new", "_blank")}>+ 开始分析</Button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col pt-3">
-        {chains.length > 0 && (
-          <div className="flex-none rounded-lg border border-border bg-surface p-3 mb-3">
-            <StudentBeamChart sessions={chains} />
-          </div>
-        )}
-        <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
-          <AdminTablePanel
-            loading={loadingChains}
-            isEmpty={chains.length === 0}
-            emptyDescription="暂无学生提问链条数据，请先查询"
-          >
-            <DataTable table={chainsTable} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1100px]" />
-          </AdminTablePanel>
+      {/* Beam chart */}
+      {chains.length > 0 && (
+        <div className="flex-none rounded-lg border border-border bg-surface p-3 mb-3">
+          <StudentBeamChart sessions={chains} />
         </div>
+      )}
+
+      {/* Chains table */}
+      <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
+        <AdminTablePanel loading={loadingChains} isEmpty={chains.length === 0} emptyDescription="暂无学生提问链条数据，请先查询">
+          <DataTable table={chainsTable} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[1100px]" />
+        </AdminTablePanel>
+      </div>
         <div className="flex-none flex justify-end pt-2">
           <DataTablePagination
             currentPage={chainsPage}
@@ -825,6 +739,5 @@ export const StudentQuestionChainsPanel: React.FC = () => {
           />
         </div>
       </div>
-    </div>
   );
 };

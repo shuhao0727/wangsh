@@ -9,7 +9,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import StatisticsCards from "./components/StatisticsCards";
 import UsageRecordPanel from "./components/UsageRecordPanel";
-import { StudentQuestionChainsPanel } from "./components/AnalysisPanel";
 import TaskAnalysisListPanel from "./components/TaskAnalysisListPanel";
 
 import type { StatisticsData, SearchFilterParams } from "@services/znt/types";
@@ -97,7 +96,7 @@ const AdminAgentData: React.FC = () => {
             <TaskAnalysisListPanel />
           </div>
           <div style={{ display: activeTabKey === "chains" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
-            <StudentQuestionChainsPanel />
+            <TaskAnalysisListPanel detailView="beam" />
           </div>
         </Tabs>
       </div>
