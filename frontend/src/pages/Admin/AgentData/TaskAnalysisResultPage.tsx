@@ -16,7 +16,15 @@ const WC_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#06B6D4", "#EC4899", "#F59E
 
 type WordCloudItem = { word: string; count: number };
 type TopicItem = { topic: string; questions?: string[]; count: number };
-type TaskAnalysisResult = { word_cloud?: WordCloudItem[]; wordCloud?: WordCloudItem[]; covered?: TopicItem[]; uncovered?: TopicItem[] };
+type TaskAnalysisResult = {
+  word_cloud?: WordCloudItem[];
+  wordCloud?: WordCloudItem[];
+  keywords?: WordCloudItem[];
+  hot_words?: WordCloudItem[];
+  covered?: TopicItem[];
+  uncovered?: TopicItem[];
+  result?: TaskAnalysisResult;
+};
 type TaskAnalysisDetail = {
   id?: number;
   title?: string;
@@ -47,11 +55,20 @@ const escapeHtml = (value: string) => value
 const safeFilePart = (value: string) => value.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_").slice(0, 80) || "report";
 
 const normalizeWords = (detail: TaskAnalysisDetail | null): WordCloudItem[] => {
-  const raw = detail?.result?.word_cloud || detail?.result?.wordCloud || detail?.word_cloud || [];
-  return raw
+  const result = detail?.result?.result || detail?.result;
+  const raw = result?.word_cloud || result?.wordCloud || result?.keywords || result?.hot_words || detail?.word_cloud || [];
+  const words = raw
     .map((item: any) => ({ word: String(item.word || item.name || "").trim(), count: Number(item.count ?? item.value ?? 0) }))
     .filter((item) => item.word && item.count > 0)
     .sort((a, b) => b.count - a.count);
+
+  if (words.length > 0) return words;
+
+  const topicItems = normalizeTopics(result?.covered || detail?.covered).concat(normalizeTopics(result?.uncovered || detail?.uncovered));
+  return topicItems
+    .flatMap((item) => [item.topic, ...(item.questions || [])].map((word) => ({ word: word.slice(0, 18), count: Math.max(item.count, 1) })))
+    .filter((item) => item.word.trim())
+    .slice(0, 50);
 };
 
 const normalizeTopics = (value: unknown): TopicItem[] => Array.isArray(value)
@@ -152,8 +169,8 @@ const TaskAnalysisResultPage: React.FC = () => {
   const [beamSessions, setBeamSessions] = useState<any[]>([]);
 
   const wc = useMemo(() => normalizeWords(detail), [detail]);
-  const covered = useMemo(() => normalizeTopics(detail?.result?.covered || detail?.covered), [detail]);
-  const uncovered = useMemo(() => normalizeTopics(detail?.result?.uncovered || detail?.uncovered), [detail]);
+  const covered = useMemo(() => normalizeTopics((detail?.result?.result || detail?.result)?.covered || detail?.covered), [detail]);
+  const uncovered = useMemo(() => normalizeTopics((detail?.result?.result || detail?.result)?.uncovered || detail?.uncovered), [detail]);
 
   useEffect(() => {
     const id = Number.parseInt(analysisId || "", 10);
@@ -189,7 +206,7 @@ const TaskAnalysisResultPage: React.FC = () => {
       start_at: detail.start_at,
       end_at: detail.end_at,
       class_name: detail.class_name || undefined,
-      limit_sessions: 30,
+      limit_sessions: 20,
     }).then((response) => {
       if (cancelled) return;
       if (response.success) setBeamSessions(response.data || []);

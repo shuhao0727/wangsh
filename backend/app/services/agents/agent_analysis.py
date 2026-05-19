@@ -5,6 +5,7 @@
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
@@ -26,16 +27,24 @@ _STOP_WORDS = set(
 
 
 def _segment_keywords(text: str, top_n: int = 50) -> List[Dict[str, Any]]:
-    """使用 jieba 分词提取关键词"""
+    """提取关键词；优先使用 jieba，未安装时使用内置轻量分词兜底。"""
+    freq: Dict[str, int] = {}
+
     try:
         import jieba
+        words = jieba.lcut(text)
     except ImportError:
-        return []
+        latin_words = re.findall(r"[A-Za-z][A-Za-z0-9_+#-]{1,}", text)
+        chinese_text = re.sub(r"[A-Za-z0-9_+#-]+", " ", text)
+        chinese_words: List[str] = []
+        for chunk in re.findall(r"[一-鿿]{2,}", chinese_text):
+            for size in (4, 3, 2):
+                for i in range(0, max(len(chunk) - size + 1, 0)):
+                    chinese_words.append(chunk[i:i + size])
+        words = latin_words + chinese_words
 
-    words = jieba.lcut(text)
-    freq: Dict[str, int] = {}
     for w in words:
-        w = w.strip()
+        w = w.strip().lower()
         if len(w) < 2 or w in _STOP_WORDS:
             continue
         freq[w] = freq.get(w, 0) + 1
