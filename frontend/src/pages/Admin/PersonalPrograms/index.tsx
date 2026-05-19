@@ -48,11 +48,11 @@ const AdminPersonalPrograms: React.FC = () => {
 
   return (
     <AdminPage padding="var(--ws-space-4)">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <AdminAppCard
           title="校本课 (XBK)"
-          description="校本课程作业提交与处理系统，支持文件上传与自动化处理"
-          icon={<LayoutGrid className="h-5 w-5" />}
+          description="校本课程作业提交与处理系统"
+          icon={<LayoutGrid className="h-4 w-4" />}
           enabled={xbkEnabled}
           loading={loading || saving}
           onToggle={handleToggleXbk}

@@ -42,6 +42,11 @@ const AdminDashboardPage = lazy(() => import("./pages/Admin/Dashboard"));
 const AdminUsersPage = lazy(() => import("./pages/Admin/Users"));
 const AdminAIAgentsPage = lazy(() => import("./pages/Admin/AIAgents"));
 const AdminAgentDataPage = lazy(() => import("./pages/Admin/AgentData"));
+const TaskAnalysisResultPage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisResultPage"));
+const TaskAnalysisNewPage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisNewPage"));
+const LockCrackerPage = lazy(() => import("./pages/Games/LockCracker"));
+const GamesPage = lazy(() => import("./pages/Games"));
+const GameConfigPage = lazy(() => import("./pages/Games/GameConfig"));
 const AdminGroupDiscussionPage = lazy(() => import("./pages/Admin/GroupDiscussion"));
 const AdminInformaticsPage = lazy(() => import("./pages/Admin/Informatics"));
 const AdminITTechnologyPage = lazy(() => import("./pages/Admin/ITTechnology"));
@@ -114,6 +119,11 @@ function App() {
             <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsFullPage /></PageErrorBoundary>} />
+            <Route path="/task-analysis/new" element={<PageErrorBoundary pageName="task-analysis-new"><TaskAnalysisNewPage /></PageErrorBoundary>} />
+            <Route path="/task-analysis/:analysisId" element={<PageErrorBoundary pageName="task-analysis-result"><TaskAnalysisResultPage /></PageErrorBoundary>} />
+            <Route path="/games/lock-cracker" element={<PageErrorBoundary pageName="lock-cracker"><LockCrackerPage /></PageErrorBoundary>} />
+            <Route path="/games" element={<PageErrorBoundary pageName="games"><GamesPage /></PageErrorBoundary>} />
+            <Route path="/admin/games/config" element={<PageErrorBoundary pageName="game-config"><GameConfigPage /></PageErrorBoundary>} />
             <Route path="/mindmaps" element={<PageErrorBoundary pageName="mindmap-gallery"><MindmapGalleryPage /></PageErrorBoundary>} />
             <Route path="/mindmap-preview" element={<PageErrorBoundary pageName="mindmap-preview"><MindmapPreviewPage /></PageErrorBoundary>} />
 

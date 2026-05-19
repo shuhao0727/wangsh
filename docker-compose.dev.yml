@@ -64,10 +64,7 @@ services:
 
   # 后端服务 (Python FastAPI)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-      target: development
+    image: wangsh-backend:latest
     container_name: wangsh-backend
     restart: unless-stopped
     user: "0:0"
@@ -244,10 +241,8 @@ services:
 
   # 前端服务 (Vite dev server，热加载)
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-      target: development
+    image: node:20-alpine
+    working_dir: /app
     container_name: wangsh-frontend
     restart: unless-stopped
     ports:
@@ -265,6 +260,7 @@ services:
       - wangsh-network
     depends_on:
       - backend
+    command: ["sh", "-c", "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 6608"]
 
   # Caddy 服务 (仅用于生产/模拟生产，开发时可不启动)
   # 开发时直接访问 http://localhost:6608，API 通过 Vite proxy 转发

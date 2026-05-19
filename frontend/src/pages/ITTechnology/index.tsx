@@ -84,6 +84,7 @@ const APPS = [
     action: 'agents',
     available: true,
   },
+  { key: 'it_game_lock_cracker_enabled', title: '小游戏', description: '枚举法 · 密码锁破解 · 更多教学小游戏', icon: <Network className="h-5 w-5" />, color: '#F59E0B', bg: 'color-mix(in srgb, #F59E0B 8%, transparent)', ring: 'color-mix(in srgb, #F59E0B 22%, transparent)', action: 'games', available: true },
 ];
 
 const ITTechnologyPage: React.FC = () => {
@@ -98,7 +99,7 @@ const ITTechnologyPage: React.FC = () => {
   const loadFlags = async () => {
     setLoading(true); setError(null);
     try {
-      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled'];
+      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled', 'it_game_lock_cracker_enabled'];
       const results = await Promise.all(
         keys.map(key => featureFlagsApi.getPublic(key).catch(() => ({ value: { enabled: false } } as any)))
       );
@@ -119,6 +120,7 @@ const ITTechnologyPage: React.FC = () => {
         it_machine_learning_enabled: 'ml',
         it_ai_exploration_enabled: 'ai',
         it_agent_exploration_enabled: 'agents',
+it_game_lock_cracker_enabled: 'games',
       };
       const enabledLearningKeys = Object.keys(moduleMap).filter(k => newFlags[k]);
       if (enabledLearningKeys.length > 0) {
@@ -270,6 +272,8 @@ const ITTechnologyPage: React.FC = () => {
           if (app.action === 'ml') window.open('/it-technology/ml', '_blank');
           if (app.action === 'ai') window.open('/it-technology/ai', '_blank');
           if (app.action === 'agents') window.open('/it-technology/agents', '_blank');
+          if (app.action === 'lock-cracker') window.open('/games/lock-cracker', '_blank');
+          if (app.action === 'games') window.open('/games', '_self');
           if (app.action === 'mindmap') window.open('/mindmaps', '_blank');
         }}
       />

@@ -3,7 +3,7 @@ AI智能体模型定义 - 对应数据库表 znt_agents
 与数据库设计文档v3.0保持一致
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, ForeignKey, JSON
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
 
@@ -68,3 +68,20 @@ class ZntConversation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     agent = relationship("AIAgent")
+
+
+class TaskAnalysis(Base):
+    """任务分析记录表 — 保存教师的任务分析结果"""
+    __tablename__ = "task_analyses"
+    __table_args__ = {"comment": "任务分析记录表"}
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(200), nullable=False, default="未命名分析")
+    task_sheet = Column(Text, nullable=False)
+    agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True)
+    class_name = Column(String(100), nullable=True)
+    start_at = Column(DateTime(timezone=True), nullable=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
+    result = Column(JSON, nullable=False, default=dict)
+    created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -1,12 +1,31 @@
+import json
 from typing import Optional, List, Dict, Any
 
-from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
-from app.schemas.agents import HotQuestionBucket, StudentChainSession
-from app.services.agents import analyze_hot_questions, analyze_student_chains
+from app.utils.errors import safe_error_detail
+from app.models.agents import AIAgent
+from app.schemas.agents import (
+    HotQuestionBucket,
+    StudentChainSession,
+    TaskAnalysisRequest,
+    TaskAnalysisResponse,
+    TaskAnalysisSaveRequest,
+    TaskAnalysisRecord,
+)
+from app.models.agents import TaskAnalysis as TaskAnalysisModel
+from app.services.agents import (
+    analyze_hot_questions,
+    analyze_student_chains,
+    analyze_task_sheet,
+    stream_task_sheet_analysis,
+)
+from app.services.agents.providers.common import resolve_credentials
 
 router = APIRouter()
 
@@ -21,7 +40,7 @@ async def hot_questions(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     effective_end = end_at or now
     effective_start = start_at or (effective_end - timedelta(hours=1))
     return await analyze_hot_questions(
@@ -32,6 +51,215 @@ async def hot_questions(
         bucket_seconds=bucket_seconds,
         top_n=top_n,
     )
+
+
+@router.post("/analysis/task-analysis", response_model=TaskAnalysisResponse)
+async def task_analysis(
+    body: TaskAnalysisRequest,
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.now(timezone.utc)
+    effective_end = body.end_at or now
+    effective_start = body.start_at or (effective_end - timedelta(hours=1))
+
+    # Resolve credentials for the selected agent
+    result = await db.execute(
+        select(AIAgent).where(
+            AIAgent.id == body.agent_id,
+            AIAgent.is_deleted == False,
+        )
+    )
+    agent = result.scalar_one_or_none()
+    api_endpoint = ""
+    api_key = ""
+    agent_type = ""
+    agent_model = ""
+    if agent:
+        api_endpoint, api_key = resolve_credentials(agent)
+        agent_type = agent.agent_type
+        agent_model = agent.model_name or ""
+
+    return await analyze_task_sheet(
+        db,
+        agent_id=body.agent_id,
+        task_sheet=body.task_sheet,
+        start_at=effective_start,
+        end_at=effective_end,
+        class_name=body.class_name,
+        api_endpoint=api_endpoint,
+        api_key=api_key,
+        agent_type=agent_type,
+        agent_model=agent_model,
+    )
+
+
+# ── 任务分析记录的 CRUD ──
+
+@router.get("/analysis/task-analyses")
+async def list_task_analyses(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(
+        select(TaskAnalysisModel).order_by(TaskAnalysisModel.created_at.desc()).offset(skip).limit(limit)
+    )).scalars().all()
+    return [{"id": r.id, "title": r.title, "agent_id": r.agent_id, "class_name": r.class_name,
+             "created_at": r.created_at.isoformat(),
+             "uncovered_count": len((r.result or {}).get("uncovered", []))} for r in rows]
+
+def _sse(event: str, payload: Dict[str, Any]) -> bytes:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
+@router.post("/analysis/task-analyses/stream")
+async def save_task_analysis_stream(
+    body: TaskAnalysisSaveRequest,
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    async def event_generator():
+        try:
+            now = datetime.now(timezone.utc)
+            effective_end = body.end_at or now
+            effective_start = body.start_at or (effective_end - timedelta(hours=1))
+            result_data = await db.execute(
+                select(AIAgent).where(AIAgent.id == body.agent_id, AIAgent.is_deleted == False)
+            )
+            agent = result_data.scalar_one_or_none()
+            api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
+            if agent:
+                api_endpoint, api_key = resolve_credentials(agent)
+                agent_type = agent.agent_type
+                agent_model = agent.model_name or ""
+
+            analysis_result: Dict[str, Any] = {"word_cloud": [], "covered": [], "uncovered": []}
+            async for item in stream_task_sheet_analysis(
+                db,
+                agent_id=body.agent_id,
+                task_sheet=body.task_sheet,
+                start_at=effective_start,
+                end_at=effective_end,
+                class_name=body.class_name,
+                api_endpoint=api_endpoint,
+                api_key=api_key,
+                agent_type=agent_type,
+                agent_model=agent_model,
+            ):
+                event = str(item.pop("event", "progress"))
+                if event == "analysis_finished":
+                    analysis_result = item.get("result") or analysis_result
+                    item["message"] = "分析完成，正在保存结果"
+                    item["progress"] = 96
+                    yield _sse(event, item)
+                    break
+                yield _sse(event, item)
+
+            record = TaskAnalysisModel(
+                title=body.title,
+                task_sheet=body.task_sheet,
+                agent_id=body.agent_id,
+                class_name=body.class_name,
+                start_at=effective_start,
+                end_at=effective_end,
+                result=analysis_result,
+                created_by=current_user.get("id"),
+            )
+            db.add(record)
+            await db.commit()
+            await db.refresh(record)
+            yield _sse(
+                "saved",
+                {
+                    "message": "分析完成，已保存结果",
+                    "progress": 100,
+                    "id": record.id,
+                    "result": analysis_result,
+                },
+            )
+        except Exception as exc:
+            yield _sse("error", {"message": safe_error_detail("任务分析失败", exc), "progress": 100})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/analysis/task-analyses/{analysis_id}", response_model=TaskAnalysisRecord)
+async def get_task_analysis(
+    analysis_id: int,
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    row = (await db.execute(select(TaskAnalysisModel).where(TaskAnalysisModel.id == analysis_id))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+    return row
+
+
+@router.post("/analysis/task-analyses", response_model=TaskAnalysisRecord)
+async def save_task_analysis(
+    body: TaskAnalysisSaveRequest,
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.agents import TaskAnalysis as TaskAnalysisModel
+
+    # Run analysis
+    now = datetime.now(timezone.utc)
+    effective_end = body.end_at or now
+    effective_start = body.start_at or (effective_end - timedelta(hours=1))
+    result_data = await db.execute(
+        select(AIAgent).where(AIAgent.id == body.agent_id, AIAgent.is_deleted == False)
+    )
+    agent = result_data.scalar_one_or_none()
+    api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
+    if agent:
+        api_endpoint, api_key = resolve_credentials(agent)
+        agent_type = agent.agent_type
+        agent_model = agent.model_name or ""
+
+    analysis_result = await analyze_task_sheet(
+        db, agent_id=body.agent_id, task_sheet=body.task_sheet,
+        start_at=effective_start, end_at=effective_end,
+        class_name=body.class_name,
+        api_endpoint=api_endpoint, api_key=api_key, agent_type=agent_type,
+        agent_model=agent_model,
+    )
+
+    record = TaskAnalysisModel(
+        title=body.title, task_sheet=body.task_sheet,
+        agent_id=body.agent_id, class_name=body.class_name,
+        start_at=effective_start, end_at=effective_end,
+        result=analysis_result,
+        created_by=current_user.get("id"),
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
+@router.delete("/analysis/task-analyses/{analysis_id}")
+async def delete_task_analysis(
+    analysis_id: int,
+    current_user: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    row = (await db.execute(select(TaskAnalysisModel).where(TaskAnalysisModel.id == analysis_id))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+    await db.delete(row)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/analysis/student-chains", response_model=List[StudentChainSession])
@@ -46,7 +274,7 @@ async def student_chains(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     effective_end = end_at or now
     effective_start = start_at or (effective_end - timedelta(hours=1))
     return await analyze_student_chains(

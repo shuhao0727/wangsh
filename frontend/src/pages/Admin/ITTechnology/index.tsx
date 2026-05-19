@@ -36,64 +36,17 @@ const AdminITTechnology: React.FC = () => {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
   const appConfigs = [
-    {
-      key: 'it_dianming',
-      title: '随机点名',
-      description: '班级名单管理与随机抽取工具',
-      icon: <FlaskConical className="h-5 w-5" />,
-      color: "var(--ws-color-primary)",
-      hasManager: true,
-    },
-    {
-      key: 'it_python_lab',
-      title: 'Python 实验室',
-      description: '实验模板管理与前台实验台入口',
-      icon: <Code className="h-5 w-5" />,
-      color: "var(--ws-color-info)",
-      hasManager: true,
-      managerLabel: "管理智能体",
-    },
-    {
-      key: 'it_survey',
-      title: '问卷调查',
-      description: '在线问卷创建与数据收集分析',
-      icon: <ClipboardEdit className="h-5 w-5" />,
-      color: "var(--ws-color-warning)",
-      hasManager: false, // 暂未实现
-    },
-    {
-      key: 'it_mindmap',
-      title: '思维导图',
-      description: '在线脑图编辑与知识梳理',
-      icon: <GitMerge className="h-5 w-5" />,
-      color: "var(--ws-color-success)",
-      hasManager: true,
-    },
-    {
-      key: 'it_machine_learning',
-      title: '机器学习',
-      description: '机器学习模型训练与实验平台',
-      icon: <Cpu className="h-5 w-5" />,
-      color: "var(--ws-color-purple)",
-      hasManager: true,
-    },
-    {
-      key: 'it_ai_exploration',
-      title: '人工智能探索',
-      description: 'AI 能力体验与交互式学习探索',
-      icon: <Sparkles className="h-5 w-5" />,
-      color: "var(--ws-tag-blue)",
-      hasManager: true,
-    },
-    {
-      key: 'it_agent_exploration',
-      title: '智能体探索',
-      description: '多智能体协作与对话实验',
-      icon: <Bot className="h-5 w-5" />,
-      color: "var(--ws-color-primary)",
-      hasManager: true,
-    },
+    { key: 'it_dianming', title: '随机点名', description: '班级名单管理与随机抽取工具', icon: <FlaskConical className="h-4 w-4" />, color: "var(--ws-color-primary)", category: '教学工具', hasManager: true },
+    { key: 'it_survey', title: '问卷调查', description: '在线问卷创建与数据收集分析', icon: <ClipboardEdit className="h-4 w-4" />, color: "var(--ws-color-warning)", category: '教学工具', hasManager: false },
+    { key: 'it_mindmap', title: '思维导图', description: '在线脑图编辑与知识梳理', icon: <GitMerge className="h-4 w-4" />, color: "var(--ws-color-success)", category: '教学工具', hasManager: true },
+    { key: 'it_python_lab', title: 'Python 实验室', description: '实验模板管理与前台实验台入口', icon: <Code className="h-4 w-4" />, color: "var(--ws-color-info)", category: '教学工具', hasManager: true, managerLabel: "管理智能体" },
+    { key: 'it_machine_learning', title: '机器学习', description: '模型训练与实验平台', icon: <Cpu className="h-4 w-4" />, color: "var(--ws-color-purple)", category: 'AI 与编程', hasManager: true },
+    { key: 'it_ai_exploration', title: '人工智能探索', description: 'AI 能力体验与交互式学习', icon: <Sparkles className="h-4 w-4" />, color: "var(--ws-tag-blue)", category: 'AI 与编程', hasManager: true },
+    { key: 'it_agent_exploration', title: '智能体探索', description: '多智能体协作与对话实验', icon: <Bot className="h-4 w-4" />, color: "var(--ws-color-primary)", category: 'AI 与编程', hasManager: true },
+    { key: 'it_game_lock_cracker', title: '密码锁破解', description: '教学互动小游戏 · 密码锁破解等', icon: <FlaskConical className="h-4 w-4" />, color: "var(--ws-tag-blue)", category: '小游戏', hasManager: true, managerLabel: "打开" },
   ];
+
+  const categories = [...new Set(appConfigs.map(a => a.category))];
 
   const fetchFlags = async () => {
     try {
@@ -211,35 +164,41 @@ const AdminITTechnology: React.FC = () => {
 
   return (
     <AdminPage padding="var(--ws-panel-padding)">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {appConfigs.map(app => (
-          <div key={app.key}>
-            <AdminAppCard
-              title={app.title}
-              description={app.description}
-              icon={app.icon}
-              enabled={flags[`${app.key}_enabled`] || false}
-              loading={loading[app.key]}
-              onToggle={(checked) => handleToggle(app.key, checked)}
-              color={app.color}
-              actionLabel={(app as any).managerLabel || (app.hasManager ? "管理" : undefined)}
-              actionIcon={app.hasManager ? <Settings className="h-4 w-4" /> : undefined}
-              onAction={
-                app.hasManager
-                  ? () => {
-                      if (app.key === "it_dianming") setView("dianming-manager");
-                      if (app.key === "it_python_lab") setAgentConfigVisible(true);
-                      if (app.key === "it_machine_learning") navigate("/admin/it-technology/ml-book-editor");
-                      if (app.key === "it_ai_exploration") setView("ai-manager");
-                      if (app.key === "it_agent_exploration") setView("agents-manager");
-                      if (app.key === "it_mindmap") setView("mindmap-manager");
-                    }
-                  : undefined
-              }
-            />
+      {categories.map(cat => (
+        <div key={cat} className="mb-5">
+          <h3 className="mb-2 text-sm font-semibold text-text-tertiary">{cat}</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+            {appConfigs.filter(a => a.category === cat).map(app => (
+              <div key={app.key}>
+                <AdminAppCard
+                  title={app.title}
+                  description={app.description}
+                  icon={app.icon}
+                  enabled={flags[`${app.key}_enabled`] || false}
+                  loading={loading[app.key]}
+                  onToggle={(checked) => handleToggle(app.key, checked)}
+                  color={app.color}
+                  actionLabel={(app as any).managerLabel || (app.hasManager ? "管理" : undefined)}
+                  actionIcon={app.hasManager ? <Settings className="h-4 w-4" /> : undefined}
+                  onAction={
+                    app.hasManager
+                      ? () => {
+                          if (app.key === "it_dianming") setView("dianming-manager");
+                          if (app.key === "it_python_lab") setAgentConfigVisible(true);
+                          if (app.key === "it_machine_learning") navigate("/admin/it-technology/ml-book-editor");
+                          if (app.key === "it_ai_exploration") setView("ai-manager");
+                          if (app.key === "it_agent_exploration") setView("agents-manager");
+                          if (app.key === "it_mindmap") setView("mindmap-manager");
+                          if (app.key === "it_game_lock_cracker") window.open("/admin/games/config", "_blank");
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
       <AgentConfigModal visible={agentConfigVisible} onClose={() => setAgentConfigVisible(false)} />
     </AdminPage>
   );

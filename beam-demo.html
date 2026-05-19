@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>学生光束图</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;background:linear-gradient(135deg,#F0FDFA 0%,#E0F2FE 100%);min-height:100vh;padding:32px 24px;display:flex;flex-direction:column;align-items:center}
+.container{width:100%;max-width:1060px}
+.header{margin-bottom:24px;text-align:center}
+.header h1{font-size:26px;font-weight:700;color:#0F172A;letter-spacing:-0.02em;margin-bottom:4px}
+.header h1 span{color:#0D9488}
+.header p{color:#64748B;font-size:14px}
+.card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04);border:1px solid #F1F5F9;margin-bottom:16px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-header h2{font-size:15px;font-weight:600;color:#334155;display:flex;align-items:center;gap:8px}
+.card-header h2 .dot{width:8px;height:8px;border-radius:50%;background:#0D9488;box-shadow:0 0 0 4px rgba(13,148,136,0.12)}
+.chart{height:420px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 16px;background:#F8FAFC;border-radius:10px;margin-top:12px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#475569}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+.stats{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px}
+.stat{display:flex;align-items:center;gap:6px}
+.stat-value{font-size:20px;font-weight:700;color:#0F172A}
+.stat-label{font-size:12px;color:#94A3B8}
+.footer{text-align:center;padding:16px;color:#94A3B8;font-size:12px}
+</style></head><body>
+<div class="container">
+<div class="header">
+  <h1>学生提问 <span>光束图</span></h1>
+  <p>每条流线是一个学生的提问轨迹 · 曲线交汇处 = 集体关注方向</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2><span class="dot"></span>提问轨迹 · 时间流</h2>
+    <div class="stats">
+      <div class="stat"><span class="stat-value">8</span><span class="stat-label">学生</span></div>
+      <div class="stat"><span class="stat-value">45</span><span class="stat-label">问题</span></div>
+      <div class="stat"><span class="stat-value">3min</span><span class="stat-label">时间桶</span></div>
+      <div class="stat"><span class="stat-value">11</span><span class="stat-label">话题方向</span></div>
+    </div>
+  </div>
+  <div id="beam" class="chart"></div>
+  <div class="legend" id="legend"></div>
+</div>
+<div class="footer">悬停任意点查看详情 · 滚轮缩放 · 底部滑块平移 · WangSh 学习平台</div>
+</div>
+
+<script>
+var COLORS=["#0D9488","#7C3AED","#3B82F6","#F59E0B","#EC4899","#06B6D4","#10B981","#EF4444"];
+var students=[
+  {n:"张同学",qs:[{t:"10:01",q:"for循环"},{t:"10:04",q:"if判断"},{t:"10:08",q:"列表推导式"},{t:"10:12",q:"嵌套"},{t:"10:17",q:"NameError"},{t:"10:22",q:"input"}]},
+  {n:"李同学",qs:[{t:"10:00",q:"for循环"},{t:"10:03",q:"列表推导式"},{t:"10:07",q:"嵌套"},{t:"10:11",q:"for vs while"},{t:"10:16",q:"递归"},{t:"10:21",q:"调试"}]},
+  {n:"王同学",qs:[{t:"10:02",q:"for循环"},{t:"10:05",q:"函数"},{t:"10:09",q:"列表推导式"},{t:"10:14",q:"递归"},{t:"10:20",q:"map"}]},
+  {n:"赵同学",qs:[{t:"10:01",q:"for循环"},{t:"10:04",q:"elif"},{t:"10:08",q:"列表推导式"},{t:"10:13",q:"map vs for"},{t:"10:18",q:"pdb"},{t:"10:22",q:"递归"}]},
+  {n:"陈同学",qs:[{t:"10:02",q:"for循环"},{t:"10:05",q:"if else"},{t:"10:09",q:"列表推导式"},{t:"10:13",q:"嵌套"},{t:"10:19",q:"map"}]},
+  {n:"刘同学",qs:[{t:"10:01",q:"elif"},{t:"10:04",q:"for循环"},{t:"10:07",q:"def函数"},{t:"10:12",q:"递归"},{t:"10:20",q:"对比"}]},
+  {n:"周同学",qs:[{t:"10:02",q:"for循环"},{t:"10:05",q:"列表推导式"},{t:"10:10",q:"嵌套"},{t:"10:16",q:"报错"},{t:"10:22",q:"input"}]},
+  {n:"吴同学",qs:[{t:"10:01",q:"if判断"},{t:"10:04",q:"for循环"},{t:"10:09",q:"列表推导式"},{t:"10:15",q:"递归"},{t:"10:21",q:"debug"}]},
+];
+
+var B=3;
+function bt(t){var p=t.split(":");return Math.floor((parseInt(p[0])*60+parseInt(p[1]))/B)*B;}
+function fb(b){var h=Math.floor(b/60),m=b%60;return (h<10?"0":"")+h+":"+(m<10?"0":"")+m;}
+
+var buckets={}, allTopics={};
+students.forEach(function(s){s.qs.forEach(function(q){var b=bt(q.t);if(!buckets[b])buckets[b]=[];buckets[b].push({n:s.n,q:q.q});if(!allTopics[q.q])allTopics[q.q]=0;allTopics[q.q]++;});});
+
+var rank=Object.entries(allTopics).sort(function(a,b){return b[1]-a[1];});
+var tY={};
+rank.forEach(function(e,i){var s=i%2===0?1:-1,d=Math.ceil((i+1)/2);tY[e[0]]=s*d*0.22;});
+
+var sb=Object.keys(buckets).map(Number).sort();
+var tl=sb.map(function(b){return fb(b);});
+
+var series=[];
+students.forEach(function(s,si){var c=COLORS[si];var ps=[];s.qs.forEach(function(q){var b=bt(q.t),x=sb.indexOf(b),y=tY[q.q]||0;ps.push([x,y,s.n,q.q]);});ps.sort(function(a,b){return a[0]-b[0];});
+  series.push({type:"line",data:ps.map(function(p){return[p[0],p[1]];}),lineStyle:{color:c,width:2.5,opacity:0.4},smooth:0.5,symbol:"none",silent:true,z:1});
+  ps.forEach(function(p){var cnt=buckets[sb[p[0]]].filter(function(x){return x.q===p[3];}).length;
+    series.push({type:"scatter",data:[{value:[p[0],p[1],p[2],p[3],cnt],itemStyle:{color:c,opacity:0.5+cnt*0.15},symbolSize:8+cnt*3}],z:2,silent:true});});});
+
+var ch=echarts.init(document.getElementById("beam"));
+ch.setOption({backgroundColor:"transparent",
+  tooltip:{backgroundColor:"rgba(15,23,42,0.92)",borderColor:"transparent",textStyle:{color:"#fff",fontSize:13},extraCssText:"border-radius:8px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.2);",
+    formatter:function(p){if(!p||!p.value)return"";var c=p.value[4]||0;return"<b style='font-size:14px'>"+p.value[2]+"</b><br/><span style='color:#94A3B8'>"+p.value[3]+"</span>"+(c>1?"<br/><span style='color:#F59E0B;font-weight:600'>"+c+" 人同时在此</span>":"");}},
+  grid:{left:20,right:20,top:14,bottom:42},
+  xAxis:{type:"category",data:tl,axisLabel:{fontSize:12,color:"#64748B",fontWeight:500,margin:8},axisLine:{lineStyle:{color:"#E2E8F0"}},axisTick:{show:false},name:"时间轴",nameLocation:"start",nameTextStyle:{fontSize:11,color:"#94A3B8",padding:[2,0,0,0]}},
+  yAxis:{show:false},
+  dataZoom:[{type:"slider",start:0,end:100,height:24,bottom:10,borderColor:"#E2E8F0",fillerColor:"rgba(13,148,136,0.08)",handleStyle:{color:"#0D9488",size:"140%"},textStyle:{fontSize:10,color:"#94A3B8"},moveOnMouseWheel:false,showDetail:false},{type:"inside",zoomOnMouseWheel:true,moveOnMouseMove:true}],
+  series:series});
+
+document.getElementById("legend").innerHTML=students.map(function(s,i){return"<div class='legend-item'><span class='legend-dot' style='background:"+COLORS[i]+"'></span>"+s.n+"</div>";}).join("");
+</script>
+</body></html>

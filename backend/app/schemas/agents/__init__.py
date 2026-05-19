@@ -26,6 +26,13 @@ from .ai_agent import (
     HotQuestionBucket,
     StudentChainSession,
     ConversationExportRequest,
+    TaskAnalysisRequest,
+    TaskAnalysisResponse,
+    TaskComparisonItem,
+    KeywordItem,
+    TaskAnalysisSaveRequest,
+    TaskAnalysisRecord,
+    TaskAnalysisListItem,
 )
 
 from .model_discovery import (
@@ -90,6 +97,13 @@ __all__ = [
     "HotQuestionBucket",
     "StudentChainSession",
     "ConversationExportRequest",
+    "TaskAnalysisRequest",
+    "TaskAnalysisResponse",
+    "TaskComparisonItem",
+    "KeywordItem",
+    "TaskAnalysisSaveRequest",
+    "TaskAnalysisRecord",
+    "TaskAnalysisListItem",
     # 模型发现相关
     "AIServiceProvider",
     "AIModelInfo",

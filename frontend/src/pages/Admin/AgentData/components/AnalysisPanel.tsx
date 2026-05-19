@@ -26,6 +26,7 @@ import aiAgentsApi from "@services/znt/api/ai-agents-api";
 import { agentDataApi } from "@services/znt/api";
 import type { AIAgent } from "@services/znt/types";
 import { AdminTablePanel } from "@components/Admin";
+import StudentBeamChart from "./StudentBeamChart";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
 const downloadBlobFile = (blob: Blob, filename: string) => {
@@ -64,6 +65,8 @@ type HotFilters = {
   end_at: string;
   bucket_seconds: number;
   top_n: number;
+  class_name: string;
+  student_id: string;
 };
 
 type ChainFilters = {
@@ -72,16 +75,17 @@ type ChainFilters = {
   end_at: string;
   class_name: string;
   student_id: string;
+  student_name: string;
   limit_sessions: number;
 };
 
-const toLocalDateTimeInput = (value: dayjs.Dayjs) => value.format("YYYY-MM-DDTHH:mm");
+const toLocalDateInput = (value: dayjs.Dayjs) => value.format("YYYY-MM-DD");
 
 const defaultRange = () => {
   const now = dayjs();
   return {
-    start_at: toLocalDateTimeInput(now.subtract(1, "hour")),
-    end_at: toLocalDateTimeInput(now),
+    start_at: toLocalDateInput(now.subtract(7, "day")),
+    end_at: toLocalDateInput(now),
   };
 };
 
@@ -154,6 +158,47 @@ const useActiveAgentOptions = () => {
   return { agentOptions, loadingAgents };
 };
 
+/* ========== 分析记录表 ========== */
+const HotAnalysisRecords: React.FC = () => {
+  const [records, setRecords] = useState<any[]>([]);
+  useEffect(() => {
+    void agentDataApi.listTaskAnalyses().then((r: any) => {
+      if (r.success) setRecords(r.data || []);
+    });
+  }, []);
+  if (records.length === 0) return null;
+  return (
+    <div className="flex-none pt-4">
+      <div className="rounded-lg border border-border overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-surface-2">
+            <tr className="text-left text-text-tertiary">
+              <th className="px-3 py-1.5 font-medium">标题</th>
+              <th className="px-3 py-1.5 font-medium w-[100px]">时间</th>
+              <th className="px-3 py-1.5 font-medium w-[60px]">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-secondary">
+            {records.map((r: any) => (
+              <tr key={r.id} className="hover:bg-[var(--ws-color-hover-bg)] transition-colors">
+                <td className="px-3 py-1.5 font-medium truncate max-w-[300px]">
+                  {r.title}
+                  <span className="ml-2 text-text-tertiary font-normal">{(r as any).uncovered_count || 0} 个发现</span>
+                </td>
+                <td className="px-3 py-1.5 text-text-tertiary">{dayjs(r.created_at).format("MM-DD HH:mm")}</td>
+                <td className="px-3 py-1.5">
+                  <a href={`/task-analysis/${r.id}`} target="_blank" rel="noopener noreferrer"
+                    className="font-medium text-primary hover:underline">查看</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 /* ========== 热点问题面板 ========== */
 export const HotQuestionsPanel: React.FC = () => {
   const { agentOptions, loadingAgents } = useActiveAgentOptions();
@@ -167,7 +212,16 @@ export const HotQuestionsPanel: React.FC = () => {
     ...defaultRange(),
     bucket_seconds: 60,
     top_n: 10,
+    class_name: "",
+    student_id: "",
   }));
+  const [filterOptions, setFilterOptions] = useState<{ classNames: string[] }>({ classNames: [] });
+
+  useEffect(() => {
+    void agentDataApi.getFilterOptions().then((res) => {
+      if (res.success) setFilterOptions({ classNames: res.data.class_names || [] });
+    });
+  }, []);
 
   useEffect(() => {
     if (filters.agent_id || agentOptions.length === 0) return;
@@ -200,6 +254,8 @@ export const HotQuestionsPanel: React.FC = () => {
         end_at: endISO,
         bucket_seconds: Number(filters.bucket_seconds),
         top_n: Number(filters.top_n),
+        class_name: filters.class_name.trim() || undefined,
+        student_id: filters.student_id.trim() || undefined,
       });
       if (!res.success) {
         showMessage.error(res.message || "获取热点问题失败");
@@ -225,6 +281,8 @@ export const HotQuestionsPanel: React.FC = () => {
         end_at: endISO,
         bucket_seconds: Number(filters.bucket_seconds),
         top_n: Number(filters.top_n),
+        class_name: filters.class_name.trim() || undefined,
+        student_id: filters.student_id.trim() || undefined,
       });
       if (!res.success) {
         showMessage.error(res.message || "导出失败");
@@ -330,19 +388,11 @@ export const HotQuestionsPanel: React.FC = () => {
           </div>
           <div className="w-[160px]">
             <div className="mb-1 text-xs text-text-tertiary">开始时间</div>
-            <Input type="datetime-local" value={filters.start_at} onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))} className="h-8" />
+            <Input type="date" value={filters.start_at} onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))} className="h-9" />
           </div>
           <div className="w-[160px]">
             <div className="mb-1 text-xs text-text-tertiary">结束时间</div>
-            <Input type="datetime-local" value={filters.end_at} onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))} className="h-8" />
-          </div>
-          <div className="w-[80px]">
-            <div className="mb-1 text-xs text-text-tertiary">桶(秒)</div>
-            <Input type="number" min={1} value={String(filters.bucket_seconds)} onChange={(e) => setFilters((prev) => ({ ...prev, bucket_seconds: Number(e.target.value || 1) }))} className="h-8" />
-          </div>
-          <div className="w-[70px]">
-            <div className="mb-1 text-xs text-text-tertiary">TopN</div>
-            <Input type="number" min={1} max={50} value={String(filters.top_n)} onChange={(e) => setFilters((prev) => ({ ...prev, top_n: Number(e.target.value || 1) }))} className="h-8" />
+            <Input type="date" value={filters.end_at} onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))} className="h-9" />
           </div>
           <div className="flex gap-1.5 items-end pb-px">
             <Button size="sm" className="h-8" onClick={loadHot} disabled={loadingHot}>
@@ -353,9 +403,14 @@ export const HotQuestionsPanel: React.FC = () => {
               {exportingHot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               导出
             </Button>
+            <Button variant="default" size="sm" className="h-8" onClick={() => window.open("/task-analysis/new", "_blank")}>
+              + 开始分析
+            </Button>
           </div>
         </div>
       </div>
+
+      <HotAnalysisRecords />
 
       <div className="flex min-h-0 flex-1 flex-col pt-3">
         <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
@@ -385,6 +440,7 @@ export const HotQuestionsPanel: React.FC = () => {
           />
         </div>
       </div>
+
     </div>
   );
 };
@@ -403,8 +459,16 @@ export const StudentQuestionChainsPanel: React.FC = () => {
     ...defaultRange(),
     class_name: "",
     student_id: "",
+    student_name: "",
     limit_sessions: 5,
   }));
+  const [filterOptions, setFilterOptions] = useState<{ classNames: string[] }>({ classNames: [] });
+
+  useEffect(() => {
+    void agentDataApi.getFilterOptions().then((res) => {
+      if (res.success) setFilterOptions({ classNames: res.data.class_names || [] });
+    });
+  }, []);
 
   useEffect(() => {
     if (filters.agent_id || agentOptions.length === 0) return;
@@ -432,6 +496,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
         agent_id: Number(filters.agent_id),
         class_name: filters.class_name.trim() || undefined,
         student_id: filters.student_id.trim() || undefined,
+        student_name: filters.student_name.trim() || undefined,
         start_at: startISO,
         end_at: endISO,
         limit_sessions: Number(filters.limit_sessions),
@@ -460,6 +525,7 @@ export const StudentQuestionChainsPanel: React.FC = () => {
         agent_id: Number(filters.agent_id),
         class_name: filters.class_name.trim() || undefined,
         student_id: filters.student_id.trim() || undefined,
+        student_name: filters.student_name.trim() || undefined,
         start_at: startISO,
         end_at: endISO,
         limit_sessions: Number(filters.limit_sessions),
@@ -517,6 +583,27 @@ export const StudentQuestionChainsPanel: React.FC = () => {
           </div>
         </div>
       ),
+    },
+    {
+      id: "path",
+      header: "提问路径",
+      size: 260,
+      cell: ({ row }) => {
+        const questions = row.original.messages
+          .filter((m) => m.message_type === "question")
+          .slice(0, 3);
+        if (questions.length === 0) return <span className="text-xs text-text-tertiary">-</span>;
+        return (
+          <div className="text-xs text-text-secondary leading-relaxed">
+            {questions.map((q, i) => (
+              <span key={i}>
+                {i > 0 && <span className="mx-1 text-text-tertiary/40">→</span>}
+                <span className="text-text-base/80">{q.content.slice(0, 12)}{q.content.length > 12 ? "…" : ""}</span>
+              </span>
+            ))}
+          </div>
+        );
+      },
     },
     {
       id: "session_id",
@@ -635,19 +722,19 @@ export const StudentQuestionChainsPanel: React.FC = () => {
           <div className="w-[160px]">
             <div className="mb-1 text-xs text-text-tertiary">开始时间</div>
             <Input
-              type="datetime-local"
+              type="date"
               value={filters.start_at}
               onChange={(e) => setFilters((prev) => ({ ...prev, start_at: e.target.value }))}
-              className="h-8"
+              className="h-9"
             />
           </div>
           <div className="w-[160px]">
             <div className="mb-1 text-xs text-text-tertiary">结束时间</div>
             <Input
-              type="datetime-local"
+              type="date"
               value={filters.end_at}
               onChange={(e) => setFilters((prev) => ({ ...prev, end_at: e.target.value }))}
-              className="h-8"
+              className="h-9"
             />
           </div>
           <div className="w-[80px]">
@@ -661,14 +748,15 @@ export const StudentQuestionChainsPanel: React.FC = () => {
               className="h-8"
             />
           </div>
-          <div className="w-[110px]">
+          <div className="w-[130px]">
             <div className="mb-1 text-xs text-text-tertiary">班级</div>
-            <Input
-              placeholder="筛选班级"
-              value={filters.class_name}
-              onChange={(e) => setFilters((prev) => ({ ...prev, class_name: e.target.value }))}
-              className="h-8"
-            />
+            <Select value={filters.class_name || "__none__"} onValueChange={(v) => setFilters((prev) => ({ ...prev, class_name: v === "__none__" ? "" : v }))}>
+              <SelectTrigger className="h-8"><SelectValue placeholder="全部班级" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">全部班级</SelectItem>
+                {filterOptions.classNames.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="w-[110px]">
             <div className="mb-1 text-xs text-text-tertiary">学号</div>
@@ -676,6 +764,15 @@ export const StudentQuestionChainsPanel: React.FC = () => {
               placeholder="筛选学号"
               value={filters.student_id}
               onChange={(e) => setFilters((prev) => ({ ...prev, student_id: e.target.value }))}
+              className="h-8"
+            />
+          </div>
+          <div className="w-[110px]">
+            <div className="mb-1 text-xs text-text-tertiary">姓名</div>
+            <Input
+              placeholder="筛选姓名"
+              value={filters.student_name}
+              onChange={(e) => setFilters((prev) => ({ ...prev, student_name: e.target.value }))}
               className="h-8"
             />
           </div>
@@ -688,11 +785,19 @@ export const StudentQuestionChainsPanel: React.FC = () => {
               {exportingChains ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               导出
             </Button>
+            <Button variant="default" size="sm" className="h-8" onClick={() => window.open("/task-analysis/new", "_blank")}>
+              + 开始分析
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col pt-3">
+        {chains.length > 0 && (
+          <div className="flex-none rounded-lg border border-border bg-surface p-3 mb-3">
+            <StudentBeamChart sessions={chains} />
+          </div>
+        )}
         <div className="flex-1 min-h-0 rounded-lg border border-border-secondary bg-surface-1 overflow-hidden">
           <AdminTablePanel
             loading={loadingChains}

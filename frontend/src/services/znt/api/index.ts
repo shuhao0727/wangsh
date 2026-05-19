@@ -2,7 +2,7 @@
 // 前端保留，后端已移除
 
 import aiAgentsApi from "./ai-agents-api";
-import { api } from "../../api";
+import { api, getStoredAccessToken } from "../../api";
 import { logger } from "../../logger";
 import type {
   BaseResponse,
@@ -11,6 +11,18 @@ import type {
   StatisticsData,
   SearchFilterParams,
 } from "../types";
+
+type TaskAnalysisStreamPayload = {
+  message?: string;
+  progress?: number;
+  step_id?: string;
+  result?: unknown;
+  id?: number;
+};
+
+type TaskAnalysisStreamCallbacks = {
+  onEvent?: (event: string, payload: TaskAnalysisStreamPayload) => void;
+};
 
 interface ApiErrorShape {
   message?: string;
@@ -276,6 +288,8 @@ const agentDataApi = {
     end_at?: string;
     bucket_seconds?: number;
     top_n?: number;
+    class_name?: string;
+    student_id?: string;
   }): Promise<
     BaseResponse<
       Array<{
@@ -310,6 +324,7 @@ const agentDataApi = {
     agent_id: number;
     user_id?: number;
     student_id?: string;
+    student_name?: string;
     class_name?: string;
     start_at?: string;
     end_at?: string;
@@ -372,6 +387,126 @@ const agentDataApi = {
     }
   },
 
+  analyzeTaskSheet: async (params: {
+    task_sheet: string;
+    agent_id: number;
+    start_at?: string;
+    end_at?: string;
+    class_name?: string;
+  }): Promise<
+    BaseResponse<{
+      word_cloud: Array<{ word: string; count: number }>;
+      covered: Array<{ topic: string; questions: string[]; count: number }>;
+      uncovered: Array<{ topic: string; questions: string[]; count: number }>;
+    }>
+  > => {
+    try {
+      const response = await api.client.post("/ai-agents/analysis/task-analysis", params);
+      return {
+        data: response.data as never,
+        success: true,
+        message: "分析完成",
+      };
+    } catch (error: unknown) {
+      logger.error("任务分析失败:", error);
+      return {
+        data: { word_cloud: [], covered: [], uncovered: [] },
+        success: false,
+        message: errMsg(error, "分析失败"),
+      };
+    }
+  },
+
+  listTaskAnalyses: async (): Promise<BaseResponse<unknown[]>> => {
+    try {
+      const response = await api.get("/ai-agents/analysis/task-analyses");
+      return { data: response.data as unknown as unknown[], success: true, message: "ok" };
+    } catch (e: unknown) { return { data: [], success: false, message: errMsg(e, "获取列表失败") }; }
+  },
+
+  getTaskAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      const response = await api.get(`/ai-agents/analysis/task-analyses/${id}`);
+      return { data: response.data as unknown, success: true, message: "ok" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "获取失败") }; }
+  },
+
+  saveTaskAnalysis: async (params: {
+    title: string; task_sheet: string; agent_id: number;
+    start_at?: string; end_at?: string; class_name?: string;
+  }): Promise<BaseResponse<unknown>> => {
+    try {
+      const response = await api.client.post("/ai-agents/analysis/task-analyses", params);
+      return { data: response.data as unknown, success: true, message: "保存成功" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "保存失败") }; }
+  },
+
+  saveTaskAnalysisStream: async (
+    params: {
+      title: string; task_sheet: string; agent_id: number;
+      start_at?: string; end_at?: string; class_name?: string;
+    },
+    callbacks: TaskAnalysisStreamCallbacks = {},
+  ): Promise<BaseResponse<unknown>> => {
+    try {
+      const token = getStoredAccessToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch("/api/v1/ai-agents/analysis/task-analyses/stream", {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(params),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`请求失败：${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let savedPayload: TaskAnalysisStreamPayload | null = null;
+
+      const consumeBlock = (block: string) => {
+        let event = "message";
+        const dataLines: string[] = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7).trim();
+          if (line.startsWith("data: ")) dataLines.push(line.slice(6));
+        }
+        if (dataLines.length === 0) return;
+        const payload = JSON.parse(dataLines.join("\n")) as TaskAnalysisStreamPayload;
+        callbacks.onEvent?.(event, payload);
+        if (event === "saved") savedPayload = payload;
+        if (event === "error") throw new Error(payload.message || "分析失败");
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          consumeBlock(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) consumeBlock(buffer);
+      return { data: savedPayload as unknown, success: true, message: "保存成功" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "保存失败") }; }
+  },
+
+  deleteTaskAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      await api.client.delete(`/ai-agents/analysis/task-analyses/${id}`);
+      return { data: null, success: true, message: "已删除" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
+  },
+
   exportSelectedConversations: async (sessionIds: string[]): Promise<BaseResponse<Blob>> => {
     try {
       const response = await api.client.post(
@@ -401,6 +536,8 @@ const agentDataApi = {
     end_at?: string;
     bucket_seconds?: number;
     top_n?: number;
+    class_name?: string;
+    student_id?: string;
   }): Promise<BaseResponse<Blob>> => {
     try {
       const response = await api.client.get("/ai-agents/admin/export/hot-questions", {
@@ -427,6 +564,7 @@ const agentDataApi = {
     agent_id: number;
     user_id?: number;
     student_id?: string;
+    student_name?: string;
     class_name?: string;
     start_at?: string;
     end_at?: string;

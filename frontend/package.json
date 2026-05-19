@@ -1,6 +1,6 @@
 {
   "name": "wangsh-frontend",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "private": true,
   "description": "WangSh 项目前端应用 - React + TypeScript + Vite",
   "author": "WangSh Team",
@@ -66,6 +66,7 @@
     "dompurify": "^3.3.3",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
+    "echarts-wordcloud": "^2.1.0",
     "eventsource-parser": "^1.1.2",
     "katex": "^0.16.11",
     "lucide-react": "^1.7.0",

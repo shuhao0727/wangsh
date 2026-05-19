@@ -273,3 +273,64 @@ class StudentChainSession(BaseModel):
 
 class ConversationExportRequest(BaseModel):
     session_ids: List[str]
+
+
+class TaskAnalysisRequest(BaseModel):
+    task_sheet: str = Field(..., description="任务单原文内容")
+    agent_id: int = Field(..., ge=1, description="智能体ID")
+    start_at: Optional[datetime] = Field(None, description="开始时间(ISO)")
+    end_at: Optional[datetime] = Field(None, description="结束时间(ISO)")
+    class_name: Optional[str] = Field(None, description="班级名称筛选")
+
+
+class TaskComparisonItem(BaseModel):
+    topic: str
+    questions: List[str]
+    count: int
+
+
+class KeywordItem(BaseModel):
+    word: str
+    count: int
+
+
+class TaskAnalysisResponse(BaseModel):
+    word_cloud: List[KeywordItem] = []
+    covered: List[TaskComparisonItem] = []
+    uncovered: List[TaskComparisonItem] = []
+    bloom: Dict[str, int] = {}
+
+
+class TaskAnalysisSaveRequest(BaseModel):
+    title: str = Field("未命名分析", max_length=200)
+    task_sheet: str
+    agent_id: int = Field(..., ge=1)
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    class_name: Optional[str] = None
+
+
+class TaskAnalysisRecord(BaseModel):
+    id: int
+    title: str
+    task_sheet: str = ""
+    agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    result: Dict[str, Any] = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TaskAnalysisListItem(BaseModel):
+    id: int
+    title: str
+    agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

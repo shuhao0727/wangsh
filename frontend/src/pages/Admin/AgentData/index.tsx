@@ -9,7 +9,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import StatisticsCards from "./components/StatisticsCards";
 import UsageRecordPanel from "./components/UsageRecordPanel";
-import { HotQuestionsPanel, StudentQuestionChainsPanel } from "./components/AnalysisPanel";
+import { StudentQuestionChainsPanel } from "./components/AnalysisPanel";
+import TaskAnalysisListPanel from "./components/TaskAnalysisListPanel";
 
 import type { StatisticsData, SearchFilterParams } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
@@ -20,6 +21,7 @@ type TabKey = "usage" | "hot" | "chains";
 
 const normalizeTab = (tab: string | null): TabKey => {
   if (tab === "analysis") return "hot";
+  if (tab === "task") return "hot";
   if (tab === "usage" || tab === "hot" || tab === "chains") return tab;
   return "usage";
 };
@@ -88,12 +90,11 @@ const AdminAgentData: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* 内容面板 — 全部保持挂载避免重复请求 */}
           <div style={{ display: activeTabKey === "usage" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
             <UsageRecordPanel onFilterChange={handleFilterChange} />
           </div>
           <div style={{ display: activeTabKey === "hot" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
-            <HotQuestionsPanel />
+            <TaskAnalysisListPanel />
           </div>
           <div style={{ display: activeTabKey === "chains" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
             <StudentQuestionChainsPanel />

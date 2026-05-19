@@ -28,6 +28,8 @@ from .agent_conversations import (
 from .agent_analysis import (
     analyze_hot_questions,
     analyze_student_chains,
+    analyze_task_sheet,
+    stream_task_sheet_analysis,
 )
 
 from .model_discovery import (
@@ -52,6 +54,8 @@ __all__ = [
     "get_conversation_messages_admin",
     "analyze_hot_questions",
     "analyze_student_chains",
+    "analyze_task_sheet",
+    "stream_task_sheet_analysis",
     # 模型发现服务
     "discover_models_service",
     "get_preset_models_service",
