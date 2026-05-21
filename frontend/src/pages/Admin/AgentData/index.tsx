@@ -20,7 +20,7 @@ type TabKey = "usage" | "hot" | "chains";
 
 const normalizeTab = (tab: string | null): TabKey => {
   if (tab === "analysis") return "hot";
-  if (tab === "task") return "hot";
+  if (tab === "task") return "chains";
   if (tab === "usage" || tab === "hot" || tab === "chains") return tab;
   return "usage";
 };
@@ -85,7 +85,7 @@ const AdminAgentData: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger value="chains" className="gap-1.5">
               <GitFork className="h-3.5 w-3.5" />
-              学生提问链条
+              学生问题链
             </TabsTrigger>
           </TabsList>
 
@@ -93,7 +93,7 @@ const AdminAgentData: React.FC = () => {
             <UsageRecordPanel onFilterChange={handleFilterChange} />
           </div>
           <div style={{ display: activeTabKey === "hot" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
-            <TaskAnalysisListPanel />
+            <TaskAnalysisListPanel detailView="timeline" />
           </div>
           <div style={{ display: activeTabKey === "chains" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
             <TaskAnalysisListPanel detailView="beam" />

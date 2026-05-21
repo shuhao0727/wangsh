@@ -65,6 +65,10 @@ services:
   # 后端服务 (Python FastAPI)
   backend:
     image: wangsh-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      target: development
     container_name: wangsh-backend
     restart: unless-stopped
     user: "0:0"

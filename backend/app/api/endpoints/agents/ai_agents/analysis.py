@@ -17,6 +17,7 @@ from app.schemas.agents import (
     TaskAnalysisResponse,
     TaskAnalysisSaveRequest,
     TaskAnalysisRecord,
+    TeacherQuestionMark,
 )
 from app.models.agents import TaskAnalysis as TaskAnalysisModel
 from app.services.agents import (
@@ -125,8 +126,11 @@ async def save_task_analysis_stream(
             now = datetime.now(timezone.utc)
             effective_end = body.end_at or now
             effective_start = body.start_at or (effective_end - timedelta(hours=1))
+
+            # 分析用智能体（用于调用 LLM）：优先使用 analysis_agent_id，否则用 agent_id
+            llm_agent_id = body.analysis_agent_id or body.agent_id
             result_data = await db.execute(
-                select(AIAgent).where(AIAgent.id == body.agent_id, AIAgent.is_deleted == False)
+                select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
             )
             agent = result_data.scalar_one_or_none()
             api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
@@ -147,6 +151,9 @@ async def save_task_analysis_stream(
                 api_key=api_key,
                 agent_type=agent_type,
                 agent_model=agent_model,
+                bucket_seconds=body.bucket_seconds,
+                teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                custom_prompt=body.custom_prompt,
             ):
                 event = str(item.pop("event", "progress"))
                 if event == "analysis_finished":

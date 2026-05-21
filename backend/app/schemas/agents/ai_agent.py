@@ -254,6 +254,18 @@ class HotQuestionBucket(BaseModel):
     top_questions: List[HotQuestionExample]
 
 
+class TimelineBucket(BaseModel):
+    """时序分析时间桶"""
+    bucket_start: datetime
+    bucket_end: datetime
+    question_count: int = 0
+    unique_students: int = 0
+    top_questions: List[HotQuestionExample] = []
+    is_burst: bool = Field(False, description="是否为爆发点")
+    near_teacher_mark: Optional[str] = Field(None, description="关联的教师提问内容")
+    bloom_distribution: Dict[str, int] = Field(default_factory=dict, description="该桶内 Bloom 认知层级分布")
+
+
 class StudentChainMessage(BaseModel):
     id: int
     message_type: str
@@ -275,12 +287,20 @@ class ConversationExportRequest(BaseModel):
     session_ids: List[str]
 
 
+class TeacherQuestionMark(BaseModel):
+    """教师提问时间标记"""
+    time: datetime = Field(..., description="教师提问时间")
+    question: str = Field("", description="教师提问内容")
+
+
 class TaskAnalysisRequest(BaseModel):
     task_sheet: str = Field(..., description="任务单原文内容")
     agent_id: int = Field(..., ge=1, description="智能体ID")
     start_at: Optional[datetime] = Field(None, description="开始时间(ISO)")
     end_at: Optional[datetime] = Field(None, description="结束时间(ISO)")
     class_name: Optional[str] = Field(None, description="班级名称筛选")
+    bucket_seconds: int = Field(180, ge=60, le=600, description="时间桶秒数，默认3分钟")
+    teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list, description="教师提问时间点")
 
 
 class TaskComparisonItem(BaseModel):
@@ -307,15 +327,23 @@ class TaskAnalysisResponse(BaseModel):
     uncovered: List[TaskComparisonItem] = []
     main_question_chain: List[MainQuestionChainItem] = []
     bloom: Dict[str, int] = {}
+    # 时序分析
+    timeline_buckets: List[TimelineBucket] = []
+    teacher_marks: List[TeacherQuestionMark] = []
+    burst_points: List[TimelineBucket] = []
 
 
 class TaskAnalysisSaveRequest(BaseModel):
     title: str = Field("未命名分析", max_length=200)
     task_sheet: str
-    agent_id: int = Field(..., ge=1)
+    agent_id: int = Field(..., ge=1, description="数据来源智能体ID（学生对话的智能体）")
+    analysis_agent_id: Optional[int] = Field(None, ge=1, description="分析用智能体ID（执行AI分析的智能体，不填则用agent_id）")
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     class_name: Optional[str] = None
+    bucket_seconds: int = Field(180, ge=60, le=600, description="时间桶秒数")
+    custom_prompt: Optional[str] = Field(None, max_length=2000, description="自定义AI分析提示词")
+    teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list, description="教师提问时间点")
 
 
 class TaskAnalysisRecord(BaseModel):

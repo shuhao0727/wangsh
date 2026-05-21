@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, ExternalLink, Trash2, Search, Download } from "lucide-react";
+import { Plus, Trash2, Search, Download, GitCompare } from "lucide-react";
 import dayjs from "dayjs";
 import { agentDataApi } from "@services/znt/api";
 import { showMessage } from "@/lib/toast";
@@ -65,10 +65,11 @@ window.addEventListener("resize",function(){chart.resize()});
 </script></body></html>`;
 }
 
-const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView = "wordcloud" }) => {
+const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView = "timeline" }) => {
   const [records, setRecords] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const loadRecords = async () => {
     setLoading(true);
@@ -121,6 +122,18 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
             className="pl-9 h-9"
           />
         </div>
+        {selectedIds.size >= 2 && (
+          <Button size="sm" variant="outline" className="text-primary border-primary"
+            onClick={() => window.open(`/task-analysis/compare?ids=${[...selectedIds].join(",")}`, "_blank")}>
+            <GitCompare className="h-4 w-4 mr-1" />
+            对比分析 ({selectedIds.size})
+          </Button>
+        )}
+        {selectedIds.size > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            取消选择
+          </Button>
+        )}
         <div className="flex-1" />
         <Button size="sm" onClick={() => window.open("/task-analysis/new", "_blank")}>
           <Plus className="h-4 w-4 mr-1" />
@@ -145,6 +158,14 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
           <table className="w-full text-sm">
             <thead className="bg-surface-2 sticky top-0">
               <tr className="text-left text-xs text-text-tertiary">
+                <th className="px-2 py-2.5 w-[40px]">
+                  <input type="checkbox" className="rounded border-border-secondary"
+                    checked={filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.id)));
+                      else setSelectedIds(new Set());
+                    }} />
+                </th>
                 <th className="px-4 py-2.5 font-medium">标题</th>
                 <th className="px-4 py-2.5 font-medium w-[120px]">时间</th>
                 <th className="px-4 py-2.5 font-medium w-[100px]">发现</th>
@@ -153,7 +174,16 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
             </thead>
             <tbody className="divide-y divide-border-secondary">
               {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-[var(--ws-color-hover-bg)] transition-colors">
+                <tr key={r.id} className={`hover:bg-[var(--ws-color-hover-bg)] transition-colors ${selectedIds.has(r.id) ? "bg-primary-soft/30" : ""}`}>
+                  <td className="px-2 py-3">
+                    <input type="checkbox" className="rounded border-border-secondary"
+                      checked={selectedIds.has(r.id)}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds);
+                        if (e.target.checked) next.add(r.id); else next.delete(r.id);
+                        setSelectedIds(next);
+                      }} />
+                  </td>
                   <td className="px-4 py-3 font-medium truncate max-w-[400px]">{r.title}</td>
                   <td className="px-4 py-3 text-text-tertiary text-xs">{dayjs(r.created_at).format("MM-DD HH:mm")}</td>
                   <td className="px-4 py-3">
@@ -166,7 +196,7 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
                     <div className="flex items-center gap-2">
                       <a href={`/task-analysis/${r.id}?view=${detailView}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                        <ExternalLink className="h-3 w-3" />查看
+                        {detailView === "beam" ? "光束图" : "时序"}
                       </a>
                       <button onClick={() => handleDownload(r.id)} title="下载"
                         className="text-text-tertiary hover:text-primary transition-colors">

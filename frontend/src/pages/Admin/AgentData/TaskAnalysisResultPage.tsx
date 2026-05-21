@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { showMessage } from "@/lib/toast";
 import { agentDataApi } from "@services/znt/api";
 import StudentBeamChart from "./components/StudentBeamChart";
+import TimelineChart from "./components/TimelineChart";
 
 const WC_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#06B6D4", "#EC4899", "#F59E0B", "#10B981", "#8B5CF6"];
 
@@ -344,8 +345,9 @@ const WordCloudChart: React.FC<{ data: WordCloudItem[] }> = ({ data }) => {
 const TaskAnalysisResultPage: React.FC = () => {
   const { analysisId } = useParams<{ analysisId?: string }>();
   const [searchParams] = useSearchParams();
-  const view = searchParams.get("view") === "beam" ? "beam" : "wordcloud";
+  const view = (searchParams.get("view") || "timeline") as "timeline" | "beam" | "wordcloud";
   const isBeamView = view === "beam";
+  const isTimelineView = view === "timeline";
   const [loading, setLoading] = useState(true);
   const [loadingBeam, setLoadingBeam] = useState(false);
   const [detail, setDetail] = useState<TaskAnalysisDetail | null>(null);
@@ -456,31 +458,143 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
           )}
 
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryCard icon={<Hash className="h-4 w-4" />} label="热点词" value={wc.length} hint="从学生问题中提取" />
-            <SummaryCard icon={<Target className="h-4 w-4" />} label="已覆盖" value={covered.length} hint="任务单命中的主题" />
-            <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="新问题" value={uncovered.length} hint="学生自发延伸方向" />
-            <SummaryCard icon={isBeamView ? <Users className="h-4 w-4" /> : <GitBranch className="h-4 w-4" />} label={isBeamView ? "学生/问题" : "分析视图"} value={isBeamView ? `${studentTotal}/${questionTotal}` : "证据"} hint={isBeamView ? "参与学生 / 提问数" : "优先阅读代表问题"} />
+            {isBeamView ? (
+              <>
+                <SummaryCard icon={<Users className="h-4 w-4" />} label="参与学生" value={studentTotal} hint="提交问题的学生数" />
+                <SummaryCard icon={<MessageSquare className="h-4 w-4" />} label="提问总数" value={questionTotal} hint="学生提问总条数" />
+                <SummaryCard icon={<Target className="h-4 w-4" />} label="主题聚类" value={covered.length + uncovered.length} hint="AI 识别的问题主题" />
+                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="生发问题" value={uncovered.length} hint="任务单外的新方向" />
+              </>
+            ) : (
+              <>
+                <SummaryCard icon={<Hash className="h-4 w-4" />} label="热点词" value={wc.length} hint="从学生问题中提取" />
+                <SummaryCard icon={<Target className="h-4 w-4" />} label="已覆盖" value={covered.length} hint="任务单命中的主题" />
+                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="新问题" value={uncovered.length} hint="学生自发延伸方向" />
+                <SummaryCard icon={<Users className="h-4 w-4" />} label="学生/问题" value={`${studentTotal}/${questionTotal}`} hint="参与学生 / 提问数" />
+              </>
+            )}
           </div>
 
-          {isBeamView ? (
+          {isTimelineView ? (
             <div className="space-y-5">
+              <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                <div className="mb-3">
+                  <h2 className="text-base font-semibold text-text-base">时序热点分析</h2>
+                  <p className="mt-1 text-sm text-text-tertiary">按时间桶展示学生提问密度变化，红色柱表示爆发点，黄色虚线为教师提问时间。点击柱体查看详情。</p>
+                </div>
+                <TimelineChart
+                  buckets={((detail?.result?.result || detail?.result) as any)?.timeline_buckets || []}
+                  teacherMarks={((detail?.result?.result || detail?.result) as any)?.teacher_marks || []}
+                  burstPoints={((detail?.result?.result || detail?.result) as any)?.burst_points || []}
+                  height={420}
+                />
+              </section>
+
               <MainQuestionChainFlow items={mainQuestionChain} />
+
+              {(covered.length > 0 || uncovered.length > 0) && (
+                <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                  <h2 className="mb-3 text-base font-semibold text-text-base">任务单对比</h2>
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {covered.length > 0 && (
+                      <div>
+                        <div className="mb-2 text-xs font-medium text-[var(--ws-color-success)]">✅ 任务单覆盖 ({covered.length})</div>
+                        <div className="space-y-1.5">
+                          {covered.map((t, i) => (
+                            <div key={i} className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                              <span className="font-medium text-text-base">{t.topic}</span>
+                              <span className="ml-2 text-xs text-text-tertiary">{t.count}次</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {uncovered.length > 0 && (
+                      <div>
+                        <div className="mb-2 text-xs font-medium text-[var(--ws-color-warning)]">💡 学生生成性问题 ({uncovered.length})</div>
+                        <div className="space-y-1.5">
+                          {uncovered.map((t, i) => (
+                            <div key={i} className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                              <span className="font-medium text-text-base">{t.topic}</span>
+                              <span className="ml-2 text-xs text-text-tertiary">{t.count}次</span>
+                              {t.questions && t.questions.length > 0 && (
+                                <div className="mt-1 text-xs text-text-tertiary">例: {t.questions[0]}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+          ) : isBeamView ? (
+            <div className="space-y-5">
+              {/* ② AI 主问题链（认知递进流程） */}
+              <MainQuestionChainFlow items={mainQuestionChain} />
+
+              {/* ③ 语义光束图（核心主视觉） */}
               <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-text-base">语义光束图</h2>
-                    <p className="mt-1 text-sm text-text-tertiary">主视图：同类问题汇聚到同一主题 lane，用来观察不同学生问题链的交汇点。</p>
+                    <p className="mt-1 text-sm text-text-tertiary">同类问题汇聚到同一主题 lane，观察学生问题链的交汇与分化。</p>
                   </div>
                   {loadingBeam && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                 </div>
-                {loadingBeam ? <div className="flex h-[520px] items-center justify-center text-sm text-text-tertiary">正在加载链条数据...</div> : <StudentBeamChart sessions={beamSessions} height={520} />}
+                {loadingBeam ? <div className="flex h-[520px] items-center justify-center text-sm text-text-tertiary">正在加载链条数据...</div> : (
+                  <StudentBeamChart
+                    sessions={beamSessions}
+                    height={520}
+                    mainQuestionChain={mainQuestionChain}
+                    teacherMarks={((detail?.result?.result || detail?.result) as any)?.teacher_marks || []}
+                    burstPoints={((detail?.result?.result || detail?.result) as any)?.burst_points || []}
+                    covered={covered}
+                    uncovered={uncovered}
+                  />
+                )}
               </section>
 
+              {/* ④ 教学发现（学生生发性问题） */}
+              {uncovered.length > 0 && (
+                <section className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-sm">
+                  <div className="mb-3">
+                    <h2 className="text-base font-semibold text-text-base flex items-center gap-2">
+                      <span className="text-lg">🔥</span> 学生生发性问题
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{uncovered.length} 个方向</span>
+                    </h2>
+                    <p className="mt-1 text-sm text-text-tertiary">任务单未覆盖但学生高频追问的主题 — 生产性失败信号（Productive Failure）</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                    {uncovered.map((t, i) => (
+                      <div key={i} className={`rounded-lg border px-3.5 py-3 ${t.count >= 3 ? "border-red-200 bg-red-50/40" : "border-border-secondary bg-surface"}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-medium text-sm text-text-base">{t.topic}</span>
+                          <span className={`text-xs font-semibold ${t.count >= 3 ? "text-red-600" : "text-text-tertiary"}`}>{t.count}次</span>
+                        </div>
+                        {t.questions && t.questions.length > 0 && (
+                          <div className="space-y-1">
+                            {t.questions.slice(0, 2).map((q, qi) => (
+                              <div key={qi} className="text-xs text-text-secondary pl-2 border-l-2 border-amber-300">"{q}"</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-lg bg-primary-soft/50 px-3 py-2 text-xs text-primary">
+                    💡 教学建议：以上问题为任务单未预料的方向，反映学生真实认知需求，建议纳入下次教学设计。
+                  </div>
+                </section>
+              )}
+
+              {/* ⑤ 学生问题链摘要 */}
               <section>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-semibold text-text-base">学生问题链流程</h2>
-                    <p className="mt-1 text-sm text-text-tertiary">仅展示最活跃的几条链路摘要，辅助理解光束图中的路径。</p>
+                    <h2 className="text-base font-semibold text-text-base">学生问题链摘要</h2>
+                    <p className="mt-1 text-sm text-text-tertiary">最活跃的链路，辅助理解光束图中的路径。</p>
                   </div>
                   <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">Top {Math.min(chainSummaries.length, 4)}</span>
                 </div>

@@ -44,6 +44,7 @@ const AdminAIAgentsPage = lazy(() => import("./pages/Admin/AIAgents"));
 const AdminAgentDataPage = lazy(() => import("./pages/Admin/AgentData"));
 const TaskAnalysisResultPage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisResultPage"));
 const TaskAnalysisNewPage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisNewPage"));
+const TaskAnalysisComparePage = lazy(() => import("./pages/Admin/AgentData/TaskAnalysisComparePage"));
 const LockCrackerPage = lazy(() => import("./pages/Games/LockCracker"));
 const GamesPage = lazy(() => import("./pages/Games"));
 const GameConfigPage = lazy(() => import("./pages/Games/GameConfig"));
@@ -120,6 +121,7 @@ function App() {
             <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsFullPage /></PageErrorBoundary>} />
             <Route path="/task-analysis/new" element={<PageErrorBoundary pageName="task-analysis-new"><TaskAnalysisNewPage /></PageErrorBoundary>} />
+            <Route path="/task-analysis/compare" element={<PageErrorBoundary pageName="task-analysis-compare"><TaskAnalysisComparePage /></PageErrorBoundary>} />
             <Route path="/task-analysis/:analysisId" element={<PageErrorBoundary pageName="task-analysis-result"><TaskAnalysisResultPage /></PageErrorBoundary>} />
             <Route path="/games/lock-cracker" element={<PageErrorBoundary pageName="lock-cracker"><LockCrackerPage /></PageErrorBoundary>} />
             <Route path="/games" element={<PageErrorBoundary pageName="games"><GamesPage /></PageErrorBoundary>} />

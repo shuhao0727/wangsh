@@ -26,6 +26,95 @@ _STOP_WORDS = set(
 )
 
 
+def _build_timeline_buckets(
+    rows: List[Dict[str, Any]],
+    bucket_seconds: int,
+    teacher_marks: List[Dict[str, Any]],
+    start_at: datetime,
+    end_at: datetime,
+    top_n: int = 5,
+) -> List[Dict[str, Any]]:
+    """
+    将提问记录按时间桶分组，检测爆发点，关联教师标记。
+    rows: 每行含 content, created_at, full_name 等字段
+    teacher_marks: [{"time": datetime, "question": str}, ...]
+    返回: TimelineBucket 列表
+    """
+    from math import floor
+
+    if not rows:
+        return []
+
+    # 计算桶边界
+    start_epoch = start_at.timestamp()
+    end_epoch = end_at.timestamp()
+    buckets_map: Dict[float, List[Dict[str, Any]]] = {}
+
+    for r in rows:
+        created = r.get("created_at")
+        if not created:
+            continue
+        ts = created.timestamp() if hasattr(created, "timestamp") else float(created)
+        bucket_key = floor((ts - start_epoch) / bucket_seconds) * bucket_seconds + start_epoch
+        if bucket_key not in buckets_map:
+            buckets_map[bucket_key] = []
+        buckets_map[bucket_key].append(r)
+
+    # 构建有序桶列表
+    sorted_keys = sorted(buckets_map.keys())
+    timeline = []
+    prev_count = 0
+
+    for bk in sorted_keys:
+        items = buckets_map[bk]
+        bucket_start = datetime.fromtimestamp(bk, tz=timezone.utc)
+        bucket_end = datetime.fromtimestamp(bk + bucket_seconds, tz=timezone.utc)
+
+        # 统计
+        question_count = len(items)
+        unique_students = len(set(
+            r.get("full_name") or r.get("student_id") or "unknown" for r in items
+        ))
+
+        # Top 问题
+        freq: Dict[str, int] = {}
+        for r in items:
+            q = (r.get("content") or "").strip().lower().rstrip("？?。.")
+            if q:
+                freq[q] = freq.get(q, 0) + 1
+        sorted_qs = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        top_questions = [{"question": q, "count": c} for q, c in sorted_qs]
+
+        # 爆发点检测：提问量 > 前一桶的 2 倍且绝对值 >= 3
+        is_burst = (prev_count > 0 and question_count >= prev_count * 2 and question_count >= 3)
+
+        # 关联最近的教师标记
+        near_teacher_mark = None
+        if teacher_marks:
+            for tm in teacher_marks:
+                tm_time = tm.get("time")
+                if not tm_time:
+                    continue
+                tm_ts = tm_time.timestamp() if hasattr(tm_time, "timestamp") else float(tm_time)
+                # 如果教师标记在该桶之前 5 分钟内
+                if bk - 300 <= tm_ts <= bk + bucket_seconds:
+                    near_teacher_mark = tm.get("question", "")
+                    break
+
+        timeline.append({
+            "bucket_start": bucket_start.isoformat(),
+            "bucket_end": bucket_end.isoformat(),
+            "question_count": question_count,
+            "unique_students": unique_students,
+            "top_questions": top_questions,
+            "is_burst": is_burst,
+            "near_teacher_mark": near_teacher_mark,
+        })
+        prev_count = question_count
+
+    return timeline
+
+
 def _segment_keywords(text: str, top_n: int = 50) -> List[Dict[str, Any]]:
     """提取关键词；优先使用 jieba，未安装时使用内置轻量分词兜底。"""
     freq: Dict[str, int] = {}
@@ -149,6 +238,9 @@ async def stream_task_sheet_analysis(
     api_key: str = "",
     agent_type: str = "",
     agent_model: str = "",
+    bucket_seconds: int = 180,
+    teacher_marks: Optional[List[Dict[str, Any]]] = None,
+    custom_prompt: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     now = datetime.now(timezone.utc)
     effective_end = end_at or now
@@ -240,11 +332,34 @@ async def stream_task_sheet_analysis(
     }
     yield {"event": "step_finished", "step_id": "llm", "message": "任务单对比完成", "progress": 90}
 
+    # 时间桶分析 + 爆发点检测
+    yield {"event": "step_started", "step_id": "timeline", "message": "正在构建时序热点分析", "progress": 92}
+    timeline_buckets = _build_timeline_buckets(
+        [dict(r) for r in rows],
+        bucket_seconds=bucket_seconds,
+        teacher_marks=teacher_marks or [],
+        start_at=effective_start,
+        end_at=effective_end,
+    )
+    burst_points = [b for b in timeline_buckets if b.get("is_burst")]
+    yield {
+        "event": "partial_result",
+        "step_id": "timeline",
+        "message": f"时序分析完成：{len(timeline_buckets)} 个时间桶，{len(burst_points)} 个爆发点",
+        "progress": 96,
+        "result": {"timeline_bucket_count": len(timeline_buckets), "burst_count": len(burst_points)},
+    }
+    yield {"event": "step_finished", "step_id": "timeline", "message": "时序热点分析完成", "progress": 98}
+
     result = {
         "word_cloud": word_cloud,
         "covered": comparison.get("covered", []),
         "uncovered": comparison.get("uncovered", []),
         "main_question_chain": comparison.get("main_question_chain", []),
+        "bloom": comparison.get("bloom", {}),
+        "timeline_buckets": timeline_buckets,
+        "teacher_marks": teacher_marks or [],
+        "burst_points": burst_points,
     }
     yield {
         "event": "analysis_finished",
@@ -266,6 +381,8 @@ async def analyze_task_sheet(
     api_key: str = "",
     agent_type: str = "",
     agent_model: str = "",
+    bucket_seconds: int = 180,
+    teacher_marks: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """分析任务单：提取关键词 + 对比学生提问"""
     now = datetime.now(timezone.utc)
@@ -326,12 +443,25 @@ async def analyze_task_sheet(
         agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model
     )
 
+    # 4. Timeline buckets + burst detection
+    timeline_buckets = _build_timeline_buckets(
+        [dict(r) for r in rows],
+        bucket_seconds=bucket_seconds,
+        teacher_marks=teacher_marks or [],
+        start_at=effective_start,
+        end_at=effective_end,
+    )
+    burst_points = [b for b in timeline_buckets if b.get("is_burst")]
+
     return {
         "word_cloud": word_cloud,
         "covered": comparison.get("covered", []),
         "uncovered": comparison.get("uncovered", []),
         "main_question_chain": comparison.get("main_question_chain", []),
         "bloom": comparison.get("bloom", {}),
+        "timeline_buckets": timeline_buckets,
+        "teacher_marks": teacher_marks or [],
+        "burst_points": burst_points,
     }
 
 
