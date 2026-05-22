@@ -66,6 +66,7 @@ window.addEventListener("resize",function(){chart.resize()});
 }
 
 const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView = "timeline" }) => {
+  const isChain = detailView === "beam";
   const [records, setRecords] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -74,7 +75,9 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
   const loadRecords = async () => {
     setLoading(true);
     try {
-      const res = await agentDataApi.listTaskAnalyses();
+      const res = isChain
+        ? await agentDataApi.listChainAnalyses()
+        : await agentDataApi.listHotAnalyses();
       if (res.success) setRecords(res.data as AnalysisRecord[]);
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -84,13 +87,17 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("确定删除这条分析记录？")) return;
-    const res = await agentDataApi.deleteTaskAnalysis(id);
+    const res = isChain
+      ? await agentDataApi.deleteChainAnalysis(id)
+      : await agentDataApi.deleteHotAnalysis(id);
     if (res.success) { showMessage.success("已删除"); void loadRecords(); }
     else showMessage.error("删除失败");
   };
 
   const handleDownload = async (id: number) => {
-    const res = await agentDataApi.getTaskAnalysis(id);
+    const res = isChain
+      ? await agentDataApi.getChainAnalysis(id)
+      : await agentDataApi.getHotAnalysis(id);
     if (!res.success) { showMessage.error("获取失败"); return; }
     const d: any = res.data;
     const r = d.result || {};

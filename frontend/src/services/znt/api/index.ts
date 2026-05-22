@@ -507,6 +507,46 @@ const agentDataApi = {
     } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
   },
 
+  // 热点问题分析
+  listHotAnalyses: async (): Promise<BaseResponse<unknown[]>> => {
+    try {
+      const res = await api.client.get("/ai-agents/analysis/hot-questions");
+      return { data: res.data, success: true, message: "ok" };
+    } catch (e: unknown) { return { data: [], success: false, message: errMsg(e, "加载失败") }; }
+  },
+  getHotAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      const res = await api.client.get(`/ai-agents/analysis/hot-questions/${id}`);
+      return { data: res.data, success: true, message: "ok" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "获取失败") }; }
+  },
+  deleteHotAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      await api.client.delete(`/ai-agents/analysis/hot-questions/${id}`);
+      return { data: null, success: true, message: "已删除" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
+  },
+
+  // 学生问题链分析
+  listChainAnalyses: async (): Promise<BaseResponse<unknown[]>> => {
+    try {
+      const res = await api.client.get("/ai-agents/analysis/student-chains");
+      return { data: res.data, success: true, message: "ok" };
+    } catch (e: unknown) { return { data: [], success: false, message: errMsg(e, "加载失败") }; }
+  },
+  getChainAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      const res = await api.client.get(`/ai-agents/analysis/student-chains/${id}`);
+      return { data: res.data, success: true, message: "ok" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "获取失败") }; }
+  },
+  deleteChainAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      await api.client.delete(`/ai-agents/analysis/student-chains/${id}`);
+      return { data: null, success: true, message: "已删除" };
+    } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
+  },
+
   exportSelectedConversations: async (sessionIds: string[]): Promise<BaseResponse<Blob>> => {
     try {
       const response = await api.client.post(

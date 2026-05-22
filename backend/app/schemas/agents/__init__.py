@@ -35,6 +35,12 @@ from .ai_agent import (
     TaskAnalysisSaveRequest,
     TaskAnalysisRecord,
     TaskAnalysisListItem,
+    HotQuestionAnalysisSaveRequest,
+    HotQuestionAnalysisRecord,
+    HotQuestionAnalysisListItem,
+    StudentChainAnalysisSaveRequest,
+    StudentChainAnalysisRecord,
+    StudentChainAnalysisListItem,
 )
 
 from .model_discovery import (

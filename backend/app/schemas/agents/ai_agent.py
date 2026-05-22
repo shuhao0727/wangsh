@@ -370,3 +370,88 @@ class TaskAnalysisListItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── 热点问题分析专用 Schema ──
+
+class HotQuestionAnalysisSaveRequest(BaseModel):
+    title: str = Field("未命名分析", max_length=200)
+    task_sheet: str
+    agent_id: int = Field(..., ge=1, description="数据来源智能体ID")
+    analysis_agent_id: Optional[int] = Field(None, ge=1, description="分析用智能体ID")
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    class_name: Optional[str] = None
+    bucket_seconds: int = Field(180, ge=60, le=600)
+    custom_prompt: Optional[str] = Field(None, max_length=2000)
+    teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list)
+
+
+class HotQuestionAnalysisRecord(BaseModel):
+    id: int
+    title: str
+    task_sheet: str = ""
+    agent_id: Optional[int] = None
+    analysis_agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    bucket_seconds: int = 180
+    teacher_marks: List[TeacherQuestionMark] = []
+    custom_prompt: Optional[str] = None
+    result: Dict[str, Any] = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class HotQuestionAnalysisListItem(BaseModel):
+    id: int
+    title: str
+    agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── 学生问题链分析专用 Schema ──
+
+class StudentChainAnalysisSaveRequest(BaseModel):
+    title: str = Field("未命名分析", max_length=200)
+    agent_id: int = Field(..., ge=1, description="数据来源智能体ID")
+    analysis_agent_id: Optional[int] = Field(None, ge=1, description="分析用智能体ID")
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    class_name: Optional[str] = None
+    task_sheet: Optional[str] = Field(None, description="任务单（可选）")
+    custom_prompt: Optional[str] = Field(None, max_length=2000)
+
+
+class StudentChainAnalysisRecord(BaseModel):
+    id: int
+    title: str
+    agent_id: Optional[int] = None
+    analysis_agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    task_sheet: Optional[str] = None
+    result: Dict[str, Any] = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StudentChainAnalysisListItem(BaseModel):
+    id: int
+    title: str
+    agent_id: Optional[int] = None
+    class_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

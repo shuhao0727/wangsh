@@ -85,3 +85,42 @@ class TaskAnalysis(Base):
     result = Column(JSON, nullable=False, default=dict)
     created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class HotQuestionAnalysis(Base):
+    """热点问题分析记录表 — 全班生发性问题发现"""
+    __tablename__ = "hot_question_analyses"
+    __table_args__ = {"comment": "热点问题分析记录表"}
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(200), nullable=False, default="未命名分析")
+    task_sheet = Column(Text, nullable=False)
+    agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True)
+    analysis_agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True)
+    class_name = Column(String(100), nullable=True)
+    start_at = Column(DateTime(timezone=True), nullable=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
+    bucket_seconds = Column(Integer, nullable=False, default=180)
+    teacher_marks = Column(JSON, nullable=False, default=list)
+    custom_prompt = Column(Text, nullable=True)
+    result = Column(JSON, nullable=False, default=dict)
+    created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class StudentChainAnalysis(Base):
+    """学生问题链分析记录表 — 个体思维链条追踪"""
+    __tablename__ = "student_chain_analyses"
+    __table_args__ = {"comment": "学生问题链分析记录表"}
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(200), nullable=False, default="未命名分析")
+    agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True)
+    analysis_agent_id = Column(Integer, ForeignKey("znt_agents.id", ondelete="SET NULL"), nullable=True)
+    class_name = Column(String(100), nullable=True)
+    start_at = Column(DateTime(timezone=True), nullable=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
+    task_sheet = Column(Text, nullable=True)
+    result = Column(JSON, nullable=False, default=dict)
+    created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
