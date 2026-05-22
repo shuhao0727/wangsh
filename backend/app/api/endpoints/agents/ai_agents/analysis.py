@@ -171,7 +171,44 @@ async def save_task_analysis_stream(
                     break
                 yield _sse(event, item)
 
-            record = TaskAnalysisModel(
+            # 根据请求特征判断类型并存入对应表
+            is_hot = bool(body.task_sheet) and body.bucket_seconds > 0
+            if is_hot:
+                record = HotQuestionAnalysis(
+                    title=body.title,
+                    task_sheet=body.task_sheet,
+                    agent_id=body.agent_id,
+                    analysis_agent_id=body.analysis_agent_id,
+                    class_name=body.class_name,
+                    start_at=effective_start,
+                    end_at=effective_end,
+                    bucket_seconds=body.bucket_seconds,
+                    teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                    custom_prompt=body.custom_prompt,
+                    result=analysis_result,
+                    created_by=current_user.get("id"),
+                )
+                db.add(record)
+                await db.commit()
+                await db.refresh(record)
+            else:
+                record = StudentChainAnalysis(
+                    title=body.title,
+                    task_sheet=body.task_sheet or None,
+                    agent_id=body.agent_id,
+                    analysis_agent_id=body.analysis_agent_id,
+                    class_name=body.class_name,
+                    start_at=effective_start,
+                    end_at=effective_end,
+                    result=analysis_result,
+                    created_by=current_user.get("id"),
+                )
+                db.add(record)
+                await db.commit()
+                await db.refresh(record)
+
+            # 兼容写入旧表
+            legacy = TaskAnalysisModel(
                 title=body.title,
                 task_sheet=body.task_sheet,
                 agent_id=body.agent_id,
@@ -181,9 +218,9 @@ async def save_task_analysis_stream(
                 result=analysis_result,
                 created_by=current_user.get("id"),
             )
-            db.add(record)
+            db.add(legacy)
             await db.commit()
-            await db.refresh(record)
+            await db.refresh(legacy)
             yield _sse(
                 "saved",
                 {
