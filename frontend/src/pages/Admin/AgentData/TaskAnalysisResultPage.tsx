@@ -366,11 +366,25 @@ const TaskAnalysisResultPage: React.FC = () => {
     if (Number.isNaN(id)) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
-    void agentDataApi.getTaskAnalysis(id)
+
+    // 根据视图类型选择正确的数据源
+    const fetchApi = view === "beam" ? agentDataApi.getChainAnalysis : agentDataApi.getHotAnalysis;
+    void fetchApi(id)
       .then((response: any) => {
         if (cancelled) return;
-        if (response.success) setDetail(response.data as TaskAnalysisDetail);
-        else showMessage.error(response.message || "记录不存在");
+        if (response.success) { setDetail(response.data as TaskAnalysisDetail); return; }
+        // 404 fallback: 尝试旧表
+        return (view === "beam" ? agentDataApi.getHotAnalysis(id) : agentDataApi.getChainAnalysis(id))
+          .then((r2: any) => {
+            if (cancelled) return;
+            if (r2.success) { setDetail(r2.data as TaskAnalysisDetail); return; }
+            return agentDataApi.getTaskAnalysis(id);
+          })
+          .then((r3: any) => {
+            if (cancelled) return;
+            if (r3?.success) { setDetail(r3.data as TaskAnalysisDetail); return; }
+            showMessage.error("记录不存在");
+          });
       })
       .catch(() => {
         if (!cancelled) showMessage.error("获取任务分析失败");

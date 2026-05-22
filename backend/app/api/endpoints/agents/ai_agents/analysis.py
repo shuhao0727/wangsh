@@ -38,7 +38,11 @@ from app.services.agents.providers.common import resolve_credentials
 router = APIRouter()
 
 
-@router.get("/analysis/hot-questions", response_model=List[HotQuestionBucket])
+def _sse(event: str, payload: Dict[str, Any]) -> bytes:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
+@router.get("/analysis/hot-questions/live", response_model=List[HotQuestionBucket])
 async def hot_questions(
     agent_id: int = Query(..., ge=1, description="智能体ID"),
     start_at: Optional[datetime] = Query(None, description="开始时间(ISO)"),
@@ -117,9 +121,6 @@ async def list_task_analyses(
     return [{"id": r.id, "title": r.title, "agent_id": r.agent_id, "class_name": r.class_name,
              "created_at": r.created_at.isoformat(),
              "uncovered_count": len((r.result or {}).get("uncovered", []))} for r in rows]
-
-def _sse(event: str, payload: Dict[str, Any]) -> bytes:
-    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
 @router.post("/analysis/task-analyses/stream")
@@ -286,13 +287,24 @@ async def save_task_analysis(
         agent_model=agent_model,
     )
 
-    record = TaskAnalysisModel(
-        title=body.title, task_sheet=body.task_sheet,
-        agent_id=body.agent_id, class_name=body.class_name,
-        start_at=effective_start, end_at=effective_end,
-        result=analysis_result,
-        created_by=current_user.get("id"),
-    )
+    is_hot = bool(body.task_sheet) and body.bucket_seconds > 0
+    if is_hot:
+        record = HotQuestionAnalysis(
+            title=body.title, task_sheet=body.task_sheet,
+            agent_id=body.agent_id, analysis_agent_id=body.analysis_agent_id,
+            class_name=body.class_name, start_at=effective_start, end_at=effective_end,
+            bucket_seconds=body.bucket_seconds,
+            teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+            custom_prompt=body.custom_prompt,
+            result=analysis_result, created_by=current_user.get("id"),
+        )
+    else:
+        record = StudentChainAnalysis(
+            title=body.title, task_sheet=body.task_sheet or None,
+            agent_id=body.agent_id, analysis_agent_id=body.analysis_agent_id,
+            class_name=body.class_name, start_at=effective_start, end_at=effective_end,
+            result=analysis_result, created_by=current_user.get("id"),
+        )
     db.add(record)
     await db.commit()
     await db.refresh(record)
@@ -313,7 +325,7 @@ async def delete_task_analysis(
     return {"ok": True}
 
 
-@router.get("/analysis/student-chains", response_model=List[StudentChainSession])
+@router.get("/analysis/student-chains/live", response_model=List[StudentChainSession])
 async def student_chains(
     agent_id: int = Query(..., ge=1, description="智能体ID"),
     user_id: Optional[int] = Query(None, ge=1, description="用户ID"),

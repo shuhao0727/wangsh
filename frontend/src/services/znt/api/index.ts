@@ -301,7 +301,7 @@ const agentDataApi = {
     >
   > => {
     try {
-      const response = await api.get("/ai-agents/analysis/hot-questions", {
+      const response = await api.get("/ai-agents/analysis/hot-questions/live", {
         params,
       });
       return {
@@ -348,7 +348,7 @@ const agentDataApi = {
     >
   > => {
     try {
-      const response = await api.get("/ai-agents/analysis/student-chains", {
+      const response = await api.get("/ai-agents/analysis/student-chains/live", {
         params,
       });
       return {

@@ -30,7 +30,7 @@ x-common-env: &common-env
 # 包含 common-env + PythonLab 环境变量的合并版本
 x-common-with-pythonlab-env: &common-with-pythonlab-env
   <<: *common-env
-  PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.5.14}
+  PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:${IMAGE_TAG:-1.5.15}}
   PYTHONLAB_SANDBOX_PROVIDER: ${PYTHONLAB_SANDBOX_PROVIDER:-docker}
   PYTHONLAB_DOCKER_RUNTIME: ${PYTHONLAB_DOCKER_RUNTIME:-runc}
   PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
