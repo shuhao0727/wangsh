@@ -342,8 +342,20 @@ class SimpleDatabaseInitializer:
                 sql_file_path = fallback_sql_file_path
                 print(f"📦 使用标准版初始化脚本: {fallback_sql_file_path}")
             else:
-                print(f"❌ 初始化SQL文件不存在: {v3_sql_file_path}")
-                return False
+                # SQL 文件已被 Alembic 迁移替代，回退到 Alembic
+                print("📦 SQL 文件缺失，使用 Alembic 迁移初始化...")
+                try:
+                    from alembic.config import Config
+                    from alembic import command
+                    alembic_ini = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
+                    if os.path.exists(alembic_ini):
+                        cfg = Config(alembic_ini)
+                        command.upgrade(cfg, "head")
+                        print("✅ Alembic 迁移完成")
+                        return True
+                except Exception as e:
+                    print(f"⚠️ Alembic 失败: {e}")
+                    return False
             
             if use_docker:
                 success = self.execute_sql_file_docker(sql_file_path)

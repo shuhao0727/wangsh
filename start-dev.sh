@@ -488,14 +488,7 @@ start_docker_infrastructure() {
     done
     print_success "PostgreSQL连接就绪"
 
-    local db_migration_sql="${PROJECT_ROOT}/backend/db/migrations/20260216_local_dev_schema.sql"
-    if [ -f "${db_migration_sql}" ]; then
-        print_info "执行本地开发数据库迁移..."
-        docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" -i wangsh-postgres \
-            psql -U "${POSTGRES_USER:-admin}" -d "${POSTGRES_DB:-wangsh_db}" \
-            < "${db_migration_sql}" > /dev/null
-        print_success "本地开发数据库迁移完成"
-    fi
+    # 数据库迁移由 Alembic 自动处理（backend 启动时运行）
     
     if ! docker ps --format "{{.Names}}" | grep -qx "wangsh-redis"; then
         print_info "启动Redis容器..."
