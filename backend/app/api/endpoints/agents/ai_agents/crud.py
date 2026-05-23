@@ -114,6 +114,7 @@ async def read_agents(
 @router.get("/active", response_model=List[AIAgentResponse])
 async def read_active_agents(
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
         agents = await get_active_agents(db)
