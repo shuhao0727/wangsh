@@ -20,6 +20,11 @@ from .analysis import (
     StudentChainAnalysisSaveRequest, StudentChainAnalysisRecord,
 )
 
+# 兼容别名（API 层仍引用旧名称，逐步迁移到 AnalysisListItem）
+HotQuestionAnalysisListItem = AnalysisListItem
+StudentChainAnalysisListItem = AnalysisListItem
+TaskAnalysisListItem = AnalysisListItem
+
 # Conversation
 from .conversation import (
     ConversationSummary, ConversationMessage,
