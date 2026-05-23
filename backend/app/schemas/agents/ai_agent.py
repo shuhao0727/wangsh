@@ -85,6 +85,7 @@ class AIAgentInDB(AIAgentBase):
 
 class AIAgentResponse(AIAgentInDB):
     """API响应中的AI智能体模型"""
+    api_key: Optional[str] = Field(None, exclude=True, description="API密钥（永远不返回）")
     status: Optional[bool] = Field(None, description="状态显示（前端兼容字段）")
     agent_name: Optional[str] = Field(None, description="智能体名称别名（前端兼容字段）")
     description: Optional[str] = Field(None, description="描述")

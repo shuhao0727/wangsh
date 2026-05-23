@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import Optional, List, Dict, Any
 
 from datetime import datetime, timedelta, timezone
@@ -230,6 +231,8 @@ async def save_task_analysis_stream(
                     "result": analysis_result,
                 },
             )
+        except asyncio.CancelledError:
+            import logging; logging.getLogger(__name__).info("SSE client disconnected, analysis cancelled")
         except Exception as exc:
             yield _sse("error", {"message": safe_error_detail("任务分析失败", exc), "progress": 100})
 

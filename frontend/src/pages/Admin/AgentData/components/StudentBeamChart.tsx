@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
+import { BEAM_COLORS, UNCOVERED_COLOR, TEACHER_MARK_COLOR, LANE_LINE_COLOR } from "./chartTheme";
 
 type Message = { message_type: string; content: string; created_at: string };
 type Session = {
@@ -29,7 +30,6 @@ interface Props {
   uncovered?: TopicItem[];
 }
 
-const BEAM_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899", "#06B6D4", "#10B981", "#EF4444", "#8B5CF6", "#F43F5E"];
 const STOP_WORDS = new Set(["怎么", "如何", "为什么", "什么", "可以", "这个", "那个", "一下", "请问", "老师", "就是", "还是", "如果", "没有", "问题", "请", "呢", "吗", "啊", "的", "了", "和", "与", "在", "是", "我", "要", "能"]);
 
 const extractTerms = (text: string): string[] => {
@@ -146,7 +146,7 @@ const StudentBeamChart: React.FC<Props> = ({
         type: "line", name: c.label, silent: true, z: 0, symbol: "none",
         data: [[questions[0].time, y], [questions[questions.length - 1].time, y]],
         lineStyle: {
-          color: c.isChainStage ? "rgba(13,148,136,0.25)" : "rgba(148,163,184,0.12)",
+          color: c.isChainStage ? LANE_LINE_COLOR : "rgba(148,163,184,0.12)",
           width: c.isChainStage ? 2 : 1,
           type: c.isChainStage ? "solid" : "dashed",
         },
@@ -169,7 +169,7 @@ const StudentBeamChart: React.FC<Props> = ({
     const scatterData = enriched.map((item) => ({
       value: [item.time, item.y, item.name, item.content, item.topic, item.isUncovered ? 1 : 0],
       itemStyle: {
-        color: item.isUncovered ? "#F59E0B" : BEAM_COLORS[students.indexOf(item.name) % BEAM_COLORS.length],
+        color: item.isUncovered ? UNCOVERED_COLOR : BEAM_COLORS[students.indexOf(item.name) % BEAM_COLORS.length],
         borderColor: item.isUncovered ? "#DC2626" : "transparent",
         borderWidth: item.isUncovered ? 2 : 0,
         opacity: 0.75,
