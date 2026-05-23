@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Search, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Search } from "lucide-react";
 import dayjs from "dayjs";
 import { agentDataApi } from "@services/znt/api";
 import aiAgentsApi from "@services/znt/api/ai-agents-api";

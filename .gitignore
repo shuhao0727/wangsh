@@ -343,3 +343,10 @@ docker-compose.local.yml
 frontend/src/.uimax-reviews.json
 frontend/mindmap-demo/
 *.png
+
+# ==================== 临时构建文件 ====================
+Dockerfile.backend-*
+frontend/build/
+output/
+test-results/
+beam-demo.html

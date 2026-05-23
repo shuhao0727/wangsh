@@ -9,24 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
 from app.utils.errors import safe_error_detail
-from app.models.agents import AIAgent
-from app.schemas.agents import (
-    HotQuestionBucket,
-    StudentChainSession,
-    TaskAnalysisRequest,
-    TaskAnalysisResponse,
-    TaskAnalysisSaveRequest,
-    TaskAnalysisRecord,
-    TeacherQuestionMark,
-    HotQuestionAnalysisSaveRequest,
-    HotQuestionAnalysisRecord,
-    HotQuestionAnalysisListItem,
-    StudentChainAnalysisSaveRequest,
-    StudentChainAnalysisRecord,
-    StudentChainAnalysisListItem,
-)
+from app.models.agents import AIAgent, HotQuestionAnalysis, StudentChainAnalysis
 from app.models.agents import TaskAnalysis as TaskAnalysisModel
-from app.models.agents import HotQuestionAnalysis, StudentChainAnalysis
 from app.services.agents import (
     analyze_hot_questions,
     analyze_student_chains,
