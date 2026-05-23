@@ -5,6 +5,9 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.errors import safe_error_detail
+
+from app.core.deps import get_db
 
 from app.core.deps import get_db, require_admin
 from app.models.learning.chapter import LearningChapter
@@ -106,7 +109,11 @@ async def upsert_chapter(
     if "sort_order" in data:
         ch.sort_order = data["sort_order"]
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("保存章节失败", e))
     await db.refresh(ch)
     return _chapter_payload(ch)
 
@@ -130,5 +137,9 @@ async def delete_chapter(
     if ch is None:
         raise HTTPException(status_code=404, detail="章节不存在")
     await db.delete(ch)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("删除章节失败", e))
     return {"detail": "ok"}

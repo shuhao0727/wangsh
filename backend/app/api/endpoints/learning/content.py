@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.errors import safe_error_detail
 from app.core.deps import get_db, require_admin
 from app.models.learning.content import LearningContentItem
 from app.schemas.learning.content import LearningContentItemIn
@@ -129,7 +130,11 @@ async def upsert_learning_content(
     item.enabled = data.enabled
     item.source_type = data.source_type
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("保存学习内容失败", e))
     await db.refresh(item)
     return _content_payload(item)
 
@@ -159,6 +164,10 @@ async def toggle_learning_content(
         raise HTTPException(status_code=404, detail="未找到学习内容项")
 
     item.enabled = bool(data["enabled"])
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("保存学习内容失败", e))
     await db.refresh(item)
     return _content_payload(item)

@@ -13,6 +13,7 @@ from app.core.deps import get_db, get_current_user, require_admin
 from app.models.learning.content import LearningContentItem
 from app.schemas.learning.content import MindmapCreate, MindmapUpdate, LearningContentItemOut
 
+from app.utils.errors import safe_error_detail
 router = APIRouter(prefix="/learning/mindmaps", tags=["mindmaps"])
 
 
@@ -105,7 +106,11 @@ async def create_mindmap(
         updated_at=now,
     )
     db.add(item)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("创建思维导图失败", e))
     await db.refresh(item)
     return _to_out(item)
 
@@ -133,7 +138,11 @@ async def update_mindmap(
     if body.enabled is not None:
         item.enabled = body.enabled
     item.updated_at = datetime.utcnow()
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("更新思维导图失败", e))
     await db.refresh(item)
     return _to_out(item)
 
@@ -155,7 +164,11 @@ async def delete_mindmap(
     if item.owner_id != user_id and not is_admin:
         raise HTTPException(status_code=403, detail="无权删除此导图")
     await db.delete(item)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("删除思维导图失败", e))
     return {"ok": True}
 
 
@@ -179,6 +192,10 @@ async def toggle_publish(
         item.owner_id = 1  # admin user
         item.source_type = "user"
     item.updated_at = datetime.utcnow()
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("更新思维导图失败", e))
     await db.refresh(item)
     return _to_out(item)
