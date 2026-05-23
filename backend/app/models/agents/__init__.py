@@ -2,7 +2,7 @@
 AI智能体模型模块
 """
 
-from .ai_agent import AIAgent, ZntConversation, TaskAnalysis
+from .ai_agent import AIAgent, ZntConversation, TaskAnalysis, HotQuestionAnalysis, StudentChainAnalysis
 from .group_discussion import GroupDiscussionAnalysis, GroupDiscussionMessage, GroupDiscussionSession
 from .optimization import OptimizeLog
 
@@ -14,4 +14,6 @@ __all__ = [
     "GroupDiscussionAnalysis",
     "OptimizeLog",
     "TaskAnalysis",
+    "HotQuestionAnalysis",
+    "StudentChainAnalysis",
 ]
