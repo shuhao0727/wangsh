@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin, require_user
 from app.models.xxjs.dianming import XxjsDianming
+from app.utils.errors import safe_error_detail
 from app.schemas.xxjs.dianming import (
     DianmingClass,
     DianmingImportRequest,
@@ -86,24 +87,31 @@ async def import_students(
     if not names:
         return []
 
-    # 批量 upsert：ON CONFLICT DO NOTHING（利用唯一约束 uq_xxjs_dianming_student）
-    for name in names:
-        stmt = (
-            pg_insert(XxjsDianming)
-            .values(
-                year=data.year,
-                class_name=data.class_name,
-                student_name=name,
-                student_no=None,
-            )
-            .on_conflict_do_nothing(
-                constraint="uq_xxjs_dianming_student"
-            )
+    # 批量 upsert：单条 SQL 多行 INSERT（修复 N+1）
+    stmt = (
+        pg_insert(XxjsDianming)
+        .values(
+            [
+                {
+                    "year": data.year,
+                    "class_name": data.class_name,
+                    "student_name": name,
+                    "student_no": None,
+                }
+                for name in names
+            ]
         )
-        await db.execute(stmt)
+        .on_conflict_do_nothing(
+            constraint="uq_xxjs_dianming_student"
+        )
+    )
+    await db.execute(stmt)
 
-    await db.commit()
-    # 重新查询返回完整列表
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("导入学生失败", e))
     return await _query_students(db, data.year, data.class_name)
 
 
@@ -120,8 +128,12 @@ async def delete_class(
         XxjsDianming.class_name == class_name,
     )
     result = await db.execute(stmt)
-    await db.commit()
-    return {"success": True, "deleted": result.rowcount or 0}  # type: ignore[union-attr]
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("删除班级失败", e))
+    return {"success": True, "deleted": result.rowcount or 0}
 
 
 @router.put("/class/students", response_model=List[DianmingStudent])
@@ -131,27 +143,24 @@ async def update_class_students(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Any:
     """更新班级学生名单（覆盖模式：先删除后导入）"""
-    # 1. 删除原有学生
-    stmt = delete(XxjsDianming).where(
-        XxjsDianming.year == data.year,
-        XxjsDianming.class_name == data.class_name,
-    )
-    await db.execute(stmt)
+    try:
+        # 1. 删除原有学生
+        stmt = delete(XxjsDianming).where(
+            XxjsDianming.year == data.year,
+            XxjsDianming.class_name == data.class_name,
+        )
+        await db.execute(stmt)
 
-    # 2. 导入新名单
-    names = [n.strip() for n in data.names_text.split("\n") if n.strip()]
-    if names:
-        for name in names:
-            db.add(
-                XxjsDianming(
-                    year=data.year,
-                    class_name=data.class_name,
-                    student_name=name,
-                    student_no=None,
-                )
-            )
+        # 2. 导入新名单
+        names = [n.strip() for n in data.names_text.split("\n") if n.strip()]
+        if names:
+            for name in names:
+                db.add(XxjsDianming(year=data.year, class_name=data.class_name, student_name=name, student_no=None))
 
-    await db.commit()
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("更新班级学生失败", e))
     return await _query_students(db, data.year, data.class_name)
 
 
