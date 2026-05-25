@@ -55,13 +55,13 @@ cp .env.example .env
 # 编辑 .env，设置生产配置（修改密码、密钥等）
 
 # 2. 构建镜像
-./build_images.sh
+bash scripts/deploy.sh build
 
 # 3. 推送镜像到 Docker Hub（可选）
-docker compose push
+bash scripts/deploy.sh push
 
 # 4. 部署
-docker compose up -d
+bash scripts/deploy.sh up
 ```
 
 ---
@@ -99,7 +99,7 @@ REACT_APP_VERSION=1.5.12
 ### 1. 构建所有镜像
 
 ```bash
-./build_images.sh
+bash scripts/deploy.sh build
 ```
 
 构建的镜像列表：
@@ -126,7 +126,7 @@ curl http://localhost:6608/health
 docker login
 
 # 推送所有镜像
-docker compose push
+bash scripts/deploy.sh push
 ```
 
 ---

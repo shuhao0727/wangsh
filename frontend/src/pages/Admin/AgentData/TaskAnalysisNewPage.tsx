@@ -48,7 +48,7 @@ const TaskAnalysisNewPage: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<{ lastAt?: string; firstAt?: string } | null>(null);
   useEffect(() => {
     if (!agentId) return;
-    void agentDataApi.getHotQuestions?.({ agent_id: Number(agentId), bucket_seconds: 3600, top_n: 1 })
+    void agentDataApi.analyzeHotQuestions({ agent_id: Number(agentId), bucket_seconds: 900, top_n: 1 })
       .then((res: any) => {
         if (res?.data?.length > 0) {
           const buckets = res.data;

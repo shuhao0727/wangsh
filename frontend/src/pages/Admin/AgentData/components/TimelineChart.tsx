@@ -2,10 +2,12 @@
  * TimelineChart — 时序热点问题分析图表
  * 使用 ECharts 绘制：折线图(提问量) + 教师标记(垂直线) + 爆发点(红点)
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import { Flame, Users, MessageSquare } from "lucide-react";
+import useDocumentDarkMode from "@/hooks/useDocumentDarkMode";
+import { getAgentChartTheme } from "./chartTheme";
 
 type TopQuestion = { question: string; count: number };
 type TimelineBucket = {
@@ -35,6 +37,8 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<TimelineBucket | null>(null);
+  const isDark = useDocumentDarkMode();
+  const theme = useMemo(() => getAgentChartTheme(), [isDark]);
 
   useEffect(() => {
     if (!chartRef.current || buckets.length === 0) return;
@@ -57,30 +61,37 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
       .map((b, i) => (b.is_burst ? i : -1))
       .filter((i) => i >= 0);
 
+    const burstBucketIndices = new Map<number, number>();
+    burstIndices.forEach((bucketIndex, scatterIndex) => {
+      burstBucketIndices.set(scatterIndex, bucketIndex);
+    });
     // 教师标记线
     const markLines = teacherMarks.map((tm) => ({
       xAxis: dayjs(tm.time).format("HH:mm"),
-      label: { formatter: tm.question || "教师提问", fontSize: 10 },
+      label: { formatter: tm.question || "教师提问", fontSize: 10, color: theme.teacher },
     }));
 
     const option: echarts.EChartsOption = {
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "cross" },
+        backgroundColor: theme.surfaceElevated,
+        borderColor: theme.border,
+        textStyle: { color: theme.textBase, fontSize: 12 },
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return "";
           const idx = params[0].dataIndex;
           const bucket = buckets[idx];
           if (!bucket) return "";
-          let html = `<div style="font-size:12px"><b>${dayjs(bucket.bucket_start).format("HH:mm")} - ${dayjs(bucket.bucket_end).format("HH:mm")}</b>`;
+          let html = `<div style="font-size:12px"><b style="color:${theme.textBase}">${dayjs(bucket.bucket_start).format("HH:mm")} - ${dayjs(bucket.bucket_end).format("HH:mm")}</b>`;
           html += `<br/>提问数: <b>${bucket.question_count}</b>`;
           html += `<br/>独立学生: <b>${bucket.unique_students}</b>`;
-          if (bucket.is_burst) html += `<br/><span style="color:#EF4444">🔥 爆发点</span>`;
-          if (bucket.near_teacher_mark) html += `<br/>📌 教师: ${bucket.near_teacher_mark}`;
+          if (bucket.is_burst) html += `<br/><span style="color:${theme.burst}">🔥 爆发点</span>`;
+          if (bucket.near_teacher_mark) html += `<br/><span style="color:${theme.teacher}">📌 教师: ${bucket.near_teacher_mark}</span>`;
           if (bucket.top_questions?.length > 0) {
-            html += `<br/><br/><b>热点问题:</b>`;
+            html += `<br/><br/><b style="color:${theme.textBase}">热点问题:</b>`;
             bucket.top_questions.slice(0, 3).forEach((q) => {
-              html += `<br/>• ${q.question.slice(0, 30)}${q.question.length > 30 ? "..." : ""} (${q.count})`;
+              html += `<br/>• <span style="color:${theme.textMuted}">${q.question.slice(0, 30)}${q.question.length > 30 ? "..." : ""}</span> (${q.count})`;
             });
           }
           html += "</div>";
@@ -90,17 +101,18 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
       legend: {
         data: ["提问数", "独立学生数"],
         top: 8,
-        textStyle: { fontSize: 11 },
+        textStyle: { fontSize: 11, color: theme.textSecondary },
       },
       grid: { left: 50, right: 30, top: 50, bottom: 40 },
       xAxis: {
         type: "category",
         data: xData,
-        axisLabel: { fontSize: 10, rotate: xData.length > 12 ? 30 : 0 },
+        axisLabel: { fontSize: 10, rotate: xData.length > 12 ? 30 : 0, color: theme.textSecondary },
+        axisLine: { lineStyle: { color: theme.border } },
       },
       yAxis: [
-        { type: "value", name: "提问数", nameTextStyle: { fontSize: 10 }, splitLine: { lineStyle: { type: "dashed" } } },
-        { type: "value", name: "学生数", nameTextStyle: { fontSize: 10 }, splitLine: { show: false } },
+        { type: "value", name: "提问数", nameTextStyle: { fontSize: 10, color: theme.textSecondary }, axisLabel: { color: theme.textSecondary }, splitLine: { lineStyle: { type: "dashed", color: theme.grid } } },
+        { type: "value", name: "学生数", nameTextStyle: { fontSize: 10, color: theme.textSecondary }, axisLabel: { color: theme.textSecondary }, splitLine: { show: false } },
       ],
       series: [
         {
@@ -109,7 +121,7 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
           data: questionCounts,
           itemStyle: {
             color: (params: any) =>
-              burstIndices.includes(params.dataIndex) ? "#EF4444" : "#0D9488",
+              burstIndices.includes(params.dataIndex) ? theme.burst : theme.primary,
             borderRadius: [3, 3, 0, 0],
           },
           barMaxWidth: 28,
@@ -120,28 +132,26 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
           yAxisIndex: 1,
           data: studentCounts,
           smooth: true,
-          lineStyle: { color: "#7C3AED", width: 2 },
-          itemStyle: { color: "#7C3AED" },
+          lineStyle: { color: theme.accent, width: 2 },
+          itemStyle: { color: theme.accent },
           symbol: "circle",
           symbolSize: 5,
         },
-        // 爆发点高亮
         {
           name: "爆发点",
           type: "scatter",
           data: burstIndices.map((i) => [i, questionCounts[i]]),
           symbolSize: 14,
-          itemStyle: { color: "#EF4444", shadowBlur: 6, shadowColor: "rgba(239,68,68,0.4)" },
+          itemStyle: { color: theme.burst, shadowBlur: 6, shadowColor: theme.burstGlow },
           z: 10,
         },
       ],
-      // 教师标记线
       ...(markLines.length > 0
         ? {
             markLine: {
               silent: true,
               symbol: ["none", "none"],
-              lineStyle: { type: "dashed", color: "#F59E0B", width: 2 },
+              lineStyle: { type: "dashed", color: theme.teacherSoft, width: 2 },
               data: markLines,
             },
           }
@@ -154,8 +164,8 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
         silent: true,
         symbol: ["none", "triangle"],
         symbolSize: 8,
-        lineStyle: { type: "dashed", color: "#F59E0B", width: 1.5 },
-        label: { fontSize: 9, color: "#F59E0B", position: "start" },
+        lineStyle: { type: "dashed", color: theme.teacherSoft, width: 1.5 },
+        label: { fontSize: 9, color: theme.teacher, position: "start" },
         data: markLines,
       };
     }
@@ -165,8 +175,12 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
     // 点击事件
     chart.off("click");
     chart.on("click", (params: any) => {
-      if (params.dataIndex !== undefined && buckets[params.dataIndex]) {
-        setSelectedBucket(buckets[params.dataIndex]);
+      if (params.dataIndex === undefined) return;
+      const bucketIndex = params.seriesName === "爆发点"
+        ? burstBucketIndices.get(params.dataIndex)
+        : params.dataIndex;
+      if (bucketIndex !== undefined && buckets[bucketIndex]) {
+        setSelectedBucket(buckets[bucketIndex]);
       }
     });
 
@@ -177,7 +191,7 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
       chart.dispose();
       chartInstance.current = null;
     };
-  }, [buckets, teacherMarks, burstPoints]);
+  }, [buckets, teacherMarks, burstPoints, theme]);
 
   return (
     <div className="space-y-4">
@@ -193,12 +207,12 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
                 {dayjs(selectedBucket.bucket_start).format("HH:mm")} - {dayjs(selectedBucket.bucket_end).format("HH:mm")}
               </span>
               {selectedBucket.is_burst && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ws-color-danger)]/20 bg-[var(--ws-color-danger)]/10 px-2 py-0.5 text-xs font-medium text-[var(--ws-color-danger)]">
                   <Flame className="h-3 w-3" /> 爆发点
                 </span>
               )}
               {selectedBucket.near_teacher_mark && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning)]/10 px-2 py-0.5 text-xs text-[var(--ws-color-warning)]">
                   📌 {selectedBucket.near_teacher_mark}
                 </span>
               )}

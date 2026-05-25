@@ -445,6 +445,8 @@ const agentDataApi = {
     params: {
       title: string; task_sheet: string; agent_id: number;
       start_at?: string; end_at?: string; class_name?: string;
+      analysis_agent_id?: number; bucket_seconds?: number; custom_prompt?: string;
+      teacher_marks?: Array<{ time: string; question: string }>;
     },
     callbacks: TaskAnalysisStreamCallbacks = {},
   ): Promise<BaseResponse<unknown>> => {

@@ -23,7 +23,7 @@ jobs:
       - name: version consistency
         run: node scripts/check-version-consistency.mjs
       - name: shell syntax
-        run: bash -n scripts/deploy.sh build_images.sh
+        run: bash -n scripts/deploy.sh
       - name: compose config validation
         run: |
           docker compose --env-file .env.example -f docker-compose.yml config --quiet

@@ -320,51 +320,31 @@ class SimpleDatabaseInitializer:
             
             # 执行初始化
             print("🔄 开始执行数据库初始化...")
-            
-            # 优先使用 v3.0 版本的初始化脚本
-            v3_sql_file_path = os.path.join(
-                os.path.dirname(__file__),
-                "init.sql",
-                "full_init_v3.sql"
+
+            # 当前数据库结构以 Alembic 为准。
+            alembic_ini = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
             )
-            
-            fallback_sql_file_path = os.path.join(
-                os.path.dirname(__file__),
-                "init.sql",
-                "full_init.sql"
-            )
-            
-            sql_file_path = None
-            if os.path.exists(v3_sql_file_path):
-                sql_file_path = v3_sql_file_path
-                print(f"📦 使用 v3.0 增强版初始化脚本: {v3_sql_file_path}")
-            elif os.path.exists(fallback_sql_file_path):
-                sql_file_path = fallback_sql_file_path
-                print(f"📦 使用标准版初始化脚本: {fallback_sql_file_path}")
-            else:
-                # SQL 文件已被 Alembic 迁移替代，回退到 Alembic
-                print("📦 SQL 文件缺失，使用 Alembic 迁移初始化...")
-                try:
-                    from alembic.config import Config
-                    from alembic import command
-                    alembic_ini = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
-                    if os.path.exists(alembic_ini):
-                        cfg = Config(alembic_ini)
-                        command.upgrade(cfg, "head")
-                        print("✅ Alembic 迁移完成")
-                        return True
-                except Exception as e:
-                    print(f"⚠️ Alembic 失败: {e}")
-                    return False
-            
-            if use_docker:
-                success = self.execute_sql_file_docker(sql_file_path)
-            else:
-                success = self.execute_sql_file_direct(sql_file_path)
-            
-            if not success:
+            if not os.path.exists(alembic_ini):
+                print(f"❌ Alembic 配置文件不存在: {alembic_ini}")
                 return False
-            
+
+            print("📦 使用 Alembic 迁移初始化数据库...")
+            try:
+                from alembic.config import Config
+                from alembic import command
+
+                cfg = Config(alembic_ini)
+                cfg.set_main_option(
+                    "script_location",
+                    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic"))
+                )
+                command.upgrade(cfg, "head")
+                print("✅ Alembic 迁移完成")
+            except Exception as e:
+                print(f"❌ Alembic 迁移失败: {e}")
+                return False
+
             # 验证初始化结果
             print("✅ 验证初始化结果...")
             

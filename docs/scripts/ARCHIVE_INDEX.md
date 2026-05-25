@@ -44,6 +44,15 @@
 | `xbk_verify.py` | `backend/scripts/xbk_verify.py` | 旧版XBK验证脚本 | 被新版验证流程替代 |
 | `analyze_db_performance.py` | `backend/scripts/analyze_db_performance.py` | 静态数据库索引启发式分析脚本 | 未维护且默认写报告，当前以数据库性能指南和 Alembic 流程为准 |
 | `check_query_patterns.py` | `backend/scripts/check_query_patterns.py` | 静态查询模式扫描脚本 | 未维护且误报风险高，不作为质量门禁 |
+| `add_missing_indexes.sql` | `backend/scripts/add_missing_indexes.sql` | 数据���索引补丁草案 SQL | 未接入 Alembic / README / workflow，改为仅保留历史参考 |
+| `mindmap_seed.py` | `backend/scripts/mindmap_seed.py` | 一次性思维导图种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_agents_content.py` | `backend/scripts/seed_agents_content.py` | 智能体内容种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_ai_content.py` | `backend/scripts/seed_ai_content.py` | AI 内容种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_all_experiments.py` | `backend/scripts/seed_all_experiments.py` | 历史实验种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_experiments.py` | `backend/scripts/seed_experiments.py` | 历史实验数据种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_learning.py` | `backend/scripts/seed_learning.py` | 学习模块旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_learning_content.py` | `backend/scripts/seed_learning_content.py` | 学习内容旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_ml_book.py` | `backend/scripts/seed_ml_book.py` | 机器学习书籍旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
 
 ### 3. 前端脚本（原 `frontend/scripts/archive/`）
 

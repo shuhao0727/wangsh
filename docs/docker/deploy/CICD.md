@@ -110,9 +110,9 @@ docker compose <命令>
 
 带 `-amd64` 后缀的命令（如 `up-amd64`、`build-amd64`）会强制使用 `linux/amd64` 平台。
 
-### 3.2 build_images.sh — 本地镜像构建
+### 3.2 scripts/deploy.sh build — 本地镜像构建
 
-构建所有 6 个 Docker 镜像（backend、frontend、gateway、typst-worker、pythonlab-worker、pythonlab-sandbox）。
+构建生产 Docker Compose 定义中的服务镜像。需要推送时继续执行 `bash scripts/deploy.sh push`。
 
 ### 3.3 start-dev.sh / stop-dev.sh — 开发环境
 

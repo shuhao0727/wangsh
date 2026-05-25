@@ -14,6 +14,7 @@ import StudentBeamChart from "./components/StudentBeamChart";
 import TimelineChart from "./components/TimelineChart";
 import SummaryCard from "./components/SummaryCard";
 import MainQuestionChainFlow from "./components/MainQuestionChainFlow";
+import { getAgentChartTheme } from "./components/chartTheme";
 
 const WC_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#06B6D4", "#EC4899", "#F59E0B", "#10B981", "#8B5CF6"];
 
@@ -218,6 +219,7 @@ const WordCloudChart: React.FC<{ data: WordCloudItem[] }> = ({ data }) => {
     if (!ref.current || data.length === 0) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
     const maxCount = Math.max(...data.map((item) => item.count), 1);
+    const theme = getAgentChartTheme();
     chartRef.current.off("mouseover");
     chartRef.current.off("mouseout");
     chartRef.current.on("mouseover", (params: any) => {
@@ -227,9 +229,9 @@ const WordCloudChart: React.FC<{ data: WordCloudItem[] }> = ({ data }) => {
     chartRef.current.setOption({
       tooltip: {
         show: true,
-        backgroundColor: "rgba(15,23,42,0.86)",
-        borderColor: "transparent",
-        textStyle: { color: "#fff", fontSize: 13 },
+        backgroundColor: theme.surfaceElevated,
+        borderColor: theme.border,
+        textStyle: { color: theme.textBase, fontSize: 13 },
         formatter: (params: any) => `${params.name}<br/>出现 <b>${params.value}</b> 次`,
       },
       series: [{
@@ -339,7 +341,7 @@ const TaskAnalysisResultPage: React.FC = () => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [analysisId]);
+  }, [analysisId, view]);
 
   useEffect(() => {
     if (!isBeamView || !detail?.agent_id) {
@@ -518,25 +520,25 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
 
               {/* ④ 教学发现（学生生发性问题） */}
               {uncovered.length > 0 && (
-                <section className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-sm">
+                <section className="rounded-xl border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning)]/8 p-4 shadow-sm">
                   <div className="mb-3">
-                    <h2 className="text-base font-semibold text-text-base flex items-center gap-2">
+                    <h2 className="flex items-center gap-2 text-base font-semibold text-text-base">
                       <span className="text-lg">🔥</span> 学生生发性问题
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{uncovered.length} 个方向</span>
+                      <span className="rounded-full bg-[var(--ws-color-warning)]/12 px-2 py-0.5 text-xs font-medium text-[var(--ws-color-warning)]">{uncovered.length} 个方向</span>
                     </h2>
                     <p className="mt-1 text-sm text-text-tertiary">任务单未覆盖但学生高频追问的主题 — 生产性失败信号（Productive Failure）</p>
                   </div>
                   <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
                     {uncovered.map((t, i) => (
-                      <div key={i} className={`rounded-lg border px-3.5 py-3 ${t.count >= 3 ? "border-red-200 bg-red-50/40" : "border-border-secondary bg-surface"}`}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-medium text-sm text-text-base">{t.topic}</span>
-                          <span className={`text-xs font-semibold ${t.count >= 3 ? "text-red-600" : "text-text-tertiary"}`}>{t.count}次</span>
+                      <div key={i} className={`rounded-lg border px-3.5 py-3 ${t.count >= 3 ? "border-[var(--ws-color-danger)]/20 bg-[var(--ws-color-danger)]/8" : "border-border-secondary bg-surface"}`}>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <span className="text-sm font-medium text-text-base">{t.topic}</span>
+                          <span className={`text-xs font-semibold ${t.count >= 3 ? "text-[var(--ws-color-danger)]" : "text-text-tertiary"}`}>{t.count}次</span>
                         </div>
                         {t.questions && t.questions.length > 0 && (
                           <div className="space-y-1">
                             {t.questions.slice(0, 2).map((q, qi) => (
-                              <div key={qi} className="text-xs text-text-secondary pl-2 border-l-2 border-amber-300">"{q}"</div>
+                              <div key={qi} className="border-l-2 border-[var(--ws-color-warning)]/35 pl-2 text-xs text-text-secondary">"{q}"</div>
                             ))}
                           </div>
                         )}

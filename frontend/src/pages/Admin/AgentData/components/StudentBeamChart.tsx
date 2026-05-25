@@ -4,7 +4,8 @@
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
-import { BEAM_COLORS, UNCOVERED_COLOR, TEACHER_MARK_COLOR, LANE_LINE_COLOR } from "./chartTheme";
+import useDocumentDarkMode from "@/hooks/useDocumentDarkMode";
+import { getAgentChartTheme } from "./chartTheme";
 
 type Message = { message_type: string; content: string; created_at: string };
 type Session = {
@@ -73,11 +74,13 @@ const StudentBeamChart: React.FC<Props> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const isDark = useDocumentDarkMode();
 
   const empty = useMemo(() => sessions.every((s) => !s.messages.some((m) => m.message_type === "question")), [sessions]);
 
   useEffect(() => {
     if (!ref.current || sessions.length === 0 || empty) return;
+    const theme = getAgentChartTheme();
     if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null; }
     chartRef.current = echarts.init(ref.current);
 
@@ -146,11 +149,11 @@ const StudentBeamChart: React.FC<Props> = ({
         type: "line", name: c.label, silent: true, z: 0, symbol: "none",
         data: [[questions[0].time, y], [questions[questions.length - 1].time, y]],
         lineStyle: {
-          color: c.isChainStage ? LANE_LINE_COLOR : "rgba(148,163,184,0.12)",
+          color: c.isChainStage ? theme.laneLine : theme.laneLineMuted,
           width: c.isChainStage ? 2 : 1,
           type: c.isChainStage ? "solid" : "dashed",
         },
-        label: c.isChainStage ? { show: true, formatter: c.label, position: "insideStartTop", fontSize: 10, color: "#0D9488", fontWeight: 600 } : undefined,
+        label: c.isChainStage ? { show: true, formatter: c.label, position: "insideStartTop", fontSize: 10, color: theme.primary, fontWeight: 600 } : undefined,
       };
     });
 
@@ -160,7 +163,7 @@ const StudentBeamChart: React.FC<Props> = ({
       return {
         type: "line", name: student, z: 2, symbol: "none", smooth: 0.5,
         data: items.map((item) => [item.time, item.y]),
-        lineStyle: { color: BEAM_COLORS[idx % BEAM_COLORS.length], width: 2.2, opacity: 0.28 },
+        lineStyle: { color: theme.beamColors[idx % theme.beamColors.length], width: 2.2, opacity: 0.28 },
         emphasis: { lineStyle: { width: 4.5, opacity: 0.8 } },
       };
     });
@@ -169,12 +172,12 @@ const StudentBeamChart: React.FC<Props> = ({
     const scatterData = enriched.map((item) => ({
       value: [item.time, item.y, item.name, item.content, item.topic, item.isUncovered ? 1 : 0],
       itemStyle: {
-        color: item.isUncovered ? UNCOVERED_COLOR : BEAM_COLORS[students.indexOf(item.name) % BEAM_COLORS.length],
-        borderColor: item.isUncovered ? "#DC2626" : "transparent",
+        color: item.isUncovered ? theme.uncovered : theme.beamColors[students.indexOf(item.name) % theme.beamColors.length],
+        borderColor: item.isUncovered ? theme.uncoveredBorder : "transparent",
         borderWidth: item.isUncovered ? 2 : 0,
         opacity: 0.75,
         shadowBlur: item.isUncovered ? 8 : 4,
-        shadowColor: item.isUncovered ? "rgba(220,38,38,0.3)" : "rgba(13,148,136,0.2)",
+        shadowColor: item.isUncovered ? theme.uncoveredShadow : theme.laneLine,
       },
       symbol: item.isUncovered ? "diamond" : "circle",
       symbolSize: item.isUncovered ? 14 : 10,
@@ -183,14 +186,14 @@ const StudentBeamChart: React.FC<Props> = ({
     // 教师标记线
     const teacherMarkLines = teacherMarks.map((tm) => ({
       xAxis: new Date(tm.time).getTime(),
-      label: { formatter: `📌 ${tm.question || "教师提问"}`, fontSize: 9, color: "#D97706", position: "insideEndTop" as const },
-      lineStyle: { type: "dashed" as const, color: "#F59E0B", width: 1.5 },
+      label: { formatter: `📌 ${tm.question || "教师提问"}`, fontSize: 9, color: theme.teacher, position: "insideEndTop" as const },
+      lineStyle: { type: "dashed" as const, color: theme.teacherSoft, width: 1.5 },
     }));
 
     // 爆发点标记
     const burstScatter = burstPoints.map((bp) => ({
       value: [new Date(bp.bucket_start).getTime(), maxLane + 0.4],
-      itemStyle: { color: "#EF4444", shadowBlur: 12, shadowColor: "rgba(239,68,68,0.5)" },
+      itemStyle: { color: theme.burst, shadowBlur: 12, shadowColor: theme.burstGlow },
       symbol: "pin", symbolSize: 20,
     }));
 
@@ -200,25 +203,27 @@ const StudentBeamChart: React.FC<Props> = ({
       tooltip: {
         trigger: "item",
         confine: true,
-        backgroundColor: "rgba(255,255,255,0.96)",
-        borderColor: "#e2e8f0",
-        textStyle: { fontSize: 12 },
+        backgroundColor: theme.surfaceElevated,
+        borderColor: theme.border,
+        textStyle: { fontSize: 12, color: theme.textBase },
         formatter(param: any) {
           const v = param?.value;
           if (!v) return "";
           const [time, , name, content, topic, isUnc] = v;
-          const tag = isUnc ? '<span style="color:#DC2626;font-weight:600">🔥 生发问题</span>' : '<span style="color:#0D9488">✅ 任务覆盖</span>';
-          return `<div style="max-width:280px"><b style="color:#0f172a">${escapeHtml(String(topic))}</b> ${tag}<br/><span style="color:#64748b">${escapeHtml(String(name))} · ${fmtTime(time as number)}</span><br/><div style="margin-top:4px;color:#334155;line-height:1.4">"${escapeHtml(String(content).slice(0, 80))}"</div></div>`;
+          const tag = isUnc
+            ? `<span style="color:${theme.uncoveredBorder};font-weight:600">🔥 生发问题</span>`
+            : `<span style="color:${theme.primary}">✅ 任务覆盖</span>`;
+          return `<div style="max-width:280px"><b style="color:${theme.textBase}">${escapeHtml(String(topic))}</b> ${tag}<br/><span style="color:${theme.textSecondary}">${escapeHtml(String(name))} · ${fmtTime(time as number)}</span><br/><div style="margin-top:4px;color:${theme.textMuted};line-height:1.4">"${escapeHtml(String(content).slice(0, 80))}"</div></div>`;
         },
       },
       legend: { show: false },
       grid: { left: 16, right: 24, top: 32, bottom: 58 },
       xAxis: {
         type: "time",
-        axisLabel: { fontSize: 10, formatter: fmtTime },
+        axisLabel: { fontSize: 10, formatter: fmtTime, color: theme.textSecondary },
         axisLine: { show: false },
         axisTick: { show: false },
-        splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.1)" } },
+        splitLine: { show: true, lineStyle: { color: theme.grid } },
       },
       yAxis: {
         type: "value",
@@ -230,7 +235,7 @@ const StudentBeamChart: React.FC<Props> = ({
         splitLine: { show: false },
       },
       dataZoom: [
-        { type: "slider", start: 0, end: 100, height: 20, bottom: 8, fillerColor: "rgba(13,148,136,0.1)", borderColor: "#e2e8f0", handleStyle: { color: "#0D9488" }, textStyle: { fontSize: 10 } },
+        { type: "slider", start: 0, end: 100, height: 20, bottom: 8, fillerColor: theme.primarySoft, borderColor: theme.border, handleStyle: { color: theme.primary }, textStyle: { fontSize: 10, color: theme.textSecondary } },
         { type: "inside", zoomOnMouseWheel: true, moveOnMouseMove: true },
       ],
       series: [
@@ -238,16 +243,15 @@ const StudentBeamChart: React.FC<Props> = ({
         ...beamSeries,
         {
           type: "scatter", data: scatterData, z: 4,
-          emphasis: { scale: 1.6, label: { show: true, formatter: (p: any) => p.value?.[3]?.slice(0, 20) || "", color: "#0f172a", fontSize: 10, position: "top" } },
+          emphasis: { scale: 1.6, label: { show: true, formatter: (p: any) => p.value?.[3]?.slice(0, 20) || "", color: theme.textBase, fontSize: 10, position: "top" } },
         },
-        // 教师标记线（独立 series 避免渲染冲突）
         ...(teacherMarkLines.length > 0 ? [{
           type: "line", data: [] as any[], z: 3, silent: true, symbol: "none",
           markLine: { silent: true, symbol: ["none", "none"], data: teacherMarkLines },
         }] : []),
         ...(burstScatter.length > 0 ? [{
           type: "scatter", data: burstScatter, z: 5, silent: false,
-          tooltip: { formatter: () => "🔥 提问爆发点" },
+          tooltip: { formatter: () => `<span style="color:${theme.burst};font-weight:600">🔥 提问爆发点</span>` },
         }] : []),
       ],
     }, true);
@@ -255,7 +259,7 @@ const StudentBeamChart: React.FC<Props> = ({
     const resize = () => chartRef.current?.resize();
     window.addEventListener("resize", resize);
     return () => { window.removeEventListener("resize", resize); chartRef.current?.dispose(); chartRef.current = null; };
-  }, [sessions, mainQuestionChain, teacherMarks, burstPoints, uncovered]);
+  }, [sessions, mainQuestionChain, teacherMarks, burstPoints, uncovered, isDark]);
 
   if (sessions.length === 0 || empty) {
     return <div className="flex w-full items-center justify-center rounded-lg bg-surface-2 text-sm text-text-tertiary" style={{ height }}>暂无可绘制的学生提问链条</div>;
@@ -266,10 +270,10 @@ const StudentBeamChart: React.FC<Props> = ({
       <div ref={ref} className="w-full" style={{ height }} aria-label="学生提问语义光束图" />
       {/* 图例说明 */}
       <div className="absolute top-2 right-4 flex items-center gap-3 text-[11px] text-text-tertiary">
-        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-primary" />任务覆盖</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rotate-45 bg-amber-500 border border-red-500" />生发问题</span>
-        {teacherMarks.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-amber-400" />教师提问</span>}
-        {burstPoints.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />爆发点</span>}
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />任务覆盖</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-[var(--ws-color-danger)] bg-[var(--ws-color-warning)]" />生发问题</span>
+        {teacherMarks.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-[var(--ws-color-warning)]" />教师提问</span>}
+        {burstPoints.length > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[var(--ws-color-danger)]" />爆发点</span>}
       </div>
     </div>
   );

@@ -26,8 +26,8 @@ bash stop-dev.sh
 ```bash
 cp .env.example .env
 # 修改 .env 中的密钥和配置
-./build_images.sh
-docker compose up -d
+bash scripts/deploy.sh build
+bash scripts/deploy.sh up
 ```
 
 登录过期配置（短时登录）：

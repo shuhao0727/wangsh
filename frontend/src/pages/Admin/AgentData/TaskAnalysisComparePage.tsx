@@ -18,13 +18,24 @@ type AnalysisRecord = {
   result: any;
 };
 
+type NormalizedAnalysisRecord = AnalysisRecord & {
+  normalizedResult: any;
+  compareKey: string;
+};
+
+const normalizeRecord = (record: AnalysisRecord, index: number): NormalizedAnalysisRecord => ({
+  ...record,
+  normalizedResult: record?.result?.result || record?.result || {},
+  compareKey: `${record.id}-${index}`,
+});
+
 const COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899"];
 const BLOOM_KEYS = ["记忆", "理解", "应用", "分析", "评价", "创造"];
 
 const TaskAnalysisComparePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const ids = useMemo(() => (searchParams.get("ids") || "").split(",").map(Number).filter(Boolean), [searchParams]);
-  const [records, setRecords] = useState<AnalysisRecord[]>([]);
+  const [records, setRecords] = useState<NormalizedAnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const bloomRef = React.useRef<HTMLDivElement>(null);
@@ -34,7 +45,7 @@ const TaskAnalysisComparePage: React.FC = () => {
     if (ids.length < 2) { setLoading(false); return; }
     Promise.all(ids.map((id) => agentDataApi.getTaskAnalysis(id)))
       .then((results) => {
-        setRecords(results.filter((r: any) => r.success).map((r: any) => r.data as AnalysisRecord));
+        setRecords(results.filter((r: any) => r.success).map((r: any, index: number) => normalizeRecord(r.data as AnalysisRecord, index)));
       })
       .finally(() => setLoading(false));
   }, [ids]);
@@ -45,7 +56,7 @@ const TaskAnalysisComparePage: React.FC = () => {
     const chart = echarts.init(bloomRef.current);
     const series = BLOOM_KEYS.map((key) => ({
       name: key, type: "bar", stack: "bloom",
-      data: records.map((r) => (r.result?.bloom || {})[key] || 0),
+      data: records.map((r) => (r.normalizedResult?.bloom || {})[key] || 0),
     }));
     chart.setOption({
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
@@ -65,7 +76,7 @@ const TaskAnalysisComparePage: React.FC = () => {
     if (!timelineRef.current || records.length < 2) return;
     const chart = echarts.init(timelineRef.current);
     const series = records.map((r, idx) => {
-      const buckets = r.result?.timeline_buckets || [];
+      const buckets = r.normalizedResult?.timeline_buckets || [];
       return {
         name: r.title.slice(0, 12) || `#${r.id}`,
         type: "line", smooth: true,
@@ -90,9 +101,16 @@ const TaskAnalysisComparePage: React.FC = () => {
   // 生发问题交集分析
   const generativeComparison = useMemo(() => {
     if (records.length < 2) return { shared: [], unique: [] };
-    const allTopics = records.map((r) => (r.result?.uncovered || []).map((t: any) => t.topic));
+    const allTopics: string[][] = records.map((r) => {
+      const topics = (r.normalizedResult?.uncovered || [])
+        .map((t: any) => t.topic)
+        .filter((topic: unknown): topic is string => typeof topic === "string" && topic.length > 0);
+      return [...new Set<string>(topics)];
+    });
     const topicCount = new Map<string, number>();
-    allTopics.flat().forEach((t: string) => topicCount.set(t, (topicCount.get(t) || 0) + 1));
+    allTopics.flat().forEach((t) => {
+      topicCount.set(t, (topicCount.get(t) || 0) + 1);
+    });
     const shared = [...topicCount.entries()].filter(([, c]) => c >= 2).map(([t]) => t);
     const unique = [...topicCount.entries()].filter(([, c]) => c === 1).map(([t]) => t);
     return { shared, unique };
@@ -130,26 +148,26 @@ const TaskAnalysisComparePage: React.FC = () => {
                   <tr className="text-left text-xs text-text-tertiary border-b border-border-secondary">
                     <th className="py-2 px-3 font-medium">指标</th>
                     {records.map((r) => (
-                      <th key={r.id} className="py-2 px-3 font-medium">{r.title.slice(0, 15)}<br/><span className="text-[10px] font-normal">{dayjs(r.created_at).format("MM-DD")}</span></th>
+                      <th key={r.compareKey} className="py-2 px-3 font-medium">{r.title.slice(0, 15)}<br/><span className="text-[10px] font-normal">{dayjs(r.created_at).format("MM-DD")}</span></th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-secondary">
                   <tr>
                     <td className="py-2 px-3 text-text-secondary">提问总数</td>
-                    {records.map((r) => <td key={r.id} className="py-2 px-3 font-semibold">{(r.result?.timeline_buckets || []).reduce((s: number, b: any) => s + (b.question_count || 0), 0)}</td>)}
+                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold">{(r.normalizedResult?.timeline_buckets || []).reduce((s: number, b: any) => s + (b.question_count || 0), 0)}</td>)}
                   </tr>
                   <tr>
                     <td className="py-2 px-3 text-text-secondary">生发问题</td>
-                    {records.map((r) => <td key={r.id} className="py-2 px-3 font-semibold text-amber-600">{(r.result?.uncovered || []).length}</td>)}
+                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold text-amber-600">{(r.normalizedResult?.uncovered || []).length}</td>)}
                   </tr>
                   <tr>
                     <td className="py-2 px-3 text-text-secondary">爆发点</td>
-                    {records.map((r) => <td key={r.id} className="py-2 px-3 font-semibold text-red-600">{(r.result?.burst_points || []).length}</td>)}
+                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold text-red-600">{(r.normalizedResult?.burst_points || []).length}</td>)}
                   </tr>
                   <tr>
                     <td className="py-2 px-3 text-text-secondary">主问题链</td>
-                    {records.map((r) => <td key={r.id} className="py-2 px-3">{(r.result?.main_question_chain || []).length} 阶段</td>)}
+                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3">{(r.normalizedResult?.main_question_chain || []).length} 阶段</td>)}
                   </tr>
                 </tbody>
               </table>
