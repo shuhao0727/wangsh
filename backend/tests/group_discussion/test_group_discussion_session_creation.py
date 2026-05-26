@@ -35,8 +35,10 @@ class _FakeDB:
         self.deleted = []
         self.commit_raises = commit_raises
         self.rollback_count = 0
+        self.statements = []
 
     async def execute(self, _stmt):
+        self.statements.append(_stmt)
         if self.execute_count >= len(self._execute_values):
             raise AssertionError(f"unexpected db.execute call #{self.execute_count}")
         value = self._execute_values[self.execute_count]
@@ -434,6 +436,19 @@ class TestListTodayGroups:
 
         assert len(rows) == 1
         assert rows[0][0].class_name == "高一(1)班"
+
+
+    def test_list_members_preloads_user_for_async_endpoint(self):
+        """测试管理员成员列表预加载用户信息，避免异步懒加载触发 500"""
+        member = _create_member(session_id=1, user_id=1)
+        member.user = SimpleNamespace(username="stu1", full_name="学生一", student_id="S001")
+        db = _FakeDB([[member]])
+
+        members = asyncio.run(gd.admin_list_members(db=db, session_id=1))
+
+        assert members == [member]
+        assert db.execute_count == 1
+        assert "GroupDiscussionMember.user" in str(db.statements[0]._with_options[0].path)
 
 
 class TestListMessages:

@@ -360,7 +360,9 @@ async def admin_list_members(
     """列出会话成员"""
     members = (
         await db.execute(
-            select(GroupDiscussionMember).where(GroupDiscussionMember.session_id == session_id)
+            select(GroupDiscussionMember)
+            .options(selectinload(GroupDiscussionMember.user))
+            .where(GroupDiscussionMember.session_id == session_id)
             .order_by(GroupDiscussionMember.joined_at.asc())
         )
     ).scalars().all()
