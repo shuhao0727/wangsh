@@ -166,8 +166,16 @@ case "${cmd}" in
   push)
     require_env_file
     require_docker
-    registry="$(env_value DOCKER_REGISTRY)"
-    ns="$(env_value DOCKERHUB_NAMESPACE)"
+    prefix="$(env_value IMAGE_REPOSITORY_PREFIX)"
+    if [ -z "${prefix}" ]; then
+      registry="$(env_value DOCKER_REGISTRY)"
+      ns="$(env_value DOCKERHUB_NAMESPACE)"
+      if [ -n "${registry}" ] && [ "${registry}" != "docker.io" ]; then
+        prefix="${registry%/}/${ns:-shuhao07}"
+      else
+        prefix="${ns:-shuhao07}"
+      fi
+    fi
     tag="$(env_value IMAGE_TAG)"
     if [ -z "${tag}" ]; then
       tag="$(env_value APP_VERSION)"
@@ -178,19 +186,33 @@ case "${cmd}" in
     name_backend="$(env_value IMAGE_NAME_BACKEND)"
     name_frontend="$(env_value IMAGE_NAME_FRONTEND)"
     name_worker="$(env_value IMAGE_NAME_WORKER)"
+    name_pythonlab_worker="$(env_value IMAGE_NAME_PYTHONLAB_WORKER)"
+    name_gateway="$(env_value IMAGE_NAME_GATEWAY)"
+    name_backend="${name_backend:-wangsh-backend}"
+    name_frontend="${name_frontend:-wangsh-frontend}"
+    name_worker="${name_worker:-wangsh-typst-worker}"
+    name_pythonlab_worker="${name_pythonlab_worker:-wangsh-pythonlab-worker}"
+    name_gateway="${name_gateway:-wangsh-gateway}"
+    sandbox_image="$(env_value PYTHONLAB_SANDBOX_IMAGE)"
+    sandbox_image="${sandbox_image:-${prefix}/pythonlab-sandbox:${tag}}"
 
-    if [ -z "${registry}" ] || [ -z "${ns}" ] || [ -z "${tag}" ] || [ -z "${name_backend}" ] || [ -z "${name_frontend}" ] || [ -z "${name_worker}" ]; then
-      echo "missing DOCKER_REGISTRY/DOCKERHUB_NAMESPACE/IMAGE_TAG/IMAGE_NAME_* in ${env_file}" >&2
+    if [ -z "${prefix}" ] || [ -z "${tag}" ]; then
+      echo "missing IMAGE_REPOSITORY_PREFIX/IMAGE_TAG in ${env_file}" >&2
       exit 2
     fi
 
-    img_backend="${registry}/${ns}/${name_backend}:${tag}"
-    img_frontend="${registry}/${ns}/${name_frontend}:${tag}"
-    img_worker="${registry}/${ns}/${name_worker}:${tag}"
+    img_backend="${prefix}/${name_backend}:${tag}"
+    img_frontend="${prefix}/${name_frontend}:${tag}"
+    img_worker="${prefix}/${name_worker}:${tag}"
+    img_pythonlab_worker="${prefix}/${name_pythonlab_worker}:${tag}"
+    img_gateway="${prefix}/${name_gateway}:${tag}"
 
     retry 5 docker push "${img_backend}"
     retry 5 docker push "${img_frontend}"
     retry 5 docker push "${img_worker}"
+    retry 5 docker push "${img_pythonlab_worker}"
+    retry 5 docker push "${img_gateway}"
+    retry 5 docker push "${sandbox_image}"
     ;;
   down)
     require_env_file
@@ -227,11 +249,12 @@ PROJECT_NAME=WangSh
 APP_VERSION=1.5.10
 API_V1_STR=/api/v1
 
-DOCKER_REGISTRY=docker.io
-DOCKERHUB_NAMESPACE=shuhao07
+IMAGE_REPOSITORY_PREFIX=shuhao07
 IMAGE_NAME_BACKEND=wangsh-backend
 IMAGE_NAME_FRONTEND=wangsh-frontend
 IMAGE_NAME_WORKER=wangsh-typst-worker
+IMAGE_NAME_PYTHONLAB_WORKER=wangsh-pythonlab-worker
+IMAGE_NAME_GATEWAY=wangsh-gateway
 
 TIMEZONE=Asia/Shanghai
 LOG_LEVEL=INFO

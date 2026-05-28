@@ -17,6 +17,7 @@
 ### 2. 配置影响
 
 - `.env.example`、Compose、前端 package 版本默认值同步到 `1.5.16`。
+- 生产镜像默认使用 Docker Hub 短名称 `shuhao07/*:1.5.16`，不再渲染为 `docker.io/shuhao07/*`。
 - PythonLab sandbox 默认镜像同步到 `shuhao07/pythonlab-sandbox:1.5.16`。
 
 ### 3. 验证
