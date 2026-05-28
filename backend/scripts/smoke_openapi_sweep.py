@@ -33,6 +33,8 @@ def env() -> Env:
 
 
 def _substitute_path(path: str) -> str:
+    path = re.sub(r"\{module_key\}", "ml", path)
+    path = re.sub(r"\{slug\}", "sample", path)
     path = re.sub(r"\{[^/]*id[^/]*\}", "1", path, flags=re.IGNORECASE)
     path = re.sub(r"\{[^/]*\}", "1", path)
     return path
