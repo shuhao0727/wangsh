@@ -1,4 +1,4 @@
-from app.schemas.agents import UsageFilterOptions
+from app.schemas.agents.ai_agent import UsageFilterOptions
 
 
 def test_usage_filter_options_accepts_only_filter_lists():

@@ -1,11 +1,15 @@
 import asyncio
+import io
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.deps import get_db, require_admin, require_user
 from app.core.config import settings
@@ -61,6 +65,7 @@ from app.services.agents.group_discussion import (
     admin_add_member,
     admin_remove_member,
     admin_list_members,
+    admin_list_all_sessions,
     list_classes,
 )
 from app.services.agents.group_discussion_public_config import GroupDiscussionPublicConfigService
@@ -461,6 +466,7 @@ async def admin_get_sessions(
     group_no: Optional[str] = Query(None),
     group_name: Optional[str] = Query(None),
     user_name: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词搜索（班级/组号/组名/姓名）"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -474,6 +480,7 @@ async def admin_get_sessions(
         group_no=group_no,
         group_name=group_name,
         user_name=user_name,
+        keyword=keyword,
         page=page,
         size=size,
     )
@@ -496,6 +503,86 @@ async def admin_get_sessions(
         page=page_n,
         page_size=size,
         total_pages=total_pages,
+    )
+
+
+@router.get("/admin/export-sessions")
+async def admin_export_sessions(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    class_name: Optional[str] = Query(None),
+    group_no: Optional[str] = Query(None),
+    group_name: Optional[str] = Query(None),
+    user_name: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词搜索（班级/组号/组名/姓名）"),
+    limit: int = Query(5000, ge=1, le=10000, description="最大导出行数，默认 5000，上限 10000"),
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_admin),
+):
+    """导出筛选后的会话列表为 Excel"""
+    export_limit = min(int(limit or 5000), 10000)
+    rows = await admin_list_all_sessions(
+        db,
+        start_date=start_date,
+        end_date=end_date,
+        class_name=class_name,
+        group_no=group_no,
+        group_name=group_name,
+        user_name=user_name,
+        keyword=keyword,
+        limit=export_limit,
+    )
+    if len(rows) > export_limit:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"导出结果超过 {export_limit} 条，请缩小筛选范围后重试",
+        )
+
+    def _build_xlsx(sessions) -> bytes:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "小组讨论会话"
+
+        headers = ["ID", "日期", "班级", "组号", "组名", "消息数", "创建时间", "最后消息"]
+        header_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        header_font = Font(bold=True)
+        header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_align
+
+        for row_idx, s in enumerate(sessions, 2):
+            ws.cell(row=row_idx, column=1, value=s.id)
+            ws.cell(row=row_idx, column=2, value=str(s.session_date) if s.session_date else "")
+            ws.cell(row=row_idx, column=3, value=s.class_name)
+            ws.cell(row=row_idx, column=4, value=s.group_no)
+            ws.cell(row=row_idx, column=5, value=s.group_name or "")
+            ws.cell(row=row_idx, column=6, value=int(s.message_count or 0))
+            ws.cell(row=row_idx, column=7, value=s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "")
+            ws.cell(row=row_idx, column=8, value=s.last_message_at.strftime("%Y-%m-%d %H:%M") if s.last_message_at else "")
+
+        col_widths = [8, 14, 18, 10, 20, 10, 18, 18]
+        for i, w in enumerate(col_widths, 1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+        ws.freeze_panes = "A2"
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    excel_bytes = await run_in_threadpool(_build_xlsx, rows)
+    now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="group_discussion_sessions_{now_str}.xlsx"'
+        },
     )
 
 

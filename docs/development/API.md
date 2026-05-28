@@ -171,6 +171,7 @@
 | POST | `.../add-member` | 添加成员 | 管理员 |
 | POST | `.../remove-member` | 移除成员 | 管理员 |
 | GET | `.../admin/sessions` | 管理员会话列表 | 管理员 |
+| GET | `.../admin/export-sessions` | 导出筛选后的会话列表（Excel，默认最多 5000 条，上限 10000 条） | 管理员 |
 | DELETE | `.../admin/sessions/{id}` | 删除会话 | 管理员 |
 | POST | `.../admin/sessions/batch-delete` | 批量删除会话 | 管理员 |
 | GET | `.../admin/messages` | 管理员消息列表 | 管理员 |

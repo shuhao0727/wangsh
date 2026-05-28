@@ -62,6 +62,7 @@ export function useGroupDiscussionSessions(params: {
   groupNo?: string;
   groupName?: string;
   userName?: string;
+  keyword?: string;
   page: number;
   size: number;
 }) {
@@ -75,6 +76,7 @@ export function useGroupDiscussionSessions(params: {
         groupNo: params.groupNo || undefined,
         groupName: params.groupName || undefined,
         userName: params.userName || undefined,
+        keyword: params.keyword || undefined,
         page: params.page,
         size: params.size,
       });

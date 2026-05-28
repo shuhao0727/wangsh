@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
@@ -110,11 +110,9 @@ const GroupDiscussionAdminTab: React.FC = () => {
     dayjs().format("YYYY-MM-DD"),
     dayjs().format("YYYY-MM-DD"),
   ]);
-  const [className, setClassName] = useState<string>("");
-  const [groupNo, setGroupNo] = useState<string>("");
-  const [groupName, setGroupName] = useState<string>("");
-  const [userName, setUserName] = useState<string>("");
+  const [keyword, setKeyword] = useState<string>("");
   const [selectedSessionIds, setSelectedSessionIds] = useState<number[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const [currentSession, setCurrentSession] = useState<SessionRow | null>(null);
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
@@ -135,10 +133,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
   } = useGroupDiscussionSessions({
     startDate: dateRange[0] || undefined,
     endDate: dateRange[1] || undefined,
-    className: className.trim() || undefined,
-    groupNo: groupNo.trim() || undefined,
-    groupName: groupName.trim() || undefined,
-    userName: userName.trim() || undefined,
+    keyword: keyword.trim() || undefined,
     page,
     size: pageSize,
   });
@@ -767,71 +762,70 @@ const GroupDiscussionAdminTab: React.FC = () => {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const handleExportExcel = useCallback(async () => {
+    setExportLoading(true);
+    try {
+      const res = await groupDiscussionApi.adminExportSessions({
+        startDate: dateRange[0] || undefined,
+        endDate: dateRange[1] || undefined,
+        keyword: keyword.trim() || undefined,
+      });
+      if (!res.success || !res.data) {
+        showMessage.error(res.message || "导出失败");
+        return;
+      }
+
+      const blob = res.data;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      const now = dayjs().format("YYYYMMDD_HHmmss");
+      a.download = `小组讨论会话_${now}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+      showMessage.success("导出成功");
+    } catch (e: unknown) {
+      showMessage.error("导出失败：" + (e instanceof Error ? e.message : "网络错误"));
+    } finally {
+      setExportLoading(false);
+    }
+  }, [dateRange, keyword]);
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <AdminCard size="small" className="mb-4" styles={{ body: { padding: 12 } }}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="shrink-0 text-sm text-text-tertiary">时间</span>
-              <Input
-                type="date"
-                className="h-8 w-[136px]"
-                value={dateRange[0]}
-                onChange={(e) => setDateRange([e.target.value, dateRange[1]])}
-              />
-              <span className="text-xs text-text-tertiary">至</span>
-              <Input
-                type="date"
-                className="h-8 w-[136px]"
-                value={dateRange[1]}
-                onChange={(e) => setDateRange([dateRange[0], e.target.value])}
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="shrink-0 text-sm text-text-tertiary">班级</span>
-              <Input
-                className="h-8 w-[150px]"
-                value={className}
-                onChange={(e) => setClassName(e.target.value)}
-                placeholder="如：高一(1)班"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="shrink-0 text-sm text-text-tertiary">组号</span>
-              <Input
-                className="h-8 w-[88px]"
-                value={groupNo}
-                onChange={(e) => setGroupNo(e.target.value)}
-                placeholder="如：1"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="shrink-0 text-sm text-text-tertiary">组名</span>
-              <Input
-                className="h-8 w-[140px]"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="如：学习小组"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="shrink-0 text-sm text-text-tertiary">姓名</span>
-              <Input
-                className="h-8 w-[110px]"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="如：张三"
-              />
-            </div>
-
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Input
+              type="date"
+              className="h-8 w-[126px] shrink-0"
+              value={dateRange[0]}
+              onChange={(e) => setDateRange([e.target.value, dateRange[1]])}
+            />
+            <span className="shrink-0 text-xs text-text-tertiary">至</span>
+            <Input
+              type="date"
+              className="h-8 w-[126px] shrink-0"
+              value={dateRange[1]}
+              onChange={(e) => setDateRange([dateRange[0], e.target.value])}
+            />
+            <Input
+              className="h-8 min-w-[150px] flex-1"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="关键词"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setPage(1);
+                  void refetchSessions();
+                }
+              }}
+            />
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               disabled={isLoading}
               onClick={() => {
                 setPage(1);
@@ -843,13 +837,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Select
               value={selectedAgentId ? String(selectedAgentId) : "__none__"}
               onValueChange={(value) => setSelectedAgentId(value === "__none__" ? null : Number(value))}
             >
-              <SelectTrigger className="h-8 w-[160px] text-xs">
-                <SelectValue placeholder="选择分析智能体" />
+              <SelectTrigger className="h-8 w-[130px] shrink-0 text-xs">
+                <SelectValue placeholder="智能体" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">不指定智能体</SelectItem>
@@ -863,7 +857,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               variant="outline"
               disabled={selectedSessionIds.length < 2}
               onClick={() => {
@@ -872,12 +866,12 @@ const GroupDiscussionAdminTab: React.FC = () => {
                 setCompareVisible(true);
               }}
             >
-              横向对比分析（{selectedSessionIds.length}）
+              横向对比（{selectedSessionIds.length}）
             </Button>
 
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               variant="outline"
               disabled={selectedSessionIds.length === 0}
               onClick={() => {
@@ -886,12 +880,12 @@ const GroupDiscussionAdminTab: React.FC = () => {
                 setCompareVisible(true);
               }}
             >
-              跨系统分析（{selectedSessionIds.length}）
+              跨系统（{selectedSessionIds.length}）
             </Button>
 
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               variant="destructive"
               disabled={batchDeleting || selectedSessionIds.length === 0}
               onClick={() => {
@@ -905,7 +899,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
             <Button
               size="sm"
-              className="h-8"
+              className="h-8 shrink-0"
               variant="outline"
               disabled={selectedSessionIds.length === 0}
               onClick={() => setSelectedSessionIds([])}
@@ -913,14 +907,19 @@ const GroupDiscussionAdminTab: React.FC = () => {
               清空选择
             </Button>
 
-            <div className="flex h-8 items-center gap-2 rounded-md border border-border-secondary bg-surface-2 px-2.5">
-              <span className="text-sm text-text-secondary">学生端弹窗</span>
-              <Badge
-                variant={frontendVisible ? "success" : "secondary"}
-                className="px-1.5 py-0 text-[11px]"
-              >
-                {frontendVisible ? "已开启" : "已关闭"}
-              </Badge>
+            <Button
+              size="sm"
+              className="h-8 shrink-0"
+              variant="outline"
+              disabled={exportLoading}
+              onClick={handleExportExcel}
+            >
+              {exportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              导出
+            </Button>
+
+            <div className="flex h-8 items-center gap-1.5 rounded-md border border-border-secondary bg-surface-2 px-2 shrink-0">
+              <span className="text-xs text-text-secondary">弹窗</span>
               <Switch
                 aria-label="切换学生端弹窗可见性"
                 checked={frontendVisible}

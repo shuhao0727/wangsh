@@ -16,6 +16,7 @@ from .core import (
     resolve_target_class_name,
     ensure_session_view_access,
     admin_list_sessions,
+    admin_list_all_sessions,
     admin_delete_session,
     admin_delete_sessions,
     admin_list_analyses,
@@ -78,6 +79,7 @@ __all__ = [
 
     # 管理员函数
     "admin_list_sessions",
+    "admin_list_all_sessions",
     "admin_delete_session",
     "admin_delete_sessions",
     "admin_list_analyses",

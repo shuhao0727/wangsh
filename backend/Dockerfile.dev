@@ -47,9 +47,11 @@ RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -
 
 ARG TYPST_VERSION=0.14.2
 
-RUN apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true; \
+    apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
-    ca-certificates curl xz-utils fontconfig docker.io \
+    ca-certificates curl xz-utils fontconfig \
     fonts-noto-cjk fonts-noto-core fonts-noto-extra \
     fonts-liberation fonts-dejavu-core \
     fonts-arphic-ukai fonts-arphic-uming \
@@ -177,9 +179,11 @@ ENV NO_PROXY=
 ARG TYPST_VERSION=0.14.2
 ARG DOCKER_CLI_VERSION=26.1.4
 
-RUN apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true; \
+    apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
-    ca-certificates curl xz-utils fontconfig docker.io \
+    ca-certificates curl xz-utils fontconfig \
     fonts-noto-cjk fonts-noto-core fonts-noto-extra \
     fonts-liberation fonts-dejavu-core \
     fonts-arphic-ukai fonts-arphic-uming \

@@ -2,6 +2,32 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
+## v1.5.16（2026-05-28）
+
+### 1. 变更范围
+
+**小组讨论管理修复**：
+- 新增管理员会话 Excel 导出接口，并限制默认最多导出 5000 条、上限 10000 条，避免大范围导出拖慢后端。
+- 管理端会话列表保留单一关键词筛选，导出与列表使用同一筛选条件。
+- 前端导出请求改为复用项目 API 客户端，保持鉴权与刷新行为一致。
+
+**清理项**：
+- 移除临时 Typst quick Dockerfile 和 mock 分析数据 seed 脚本，避免临时构建路径和演示数据误入生产流程。
+
+### 2. 配置影响
+
+- `.env.example`、Compose、前端 package 版本默认值同步到 `1.5.16`。
+- PythonLab sandbox 默认镜像同步到 `shuhao07/pythonlab-sandbox:1.5.16`。
+
+### 3. 验证
+
+```bash
+npm run type-check
+pytest -q tests/ai_agents/test_usage_filter_options_schema.py tests/system/test_feature_flags.py tests/system/test_metrics.py tests/group_discussion/test_group_discussion_session_creation.py
+docker compose --env-file .env.example -f docker-compose.yml config --quiet
+git diff --check
+```
+
 ## v1.5.10（2026-05-09）
 
 ### 1. 变更范围

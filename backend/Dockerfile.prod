@@ -99,10 +99,8 @@ USER root
 
 ARG TYPST_VERSION=0.14.2
 
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null; \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null; \
-    apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
     ca-certificates curl wget xz-utils fontconfig \
     fonts-noto-cjk fonts-noto-core \
     fonts-liberation fonts-dejavu-core \

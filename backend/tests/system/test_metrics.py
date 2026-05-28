@@ -111,7 +111,7 @@ def test_overview_router_has_admin_auth():
             continue
         deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
         dep_names = [getattr(d, "__name__", str(d)) for d in deps]
-        assert "require_admin" in dep_names, f"{route.path} missing require_admin"
+        assert "require_super_admin" in dep_names, f"{route.path} missing require_super_admin"
 
 
 def test_metrics_router_has_admin_auth():
@@ -123,7 +123,7 @@ def test_metrics_router_has_admin_auth():
             continue
         deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
         dep_names = [getattr(d, "__name__", str(d)) for d in deps]
-        assert "require_admin" in dep_names, f"{route.path} missing require_admin"
+        assert "require_super_admin" in dep_names, f"{route.path} missing require_super_admin"
 
 
 def test_system_overview_includes_core_observability_metrics(monkeypatch):

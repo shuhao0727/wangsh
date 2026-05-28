@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -161,6 +161,7 @@ async def admin_list_sessions(
     group_no: Optional[str],
     group_name: Optional[str],
     user_name: Optional[str],
+    keyword: Optional[str] = None,
     page: int,
     size: int,
 ) -> Tuple[List[GroupDiscussionSession], int, int, int]:
@@ -191,6 +192,23 @@ async def admin_list_sessions(
                     )
                 )
             )
+    if keyword:
+        kw = (keyword or "").strip()
+        if kw:
+            kw_pattern = f"%{kw}%"
+            stmt = stmt.where(
+                or_(
+                    GroupDiscussionSession.class_name.ilike(kw_pattern),
+                    GroupDiscussionSession.group_no.ilike(kw_pattern),
+                    GroupDiscussionSession.group_name.ilike(kw_pattern),
+                    exists(
+                        select(1).where(
+                            GroupDiscussionMessage.session_id == GroupDiscussionSession.id,
+                            GroupDiscussionMessage.user_display_name.ilike(kw_pattern),
+                        )
+                    ),
+                )
+            )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = int((await db.execute(count_stmt)).scalar_one() or 0)
@@ -205,6 +223,71 @@ async def admin_list_sessions(
 
     total_pages = (total + size_n - 1) // size_n if total > 0 else 1
     return list(rows), total, page_n, total_pages
+
+
+async def admin_list_all_sessions(
+    db: AsyncSession,
+    *,
+    start_date: Optional[date],
+    end_date: Optional[date],
+    class_name: Optional[str],
+    group_no: Optional[str],
+    group_name: Optional[str],
+    user_name: Optional[str],
+    keyword: Optional[str] = None,
+    limit: int = 5000,
+) -> List[GroupDiscussionSession]:
+    """列出匹配的会话（供导出使用，带硬上限避免一次性拉取过多数据）"""
+    limit_n = max(1, min(int(limit or 5000), 10000))
+    stmt = select(GroupDiscussionSession)
+    if start_date:
+        stmt = stmt.where(GroupDiscussionSession.session_date >= start_date)
+    if end_date:
+        stmt = stmt.where(GroupDiscussionSession.session_date <= end_date)
+    if class_name:
+        stmt = stmt.where(GroupDiscussionSession.class_name == _normalize_class_name(class_name))
+    if group_no:
+        stmt = stmt.where(GroupDiscussionSession.group_no == _normalize_group_no(group_no))
+    if group_name:
+        gn = (group_name or "").strip()
+        if gn:
+            stmt = stmt.where(GroupDiscussionSession.group_name.ilike(f"%{gn}%"))
+    if user_name:
+        q = (user_name or "").strip()
+        if q:
+            stmt = stmt.where(
+                exists(
+                    select(1).where(
+                        GroupDiscussionMessage.session_id == GroupDiscussionSession.id,
+                        GroupDiscussionMessage.user_display_name.ilike(f"%{q}%"),
+                    )
+                )
+            )
+    if keyword:
+        kw = (keyword or "").strip()
+        if kw:
+            kw_pattern = f"%{kw}%"
+            stmt = stmt.where(
+                or_(
+                    GroupDiscussionSession.class_name.ilike(kw_pattern),
+                    GroupDiscussionSession.group_no.ilike(kw_pattern),
+                    GroupDiscussionSession.group_name.ilike(kw_pattern),
+                    exists(
+                        select(1).where(
+                            GroupDiscussionMessage.session_id == GroupDiscussionSession.id,
+                            GroupDiscussionMessage.user_display_name.ilike(kw_pattern),
+                        )
+                    ),
+                )
+            )
+
+    rows = (
+        await db.execute(
+            stmt.order_by(GroupDiscussionSession.session_date.desc(), GroupDiscussionSession.id.desc())
+            .limit(limit_n + 1)
+        )
+    ).scalars().all()
+    return list(rows)
 
 
 async def admin_delete_session(db: AsyncSession, *, session_id: int) -> None:

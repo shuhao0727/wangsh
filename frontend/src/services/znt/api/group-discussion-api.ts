@@ -5,14 +5,44 @@ import type { BaseResponse } from "../types";
 
 interface ApiErrorShape {
   message?: string;
-  response?: { data?: { detail?: unknown }; status?: number };
+  response?: { data?: unknown; status?: number };
 }
 const asApiError = (e: unknown): ApiErrorShape =>
   (e && typeof e === "object" ? e : {}) as ApiErrorShape;
+const detailFromResponseData = (data: unknown): string | undefined => {
+  if (typeof data === "string") {
+    const text = data.trim();
+    return text || undefined;
+  }
+  if (!data || typeof data !== "object") return undefined;
+  const record = data as Record<string, unknown>;
+  const detail = record.detail ?? record.message;
+  return typeof detail === "string" && detail.trim() ? detail.trim() : undefined;
+};
 const errMsg = (e: unknown, fallback: string): string => {
   const err = asApiError(e);
-  const detail = err.response?.data?.detail;
-  return (typeof detail === "string" ? detail : err.message) || fallback;
+  return detailFromResponseData(err.response?.data) || err.message || fallback;
+};
+const errMsgFromBlobResponse = async (e: unknown, fallback: string): Promise<string> => {
+  const err = asApiError(e);
+  const data = err.response?.data;
+  if (typeof Blob !== "undefined" && data instanceof Blob && data.size > 0) {
+    try {
+      const text = await data.text();
+      if (text.trim()) {
+        try {
+          const parsed = JSON.parse(text) as unknown;
+          const detail = detailFromResponseData(parsed);
+          if (detail) return detail;
+        } catch {
+          return text.trim();
+        }
+      }
+    } catch {
+      // Fall through to the regular Axios error message.
+    }
+  }
+  return errMsg(e, fallback);
 };
 
 const BASE_PATH = "/ai-agents/group-discussion";
@@ -390,6 +420,7 @@ export const groupDiscussionApi = {
     groupNo?: string;
     groupName?: string;
     userName?: string;
+    keyword?: string;
     page?: number;
     size?: number;
   }): Promise<BaseResponse<GroupDiscussionAdminSessionListResponse>> => {
@@ -402,6 +433,7 @@ export const groupDiscussionApi = {
           group_no: params.groupNo,
           group_name: params.groupName,
           user_name: params.userName,
+          keyword: params.keyword,
           page: params.page ?? 1,
           size: params.size ?? 20,
         },
@@ -415,6 +447,41 @@ export const groupDiscussionApi = {
         success: false,
         message: errMsg(error, "获取失败"),
         data: { items: [], total: 0, page: 1, page_size: params.size ?? 20, total_pages: 0 },
+      };
+    }
+  },
+
+  adminExportSessions: async (params: {
+    startDate?: string;
+    endDate?: string;
+    className?: string;
+    groupNo?: string;
+    groupName?: string;
+    userName?: string;
+    keyword?: string;
+    limit?: number;
+  }): Promise<BaseResponse<Blob | null>> => {
+    try {
+      const response = await api.client.get(`${BASE_PATH}/admin/export-sessions`, {
+        params: {
+          start_date: params.startDate,
+          end_date: params.endDate,
+          class_name: params.className,
+          group_no: params.groupNo,
+          group_name: params.groupName,
+          user_name: params.userName,
+          keyword: params.keyword,
+          limit: params.limit ?? 5000,
+        },
+        responseType: "blob",
+      });
+      return { success: true, message: "导出成功", data: response.data as unknown as Blob };
+    } catch (error: unknown) {
+      logger.error("导出小组讨论会话失败:", error);
+      return {
+        success: false,
+        message: await errMsgFromBlobResponse(error, "导出失败"),
+        data: null,
       };
     }
   },

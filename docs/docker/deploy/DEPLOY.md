@@ -71,9 +71,9 @@ bash scripts/deploy.sh up
 版本号统一在 `.env` 中的 `APP_VERSION` 定义：
 
 ```bash
-APP_VERSION=1.5.12
-IMAGE_TAG=1.5.12
-REACT_APP_VERSION=1.5.12
+APP_VERSION=1.5.16
+IMAGE_TAG=1.5.16
+REACT_APP_VERSION=1.5.16
 ```
 
 修改版本号后，其他相关变量会自动同步。
@@ -185,9 +185,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=1.5.12          # 应用版本号
-IMAGE_TAG=1.5.12            # Docker 镜像标签
-REACT_APP_VERSION=1.5.12    # 前端版本号
+APP_VERSION=1.5.16          # 应用版本号
+IMAGE_TAG=1.5.16            # Docker 镜像标签
+REACT_APP_VERSION=1.5.16    # 前端版本号
 ```
 
 ### 安全配置（生产环境必须修改）

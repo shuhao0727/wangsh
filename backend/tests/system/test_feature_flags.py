@@ -74,4 +74,4 @@ def test_admin_feature_flags_require_auth():
             continue
         deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
         dep_names = [getattr(d, "__name__", str(d)) for d in deps]
-        assert "require_admin" in dep_names, f"{route.path} ({methods}) missing require_admin"
+        assert "require_super_admin" in dep_names, f"{route.path} ({methods}) missing require_super_admin"
