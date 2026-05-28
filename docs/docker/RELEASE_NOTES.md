@@ -29,6 +29,27 @@ docker compose --env-file .env.example -f docker-compose.yml config --quiet
 git diff --check
 ```
 
+### 4. 镜像与生产模拟
+
+```bash
+ENV_FILE=.env COMPOSE_FILE=docker-compose.yml DOCKER_DEFAULT_PLATFORM=linux/amd64 bash scripts/deploy.sh build-amd64
+bash scripts/deploy.sh simulate
+```
+
+已验证镜像：
+- `shuhao07/wangsh-backend:1.5.16`
+- `shuhao07/wangsh-frontend:1.5.16`
+- `shuhao07/wangsh-gateway:1.5.16`
+- `shuhao07/wangsh-typst-worker:1.5.16`
+- `shuhao07/wangsh-pythonlab-worker:1.5.16`
+- `shuhao07/pythonlab-sandbox:1.5.16`
+
+本地生产模拟验证通过：
+- `http://localhost:6608/api/health` 返回 200。
+- 登录、`/api/v1/auth/me`、`/api/v1/users/stats`、`/api/v1/system/overview` 返回 200。
+- 小组讨论 admin sessions 返回 200，空范围 Excel 导出返回 200。
+- `typst-worker` 内 `typst 0.14.2` 可用，`pythonlab-worker` 内 Docker CLI 可用。
+
 ## v1.5.10（2026-05-09）
 
 ### 1. 变更范围

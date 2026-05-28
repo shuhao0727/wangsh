@@ -5,7 +5,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前版本**: 1.5.12
+- **当前版本**: 1.5.16
 
 ### 快速连接
 ```bash
@@ -54,14 +54,14 @@ docker compose -f docker-compose.dev.yml up -d
 cp .env.example .env
 # 编辑 .env，设置生产配置（修改密码、密钥等）
 
-# 2. 构建镜像
+# 2. 构建镜像（发布机器）
 bash scripts/deploy.sh build
 
-# 3. 推送镜像到 Docker Hub（可选）
+# 3. 推送镜像到 Docker Hub
 bash scripts/deploy.sh push
 
-# 4. 部署
-bash scripts/deploy.sh up
+# 4. 生产服务器拉取并部署
+bash scripts/deploy.sh deploy
 ```
 
 ---
@@ -111,14 +111,22 @@ bash scripts/deploy.sh build
 - `shuhao07/wangsh-pythonlab-worker:1.5.16` - PythonLab 调试 worker
 - `shuhao07/pythonlab-sandbox:1.5.16` - PythonLab 沙箱镜像
 
-### 2. 测试镜像
+### 2. 本地生产模拟验证
 
 ```bash
-# 启动所有服务
-docker compose up -d
+# 使用本地已构建或已拉取的生产镜像，不重新 build
+bash scripts/deploy.sh simulate
 
 # 健康检查
-curl http://localhost:6608/health
+curl http://localhost:16608/api/health
+```
+
+默认模拟参数：
+
+```bash
+SIM_VERSION=1.5.16
+SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
+SIM_WEB_PORT=16608
 ```
 
 ### 3. 推送到 Docker Hub
@@ -127,8 +135,25 @@ curl http://localhost:6608/health
 # 登录 Docker Hub
 docker login
 
-# 推送所有镜像
+# 推送所有生产镜像
 bash scripts/deploy.sh push
+```
+
+### 4. 生产服务器部署
+
+```bash
+# 确认 .env 使用生产配置
+APP_VERSION=1.5.16
+IMAGE_TAG=1.5.16
+REACT_APP_VERSION=1.5.16
+IMAGE_REPOSITORY_PREFIX=shuhao07
+
+# 拉取并启动，不在生产服务器重新构建
+bash scripts/deploy.sh deploy
+
+# 验证网关和后端
+curl http://localhost:6608/api/health
+docker compose ps
 ```
 
 ---
@@ -148,6 +173,16 @@ Docker Compose 命令：
 | `docker compose logs -f` | 查看实时日志 |
 | `docker compose ps` | 查看服务状态 |
 | `docker compose restart` | 重启所有服务 |
+
+项目脚本推荐命令：
+
+| 命令 | 说明 |
+|------|------|
+| `bash scripts/deploy.sh build` | 按 `.env` 构建生产镜像 |
+| `bash scripts/deploy.sh push` | 推送 `shuhao07/*:${IMAGE_TAG}` 生产镜像 |
+| `bash scripts/deploy.sh deploy` | 生产服务器拉取镜像并 `up -d --no-build` |
+| `bash scripts/deploy.sh up-no-build` | 使用本地已有镜像启动，不拉取、不构建 |
+| `bash scripts/deploy.sh simulate` | 用临时配置在 `16608` 端口做本地生产模拟 |
 
 开发环境命令：
 ```bash
@@ -221,7 +256,8 @@ BACKEND_RELOAD=false         # 生产环境必须为 false
 
 确保 `pythonlab-worker` 服务正常运行：
 ```bash
-docker compose -f docker-compose.dev.yml ps pythonlab-worker
+docker compose ps pythonlab-worker
+docker exec wangsh-pythonlab-worker-1 docker --version
 ```
 
 ### 3. 前端出现 `Failed to load module script` 或 MIME `text/html`
@@ -237,6 +273,11 @@ docker compose -f docker-compose.dev.yml ps pythonlab-worker
 ### 4. Typst PDF 渲染失败
 
 确保 `typst-worker` 服务正常运行，且字体文件已正确挂载
+
+```bash
+docker compose ps typst-worker
+docker exec wangsh-typst-worker-1 typst --version
+```
 
 ### 5. 数据库连接失败
 
@@ -299,11 +340,11 @@ docker exec wangsh-postgres pg_dump -U admin wangsh_db > backup_$(date +%Y%m%d_%
 # 2. 回滚数据库
 docker exec wangsh-backend alembic downgrade -1
 
-# 3. 回滚代码（重新部署旧版本）
-IMAGE_TAG=1.5.0 docker compose pull && docker compose up -d
+# 3. 回滚镜像版本（重新部署旧版本）
+IMAGE_TAG=1.5.10 APP_VERSION=1.5.10 REACT_APP_VERSION=1.5.10 bash scripts/deploy.sh pull-up
 
 # 4. 验证
-curl http://localhost:6608/health
+curl http://localhost:6608/api/health
 ```
 
 ### 回滚失败处理
@@ -348,6 +389,8 @@ docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
 
 - [ ] 修改 `.env` 中的所有密码和密钥
 - [ ] 设置 `DEBUG=false`
+- [ ] 确认 `IMAGE_REPOSITORY_PREFIX=shuhao07`
+- [ ] 确认 `APP_VERSION`、`IMAGE_TAG`、`REACT_APP_VERSION` 均为目标版本
 - [ ] 配置 CORS 允许的域名
 - [ ] 构建并测试所有镜像
 - [ ] 推送镜像到 Docker Hub
@@ -375,7 +418,7 @@ docker exec -i wangsh-postgres psql -U admin wangsh_db < backup_file.sql
 
 ```bash
 # 基础健康检查
-curl http://localhost:6608/health
+curl http://localhost:6608/api/health
 
 # 检查所有服务状态
 docker compose ps

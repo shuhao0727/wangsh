@@ -118,7 +118,7 @@ case "${cmd}" in
   deploy-local)
     require_env_file
     require_docker
-    COMPOSE_PROJECT_NAME=wangsh_local compose up -d --no-build
+    COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-wangsh_local}" compose up -d --no-build
     compose ps
     bash scripts/deploy.sh health
     web_port="$(env_value WEB_PORT)"
@@ -148,6 +148,12 @@ case "${cmd}" in
     require_env_file
     require_docker
     retry 3 compose up -d --build
+    compose ps
+    ;;
+  up-no-build)
+    require_env_file
+    require_docker
+    compose up -d --no-build
     compose ps
     ;;
   pull-up)
@@ -239,22 +245,28 @@ case "${cmd}" in
     require_docker
     tmp_env="$(mktemp -t wangsh_env_XXXXXX)"
     trap 'rm -f "${tmp_env}"' EXIT
+    sim_web_port="${SIM_WEB_PORT:-16608}"
+    sim_version="${SIM_VERSION:-1.5.16}"
+    sim_image_prefix="${SIM_IMAGE_REPOSITORY_PREFIX:-shuhao07}"
     secret_key="$(rand)"
     fernet="$(fernet_key)"
     pg_password="$(rand)"
     admin_password="$(rand)"
 
-    cat > "${tmp_env}" <<EOF
+cat > "${tmp_env}" <<EOF
 PROJECT_NAME=WangSh
-APP_VERSION=1.5.10
+APP_VERSION=${sim_version}
+IMAGE_TAG=${sim_version}
+REACT_APP_VERSION=${sim_version}
 API_V1_STR=/api/v1
 
-IMAGE_REPOSITORY_PREFIX=shuhao07
+IMAGE_REPOSITORY_PREFIX=${sim_image_prefix}
 IMAGE_NAME_BACKEND=wangsh-backend
 IMAGE_NAME_FRONTEND=wangsh-frontend
 IMAGE_NAME_WORKER=wangsh-typst-worker
 IMAGE_NAME_PYTHONLAB_WORKER=wangsh-pythonlab-worker
 IMAGE_NAME_GATEWAY=wangsh-gateway
+PYTHONLAB_SANDBOX_IMAGE=${sim_image_prefix}/pythonlab-sandbox:${sim_version}
 
 TIMEZONE=Asia/Shanghai
 LOG_LEVEL=INFO
@@ -265,10 +277,10 @@ POSTGRES_USER=admin
 POSTGRES_PASSWORD=${pg_password}
 SUPER_ADMIN_USERNAME=admin
 SUPER_ADMIN_PASSWORD=${admin_password}
-CORS_ORIGINS=["http://localhost:16608","http://127.0.0.1:16608"]
+CORS_ORIGINS=["http://localhost:${sim_web_port}","http://127.0.0.1:${sim_web_port}"]
 REACT_APP_API_URL=/api/v1
 REACT_APP_ENV=production
-WEB_PORT=16608
+WEB_PORT=${sim_web_port}
 EOF
 
     COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-wangsh_sim}" \
@@ -279,17 +291,17 @@ EOF
     COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-wangsh_sim}" \
       ENV_FILE="${tmp_env}" \
       COMPOSE_FILE="${compose_file}" \
-      bash scripts/deploy.sh up
+      bash scripts/deploy.sh up-no-build
 
     for _ in $(seq 1 60); do
-      if curl -fsS "http://localhost:16608/api/health" >/dev/null; then
+      if curl -fsS "http://localhost:${sim_web_port}/api/health" >/dev/null; then
         break
       fi
       sleep 1
     done
-    curl -fsS "http://localhost:16608/api/health" >/dev/null
+    curl -fsS "http://localhost:${sim_web_port}/api/health" >/dev/null
 
-    BASE_URL="http://localhost:16608/api/v1" \
+    BASE_URL="http://localhost:${sim_web_port}/api/v1" \
       ADMIN_USERNAME="admin" \
       ADMIN_PASSWORD="${admin_password}" \
       python3 backend/scripts/smoke_typst_pipeline.py
@@ -340,7 +352,7 @@ EOF
     esac
     ;;
   *)
-    echo "usage: $0 <deploy|deploy-amd64|deploy-local|up|pull-up|build|push|down|down-v|logs|health|simulate|backup-db|restore-db|up-amd64|pull-up-amd64|build-amd64|push-amd64|simulate-amd64>" >&2
+    echo "usage: $0 <deploy|deploy-amd64|deploy-local|up|up-no-build|pull-up|build|push|down|down-v|logs|health|simulate|backup-db|restore-db|up-amd64|pull-up-amd64|build-amd64|push-amd64|simulate-amd64>" >&2
     exit 2
     ;;
 esac

@@ -23,6 +23,17 @@
 # 部署后健康检查
 ./scripts/health-check-detailed.sh
 
+# 生产镜像构建、推送与部署
+bash scripts/deploy.sh build
+bash scripts/deploy.sh push
+bash scripts/deploy.sh deploy
+
+# 使用 shuhao07/*:1.5.16 镜像做本地生产模拟（端口 16608）
+bash scripts/deploy.sh simulate
+
+# 使用当前 .env 中的本地镜像启动，不拉取、不构建
+bash scripts/deploy.sh up-no-build
+
 # XBK 一键重建 + 样例导入 + 冒烟
 python scripts/xbk/run_all.py
 ```
