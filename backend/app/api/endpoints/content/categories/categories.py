@@ -77,6 +77,46 @@ async def create_category(
         )
 
 
+@router.get("/search", response_model=List[CategoryResponse])
+async def search_categories(
+    keyword: str = Query(..., min_length=1, description="搜索关键词"),
+    limit: int = Query(settings.CATEGORY_SEARCH_LIMIT, ge=1, le=100, description="返回结果数量限制"),
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_user)
+) -> Any:
+    """
+    搜索分类（按名称或slug模糊匹配）
+
+    权限：任何登录用户
+    """
+    categories = await CategoryService.search_categories(
+        db=db,
+        keyword=keyword,
+        limit=limit
+    )
+
+    return categories
+
+
+@router.get("/popular", response_model=List[Dict[str, Any]])
+async def get_popular_categories(
+    limit: int = Query(settings.CATEGORY_POPULAR_LIMIT, ge=1, le=50, description="返回热门分类数量"),
+    db: AsyncSession = Depends(get_db),
+    _: Dict[str, Any] = Depends(require_user)
+) -> Any:
+    """
+    获取热门分类（按文章数量排序）
+
+    权限：任何登录用户
+    """
+    popular_categories = await CategoryService.get_popular_categories(
+        db=db,
+        limit=limit
+    )
+
+    return popular_categories
+
+
 @router.get("/{category_id}", response_model=CategoryResponse)
 async def get_category(
     category_id: int,
@@ -178,46 +218,6 @@ async def delete_category(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"分类ID {category_id} 不存在"
         )
-
-
-@router.get("/search", response_model=List[CategoryResponse])
-async def search_categories(
-    keyword: str = Query(..., min_length=1, description="搜索关键词"),
-    limit: int = Query(settings.CATEGORY_SEARCH_LIMIT, ge=1, le=100, description="返回结果数量限制"),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_user)
-) -> Any:
-    """
-    搜索分类（按名称或slug模糊匹配）
-    
-    权限：任何登录用户
-    """
-    categories = await CategoryService.search_categories(
-        db=db,
-        keyword=keyword,
-        limit=limit
-    )
-    
-    return categories
-
-
-@router.get("/popular", response_model=List[Dict[str, Any]])
-async def get_popular_categories(
-    limit: int = Query(settings.CATEGORY_POPULAR_LIMIT, ge=1, le=50, description="返回热门分类数量"),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_user)
-) -> Any:
-    """
-    获取热门分类（按文章数量排序）
-    
-    权限：任何登录用户
-    """
-    popular_categories = await CategoryService.get_popular_categories(
-        db=db,
-        limit=limit
-    )
-    
-    return popular_categories
 
 
 @router.post("/get-or-create", response_model=CategoryResponse)
