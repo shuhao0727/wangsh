@@ -102,10 +102,13 @@ class HotQuestionAnalysisSaveRequest(BaseAnalysisSaveRequest):
     task_sheet: str
     bucket_seconds: int = Field(180, ge=60, le=600)
     teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list)
+    prompt_template_id: Optional[int] = Field(None, ge=1, description="提示词模板ID")
 
 
 class StudentChainAnalysisSaveRequest(BaseAnalysisSaveRequest):
     task_sheet: Optional[str] = Field(None, description="任务单（可选）")
+    teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list)
+    prompt_template_id: Optional[int] = Field(None, ge=1, description="提示词模板ID")
 
 
 class BaseAnalysisRecord(BaseModel):
@@ -146,5 +149,44 @@ class AnalysisListItem(BaseModel):
     agent_id: Optional[int] = None
     class_name: Optional[str] = None
     created_at: datetime
+    theme_count: int = 0
+    question_count: int = 0
+    teacher_anchor_count: int = 0
+    burst_count: int = 0
+    chain_count: int = 0
+    ai_chain_node_count: int = 0
+    uncovered_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AgentAnalysisPromptTemplateCreate(BaseModel):
+    analysis_type: str = Field(..., pattern="^(hot_questions|student_chains)$")
+    name: str = Field(..., min_length=1, max_length=120)
+    content: str = Field(..., min_length=1, max_length=8000)
+    is_default: bool = False
+    is_active: bool = True
+    sort_order: int = Field(100, ge=0, le=10000)
+
+
+class AgentAnalysisPromptTemplateUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    content: Optional[str] = Field(None, min_length=1, max_length=8000)
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = Field(None, ge=0, le=10000)
+
+
+class AgentAnalysisPromptTemplateRecord(BaseModel):
+    id: int
+    analysis_type: str
+    name: str
+    content: str
+    is_default: bool = False
+    is_active: bool = True
+    sort_order: int = 100
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

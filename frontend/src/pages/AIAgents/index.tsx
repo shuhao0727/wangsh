@@ -465,7 +465,6 @@ const AIAgentsPage: React.FC = () => {
             answer: answerText || "",
             session_id: activeSessionId,
             response_time_ms: Date.now() - streamStartedAt,
-            used_at: new Date().toISOString(),
           });
           setTimeout(() => {
             agentDataApi.listConversations({

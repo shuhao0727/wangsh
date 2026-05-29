@@ -3,7 +3,7 @@
 提供使用记录的创建、查询和统计功能
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -81,7 +81,8 @@ async def create_agent_usage(
     response_time_ms: Optional[int] = None,
     used_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    used_at_value = used_at or datetime.now()
+    # 对话记录的权威时间必须来自服务端，不能信任浏览器/客户端时间。
+    used_at_value = datetime.now(timezone.utc)
 
     agent_result = await db.execute(select(AIAgent).where(AIAgent.id == agent_id))
     agent = agent_result.scalar_one_or_none()
@@ -127,6 +128,11 @@ async def create_agent_usage(
         await db.refresh(answer_row)
     elif question_row:
         await db.refresh(question_row)
+    persisted_at = (
+        answer_row.created_at
+        if answer_row is not None
+        else (question_row.created_at if question_row is not None else used_at_value)
+    )
 
     return {
         "id": (answer_row.id if answer_row else (question_row.id if question_row else 0)),
@@ -136,8 +142,8 @@ async def create_agent_usage(
         "answer": answer or "",
         "session_id": session_id,
         "response_time_ms": response_time_ms,
-        "used_at": used_at_value,
-        "created_at": used_at_value,
+        "used_at": persisted_at,
+        "created_at": persisted_at,
         "user": (
             {
                 "id": user.id,

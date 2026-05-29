@@ -1,178 +1,251 @@
 /**
- * 学生语义光束图 — 增强版
- * 特性：主问题链对齐 | 教师标记 | 爆发点 | 覆盖/生发区分 | 交互增强
+ * 学生语义光束图
+ * 教师问题链固定为中轴，真实学生问题链围绕中轴形成连续波形。
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
 import useDocumentDarkMode from "@/hooks/useDocumentDarkMode";
 import { getAgentChartTheme } from "./chartTheme";
+import type { BeamRangeSelection, BeamStudentChain, BeamTeacherAnchor, BeamRelationType } from "../types";
 
-type Message = { message_type: string; content: string; created_at: string };
-type Session = {
-  session_id: string;
-  user_name?: string;
-  class_name?: string;
-  last_at: string;
-  turns: number;
-  messages: Message[];
-};
-type MainChainItem = { stage: string; question: string; reason?: string; evidence?: string[] };
-type TeacherMark = { time: string; question: string };
 type BurstPoint = { bucket_start: string; question_count: number; top_questions?: Array<{ question: string; count: number }> };
-type TopicItem = { topic: string; questions?: string[]; count: number };
+type EnrichedBeamQuestion = {
+  chainId: string;
+  studentName: string;
+  content: string;
+  time: number;
+  y: number;
+  relationType: BeamRelationType;
+  relationLabel: string;
+  teacherQuestion?: string;
+  teacherTime?: string;
+  isUncovered?: boolean;
+  evidenceIds?: number[];
+  colorIndex: number;
+};
 
 interface Props {
-  sessions: Session[];
   height?: number;
-  mainQuestionChain?: MainChainItem[];
-  teacherMarks?: TeacherMark[];
+  teacherAnchors?: BeamTeacherAnchor[];
+  studentChains?: BeamStudentChain[];
   burstPoints?: BurstPoint[];
-  covered?: TopicItem[];
-  uncovered?: TopicItem[];
+  manualRange?: { startAt?: string; endAt?: string } | null;
+  onRangeChange?: (selection: BeamRangeSelection) => void;
 }
-
-const STOP_WORDS = new Set(["怎么", "如何", "为什么", "什么", "可以", "这个", "那个", "一下", "请问", "老师", "就是", "还是", "如果", "没有", "问题", "请", "呢", "吗", "啊", "的", "了", "和", "与", "在", "是", "我", "要", "能"]);
-
-const extractTerms = (text: string): string[] => {
-  const cleaned = text.replace(/[\s\p{P}\p{S}]+/gu, " ").trim();
-  const latin = cleaned.match(/[a-zA-Z][a-zA-Z0-9_+#-]{1,}/g) || [];
-  const chinese = cleaned.replace(/[a-zA-Z0-9_+#-]+/g, "").replace(/\s+/g, "");
-  const cTerms: string[] = [];
-  for (let size = 4; size >= 2; size -= 1) {
-    for (let i = 0; i <= chinese.length - size; i += size) {
-      const t = chinese.slice(i, i + size);
-      if (!STOP_WORDS.has(t)) cTerms.push(t);
-    }
-  }
-  return [...latin, ...cTerms].map((t) => t.toLowerCase()).filter((t) => t.length >= 2 && !STOP_WORDS.has(t)).slice(0, 8);
-};
-
-const similarity = (a: Set<string>, b: Set<string>) => {
-  if (a.size === 0 || b.size === 0) return 0;
-  let same = 0;
-  a.forEach((t) => { if (b.has(t)) same += 1; });
-  return same / Math.min(a.size, b.size);
-};
 
 const escapeHtml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmtTime = (v: number) => { const d = new Date(v); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
-
-// 判断问题是否属于 uncovered（生发性）— 使用术语相似度而非子串匹配
-const isUncoveredQuestion = (content: string, uncoveredTopics: TopicItem[]): boolean => {
-  if (uncoveredTopics.length === 0) return false;
-  const contentTerms = new Set(extractTerms(content));
-  if (contentTerms.size === 0) return false;
-  return uncoveredTopics.some((t) => {
-    const topicTerms = new Set(extractTerms(t.topic));
-    if (similarity(contentTerms, topicTerms) >= 0.4) return true;
-    return (t.questions || []).some((q) => similarity(contentTerms, new Set(extractTerms(q))) >= 0.45);
-  });
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const smoothStep = (value: number) => value * value * (3 - 2 * value);
+const relationOffset: Record<BeamRelationType, number> = {
+  clarify: -0.28,
+  follow_up: 0.28,
+  apply: 0.72,
+  debug: -0.86,
+  challenge: -0.62,
+  transfer: 1,
+  extend: 1.16,
+  off_track: -1.18,
 };
 
 const StudentBeamChart: React.FC<Props> = ({
-  sessions, height = 520, mainQuestionChain = [], teacherMarks = [], burstPoints = [], covered = [], uncovered = [],
+  height = 520, teacherAnchors = [], studentChains = [], burstPoints = [], manualRange, onRangeChange,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const onRangeChangeRef = useRef(onRangeChange);
+  const emitRangeRef = useRef<((start?: number, end?: number, source?: BeamRangeSelection["source"]) => void) | null>(null);
   const isDark = useDocumentDarkMode();
 
-  const empty = useMemo(() => sessions.every((s) => !s.messages.some((m) => m.message_type === "question")), [sessions]);
+  const empty = useMemo(
+    () => studentChains.every((chain) => chain.nodes.length === 0),
+    [studentChains],
+  );
 
   useEffect(() => {
-    if (!ref.current || sessions.length === 0 || empty) return;
+    onRangeChangeRef.current = onRangeChange;
+  }, [onRangeChange]);
+
+  useEffect(() => {
+    if (!ref.current || empty) return;
     const theme = getAgentChartTheme();
     if (chartRef.current) { chartRef.current.dispose(); chartRef.current = null; }
     chartRef.current = echarts.init(ref.current);
 
-    // 提取所有问题
-    const questions = sessions.flatMap((s) => {
-      const name = s.user_name || s.session_id.slice(0, 8);
-      return s.messages
-        .filter((m) => m.message_type === "question" && m.content.trim())
-        .map((m) => ({ name, content: m.content.trim(), time: new Date(m.created_at).getTime() }));
-    }).filter((q) => Number.isFinite(q.time)).sort((a, b) => a.time - b.time);
+    const chains = studentChains.filter((chain) => chain.nodes.length > 0);
 
-    if (questions.length === 0) { chartRef.current.clear(); return; }
+    const teacherQuestions = teacherAnchors
+      .map((anchor, index) => ({
+        id: anchor.id || `teacher-${index}`,
+        content: anchor.question || "教师提问",
+        time: new Date(anchor.time).getTime(),
+        label: anchor.label || `T${index + 1}`,
+      }))
+      .filter((item) => Number.isFinite(item.time))
+      .sort((a, b) => a.time - b.time);
 
-    // 聚类：优先对齐主问题链阶段，否则自动聚类
-    type Cluster = { label: string; terms: Set<string>; items: typeof questions; isChainStage: boolean };
-    const clusters: Cluster[] = [];
+    const allNodeTimes = chains.flatMap((chain) => chain.nodes.map((node) => new Date(node.time).getTime())).filter(Number.isFinite);
+    if (allNodeTimes.length === 0) { chartRef.current.clear(); return; }
+    const minTime = Math.min(...allNodeTimes, teacherQuestions[0]?.time ?? allNodeTimes[0]);
+    const maxTime = Math.max(...allNodeTimes, teacherQuestions[teacherQuestions.length - 1]?.time ?? allNodeTimes[allNodeTimes.length - 1]);
+    const maxLane = 1.45;
 
-    // 用主问题链阶段作为预设 lane
-    if (mainQuestionChain.length > 0) {
-      mainQuestionChain.forEach((stage) => {
-        const terms = new Set(extractTerms(stage.question + " " + stage.stage));
-        (stage.evidence || []).forEach((e) => extractTerms(e).forEach((t) => terms.add(t)));
-        clusters.push({ label: stage.stage, terms, items: [], isChainStage: true });
+    const nearestTeacher = (time: number) => {
+      if (teacherQuestions.length === 0) return undefined;
+      return teacherQuestions.reduce((best, current) => (
+        Math.abs(current.time - time) < Math.abs(best.time - time) ? current : best
+      ), teacherQuestions[0]);
+    };
+
+    const enriched = chains.flatMap((chain, chainIndex) => chain.nodes
+      .map((node, nodeIndex): EnrichedBeamQuestion | null => {
+        const time = new Date(node.time).getTime();
+        if (!Number.isFinite(time)) return null;
+        const teacher = nearestTeacher(time);
+        const baseOffset = relationOffset[node.relationType] ?? relationOffset.follow_up;
+        const wave = Math.sin((nodeIndex + 1) * 1.15 + chainIndex * 0.8) * 0.12;
+        const y = clamp(baseOffset + wave, -maxLane, maxLane);
+        return {
+          chainId: chain.id,
+          studentName: chain.studentName,
+          content: node.content,
+          time,
+          y,
+          relationType: node.relationType,
+          relationLabel: node.relationLabel,
+          teacherQuestion: node.teacherQuestion || teacher?.content,
+          teacherTime: node.teacherTime || (teacher ? new Date(teacher.time).toISOString() : undefined),
+          isUncovered: Boolean(node.isUncovered),
+          evidenceIds: node.evidenceIds || [],
+          colorIndex: chainIndex,
+        };
+      })
+      .filter((item): item is EnrichedBeamQuestion => item !== null))
+      .sort((a, b) => a.time - b.time);
+
+    if (enriched.length === 0) { chartRef.current.clear(); return; }
+
+    const emitRange = (start?: number, end?: number, source: BeamRangeSelection["source"] = "zoom") => {
+      const callback = onRangeChangeRef.current;
+      if (!callback) return;
+      const startAt = Number.isFinite(start) ? start : undefined;
+      const endAt = Number.isFinite(end) ? end : undefined;
+      const inRange = enriched
+        .filter((item) => (startAt === undefined || item.time >= startAt) && (endAt === undefined || item.time <= endAt))
+        .sort((a, b) => a.time - b.time);
+      const rangeTeachers = teacherQuestions
+        .filter((teacher) => (startAt === undefined || teacher.time >= startAt) && (endAt === undefined || teacher.time <= endAt))
+        .map((teacher) => ({
+          id: teacher.id,
+          time: new Date(teacher.time).toISOString(),
+          question: teacher.content,
+          label: teacher.label,
+        }));
+      callback({
+        startAt: startAt === undefined ? undefined : new Date(startAt).toISOString(),
+        endAt: endAt === undefined ? undefined : new Date(endAt).toISOString(),
+        questions: inRange.map((item) => ({
+          chainId: item.chainId,
+          time: new Date(item.time).toISOString(),
+          studentName: item.studentName,
+          content: item.content,
+          relationType: item.relationType,
+          relationLabel: item.relationLabel,
+          teacherQuestion: item.teacherQuestion,
+          teacherTime: item.teacherTime,
+          isUncovered: item.isUncovered,
+          evidenceIds: item.evidenceIds,
+        })),
+        teacherAnchors: rangeTeachers,
+        source,
       });
-    }
-
-    // 分配问题到聚类
-    questions.forEach((q) => {
-      const terms = new Set(extractTerms(q.content));
-      const match = clusters.find((c) => similarity(c.terms, terms) >= 0.4);
-      if (match) {
-        terms.forEach((t) => match.terms.add(t));
-        match.items.push(q);
-      } else {
-        const label = [...terms].slice(0, 3).join("/") || q.content.slice(0, 12);
-        clusters.push({ label, terms, items: [q], isChainStage: false });
-      }
-    });
-
-    // 排序：主问题链阶段在中间，其他按数量排列在两侧
-    const chainClusters = clusters.filter((c) => c.isChainStage && c.items.length > 0);
-    const otherClusters = clusters.filter((c) => !c.isChainStage && c.items.length > 0).sort((a, b) => b.items.length - a.items.length);
-
-    const orderedClusters = [...chainClusters, ...otherClusters];
-    const laneMap = new Map<string, number>();
-    orderedClusters.forEach((c, i) => {
-      const lane = i < chainClusters.length
-        ? i - Math.floor(chainClusters.length / 2)  // 主链居中
-        : chainClusters.length + Math.ceil((i - chainClusters.length) / 2) * ((i - chainClusters.length) % 2 === 0 ? 1 : -1);
-      laneMap.set(c.label, lane);
-    });
-
-    const maxLane = Math.max(1, ...[...laneMap.values()].map(Math.abs));
-    const students = [...new Set(questions.map((q) => q.name))];
-    const enriched = orderedClusters.flatMap((c) => c.items.map((item) => ({
-      ...item, topic: c.label, y: laneMap.get(c.label) || 0, isChainStage: c.isChainStage,
-      isUncovered: isUncoveredQuestion(item.content, uncovered),
-    })));
-
-    // === 绘制 ===
-
-    // Lane 引导线（主问题链阶段用实线+标签，其他用虚线）
-    const laneSeries = orderedClusters.map((c) => {
-      const y = laneMap.get(c.label) || 0;
-      return {
-        type: "line", name: c.label, silent: true, z: 0, symbol: "none",
-        data: [[questions[0].time, y], [questions[questions.length - 1].time, y]],
-        lineStyle: {
-          color: c.isChainStage ? theme.laneLine : theme.laneLineMuted,
-          width: c.isChainStage ? 2 : 1,
-          type: c.isChainStage ? "solid" : "dashed",
-        },
-        label: c.isChainStage ? { show: true, formatter: c.label, position: "insideStartTop", fontSize: 10, color: theme.primary, fontWeight: 600 } : undefined,
-      };
-    });
+    };
+    emitRangeRef.current = emitRange;
 
     // 学生光束线
-    const beamSeries = students.map((student, idx) => {
-      const items = enriched.filter((e) => e.name === student).sort((a, b) => a.time - b.time);
+    const buildContinuousBeamData = (items: Array<typeof enriched[number]>, studentIndex: number) => {
+      if (items.length <= 1) return items.map((item) => [item.time, item.y]);
+      const range = Math.max(maxTime - minTime, 1);
+      const data: number[][] = [];
+      items.forEach((item, index) => {
+        if (index === 0) {
+          data.push([item.time, item.y]);
+          return;
+        }
+        const prev = items[index - 1];
+        const steps = clamp(Math.round(((item.time - prev.time) / range) * 120), 16, 44);
+        const direction = studentIndex % 2 === 0 ? 1 : -1;
+        const amplitude = clamp(Math.abs(item.y - prev.y) * 0.08 + 0.05, 0.05, 0.18);
+        for (let step = 1; step <= steps; step += 1) {
+          const progress = step / steps;
+          const eased = smoothStep(progress);
+          const x = prev.time + (item.time - prev.time) * progress;
+          const baseY = prev.y + (item.y - prev.y) * eased;
+          const wave = Math.sin(progress * Math.PI) * amplitude * direction;
+          data.push([x, baseY + wave]);
+        }
+      });
+      return data;
+    };
+
+    const trajectorySeries = chains.map((chain, idx) => {
+      const items = enriched.filter((e) => e.chainId === chain.id).sort((a, b) => a.time - b.time);
       return {
-        type: "line", name: student, z: 2, symbol: "none", smooth: 0.5,
-        data: items.map((item) => [item.time, item.y]),
-        lineStyle: { color: theme.beamColors[idx % theme.beamColors.length], width: 2.2, opacity: 0.28 },
-        emphasis: { lineStyle: { width: 4.5, opacity: 0.8 } },
+        type: "line", name: `${chain.studentName} 趋势`, z: 1, symbol: "none", smooth: false, silent: true,
+        data: buildContinuousBeamData(items, idx),
+        lineStyle: { color: theme.beamColors[idx % theme.beamColors.length], width: 5, opacity: 0.1 },
       };
     });
+
+    const beamSeries = chains.map((chain, idx) => {
+      const items = enriched.filter((e) => e.chainId === chain.id).sort((a, b) => a.time - b.time);
+      return {
+        type: "line", name: chain.studentName, z: 2, symbol: "none", smooth: false,
+        data: buildContinuousBeamData(items, idx),
+        lineStyle: { color: theme.beamColors[idx % theme.beamColors.length], width: 2.2, opacity: 0.38 },
+        endLabel: { show: true, formatter: chain.studentName, color: theme.beamColors[idx % theme.beamColors.length], fontWeight: 600 },
+        emphasis: { lineStyle: { width: 4.5, opacity: 0.85 } },
+      };
+    });
+
+    const teacherAxisSeries = [{
+      type: "line",
+      name: "教师提问主线",
+      z: 3,
+      symbol: "none",
+      smooth: false,
+      silent: true,
+      data: [[minTime, 0], [maxTime, 0]],
+      lineStyle: { color: theme.teacher, width: 5, opacity: 0.88, shadowBlur: 8, shadowColor: theme.teacherSoft },
+      emphasis: { lineStyle: { width: 6.5, opacity: 1 } },
+    }];
+
+    const teacherPointSeries = teacherQuestions.length > 0 ? [{
+      type: "scatter",
+      name: "教师锚点",
+      z: 6,
+      symbol: "circle",
+      symbolSize: 12,
+      data: teacherQuestions.map((item) => ({
+        value: [item.time, 0, "教师", item.content, "教师主线", 0],
+        itemStyle: { color: theme.teacher, borderColor: theme.surface, borderWidth: 2 },
+      })),
+      label: { show: true, formatter: (p: any) => `T${p.dataIndex + 1}`, color: theme.teacher, fontSize: 10, position: "top" },
+      tooltip: {
+        formatter(param: any) {
+          const v = param?.value;
+          if (!v) return "";
+          const [time, , , content] = v;
+          return `<div style="max-width:300px"><b style="color:${theme.teacher}">教师提问主线</b><br/><span style="color:${theme.textSecondary}">${fmtTime(time as number)}</span><br/><div style="margin-top:4px;color:${theme.textMuted};line-height:1.4">"${escapeHtml(String(content).slice(0, 90))}"</div></div>`;
+        },
+      },
+    }] : [];
 
     // 散点（区分覆盖/生发）
     const scatterData = enriched.map((item) => ({
-      value: [item.time, item.y, item.name, item.content, item.topic, item.isUncovered ? 1 : 0],
+      value: [item.time, item.y, item.studentName, item.content, item.relationLabel, item.isUncovered ? 1 : 0, item.teacherQuestion || ""],
       itemStyle: {
-        color: item.isUncovered ? theme.uncovered : theme.beamColors[students.indexOf(item.name) % theme.beamColors.length],
+        color: item.isUncovered ? theme.uncovered : theme.beamColors[item.colorIndex % theme.beamColors.length],
         borderColor: item.isUncovered ? theme.uncoveredBorder : "transparent",
         borderWidth: item.isUncovered ? 2 : 0,
         opacity: 0.75,
@@ -181,13 +254,6 @@ const StudentBeamChart: React.FC<Props> = ({
       },
       symbol: item.isUncovered ? "diamond" : "circle",
       symbolSize: item.isUncovered ? 14 : 10,
-    }));
-
-    // 教师标记线
-    const teacherMarkLines = teacherMarks.map((tm) => ({
-      xAxis: new Date(tm.time).getTime(),
-      label: { formatter: `📌 ${tm.question || "教师提问"}`, fontSize: 9, color: theme.teacher, position: "insideEndTop" as const },
-      lineStyle: { type: "dashed" as const, color: theme.teacherSoft, width: 1.5 },
     }));
 
     // 爆发点标记
@@ -209,15 +275,30 @@ const StudentBeamChart: React.FC<Props> = ({
         formatter(param: any) {
           const v = param?.value;
           if (!v) return "";
-          const [time, , name, content, topic, isUnc] = v;
+          const [time, , name, content, relation, isUnc, teacherQuestion] = v;
           const tag = isUnc
             ? `<span style="color:${theme.uncoveredBorder};font-weight:600">🔥 生发问题</span>`
-            : `<span style="color:${theme.primary}">✅ 任务覆盖</span>`;
-          return `<div style="max-width:280px"><b style="color:${theme.textBase}">${escapeHtml(String(topic))}</b> ${tag}<br/><span style="color:${theme.textSecondary}">${escapeHtml(String(name))} · ${fmtTime(time as number)}</span><br/><div style="margin-top:4px;color:${theme.textMuted};line-height:1.4">"${escapeHtml(String(content).slice(0, 80))}"</div></div>`;
+            : `<span style="color:${theme.primary}">学生问题链</span>`;
+          const teacherLine = teacherQuestion ? `<br/><span style="color:${theme.teacher}">关联教师：${escapeHtml(String(teacherQuestion).slice(0, 40))}</span>` : "";
+          return `<div style="max-width:300px"><b style="color:${theme.textBase}">${escapeHtml(String(relation))}</b> ${tag}<br/><span style="color:${theme.textSecondary}">${escapeHtml(String(name))} · ${fmtTime(time as number)}</span>${teacherLine}<br/><div style="margin-top:4px;color:${theme.textMuted};line-height:1.4">"${escapeHtml(String(content).slice(0, 90))}"</div></div>`;
         },
       },
       legend: { show: false },
-      grid: { left: 16, right: 24, top: 32, bottom: 58 },
+      toolbox: {
+        show: true,
+        right: 12,
+        top: 4,
+        itemSize: 14,
+        feature: {
+          brush: {
+            type: ["rect", "clear"],
+            title: { rect: "框选时间段", clear: "清除框选" },
+          },
+        },
+        iconStyle: { borderColor: theme.textSecondary },
+        emphasis: { iconStyle: { borderColor: theme.primary } },
+      },
+      grid: { left: 16, right: 24, top: 36, bottom: 62 },
       xAxis: {
         type: "time",
         axisLabel: { fontSize: 10, formatter: fmtTime, color: theme.textSecondary },
@@ -227,8 +308,8 @@ const StudentBeamChart: React.FC<Props> = ({
       },
       yAxis: {
         type: "value",
-        min: -maxLane - 1,
-        max: maxLane + 1,
+        min: -1.65,
+        max: 2.05,
         axisLabel: { show: false },
         axisLine: { show: false },
         axisTick: { show: false },
@@ -238,30 +319,92 @@ const StudentBeamChart: React.FC<Props> = ({
         { type: "slider", start: 0, end: 100, height: 20, bottom: 8, fillerColor: theme.primarySoft, borderColor: theme.border, handleStyle: { color: theme.primary }, textStyle: { fontSize: 10, color: theme.textSecondary } },
         { type: "inside", zoomOnMouseWheel: true, moveOnMouseMove: true },
       ],
+      brush: {
+        xAxisIndex: 0,
+        brushMode: "single",
+        transformable: true,
+        brushStyle: {
+          borderColor: theme.primary,
+          color: `color-mix(in srgb, ${theme.primary} 8%, transparent)`,
+          borderWidth: 1.5,
+        },
+      },
       series: [
-        ...laneSeries,
+        ...teacherAxisSeries,
+        ...trajectorySeries,
         ...beamSeries,
         {
           type: "scatter", data: scatterData, z: 4,
           emphasis: { scale: 1.6, label: { show: true, formatter: (p: any) => p.value?.[3]?.slice(0, 20) || "", color: theme.textBase, fontSize: 10, position: "top" } },
         },
-        ...(teacherMarkLines.length > 0 ? [{
-          type: "line", data: [] as any[], z: 3, silent: true, symbol: "none",
-          markLine: { silent: true, symbol: ["none", "none"], data: teacherMarkLines },
-        }] : []),
+        ...teacherPointSeries,
         ...(burstScatter.length > 0 ? [{
           type: "scatter", data: burstScatter, z: 5, silent: false,
-          tooltip: { formatter: () => `<span style="color:${theme.burst};font-weight:600">🔥 提问爆发点</span>` },
+          tooltip: { formatter: () => `<span style="color:${theme.burst};font-weight:600">提问爆发点</span>` },
         }] : []),
       ],
     }, true);
 
+    emitRange(minTime, maxTime, "initial");
+
+    chartRef.current.off("datazoom");
+    chartRef.current.on("datazoom", () => {
+      const optionState = chartRef.current?.getOption() as any;
+      const zoom = optionState?.dataZoom?.[0];
+      const startValue = Number(zoom?.startValue);
+      const endValue = Number(zoom?.endValue);
+      if (Number.isFinite(startValue) && Number.isFinite(endValue)) {
+        emitRange(startValue, endValue, "zoom");
+        return;
+      }
+      const startPercent = Number(zoom?.start ?? 0);
+      const endPercent = Number(zoom?.end ?? 100);
+      emitRange(minTime + (maxTime - minTime) * (startPercent / 100), minTime + (maxTime - minTime) * (endPercent / 100), "zoom");
+    });
+
+    chartRef.current.off("brushEnd");
+    chartRef.current.on("brushEnd", (event: any) => {
+      const coordRange = event?.areas?.[0]?.coordRange;
+      if (!coordRange) {
+        emitRange(minTime, maxTime, "brush");
+        return;
+      }
+      const xRange = Array.isArray(coordRange[0]) ? coordRange[0] : coordRange;
+      if (Array.isArray(xRange) && xRange.length >= 2) {
+        const start = Number(xRange[0]);
+        const end = Number(xRange[1]);
+        if (Number.isFinite(start) && Number.isFinite(end)) {
+          emitRange(Math.min(start, end), Math.max(start, end), "brush");
+        }
+      }
+    });
+
     const resize = () => chartRef.current?.resize();
     window.addEventListener("resize", resize);
-    return () => { window.removeEventListener("resize", resize); chartRef.current?.dispose(); chartRef.current = null; };
-  }, [sessions, mainQuestionChain, teacherMarks, burstPoints, uncovered, isDark]);
+    return () => {
+      window.removeEventListener("resize", resize);
+      emitRangeRef.current = null;
+      chartRef.current?.dispose();
+      chartRef.current = null;
+    };
+  }, [teacherAnchors, studentChains, burstPoints, isDark]);
 
-  if (sessions.length === 0 || empty) {
+  useEffect(() => {
+    if (!manualRange?.startAt || !manualRange?.endAt || !emitRangeRef.current) return;
+    const start = new Date(manualRange.startAt).getTime();
+    const end = new Date(manualRange.endAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+    const startValue = Math.min(start, end);
+    const endValue = Math.max(start, end);
+    emitRangeRef.current(startValue, endValue, "manual");
+    chartRef.current?.dispatchAction({
+      type: "dataZoom",
+      startValue,
+      endValue,
+    });
+  }, [manualRange]);
+
+  if (empty) {
     return <div className="flex w-full items-center justify-center rounded-lg bg-surface-2 text-sm text-text-tertiary" style={{ height }}>暂无可绘制的学生提问链条</div>;
   }
 
@@ -269,10 +412,10 @@ const StudentBeamChart: React.FC<Props> = ({
     <div className="relative">
       <div ref={ref} className="w-full" style={{ height }} aria-label="学生提问语义光束图" />
       {/* 图例说明 */}
-      <div className="absolute top-2 right-4 flex items-center gap-3 text-[11px] text-text-tertiary">
+      <div className="absolute top-2 left-4 flex items-center gap-3 text-[11px] text-text-tertiary">
+        <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-[3px] border-[var(--ws-color-warning)]" />教师主线</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />任务覆盖</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-[var(--ws-color-danger)] bg-[var(--ws-color-warning)]" />生发问题</span>
-        {teacherMarks.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-[var(--ws-color-warning)]" />教师提问</span>}
         {burstPoints.length > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[var(--ws-color-danger)]" />爆发点</span>}
       </div>
     </div>

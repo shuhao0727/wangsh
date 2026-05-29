@@ -18,6 +18,8 @@ from .analysis import (
     TaskAnalysisSaveRequest, TaskAnalysisRecord,
     HotQuestionAnalysisSaveRequest, HotQuestionAnalysisRecord,
     StudentChainAnalysisSaveRequest, StudentChainAnalysisRecord,
+    AgentAnalysisPromptTemplateCreate, AgentAnalysisPromptTemplateUpdate,
+    AgentAnalysisPromptTemplateRecord,
 )
 
 # 兼容别名（API 层仍引用旧名称，逐步迁移到 AnalysisListItem）
@@ -78,6 +80,8 @@ __all__ = [
     "TaskAnalysisSaveRequest", "TaskAnalysisRecord",
     "HotQuestionAnalysisSaveRequest", "HotQuestionAnalysisRecord",
     "StudentChainAnalysisSaveRequest", "StudentChainAnalysisRecord",
+    "AgentAnalysisPromptTemplateCreate", "AgentAnalysisPromptTemplateUpdate",
+    "AgentAnalysisPromptTemplateRecord",
     # Conversation
     "ConversationSummary", "ConversationMessage",
     "StudentChainMessage", "StudentChainSession",

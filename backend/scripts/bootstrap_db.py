@@ -42,8 +42,22 @@ async def _has_alembic_version(conn) -> bool:
     return result.scalar_one_or_none() is not None
 
 
+async def _get_existing_public_tables(conn) -> set[str]:
+    result = await conn.execute(
+        text(
+            """
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename != 'alembic_version'
+            """
+        )
+    )
+    return {str(row[0]) for row in result}
+
+
 async def _legacy_create_all_and_stamp(conn) -> None:
-    """历史兼容路径：空库可直接创建完整 ORM schema，并标记为当前 Alembic head。"""
+    """空库初始化路径：创建当前 ORM schema，并标记为当前 Alembic head。"""
     await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, checkfirst=True))
     head = _find_alembic_head()
     await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
@@ -97,10 +111,25 @@ async def _ensure_views(conn) -> None:
     )
 
 
-async def main() -> None:
+async def main(*, initial_only: bool = False) -> None:
     async with engine.begin() as conn:
-        if not await _has_alembic_version(conn):
+        has_alembic_version = await _has_alembic_version(conn)
+        if not has_alembic_version:
+            existing_tables = await _get_existing_public_tables(conn)
+            if existing_tables:
+                raise RuntimeError(
+                    "alembic_version is missing or empty, but public schema already has tables. "
+                    "Refusing to run create_all/stamp on a non-empty database. "
+                    "Run `python /app/scripts/check_migration_state.py`, back up the database, "
+                    "inspect the schema, and stamp only a verified revision."
+                )
             await _legacy_create_all_and_stamp(conn)
+        elif initial_only:
+            print("Alembic version already exists; initial bootstrap skipped")
+            return
+
+        if initial_only:
+            return
 
         await _ensure_compat_columns(conn)
         await _ensure_views(conn)
@@ -108,4 +137,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(initial_only="--initial-only" in sys.argv[1:]))

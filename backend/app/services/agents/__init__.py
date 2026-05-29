@@ -32,6 +32,13 @@ from .agent_analysis import (
     stream_task_sheet_analysis,
 )
 
+from .agent_deep_analysis import (
+    analyze_hot_questions_v2,
+    analyze_student_chains_v2,
+    summarize_hot_list_item,
+    summarize_chain_list_item,
+)
+
 from .model_discovery import (
     discover_models_service,
     get_preset_models_service,
@@ -56,6 +63,10 @@ __all__ = [
     "analyze_student_chains",
     "analyze_task_sheet",
     "stream_task_sheet_analysis",
+    "analyze_hot_questions_v2",
+    "analyze_student_chains_v2",
+    "summarize_hot_list_item",
+    "summarize_chain_list_item",
     # 模型发现服务
     "discover_models_service",
     "get_preset_models_service",

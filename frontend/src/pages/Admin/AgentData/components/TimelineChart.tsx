@@ -66,9 +66,9 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
       burstBucketIndices.set(scatterIndex, bucketIndex);
     });
     // 教师标记线
-    const markLines = teacherMarks.map((tm) => ({
+    const markLines = teacherMarks.map((tm, index) => ({
       xAxis: dayjs(tm.time).format("HH:mm"),
-      label: { formatter: tm.question || "教师提问", fontSize: 10, color: theme.teacher },
+      label: { formatter: `教师 #${index + 1}`, fontSize: 10, color: theme.teacher },
     }));
 
     const option: echarts.EChartsOption = {
@@ -87,7 +87,7 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
           html += `<br/>提问数: <b>${bucket.question_count}</b>`;
           html += `<br/>独立学生: <b>${bucket.unique_students}</b>`;
           if (bucket.is_burst) html += `<br/><span style="color:${theme.burst}">🔥 爆发点</span>`;
-          if (bucket.near_teacher_mark) html += `<br/><span style="color:${theme.teacher}">📌 教师: ${bucket.near_teacher_mark}</span>`;
+          if (bucket.near_teacher_mark) html += `<br/><span style="color:${theme.teacher}">📌 教师提问已触发</span>`;
           if (bucket.top_questions?.length > 0) {
             html += `<br/><br/><b style="color:${theme.textBase}">热点问题:</b>`;
             bucket.top_questions.slice(0, 3).forEach((q) => {

@@ -8,8 +8,12 @@ cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
 
+compose() {
+  docker compose --env-file "$env_file" -f "$compose_file" "$@"
+}
+
 check_backend_container() {
-  if ! docker compose -f "$compose_file" ps backend 2>/dev/null | grep -q "Up"; then
+  if ! compose ps backend 2>/dev/null | grep -q "Up"; then
     echo "Error: backend container is not running" >&2
     exit 1
   fi
@@ -19,24 +23,28 @@ case "$cmd" in
   upgrade)
     check_backend_container
     revision="${2:-head}"
+    if [ "$revision" = "head" ]; then
+      echo "Checking migration state before upgrade..."
+      compose exec backend python /app/scripts/check_migration_state.py
+    fi
     echo "Upgrading database to: $revision"
-    docker compose -f "$compose_file" exec backend alembic upgrade "$revision"
+    compose exec backend alembic upgrade "$revision"
     echo "✓ Migration completed"
     ;;
 
   current)
     check_backend_container
-    docker compose -f "$compose_file" exec backend alembic current
+    compose exec backend alembic current
     ;;
 
   history)
     check_backend_container
-    docker compose -f "$compose_file" exec backend alembic history
+    compose exec backend alembic history
     ;;
 
   heads)
     check_backend_container
-    docker compose -f "$compose_file" exec backend alembic heads
+    compose exec backend alembic heads
     ;;
 
   *)

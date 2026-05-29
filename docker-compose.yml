@@ -155,8 +155,12 @@ services:
     networks:
       - wangsh-network
       - dify_network  # 可选：仅在部署了 Dify 时需要；未部署时删除此行和底部 dify_network 定义
-    # stamp head 仅标记版本不执行迁移 → 应使用 upgrade head 确保迁移真正应用到数据库
-    command: [ "sh", "-c", "python /app/scripts/bootstrap_db.py && alembic -c /app/alembic.ini upgrade head && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
+    # 生产启动顺序：
+    # 1. 只读检查迁移状态，提前阻断 alembic_version 与真实 schema 漂移
+    # 2. 仅空库允许 ORM 首次建表并 stamp head（已有库不会 create_all）
+    # 3. 运行正式 Alembic 迁移
+    # 4. 创建兼容视图/极少量历史兼容补丁
+    command: [ "sh", "-c", "python /app/scripts/check_migration_state.py && python /app/scripts/bootstrap_db.py --initial-only && alembic -c /app/alembic.ini upgrade head && python /app/scripts/bootstrap_db.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
       - uploads_data:/app/uploads

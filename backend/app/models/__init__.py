@@ -13,7 +13,15 @@ from .core import User, RefreshToken, FeatureFlag
 from .articles import Article, Category, MarkdownStyle
 
 # 智能体模型 (znt_ 前缀)
-from .agents import AIAgent, ZntConversation, GroupDiscussionSession, GroupDiscussionMessage, GroupDiscussionAnalysis, OptimizeLog
+from .agents import (
+    AIAgent,
+    ZntConversation,
+    AgentAnalysisPromptTemplate,
+    GroupDiscussionSession,
+    GroupDiscussionMessage,
+    GroupDiscussionAnalysis,
+    OptimizeLog,
+)
 
 # 校本课模型 (xbk_ 前缀)
 from .xbk import XbkStudent, XbkCourse, XbkSelection
@@ -62,6 +70,7 @@ __all__ = [
     "MarkdownStyle",
     "AIAgent",
     "ZntConversation",
+    "AgentAnalysisPromptTemplate",
     "GroupDiscussionSession",
     "GroupDiscussionMessage",
     "GroupDiscussionAnalysis",

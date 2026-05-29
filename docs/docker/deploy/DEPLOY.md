@@ -292,6 +292,9 @@ docker exec wangsh-typst-worker-1 typst --version
 ### 迁移前检查
 
 ```bash
+# 只读检查：提前发现 alembic_version 与真实 schema 漂移
+docker exec wangsh-backend python /app/scripts/check_migration_state.py
+
 # 查看当前版本
 docker exec wangsh-backend alembic current
 
@@ -303,11 +306,31 @@ docker exec wangsh-backend alembic history
 
 ```bash
 # 升级到最新版本
+docker exec wangsh-backend python /app/scripts/check_migration_state.py
 docker exec wangsh-backend alembic upgrade head
 
 # 升级到指定版本
 docker exec wangsh-backend alembic upgrade <revision>
 ```
+
+生产 backend 容器启动时也会自动执行：
+
+```bash
+python /app/scripts/check_migration_state.py
+python /app/scripts/bootstrap_db.py --initial-only
+alembic -c /app/alembic.ini upgrade head
+python /app/scripts/bootstrap_db.py
+```
+
+`check_migration_state.py` 是只读检查，不会修改数据库。它用于阻断以下危险状态：
+
+- `alembic_version` 缺失或为空，但 public schema 已经有业务表。
+- 当前 Alembic 版本不是代码中 head 的祖先。
+- 当前版本落后，但待执行迁移要创建的表、索引或列已经存在。
+
+如果检查失败，不要删除已有表，也不要直接重跑迁移。先备份数据库，再对照待执行迁移确认真实表、列、索引、约束是否完整；只有在确认真实 schema 已等价于目标迁移后，才允许手动补齐缺失索引/约束并 `alembic stamp <verified_revision>`。
+
+`bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它会创建当前 ORM schema 并 stamp 到 Alembic head。已有业务表但缺失 `alembic_version` 的数据库会被拒绝，避免把历史库误标记为最新。
 
 ### 迁移验证
 
@@ -320,6 +343,7 @@ docker exec wangsh-backend python -c "from app.db.database import engine; import
 
 - **迁移失败**: 检查数据库连接和权限
 - **版本冲突**: 使用 `alembic heads` 查看分支
+- **表已存在但迁移版本落后**: 这是 schema drift。先备份，运行 `check_migration_state.py`，核对真实结构后再补齐缺失索引/约束并 stamp 已验证版本；不要删表重建。
 
 ---
 

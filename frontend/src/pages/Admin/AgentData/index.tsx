@@ -93,10 +93,10 @@ const AdminAgentData: React.FC = () => {
             <UsageRecordPanel onFilterChange={handleFilterChange} />
           </div>
           <div style={{ display: activeTabKey === "hot" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
-            <TaskAnalysisListPanel detailView="timeline" />
+            <TaskAnalysisListPanel analysisType="hot" detailView="timeline" />
           </div>
           <div style={{ display: activeTabKey === "chains" ? "flex" : "none" }} className="flex-1 min-h-0 flex-col pt-3">
-            <TaskAnalysisListPanel detailView="beam" />
+            <TaskAnalysisListPanel analysisType="chains" detailView="beam" />
           </div>
         </Tabs>
       </div>

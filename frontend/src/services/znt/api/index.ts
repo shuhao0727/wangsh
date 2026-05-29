@@ -24,6 +24,16 @@ type TaskAnalysisStreamCallbacks = {
   onEvent?: (event: string, payload: TaskAnalysisStreamPayload) => void;
 };
 
+type AgentAnalysisType = "hot_questions" | "student_chains";
+type PromptTemplatePayload = {
+  analysis_type: AgentAnalysisType;
+  name: string;
+  content: string;
+  is_default?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
 interface ApiErrorShape {
   message?: string;
   response?: { data?: { detail?: unknown } };
@@ -253,7 +263,6 @@ const agentDataApi = {
     answer?: string;
     session_id?: string;
     response_time_ms?: number;
-    used_at?: string;
   }): Promise<BaseResponse<AgentUsageData>> => {
     try {
       const response = await api.post(AGENT_USAGE_BASE_PATH, payload);
@@ -273,7 +282,6 @@ const agentDataApi = {
           answer: payload.answer,
           session_id: payload.session_id,
           response_time_ms: payload.response_time_ms,
-          used_at: payload.used_at,
         },
         success: false,
         message:
@@ -502,6 +510,106 @@ const agentDataApi = {
     } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "保存失败") }; }
   },
 
+  saveHotQuestionAnalysisStream: async (
+    params: {
+      title: string; task_sheet: string; agent_id: number;
+      start_at?: string; end_at?: string; class_name?: string;
+      analysis_agent_id?: number; bucket_seconds?: number; custom_prompt?: string;
+      prompt_template_id?: number;
+      teacher_marks?: Array<{ time: string; question: string }>;
+    },
+    callbacks: TaskAnalysisStreamCallbacks = {},
+    signal?: AbortSignal,
+  ): Promise<BaseResponse<unknown>> => agentDataApi.consumeAnalysisStream(
+    "/api/v1/ai-agents/analysis/hot-questions/stream",
+    params,
+    callbacks,
+    signal,
+  ),
+
+  saveStudentChainAnalysisStream: async (
+    params: {
+      title: string; task_sheet?: string; agent_id: number;
+      start_at?: string; end_at?: string; class_name?: string;
+      analysis_agent_id?: number; custom_prompt?: string; prompt_template_id?: number;
+      teacher_marks?: Array<{ time: string; question: string }>;
+    },
+    callbacks: TaskAnalysisStreamCallbacks = {},
+    signal?: AbortSignal,
+  ): Promise<BaseResponse<unknown>> => agentDataApi.consumeAnalysisStream(
+    "/api/v1/ai-agents/analysis/student-chains/stream",
+    params,
+    callbacks,
+    signal,
+  ),
+
+  consumeAnalysisStream: async (
+    url: string,
+    params: Record<string, unknown>,
+    callbacks: TaskAnalysisStreamCallbacks = {},
+    signal?: AbortSignal,
+  ): Promise<BaseResponse<unknown>> => {
+    try {
+      const token = getStoredAccessToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(params),
+        signal,
+      });
+      if (!response.ok || !response.body) throw new Error(`请求失败：${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let savedPayload: TaskAnalysisStreamPayload | null = null;
+      const consumeBlock = (block: string) => {
+        let event = "message";
+        const dataLines: string[] = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7).trim();
+          if (line.startsWith("data: ")) dataLines.push(line.slice(6));
+        }
+        if (dataLines.length === 0) return;
+        let payload: TaskAnalysisStreamPayload;
+        try {
+          payload = JSON.parse(dataLines.join("\n")) as TaskAnalysisStreamPayload;
+        } catch {
+          return; // skip malformed chunk without aborting the stream
+        }
+        callbacks.onEvent?.(event, payload);
+        if (event === "saved") savedPayload = payload;
+        if (event === "error") throw new Error(payload.message || "分析失败");
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          consumeBlock(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+      if (buffer.trim()) consumeBlock(buffer);
+      if (!savedPayload) throw new Error("未收到保存确认");
+      return { data: savedPayload as unknown, success: true, message: "保存成功" };
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        return { data: null, success: false, message: "已取消" };
+      }
+      return { data: null, success: false, message: errMsg(e, "保存失败") };
+    } finally {
+      // reader is automatically released by GC when fetch is aborted
+    }
+  },
+
   deleteTaskAnalysis: async (id: number): Promise<BaseResponse<unknown>> => {
     try {
       await api.client.delete(`/ai-agents/analysis/task-analyses/${id}`);
@@ -547,6 +655,44 @@ const agentDataApi = {
       await api.client.delete(`/ai-agents/analysis/student-chains/${id}`);
       return { data: null, success: true, message: "已删除" };
     } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
+  },
+
+  listAnalysisPromptTemplates: async (analysisType: AgentAnalysisType): Promise<BaseResponse<unknown[]>> => {
+    try {
+      const res = await api.client.get("/ai-agents/analysis/prompt-templates", {
+        params: { analysis_type: analysisType },
+      });
+      return { data: res.data, success: true, message: "ok" };
+    } catch (e: unknown) {
+      return { data: [], success: false, message: errMsg(e, "加载提示词模板失败") };
+    }
+  },
+
+  createAnalysisPromptTemplate: async (payload: PromptTemplatePayload): Promise<BaseResponse<unknown>> => {
+    try {
+      const res = await api.client.post("/ai-agents/analysis/prompt-templates", payload);
+      return { data: res.data, success: true, message: "保存成功" };
+    } catch (e: unknown) {
+      return { data: null, success: false, message: errMsg(e, "保存提示词模板失败") };
+    }
+  },
+
+  updateAnalysisPromptTemplate: async (id: number, payload: Partial<Omit<PromptTemplatePayload, "analysis_type">>): Promise<BaseResponse<unknown>> => {
+    try {
+      const res = await api.client.put(`/ai-agents/analysis/prompt-templates/${id}`, payload);
+      return { data: res.data, success: true, message: "保存成功" };
+    } catch (e: unknown) {
+      return { data: null, success: false, message: errMsg(e, "更新提示词模板失败") };
+    }
+  },
+
+  deleteAnalysisPromptTemplate: async (id: number): Promise<BaseResponse<unknown>> => {
+    try {
+      await api.client.delete(`/ai-agents/analysis/prompt-templates/${id}`);
+      return { data: null, success: true, message: "已删除" };
+    } catch (e: unknown) {
+      return { data: null, success: false, message: errMsg(e, "删除提示词模板失败") };
+    }
   },
 
   exportSelectedConversations: async (sessionIds: string[]): Promise<BaseResponse<Blob>> => {

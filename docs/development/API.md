@@ -128,7 +128,13 @@
 | POST | `/ai-agents/usage` | 创建使用记录 | 是 |
 | GET | `/ai-agents/usage/filter-options` | 获取使用记录筛选选项 | 管理员 |
 | GET | `/ai-agents/analysis/hot-questions` | 热门问题分析 | 管理员 |
+| POST | `/ai-agents/analysis/hot-questions/stream` | 创建热点问题深度分析（SSE） | 管理员 |
 | GET | `/ai-agents/analysis/student-chains` | 学生问题链分析 | 管理员 |
+| POST | `/ai-agents/analysis/student-chains/stream` | 创建学生问题链深度分析（SSE） | 管理员 |
+| GET | `/ai-agents/analysis/prompt-templates` | 分析提示词模板列表 | 管理员 |
+| POST | `/ai-agents/analysis/prompt-templates` | 创建分析提示词模板 | 管理员 |
+| PUT | `/ai-agents/analysis/prompt-templates/{template_id}` | 更新分析提示词模板 | 管理员 |
+| DELETE | `/ai-agents/analysis/prompt-templates/{template_id}` | 删除分析提示词模板 | 管理员 |
 | POST | `/ai-agents/admin/export/conversations` | 导出对话 | 管理员 |
 | GET | `/ai-agents/admin/export/hot-questions` | 导出热门问题 | 管理员 |
 | GET | `/ai-agents/admin/export/student-chains` | 导出学生链 | 管理员 |
@@ -141,8 +147,9 @@
 - OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
 - `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
-- 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（忽略请求体中的 `user_id`），用于防止伪造归属。
+- 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（`user_id` 可省略，传入也会被忽略），并以服务端接收时间作为记录时间（忽略客户端 `used_at`），用于防止伪造归属和客户端时钟错误。
 - 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
+- 热点问题与学生问题链已拆分为两个深度分析流。热点结果使用 `analysis_version=hot_v2`，包含 `word_cloud`、`themes`、`timeline_buckets`、`teacher_questions`、`course_hotspot_sequence` 和 `evidence_index`。学生问题链结果使用 `analysis_version=chain_v2`，包含 `teacher_mainline`、`ai_main_question_chain`、`student_question_chains`、`beam_nodes`、`beam_edges`、`lanes` 和 `evidence_index`。
 - 小组讨论班级归属策略：
   - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
   - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。

@@ -23,11 +23,30 @@ from app.services.informatics.github_sync import get_or_create_sync_settings
 
 
 async def init_database():
-    """开发环境/首次部署时自动创建表、视图并同步 Alembic 版本"""
+    """开发环境/首次部署时自动创建表、视图并同步 Alembic 版本。
+
+    已有数据库必须通过 Alembic 迁移演进，避免 DEBUG 模式下
+    ``Base.metadata.create_all`` 先创建新模型表，导致 alembic_version
+    落后于真实 schema。
+    """
     if not (settings.DEBUG or settings.AUTO_CREATE_TABLES):
         return
-    logger.info("创建数据库表（仅开发环境/首次部署可选，生产请使用 Alembic 迁移）...")
+    logger.info("检查数据库初始化状态（生产请使用 Alembic 迁移）...")
     async with engine.begin() as conn:
+        existing_tables = await _get_existing_public_tables(conn)
+        has_alembic_revision = await _has_alembic_revision(conn)
+        if existing_tables:
+            if has_alembic_revision:
+                logger.info("检测到已有数据库和 Alembic 版本，跳过自动 create_all")
+            else:
+                logger.warning(
+                    "检测到非空数据库但 alembic_version 缺失或为空，已跳过自动 create_all；"
+                    "请先运行 scripts/check_migration_state.py 并人工确认 schema 状态"
+                )
+            await _ensure_views(conn)
+            return
+
+        logger.info("检测到空数据库，执行开发/首次部署自动建表并标记 Alembic head")
         await conn.run_sync(Base.metadata.create_all)
         await _ensure_views(conn)
         await _sync_alembic_version(conn)
@@ -176,6 +195,28 @@ async def shutdown(cleanup_task: "asyncio.Task[None] | None"):
 
 # ---- 内部辅助函数 ----
 
+async def _get_existing_public_tables(conn) -> set[str]:
+    result = await conn.execute(
+        text(
+            """
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename != 'alembic_version'
+            """
+        )
+    )
+    return {str(row[0]) for row in result}
+
+
+async def _has_alembic_revision(conn) -> bool:
+    version_table = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
+    if version_table.scalar_one_or_none() is None:
+        return False
+    result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+    return result.scalar_one_or_none() is not None
+
+
 async def _ensure_dev_schema(conn):
     """历史遗留函数桩。
 
@@ -215,6 +256,7 @@ async def _sync_alembic_version(conn):
     ⚠️ 生产环境应始终使用 `alembic upgrade head`，不要依赖此函数。
     """
     try:
+        await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
         result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
         current = result.scalar_one_or_none()
         if not current:
@@ -245,7 +287,6 @@ def _find_alembic_head() -> "str | None":
     通过解析每个迁移文件中的 revision / down_revision 变量，
     找出不被任何其他迁移作为 down_revision 引用的 revision（即 head）。
     """
-    import re
     from pathlib import Path
 
     versions_dir = Path(__file__).resolve().parents[2] / "alembic" / "versions"
@@ -257,20 +298,16 @@ def _find_alembic_head() -> "str | None":
 
     for f in versions_dir.glob("*.py"):
         try:
-            content = f.read_text(encoding="utf-8")
-            rev_match = re.search(r'''^revision\s*=\s*['"]([^'"]+)['"]''', content, re.MULTILINE)
-            if rev_match:
-                revisions.add(rev_match.group(1))
-            # down_revision 可能是单字符串 'abc' 或元组 ('abc', 'def')
-            if re.search(r'''^down_revision\s*=\s*\(''', content, re.MULTILINE):
-                for m in re.finditer(r'''['"]([^'"]+)['"]''', content.split("down_revision")[1].split("\n")[0]):
-                    rev = m.group(1)
-                    if rev != "None":
-                        down_revisions.add(rev)
-            else:
-                down_match = re.search(r'''^down_revision\s*=\s*['"]([^'"]+)['"]''', content, re.MULTILINE)
-                if down_match and down_match.group(1) != "None":
-                    down_revisions.add(down_match.group(1))
+            namespace: dict[str, object] = {}
+            exec(f.read_text(encoding="utf-8"), namespace)
+            revision = namespace.get("revision")
+            down_revision = namespace.get("down_revision")
+            if isinstance(revision, str):
+                revisions.add(revision)
+            if isinstance(down_revision, str):
+                down_revisions.add(down_revision)
+            elif isinstance(down_revision, (tuple, list)):
+                down_revisions.update(item for item in down_revision if isinstance(item, str))
         except Exception:
             logger.debug("解析迁移文件 %s 失败，跳过", f.name)
 

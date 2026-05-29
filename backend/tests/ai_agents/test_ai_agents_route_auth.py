@@ -74,6 +74,7 @@ def test_create_usage_record_forces_current_user_id(monkeypatch):
         user_id=99999,  # 模拟前端篡改
         question="q",
         answer="a",
+        used_at="1999-01-01T00:00:00Z",  # 模拟客户端电脑时间错误
     )
 
     result = asyncio.run(
@@ -86,4 +87,37 @@ def test_create_usage_record_forces_current_user_id(monkeypatch):
 
     assert captured["user_id"] == 12345
     assert captured["agent_id"] == 7
+    assert "used_at" not in captured
+    assert result["user_id"] == 12345
+
+
+def test_create_usage_record_does_not_require_client_user_id(monkeypatch):
+    captured = {}
+
+    async def fake_create_agent_usage(db, **kwargs):
+        captured.update(kwargs)
+        return {
+            "id": 1,
+            "user_id": kwargs["user_id"],
+            "moxing_id": kwargs["agent_id"],
+        }
+
+    monkeypatch.setattr(usage_api, "create_agent_usage", fake_create_agent_usage)
+
+    usage_in = usage_api.AgentUsageCreate(
+        agent_id=7,
+        question="q",
+        answer="a",
+    )
+
+    result = asyncio.run(
+        usage_api.create_usage_record(
+            usage_in=usage_in,
+            db=_FakeDB(),
+            current_user={"id": 12345, "role_code": "student"},
+        )
+    )
+
+    assert captured["user_id"] == 12345
+    assert "used_at" not in captured
     assert result["user_id"] == 12345

@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Clock, Download, GitBranch, Hash, Lightbulb, Loader2, MessageSquare, Target, Users } from "lucide-react";
+import { ArrowLeft, ChevronRight, Clock, Download, Hash, Lightbulb, Loader2, MessageSquare, Target, Users } from "lucide-react";
 import dayjs from "dayjs";
 import * as echarts from "echarts";
 import "echarts-wordcloud";
@@ -15,142 +15,18 @@ import TimelineChart from "./components/TimelineChart";
 import SummaryCard from "./components/SummaryCard";
 import MainQuestionChainFlow from "./components/MainQuestionChainFlow";
 import { getAgentChartTheme } from "./components/chartTheme";
+import type {
+  WordCloudItem, TopicItem, MainQuestionChainItem, TeacherQuestionItem,
+  TaskAnalysisResult, TaskAnalysisDetail, ChainSession, ChainSummary, BeamRangeSelection,
+} from "./types";
+import {
+  WC_COLORS, escapeHtml, safeFilePart, wordColor, normalizeTopics, normalizeWords,
+  normalizeMainQuestionChain, deriveChainSummaries, formatTimeRange,
+  buildDisplayTeacherQuestions, buildDisplayStudentChains, buildBeamTeacherAnchors,
+  buildBeamStudentChains, positiveNumber,
+} from "./normalize";
 
-const WC_COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#06B6D4", "#EC4899", "#F59E0B", "#10B981", "#8B5CF6"];
 
-type WordCloudItem = { word: string; count: number };
-type TopicItem = { topic: string; questions?: string[]; count: number };
-type MainQuestionChainItem = { stage: string; question: string; reason?: string; evidence?: string[] };
-type TaskAnalysisResult = {
-  word_cloud?: WordCloudItem[];
-  wordCloud?: WordCloudItem[];
-  keywords?: WordCloudItem[];
-  hot_words?: WordCloudItem[];
-  covered?: TopicItem[];
-  uncovered?: TopicItem[];
-  main_question_chain?: MainQuestionChainItem[];
-  result?: TaskAnalysisResult;
-};
-type TaskAnalysisDetail = {
-  id?: number;
-  title?: string;
-  task_sheet?: string;
-  created_at?: string;
-  agent_id?: number;
-  start_at?: string;
-  end_at?: string;
-  class_name?: string;
-  result?: TaskAnalysisResult;
-  word_cloud?: WordCloudItem[];
-  covered?: TopicItem[];
-  uncovered?: TopicItem[];
-};
-type ChainMessage = { id?: number; message_type: string; content: string; created_at: string };
-type ChainSession = {
-  session_id: string;
-  user_name?: string;
-  class_name?: string;
-  last_at: string;
-  turns: number;
-  messages: ChainMessage[];
-};
-type ChainSummary = {
-  sessionId: string;
-  studentName: string;
-  className?: string;
-  questionCount: number;
-  startAt?: string;
-  endAt?: string;
-  questions: ChainMessage[];
-};
-
-const wordColor = (word: string) => {
-  let hash = 0;
-  for (let i = 0; i < word.length; i += 1) hash = (hash * 31 + word.charCodeAt(i)) | 0;
-  return WC_COLORS[Math.abs(hash) % WC_COLORS.length];
-};
-
-const escapeHtml = (value: string) => value
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;");
-
-const safeFilePart = (value: string) => value.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_").slice(0, 80) || "report";
-
-const normalizeTopics = (value: unknown): TopicItem[] => Array.isArray(value)
-  ? value.map((item: any) => ({ topic: String(item.topic || "未命名主题"), questions: Array.isArray(item.questions) ? item.questions : [], count: Number(item.count || 0) }))
-  : [];
-
-const normalizeWords = (detail: TaskAnalysisDetail | null): WordCloudItem[] => {
-  const result = detail?.result?.result || detail?.result;
-  const raw = result?.word_cloud || result?.wordCloud || result?.keywords || result?.hot_words || detail?.word_cloud || [];
-  const words = raw
-    .map((item: any) => ({ word: String(item.word || item.name || "").trim(), count: Number(item.count ?? item.value ?? 0) }))
-    .filter((item) => item.word && item.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  if (words.length > 0) return words;
-
-  const topicItems = normalizeTopics(result?.covered || detail?.covered).concat(normalizeTopics(result?.uncovered || detail?.uncovered));
-  return topicItems
-    .flatMap((item) => [item.topic, ...(item.questions || [])].map((word) => ({ word: word.slice(0, 18), count: Math.max(item.count, 1) })))
-    .filter((item) => item.word.trim())
-    .slice(0, 50);
-};
-
-const normalizeMainQuestionChain = (detail: TaskAnalysisDetail | null, covered: TopicItem[], uncovered: TopicItem[], chains: ChainSummary[]): MainQuestionChainItem[] => {
-  const result = detail?.result?.result || detail?.result;
-  const aiChain = Array.isArray(result?.main_question_chain) ? result.main_question_chain : [];
-  const normalized = aiChain
-    .map((item: any) => ({
-      stage: String(item.stage || item.title || "主线阶段").trim(),
-      question: String(item.question || item.topic || "").trim(),
-      reason: item.reason ? String(item.reason) : undefined,
-      evidence: Array.isArray(item.evidence) ? item.evidence.map((text: unknown) => String(text)).filter(Boolean).slice(0, 2) : [],
-    }))
-    .filter((item) => item.question);
-  if (normalized.length > 0) return normalized;
-
-  const topicFallback = uncovered.concat(covered).slice(0, 5).map((item, index) => ({
-    stage: index === 0 ? "核心困惑" : `延伸问题 ${index + 1}`,
-    question: item.topic,
-    reason: index === 0 ? "学生提问中最值得优先处理的方向" : "由学生提问延伸出的后续理解路径",
-    evidence: (item.questions || []).slice(0, 2),
-  }));
-  if (topicFallback.length > 0) return topicFallback;
-
-  return chains.slice(0, 5).map((chain, index) => ({
-    stage: index === 0 ? "起始问题" : `追问 ${index + 1}`,
-    question: chain.questions[0]?.content || chain.studentName,
-    reason: `${chain.studentName} 的连续提问形成了一个可追踪的问题路径`,
-    evidence: chain.questions.slice(0, 2).map((question) => question.content),
-  }));
-};
-
-const deriveChainSummaries = (sessions: ChainSession[]): ChainSummary[] => sessions
-  .map((session) => {
-    const questions = session.messages
-      .filter((message) => message.message_type === "question" && message.content.trim())
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    return {
-      sessionId: session.session_id,
-      studentName: session.user_name || session.session_id,
-      className: session.class_name,
-      questionCount: questions.length,
-      startAt: questions[0]?.created_at,
-      endAt: questions[questions.length - 1]?.created_at || session.last_at,
-      questions,
-    };
-  })
-  .filter((session) => session.questionCount > 0)
-  .sort((a, b) => b.questionCount - a.questionCount);
-
-const formatTimeRange = (startAt?: string, endAt?: string) => {
-  if (!startAt && !endAt) return "暂无时间";
-  if (!startAt || !endAt || startAt === endAt) return dayjs(startAt || endAt).format("HH:mm");
-  return `${dayjs(startAt).format("HH:mm")} - ${dayjs(endAt).format("HH:mm")}`;
-};
 
 const TopicEvidenceCard: React.FC<{ item: TopicItem; index: number }> = ({ item, index }) => (
   <div className="rounded-xl border border-border-secondary bg-surface px-4 py-3 shadow-sm transition-all hover:border-[var(--ws-color-warning)]/40 hover:shadow-md">
@@ -290,24 +166,248 @@ const WordCloudChart: React.FC<{ data: WordCloudItem[] }> = ({ data }) => {
   );
 };
 
+const formatInputTime = (value?: string) => (value ? dayjs(value).format("HH:mm") : "");
+
+const mergeDateAndTime = (baseIso: string | undefined, timeText: string) => {
+  const match = timeText.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  // treat bare time as local, convert to ISO for backend comparison
+  const local = dayjs().hour(hour).minute(minute).second(0).millisecond(0);
+  return local.toISOString();
+};
+
+const ChainThoughtPathCard: React.FC<{
+  chain: { studentName: string; percentage: number; questions: NonNullable<BeamRangeSelection["questions"]> };
+  index: number;
+  isEvidenceOnly: boolean;
+}> = ({ chain, index, isEvidenceOnly }) => (
+  <details className="group rounded-xl border border-border-secondary bg-surface px-4 py-3 shadow-sm" open={index === 0}>
+    <summary className="flex cursor-pointer select-none items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">#{index + 1}</span>
+          <span className="font-semibold text-text-base">{chain.studentName}</span>
+          {isEvidenceOnly && <span className="rounded-full border border-primary/20 bg-primary-soft/40 px-2 py-0.5 text-[11px] text-primary">旧记录证据链</span>}
+        </div>
+        <div className="mt-1 text-xs text-text-tertiary">
+          {formatTimeRange(chain.questions[0]?.time, chain.questions[chain.questions.length - 1]?.time)} · {chain.questions.length} 个问题 · 占比 {chain.percentage}%
+        </div>
+      </div>
+      <span className="shrink-0 text-xs text-text-tertiary group-open:hidden">展开思维链</span>
+      <span className="hidden shrink-0 text-xs text-text-tertiary group-open:inline">收起</span>
+    </summary>
+    <div className="mt-3 space-y-3 border-t border-border-secondary pt-3">
+      {chain.questions.map((question, questionIndex) => (
+        <div key={`${question.chainId}-${question.time}-${questionIndex}`} className="grid gap-2 rounded-lg bg-surface-2 px-3 py-2.5 sm:grid-cols-[82px_1fr]">
+          <div className="flex items-center gap-2 text-xs text-text-tertiary sm:block">
+            <div className="font-semibold text-primary">{dayjs(question.time).format("HH:mm")}</div>
+            <div className="mt-0.5">{question.relationLabel || "问题"}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm leading-relaxed text-text-base">{question.content}</div>
+            {question.teacherQuestion && (
+              <div className="mt-1 rounded-md border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning)]/8 px-2 py-1 text-xs leading-relaxed text-text-tertiary">
+                关联教师主线：{question.teacherQuestion}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </details>
+);
+
+const CollapsibleTeacherMainline: React.FC<{ items: TeacherQuestionItem[] }> = ({ items }) => (
+  <details className="group rounded-xl border border-border bg-surface shadow-sm">
+    <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3">
+      <div>
+        <h2 className="text-base font-semibold text-text-base">教师主线</h2>
+        <p className="mt-1 text-sm text-text-tertiary">课堂中教师/admin 提问形成的中心轴，光束图里的橙色粗线与锚点来自这里。</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-[var(--ws-color-warning-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--ws-color-warning)]">{items.length} 个锚点</span>
+    </summary>
+    <div className="border-t border-border-secondary px-4 py-3">
+      {items.length > 0 ? (
+        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+          {items.map((item, index) => (
+            <div key={`${item.id || item.time}-${index}`} className="rounded-lg border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning)]/8 px-3 py-2">
+              <div className="mb-1 text-xs font-semibold text-[var(--ws-color-warning)]">T{index + 1}{item.time ? ` · ${dayjs(item.time).format("HH:mm")}` : ""}</div>
+              <div className="text-sm font-medium leading-relaxed text-text-base">{item.question}</div>
+              {item.user_name && <div className="mt-1 text-[11px] text-text-tertiary">{item.user_name}</div>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-secondary text-sm text-text-tertiary">暂无教师主线锚点</div>
+      )}
+    </div>
+  </details>
+);
+
+const CollapsibleAiMainline: React.FC<{ items: MainQuestionChainItem[] }> = ({ items }) => (
+  <details className="group rounded-xl border border-border bg-surface shadow-sm">
+    <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3">
+      <div>
+        <h2 className="text-base font-semibold text-text-base">AI 主问题链</h2>
+        <p className="mt-1 text-sm text-text-tertiary">AI 基于学生问题归纳出的课堂认知推进链，和教师主线分开阅读，避免混成一套逻辑。</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">{items.length} 个阶段</span>
+    </summary>
+    <div className="border-t border-border-secondary px-4 py-3">
+      {items.length > 0 ? (
+        <div className="flex flex-col gap-3 overflow-x-auto pb-2 lg:flex-row lg:items-stretch lg:gap-4">
+          {items.map((item, index) => (
+            <div key={`${item.stage}-${index}`} className="flex w-full flex-col rounded-xl border border-border-secondary bg-surface-2 px-4 py-3 shadow-sm lg:min-w-[260px] lg:max-w-[330px] lg:flex-1">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white ring-4 ring-primary-soft">{index + 1}</span>
+                <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">{item.stage}</span>
+              </div>
+              <h3 className="text-sm font-semibold leading-relaxed text-text-base">{item.question}</h3>
+              {item.reason && <p className="mt-2 text-xs leading-relaxed text-text-tertiary">{item.reason}</p>}
+              {(item.evidence || []).length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {(item.evidence || []).slice(0, 2).map((evidence, evidenceIndex) => (
+                    <div key={`${evidence}-${evidenceIndex}`} className="flex gap-2 rounded-lg border border-border-secondary bg-surface px-2.5 py-1.5 text-xs leading-relaxed text-text-secondary">
+                      <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span className="break-words">{evidence}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-secondary text-sm text-text-tertiary">暂无 AI 主问题链</div>
+      )}
+    </div>
+  </details>
+);
+
 const TaskAnalysisResultPage: React.FC = () => {
   const { analysisId } = useParams<{ analysisId?: string }>();
   const [searchParams] = useSearchParams();
   const view = (searchParams.get("view") || "timeline") as "timeline" | "beam" | "wordcloud";
-  const isBeamView = view === "beam";
-  const isTimelineView = view === "timeline";
+  const typeParam = searchParams.get("type");
+  const isBeamView = view === "beam" || typeParam === "chains";
+  const isTimelineView = view === "timeline" && !isBeamView;
   const [loading, setLoading] = useState(true);
   const [loadingBeam, setLoadingBeam] = useState(false);
   const [detail, setDetail] = useState<TaskAnalysisDetail | null>(null);
   const [beamSessions, setBeamSessions] = useState<ChainSession[]>([]);
+  const [beamRange, setBeamRange] = useState<BeamRangeSelection | null>(null);
+  const [beamManualRange, setBeamManualRange] = useState<{ startAt?: string; endAt?: string } | null>(null);
+  const [beamRangeInputs, setBeamRangeInputs] = useState({ start: "", end: "" });
 
   const wc = useMemo(() => normalizeWords(detail), [detail]);
   const covered = useMemo(() => normalizeTopics((detail?.result?.result || detail?.result)?.covered || detail?.covered), [detail]);
   const uncovered = useMemo(() => normalizeTopics((detail?.result?.result || detail?.result)?.uncovered || detail?.uncovered), [detail]);
   const chainSummaries = useMemo(() => deriveChainSummaries(beamSessions), [beamSessions]);
   const mainQuestionChain = useMemo(() => normalizeMainQuestionChain(detail, covered, uncovered, chainSummaries), [detail, covered, uncovered, chainSummaries]);
-  const questionTotal = useMemo(() => chainSummaries.reduce((sum, chain) => sum + chain.questionCount, 0), [chainSummaries]);
-  const studentTotal = useMemo(() => new Set(chainSummaries.map((chain) => chain.studentName)).size, [chainSummaries]);
+  const resultData = useMemo(() => (detail?.result?.result || detail?.result || {}) as TaskAnalysisResult, [detail]);
+  const hotThemes = useMemo(() => normalizeTopics(resultData.themes || uncovered), [resultData, uncovered]);
+  const courseSequence = useMemo(() => resultData.course_hotspot_sequence || [], [resultData]);
+  const teachingSuggestions = useMemo(() => resultData.teaching_suggestions || [], [resultData]);
+  const studentChainSummary = useMemo(() => resultData.student_chain_summary || {}, [resultData]);
+  const savedMainQuestionChain = useMemo(() => {
+    const items = resultData.ai_main_question_chain || [];
+    if (items.length === 0) return mainQuestionChain;
+    return items.map((item, index) => ({
+      stage: item.stage || `主线 ${index + 1}`,
+      question: item.next_ai_question || item.question || "",
+      reason: item.student_response_summary || item.reason,
+      evidence: item.evidence || [],
+    })).filter((item) => item.question);
+  }, [resultData, mainQuestionChain]);
+  const teacherQuestions = useMemo(() => buildDisplayTeacherQuestions(resultData, savedMainQuestionChain, detail), [resultData, savedMainQuestionChain, detail]);
+  const savedStudentChains = useMemo(
+    () => buildDisplayStudentChains(resultData, uncovered, savedMainQuestionChain, chainSummaries, detail),
+    [resultData, uncovered, savedMainQuestionChain, chainSummaries, detail],
+  );
+  const beamTeacherAnchors = useMemo(
+    () => buildBeamTeacherAnchors(teacherQuestions, detail),
+    [teacherQuestions, detail],
+  );
+  const beamStudentChains = useMemo(
+    () => buildBeamStudentChains(savedStudentChains, detail),
+    [savedStudentChains, detail],
+  );
+  const activeBeamQuestions = useMemo(() => beamRange?.questions || [], [beamRange]);
+  const activeUncoveredQuestions = useMemo(
+    () => activeBeamQuestions.filter((question) => question.isUncovered),
+    [activeBeamQuestions],
+  );
+  const activeBeamStudentPaths = useMemo(() => {
+    const grouped = new Map<string, typeof activeBeamQuestions>();
+    activeBeamQuestions.forEach((question) => {
+      grouped.set(question.studentName, [...(grouped.get(question.studentName) || []), question]);
+    });
+    const total = Math.max(activeBeamQuestions.length, 1);
+    return [...grouped.entries()]
+      .map(([studentName, questions]) => ({
+        studentName,
+        questions: questions.sort((a, b) => dayjs(a.time).valueOf() - dayjs(b.time).valueOf()),
+        percentage: Math.round((questions.length / total) * 100),
+      }))
+      .sort((a, b) => b.questions.length - a.questions.length);
+  }, [activeBeamQuestions]);
+  const visibleBeamTeacherAnchors = useMemo(() => beamRange?.teacherAnchors || [], [beamRange]);
+  const hasEvidenceOnlyChains = useMemo(
+    () => savedStudentChains.some((chain) => chain.is_evidence_only || chain.source === "evidence"),
+    [savedStudentChains],
+  );
+  const canRenderBeamFromSavedResult = useMemo(
+    () => (resultData.student_question_chains || []).length > 0
+      || (resultData.beam_nodes || []).some((node) => node.kind !== "teacher_anchor")
+      || savedStudentChains.length > 0,
+    [resultData, savedStudentChains],
+  );
+  const questionTotal = useMemo(() => {
+    const liveTotal = chainSummaries.reduce((sum, chain) => sum + chain.questionCount, 0);
+    const savedTotal = savedStudentChains.reduce((sum, chain) => sum + positiveNumber(chain.question_count, chain.nodes?.length), 0);
+    return positiveNumber(studentChainSummary.question_count, liveTotal, savedTotal);
+  }, [chainSummaries, savedStudentChains, studentChainSummary]);
+  const studentTotal = useMemo(() => {
+    if (hasEvidenceOnlyChains && chainSummaries.length === 0 && !(resultData.student_question_chains || []).length) return 0;
+    const liveTotal = new Set(chainSummaries.map((chain) => chain.studentName)).size;
+    const savedTotal = new Set(savedStudentChains
+      .filter((chain) => !(chain.is_evidence_only || chain.source === "evidence"))
+      .map((chain) => chain.student_name || chain.session_id)).size;
+    return positiveNumber(studentChainSummary.unique_students, liveTotal, savedTotal);
+  }, [chainSummaries, hasEvidenceOnlyChains, resultData, savedStudentChains, studentChainSummary]);
+  const chainCount = useMemo(() => positiveNumber(studentChainSummary.chain_count, savedStudentChains.length, chainSummaries.length), [studentChainSummary, savedStudentChains, chainSummaries]);
+  const teacherAnchorCount = useMemo(() => positiveNumber(studentChainSummary.teacher_anchor_count, teacherQuestions.length), [studentChainSummary, teacherQuestions]);
+
+  useEffect(() => {
+    if (!beamRange?.startAt || !beamRange?.endAt || beamRange.source === "manual") return;
+    setBeamRangeInputs({
+      start: formatInputTime(beamRange.startAt),
+      end: formatInputTime(beamRange.endAt),
+    });
+  }, [beamRange]);
+
+  const handleApplyBeamRange = () => {
+    const base = beamRange?.startAt || beamStudentChains[0]?.startAt || detail?.start_at || detail?.created_at;
+    const startAt = mergeDateAndTime(base, beamRangeInputs.start);
+    const endAt = mergeDateAndTime(base, beamRangeInputs.end);
+    if (!startAt || !endAt) {
+      showMessage.error("请输入正确的时间，例如 10:14");
+      return;
+    }
+    setBeamManualRange({ startAt, endAt });
+    setBeamRangeInputs({ start: formatInputTime(startAt), end: formatInputTime(endAt) });
+  };
+
+  const handleResetBeamRange = () => {
+    setBeamManualRange(null);
+    setBeamRangeInputs({
+      start: formatInputTime(beamRange?.startAt),
+      end: formatInputTime(beamRange?.endAt),
+    });
+  };
 
   useEffect(() => {
     const id = Number.parseInt(analysisId || "", 10);
@@ -316,13 +416,13 @@ const TaskAnalysisResultPage: React.FC = () => {
     setLoading(true);
 
     // 根据视图类型选择正确的数据源
-    const fetchApi = view === "beam" ? agentDataApi.getChainAnalysis : agentDataApi.getHotAnalysis;
+    const fetchApi = isBeamView ? agentDataApi.getChainAnalysis : agentDataApi.getHotAnalysis;
     void fetchApi(id)
       .then((response: any) => {
         if (cancelled) return;
         if (response.success) { setDetail(response.data as TaskAnalysisDetail); return; }
         // 404 fallback: 尝试旧表
-        return (view === "beam" ? agentDataApi.getHotAnalysis(id) : agentDataApi.getChainAnalysis(id))
+        return (isBeamView ? agentDataApi.getHotAnalysis(id) : agentDataApi.getChainAnalysis(id))
           .then((r2: any) => {
             if (cancelled) return;
             if (r2.success) { setDetail(r2.data as TaskAnalysisDetail); return; }
@@ -341,12 +441,12 @@ const TaskAnalysisResultPage: React.FC = () => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [analysisId, view]);
+  }, [analysisId, isBeamView]);
 
   useEffect(() => {
-    if (!isBeamView || !detail?.agent_id) {
-      setBeamSessions([]);
-      setLoadingBeam(false);
+    if (!isBeamView || !detail?.agent_id || canRenderBeamFromSavedResult) {
+      setBeamSessions((current) => (current.length > 0 ? [] : current));
+      setLoadingBeam((current) => (current ? false : current));
       return;
     }
     let cancelled = false;
@@ -374,7 +474,7 @@ const TaskAnalysisResultPage: React.FC = () => {
       if (!cancelled) setLoadingBeam(false);
     });
     return () => { cancelled = true; };
-  }, [detail, isBeamView]);
+  }, [canRenderBeamFromSavedResult, detail, isBeamView]);
 
   const handleDownload = () => {
     if (!detail) return;
@@ -424,21 +524,29 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
               <>
                 <SummaryCard icon={<Users className="h-4 w-4" />} label="参与学生" value={studentTotal} hint="提交问题的学生数" />
                 <SummaryCard icon={<MessageSquare className="h-4 w-4" />} label="提问总数" value={questionTotal} hint="学生提问总条数" />
-                <SummaryCard icon={<Target className="h-4 w-4" />} label="主题聚类" value={covered.length + uncovered.length} hint="AI 识别的问题主题" />
-                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="生发问题" value={uncovered.length} hint="任务单外的新方向" />
+                <SummaryCard icon={<Target className="h-4 w-4" />} label="问题链" value={chainCount} hint="可追踪的学生链路" />
+                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="教师锚点" value={teacherAnchorCount} hint="教师主线问题数" />
               </>
             ) : (
               <>
                 <SummaryCard icon={<Hash className="h-4 w-4" />} label="热点词" value={wc.length} hint="从学生问题中提取" />
-                <SummaryCard icon={<Target className="h-4 w-4" />} label="已覆盖" value={covered.length} hint="任务单命中的主题" />
-                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="新问题" value={uncovered.length} hint="学生自发延伸方向" />
-                <SummaryCard icon={<Users className="h-4 w-4" />} label="学生/问题" value={`${studentTotal}/${questionTotal}`} hint="参与学生 / 提问数" />
+                <SummaryCard icon={<Target className="h-4 w-4" />} label="热点主题" value={hotThemes.length || uncovered.length} hint="课程中聚合出的主题" />
+                <SummaryCard icon={<Lightbulb className="h-4 w-4" />} label="教师锚点" value={teacherQuestions.length} hint="自动识别 + 手动标记" />
+                <SummaryCard icon={<Users className="h-4 w-4" />} label="阶段序列" value={courseSequence.length} hint="完整课程热点时序" />
               </>
             )}
           </div>
 
           {isTimelineView ? (
             <div className="space-y-5">
+              <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                <div className="mb-3">
+                  <h2 className="text-base font-semibold text-text-base">学生关注点词云</h2>
+                  <p className="mt-1 text-sm text-text-tertiary">词云只用于热点问题分析，帮助观察学生提问中的课程关注点。</p>
+                </div>
+                <WordCloudChart data={wc} />
+              </section>
+
               <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                 <div className="mb-3">
                   <h2 className="text-base font-semibold text-text-base">时序热点分析</h2>
@@ -453,6 +561,56 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
               </section>
 
               <MainQuestionChainFlow items={mainQuestionChain} />
+
+              {courseSequence.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                  <div className="mb-3">
+                    <h2 className="text-base font-semibold text-text-base">完整课程热点序列</h2>
+                    <p className="mt-1 text-sm text-text-tertiary">按教师提问、学生集中生发、主题扩散/收敛组织整节课的问题演化。</p>
+                  </div>
+                  <div className="space-y-3">
+                    {courseSequence.map((item, index) => (
+                      <div key={`${item.stage}-${index}`} className="rounded-lg border border-border-secondary bg-surface-2 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">{item.stage}</span>
+                          <span className="text-xs text-text-tertiary">{formatTimeRange(item.start_at, item.end_at)}</span>
+                          <span className="rounded-full bg-[var(--ws-color-warning-soft)] px-2 py-0.5 text-xs text-[var(--ws-color-warning)]">{item.phase_type || "主题扩散"}</span>
+                          <span className="text-xs text-text-tertiary">{item.question_count || 0} 问题 · {item.unique_students || 0} 学生</span>
+                        </div>
+                        {item.teacher_question && <div className="mt-2 text-sm text-text-secondary">教师提问：{item.teacher_question}</div>}
+                        <div className="mt-1 text-sm font-medium text-text-base">热点主题：{item.dominant_theme || "未聚类"}</div>
+                        {(item.representative_questions || []).slice(0, 3).map((question, qIndex) => (
+                          <div key={qIndex} className="mt-1 border-l-2 border-primary/30 pl-2 text-xs text-text-tertiary">{question}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {hotThemes.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                  <h2 className="mb-3 text-base font-semibold text-text-base">热点主题证据</h2>
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {hotThemes.map((theme, index) => (
+                      <TopicEvidenceCard key={`${theme.topic}-${index}`} item={theme} index={index} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {teachingSuggestions.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                  <h2 className="mb-3 text-base font-semibold text-text-base">教学建议</h2>
+                  <div className="space-y-2">
+                    {teachingSuggestions.map((item, index) => (
+                      <div key={index} className="rounded-lg bg-primary-soft/50 px-3 py-2 text-sm text-primary">
+                        <span className="font-semibold">{item.theme || "建议"}：</span>{item.suggestion || item.reason}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {(covered.length > 0 || uncovered.length > 0) && (
                 <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
@@ -493,60 +651,120 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
             </div>
           ) : isBeamView ? (
             <div className="space-y-5">
-              {/* ② AI 主问题链（认知递进流程） */}
-              <MainQuestionChainFlow items={mainQuestionChain} />
+              <div className="space-y-3">
+                <CollapsibleTeacherMainline items={teacherQuestions} />
+                <CollapsibleAiMainline items={savedMainQuestionChain} />
+              </div>
 
               {/* ③ 语义光束图（核心主视觉） */}
               <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-text-base">语义光束图</h2>
-                    <p className="mt-1 text-sm text-text-tertiary">同类问题汇聚到同一主题 lane，观察学生问题链的交汇与分化。</p>
+                    <p className="mt-1 text-sm text-text-tertiary">橙色粗线是教师问题链中轴，彩色波形是真实学生问题链。拖动底部时间条、框选或输入精准时间可查看区间趋势。</p>
                   </div>
                   {loadingBeam && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                 </div>
+                {!loadingBeam && hasEvidenceOnlyChains ? (
+                  <div className="mb-3 rounded-lg border border-primary/20 bg-primary-soft/45 px-3 py-2 text-xs leading-relaxed text-primary">
+                    当前记录缺少逐学生真实链，已使用已保存代表问题绘制“课堂证据链”；不会伪造学生身份。新生成的问题链记录会优先显示真实学生路径。
+                  </div>
+                ) : !loadingBeam && beamStudentChains.length < 5 && (
+                  <div className="mb-3 rounded-lg border border-[var(--ws-color-warning)]/25 bg-[var(--ws-color-warning)]/8 px-3 py-2 text-xs text-[var(--ws-color-warning)]">
+                    当前真实学生链{beamStudentChains.length}条，不足 5 条，未使用模拟链补足。
+                  </div>
+                )}
+                <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-border-secondary bg-surface-2/70 px-3 py-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-text-tertiary">开始时间</label>
+                    <input
+                      type="time"
+                      value={beamRangeInputs.start}
+                      onChange={(event) => setBeamRangeInputs((current) => ({ ...current, start: event.target.value }))}
+                      className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text-base outline-none transition-colors focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-text-tertiary">结束时间</label>
+                    <input
+                      type="time"
+                      value={beamRangeInputs.end}
+                      onChange={(event) => setBeamRangeInputs((current) => ({ ...current, end: event.target.value }))}
+                      className="h-8 rounded-md border border-border bg-surface px-2 text-sm text-text-base outline-none transition-colors focus:border-primary"
+                    />
+                  </div>
+                  <Button type="button" size="sm" variant="secondary" onClick={handleApplyBeamRange}>应用区间</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={handleResetBeamRange}>同步当前选择</Button>
+                  <div className="min-w-[180px] flex-1 text-xs text-text-tertiary">
+                    当前区间：{beamRange?.startAt && beamRange?.endAt ? `${dayjs(beamRange.startAt).format("HH:mm")} - ${dayjs(beamRange.endAt).format("HH:mm")}` : "暂无"}
+                    {beamRange?.source === "manual" && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-primary">精准时间</span>}
+                  </div>
+                </div>
                 {loadingBeam ? <div className="flex h-[520px] items-center justify-center text-sm text-text-tertiary">正在加载链条数据...</div> : (
-                  <StudentBeamChart
-                    sessions={beamSessions}
-                    height={520}
-                    mainQuestionChain={mainQuestionChain}
-                    teacherMarks={((detail?.result?.result || detail?.result) as any)?.teacher_marks || []}
-                    burstPoints={((detail?.result?.result || detail?.result) as any)?.burst_points || []}
-                    covered={covered}
-                    uncovered={uncovered}
-                  />
+                    <StudentBeamChart
+                      height={520}
+                      teacherAnchors={beamTeacherAnchors}
+                      studentChains={beamStudentChains}
+                      burstPoints={resultData.burst_points || []}
+                      manualRange={beamManualRange}
+                      onRangeChange={setBeamRange}
+                    />
                 )}
               </section>
 
               {/* ④ 教学发现（学生生发性问题） */}
-              {uncovered.length > 0 && (
+              {(uncovered.length > 0 || activeBeamQuestions.length > 0) && (
                 <section className="rounded-xl border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning)]/8 p-4 shadow-sm">
                   <div className="mb-3">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-text-base">
-                      <span className="text-lg">🔥</span> 学生生发性问题
-                      <span className="rounded-full bg-[var(--ws-color-warning)]/12 px-2 py-0.5 text-xs font-medium text-[var(--ws-color-warning)]">{uncovered.length} 个方向</span>
+                      <span className="text-lg">🔥</span> 区间内学生生发性问题
+                      <span className="rounded-full bg-[var(--ws-color-warning)]/12 px-2 py-0.5 text-xs font-medium text-[var(--ws-color-warning)]">
+                        {activeUncoveredQuestions.length || uncovered.length} 条/方向
+                      </span>
                     </h2>
-                    <p className="mt-1 text-sm text-text-tertiary">任务单未覆盖但学生高频追问的主题 — 生产性失败信号（Productive Failure）</p>
+                    <p className="mt-1 text-sm text-text-tertiary">
+                      {beamRange?.startAt && beamRange?.endAt
+                        ? `${dayjs(beamRange.startAt).format("HH:mm")} - ${dayjs(beamRange.endAt).format("HH:mm")} 内的学生问题随光束图时间区间变化。`
+                        : "拖动光束图底部时间条后，这里会只显示当前时间段里的学生问题。"}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-                    {uncovered.map((t, i) => (
-                      <div key={i} className={`rounded-lg border px-3.5 py-3 ${t.count >= 3 ? "border-[var(--ws-color-danger)]/20 bg-[var(--ws-color-danger)]/8" : "border-border-secondary bg-surface"}`}>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <span className="text-sm font-medium text-text-base">{t.topic}</span>
-                          <span className={`text-xs font-semibold ${t.count >= 3 ? "text-[var(--ws-color-danger)]" : "text-text-tertiary"}`}>{t.count}次</span>
-                        </div>
-                        {t.questions && t.questions.length > 0 && (
-                          <div className="space-y-1">
-                            {t.questions.slice(0, 2).map((q, qi) => (
-                              <div key={qi} className="border-l-2 border-[var(--ws-color-warning)]/35 pl-2 text-xs text-text-secondary">"{q}"</div>
-                            ))}
+                  {activeBeamQuestions.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                      {(activeUncoveredQuestions.length > 0 ? activeUncoveredQuestions : activeBeamQuestions).slice(0, 8).map((question, index) => (
+                        <div key={`${question.time}-${question.studentName}-${index}`} className={`rounded-lg border px-3.5 py-3 ${question.isUncovered ? "border-[var(--ws-color-danger)]/20 bg-[var(--ws-color-danger)]/8" : "border-border-secondary bg-surface"}`}>
+                          <div className="mb-1.5 flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-sm font-medium text-text-base">{question.studentName}</span>
+                            <span className="shrink-0 text-xs text-text-tertiary">{dayjs(question.time).format("HH:mm")}</span>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                          <div className="text-sm leading-relaxed text-text-secondary">{question.content}</div>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-text-tertiary">
+                            {question.relationLabel && <span>关系：{question.relationLabel}</span>}
+                            {question.teacherQuestion && <span>关联教师：{question.teacherQuestion}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                      {uncovered.map((t, i) => (
+                        <div key={i} className={`rounded-lg border px-3.5 py-3 ${t.count >= 3 ? "border-[var(--ws-color-danger)]/20 bg-[var(--ws-color-danger)]/8" : "border-border-secondary bg-surface"}`}>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <span className="text-sm font-medium text-text-base">{t.topic}</span>
+                            <span className={`text-xs font-semibold ${t.count >= 3 ? "text-[var(--ws-color-danger)]" : "text-text-tertiary"}`}>{t.count}次</span>
+                          </div>
+                          {t.questions && t.questions.length > 0 && (
+                            <div className="space-y-1">
+                              {t.questions.slice(0, 2).map((q, qi) => (
+                                <div key={qi} className="border-l-2 border-[var(--ws-color-warning)]/35 pl-2 text-xs text-text-secondary">"{q}"</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 rounded-lg bg-primary-soft/50 px-3 py-2 text-xs text-primary">
-                    💡 教学建议：以上问题为任务单未预料的方向，反映学生真实认知需求，建议纳入下次教学设计。
+                    教学建议：优先关注当前区间里学生集中转向、追问或偏离教师主线的节点，它们更能反映实时认知需求。
                   </div>
                 </section>
               )}
@@ -556,11 +774,59 @@ ${wc.length > 0 ? `<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-text-base">学生问题链摘要</h2>
-                    <p className="mt-1 text-sm text-text-tertiary">最活跃的链路，辅助理解光束图中的路径。</p>
+                    <p className="mt-1 text-sm text-text-tertiary">
+                      {beamRange?.startAt && beamRange?.endAt
+                        ? `当前区间 ${dayjs(beamRange.startAt).format("HH:mm")} - ${dayjs(beamRange.endAt).format("HH:mm")} · ${activeBeamStudentPaths.length} 条${hasEvidenceOnlyChains ? "课堂证据链" : "真实学生链"} · ${activeBeamQuestions.length} 个问题 · ${visibleBeamTeacherAnchors.length} 个教师锚点`
+                        : studentChainSummary.chain_count !== undefined
+                        ? `${chainCount} 条链 · ${questionTotal} 个问题 · ${teacherAnchorCount} 个教师锚点`
+                        : "最活跃的链路，辅助理解光束图中的路径。"}
+                    </p>
                   </div>
-                  <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">Top {Math.min(chainSummaries.length, 4)}</span>
+                  <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">
+                    {Math.min(activeBeamStudentPaths.length || savedStudentChains.length || chainSummaries.length, 5) > 0
+                      ? `Top ${Math.min(activeBeamStudentPaths.length || savedStudentChains.length || chainSummaries.length, 5)}`
+                      : "暂无真实链"}
+                  </span>
                 </div>
-                {chainSummaries.length > 0 ? (
+                {visibleBeamTeacherAnchors.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {visibleBeamTeacherAnchors.map((anchor, index) => (
+                      <span key={`${anchor.id}-${index}`} className="rounded-full border border-[var(--ws-color-warning)]/25 bg-[var(--ws-color-warning)]/8 px-2.5 py-1 text-xs text-[var(--ws-color-warning)]" title={anchor.question}>
+                        {anchor.label || `T${index + 1}`} · {dayjs(anchor.time).format("HH:mm")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {activeBeamStudentPaths.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {activeBeamStudentPaths.slice(0, 5).map((chain, index) => (
+                      <ChainThoughtPathCard key={chain.studentName} chain={chain} index={index} isEvidenceOnly={hasEvidenceOnlyChains} />
+                    ))}
+                  </div>
+                ) : savedStudentChains.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {savedStudentChains.slice(0, 5).map((chain, index) => (
+                      <details key={chain.session_id} className="group rounded-xl border border-border-secondary bg-surface px-4 py-3 shadow-sm" open={index === 0}>
+                        <summary className="flex cursor-pointer select-none items-center justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-text-base">{chain.student_name || chain.session_id}</div>
+                            <div className="text-xs text-text-tertiary">{formatTimeRange(chain.start_at, chain.end_at)} · {chain.question_count || chain.nodes?.length || 0} 个问题</div>
+                          </div>
+                          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">#{index + 1}</span>
+                        </summary>
+                        {chain.summary && <div className="mt-3 text-sm text-text-secondary">{chain.summary}</div>}
+                        <div className="mt-3 space-y-2 border-t border-border-secondary pt-3">
+                          {(chain.nodes || []).map((node, nodeIndex) => (
+                            <div key={`${chain.session_id}-${node.time}-${nodeIndex}`} className="rounded-lg bg-surface-2 px-3 py-2">
+                              <div className="mb-1 text-xs font-semibold text-primary">{node.time ? dayjs(node.time).format("HH:mm") : `节点 ${nodeIndex + 1}`}</div>
+                              <div className="text-sm leading-relaxed text-text-base">{node.question}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                ) : chainSummaries.length > 0 ? (
                   <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{chainSummaries.slice(0, 4).map((chain, index) => <ChainCard key={chain.sessionId} chain={chain} index={index} />)}</div>
                 ) : (
                   <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-border-secondary bg-surface text-sm text-text-tertiary">暂无可阅读的问题链</div>

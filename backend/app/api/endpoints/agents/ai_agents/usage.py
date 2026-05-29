@@ -147,7 +147,6 @@ async def create_usage_record(
             answer=usage_in.answer,
             session_id=usage_in.session_id,
             response_time_ms=usage_in.response_time_ms,
-            used_at=usage_in.used_at,
         )
         try:
             await cache.clear_pattern("agent_usage_stats:*")

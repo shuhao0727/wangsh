@@ -30,7 +30,7 @@ class AgentUsageAgent(BaseModel):
 
 class AgentUsageCreate(BaseModel):
     agent_id: int = Field(..., ge=1)
-    user_id: int = Field(..., ge=1)
+    user_id: Optional[int] = Field(None, ge=1)
     question: Optional[str] = None
     answer: Optional[str] = None
     session_id: Optional[str] = None

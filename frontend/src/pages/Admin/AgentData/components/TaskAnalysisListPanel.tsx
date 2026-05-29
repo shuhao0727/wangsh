@@ -14,6 +14,12 @@ type AnalysisRecord = {
   title: string;
   created_at: string;
   uncovered_count: number;
+  theme_count?: number;
+  question_count?: number;
+  teacher_anchor_count?: number;
+  burst_count?: number;
+  chain_count?: number;
+  ai_chain_node_count?: number;
 };
 
 function generateReportHTML(d: any, wc: any[], cov: any[], uncov: any[]): string {
@@ -65,8 +71,13 @@ window.addEventListener("resize",function(){chart.resize()});
 </script></body></html>`;
 }
 
-const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView = "timeline" }) => {
-  const isChain = detailView === "beam";
+const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailView?: string }> = ({
+  analysisType,
+  detailView,
+}) => {
+  const isChain = analysisType ? analysisType === "chains" : detailView === "beam";
+  const resolvedView = detailView || (isChain ? "beam" : "timeline");
+  const newAnalysisUrl = `/task-analysis/new?type=${isChain ? "chains" : "hot"}`;
   const [records, setRecords] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -142,9 +153,9 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
           </Button>
         )}
         <div className="flex-1" />
-        <Button size="sm" onClick={() => window.open("/task-analysis/new", "_blank")}>
+        <Button size="sm" onClick={() => window.open(newAnalysisUrl, "_blank")}>
           <Plus className="h-4 w-4 mr-1" />
-          新建分析
+          {isChain ? "新建问题链分析" : "新建热点分析"}
         </Button>
       </div>
 
@@ -155,13 +166,13 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <p className="text-sm text-text-tertiary">{search ? "未找到匹配记录" : "暂无分析记录"}</p>
           {!search && (
-            <Button variant="outline" onClick={() => window.open("/task-analysis/new", "_blank")}>
+            <Button variant="outline" onClick={() => window.open(newAnalysisUrl, "_blank")}>
               <Plus className="h-4 w-4 mr-1" />创建第一个分析
             </Button>
           )}
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-border">
+        <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="bg-surface-2 sticky top-0">
               <tr className="text-left text-xs text-text-tertiary">
@@ -173,10 +184,10 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
                       else setSelectedIds(new Set());
                     }} />
                 </th>
-                <th className="px-4 py-2.5 font-medium">标题</th>
+                <th className="px-4 py-2.5 font-medium min-w-[240px]">标题</th>
                 <th className="px-4 py-2.5 font-medium w-[120px]">时间</th>
-                <th className="px-4 py-2.5 font-medium w-[100px]">发现</th>
-                <th className="px-4 py-2.5 font-medium w-[140px]">操作</th>
+                <th className="px-4 py-2.5 font-medium w-[190px] min-w-[190px]">发现</th>
+                <th className="px-4 py-2.5 font-medium w-[150px] min-w-[150px]">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-secondary">
@@ -191,19 +202,26 @@ const TaskAnalysisListPanel: React.FC<{ detailView?: string }> = ({ detailView =
                         setSelectedIds(next);
                       }} />
                   </td>
-                  <td className="px-4 py-3 font-medium truncate max-w-[400px]">{r.title}</td>
-                  <td className="px-4 py-3 text-text-tertiary text-xs">{dayjs(r.created_at).format("MM-DD HH:mm")}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  <td className="px-4 py-3 font-medium truncate max-w-[420px]">{r.title}</td>
+                  <td className="px-4 py-3 text-text-tertiary text-xs whitespace-nowrap">{dayjs(r.created_at).format("MM-DD HH:mm")}</td>
+                  <td className="px-4 py-3 align-top">
+                    <span className="inline-flex whitespace-nowrap items-center rounded-full px-2 py-0.5 text-xs font-medium"
                       style={{ background: "var(--ws-color-warning-soft)", color: "var(--ws-color-warning)" }}>
-                      {r.uncovered_count || 0} 个主题
+                      {isChain
+                        ? `${r.chain_count || r.uncovered_count || 0} 条链`
+                        : `${r.theme_count || r.uncovered_count || 0} 个主题`}
                     </span>
+                    <div className="mt-1 whitespace-nowrap text-[11px] text-text-tertiary">
+                      {isChain
+                        ? `锚点 ${r.teacher_anchor_count || 0} · 主线 ${r.ai_chain_node_count || 0}`
+                        : `${r.question_count || 0} 个问题 · ${r.burst_count || 0} 个爆发点`}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <a href={`/task-analysis/${r.id}?view=${detailView}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`/task-analysis/${r.id}?view=${resolvedView}&type=${isChain ? "chains" : "hot"}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                        {detailView === "beam" ? "光束图" : "时序"}
+                        {resolvedView === "beam" ? "光束图" : "时序"}
                       </a>
                       <button onClick={() => handleDownload(r.id)} title="下载"
                         className="text-text-tertiary hover:text-primary transition-colors">

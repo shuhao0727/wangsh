@@ -6,7 +6,8 @@
 
 ## 当前入口
 
-- `bootstrap_db.py` - 本地/部署场景数据库初始化
+- `bootstrap_db.py` - 本地/部署场景数据库初始化；`--initial-only` 仅允许空库首次建表并 stamp
+- `check_migration_state.py` - 生产迁移前只读检查，阻断 `alembic_version` 与真实 schema 漂移
 - `smoke_openapi_sweep.py` - 只读 GET 广覆盖扫雷
 - `smoke_feature_suite.py` - users/articles/xbk/classroom 等核心 CRUD 烟测
 - `smoke_assessment_flow.py` - 测评主链路烟测

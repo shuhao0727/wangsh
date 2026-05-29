@@ -28,6 +28,9 @@ bash scripts/deploy.sh build
 bash scripts/deploy.sh push
 bash scripts/deploy.sh deploy
 
+# 迁移前只读检查 + Alembic 升级
+bash scripts/migrate-db.sh upgrade
+
 # 使用 shuhao07/*:1.5.16 镜像做本地生产模拟（端口 16608）
 bash scripts/deploy.sh simulate
 

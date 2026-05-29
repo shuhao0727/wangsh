@@ -124,3 +124,20 @@ class StudentChainAnalysis(Base):
     result = Column(JSON, nullable=False, default=dict)
     created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AgentAnalysisPromptTemplate(Base):
+    """AgentData 分析提示词模板 — 按分析类型管理"""
+    __tablename__ = "agent_analysis_prompt_templates"
+    __table_args__ = {"comment": "AgentData 分析提示词模板表"}
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    analysis_type = Column(String(40), nullable=False, index=True, comment="hot_questions/student_chains")
+    name = Column(String(120), nullable=False, comment="模板名称")
+    content = Column(Text, nullable=False, comment="提示词内容")
+    is_default = Column(Boolean, nullable=False, default=False, server_default=expression.false())
+    is_active = Column(Boolean, nullable=False, default=True, server_default=expression.true())
+    sort_order = Column(Integer, nullable=False, default=100, server_default="100")
+    created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

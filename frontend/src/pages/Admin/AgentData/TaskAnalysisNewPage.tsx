@@ -3,6 +3,7 @@
  * 左侧：任务单输入 | 右侧：配置 + 分析按钮
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,11 +14,24 @@ import aiAgentsApi from "@services/znt/api/ai-agents-api";
 import { showMessage } from "@/lib/toast";
 import type { AIAgent } from "@services/znt/types";
 
+type AnalysisType = "hot" | "chains";
+type PromptTemplate = {
+  id: number;
+  analysis_type: "hot_questions" | "student_chains";
+  name: string;
+  content: string;
+  is_default?: boolean;
+};
+
 const now = dayjs();
 let _cache: AIAgent[] | null = null;
 let _cacheAt = 0;
 
 const TaskAnalysisNewPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const analysisType: AnalysisType = searchParams.get("type") === "chains" ? "chains" : "hot";
+  const isChain = analysisType === "chains";
+  const backendAnalysisType = isChain ? "student_chains" : "hot_questions";
   const [agents, setAgents] = useState<AIAgent[]>(_cache || []);
   useEffect(() => {
     if (_cache && Date.now() - _cacheAt < 60_000) { setAgents(_cache); return; }
@@ -37,12 +51,29 @@ const TaskAnalysisNewPage: React.FC = () => {
   const [className, setClassName] = useState("");
   const [bucketSeconds, setBucketSeconds] = useState(180);
   const [customPrompt, setCustomPrompt] = useState("");
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
+  const [promptTemplateId, setPromptTemplateId] = useState("");
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [teacherMarks, setTeacherMarks] = useState<Array<{ time: string; question: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressSteps, setProgressSteps] = useState<string[]>([]);
   const [partialResults, setPartialResults] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void agentDataApi.listAnalysisPromptTemplates(backendAnalysisType).then((res) => {
+      if (cancelled || !res.success) return;
+      const items = (res.data as PromptTemplate[]) || [];
+      setPromptTemplates(items);
+      const defaultTemplate = items.find((item) => item.is_default) || items[0];
+      if (defaultTemplate) {
+        setPromptTemplateId(String(defaultTemplate.id));
+        setCustomPrompt(defaultTemplate.content);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [backendAnalysisType]);
 
   // 从使用记录自动填充时间范围
   const [recentActivity, setRecentActivity] = useState<{ lastAt?: string; firstAt?: string } | null>(null);
@@ -73,7 +104,7 @@ const TaskAnalysisNewPage: React.FC = () => {
   useEffect(() => { if (agentId || agentOptions.length === 0) return; setAgentId(agentOptions[0].value); }, [agentOptions, agentId]);
 
   const handleSave = async () => {
-    if (!taskSheet.trim()) { showMessage.warning("请输入任务单内容"); return; }
+    if (!isChain && !taskSheet.trim()) { showMessage.warning("请输入任务单内容"); return; }
     if (!agentId) { showMessage.warning("请选择智能体"); return; }
     setSaving(true);
     setProgress(0);
@@ -81,23 +112,25 @@ const TaskAnalysisNewPage: React.FC = () => {
     setPartialResults([]);
 
     try {
-      const res = await agentDataApi.saveTaskAnalysisStream({
-        title: taskSheet.trim().split("\n")[0].slice(0, 60),
-        task_sheet: taskSheet,
+      const basePayload = {
+        title: (taskSheet.trim().split("\n")[0] || (isChain ? "学生问题链分析" : "热点问题分析")).slice(0, 60),
+        task_sheet: taskSheet.trim() || undefined,
         agent_id: Number(agentId),
         analysis_agent_id: analysisAgentId ? Number(analysisAgentId) : undefined,
         start_at: dayjs(startDate).startOf("day").toISOString(),
         end_at: dayjs(endDate).endOf("day").toISOString(),
         class_name: className.trim() || undefined,
-        bucket_seconds: bucketSeconds,
         custom_prompt: customPrompt.trim() || undefined,
+        prompt_template_id: promptTemplateId ? Number(promptTemplateId) : undefined,
         teacher_marks: teacherMarks
           .filter((m) => m.time)
           .map((m) => ({
             time: dayjs(`${startDate} ${m.time}`).toISOString(),
             question: m.question,
           })),
-      }, {
+      };
+      const res = await (isChain
+        ? agentDataApi.saveStudentChainAnalysisStream(basePayload, {
         onEvent: (event, payload) => {
           if (typeof payload.progress === "number") {
             setProgress(Math.max(0, Math.min(100, payload.progress)));
@@ -107,27 +140,80 @@ const TaskAnalysisNewPage: React.FC = () => {
           }
           if (event === "partial_result" && payload.result) {
             const value = payload.result as any;
-            if (value.question_count !== undefined) {
-              setPartialResults((prev) => [...prev, `已提取 ${value.question_count} 条学生提问`]);
-            } else if (Array.isArray(value.word_cloud)) {
-              setPartialResults((prev) => [...prev, `词云已生成：${value.word_cloud.slice(0, 8).map((x: any) => x.word).filter(Boolean).join("、") || "暂无关键词"}`]);
-            } else if (Array.isArray(value.covered) || Array.isArray(value.uncovered)) {
-              setPartialResults((prev) => [...prev, `AI 对比完成：覆盖 ${value.covered?.length || 0} 类，未覆盖 ${value.uncovered?.length || 0} 类`]);
+            if (value.chain_count !== undefined) {
+              setPartialResults((prev) => [...prev, `已生成 ${value.chain_count} 条学生问题链，${value.teacher_anchor_count || 0} 个教师锚点`]);
             }
           }
         },
-      });
+      })
+        : agentDataApi.saveHotQuestionAnalysisStream({
+          ...basePayload,
+          task_sheet: taskSheet.trim(),
+          bucket_seconds: bucketSeconds,
+        }, {
+        onEvent: (event, payload) => {
+          if (typeof payload.progress === "number") {
+            setProgress(Math.max(0, Math.min(100, payload.progress)));
+          }
+          if (payload.message) {
+            setProgressSteps((prev) => [...prev, payload.message as string]);
+          }
+          if (event === "partial_result" && payload.result) {
+            const value = payload.result as any;
+            if (value.theme_count !== undefined) {
+              setPartialResults((prev) => [...prev, `已生成 ${value.theme_count} 个热点主题，${value.teacher_anchor_count || 0} 个教师锚点`]);
+            }
+          }
+        },
+      }));
       if (!res.success) { showMessage.error(res.message || "分析失败"); setSaving(false); return; }
       const id = (res.data as any)?.id;
+      const view = (res.data as any)?.view || (isChain ? "beam" : "timeline");
       setProgress(100);
       setProgressSteps((p) => [...p, "✓ 分析完成，正在跳转..."]);
-      setTimeout(() => { window.location.href = `/task-analysis/${id}`; }, 600);
+      setTimeout(() => { window.location.href = `/task-analysis/${id}?view=${view}&type=${analysisType}`; }, 600);
     } catch (e: any) {
       showMessage.error(e?.message || "分析失败");
       setSaving(false);
       setProgress(0);
       setProgressSteps([]);
       setPartialResults([]);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!customPrompt.trim()) { showMessage.warning("请先填写提示词内容"); return; }
+    const name = window.prompt("模板名称", isChain ? "学生问题链自定义模板" : "热点问题自定义模板");
+    if (!name?.trim()) return;
+    const res = await agentDataApi.createAnalysisPromptTemplate({
+      analysis_type: backendAnalysisType,
+      name: name.trim(),
+      content: customPrompt.trim(),
+      is_active: true,
+      is_default: false,
+      sort_order: 100,
+    });
+    if (!res.success) { showMessage.error(res.message || "保存模板失败"); return; }
+    showMessage.success("模板已保存");
+    const next = await agentDataApi.listAnalysisPromptTemplates(backendAnalysisType);
+    if (next.success) setPromptTemplates((next.data as PromptTemplate[]) || []);
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!promptTemplateId) return;
+    const template = promptTemplates.find((item) => String(item.id) === promptTemplateId);
+    if (!template) return;
+    if (!window.confirm(`确定删除提示词模板「${template.name}」？`)) return;
+    const res = await agentDataApi.deleteAnalysisPromptTemplate(Number(promptTemplateId));
+    if (!res.success) { showMessage.error(res.message || "删除模板失败"); return; }
+    showMessage.success("模板已删除");
+    const next = await agentDataApi.listAnalysisPromptTemplates(backendAnalysisType);
+    if (next.success) {
+      const items = (next.data as PromptTemplate[]) || [];
+      setPromptTemplates(items);
+      const fallback = items.find((item) => item.is_default) || items[0];
+      setPromptTemplateId(fallback ? String(fallback.id) : "");
+      setCustomPrompt(fallback?.content || "");
     }
   };
 
@@ -138,7 +224,7 @@ const TaskAnalysisNewPage: React.FC = () => {
         <Button variant="ghost" size="sm" onClick={() => window.close()}>
           <ArrowLeft className="h-4 w-4 mr-1" />关闭
         </Button>
-        <span className="ml-4 text-sm font-semibold">新建任务分析</span>
+        <span className="ml-4 text-sm font-semibold">{isChain ? "新建学生问题链分析" : "新建热点问题分析"}</span>
       </header>
 
       {/* Main: left-right split */}
@@ -147,7 +233,7 @@ const TaskAnalysisNewPage: React.FC = () => {
           <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border-secondary bg-surface p-6 shadow-sm">
             <div className="text-center space-y-3">
               <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
-              <div className="text-sm font-medium">正在分析任务单</div>
+              <div className="text-sm font-medium">{isChain ? "正在分析学生问题链" : "正在分析课程热点问题"}</div>
               <div className="h-2 overflow-hidden rounded-full bg-surface-3">
                 <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
               </div>
@@ -178,10 +264,12 @@ const TaskAnalysisNewPage: React.FC = () => {
       <div className="flex-1 flex min-h-0">
         {/* Left: Task sheet input */}
         <div className="flex-[3] border-r border-border-secondary flex flex-col p-6">
-          <div className="mb-3 text-sm font-medium text-text-secondary">任务单内容</div>
+          <div className="mb-3 text-sm font-medium text-text-secondary">{isChain ? "课程任务单 / 教学背景（可选）" : "任务单内容"}</div>
           <textarea
             className="flex-1 w-full resize-none rounded-lg border border-border bg-surface px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[var(--ws-color-focus-ring)]"
-            placeholder={"粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数\n3. 定义一个函数计算阶乘\n4. 用 elif 判断成绩等级"}
+            placeholder={isChain
+              ? "可选：粘贴本节课的任务单、教学目标或教师主问题，帮助系统理解学生问题链的教学背景。"
+              : "粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数\n3. 定义一个函数计算阶乘\n4. 用 elif 判断成绩等级"}
             value={taskSheet}
             onChange={(e) => setTaskSheet(e.target.value)}
           />
@@ -202,7 +290,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                 <div className="text-3xl mb-2">📌</div>
                 <div className="text-xs text-text-tertiary leading-relaxed">
                   标记你在课堂中的提问时间点<br/>
-                  系统会分析学生在你提问后的反应
+                  系统会自动合并教师账号提问与手动标记
                 </div>
                 <Button variant="outline" size="sm" className="mt-3 text-xs" onClick={addTeacherMark}>
                   + 添加第一个提问时间点
@@ -232,7 +320,7 @@ const TaskAnalysisNewPage: React.FC = () => {
             )}
           </div>
           <div className="mt-3 text-[11px] text-text-tertiary leading-relaxed border-t border-border-secondary pt-2">
-            💡 提示：标记你的提问时间，系统会分析学生在你提问后 3-5 分钟内的深入追问（生成性问题）
+            提示：系统会自动识别 teacher/admin/super_admin 的提问；这里用于补充线下口头提问。
           </div>
         </div>
 
@@ -320,6 +408,28 @@ const TaskAnalysisNewPage: React.FC = () => {
             </div>
 
             <div className="border-t border-border-secondary pt-3">
+              <div className="mb-2">
+                <div className="mb-1.5 text-xs text-text-tertiary">提示词模板</div>
+                <Select
+                  value={promptTemplateId || "__custom__"}
+                  onValueChange={(value) => {
+                    if (value === "__custom__") { setPromptTemplateId(""); return; }
+                    setPromptTemplateId(value);
+                    const tpl = promptTemplates.find((item) => String(item.id) === value);
+                    if (tpl) setCustomPrompt(tpl.content);
+                  }}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="选择提示词模板" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__custom__">自定义提示词</SelectItem>
+                    {promptTemplates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={String(tpl.id)}>
+                        {tpl.name}{tpl.is_default ? "（默认）" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <button
                 onClick={() => setShowPromptEditor(!showPromptEditor)}
                 className="flex items-center gap-1 text-xs text-text-secondary hover:text-primary transition-colors"
@@ -339,6 +449,10 @@ const TaskAnalysisNewPage: React.FC = () => {
                   <div className="mt-1 text-[11px] text-text-tertiary">
                     {customPrompt ? `${customPrompt.length} 字` : "留空 = 使用系统默认分析策略"}
                   </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={handleSaveTemplate}>保存为模板</Button>
+                    {promptTemplateId && <Button type="button" variant="ghost" size="sm" onClick={handleDeleteTemplate}>删除模板</Button>}
+                  </div>
                 </div>
               )}
             </div>
@@ -349,10 +463,10 @@ const TaskAnalysisNewPage: React.FC = () => {
             size="lg"
             className="w-full h-11"
             onClick={handleSave}
-            disabled={saving || !taskSheet.trim() || !agentId}
+            disabled={saving || (!isChain && !taskSheet.trim()) || !agentId}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-            {saving ? "正在分析..." : "开始分析"}
+            {saving ? "正在分析..." : isChain ? "开始问题链分析" : "开始热点分析"}
           </Button>
         </div>
       </div>
