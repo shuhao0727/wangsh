@@ -60,6 +60,23 @@ const TaskAnalysisNewPage: React.FC = () => {
   const [progressSteps, setProgressSteps] = useState<string[]>([]);
   const [partialResults, setPartialResults] = useState<string[]>([]);
 
+  // recent analyses for quick re-run
+  const [recentAnalyses, setRecentAnalyses] = useState<Array<{ id: number; title: string; created_at: string; agent_id?: number }>>([]);
+  useEffect(() => {
+    void (isChain ? agentDataApi.listChainAnalyses() : agentDataApi.listHotAnalyses())
+      .then((res: any) => {
+        if (res.success) setRecentAnalyses((res.data || []).slice(0, 3));
+      });
+  }, [isChain]);
+
+  // analysis goal refinements
+  const [goalFlags, setGoalFlags] = useState<Record<string, boolean>>({
+    uncover_new: true,
+    track_deviation: true,
+    suggest_task_sheet: true,
+    compare_previous: false,
+  });
+
   useEffect(() => {
     let cancelled = false;
     void agentDataApi.listAnalysisPromptTemplates(backendAnalysisType).then((res) => {
@@ -220,11 +237,17 @@ const TaskAnalysisNewPage: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-[var(--ws-color-bg)]">
       {/* Header */}
-      <header className="shrink-0 border-b border-border-secondary bg-surface px-6 py-3 flex items-center">
+      <header className="shrink-0 border-b border-border-secondary bg-surface/90 backdrop-blur-sm px-6 py-3 flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => window.close()}>
           <ArrowLeft className="h-4 w-4 mr-1" />关闭
         </Button>
-        <span className="ml-4 text-sm font-semibold">{isChain ? "新建学生问题链分析" : "新建热点问题分析"}</span>
+        <div className="h-5 w-px bg-border-secondary" />
+        <div>
+          <span className="text-sm font-semibold tracking-tight">{isChain ? "新建学生问题链分析" : "新建热点问题分析"}</span>
+          <span className="ml-2 text-xs text-text-tertiary">
+            {isChain ? "追踪每个学生的提问思考路径" : "识别课堂中最受关注的知识点"}
+          </span>
+        </div>
       </header>
 
       {/* Main: left-right split */}
@@ -261,213 +284,167 @@ const TaskAnalysisNewPage: React.FC = () => {
           </div>
         </div>
       ) : (
-      <div className="flex-1 flex min-h-0">
-        {/* Left: Task sheet input */}
-        <div className="flex-[3] border-r border-border-secondary flex flex-col p-6">
-          <div className="mb-3 text-sm font-medium text-text-secondary">{isChain ? "课程任务单 / 教学背景（可选）" : "任务单内容"}</div>
-          <textarea
-            className="flex-1 w-full resize-none rounded-lg border border-border bg-surface px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[var(--ws-color-focus-ring)]"
-            placeholder={isChain
-              ? "可选：粘贴本节课的任务单、教学目标或教师主问题，帮助系统理解学生问题链的教学背景。"
-              : "粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数\n3. 定义一个函数计算阶乘\n4. 用 elif 判断成绩等级"}
-            value={taskSheet}
-            onChange={(e) => setTaskSheet(e.target.value)}
-          />
-          {taskSheet.trim() && (
-            <div className="mt-2 text-xs text-text-tertiary text-right">{taskSheet.trim().length} 字</div>
-          )}
-        </div>
-
-        {/* Middle: Teacher question marks */}
-        <div className="flex-[2] border-r border-border-secondary flex flex-col p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-medium text-text-secondary">教师提问时间线</div>
-            <Button variant="ghost" size="sm" onClick={addTeacherMark} className="text-xs h-7">+ 添加</Button>
+      <div className="flex-1 overflow-y-auto bg-[var(--ws-color-bg)]">
+        <div className="mx-auto max-w-7xl px-10 py-12">
+          {/* Step indicator */}
+          <div className="flex items-center gap-3 mb-8">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white shadow-sm ring-4 ring-primary/10">1</span>
+            <div className="flex-1 h-px bg-border" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface border-2 border-border-secondary text-sm font-medium text-text-tertiary">2</span>
+            <div className="flex-1 h-px bg-border" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface border-2 border-border-secondary text-sm font-medium text-text-tertiary">3</span>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {teacherMarks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <div className="text-3xl mb-2">📌</div>
-                <div className="text-xs text-text-tertiary leading-relaxed">
-                  标记你在课堂中的提问时间点<br/>
-                  系统会自动合并教师账号提问与手动标记
-                </div>
-                <Button variant="outline" size="sm" className="mt-3 text-xs" onClick={addTeacherMark}>
-                  + 添加第一个提问时间点
-                </Button>
+
+          {/* Bento Grid */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            {/* Card 1: Task Sheet — spans 3 cols */}
+            <div className="lg:col-span-3 rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-border/30 p-8 flex flex-col min-h-[400px]">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-text-base">{isChain ? "课程任务单" : "任务单内容"}</h2>
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  {isChain ? "帮助系统理解教学背景（可选）" : "粘贴本节课的问题列表，用于对比学生的自发提问"}
+                  {!isChain && <span className="text-red-400 ml-1">*</span>}
+                </p>
               </div>
-            ) : (
-              teacherMarks.map((mark, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-lg border border-border-secondary bg-surface p-2.5">
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <Input
-                      type="time"
-                      value={mark.time}
-                      onChange={(e) => updateTeacherMark(i, "time", e.target.value)}
-                      className="h-8 text-xs w-28"
-                      placeholder="HH:mm"
-                    />
-                    <Input
-                      value={mark.question}
-                      onChange={(e) => updateTeacherMark(i, "question", e.target.value)}
-                      className="h-8 text-xs"
-                      placeholder="提问内容（可选）"
-                    />
-                  </div>
-                  <button onClick={() => removeTeacherMark(i)} className="shrink-0 text-text-tertiary hover:text-red-500 text-xs mt-1">✕</button>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="mt-3 text-[11px] text-text-tertiary leading-relaxed border-t border-border-secondary pt-2">
-            提示：系统会自动识别 teacher/admin/super_admin 的提问；这里用于补充线下口头提问。
-          </div>
-        </div>
+              <textarea
+                className="flex-1 w-full resize-none rounded-xl border border-border/60 bg-gray-50/50 px-4 py-3.5 text-sm leading-relaxed placeholder:text-text-tertiary/50 focus:outline-none focus:border-primary/40 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all min-h-[200px]"
+                placeholder={isChain
+                  ? "粘贴本节课的任务单、教学目标或教师主问题..."
+                  : "粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数\n3. 定义一个函数计算阶乘"}
+                value={taskSheet}
+                onChange={(e) => setTaskSheet(e.target.value)}
+              />
+              <div className="mt-2 text-[11px] text-text-tertiary text-right">{taskSheet.length} 字</div>
+            </div>
 
-        {/* Right: Config panel */}
-        <div className="flex-[2] flex flex-col p-6 bg-surface-2">
-          <div className="space-y-4 flex-1 overflow-y-auto">
-            <div className="text-sm font-medium text-text-secondary mb-4">分析配置</div>
+            {/* Card 2: Quick-start & Goals — 2 cols */}
+            <div className="lg:col-span-2 rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-border/30 p-8 flex flex-col">
+              <h2 className="text-base font-semibold text-text-base mb-4">分析目标与基准</h2>
 
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-text-secondary">🤖 分析对象（智能体）</div>
-              <p className="mb-1.5 text-[11px] text-text-tertiary">学生和哪个智能体的对话记录</p>
-              <Select value={agentId || "__empty__"} onValueChange={(v) => setAgentId(v === "__empty__" ? "" : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder={agents.length ? "选择智能体" : "加载中..."} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__empty__">请选择</SelectItem>
-                  {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {!agentId && <div className="mt-1 text-[11px] text-amber-600">⚠ 请选择要分析哪个智能体的学生对话</div>}
-              {agentId && recentActivity?.firstAt && (
-                <div className="mt-1.5 text-[11px] text-text-tertiary">
-                  📊 活动范围: {dayjs(recentActivity.firstAt).format("MM-DD")} ~ {dayjs(recentActivity.lastAt).format("MM-DD")}
-                  <button
-                    className="ml-2 text-primary hover:underline"
-                    onClick={() => {
-                      if (recentActivity.firstAt) setStartDate(dayjs(recentActivity.firstAt).format("YYYY-MM-DD"));
-                      if (recentActivity.lastAt) setEndDate(dayjs(recentActivity.lastAt).format("YYYY-MM-DD"));
-                    }}
-                  >自动填充日期</button>
+              {recentAnalyses.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-xs font-medium text-text-tertiary mb-2">基于最近结果重新分析</div>
+                  {recentAnalyses.map((a) => (
+                    <button key={a.id} onClick={() => window.open(`/task-analysis/${a.id}?view=${isChain ? "beam" : "timeline"}&type=${analysisType}`, "_blank")}
+                      className="w-full text-left rounded-lg px-3 py-2 text-xs text-text-secondary hover:bg-primary-soft/30 transition-colors mb-1">
+                      <span className="font-medium">{a.title}</span>
+                      <span className="ml-2 text-text-tertiary/70">{dayjs(a.created_at).format("MM-DD")}</span>
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
 
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-text-secondary">🧠 分析用智能体</div>
-              <p className="mb-1.5 text-[11px] text-text-tertiary">用哪个 AI 来执行分析（建议选能力强的模型）</p>
-              <Select value={analysisAgentId || "__empty__"} onValueChange={(v) => setAnalysisAgentId(v === "__empty__" ? "" : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="选择分析用智能体" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__empty__">请选择</SelectItem>
-                  {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {!analysisAgentId && agentId && <div className="mt-1 text-[11px] text-text-tertiary">不选则使用分析对象的同一智能体</div>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="mb-1.5 text-xs text-text-tertiary">开始日期</div>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9" />
+              <div className="mb-4">
+                <div className="text-xs font-medium text-text-tertiary mb-2">分析目标</div>
+                {([{key:"uncover_new",label:"发现未覆盖的新问题方向"},{key:"track_deviation",label:"追踪偏离教师主线的趋势"},{key:"suggest_task_sheet",label:"生成可加入任务单的教学建议"},{key:"compare_previous",label:"与历史分析对比（需≥2次记录）"}] as const).map(({key,label})=>(
+                  <label key={key} className="flex items-center gap-2 py-1 cursor-pointer">
+                    <input type="checkbox" checked={goalFlags[key]??false} onChange={e=>setGoalFlags(p=>({...p,[key]:e.target.checked}))} className="rounded border-gray-300 h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs text-text-secondary">{label}</span>
+                  </label>
+                ))}
               </div>
-              <div>
-                <div className="mb-1.5 text-xs text-text-tertiary">结束日期</div>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9" />
-              </div>
-            </div>
 
-            <div>
-              <div className="mb-1.5 text-xs text-text-tertiary">班级（可选）</div>
-              <Input placeholder="全部班级" value={className} onChange={(e) => setClassName(e.target.value)} className="h-9" />
-            </div>
-
-            <div>
-              <div className="mb-1.5 text-xs text-text-tertiary">时间桶粒度（秒）</div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={60}
-                  max={600}
-                  step={30}
-                  value={bucketSeconds}
-                  onChange={(e) => setBucketSeconds(Math.max(60, Math.min(600, Number(e.target.value) || 180)))}
-                  className="h-9 w-24"
-                />
-                <div className="flex gap-1">
-                  {[60, 180, 300].map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setBucketSeconds(v)}
-                      className={`px-2 py-1 rounded text-[11px] border transition-colors ${bucketSeconds === v ? "bg-primary text-white border-primary" : "bg-surface border-border-secondary text-text-tertiary hover:border-primary/40"}`}
-                    >{v / 60}分钟</button>
+              {/* Teacher marks (moved here) */}
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-text-tertiary">教师提问标记</span>
+                  <Button variant="ghost" size="sm" onClick={addTeacherMark} className="text-xs h-6 px-2">+ 添加</Button>
+                </div>
+                <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+                  {teacherMarks.length === 0 ? (
+                    <p className="text-xs text-text-tertiary/60 italic">暂未标记。系统将自动识别 teacher/admin 的提问。</p>
+                  ) : teacherMarks.map((mark, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg border border-border/40 bg-gray-50/50 px-2.5 py-1.5">
+                      <span className="text-[10px] font-semibold text-text-tertiary w-4">{i + 1}</span>
+                      <Input type="time" value={mark.time} onChange={e=>updateTeacherMark(i,"time",e.target.value)} className="h-7 text-xs w-24" placeholder="HH:mm" />
+                      <Input value={mark.question} onChange={e=>updateTeacherMark(i,"question",e.target.value)} className="h-7 text-xs flex-1" placeholder="提问内容" />
+                      <button onClick={()=>removeTeacherMark(i)} className="text-text-tertiary/40 hover:text-red-500 text-xs">✕</button>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-border-secondary pt-3">
-              <div className="mb-2">
-                <div className="mb-1.5 text-xs text-text-tertiary">提示词模板</div>
-                <Select
-                  value={promptTemplateId || "__custom__"}
-                  onValueChange={(value) => {
-                    if (value === "__custom__") { setPromptTemplateId(""); return; }
-                    setPromptTemplateId(value);
-                    const tpl = promptTemplates.find((item) => String(item.id) === value);
-                    if (tpl) setCustomPrompt(tpl.content);
-                  }}
-                >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="选择提示词模板" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__custom__">自定义提示词</SelectItem>
-                    {promptTemplates.map((tpl) => (
-                      <SelectItem key={tpl.id} value={String(tpl.id)}>
-                        {tpl.name}{tpl.is_default ? "（默认）" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <button
-                onClick={() => setShowPromptEditor(!showPromptEditor)}
-                className="flex items-center gap-1 text-xs text-text-secondary hover:text-primary transition-colors"
-              >
-                <span>{showPromptEditor ? "▼" : "▶"}</span>
-                <span>自定义 AI 分析提示词</span>
-                {customPrompt && <span className="ml-1 text-primary">•</span>}
-              </button>
-              {showPromptEditor && (
-                <div className="mt-2">
-                  <textarea
-                    className="w-full h-32 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-[var(--ws-color-focus-ring)]"
-                    placeholder={"留空使用默认提示词。可自定义分析重点，例如：\n\n请重点关注学生在调试代码时遇到的困难，分析他们的错误类型分布。\n\n或：请对比学生提问与任务单的认知层级差异，重点标注创造性问题。"}
-                    value={customPrompt}
-                    onChange={(e) => setCustomPrompt(e.target.value)}
-                  />
-                  <div className="mt-1 text-[11px] text-text-tertiary">
-                    {customPrompt ? `${customPrompt.length} 字` : "留空 = 使用系统默认分析策略"}
+            {/* Card 3: Config — full width bottom */}
+            <div className="lg:col-span-5 rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-border/30 p-8">
+              <h2 className="text-base font-semibold text-text-base mb-5">分析配置</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">分析对象（智能体）</label>
+                  <Select value={agentId||"__empty__"} onValueChange={(v)=>setAgentId(v==="__empty__"?"":v)}>
+                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择智能体" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__empty__">请选择</SelectItem>
+                      {agentOptions.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {agentId&&recentActivity?.firstAt&&(
+                    <div className="mt-1 text-[11px] text-text-tertiary">活动: {dayjs(recentActivity.firstAt).format("MM-DD")}~{dayjs(recentActivity.lastAt).format("MM-DD")}
+                      <button className="ml-1 text-primary hover:underline" onClick={()=>{if(recentActivity.firstAt)setStartDate(dayjs(recentActivity.firstAt).format("YYYY-MM-DD"));if(recentActivity.lastAt)setEndDate(dayjs(recentActivity.lastAt).format("YYYY-MM-DD"))}}>填充</button>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">分析用智能体</label>
+                  <Select value={analysisAgentId||"__empty__"} onValueChange={v=>setAnalysisAgentId(v==="__empty__"?"":v)}>
+                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选能力强的模型" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__empty__">请选择</SelectItem>
+                      {agentOptions.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">开始日期</label>
+                  <Input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="mt-1.5 h-9" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">结束日期</label>
+                  <Input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="mt-1.5 h-9" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">班级</label>
+                  <Input placeholder="全部班级" value={className} onChange={e=>setClassName(e.target.value)} className="mt-1.5 h-9" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">时间桶粒度</label>
+                  <div className="mt-1.5 flex gap-1">
+                    {[60,180,300].map(v=><button key={v} onClick={()=>setBucketSeconds(v)} className={`px-2.5 py-1 rounded text-xs border transition-colors ${bucketSeconds===v?"bg-primary text-white border-primary":"bg-white border-border text-text-tertiary hover:border-primary/30"}`}>{v/60}分钟</button>)}
                   </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary">提示词模板</label>
+                  <Select value={promptTemplateId||"__custom__"} onValueChange={v=>{if(v==="__custom__"){setPromptTemplateId("");return;}setPromptTemplateId(v);const t=promptTemplates.find(i=>String(i.id)===v);if(t)setCustomPrompt(t.content)}}>
+                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择模板" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__custom__">自定义</SelectItem>
+                      {promptTemplates.map(t=><SelectItem key={t.id} value={String(t.id)}>{t.name}{t.is_default?"（默认）":""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {showPromptEditor && (
+                <div className="mt-4">
+                  <textarea className="w-full h-24 resize-none rounded-lg border border-border bg-gray-50/50 px-3 py-2 text-xs focus:outline-none focus:border-primary/40" placeholder="自定义 AI 分析提示词..." value={customPrompt} onChange={e=>setCustomPrompt(e.target.value)} />
                   <div className="mt-2 flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={handleSaveTemplate}>保存为模板</Button>
-                    {promptTemplateId && <Button type="button" variant="ghost" size="sm" onClick={handleDeleteTemplate}>删除模板</Button>}
+                    <Button variant="outline" size="sm" onClick={handleSaveTemplate}>保存为模板</Button>
+                    {promptTemplateId && <Button variant="ghost" size="sm" onClick={handleDeleteTemplate}>删除模板</Button>}
                   </div>
                 </div>
               )}
+              <button onClick={()=>setShowPromptEditor(!showPromptEditor)} className="mt-2 text-xs text-text-tertiary hover:text-primary">
+                {showPromptEditor ? "收起 ▲" : "展开 ▼"} 自定义提示词 {customPrompt && "•"}
+              </button>
             </div>
           </div>
 
           {/* CTA */}
-          <Button
-            size="lg"
-            className="w-full h-11"
-            onClick={handleSave}
-            disabled={saving || (!isChain && !taskSheet.trim()) || !agentId}
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-            {saving ? "正在分析..." : isChain ? "开始问题链分析" : "开始热点分析"}
-          </Button>
+          <div className="mt-8 flex justify-center">
+            <Button size="lg" className="h-12 px-10 text-base shadow-lg shadow-primary/20" onClick={handleSave} disabled={saving||(!isChain&&!taskSheet.trim())||!agentId}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+              {saving ? "正在分析..." : isChain ? "开始问题链分析" : "开始热点分析"}
+            </Button>
+          </div>
         </div>
       </div>
       )}

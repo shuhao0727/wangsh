@@ -47,5 +47,6 @@ class ConversationExportRequest(BaseModel):
 
 
 class UsageFilterOptions(BaseModel):
-    agent_id: Optional[int] = Field(None, ge=1)
-    time_range: Optional[str] = Field(None, description="today/7d/30d")
+    class_names: List[str] = []
+    grades: List[str] = []
+    agent_names: List[str] = []

@@ -783,3 +783,58 @@ async def delete_chain_analysis(
     await db.delete(r)
     await db.commit()
     return {"message": "已删除"}
+
+
+@router.get("/trends")
+async def get_analysis_trends(
+    agent_id: int = Query(..., description="数据来源智能体 ID"),
+    analysis_type: str = Query("hot_questions", description="分析类型: hot_questions | student_chains"),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    """返回指定智能体最近 N 次分析的摘要趋势数据"""
+    model = StudentChainAnalysis if analysis_type == "student_chains" else HotQuestionAnalysis
+
+    rows = (await db.execute(
+        select(model)
+        .where(model.agent_id == agent_id, model.result.isnot(None))
+        .order_by(model.created_at.desc())
+        .limit(limit)
+    )).scalars().all()
+
+    trends = []
+    for r in rows:
+        result = r.result or {}
+        if isinstance(result, dict) and "result" in result:
+            result = result["result"]
+
+        item: Dict[str, Any] = {
+            "id": r.id,
+            "title": r.title,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        if analysis_type == "hot_questions":
+            themes = result.get("themes") or []
+            item.update({
+                "theme_count": max(len(themes), len(result.get("covered") or []), len(result.get("uncovered") or [])),
+                "question_count": sum((t.get("count", 0) for t in themes), 0) or None,
+                "burst_count": len(result.get("burst_points") or []),
+                "unique_students": sum((t.get("unique_students", 0) for t in themes), 0) or None,
+                "top_themes": [t.get("topic", "") for t in (themes or [])[:3]],
+                "teaching_suggestions_count": len(result.get("teaching_suggestions") or []),
+                "course_sequence_count": len(result.get("course_hotspot_sequence") or []),
+            })
+        else:
+            summary = result.get("student_chain_summary") or {}
+            chains = result.get("student_question_chains") or []
+            item.update({
+                "chain_count": summary.get("chain_count") or len(chains),
+                "question_count": summary.get("question_count"),
+                "unique_students": summary.get("unique_students"),
+                "teacher_anchor_count": summary.get("teacher_anchor_count"),
+                "dominant_question_type": summary.get("dominant_question_type"),
+            })
+        trends.append(item)
+
+    return {"success": True, "data": list(reversed(trends))}

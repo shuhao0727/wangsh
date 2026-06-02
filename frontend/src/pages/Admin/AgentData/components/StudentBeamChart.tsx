@@ -31,6 +31,7 @@ interface Props {
   burstPoints?: BurstPoint[];
   manualRange?: { startAt?: string; endAt?: string } | null;
   onRangeChange?: (selection: BeamRangeSelection) => void;
+  onStudentClick?: (studentName: string) => void;
 }
 
 const escapeHtml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -49,13 +50,14 @@ const relationOffset: Record<BeamRelationType, number> = {
 };
 
 const StudentBeamChart: React.FC<Props> = ({
-  height = 520, teacherAnchors = [], studentChains = [], burstPoints = [], manualRange, onRangeChange,
+  height = 520, teacherAnchors = [], studentChains = [], burstPoints = [], manualRange, onRangeChange, onStudentClick,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const onRangeChangeRef = useRef(onRangeChange);
   const emitRangeRef = useRef<((start?: number, end?: number, source?: BeamRangeSelection["source"]) => void) | null>(null);
   const isDark = useDocumentDarkMode();
+  const emittedInitialRef = useRef(false);
 
   const empty = useMemo(
     () => studentChains.every((chain) => chain.nodes.length === 0),
@@ -130,11 +132,13 @@ const StudentBeamChart: React.FC<Props> = ({
       if (!callback) return;
       const startAt = Number.isFinite(start) ? start : undefined;
       const endAt = Number.isFinite(end) ? end : undefined;
+      if (startAt === undefined || endAt === undefined) return;
+
       const inRange = enriched
-        .filter((item) => (startAt === undefined || item.time >= startAt) && (endAt === undefined || item.time <= endAt))
+        .filter((item) => item.time >= startAt && item.time <= endAt)
         .sort((a, b) => a.time - b.time);
       const rangeTeachers = teacherQuestions
-        .filter((teacher) => (startAt === undefined || teacher.time >= startAt) && (endAt === undefined || teacher.time <= endAt))
+        .filter((teacher) => teacher.time >= startAt && teacher.time <= endAt)
         .map((teacher) => ({
           id: teacher.id,
           time: new Date(teacher.time).toISOString(),
@@ -142,8 +146,8 @@ const StudentBeamChart: React.FC<Props> = ({
           label: teacher.label,
         }));
       callback({
-        startAt: startAt === undefined ? undefined : new Date(startAt).toISOString(),
-        endAt: endAt === undefined ? undefined : new Date(endAt).toISOString(),
+        startAt: new Date(startAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
         questions: inRange.map((item) => ({
           chainId: item.chainId,
           time: new Date(item.time).toISOString(),
@@ -345,10 +349,14 @@ const StudentBeamChart: React.FC<Props> = ({
       ],
     }, true);
 
-    emitRange(minTime, maxTime, "initial");
+    if (!emittedInitialRef.current) {
+      emitRange(minTime, maxTime, "initial");
+      emittedInitialRef.current = true;
+    }
 
     chartRef.current.off("datazoom");
     chartRef.current.on("datazoom", () => {
+      if (chartRef.current?.isDisposed?.()) return;
       const optionState = chartRef.current?.getOption() as any;
       const zoom = optionState?.dataZoom?.[0];
       const startValue = Number(zoom?.startValue);
@@ -379,11 +387,21 @@ const StudentBeamChart: React.FC<Props> = ({
       }
     });
 
+    if (onStudentClick) {
+      chartRef.current.off("click");
+      chartRef.current.on("click", (params: any) => {
+        if (params.seriesName && studentChains.some((c) => c.studentName === params.seriesName)) {
+          onStudentClick(params.seriesName);
+        }
+      });
+    }
+
     const resize = () => chartRef.current?.resize();
     window.addEventListener("resize", resize);
     return () => {
       window.removeEventListener("resize", resize);
       emitRangeRef.current = null;
+      emittedInitialRef.current = false;
       chartRef.current?.dispose();
       chartRef.current = null;
     };

@@ -657,6 +657,13 @@ const agentDataApi = {
     } catch (e: unknown) { return { data: null, success: false, message: errMsg(e, "删除失败") }; }
   },
 
+  getAnalysisTrends: async (agentId: number, analysisType: string, limit = 10): Promise<BaseResponse<unknown[]>> => {
+    try {
+      const res = await api.client.get("/ai-agents/analysis/trends", { params: { agent_id: agentId, analysis_type: analysisType, limit } });
+      return { data: res.data?.data || [], success: true, message: "ok" };
+    } catch (e: unknown) { return { data: [], success: false, message: errMsg(e, "加载失败") }; }
+  },
+
   listAnalysisPromptTemplates: async (analysisType: AgentAnalysisType): Promise<BaseResponse<unknown[]>> => {
     try {
       const res = await api.client.get("/ai-agents/analysis/prompt-templates", {
