@@ -246,7 +246,7 @@ case "${cmd}" in
     tmp_env="$(mktemp -t wangsh_env_XXXXXX)"
     trap 'rm -f "${tmp_env}"' EXIT
     sim_web_port="${SIM_WEB_PORT:-16608}"
-    sim_version="${SIM_VERSION:-1.5.16}"
+    sim_version="${SIM_VERSION:-1.5.17}"
     sim_image_prefix="${SIM_IMAGE_REPOSITORY_PREFIX:-shuhao07}"
     secret_key="$(rand)"
     fernet="$(fernet_key)"
