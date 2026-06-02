@@ -60,7 +60,7 @@ async def _legacy_create_all_and_stamp(conn) -> None:
     """空库初始化路径：创建当前 ORM schema，并标记为当前 Alembic head。"""
     await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, checkfirst=True))
     head = _find_alembic_head()
-    await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+    await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(64) NOT NULL)"))
     await conn.execute(text("DELETE FROM alembic_version"))
     await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head})
     print(f"Database schema created and stamped at Alembic head: {head}")

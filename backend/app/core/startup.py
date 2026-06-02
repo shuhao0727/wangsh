@@ -256,7 +256,7 @@ async def _sync_alembic_version(conn):
     ⚠️ 生产环境应始终使用 `alembic upgrade head`，不要依赖此函数。
     """
     try:
-        await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(64) NOT NULL)"))
         result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
         current = result.scalar_one_or_none()
         if not current:
