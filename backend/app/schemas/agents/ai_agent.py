@@ -380,6 +380,7 @@ class HotQuestionAnalysisSaveRequest(BaseModel):
     task_sheet: str
     agent_id: int = Field(..., ge=1, description="数据来源智能体ID")
     analysis_agent_id: Optional[int] = Field(None, ge=1, description="分析用智能体ID")
+    prompt_template_id: Optional[int] = Field(None, ge=1, description="分析提示词模板ID")
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     class_name: Optional[str] = None
@@ -424,6 +425,7 @@ class StudentChainAnalysisSaveRequest(BaseModel):
     title: str = Field("未命名分析", max_length=200)
     agent_id: int = Field(..., ge=1, description="数据来源智能体ID")
     analysis_agent_id: Optional[int] = Field(None, ge=1, description="分析用智能体ID")
+    prompt_template_id: Optional[int] = Field(None, ge=1, description="分析提示词模板ID")
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     class_name: Optional[str] = None

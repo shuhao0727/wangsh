@@ -10,7 +10,9 @@ export function useAnalysisDetail() {
   const [searchParams] = useSearchParams();
   const view = (searchParams.get("view") || "timeline") as "timeline" | "beam" | "wordcloud";
   const typeParam = searchParams.get("type");
-  const isBeamView = location.pathname.includes("/task-analysis/chains/") || view === "beam" || typeParam === "chains";
+  const isChainRoute = location.pathname.includes("/task-analysis/chains/");
+  const isHotRoute = location.pathname.includes("/task-analysis/hot/");
+  const isBeamView = isChainRoute || view === "beam" || typeParam === "chains";
   const isTimelineView = view === "timeline" && !isBeamView;
 
   const [loading, setLoading] = useState(true);
@@ -22,9 +24,9 @@ export function useAnalysisDetail() {
     let cancelled = false;
     setLoading(true);
 
-    const fetchers = typeParam === "chains"
+    const fetchers = typeParam === "chains" || isChainRoute
       ? [agentDataApi.getChainAnalysis, agentDataApi.getTaskAnalysis]
-      : typeParam === "hot"
+      : typeParam === "hot" || isHotRoute
         ? [agentDataApi.getHotAnalysis, agentDataApi.getTaskAnalysis]
         : isBeamView
           ? [agentDataApi.getTaskAnalysis, agentDataApi.getChainAnalysis]
@@ -48,7 +50,7 @@ export function useAnalysisDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [analysisId, isBeamView, typeParam]);
+  }, [analysisId, isBeamView, isChainRoute, isHotRoute, typeParam]);
 
   return { loading, detail, isBeamView, isTimelineView, view };
 }

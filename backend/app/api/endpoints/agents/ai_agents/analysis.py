@@ -386,6 +386,26 @@ def _chain_list_item(row: StudentChainAnalysis) -> Dict[str, Any]:
     }
 
 
+def _trend_top_themes(result: Dict[str, Any], limit: int = 5) -> List[str]:
+    labels: List[str] = []
+    for key in ("themes", "uncovered", "covered"):
+        items = result.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            label = (
+                item.get("topic")
+                or item.get("theme")
+                or item.get("name")
+                or item.get("word")
+            )
+            if label:
+                labels.append(str(label))
+    return labels[:limit]
+
+
 @router.get("/analysis/hot-questions/live", response_model=List[HotQuestionBucket])
 async def hot_questions(
     agent_id: int = Query(..., ge=1, description="智能体ID"),
@@ -1124,6 +1144,65 @@ async def student_chains(
         end_at=effective_end,
         limit_sessions=limit_sessions,
     )
+
+
+@router.get("/analysis/trends")
+async def get_analysis_trends(
+    agent_id: int = Query(..., ge=1, description="数据来源智能体ID"),
+    analysis_type: str = Query(..., description="hot_questions 或 student_chains"),
+    limit: int = Query(10, ge=2, le=50, description="返回最近分析次数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    if analysis_type not in {"hot_questions", "student_chains"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="analysis_type 仅支持 hot_questions 或 student_chains",
+        )
+
+    model = HotQuestionAnalysis if analysis_type == "hot_questions" else StudentChainAnalysis
+    result = await db.execute(
+        select(model)
+        .where(model.agent_id == agent_id)
+        .order_by(model.created_at.desc())
+        .limit(limit)
+    )
+    rows = list(reversed(result.scalars().all()))
+    items: List[Dict[str, Any]] = []
+    for row in rows:
+        data = row.result or {}
+        if analysis_type == "hot_questions":
+            stats = summarize_hot_list_item(data)
+            items.append({
+                "id": row.id,
+                "title": row.title,
+                "created_at": row.created_at,
+                "theme_count": stats.get("theme_count", 0),
+                "question_count": stats.get("question_count", 0),
+                "burst_count": stats.get("burst_count", 0),
+                "unique_students": int(
+                    (data.get("summary") or {}).get("unique_students") or 0
+                ),
+                "teacher_anchor_count": stats.get("teacher_anchor_count", 0),
+                "top_themes": _trend_top_themes(data),
+                "teaching_suggestions_count": len(data.get("teaching_suggestions") or []),
+            })
+        else:
+            stats = summarize_chain_list_item(data)
+            items.append({
+                "id": row.id,
+                "title": row.title,
+                "created_at": row.created_at,
+                "chain_count": stats.get("chain_count", 0),
+                "question_count": stats.get("question_count", 0),
+                "unique_students": int(
+                    (data.get("student_chain_summary") or {}).get("unique_students") or 0
+                ),
+                "teacher_anchor_count": stats.get("teacher_anchor_count", 0),
+                "ai_chain_node_count": stats.get("ai_chain_node_count", 0),
+                "top_themes": _trend_top_themes(data),
+            })
+    return {"data": items}
 
 
 # ── 热点问题分析 CRUD ──

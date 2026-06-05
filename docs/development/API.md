@@ -135,6 +135,7 @@
 | GET | `/ai-agents/analysis/student-chains/{analysis_id}` | 学生问题链分析详情 | 管理员 |
 | POST | `/ai-agents/analysis/student-chains/stream` | 创建学生问题链深度分析（SSE） | 管理员 |
 | DELETE | `/ai-agents/analysis/student-chains/{analysis_id}` | 删除学生问题链分析记录 | 管理员 |
+| GET | `/ai-agents/analysis/trends` | 最近分析趋势汇总 | 管理员 |
 | GET | `/ai-agents/analysis/prompt-templates` | 分析提示词模板列表 | 管理员 |
 | POST | `/ai-agents/analysis/prompt-templates` | 创建分析提示词模板 | 管理员 |
 | PUT | `/ai-agents/analysis/prompt-templates/{template_id}` | 更新分析提示词模板 | 管理员 |
@@ -154,7 +155,7 @@
 - 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（`user_id` 可省略，传入也会被忽略），并以服务端接收时间作为记录时间（忽略客户端 `used_at`），用于防止伪造归属和客户端时钟错误。
 - 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
 - 热点问题与学生问题链已拆分为两个深度分析流。热点结果使用 `analysis_version=hot_v2`，包含 `word_cloud`、`themes`、`timeline_buckets`、`teacher_questions`、`course_hotspot_sequence` 和 `evidence_index`。学生问题链结果使用 `analysis_version=chain_v2`，包含 `teacher_mainline`、`ai_main_question_chain`、`student_question_chains`、`beam_nodes`、`beam_edges`、`lanes` 和 `evidence_index`。
-- `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
+- `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
 - 小组讨论班级归属策略：
   - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
   - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。
