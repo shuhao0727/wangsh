@@ -304,6 +304,7 @@ EOF
     BASE_URL="http://localhost:${sim_web_port}/api/v1" \
       ADMIN_USERNAME="admin" \
       ADMIN_PASSWORD="${admin_password}" \
+      USE_BEARER="true" \
       python3 backend/scripts/smoke_typst_pipeline.py
 
     echo "ok"

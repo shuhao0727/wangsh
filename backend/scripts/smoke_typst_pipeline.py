@@ -115,7 +115,7 @@ def main() -> int:
     admin_username = os.environ.get("ADMIN_USERNAME", "admin")
     admin_password = os.environ.get("ADMIN_PASSWORD", "")
     note_id_env = os.environ.get("NOTE_ID")
-    use_bearer = os.environ.get("USE_BEARER", "").strip().lower() in {"1", "true", "yes"}
+    use_bearer = os.environ.get("USE_BEARER", "true").strip().lower() not in {"0", "false", "no"}
 
     global _OPENER
     _OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()), urllib.request.ProxyHandler({}))
