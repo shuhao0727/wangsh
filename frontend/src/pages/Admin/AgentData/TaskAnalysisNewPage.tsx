@@ -32,6 +32,10 @@ const TaskAnalysisNewPage: React.FC = () => {
   const analysisType: AnalysisType = searchParams.get("type") === "chains" ? "chains" : "hot";
   const isChain = analysisType === "chains";
   const backendAnalysisType = isChain ? "student_chains" : "hot_questions";
+  const analysisAgentLabel = isChain ? "光束图认知路径智能体" : "热点问题诊断智能体";
+  const analysisAgentHelp = isChain
+    ? "调用 API 生成学生轨迹、教师提问效果和分层干预方案"
+    : "调用 API 生成主题根因、任务单盲区和可执行教学建议";
   const [agents, setAgents] = useState<AIAgent[]>(_cache || []);
   useEffect(() => {
     if (_cache && Date.now() - _cacheAt < 60_000) { setAgents(_cache); return; }
@@ -119,10 +123,12 @@ const TaskAnalysisNewPage: React.FC = () => {
   };
 
   useEffect(() => { if (agentId || agentOptions.length === 0) return; setAgentId(agentOptions[0].value); }, [agentOptions, agentId]);
+  useEffect(() => { if (analysisAgentId || agentOptions.length === 0) return; setAnalysisAgentId(agentOptions[0].value); }, [agentOptions, analysisAgentId]);
 
   const handleSave = async () => {
     if (!isChain && !taskSheet.trim()) { showMessage.warning("请输入任务单内容"); return; }
-    if (!agentId) { showMessage.warning("请选择智能体"); return; }
+    if (!agentId) { showMessage.warning("请选择数据来源智能体"); return; }
+    if (!analysisAgentId) { showMessage.warning(`请选择${analysisAgentLabel}`); return; }
     setSaving(true);
     setProgress(0);
     setProgressSteps(["开始任务分析..."]);
@@ -159,6 +165,10 @@ const TaskAnalysisNewPage: React.FC = () => {
             const value = payload.result as any;
             if (value.chain_count !== undefined) {
               setPartialResults((prev) => [...prev, `已生成 ${value.chain_count} 条学生问题链，${value.teacher_anchor_count || 0} 个教师锚点`]);
+            } else if (value.executive_summary) {
+              setPartialResults((prev) => [...prev, `认知路径智能体摘要：${value.executive_summary}`]);
+            } else if (value.analysis_agent_status === "skipped") {
+              setPartialResults((prev) => [...prev, "认知路径智能体未完成调用，将保存基础结构化结果"]);
             }
           }
         },
@@ -179,6 +189,10 @@ const TaskAnalysisNewPage: React.FC = () => {
             const value = payload.result as any;
             if (value.theme_count !== undefined) {
               setPartialResults((prev) => [...prev, `已生成 ${value.theme_count} 个热点主题，${value.teacher_anchor_count || 0} 个教师锚点`]);
+            } else if (value.executive_summary) {
+              setPartialResults((prev) => [...prev, `热点诊断智能体摘要：${value.executive_summary}`]);
+            } else if (value.analysis_agent_status === "skipped") {
+              setPartialResults((prev) => [...prev, "热点诊断智能体未完成调用，将保存基础结构化结果"]);
             }
           }
         },
@@ -370,7 +384,7 @@ const TaskAnalysisNewPage: React.FC = () => {
               <h2 className="text-base font-semibold text-text-base mb-5">分析配置</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-text-secondary">分析对象（智能体）</label>
+                  <label className="text-xs font-medium text-text-secondary">数据来源智能体（学生对话）</label>
                   <Select value={agentId||"__empty__"} onValueChange={(v)=>setAgentId(v==="__empty__"?"":v)}>
                     <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择智能体" /></SelectTrigger>
                     <SelectContent>
@@ -383,16 +397,18 @@ const TaskAnalysisNewPage: React.FC = () => {
                       <button className="ml-1 text-primary hover:underline" onClick={()=>{if(recentActivity.firstAt)setStartDate(dayjs(recentActivity.firstAt).format("YYYY-MM-DD"));if(recentActivity.lastAt)setEndDate(dayjs(recentActivity.lastAt).format("YYYY-MM-DD"))}}>填充</button>
                     </div>
                   )}
+                  <p className="mt-1 text-[11px] leading-relaxed text-text-tertiary">只负责读取该智能体下的课堂对话和学生提问记录。</p>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-text-secondary">分析用智能体</label>
+                  <label className="text-xs font-medium text-text-secondary">{analysisAgentLabel}</label>
                   <Select value={analysisAgentId||"__empty__"} onValueChange={v=>setAnalysisAgentId(v==="__empty__"?"":v)}>
-                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选能力强的模型" /></SelectTrigger>
+                    <SelectTrigger className="mt-1.5 h-9"><SelectValue placeholder="选择带 API Key 的智能体" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__empty__">请选择</SelectItem>
                       {agentOptions.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="mt-1 text-[11px] leading-relaxed text-text-tertiary">{analysisAgentHelp}。</p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">开始日期</label>
@@ -440,7 +456,7 @@ const TaskAnalysisNewPage: React.FC = () => {
 
           {/* CTA */}
           <div className="mt-8 flex justify-center">
-            <Button size="lg" className="h-12 px-10 text-base shadow-lg shadow-primary/20" onClick={handleSave} disabled={saving||(!isChain&&!taskSheet.trim())||!agentId}>
+            <Button size="lg" className="h-12 px-10 text-base shadow-lg shadow-primary/20" onClick={handleSave} disabled={saving||(!isChain&&!taskSheet.trim())||!agentId||!analysisAgentId}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
               {saving ? "正在分析..." : isChain ? "开始问题链分析" : "开始热点分析"}
             </Button>

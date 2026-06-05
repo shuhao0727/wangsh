@@ -40,13 +40,15 @@ from app.services.agents import (
     summarize_hot_list_item,
     summarize_chain_list_item,
 )
+from app.services.agents.hot_agent import deep_analyze_hot_questions
+from app.services.agents.chain_agent import deep_analyze_student_chains
 from app.services.agents.providers.common import resolve_credentials
 
 router = APIRouter()
 
 
 def _sse(event: str, payload: Dict[str, Any]) -> bytes:
-    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n".encode("utf-8")
 
 
 def _analysis_window(start_at: Optional[datetime], end_at: Optional[datetime]) -> tuple[datetime, datetime]:
@@ -54,6 +56,45 @@ def _analysis_window(start_at: Optional[datetime], end_at: Optional[datetime]) -
     effective_end = end_at or now
     effective_start = start_at or (effective_end - timedelta(hours=1))
     return effective_start, effective_end
+
+
+def _serialize_teacher_marks(marks: Optional[List[Any]]) -> List[Dict[str, Any]]:
+    """Convert Pydantic teacher marks into JSON-safe payloads for JSON columns/SSE."""
+    serialized: List[Dict[str, Any]] = []
+    for mark in marks or []:
+        if hasattr(mark, "model_dump"):
+            item = mark.model_dump(mode="json")
+        elif isinstance(mark, dict):
+            item = dict(mark)
+            value = item.get("time")
+            if isinstance(value, datetime):
+                item["time"] = value.isoformat()
+        else:
+            continue
+        serialized.append(item)
+    return serialized
+
+
+def _task_analysis_payload(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "title": row.title,
+        "task_sheet": getattr(row, "task_sheet", None) or "",
+        "agent_id": row.agent_id,
+        "class_name": row.class_name,
+        "start_at": row.start_at,
+        "end_at": row.end_at,
+        "result": row.result or {},
+        "created_at": row.created_at,
+    }
+
+
+async def _find_task_analysis_compatible(db: AsyncSession, analysis_id: int) -> Any:
+    for model in (TaskAnalysisModel, HotQuestionAnalysis, StudentChainAnalysis):
+        row = (await db.execute(select(model).where(model.id == analysis_id))).scalar_one_or_none()
+        if row:
+            return row
+    return None
 
 
 async def _resolve_prompt_text(
@@ -75,6 +116,247 @@ async def _resolve_prompt_text(
         )
     ).scalar_one_or_none()
     return template.content if template else None
+
+
+def _agent_public_payload(
+    agent: Optional[AIAgent],
+    *,
+    role: str,
+    enabled: bool,
+    status_text: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "id": agent.id if agent else None,
+        "name": agent.name if agent else None,
+        "model_name": agent.model_name if agent else None,
+        "agent_type": agent.agent_type if agent else None,
+        "role": role,
+        "enabled": enabled,
+        "status": status_text,
+    }
+    if reason:
+        payload["reason"] = reason
+    return payload
+
+
+async def _resolve_analysis_agent_credentials(
+    db: AsyncSession,
+    *,
+    analysis_agent_id: Optional[int],
+    role: str,
+) -> Dict[str, Any]:
+    if not analysis_agent_id:
+        reason = "未选择分析诊断智能体，本次仅生成基础结构化分析"
+        return {
+            "enabled": False,
+            "reason": reason,
+            "public": _agent_public_payload(None, role=role, enabled=False, status_text="skipped", reason=reason),
+        }
+
+    agent = (
+        await db.execute(
+            select(AIAgent).where(
+                AIAgent.id == analysis_agent_id,
+                AIAgent.is_deleted == False,
+            )
+        )
+    ).scalar_one_or_none()
+    if not agent:
+        reason = "所选分析诊断智能体不存在或已删除"
+        return {
+            "enabled": False,
+            "reason": reason,
+            "public": _agent_public_payload(None, role=role, enabled=False, status_text="missing", reason=reason),
+        }
+    if not agent.is_active:
+        reason = "所选分析诊断智能体未启用"
+        return {
+            "enabled": False,
+            "reason": reason,
+            "public": _agent_public_payload(agent, role=role, enabled=False, status_text="inactive", reason=reason),
+        }
+
+    api_endpoint, api_key = resolve_credentials(agent)
+    if not api_endpoint:
+        reason = "分析诊断智能体未配置 API Endpoint"
+        return {
+            "enabled": False,
+            "reason": reason,
+            "public": _agent_public_payload(agent, role=role, enabled=False, status_text="missing_endpoint", reason=reason),
+        }
+    if not api_key:
+        reason = "分析诊断智能体未配置 API Key"
+        return {
+            "enabled": False,
+            "reason": reason,
+            "public": _agent_public_payload(agent, role=role, enabled=False, status_text="missing_api_key", reason=reason),
+        }
+
+    return {
+        "enabled": True,
+        "api_endpoint": api_endpoint,
+        "api_key": api_key,
+        "agent_type": agent.agent_type,
+        "agent_model": agent.model_name or "",
+        "public": _agent_public_payload(agent, role=role, enabled=True, status_text="ready"),
+    }
+
+
+def _compact_teacher_questions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": item.get("id"),
+            "time": item.get("time"),
+            "question": item.get("question"),
+            "source": item.get("source"),
+            "user_name": item.get("user_name"),
+        }
+        for item in items[:30]
+        if item.get("question")
+    ]
+
+
+def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+    summary = analysis_result.get("summary") or {}
+    filters = analysis_result.get("filters") or {}
+    themes = analysis_result.get("themes") if isinstance(analysis_result.get("themes"), list) else []
+    student_events = (
+        analysis_result.get("student_question_events")
+        if isinstance(analysis_result.get("student_question_events"), list)
+        else []
+    )
+    classes = sorted({str(item.get("class_name")) for item in student_events if item.get("class_name")})
+
+    student_questions = []
+    noise_questions = []
+    for item in student_events:
+        question = str(item.get("content") or "").strip()
+        if not question:
+            continue
+        compact = {
+            "student_name": item.get("user_name") or "未知学生",
+            "student_id": item.get("student_id"),
+            "class_name": item.get("class_name"),
+            "time": item.get("created_at"),
+            "question": question,
+            "question_type": item.get("question_type"),
+            "question_type_label": item.get("question_type_label"),
+            "bloom_level": item.get("bloom_level"),
+            "terms": item.get("terms") or [],
+            "theme": item.get("theme"),
+            "teacher_anchor_question": item.get("teacher_anchor_question"),
+            "evidence_id": item.get("message_id"),
+        }
+        student_questions.append(compact)
+        if item.get("question_type") == "off_track":
+            noise_questions.append(compact)
+
+    return {
+        "meta": {
+            "analysis_version": analysis_result.get("analysis_version"),
+            "analysis_type": analysis_result.get("analysis_type"),
+            "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
+            "total_questions": summary.get("question_count", len(student_questions)),
+            "unique_students": summary.get("unique_students"),
+            "teacher_anchor_count": summary.get("teacher_anchor_count"),
+            "theme_count": summary.get("theme_count", len(themes)),
+            "burst_count": summary.get("burst_count"),
+            "classes": classes,
+            "class_name": filters.get("class_name"),
+            "bucket_seconds": filters.get("bucket_seconds"),
+        },
+        "task_sheet": analysis_result.get("task_sheet") or "",
+        "topic_distribution": {
+            str(theme.get("topic") or f"主题{index + 1}"): int(theme.get("count") or 0)
+            for index, theme in enumerate(themes)
+        },
+        "student_questions": student_questions,
+        "noise_questions": noise_questions,
+        "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_questions") or []),
+        "timeline_buckets": (analysis_result.get("timeline_buckets") or [])[:40],
+        "course_hotspot_sequence": (analysis_result.get("course_hotspot_sequence") or [])[:20],
+    }
+
+
+def _prepare_chain_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+    summary = analysis_result.get("student_chain_summary") or {}
+    filters = analysis_result.get("filters") or {}
+    raw_chains = (
+        analysis_result.get("student_question_chains")
+        if isinstance(analysis_result.get("student_question_chains"), list)
+        else []
+    )
+    classes = sorted({str(chain.get("class_name")) for chain in raw_chains if chain.get("class_name")})
+
+    student_chains = []
+    for chain in raw_chains:
+        nodes = chain.get("nodes") if isinstance(chain.get("nodes"), list) else []
+        student_chains.append(
+            {
+                "session_id": chain.get("session_id"),
+                "student_name": chain.get("student_name") or "未知学生",
+                "student_id": chain.get("student_id"),
+                "class_name": chain.get("class_name"),
+                "question_count": chain.get("question_count") or len(nodes),
+                "summary": chain.get("summary"),
+                "questions": [
+                    {
+                        "node_id": node.get("node_id"),
+                        "time": node.get("time"),
+                        "question": node.get("question"),
+                        "question_type": node.get("question_type"),
+                        "question_type_label": node.get("question_type_label"),
+                        "bloom_level": node.get("bloom_level"),
+                        "teacher_anchor_id": node.get("teacher_anchor_id"),
+                        "teacher_anchor_question": node.get("teacher_anchor_question"),
+                        "evidence_ids": node.get("evidence_ids") or [],
+                    }
+                    for node in nodes
+                    if node.get("question")
+                ],
+            }
+        )
+
+    return {
+        "meta": {
+            "analysis_version": analysis_result.get("analysis_version"),
+            "analysis_type": analysis_result.get("analysis_type"),
+            "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
+            "total_questions": summary.get("question_count"),
+            "unique_students": summary.get("unique_students"),
+            "teacher_anchor_count": summary.get("teacher_anchor_count"),
+            "chain_count": summary.get("chain_count", len(student_chains)),
+            "ai_chain_node_count": summary.get("ai_chain_node_count"),
+            "dominant_question_type": summary.get("dominant_question_type"),
+            "classes": classes,
+            "class_name": filters.get("class_name"),
+        },
+        "task_sheet": analysis_result.get("task_sheet") or "",
+        "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_mainline") or []),
+        "student_chains": student_chains,
+        "themes": analysis_result.get("themes") or [],
+        "ai_main_question_chain": analysis_result.get("ai_main_question_chain") or [],
+        "unresolved_questions": (analysis_result.get("unresolved_questions") or [])[:30],
+    }
+
+
+def _hot_deep_analysis_has_content(result: Dict[str, Any]) -> bool:
+    return bool(
+        result.get("executive_summary")
+        or result.get("theme_analysis")
+        or result.get("timeline_phases")
+        or result.get("teaching_suggestions")
+    )
+
+
+def _chain_deep_analysis_has_content(result: Dict[str, Any]) -> bool:
+    return bool(
+        result.get("executive_summary")
+        or result.get("cognitive_trajectories")
+        or result.get("intervention_plan")
+        or result.get("teacher_question_evaluations")
+    )
 
 
 def _hot_list_item(row: HotQuestionAnalysis) -> Dict[str, Any]:
@@ -165,6 +447,8 @@ async def task_analysis(
         api_key=api_key,
         agent_type=agent_type,
         agent_model=agent_model,
+        bucket_seconds=body.bucket_seconds,
+        teacher_marks=_serialize_teacher_marks(body.teacher_marks),
     )
 
 
@@ -316,7 +600,7 @@ async def save_hot_question_analysis_stream(
                 class_name=body.class_name,
                 task_sheet=body.task_sheet,
                 bucket_seconds=body.bucket_seconds,
-                teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                 custom_prompt=prompt_text,
             )
             yield _sse(
@@ -332,6 +616,72 @@ async def save_hot_question_analysis_stream(
                     },
                 },
             )
+            yield _sse(
+                "step_started",
+                {
+                    "step_id": "pedagogy_agent",
+                    "message": "正在调用热点问题教学诊断智能体",
+                    "progress": 88,
+                },
+            )
+            analysis_agent = await _resolve_analysis_agent_credentials(
+                db,
+                analysis_agent_id=body.analysis_agent_id,
+                role="hotspot_pedagogy_diagnosis",
+            )
+            analysis_result["analysis_agent"] = analysis_agent["public"]
+            if analysis_agent.get("enabled"):
+                deep_result = await deep_analyze_hot_questions(
+                    _prepare_hot_deep_analysis_input(analysis_result),
+                    custom_prompt=prompt_text,
+                    api_endpoint=analysis_agent["api_endpoint"],
+                    api_key=analysis_agent["api_key"],
+                    agent_type=analysis_agent["agent_type"],
+                    agent_model=analysis_agent["agent_model"],
+                )
+                has_content = _hot_deep_analysis_has_content(deep_result)
+                status_text = "completed" if has_content else "empty"
+                reason = None if has_content else "分析诊断智能体未返回可解析的教学诊断 JSON"
+                analysis_result["deep_analysis"] = deep_result
+                analysis_result["deep_analysis_status"] = {
+                    "enabled": True,
+                    "status": status_text,
+                    "reason": reason,
+                }
+                analysis_result["analysis_agent"] = {
+                    **analysis_agent["public"],
+                    "status": status_text,
+                    **({"reason": reason} if reason else {}),
+                }
+                yield _sse(
+                    "partial_result",
+                    {
+                        "step_id": "pedagogy_agent",
+                        "message": "热点问题教学诊断已生成" if has_content else "热点问题教学诊断未返回有效内容",
+                        "progress": 93,
+                        "result": {
+                            "executive_summary": deep_result.get("executive_summary"),
+                            "theme_analysis_count": len(deep_result.get("theme_analysis") or []),
+                            "teaching_suggestions_count": len(deep_result.get("teaching_suggestions") or []),
+                            "analysis_agent_status": status_text,
+                        },
+                    },
+                )
+            else:
+                analysis_result["deep_analysis_status"] = {
+                    "enabled": False,
+                    "status": "skipped",
+                    "reason": analysis_agent.get("reason"),
+                }
+                yield _sse(
+                    "partial_result",
+                    {
+                        "step_id": "pedagogy_agent",
+                        "message": analysis_agent.get("reason") or "未启用热点问题教学诊断智能体",
+                        "progress": 90,
+                        "result": {"analysis_agent_status": "skipped"},
+                    },
+                )
             record = HotQuestionAnalysis(
                 title=body.title,
                 task_sheet=body.task_sheet,
@@ -341,7 +691,7 @@ async def save_hot_question_analysis_stream(
                 start_at=effective_start,
                 end_at=effective_end,
                 bucket_seconds=body.bucket_seconds,
-                teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                 custom_prompt=prompt_text,
                 result=analysis_result,
                 created_by=current_user.get("id"),
@@ -395,7 +745,7 @@ async def save_student_chain_analysis_stream(
                 end_at=effective_end,
                 class_name=body.class_name,
                 task_sheet=body.task_sheet,
-                teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                 custom_prompt=prompt_text,
             )
             summary = analysis_result.get("student_chain_summary") or {}
@@ -412,6 +762,72 @@ async def save_student_chain_analysis_stream(
                     },
                 },
             )
+            yield _sse(
+                "step_started",
+                {
+                    "step_id": "cognitive_agent",
+                    "message": "正在调用光束图认知路径智能体",
+                    "progress": 88,
+                },
+            )
+            analysis_agent = await _resolve_analysis_agent_credentials(
+                db,
+                analysis_agent_id=body.analysis_agent_id,
+                role="beam_cognitive_path_diagnosis",
+            )
+            analysis_result["analysis_agent"] = analysis_agent["public"]
+            if analysis_agent.get("enabled"):
+                deep_result = await deep_analyze_student_chains(
+                    _prepare_chain_deep_analysis_input(analysis_result),
+                    custom_prompt=prompt_text,
+                    api_endpoint=analysis_agent["api_endpoint"],
+                    api_key=analysis_agent["api_key"],
+                    agent_type=analysis_agent["agent_type"],
+                    agent_model=analysis_agent["agent_model"],
+                )
+                has_content = _chain_deep_analysis_has_content(deep_result)
+                status_text = "completed" if has_content else "empty"
+                reason = None if has_content else "分析诊断智能体未返回可解析的认知诊断 JSON"
+                analysis_result["deep_analysis"] = deep_result
+                analysis_result["deep_analysis_status"] = {
+                    "enabled": True,
+                    "status": status_text,
+                    "reason": reason,
+                }
+                analysis_result["analysis_agent"] = {
+                    **analysis_agent["public"],
+                    "status": status_text,
+                    **({"reason": reason} if reason else {}),
+                }
+                yield _sse(
+                    "partial_result",
+                    {
+                        "step_id": "cognitive_agent",
+                        "message": "光束图认知路径诊断已生成" if has_content else "光束图认知路径诊断未返回有效内容",
+                        "progress": 93,
+                        "result": {
+                            "executive_summary": deep_result.get("executive_summary"),
+                            "trajectory_count": len(deep_result.get("cognitive_trajectories") or []),
+                            "teacher_question_evaluation_count": len(deep_result.get("teacher_question_evaluations") or []),
+                            "analysis_agent_status": status_text,
+                        },
+                    },
+                )
+            else:
+                analysis_result["deep_analysis_status"] = {
+                    "enabled": False,
+                    "status": "skipped",
+                    "reason": analysis_agent.get("reason"),
+                }
+                yield _sse(
+                    "partial_result",
+                    {
+                        "step_id": "cognitive_agent",
+                        "message": analysis_agent.get("reason") or "未启用光束图认知路径智能体",
+                        "progress": 90,
+                        "result": {"analysis_agent_status": "skipped"},
+                    },
+                )
             record = StudentChainAnalysis(
                 title=body.title,
                 task_sheet=body.task_sheet or None,
@@ -503,7 +919,7 @@ async def save_task_analysis_stream(
                 agent_type=agent_type,
                 agent_model=agent_model,
                 bucket_seconds=body.bucket_seconds,
-                teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                 custom_prompt=body.custom_prompt,
             ):
                 event = str(item.pop("event", "progress"))
@@ -527,14 +943,11 @@ async def save_task_analysis_stream(
                     start_at=effective_start,
                     end_at=effective_end,
                     bucket_seconds=body.bucket_seconds,
-                    teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+                    teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                     custom_prompt=body.custom_prompt,
                     result=analysis_result,
                     created_by=current_user.get("id"),
                 )
-                db.add(record)
-                await db.commit()
-                await db.refresh(record)
             else:
                 record = StudentChainAnalysis(
                     title=body.title,
@@ -547,9 +960,6 @@ async def save_task_analysis_stream(
                     result=analysis_result,
                     created_by=current_user.get("id"),
                 )
-                db.add(record)
-                await db.commit()
-                await db.refresh(record)
 
             # 兼容写入旧表
             legacy = TaskAnalysisModel(
@@ -562,15 +972,18 @@ async def save_task_analysis_stream(
                 result=analysis_result,
                 created_by=current_user.get("id"),
             )
+            db.add(record)
             db.add(legacy)
             await db.commit()
+            await db.refresh(record)
             await db.refresh(legacy)
             yield _sse(
                 "saved",
                 {
                     "message": "分析完成，已保存结果",
                     "progress": 100,
-                    "id": record.id,
+                    "id": legacy.id,
+                    "analysis_record_id": record.id,
                     "result": analysis_result,
                 },
             )
@@ -596,10 +1009,10 @@ async def get_task_analysis(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    row = (await db.execute(select(TaskAnalysisModel).where(TaskAnalysisModel.id == analysis_id))).scalar_one_or_none()
+    row = await _find_task_analysis_compatible(db, analysis_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
-    return row
+    return _task_analysis_payload(row)
 
 
 @router.post("/analysis/task-analyses", response_model=TaskAnalysisRecord)
@@ -614,8 +1027,9 @@ async def save_task_analysis(
     now = datetime.now(timezone.utc)
     effective_end = body.end_at or now
     effective_start = body.start_at or (effective_end - timedelta(hours=1))
+    llm_agent_id = body.analysis_agent_id or body.agent_id
     result_data = await db.execute(
-        select(AIAgent).where(AIAgent.id == body.agent_id, AIAgent.is_deleted == False)
+        select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
     )
     agent = result_data.scalar_one_or_none()
     api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
@@ -630,6 +1044,9 @@ async def save_task_analysis(
         class_name=body.class_name,
         api_endpoint=api_endpoint, api_key=api_key, agent_type=agent_type,
         agent_model=agent_model,
+        bucket_seconds=body.bucket_seconds,
+        teacher_marks=_serialize_teacher_marks(body.teacher_marks),
+        custom_prompt=body.custom_prompt,
     )
 
     is_hot = bool(body.task_sheet) and body.bucket_seconds > 0
@@ -639,7 +1056,7 @@ async def save_task_analysis(
             agent_id=body.agent_id, analysis_agent_id=body.analysis_agent_id,
             class_name=body.class_name, start_at=effective_start, end_at=effective_end,
             bucket_seconds=body.bucket_seconds,
-            teacher_marks=[m.model_dump() for m in body.teacher_marks] if body.teacher_marks else [],
+            teacher_marks=_serialize_teacher_marks(body.teacher_marks),
             custom_prompt=body.custom_prompt,
             result=analysis_result, created_by=current_user.get("id"),
         )
@@ -650,10 +1067,22 @@ async def save_task_analysis(
             class_name=body.class_name, start_at=effective_start, end_at=effective_end,
             result=analysis_result, created_by=current_user.get("id"),
         )
+    legacy = TaskAnalysisModel(
+        title=body.title,
+        task_sheet=body.task_sheet,
+        agent_id=body.agent_id,
+        class_name=body.class_name,
+        start_at=effective_start,
+        end_at=effective_end,
+        result=analysis_result,
+        created_by=current_user.get("id"),
+    )
     db.add(record)
+    db.add(legacy)
     await db.commit()
     await db.refresh(record)
-    return record
+    await db.refresh(legacy)
+    return legacy
 
 
 @router.delete("/analysis/task-analyses/{analysis_id}")
@@ -662,7 +1091,7 @@ async def delete_task_analysis(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    row = (await db.execute(select(TaskAnalysisModel).where(TaskAnalysisModel.id == analysis_id))).scalar_one_or_none()
+    row = await _find_task_analysis_compatible(db, analysis_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
     await db.delete(row)

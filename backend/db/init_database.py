@@ -366,11 +366,7 @@ class SimpleDatabaseInitializer:
             
             # 显示系统信息
             if users_count > 0:
-                print("\n📋 系统登录信息:")
-                print("    - 超级管理员: admin / wangshuhao0727")
-                print("    - 管理员: admin2 / admin123456")
-                print("    - 学生1: 张解决 / 202300033")
-                print("    - 学生2: 王五 / 20220002")
+                print("\n📋 系统登录信息已初始化。账号与初始密码请以环境变量或安全的初始化数据为准。")
             
             return True
             
@@ -481,8 +477,8 @@ def main() -> None:
                        help="数据库端口（默认: 5432）")
     parser.add_argument("--user", default="admin",
                        help="数据库用户（默认: admin）")
-    parser.add_argument("--password", default="wangshuhao0727",
-                       help="数据库密码（默认: wangshuhao0727）")
+    parser.add_argument("--password", default=None,
+                       help="数据库密码（默认读取 POSTGRES_PASSWORD 环境变量）")
     parser.add_argument("--database", default="wangsh_db",
                        help="数据库名称（默认: wangsh_db）")
     

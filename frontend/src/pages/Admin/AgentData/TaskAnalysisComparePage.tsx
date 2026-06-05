@@ -35,6 +35,7 @@ const BLOOM_KEYS = ["记忆", "理解", "应用", "分析", "评价", "创造"];
 const TaskAnalysisComparePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const ids = useMemo(() => (searchParams.get("ids") || "").split(",").map(Number).filter(Boolean), [searchParams]);
+  const analysisType = searchParams.get("type");
   const [records, setRecords] = useState<NormalizedAnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,12 +44,18 @@ const TaskAnalysisComparePage: React.FC = () => {
 
   useEffect(() => {
     if (ids.length < 2) { setLoading(false); return; }
-    Promise.all(ids.map((id) => agentDataApi.getTaskAnalysis(id)))
+    const fetcher = analysisType === "chains"
+      ? agentDataApi.getChainAnalysis
+      : analysisType === "hot"
+        ? agentDataApi.getHotAnalysis
+        : agentDataApi.getTaskAnalysis;
+    setLoading(true);
+    Promise.all(ids.map((id) => fetcher(id)))
       .then((results) => {
         setRecords(results.filter((r: any) => r.success).map((r: any, index: number) => normalizeRecord(r.data as AnalysisRecord, index)));
       })
       .finally(() => setLoading(false));
-  }, [ids]);
+  }, [ids, analysisType]);
 
   // Bloom 对比图
   useEffect(() => {

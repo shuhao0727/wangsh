@@ -191,7 +191,7 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
         </div>
         {selectedIds.size >= 2 && (
           <Button size="sm" variant="outline" className="text-primary border-primary"
-            onClick={() => window.open(`/task-analysis/compare?ids=${[...selectedIds].join(",")}`, "_blank")}>
+            onClick={() => window.open(`/task-analysis/compare?type=${isChain ? "chains" : "hot"}&ids=${[...selectedIds].join(",")}`, "_blank")}>
             <GitCompare className="h-4 w-4 mr-1" />对比分析 ({selectedIds.size})
           </Button>
         )}

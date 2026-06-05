@@ -26,6 +26,22 @@ _STOP_WORDS = set(
 )
 
 
+def _timestamp_value(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if hasattr(value, "timestamp"):
+        return value.timestamp()
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_timeline_buckets(
     rows: List[Dict[str, Any]],
     bucket_seconds: int,
@@ -52,9 +68,9 @@ def _build_timeline_buckets(
 
     for r in rows:
         created = r.get("created_at")
-        if not created:
+        ts = _timestamp_value(created)
+        if ts is None:
             continue
-        ts = created.timestamp() if hasattr(created, "timestamp") else float(created)
         bucket_key = floor((ts - start_epoch) / bucket_seconds) * bucket_seconds + start_epoch
         if bucket_key not in buckets_map:
             buckets_map[bucket_key] = []
@@ -93,9 +109,9 @@ def _build_timeline_buckets(
         if teacher_marks:
             for tm in teacher_marks:
                 tm_time = tm.get("time")
-                if not tm_time:
+                tm_ts = _timestamp_value(tm_time)
+                if tm_ts is None:
                     continue
-                tm_ts = tm_time.timestamp() if hasattr(tm_time, "timestamp") else float(tm_time)
                 # 如果教师标记在该桶之前 5 分钟内
                 if bk - 300 <= tm_ts <= bk + bucket_seconds:
                     near_teacher_mark = tm.get("question", "")
@@ -143,7 +159,13 @@ def _segment_keywords(text: str, top_n: int = 50) -> List[Dict[str, Any]]:
 
 
 async def _call_llm_analysis(
-    agent_type: str, api_endpoint: str, api_key: str, task_sheet: str, questions_text: str, agent_model: str = ""
+    agent_type: str,
+    api_endpoint: str,
+    api_key: str,
+    task_sheet: str,
+    questions_text: str,
+    agent_model: str = "",
+    custom_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """调用 LLM 做任务单对比分析（支持 Dify / OpenAI 兼容 / DeepSeek 等）"""
     if not api_key or not questions_text.strip():
@@ -183,6 +205,8 @@ async def _call_llm_analysis(
             '"bloom":{"记忆":0,"理解":0,"应用":0,"分析":0,"评价":0,"创造":0}}'
             "\n其中 count 为该主题下所有问题的总出现次数，bloom 为各认知层级的提问总数，main_question_chain 控制在 4-6 个节点"
         )
+        if custom_prompt and custom_prompt.strip():
+            prompt += "\n\n【教师补充分析要求】\n" + custom_prompt.strip()
 
         if agent_type == "dify":
             # Dify blocking mode
@@ -317,7 +341,7 @@ async def stream_task_sheet_analysis(
     sorted_qs = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:300]
     questions_text = "\n".join(f"{q}（{c}次）" for q, c in sorted_qs)
     comparison = await _call_llm_analysis(
-        agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model
+        agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model, custom_prompt
     )
     yield {
         "event": "partial_result",
@@ -383,6 +407,7 @@ async def analyze_task_sheet(
     agent_model: str = "",
     bucket_seconds: int = 180,
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
+    custom_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """分析任务单：提取关键词 + 对比学生提问"""
     now = datetime.now(timezone.utc)
@@ -440,7 +465,7 @@ async def analyze_task_sheet(
 
     # 3. LLM comparison
     comparison = await _call_llm_analysis(
-        agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model
+        agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model, custom_prompt
     )
 
     # 4. Timeline buckets + burst detection

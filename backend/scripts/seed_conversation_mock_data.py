@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
 向 znt_conversations 写入模拟课堂对话数据（独立脚本，不依赖 app 模块）
-运行：docker run --rm --network wangsh_wangsh-network -v $(pwd):/app python:3.11-slim sh -c "pip install -q sqlalchemy asyncpg && python3 /app/scripts/seed_conv.py"
+运行：docker run --rm --network wangsh_wangsh-network -e DATABASE_URL="$DATABASE_URL" -v $(pwd):/app python:3.11-slim sh -c "pip install -q sqlalchemy asyncpg && python3 /app/scripts/seed_conv.py"
 """
 import asyncio
+import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-DATABASE_URL = "postgresql+asyncpg://admin:wangshuhao0727@wangsh-postgres:5432/wangsh_db"
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    raise RuntimeError("请先通过 DATABASE_URL 环境变量提供测试数据库连接串")
 
 TZ = timezone(timedelta(hours=8))
 BASE = datetime(2026, 5, 20, 9, 0, 0, tzinfo=TZ)

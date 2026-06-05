@@ -20,17 +20,19 @@ export function useBeamData(detail: TaskAnalysisDetail | null, isBeamView: boole
   const resultData = useMemo(() => (detail?.result?.result || detail?.result || {}) as TaskAnalysisResult, [detail]);
   const chainSummaries = useMemo(() => deriveChainSummaries(beamSessions), [beamSessions]);
 
-  const savedStudentChains = useMemo(
-    () => buildDisplayStudentChains(resultData, [], [], chainSummaries, detail),
-    [resultData, chainSummaries, detail],
+  const hasPersistedBeamData = useMemo(
+    () => (resultData.student_question_chains || []).length > 0
+      || (resultData.student_chains || []).length > 0
+      || (resultData.beam_nodes || []).some((node) => node.kind !== "teacher_anchor"),
+    [resultData],
   );
 
-  const canRenderBeamFromSavedResult = useMemo(
-    () => (resultData.student_question_chains || []).length > 0
-      || (resultData.beam_nodes || []).some((node) => node.kind !== "teacher_anchor")
-      || savedStudentChains.length > 0,
-    [resultData, savedStudentChains],
+  const savedStudentChains = useMemo(
+    () => buildDisplayStudentChains(resultData, [], [], hasPersistedBeamData ? [] : chainSummaries, detail),
+    [resultData, hasPersistedBeamData, chainSummaries, detail],
   );
+
+  const canRenderBeamFromSavedResult = hasPersistedBeamData;
 
   const hasEvidenceOnlyChains = useMemo(
     () => savedStudentChains.some((chain) => chain.is_evidence_only || chain.source === "evidence"),
@@ -61,7 +63,12 @@ export function useBeamData(detail: TaskAnalysisDetail | null, isBeamView: boole
   }, [chainSummaries, savedStudentChains, studentChainSummary]);
 
   const studentTotal = useMemo(() => {
-    if (hasEvidenceOnlyChains && chainSummaries.length === 0 && !(resultData.student_question_chains || []).length) return 0;
+    if (
+      hasEvidenceOnlyChains
+      && chainSummaries.length === 0
+      && !(resultData.student_question_chains || []).length
+      && !(resultData.student_chains || []).length
+    ) return 0;
     const liveTotal = new Set(chainSummaries.map((chain) => chain.studentName)).size;
     const savedTotal = new Set(savedStudentChains
       .filter((chain) => !(chain.is_evidence_only || chain.source === "evidence"))

@@ -56,6 +56,8 @@
 - [features/assessment/ASSESSMENT_FRONTEND.md](features/assessment/ASSESSMENT_FRONTEND.md) - 前端实现
 - [features/assessment/ASSESSMENT_FILES.md](features/assessment/ASSESSMENT_FILES.md) - 文件清单
 - [features/assessment/ASSESSMENT_PROMPTS.md](features/assessment/ASSESSMENT_PROMPTS.md) - AI 提示词设计
+- [features/assessment/hot_agent.md](features/assessment/hot_agent.md) - 热点问题教学诊断智能体指令
+- [features/assessment/chain_agent.md](features/assessment/chain_agent.md) - 学生问题链认知诊断智能体指令
 
 ## 开发协作 (`development/`)
 

@@ -24,7 +24,20 @@ export const wordColor = (word: string) => {
 };
 
 export const normalizeTopics = (value: unknown): TopicItem[] => Array.isArray(value)
-  ? value.map((item: any) => ({ topic: String(item.topic || "未命名主题"), questions: Array.isArray(item.questions) ? item.questions : [], count: Number(item.count || 0) }))
+  ? value.map((item: any) => ({
+    topic: String(item.topic || item.theme || "未命名主题"),
+    questions: Array.isArray(item.questions)
+      ? item.questions
+      : Array.isArray(item.representative_questions)
+        ? item.representative_questions
+        : item.representative_question
+          ? [String(item.representative_question)]
+          : [],
+    count: Number(item.count ?? item.question_count ?? 0),
+    unique_students: Number(item.unique_students || 0) || undefined,
+    evidence_ids: Array.isArray(item.evidence_ids) ? item.evidence_ids : undefined,
+    representative_question: item.representative_question ? String(item.representative_question) : undefined,
+  }))
   : [];
 
 export const normalizeWords = (detail: TaskAnalysisDetail | null): WordCloudItem[] => {
@@ -105,6 +118,28 @@ export const baseAnalysisTime = (detail: TaskAnalysisDetail | null) => (
   detail?.start_at || detail?.created_at || dayjs().toISOString()
 );
 
+export const mergeAnalysisDateAndClockTime = (
+  baseIso: string | undefined,
+  timeText: string,
+) => {
+  const match = timeText.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] || 0);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+
+  const base = dayjs(baseIso || undefined);
+  const localBase = base.isValid() ? base : dayjs();
+  return localBase
+    .hour(hour)
+    .minute(minute)
+    .second(second)
+    .millisecond(0)
+    .toISOString();
+};
+
 const normalizeAnalysisTime = (
   value: string | undefined,
   detail: TaskAnalysisDetail | null,
@@ -114,9 +149,8 @@ const normalizeAnalysisTime = (
   if (trimmed) {
     const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     if (timeMatch) {
-      // bare HH:MM string — treat as local time, then convert to ISO
-      const local = dayjs().hour(Number(timeMatch[1])).minute(Number(timeMatch[2])).second(Number(timeMatch[3] || 0)).millisecond(0);
-      return local.toISOString();
+      const merged = mergeAnalysisDateAndClockTime(baseAnalysisTime(detail), trimmed);
+      if (merged) return merged;
     }
 
     const parsed = dayjs(trimmed);
@@ -145,6 +179,33 @@ export const relationForQuestion = (value?: string, fallbackIndex = 0): BeamRela
 };
 
 export const laneForQuestion = relationForQuestion;
+
+export const normalizeLearningLevel = (value?: string) => {
+  const text = String(value || "").toLowerCase();
+  if (!text.trim()) return undefined;
+  if (/创造|创作|create|设计|生成|创新/.test(text)) return "创造";
+  if (/评价|评估|evaluate|判断|论证|反思/.test(text)) return "评价";
+  if (/分析|analy[sz]e|拆解|区别|对比|比较|为什么|归因|原因|关系|原理|本质/.test(text)) return "分析";
+  if (/应用|apply|使用|实现|怎么写|如何写|代码|程序|迁移|换成|类似|解决/.test(text)) return "应用";
+  if (/理解|understand|解释|说明|举例|例子|示例|意思/.test(text)) return "理解";
+  if (/了解|知道|记忆|remember|识别|列举|定义|概念|是什么/.test(text)) return "了解/知道";
+  return undefined;
+};
+
+export const inferLearningLevel = (
+  question: string | undefined,
+  relation?: BeamRelationType,
+  explicitLevel?: string,
+) => {
+  const normalized = normalizeLearningLevel(explicitLevel) || normalizeLearningLevel(question);
+  if (normalized) return normalized;
+  if (relation === "transfer" || relation === "extend") return "创造";
+  if (relation === "challenge") return "评价";
+  if (relation === "debug") return "分析";
+  if (relation === "apply") return "应用";
+  if (relation === "clarify" || relation === "follow_up") return "理解";
+  return "了解/知道";
+};
 
 export const relationLabel = (relation: BeamRelationType) => ({
   clarify: "澄清",
@@ -201,6 +262,7 @@ export const convertLiveChainsToSaved = (chains: ChainSummary[]): StudentQuestio
     question: question.content,
     time: question.created_at,
     question_type_label: laneForQuestion(question.content),
+    bloom_level: inferLearningLevel(question.content, laneForQuestion(question.content)),
   })),
 }));
 
@@ -224,6 +286,8 @@ export const convertBeamNodesToSaved = (
       time: normalizeAnalysisTime(node.time, detail, chainIndex * 5 + nodeIndex * 2 + 1),
       question_type_label: node.question_type_label || laneForQuestion(node.question_type || node.lane || node.label, nodeIndex),
       bloom_level: node.bloom_level,
+      teacher_anchor_id: node.teacher_anchor_id,
+      teacher_anchor_question: node.teacher_anchor_question || node.teacher_question,
       evidence_ids: node.evidence_ids || [],
     })).filter((node) => node.question);
     return {
@@ -257,6 +321,50 @@ const timelineBucketTimes = (result: TaskAnalysisResult, detail: TaskAnalysisDet
     .map((bucket, index) => normalizeAnalysisTime(bucket.bucket_start || bucket.start_at, detail, index * 4))
     .filter(Boolean);
 };
+
+export const normalizeTimelineBuckets = (
+  result: TaskAnalysisResult,
+  detail: TaskAnalysisDetail | null,
+) => {
+  const buckets = Array.isArray(result.timeline_buckets) ? result.timeline_buckets : [];
+  return buckets
+    .map((bucket, index) => {
+      const start = normalizeAnalysisTime(bucket.bucket_start || bucket.start_at, detail, index * 4);
+      const rawEnd = bucket.bucket_end || bucket.end_at;
+      const end = rawEnd
+        ? normalizeAnalysisTime(rawEnd, detail, index * 4 + 3)
+        : addMinutesIso(start, 3);
+      const topQuestions = Array.isArray(bucket.top_questions) ? bucket.top_questions : [];
+      const questionCount = Number(bucket.question_count || 0);
+      return {
+        ...bucket,
+        bucket_start: start,
+        bucket_end: end,
+        question_count: questionCount,
+        unique_students: Number(bucket.unique_students || 0),
+        top_questions: topQuestions
+          .map((item: any) => ({
+            question: String(item?.question || "").trim(),
+            count: Number(item?.count || 0),
+          }))
+          .filter((item) => item.question),
+        is_burst: Boolean(bucket.is_burst),
+        near_teacher_mark: bucket.near_teacher_mark || null,
+      };
+    })
+    .filter((bucket) => dayjs(bucket.bucket_start).isValid())
+    .sort((a, b) => dayjs(a.bucket_start).valueOf() - dayjs(b.bucket_start).valueOf());
+};
+
+export const normalizeTimelineTeacherMarks = (
+  result: TaskAnalysisResult,
+  detail: TaskAnalysisDetail | null,
+) => buildDisplayTeacherQuestions(result, [], detail)
+  .map((item) => ({
+    time: item.time || baseAnalysisTime(detail),
+    question: item.question,
+  }))
+  .filter((item) => item.question && dayjs(item.time).isValid());
 
 export const buildEvidenceDisplayChains = (
   result: TaskAnalysisResult,
@@ -335,18 +443,23 @@ export const buildDisplayStudentChains = (
   liveChains: ChainSummary[],
   detail: TaskAnalysisDetail | null,
 ): StudentQuestionChainItem[] => {
-  const saved = (result.student_question_chains || [])
+  const rawStudentChains = (result.student_question_chains || []).length > 0
+    ? result.student_question_chains || []
+    : result.student_chains || [];
+  const saved = rawStudentChains
     .map((chain, index) => ({
       ...chain,
       session_id: chain.session_id || `saved-chain-${index}`,
       student_name: chain.student_name || "未知学生",
-      question_count: positiveNumber(chain.question_count, chain.nodes?.length),
+      question_count: positiveNumber(chain.question_count, chain.nodes?.length, chain.questions?.length),
       source: chain.source || ("saved" as const),
-      nodes: (chain.nodes || []).map((node, nodeIndex) => ({
+      nodes: (chain.nodes || chain.questions || []).map((node, nodeIndex) => ({
         ...node,
         question: String(node.question || "").trim(),
         time: normalizeAnalysisTime(node.time, detail, nodeIndex * 2),
-        question_type_label: node.question_type_label || laneForQuestion(node.question, nodeIndex),
+        question_type_label: node.question_type_label || node.question_type || laneForQuestion(node.question, nodeIndex),
+        teacher_anchor_question: node.teacher_anchor_question || node.teacherQuestion,
+        teacherTime: node.teacherTime,
       })).filter((node) => node.question),
     }))
     .filter((chain) => (chain.nodes || []).length > 0);
@@ -383,12 +496,16 @@ export const buildBeamStudentChains = (
         const content = String(node.question || "").trim();
         if (!content) return null;
         const relation = relationForQuestion(node.question_type_label || content, nodeIndex);
+        const bloomLevel = inferLearningLevel(content, relation, node.bloom_level);
         return {
           id: `${chain.session_id || chainIndex}-${nodeIndex}`,
           time: node.time || addMinutesIso(startAt, nodeIndex * 2),
           content,
           relationType: relation,
           relationLabel: relationLabel(relation),
+          bloomLevel,
+          teacherQuestion: node.teacher_anchor_question || node.teacherQuestion,
+          teacherTime: node.teacherTime,
           isUncovered: false,
           evidenceIds: node.evidence_ids || [],
         };

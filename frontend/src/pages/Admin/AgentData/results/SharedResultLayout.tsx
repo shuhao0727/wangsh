@@ -31,8 +31,8 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
   }, []);
 
   return (
-  <div className="flex h-screen flex-col bg-[var(--ws-color-bg)]">
-    <header className="flex shrink-0 items-center justify-between border-b border-border-secondary bg-surface/90 backdrop-blur-sm px-6 py-3 sticky top-0 z-10">
+  <div className="flex h-screen flex-col bg-[radial-gradient(circle_at_top_left,var(--ws-color-primary-muted)_0,transparent_34%),linear-gradient(180deg,var(--ws-color-bg),var(--ws-color-surface))]">
+    <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border-secondary bg-surface/85 px-6 py-3 backdrop-blur-md">
       <div className="flex min-w-0 items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="mr-1 h-4 w-4" />关闭</Button>
         <div className="min-w-0">
@@ -68,7 +68,7 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
     </header>
 
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-7xl px-10 py-12">
+      <div className="mx-auto max-w-[1480px] px-6 py-8 lg:px-10">
         {detail.task_sheet ? <TaskSheetCollapsible taskSheet={detail.task_sheet} /> : (
           <div className="mb-4 rounded-lg border border-dashed border-border-secondary bg-surface-2/60 px-4 py-3 text-xs text-text-tertiary text-center">
             未提供任务单内容

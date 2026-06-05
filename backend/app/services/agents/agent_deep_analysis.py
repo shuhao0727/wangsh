@@ -128,11 +128,11 @@ def _detect_question_type(text_value: str) -> str:
         return "challenge"
     if re.search(r"如果|换成|迁移|别的|其他|类似|扩展到", t):
         return "transfer"
-    if re.search(r"怎么写|如何实现|帮我写|实现|应用|使用|例子", t):
+    if re.search(r"怎么写|如何实现|帮我写|实现|应用|使用", t):
         return "apply"
     if re.search(r"还可以|进一步|进阶|拓展|扩展|延伸", t):
         return "extend"
-    if re.search(r"是什么|什么意思|不懂|解释|说明", t):
+    if re.search(r"是什么|什么意思|不懂|解释|说明|举例|例子|示例", t):
         return "clarify"
     return "follow_up"
 
@@ -145,10 +145,12 @@ def _detect_bloom_level(text_value: str, question_type: str) -> str:
         return "评价"
     if re.search(r"区别|对比|为什么|原因|关系|原理|分析", t):
         return "分析"
-    if question_type in {"apply", "debug"} or re.search(r"怎么写|实现|运行|报错|调试|使用", t):
+    if question_type in {"apply", "debug"} or re.search(r"怎么写|如何实现|实现|运行|报错|调试|使用|代码|程序", t):
         return "应用"
-    if re.search(r"解释|理解|什么意思|举例|说明", t):
+    if re.search(r"解释|理解|什么意思|举例|例子|示例|说明", t):
         return "理解"
+    if re.search(r"是什么|定义|概念|知道|了解", t):
+        return "记忆"
     return "记忆"
 
 

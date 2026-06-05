@@ -89,7 +89,7 @@ class BaseAnalysisSaveRequest(BaseModel):
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     class_name: Optional[str] = None
-    custom_prompt: Optional[str] = Field(None, max_length=2000, description="自定义AI分析提示词")
+    custom_prompt: Optional[str] = Field(None, max_length=8000, description="自定义AI分析提示词")
 
 
 class TaskAnalysisSaveRequest(BaseAnalysisSaveRequest):

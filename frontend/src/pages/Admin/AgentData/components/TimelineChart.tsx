@@ -119,6 +119,16 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
           name: "提问数",
           type: "bar",
           data: questionCounts,
+          label: {
+            show: true,
+            position: "top",
+            color: theme.textSecondary,
+            fontSize: 10,
+            formatter: (params: any) => {
+              const bucket = buckets[params.dataIndex];
+              return bucket?.is_burst ? `${params.value} 问` : "";
+            },
+          },
           itemStyle: {
             color: (params: any) =>
               burstIndices.includes(params.dataIndex) ? theme.burst : theme.primary,
@@ -192,6 +202,14 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
       chartInstance.current = null;
     };
   }, [buckets, teacherMarks, burstPoints, theme]);
+
+  if (buckets.length === 0) {
+    return (
+      <div className="flex items-center justify-center rounded-2xl border border-dashed border-border-secondary bg-surface-2 text-sm text-text-tertiary" style={{ height }}>
+        暂无时序数据，可重新生成热点分析或缩小时间范围
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

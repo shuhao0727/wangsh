@@ -4,7 +4,11 @@
  * Or from frontend dir: npx tsx scripts/seed-learning.ts
  */
 const API_BASE = "http://backend:8000";
-const AUTH = { username: "admin", password: process.env.SUPER_ADMIN_PASSWORD || "wangshuhao0727" };
+const adminPassword = process.env.SUPER_ADMIN_PASSWORD ?? process.env.ADMIN_PASSWORD;
+if (!adminPassword) {
+  throw new Error("请先设置 SUPER_ADMIN_PASSWORD 或 ADMIN_PASSWORD 环境变量");
+}
+const AUTH = { username: "admin", password: adminPassword };
 
 async function upsert(mod: string, section: string, key: string, data: any, sort = 0) {
   const title = data.name || data.label || data.title || key;

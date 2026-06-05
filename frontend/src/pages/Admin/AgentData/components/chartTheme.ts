@@ -32,6 +32,31 @@ const readCssVar = (name: string, fallback: string) => {
   return value || fallback;
 };
 
+const alphaColor = (color: string, alpha: number, fallback: string) => {
+  const value = color.trim();
+  const safeAlpha = Math.max(0, Math.min(1, alpha));
+
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  if (hex) {
+    const full = hex.length === 3 ? hex.split("").map((char) => char + char).join("") : hex;
+    const intValue = Number.parseInt(full, 16);
+    const red = (intValue >> 16) & 255;
+    const green = (intValue >> 8) & 255;
+    const blue = intValue & 255;
+    return `rgba(${red}, ${green}, ${blue}, ${safeAlpha})`;
+  }
+
+  const rgb = value.match(/^rgba?\(([^)]+)\)$/i)?.[1];
+  if (rgb) {
+    const channels = rgb.split(",").map((part) => Number.parseFloat(part.trim())).slice(0, 3);
+    if (channels.length === 3 && channels.every((channel) => Number.isFinite(channel))) {
+      return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${safeAlpha})`;
+    }
+  }
+
+  return fallback;
+};
+
 export const getAgentChartTheme = () => {
   const primary = readCssVar("--ws-color-primary", FALLBACKS.primary);
   const accent = readCssVar("--ws-color-accent", FALLBACKS.accent);
@@ -50,23 +75,27 @@ export const getAgentChartTheme = () => {
     textSecondary,
     textMuted,
     surface,
-    surfaceElevated: `color-mix(in srgb, ${surface} 96%, transparent)`,
+    surfaceElevated: alphaColor(surface, 0.96, FALLBACKS.surface),
     surfaceAlt,
     border,
-    grid: `color-mix(in srgb, ${border} 55%, transparent)`,
-    laneLine: `color-mix(in srgb, ${primary} 28%, transparent)`,
-    laneLineMuted: `color-mix(in srgb, ${border} 55%, transparent)`,
+    grid: alphaColor(border, 0.55, FALLBACKS.grid),
+    laneLine: alphaColor(primary, 0.28, FALLBACKS.primarySoft),
+    laneLineMuted: alphaColor(border, 0.55, FALLBACKS.grid),
     teacher: warning,
-    teacherSoft: `color-mix(in srgb, ${warning} 35%, transparent)`,
+    teacherSoft: alphaColor(warning, 0.35, FALLBACKS.primaryShadow),
     burst: danger,
-    burstGlow: `color-mix(in srgb, ${danger} 45%, transparent)`,
+    burstGlow: alphaColor(danger, 0.45, FALLBACKS.dangerGlow),
+    burstSoft: alphaColor(danger, 0.08, FALLBACKS.dangerSoft),
+    burstBorder: alphaColor(danger, 0.38, FALLBACKS.dangerShadow),
     uncovered: readCssVar("--ws-color-warning", FALLBACKS.warningBright),
     uncoveredBorder: readCssVar("--ws-color-danger", FALLBACKS.dangerDeep),
-    uncoveredSoft: `color-mix(in srgb, ${danger} 14%, ${surface})`,
-    uncoveredShadow: `color-mix(in srgb, ${danger} 30%, transparent)`,
+    uncoveredSoft: alphaColor(danger, 0.14, FALLBACKS.dangerSoft),
+    uncoveredShadow: alphaColor(danger, 0.3, FALLBACKS.dangerShadow),
     primary,
     accent,
     primarySoft,
+    primaryBand: alphaColor(primary, 0.07, FALLBACKS.primarySoft),
+    primaryBrush: alphaColor(primary, 0.08, FALLBACKS.primarySoft),
     beamColors: [
       primary,
       accent,
