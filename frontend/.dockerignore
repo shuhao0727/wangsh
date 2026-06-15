@@ -1,5 +1,4 @@
 node_modules
-build
 coverage
 .cache
 .eslintcache
@@ -24,3 +23,4 @@ scripts/ui-visual-routes.json
 src/**/__tests__/
 src/**/*.test.*
 src/**/*.spec.*
+build

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, get_current_user
 from app.schemas.user_info import UserInfo
+from app.schemas.learning.progress import LearningProgressUpdate
 from app.models.learning.progress import LearningProgress
 
 router = APIRouter()
@@ -91,7 +92,7 @@ async def get_learning_progress(
 @router.put("/learning/progress/{module_key}")
 async def upsert_learning_progress(
     module_key: str,
-    data: Dict[str, Any],
+    data: LearningProgressUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ) -> Any:
@@ -108,22 +109,26 @@ async def upsert_learning_progress(
     result = await db.execute(stmt)
     progress = result.scalar_one_or_none()
 
+    progress_dict = data.to_progress_dict()
+
     if progress:
         # 更新
-        progress.progress_data = json.dumps(data, ensure_ascii=False)
-        progress.current_stage = data.get("current_stage")
-        if "completed_stages" in data:
-            progress.completed_stages = json.dumps(data.get("completed_stages"), ensure_ascii=False)
-        progress.notes = data.get("notes") if isinstance(data.get("notes"), str) else progress.notes
+        progress.progress_data = json.dumps(progress_dict, ensure_ascii=False)
+        if data.current_stage is not None:
+            progress.current_stage = data.current_stage
+        if data.completed_stages is not None:
+            progress.completed_stages = json.dumps(data.completed_stages, ensure_ascii=False)
+        if data.notes is not None:
+            progress.notes = data.notes
     else:
         # 创建
         progress = LearningProgress(
             user_id=user_id,
             module_key=module_key,
-            current_stage=data.get("current_stage"),
-            completed_stages=(json.dumps(data.get("completed_stages"), ensure_ascii=False) if "completed_stages" in data else None),
-            progress_data=json.dumps(data, ensure_ascii=False),
-            notes=data.get("notes") if isinstance(data.get("notes"), str) else None,
+            current_stage=data.current_stage,
+            completed_stages=(json.dumps(data.completed_stages, ensure_ascii=False) if data.completed_stages is not None else None),
+            progress_data=json.dumps(progress_dict, ensure_ascii=False),
+            notes=data.notes,
         )
         try:
             db.add(progress)
@@ -152,7 +157,7 @@ async def upsert_learning_progress(
 @router.post("/learning/progress/{module_key}")
 async def create_learning_progress(
     module_key: str,
-    data: Dict[str, Any],
+    data: LearningProgressUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ) -> Any:
