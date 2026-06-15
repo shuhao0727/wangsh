@@ -35,4 +35,4 @@ class ClassroomActivity(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, comment="更新时间")
 
     creator = relationship("User", lazy="selectin")
-    responses = relationship("ClassroomResponse", back_populates="activity", cascade="all, delete-orphan", lazy="selectin")
+    responses = relationship("ClassroomResponse", back_populates="activity", cascade="all, delete-orphan", lazy="noload")

@@ -3,7 +3,6 @@ import Editor from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
 import { configureMonaco, monaco } from "@/lib/monacoSetup";
 import { shouldStopMonacoEditorKeyPropagation } from "../keyboardGuards";
-import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
 
 // 使用本地 npm 包中的 Monaco，避免从 CDN (jsdelivr) 加载失败
 configureMonaco();
@@ -21,7 +20,6 @@ export type MonacoPythonEditorProps = {
 
 export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: MonacoPythonEditorProps) {
   const { value, onChange, activeLine, revealLine, breakpoints, onToggleBreakpoint, syntaxErrors, fontSize = 14 } = props;
-  const isDark = useDocumentDarkMode();
 
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const bpDecoIdsRef = useRef<string[]>([]);
@@ -210,7 +208,7 @@ export const MonacoPythonEditor = React.memo(function MonacoPythonEditor(props: 
       <Editor
         height="100%"
         defaultLanguage="python"
-        theme={isDark ? "vs-dark" : "vs"}
+        theme="vs"
         value={value}
         loading={
           <div className="flex h-full items-center justify-center text-xs text-text-secondary">

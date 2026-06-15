@@ -5,8 +5,8 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-from jose import JWTError, jwt
-from sqlalchemy import or_
+import jwt
+from jwt.exceptions import PyJWTError
 
 from app.core.config import settings
 
@@ -42,11 +42,13 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
-    except JWTError:
+    except PyJWTError:
         return None
 
 
-async def authenticate_user(db, identifier: str, credential: str, user_type: str = "admin"):
+async def authenticate_user(
+    db, identifier: str, credential: str, user_type: str = "admin"
+) -> Optional[Dict[str, Any]]:
     """
     统一用户认证 — 所有角色均使用 姓名(identifier) + 学号(credential)
 
@@ -91,12 +93,14 @@ async def authenticate_user(db, identifier: str, credential: str, user_type: str
     }
 
 
-async def authenticate_user_auto(db, identifier: str, credential: str):
+async def authenticate_user_auto(
+    db, identifier: str, credential: str
+) -> Optional[Dict[str, Any]]:
     """统一认证 — 所有角色使用 姓名+学号"""
     return await authenticate_user(db, identifier, credential)
 
 
-async def get_current_user(token: str, db = None):
+async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
     """
     获取当前用户 - 支持统一用户系统
     根据令牌中的type字段区分管理员和学生
@@ -107,8 +111,7 @@ async def get_current_user(token: str, db = None):
     payload = verify_token(token)
     if payload is None:
         return None
-    
-    user_type = payload.get("type", "admin")  # 默认为admin类型
+
     subject = payload.get("sub")  # JWT中的subject
     role_code = payload.get("role_code")  # 从令牌中获取角色代码
     
@@ -154,11 +157,11 @@ async def get_current_user(token: str, db = None):
 
 async def get_current_user_or_student(
     token: Optional[str] = None,
-    db = None
-):
+    db=None,
+) -> Optional[Dict[str, Any]]:
     """
     获取当前用户或学生
-    
+
     安全加固：仅在提供有效token且验证成功时返回用户
     """
     if not token:

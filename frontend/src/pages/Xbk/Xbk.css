@@ -216,18 +216,6 @@
   white-space: nowrap;
 }
 
-/* ── Dark mode ── */
-.dark .xbk-table-native thead th {
-  color: var(--ws-color-text);
-}
-
-.dark .xbk-tab-trigger:not([data-state="active"]) {
-  color: var(--ws-color-text-secondary);
-}
-
-.dark .xbk-filter-field label {
-  color: var(--ws-color-text);
-}
 
 @media (max-width: 768px) {
   .xbk-page {

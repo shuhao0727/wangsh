@@ -43,11 +43,6 @@
 - PythonLab：`docs/features/PYTHONLAB.md`
 - 文档整理/归档：`docs/DOCUMENTATION_OWNERSHIP.md`、`docs/scripts/ARCHIVE_INDEX.md`、对应 archive README
 
-Claude 专属背景可参考：
-
-- `docs/development/CLAUDE_GUIDE.md`
-- `docs/development/CLAUDE_MEMORY.md`
-
 ## 本地开发和常用命令
 
 根目录常用命令：

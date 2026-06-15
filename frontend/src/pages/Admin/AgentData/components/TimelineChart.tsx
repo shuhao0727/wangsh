@@ -6,7 +6,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import { Flame, Users, MessageSquare } from "lucide-react";
-import useDocumentDarkMode from "@/hooks/useDocumentDarkMode";
 import { getAgentChartTheme } from "./chartTheme";
 
 type TopQuestion = { question: string; count: number };
@@ -37,8 +36,7 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<TimelineBucket | null>(null);
-  const isDark = useDocumentDarkMode();
-  const theme = useMemo(() => getAgentChartTheme(), [isDark]);
+  const theme = useMemo(() => getAgentChartTheme(), []);
 
   useEffect(() => {
     if (!chartRef.current || buckets.length === 0) return;
@@ -214,7 +212,7 @@ const TimelineChart: React.FC<TimelineChartProps> = ({
   return (
     <div className="space-y-4">
       {/* 图表 */}
-      <div ref={chartRef} style={{ width: "100%", height }} />
+      <div ref={chartRef} style={{ width: "100%", height }} aria-label="时序热点问题分析图表" />
 
       {/* 选中桶的详情 */}
       {selectedBucket && (

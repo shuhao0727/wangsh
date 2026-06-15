@@ -75,7 +75,7 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
           </div>
         )}
         {summaryCards && (
-          <div className="mb-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
+          <div className="mb-6">
             {summaryCards}
           </div>
         )}

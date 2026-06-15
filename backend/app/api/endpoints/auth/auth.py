@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Response, Request
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -126,6 +127,7 @@ async def register_user() -> Dict[str, Any]:
 
 
 def _normalize_user_datetime(value: Any) -> str:
+    """将用户时间字段归一化为 ISO 字符串"""
     if isinstance(value, str):
         return value
     if hasattr(value, "isoformat"):
@@ -163,10 +165,45 @@ async def read_users_me(
 
 
 @router.post("/logout")
-async def logout(response: Response) -> Dict[str, str]:
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, str]:
     """
-    用户登出 - 简化实现
+    用户登出 - 撤销所有刷新令牌并轮换会话nonce，确保已颁发的令牌无法再使用
+    适用于共享电脑场景（如教室机房），防止登出后令牌被复用
     """
+    # 尝试从请求中提取访问令牌以获取用户ID
+    try:
+        token = (
+            request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+            or request.cookies.get(settings.ACCESS_TOKEN_COOKIE_NAME)
+            or request.cookies.get("access_token")
+        )
+        if token:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            subject = payload.get("sub")
+            if subject:
+                # 通过subject查找用户ID
+                from sqlalchemy import select, or_
+                from app.models import User
+                query = select(User.id).where(
+                    or_(User.username == subject, User.full_name == subject, User.student_id == subject),
+                    User.is_deleted.is_(False),
+                )
+                result = await db.execute(query)
+                user_id = result.scalar_one_or_none()
+                if user_id:
+                    # 撤销该用户所有刷新令牌
+                    await revoke_all_user_refresh_tokens(db, user_id)
+                    # 轮换会话nonce，使当前access token中的sn失效
+                    await rotate_user_session(user_id)
+    except (PyJWTError, ValueError, TypeError):
+        # 令牌无效、已过期或数据异常 - 仍然允许登出（清除cookie即可）
+        pass
+
+    # 始终清除客户端cookie
     response.delete_cookie(key=settings.ACCESS_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
     response.delete_cookie(key=settings.REFRESH_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
     return {
@@ -293,7 +330,7 @@ async def verify_token(
             "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat(),
             "issued_at": datetime.fromtimestamp(payload.get("iat", 0)).isoformat(),
         }
-    except JWTError:
+    except PyJWTError:
         return {"valid": False, "reason": "令牌无效或已过期"}
 
 

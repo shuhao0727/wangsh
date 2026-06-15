@@ -109,6 +109,7 @@ class StudentChainAnalysisSaveRequest(BaseAnalysisSaveRequest):
     task_sheet: Optional[str] = Field(None, description="任务单（可选）")
     teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list)
     prompt_template_id: Optional[int] = Field(None, ge=1, description="提示词模板ID")
+    merge_threshold: Optional[float] = Field(None, ge=0.15, le=0.60, description="问题合并相似度阈值(0.15-0.60)，默认0.30，越低越宽松")
 
 
 class BaseAnalysisRecord(BaseModel):

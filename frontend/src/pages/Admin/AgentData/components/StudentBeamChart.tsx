@@ -4,8 +4,8 @@
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
-import useDocumentDarkMode from "@/hooks/useDocumentDarkMode";
 import { getAgentChartTheme } from "./chartTheme";
+import { escapeHtml } from "../normalize";
 import { buildRelatedQuestionGroups, type RelatedQuestionGroup } from "./questionRelatedness";
 import type { BeamRangeSelection, BeamStudentChain, BeamTeacherAnchor, BeamRelationType } from "../types";
 
@@ -36,7 +36,6 @@ interface Props {
   onStudentClick?: (studentName: string) => void;
 }
 
-const escapeHtml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmtTime = (v: number) => { const d = new Date(v); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const smoothStep = (value: number) => value * value * (3 - 2 * value);
@@ -89,7 +88,6 @@ const StudentBeamChart: React.FC<Props> = ({
   const chartRef = useRef<echarts.ECharts | null>(null);
   const onRangeChangeRef = useRef(onRangeChange);
   const emitRangeRef = useRef<((start?: number, end?: number, source?: BeamRangeSelection["source"]) => void) | null>(null);
-  const isDark = useDocumentDarkMode();
   const emittedInitialRef = useRef(false);
 
   const empty = useMemo(
@@ -241,6 +239,13 @@ const StudentBeamChart: React.FC<Props> = ({
       return data;
     };
 
+    // 预计算每条链的光束插值数据，避免 trajectorySeries 和 beamSeries 对相同数据重复计算
+    const chainBeamDataMap = new Map<string, number[][]>();
+    chains.forEach((chain) => {
+      const items = enriched.filter((e) => e.chainId === chain.id).sort((a, b) => a.time - b.time);
+      chainBeamDataMap.set(chain.id, buildContinuousBeamData(items));
+    });
+
     const laneBandSeries = [{
       type: "line",
       name: "认知分区",
@@ -294,19 +299,17 @@ const StudentBeamChart: React.FC<Props> = ({
     }];
 
     const trajectorySeries = chains.map((chain, idx) => {
-      const items = enriched.filter((e) => e.chainId === chain.id).sort((a, b) => a.time - b.time);
       return {
         type: "line", name: `${chain.studentName} 趋势`, z: 1, symbol: "none", smooth: false, silent: true,
-        data: buildContinuousBeamData(items),
+        data: chainBeamDataMap.get(chain.id) || [],
         lineStyle: { ...roundedLineStyle, color: theme.beamColors[idx % theme.beamColors.length], width: 5.4, opacity: 0.09, shadowBlur: 0 },
       };
     });
 
     const beamSeries = chains.map((chain, idx) => {
-      const items = enriched.filter((e) => e.chainId === chain.id).sort((a, b) => a.time - b.time);
       return {
         type: "line", name: chain.studentName, z: 3, symbol: "none", smooth: false,
-        data: buildContinuousBeamData(items),
+        data: chainBeamDataMap.get(chain.id) || [],
         lineStyle: { ...roundedLineStyle, color: theme.beamColors[idx % theme.beamColors.length], width: 2.4, opacity: 0.78, shadowBlur: 0 },
         endLabel: {
           show: true,
@@ -547,7 +550,7 @@ const StudentBeamChart: React.FC<Props> = ({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [teacherAnchors, studentChains, burstPoints, isDark]);
+  }, [teacherAnchors, studentChains, burstPoints]);
 
   useEffect(() => {
     if (!manualRange?.startAt || !manualRange?.endAt || !emitRangeRef.current) return;

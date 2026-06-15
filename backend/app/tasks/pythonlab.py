@@ -4,6 +4,8 @@ import threading
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
+import httpx
+
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.utils.cache import cache
@@ -94,7 +96,14 @@ async def _owner_has_other_active_session(owner_user_id: int, excluding_session_
 
 @celery_app.task(
     name="app.tasks.pythonlab.start_session",
-    autoretry_for=(Exception,),
+    autoretry_for=(
+        ConnectionError,
+        TimeoutError,
+        OSError,
+        IOError,
+        httpx.ConnectError,
+        httpx.ReadTimeout,
+    ),
     max_retries=2,
     retry_backoff=True,
     retry_backoff_max=30,

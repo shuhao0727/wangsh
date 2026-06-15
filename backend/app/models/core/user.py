@@ -22,7 +22,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True, comment="加密密码（管理员使用）")
     
     # 基本信息
-    full_name = Column(String(100), nullable=False, comment="全名（学生姓名）")
+    full_name = Column(String(100), nullable=False, index=True, comment="全名（学生姓名）")
     
     # 学生专用字段（仅学生用户使用）
     student_id = Column(String(50), unique=True, index=True, nullable=True, comment="学号（学生使用）")

@@ -28,10 +28,8 @@ import {
   LogOut,
   Menu,
   Monitor,
-  Moon,
   PanelLeftClose,
   Settings,
-  Sun,
   User,
   Users,
   Zap,
@@ -39,7 +37,6 @@ import {
 import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
-import { useDarkMode } from "@hooks/useDarkMode";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 
 type AdminMenuItem = {
@@ -92,7 +89,6 @@ const AdminLayout: React.FC = () => {
   const auth = useAuth();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
-  const { isDark, toggle: toggleDark } = useDarkMode();
 
   const [collapsed, setCollapsed] = useState(false);
   const { version, envLabel } = useAppMeta();
@@ -317,16 +313,6 @@ const AdminLayout: React.FC = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className="mb-2 flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  onClick={toggleDark}
-                  aria-label="切换暗色模式"
-                  title={isDark ? "切换亮色模式" : "切换暗色模式"}
-                >
-                  {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                </Button>
                 {version ? (
                   <span className="text-xs text-text-tertiary">v{version}</span>
                 ) : null}
@@ -348,15 +334,6 @@ const AdminLayout: React.FC = () => {
                   {renderUserDropdownItems()}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={toggleDark}
-                aria-label="切换暗色模式"
-              >
-                {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-              </Button>
             </div>
           )}
           <Button

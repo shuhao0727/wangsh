@@ -4,7 +4,6 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import type { PyodideTerminalBridge } from "../hooks/usePyodideRunner";
-import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
 
 interface XTermInternal {
   element?: HTMLElement;
@@ -30,7 +29,6 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const [_gutterDigits, setGutterDigits] = useState(2);
     const gutterRafRef = useRef<number | null>(null);
     const hostRef = useRef<HTMLDivElement | null>(null);
-    const isDark = useDocumentDarkMode();
     const termRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
     const fitRafRef = useRef<number | null>(null);
@@ -40,8 +38,6 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
     const [canInit, setCanInit] = useState(false);
     const termEpochRef = useRef(0);
     const terminalDisposedRef = useRef(true);
-    const isDarkRef = useRef(isDark);
-    isDarkRef.current = isDark;
     const trace = useCallback((phase: string, extra?: Record<string, unknown>) => {
       try {
         const enabled =
@@ -58,7 +54,6 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       } catch {}
     }, []);
     const readTerminalTheme = useCallback(() => {
-      const dark = isDarkRef.current;
       const readToken = (name: string, fallback: string) => {
         try {
           return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -67,9 +62,9 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
         }
       };
       return {
-        background: readToken("--ws-color-bg", dark ? "#0f1117" : "#ffffff"),
-        foreground: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
-        cursor: readToken("--ws-color-text", dark ? "#F1F5F9" : "#1E293B"),
+        background: readToken("--ws-color-bg", "#ffffff"),
+        foreground: readToken("--ws-color-text", "#1E293B"),
+        cursor: readToken("--ws-color-text", "#1E293B"),
         selectionBackground: "color-mix(in srgb, var(--ws-color-primary) 20%, transparent)",
       };
     }, []);
@@ -175,10 +170,6 @@ const PyodideTerminal = React.forwardRef<PyodideTerminalHandle, { bridge: Pyodid
       [scheduleRefreshGutter, trace, writeClearScreen]
     );
 
-    useEffect(() => {
-      if (!termRef.current) return;
-      termRef.current.options.theme = readTerminalTheme();
-    }, [isDark, readTerminalTheme]);
 
   useEffect(() => {
     const host = hostRef.current;
