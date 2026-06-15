@@ -225,8 +225,15 @@ frontend/.cursor/
 # Docker构建缓存
 **/target/
 
+# Docker CLI 二进制文件（构建时使用，不提交）
+backend/docker/bin/
+
+# 模拟部署临时文件
+docker-compose.sim.yml
+
 # ==================== 自动化临时产物 ====================
 .playwright-cli/
+.playwright-mcp/
 test-results/
 output/
 
@@ -346,7 +353,6 @@ frontend/mindmap-demo/
 
 # ==================== 临时构建文件 ====================
 Dockerfile.backend-*
-frontend/build/
 output/
 test-results/
 beam-demo.html

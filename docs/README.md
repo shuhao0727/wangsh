@@ -13,7 +13,6 @@
 
 - [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md) - 文档 owner、生命周期状态、清理和归档策略
 - [DATABASE_PERFORMANCE_GUIDE.md](DATABASE_PERFORMANCE_GUIDE.md) - 数据库性能分析与优化指南（整合版）
-- [DATABASE_PERFORMANCE_ANALYSIS.md](DATABASE_PERFORMANCE_ANALYSIS.md) - 数据库性能分析指南旧入口（redirect）
 - [docker/RELEASE_NOTES.md](docker/RELEASE_NOTES.md) - 发布与运维记录
 - [development/API.md](development/API.md) - API 接口文档
 - [docker/deploy/DEPLOY.md](docker/deploy/DEPLOY.md) - 完整部署指南（开发/生产环境）
@@ -24,11 +23,11 @@
 - [docker/README.md](docker/README.md) - Docker 文档总入口
 - [docker/deploy/DEPLOY.md](docker/deploy/DEPLOY.md) - 部署、启动与环境变量说明
 - [docker/deploy/CICD.md](docker/deploy/CICD.md) - 工作流、镜像与 CI 门禁说明
-- [docker/testing/README.md](docker/testing/README.md) - 测试与验证入口
-- [docker/frontend/README.md](docker/frontend/README.md) - 前端专项文档入口
+- [docker/README.md#测试](docker/README.md#测试) - 测试与验证入口
+- [docker/README.md#前端](docker/README.md#前端) - 前端专项文档入口
 - [docker/frontend/ACCESSIBILITY_GUIDE.md](docker/frontend/ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
-- [docker/plans/README.md](docker/plans/README.md) - 当前计划与治理入口
-- [docker/archive/README.md](docker/archive/README.md) - 历史归档入口
+- [docker/README.md#计划文档](docker/README.md#计划文档) - 当前计划与治理入口
+- [ARCHIVE_SUMMARY.md](ARCHIVE_SUMMARY.md) - 历史文档归档摘要（2026年3-5月）
 
 ### 当前计划与治理 (`docker/plans/`)
 
@@ -38,7 +37,7 @@
 - [docker/plans/2026-05-03-learning-platform-improvement.md](docker/plans/2026-05-03-learning-platform-improvement.md) - ML/AI/Agents 学习平台改进实施计划
 - [docker/plans/2026-05-03-it-technology-markdown-book-system.md](docker/plans/2026-05-03-it-technology-markdown-book-system.md) - IT Technology Markdown Book 系统实施计划
 
-> 已归档计划详见 [docker/archive/plans/README.md](docker/archive/plans/README.md)
+> 已归档计划精简摘要详见 [ARCHIVE_SUMMARY.md](ARCHIVE_SUMMARY.md)
 
 ## 功能模块 (`features/`)
 

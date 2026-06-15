@@ -12,7 +12,6 @@
 
 ## 语义色一览
 
-| 语义 | Token | 亮色 | 暗色 | 用途 |
 |------|-------|------|------|------|
 | **primary** | `--ws-color-primary` | `#0D9488` (Teal 600) | `#2DD4BF` | 主按钮、链接、选中 |
 | **primary-hover** | `--ws-color-primary-hover` | `#14B8A6` | `#5EEAD4` | primary 元素 hover 态 |
@@ -66,6 +65,6 @@
 ## 扩展流程
 
 新增语义色应：
-1. 在 `index.css` 的 `:root` 和 `.dark` 块同时定义
+1. 在 `index.css` 的 `:root` 块中定义
 2. 更新本文档
 3. 若需 Tailwind class 支持，同步 `tailwind.config.js` 的 `theme.extend.colors`

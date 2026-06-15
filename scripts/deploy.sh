@@ -1,14 +1,8 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
-
-# 部署脚本默认使用生产配置 (.env)
-if [ -z "${env_file}" ]; then
-  if [ -f ".env" ]; then
-    env_file=".env"
-  fi
-fi
 
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
 

@@ -295,7 +295,3 @@ networks:
     name: docker_default
 
 # 数据卷配置
-volumes:
-  postgres_data:
-  redis_data:
-  uploads_data:

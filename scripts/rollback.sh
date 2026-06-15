@@ -32,15 +32,24 @@ backup_db() {
 case "$cmd" in
   rollback)
     check_backend_container
-    revision="${2:--1}"
+
+    # Parse arguments: skip flags to find the revision
+    local do_backup=false
+    local revision="-1"
+    shift  # consume "rollback"
+    for arg in "$@"; do
+      case "$arg" in
+        --backup) do_backup=true ;;
+        *) revision="$arg" ;;
+      esac
+    done
 
     if ! confirm_rollback; then
       echo "Rollback cancelled"
       exit 0
     fi
 
-    # Check if --backup flag is present
-    if [[ "${3:-}" == "--backup" ]] || [[ "${2:-}" == "--backup" ]]; then
+    if $do_backup; then
       backup_db
     fi
 

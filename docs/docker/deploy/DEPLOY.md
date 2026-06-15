@@ -5,7 +5,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前版本**: 1.5.17
+- **当前版本**: 1.6.0
 
 ### 快速连接
 ```bash
@@ -71,9 +71,9 @@ bash scripts/deploy.sh deploy
 版本号统一在 `.env` 中的 `APP_VERSION` 定义：
 
 ```bash
-APP_VERSION=1.5.17
-IMAGE_TAG=1.5.17
-REACT_APP_VERSION=1.5.17
+APP_VERSION=1.6.0
+IMAGE_TAG=1.6.0
+REACT_APP_VERSION=1.6.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
@@ -104,12 +104,12 @@ bash scripts/deploy.sh build
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:1.5.17` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:1.5.17` - 前端静态文件
-- `shuhao07/wangsh-gateway:1.5.17` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:1.5.17` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:1.5.17` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:1.5.17` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:1.6.0` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:1.6.0` - 前端静态文件
+- `shuhao07/wangsh-gateway:1.6.0` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:1.6.0` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:1.6.0` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:1.6.0` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -124,7 +124,7 @@ curl http://localhost:16608/api/health
 默认模拟参数：
 
 ```bash
-SIM_VERSION=1.5.17
+SIM_VERSION=1.6.0
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 ```
@@ -143,9 +143,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=1.5.17
-IMAGE_TAG=1.5.17
-REACT_APP_VERSION=1.5.17
+APP_VERSION=1.6.0
+IMAGE_TAG=1.6.0
+REACT_APP_VERSION=1.6.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 拉取并启动，不在生产服务器重新构建
@@ -222,9 +222,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=1.5.17          # 应用版本号
-IMAGE_TAG=1.5.17            # Docker 镜像标签
-REACT_APP_VERSION=1.5.17    # 前端版本号
+APP_VERSION=1.6.0          # 应用版本号
+IMAGE_TAG=1.6.0            # Docker 镜像标签
+REACT_APP_VERSION=1.6.0    # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 

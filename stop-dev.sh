@@ -199,19 +199,19 @@ stop_docker_containers() {
     # 检查项目根目录
     PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
-    # 检查docker-compose文件是否存在
-    if [ ! -f "${PROJECT_ROOT}/docker-compose.dev.yml" ]; then
-        print_error "未找到 docker-compose.dev.yml 文件"
+    # 检查docker compose文件是否存在
+    if [ ! -f "${PROJECT_ROOT}/docker compose.dev.yml" ]; then
+        print_error "未找到 docker compose.dev.yml 文件"
         return 1
     fi
     
     # 停止开发 Docker 容器
     cd "${PROJECT_ROOT}"
-    docker-compose -f docker-compose.dev.yml down --remove-orphans || true
+    docker compose -f docker compose.dev.yml down --remove-orphans || true
 
     # 如存在生产 compose，也一并停止（避免端口冲突）
-    if [ -f "${PROJECT_ROOT}/docker-compose.yml" ]; then
-        docker compose -f docker-compose.yml down --remove-orphans || true
+    if [ -f "${PROJECT_ROOT}/docker compose.yml" ]; then
+        docker compose -f docker compose.yml down --remove-orphans || true
     fi
     
     # 验证容器是否已停止

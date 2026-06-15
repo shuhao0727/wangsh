@@ -1,17 +1,20 @@
 .git
+.claude
 .trae
 .vscode
+.playwright-mcp
 
 backend/venv
 backend/**/__pycache__
+backend/docker/bin
 
 frontend/node_modules
 frontend/build
+frontend/dist
 frontend/test-results
 
 test-results
 output
 
-my_web
-
 **/.DS_Store
+*.tgz

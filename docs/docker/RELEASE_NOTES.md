@@ -2,41 +2,37 @@
 
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
-## v1.5.17（2026-06-14）
+## v1.6.0（2026-06-15）
 
 ### 1. 变更范围
 
 **安全修复**：
 - JWT 库从 `python-jose`（有 CVE）迁移到 `PyJWT[crypto]==2.9.0`
-- Logout 端点增加 refresh token 撤销 + session nonce 轮换，防止共享电脑 token 复用
+- Logout 端点增加 refresh token 撤销 + session nonce 轮换
 - 学习内容/章节 GET 接口增加 `get_current_user` 鉴权
-- 学习进度 PUT/POST 增加 Pydantic 输入校验（字段长度限制 + 50KB 负载上限）
-- BookReader `dangerouslySetInnerHTML` 统一加 DOMPurify 消毒
 
 **性能优化**：
-- `sys_users.full_name` 增加索引（Alembic migration），优化 60 人同时登录
-- ClassroomActivity relationship 从 `selectin` 改为 `noload`，消除 N+1 查询
-- LLM 分析接口改用 `get_http_client()` 全局连接池，不再临时创建 AsyncClient
+- `sys_users.full_name` 增加索引（Alembic migration）
+- ClassroomActivity relationship 改为 `noload`，消除 N+1 查询
 - ECharts tree-shaking：vendor chunk 从 1,147 KB 降至 734 KB（-36%）
 - StudentBeamChart `buildContinuousBeamData` 预计算 + Map 缓存
 
-**功能重构**：
-- 热点问题结果页精简：1279 行 → 529 行，4 核心区块（信息栏+图表+词云+LLM摘要）
-- 核心图表重构：教师提问顶部标记+教学区间+学生柱状图+生成性问题柱+Catmull-Rom 趋势曲线
-- 问题链光束图：学生轨迹+共享汇聚点+合并审查面板
-- 后端增加 `_merge_similar_questions` 聚类算法 + `merge_threshold` 参数化
-- LLM 提示词增加噪声过滤规则和合并审查指令
+**前端重构**：
+- 移除暗色模式全套实现（hooks、CSS、toggle、isDark 逻辑）
+- 热点问题/问题链结果页重新设计（1279 行 → 529 行）
+- 核心图表重构：教师提问标记 + 教学区间 + 生成性问题柱状图
+- 问题链光束图 demo
 
-**稳定性**：
-- 修复路由函数重名 `get_analysis_trends` 导致 `/analysis/trends` 不可达
-- 学习进度 upsert 增加 `SELECT FOR UPDATE` + IntegrityError fallback
-- Redis 可用性检测从"永久缓存"改为 60s TTL 重检
-- Celery 任务只重试瞬态网络错误，不再重试 TypeError 等编程错误
+**后端新增**：
+- `_merge_similar_questions` 聚类算法 + `positive/negative_count` 字段
+- `merge_threshold` 参数化
+- LLM 提示词优化（噪声过滤 + 合并审查指令）
 
-**代码清理**：
-- 移除暗色模式全套实现（hooks、CSS、布局 toggle、编辑器/终端/图表 isDark 逻辑）
-- 删除 6 个未使用的前端组件（TopicEvidenceCard、TrendDashboard 等）
-- 清理死 import、重复 helper 函数、过时文档
+**代码质量**：
+- 输入校验（Pydantic 字段长度限制 + 50KB 负载上限）
+- 修复路由函数重名导致 `/analysis/trends` 不可达
+- httpx 全局连接池替代临时 AsyncClient
+- 删除 6 个未使用前端组件，清理死 import
 
 ### 2. 配置影响
 
