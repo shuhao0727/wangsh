@@ -62,8 +62,6 @@
 ## 开发协作 (`development/`)
 
 - [development/API.md](development/API.md) - API 接口文档
-- [development/CLAUDE_GUIDE.md](development/CLAUDE_GUIDE.md) - AI 协作指南（参考文档，部署信息以 DEPLOY.md 为准）
-- [development/CLAUDE_MEMORY.md](development/CLAUDE_MEMORY.md) - 项目知识快照（快照型文档，可能滞后）
 
 ## 脚本与测试文档 (`scripts/`)
 

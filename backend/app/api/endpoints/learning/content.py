@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.errors import safe_error_detail
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_current_user, get_db, require_admin
 from app.models.learning.content import LearningContentItem
 from app.schemas.learning.content import LearningContentItemIn
 from app.schemas.user_info import UserInfo
@@ -55,6 +55,7 @@ def _content_payload(item: LearningContentItem) -> Dict[str, Any]:
 async def list_learning_content(
     module_key: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """获取学习模块启用内容。"""
     _validate_module_key(module_key)

@@ -767,6 +767,7 @@ async def save_student_chain_analysis_stream(
                 task_sheet=body.task_sheet,
                 teacher_marks=_serialize_teacher_marks(body.teacher_marks),
                 custom_prompt=prompt_text,
+                merge_threshold=getattr(body, "merge_threshold", None) or 0.30,
             )
             summary = analysis_result.get("student_chain_summary") or {}
             yield _sse(
@@ -1294,7 +1295,7 @@ async def delete_chain_analysis(
 
 
 @router.get("/trends")
-async def get_analysis_trends(
+async def get_trends_summary(
     agent_id: int = Query(..., description="数据来源智能体 ID"),
     analysis_type: str = Query("hot_questions", description="分析类型: hot_questions | student_chains"),
     limit: int = Query(10, ge=1, le=50),

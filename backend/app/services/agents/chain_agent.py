@@ -47,7 +47,58 @@ _CHAIN_AGENT_SYSTEM_PROMPT = """你是一位学习科学与认知诊断专家。
 7. 数据不足时标注"低置信度"，列出备选解释
 8. 区分"有效 AI 使用"和"AI 依赖"
 9. 明确标注"基于时间相关性推断，非严格因果"
-10. 沉默/零参与学生至少被提及一次"""
+10. 沉默/零参与学生至少被提及一次
+
+## 问题合并审查
+
+你将收到系统预聚类的候选合并组（merged_groups）。请按以下标准审查和调整：
+
+### 合并条件（全部满足才合并）：
+1. 来自不同学生（同一学生的多个问题是思维链条，不合并）
+2. 时间差 ≤ 2 分钟
+3. 指向同一个知识困惑点（语义相似，不要求字面相同）
+
+### 判断"语义相似"的标准：
+- 问的是同一个知识点的同一层面（如都在问 range 的边界值）
+- 表达不同但困惑相同（"包含10吗" ≈ "为什么到9" ≈ "最后一个数是什么"）
+- 注意区分：追问（递进）vs 重复（相似）
+  - "range 参数是什么？" → "步长可以是负数吗？" = 递进，不合并
+  - "range 包含 10 吗？" ≈ "range(10) 为什么到 9？" = 相似，合并
+
+### 不合并的情况：
+- 同一学生的不同问题（即使话题相同）
+- 时间差 > 2 分钟的问题（视为独立教学事件）
+- 字面有关但困惑层面不同（如"for 语法" vs "for 效率"）
+
+### 输出要求：
+在 JSON 输出中增加 `merged_groups_review` 字段：
+```json
+{
+  "merged_groups_review": {
+    "confirmed": [1, 3, 5],
+    "split": [{"group_id": 2, "reason": "困惑层面不同", "new_groups": [[q_id1, q_id2], [q_id3]]}],
+    "new_merges": [{"question_ids": [q_id4, q_id5], "topic_label": "循环边界", "reason": "语义等价"}]
+  }
+}
+```
+- confirmed: 确认正确的合并组 ID 列表
+- split: 需要拆分的组（给出原因和新分组）
+- new_merges: 系统遗漏的应该合并的问题（给出原因）
+
+## 数据清洗与归一化
+
+在分析前，请注意以下数据质量规则：
+
+1. **时间归一化**：默认课堂时长为 40 分钟。如果数据跨度超过 45 分钟，请仅关注连续活跃区间（首个学生提问到最后一个教师提问之间），忽略首尾的零散数据。
+
+2. **噪声过滤**：以下类型的数据应被标记为噪声，不纳入主要分析：
+   - 课前/课后的测试性提问（通常是"你好"、"测试"等无意义内容）
+   - 与教学内容完全无关的闲聊（判断标准：与任务单关键词无任何交集）
+   - 同一学生在 10 秒内的重复提问（系统误发）
+
+3. **有效时间窗口**：在生成时间线相关分析（热点脉冲、教学区间等）时，以教师首次提问为 T0 起点，不要使用绝对时间戳。
+
+4. **异常值处理**：如果某个时间桶的提问数超过前后平均值的 5 倍以上，标注为"可能的系统异常"而非教学事件。"""
 
 
 async def deep_analyze_student_chains(
@@ -172,6 +223,16 @@ def _build_chain_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = Non
 
     if custom_prompt and custom_prompt.strip():
         prompt_parts.append(f"\n## 教师自定义指令\n{custom_prompt.strip()}\n")
+
+    # 合并组数据（供 LLM 审查）
+    merged_groups = data.get("merged_groups")
+    if merged_groups and len(merged_groups) > 0:
+        multi_member_groups = [g for g in merged_groups if g.get("member_count", 1) > 1]
+        if multi_member_groups:
+            prompt_parts.append("\n## 候选合并组（请审查）")
+            for g in multi_member_groups[:20]:  # 最多展示20组
+                members = ", ".join(str(sid) for sid in g.get("student_ids", []))
+                prompt_parts.append(f"- 组{g['group_id']}「{g.get('topic_label', '')}」: {g.get('representative_question', '')} (学生: {members}, {g.get('member_count', 0)}人)")
 
     prompt_parts.append("\n请基于以上数据，按照系统指令要求进行深度认知诊断。只输出 JSON。")
 

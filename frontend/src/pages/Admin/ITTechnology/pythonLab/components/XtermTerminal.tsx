@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } 
 import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
-import { useDocumentDarkMode } from "@/hooks/useDocumentDarkMode";
 
 const MAX_PENDING_STDIN_CHARS = 64 * 1024;
 
@@ -31,7 +30,6 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   ref
 ) {
   const showLineNumbersOn = showLineNumbers !== false;
-  const isDark = useDocumentDarkMode();
   const [gutterText, setGutterText] = useState("");
   const [_gutterDigits, setGutterDigits] = useState(2);
   const gutterRafRef = useRef<number | null>(null);
@@ -52,15 +50,12 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
   const termEpochRef = useRef(0);
   const terminalDisposedRef = useRef(true);
   const fontSizeRef = useRef(fontSize);
-  const isDarkRef = useRef(isDark);
-  isDarkRef.current = isDark;
 
   const getTerminalTheme = useCallback(() => {
-    const dark = isDarkRef.current;
     try {
       const styles = getComputedStyle(document.documentElement);
-      const bg = styles.getPropertyValue("--ws-color-bg").trim() || (dark ? "#0F172A" : "#F0FDFA");
-      const fg = styles.getPropertyValue("--ws-color-text").trim() || (dark ? "#F1F5F9" : "#1E293B");
+      const bg = styles.getPropertyValue("--ws-color-bg").trim() || "#F0FDFA";
+      const fg = styles.getPropertyValue("--ws-color-text").trim() || "#1E293B";
       return {
         background: bg,
         foreground: fg,
@@ -69,9 +64,9 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
       };
     } catch {
       return {
-        background: dark ? "#0F172A" : "#F0FDFA",
-        foreground: dark ? "#F1F5F9" : "#1E293B",
-        cursor: dark ? "#F1F5F9" : "#1E293B",
+        background: "#F0FDFA",
+        foreground: "#1E293B",
+        cursor: "#1E293B",
         selectionBackground: "color-mix(in srgb, var(--ws-color-primary) 20%, transparent)",
       };
     }
@@ -409,10 +404,6 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
     };
   }, [canInit, getTerminalTheme, queueInput, requestFit, scheduleRefreshGutter, trace]);
 
-  useEffect(() => {
-    if (!terminalRef.current) return;
-    terminalRef.current.options.theme = getTerminalTheme();
-  }, [getTerminalTheme, isDark]);
 
   // 3. WS Connection
   useEffect(() => {

@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, get_current_user
@@ -99,11 +100,11 @@ async def upsert_learning_progress(
 
     user_id = int(current_user.get("id"))
 
-    # 查询现有记录
+    # 查询现有记录（使用 FOR UPDATE 行锁防止并发竞态）
     stmt = select(LearningProgress).where(
         LearningProgress.user_id == user_id,
         LearningProgress.module_key == module_key,
-    )
+    ).with_for_update()
     result = await db.execute(stmt)
     progress = result.scalar_one_or_none()
 
@@ -124,7 +125,24 @@ async def upsert_learning_progress(
             progress_data=json.dumps(data, ensure_ascii=False),
             notes=data.get("notes") if isinstance(data.get("notes"), str) else None,
         )
-        db.add(progress)
+        try:
+            db.add(progress)
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            # 竞态条件：另一个请求已创建记录，改为更新
+            stmt = select(LearningProgress).where(
+                LearningProgress.user_id == user_id,
+                LearningProgress.module_key == module_key,
+            ).with_for_update()
+            result = await db.execute(stmt)
+            progress = result.scalar_one()
+            # 应用更新
+            progress.progress_data = json.dumps(data, ensure_ascii=False)
+            progress.current_stage = data.get("current_stage")
+            if "completed_stages" in data:
+                progress.completed_stages = json.dumps(data.get("completed_stages"), ensure_ascii=False)
+            progress.notes = data.get("notes") if isinstance(data.get("notes"), str) else progress.notes
 
     await db.commit()
     await db.refresh(progress)

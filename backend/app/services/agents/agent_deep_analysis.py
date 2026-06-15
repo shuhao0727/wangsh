@@ -38,6 +38,11 @@ STOP_WORDS = set(
     "怎么样 老师 同学 问题 代码 程序 运行".split()
 )
 
+# 正向思维问题类型（跟进、应用、迁移、延伸）
+POSITIVE_QUESTION_TYPES = {"follow_up", "apply", "transfer", "extend"}
+# 偏离思维问题类型（澄清、质疑、调试、偏离）
+NEGATIVE_QUESTION_TYPES = {"clarify", "challenge", "debug", "off_track"}
+
 
 @dataclass(frozen=True)
 class ConversationEvent:
@@ -400,11 +405,135 @@ def _cluster_questions(events: Sequence[ConversationEvent], *, max_clusters: int
                 "representative_question": items[0].content,
                 "evidence_ids": [event.message_id for event in items],
                 "question_type_distribution": type_distribution,
+                "positive_count": sum(type_distribution.get(t, 0) for t in POSITIVE_QUESTION_TYPES),
+                "negative_count": sum(type_distribution.get(t, 0) for t in NEGATIVE_QUESTION_TYPES),
                 "bloom_distribution": bloom_distribution,
                 "_events": items,
                 "_terms": set(cluster.get("_terms", set())),
             }
         )
+    return result
+
+
+def _merge_similar_questions(
+    events: Sequence[ConversationEvent],
+    *,
+    time_window_seconds: int = 120,
+    similarity_threshold: float = 0.35,
+) -> List[Dict[str, Any]]:
+    """
+    阶段 1 确定性合并：将不同学生在 time_window 内语义相似的问题聚合为一组。
+
+    合并规则：
+    1. 来自不同学生（同一学生的问题是链条，不合并）
+    2. 时间差 ≤ time_window_seconds
+    3. 关键词 overlap coefficient ≥ similarity_threshold
+
+    Returns:
+        List of merge groups: [{
+            "group_id": int,
+            "topic_label": str,  # 最频繁的关键词组合
+            "merged_time": str,  # ISO timestamp (group average)
+            "question_ids": [message_id, ...],
+            "student_ids": [user_id, ...],
+            "representative_question": str,
+            "questions": [{message_id, user_id, content, created_at}, ...],
+            "member_count": int,
+        }]
+    """
+    # 按时间排序，跳过无关键词的事件
+    sorted_events = sorted(events, key=lambda e: (e.created_at, e.message_id))
+    valid_events = [e for e in sorted_events if e.terms]
+
+    # 跟踪已分配的事件索引
+    assigned: Set[int] = set()
+    groups: List[List[ConversationEvent]] = []
+
+    for i, event_i in enumerate(valid_events):
+        if i in assigned:
+            continue
+        # 开始新组
+        group = [event_i]
+        assigned.add(i)
+
+        # 贪心扩展：向后查找可合并的事件
+        for j in range(i + 1, len(valid_events)):
+            if j in assigned:
+                continue
+            event_j = valid_events[j]
+
+            # 时间窗口检查（与组内最早成员比较）
+            earliest = min(m.created_at for m in group)
+            if (event_j.created_at - earliest).total_seconds() > time_window_seconds:
+                break
+
+            # 与组内任意成员的时间差检查
+            within_window = any(
+                abs((event_j.created_at - member.created_at).total_seconds()) <= time_window_seconds
+                for member in group
+            )
+            if not within_window:
+                continue
+
+            # 必须来自不同学生（同一学生的问题属于链条，不合并）
+            if event_j.user_id is not None and any(
+                m.user_id == event_j.user_id for m in group if m.user_id is not None
+            ):
+                continue
+
+            # 与组内任何成员的相似度检查（overlap coefficient）
+            matched = any(
+                _term_similarity(event_j.terms, member.terms) >= similarity_threshold
+                for member in group
+            )
+            if matched:
+                group.append(event_j)
+                assigned.add(j)
+
+        groups.append(group)
+
+    # 构建输出
+    result: List[Dict[str, Any]] = []
+    for group_idx, group in enumerate(groups):
+        # 统计关键词频率
+        term_counts: Dict[str, int] = {}
+        for event in group:
+            for term in event.terms:
+                term_counts[term] = term_counts.get(term, 0) + 1
+        top_terms = sorted(term_counts.items(), key=lambda pair: pair[1], reverse=True)
+        topic_label = " / ".join(term for term, _ in top_terms[:3]) or group[0].content[:18]
+
+        # 计算平均时间
+        timestamps = [e.created_at.timestamp() for e in group]
+        avg_ts = sum(timestamps) / len(timestamps)
+        merged_time = datetime.fromtimestamp(avg_ts, tz=timezone.utc)
+
+        # 选择最短问题作为代表性问题（最简洁）
+        representative = min(group, key=lambda e: len(e.content))
+
+        question_ids = [e.message_id for e in group]
+        student_ids = list({e.user_id for e in group if e.user_id is not None})
+        questions = [
+            {
+                "message_id": e.message_id,
+                "user_id": e.user_id,
+                "content": e.content,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in group
+        ]
+
+        result.append({
+            "group_id": group_idx + 1,
+            "topic_label": topic_label,
+            "merged_time": merged_time.isoformat(),
+            "question_ids": question_ids,
+            "student_ids": student_ids,
+            "representative_question": representative.content,
+            "questions": questions,
+            "member_count": len(group),
+        })
+
     return result
 
 
@@ -508,6 +637,8 @@ def _build_timeline(
                 "theme_distribution": theme_distribution,
                 "bloom_distribution": bloom_distribution,
                 "question_type_distribution": type_distribution,
+                "positive_count": sum(type_distribution.get(t, 0) for t in POSITIVE_QUESTION_TYPES),
+                "negative_count": sum(type_distribution.get(t, 0) for t in NEGATIVE_QUESTION_TYPES),
                 "representative_questions": [event.content for event in items[:5]],
                 "unresolved_questions": [event.content for event in items if event.question_type in {"debug", "challenge"}][:5],
                 "evidence_ids": [event.message_id for event in items],
@@ -923,6 +1054,7 @@ async def analyze_student_chains_v2(
     task_sheet: Optional[str] = None,
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
     custom_prompt: Optional[str] = None,
+    merge_threshold: float = 0.30,
 ) -> Dict[str, Any]:
     events = await load_conversation_events(db, agent_id=agent_id, start_at=start_at, end_at=end_at, class_name=class_name)
     student_questions = _dedupe_student_questions(events)
@@ -983,6 +1115,7 @@ async def analyze_student_chains_v2(
             for item in ai_main_question_chain
         ],
         "teacher_marks": teacher_questions,
+        "merged_groups": _merge_similar_questions(student_questions, time_window_seconds=120, similarity_threshold=merge_threshold),
     }
 
 

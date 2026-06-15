@@ -14,6 +14,7 @@ SSE pub/sub 模块 — Redis 优先，进程内降级
 
 import asyncio
 import json
+import time
 from typing import Dict, Optional
 
 from loguru import logger
@@ -30,6 +31,8 @@ _redis_pubsubs: Dict[str, object] = {}
 
 # Redis 可用性缓存（None = 未检测）
 _redis_available: Optional[bool] = None
+_redis_checked_at: float = 0.0
+_REDIS_CHECK_TTL: float = 60.0  # 每 60 秒重新检查 Redis 可用性
 
 
 # ── 公共 API ──────────────────────────────────────────────
@@ -86,24 +89,27 @@ async def shutdown_pubsub() -> None:
 # ── 内部实现 ──────────────────────────────────────────────
 
 async def _is_redis_available() -> bool:
-    """检测 Redis pub/sub 是否可用（结果缓存）"""
-    global _redis_available
-    if _redis_available is not None:
+    """检测 Redis pub/sub 是否可用（带 TTL 缓存，每 60s 重新检查）"""
+    global _redis_available, _redis_checked_at
+    now = time.monotonic()
+    if _redis_available is not None and (now - _redis_checked_at) < _REDIS_CHECK_TTL:
         return _redis_available
     try:
         from app.core.config import settings
         if not getattr(settings, "SSE_REDIS_PUBSUB_ENABLED", True):
             _redis_available = False
+            _redis_checked_at = now
             logger.info("SSE Redis pub/sub 已通过配置禁用，使用进程内模式")
             return False
         from app.utils.cache import cache
         client = await cache.get_client()
         await client.ping()  # type: ignore[misc]
         _redis_available = True
-        logger.info("SSE pub/sub 使用 Redis 模式（支持多 worker）")
+        logger.debug("SSE pub/sub Redis 检查通过")
     except Exception:
         _redis_available = False
         logger.warning("Redis 不可用，SSE pub/sub 降级为进程内模式（仅单 worker）")
+    _redis_checked_at = now
     return _redis_available
 
 

@@ -9,10 +9,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
+from app.core.http_client import get_http_client
 from app.models.core import User
 
 logger = logging.getLogger(__name__)
@@ -214,14 +214,14 @@ async def _call_llm_analysis(
             url = f"{base}/v1/chat-messages" if "/v1" not in base else f"{base}/chat-messages"
             payload = {"query": prompt, "user": "task_analysis", "response_mode": "blocking", "inputs": {}}
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                if resp.status_code == 200:
-                    body = resp.json()
-                    answer = body.get("answer", "")
-                else:
-                    logger.error(f"Dify LLM failed: {resp.status_code}")
-                    return {}
+            client = get_http_client()
+            resp = await client.post(url, json=payload, headers=headers, timeout=120)
+            if resp.status_code == 200:
+                body = resp.json()
+                answer = body.get("answer", "")
+            else:
+                logger.error(f"Dify LLM failed: {resp.status_code}")
+                return {}
         else:
             # OpenAI-compatible (DeepSeek, OpenAI, etc.)
             base = api_endpoint.rstrip("/")
@@ -231,14 +231,14 @@ async def _call_llm_analysis(
                 url = f"{base}/v1/chat/completions"
             payload = {"model": agent_model or "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "stream": False}
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                if resp.status_code == 200:
-                    body = resp.json()
-                    answer = body.get("choices", [{}])[0].get("message", {}).get("content", "")
-                else:
-                    logger.error(f"LLM failed: {resp.status_code} {resp.text[:200]}")
-                    return {}
+            client = get_http_client()
+            resp = await client.post(url, json=payload, headers=headers, timeout=120)
+            if resp.status_code == 200:
+                body = resp.json()
+                answer = body.get("choices", [{}])[0].get("message", {}).get("content", "")
+            else:
+                logger.error(f"LLM failed: {resp.status_code} {resp.text[:200]}")
+                return {}
 
         json_start = answer.find("{")
         json_end = answer.rfind("}") + 1

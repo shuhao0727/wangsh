@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { CheckCircle2, Circle, Clock, Star, BookOpen, ListTree, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
+import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { LearningBook, LearningBookChapter } from "./types";
@@ -165,7 +166,7 @@ const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
               if (katex) {
                 try {
                   const html = katex.renderToString(latex, { throwOnError: false, displayMode: false, trust: true });
-                  return <span className="math-inline" dangerouslySetInnerHTML={{ __html: html }} />;
+                  return <span className="math-inline" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
                 } catch (e) {}
               }
               return <span className="math-inline">{latex}</span>;
@@ -174,7 +175,7 @@ const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
               if (katex) {
                 try {
                   const html = katex.renderToString(clean, { throwOnError: false, displayMode: true, trust: true });
-                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: html }} />;
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
                 } catch (e) {}
               }
               return <div className="math-block">{clean}</div>;
@@ -192,7 +193,7 @@ const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
               if (katex) {
                 try {
                   const html = katex.renderToString(tex, { throwOnError: false, displayMode: true, trust: true });
-                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: html }} />;
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
                 } catch (e) {}
               }
               return <div className="math-block">{tex}</div>;
@@ -200,7 +201,7 @@ const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
             if (hljsLib && lang) {
               try {
                 const highlighted = hljsLib.highlight(codeText, { language: lang, ignoreIllegals: true }).value;
-                return <pre><code className={`hljs language-${lang}`} dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>;
+                return <pre><code className={`hljs language-${lang}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlighted) }} /></pre>;
               } catch {}
             }
             return <pre><code className={lang ? `language-${lang}` : undefined}>{codeText}</code></pre>;

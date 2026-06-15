@@ -15,6 +15,11 @@ export const escapeHtml = (value: string) => value
   .replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;");
 
+export const shortText = (value: string | undefined, max = 24) => {
+  const text = String(value || "").trim();
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+};
+
 export const safeFilePart = (value: string) => value.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_").slice(0, 80) || "report";
 
 export const wordColor = (word: string) => {

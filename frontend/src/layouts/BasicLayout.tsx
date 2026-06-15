@@ -8,8 +8,6 @@ import {
   LayoutGrid,
   FileText,
   Menu as MenuIcon,
-  Moon,
-  Sun,
 } from "lucide-react";
 import {
   Sheet,
@@ -26,7 +24,7 @@ import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
 import { logger } from "@services/logger";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { NAV_VISIBILITY_ITEMS } from "@/constants/navVisibility";
-import { useDarkMode } from "@hooks/useDarkMode";
+
 import { useBreakpoint } from "@hooks/useBreakpoint";
 import { getAuthExpiredReason } from "@/lib/auth-expired";
 
@@ -65,7 +63,7 @@ const BasicLayout: React.FC = () => {
   } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navVisibleMap, setNavVisibleMap] = useState<Record<string, boolean>>({});
-  const { isDark, toggle: toggleDark } = useDarkMode();
+
   const authError = String(error || "").trim();
   const authExpiredBannerReason = authError || getAuthExpiredReason();
 
@@ -159,15 +157,6 @@ const BasicLayout: React.FC = () => {
           </div>
 
           <div className="header-right">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleDark}
-              aria-label="切换暗色模式"
-              title={isDark ? "切换亮色模式" : "切换暗色模式"}
-            >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
             {isMobile && (
               <Button
                 variant="ghost"

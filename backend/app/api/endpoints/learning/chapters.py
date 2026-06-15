@@ -2,14 +2,12 @@
 
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.errors import safe_error_detail
 
-from app.core.deps import get_db
-
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_current_user, get_db, require_admin
 from app.models.learning.chapter import LearningChapter
 from app.schemas.user_info import UserInfo
 
@@ -38,6 +36,7 @@ def _chapter_payload(ch: LearningChapter) -> Dict:
 async def list_chapters(
     module_key: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user),
 ) -> List[Dict]:
     """获取某模块所有章节。"""
     if module_key not in VALID_MODULE_KEYS:
@@ -56,6 +55,7 @@ async def get_chapter(
     module_key: str,
     slug: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user),
 ) -> Dict:
     """获取单章节内容。"""
     if module_key not in VALID_MODULE_KEYS:
