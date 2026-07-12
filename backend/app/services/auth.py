@@ -50,10 +50,11 @@ async def authenticate_user(
     db, identifier: str, credential: str, user_type: str = "admin"
 ) -> Optional[Dict[str, Any]]:
     """
-    统一用户认证 — 所有角色均使用 姓名(identifier) + 学号(credential)
+    统一用户认证 — 所有角色均使用 姓名(identifier) + 学号/密码(credential)
 
-    支持 identifier 为 full_name 或 student_id（反向兼容）
-    credential 匹配 student_id；有 hashed_password 的账号也可用密码登录
+    identifier 用于定位用户（full_name / student_id / username，均为公开标识符）
+    credential 优先匹配 student_id；有 hashed_password 的账号也可使用密码，
+    保持项目统一的“姓名 + 学号”登录契约并兼容历史密码账号。
     """
     from sqlalchemy import select, or_
     from app.models import User
@@ -65,18 +66,16 @@ async def authenticate_user(
         User.is_active.is_(True)
     )
     result = await db.execute(query)
-    user = result.scalar_one_or_none()
-
-    if not user:
+    candidates = result.scalars().all()
+    matching_users = [
+        user
+        for user in candidates
+        if (user.student_id and user.student_id == credential)
+        or (user.hashed_password and verify_password(credential, user.hashed_password))
+    ]
+    if len(matching_users) != 1:
         return None
-
-    # 验证凭证：优先匹配 student_id，其次匹配 hashed_password
-    if user.student_id and user.student_id == credential:
-        pass
-    elif user.hashed_password and verify_password(credential, user.hashed_password):
-        pass
-    else:
-        return None
+    user = matching_users[0]
 
     # 返回用户信息
     return {
@@ -208,6 +207,63 @@ async def create_refresh_token(db, user_id: int) -> str:
     return token
 
 
+async def lock_user_for_login(db, user_id: int) -> bool:
+    """串行化同一账号的登录流程，保证 nonce 与 refresh token 顺序一致。"""
+    from sqlalchemy import select
+    from app.models import User
+
+    result = await db.execute(
+        select(User.id)
+        .where(
+            User.id == user_id,
+            User.is_active.is_(True),
+            User.is_deleted.is_(False),
+        )
+        .with_for_update()
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def issue_login_refresh_token(
+    db,
+    user_id: int,
+    *,
+    user_locked: bool = False,
+    commit: bool = True,
+) -> str:
+    """在用户行锁保护下撤销旧 refresh token，并原子签发唯一新 token。"""
+    from sqlalchemy import update
+    from app.models import RefreshToken
+    import secrets
+
+    try:
+        if not user_locked and not await lock_user_for_login(db, user_id):
+            raise ValueError("用户不存在或不可登录")
+
+        await db.execute(
+            update(RefreshToken)
+            .where(RefreshToken.user_id == user_id)
+            .values(is_revoked=True)
+        )
+
+        token = secrets.token_urlsafe(64)
+        db.add(
+            RefreshToken(
+                user_id=user_id,
+                token=token,
+                expires_at=datetime.now(timezone.utc)
+                + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+                is_revoked=False,
+            )
+        )
+        if commit:
+            await db.commit()
+        return token
+    except Exception:
+        await db.rollback()
+        raise
+
+
 async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
     """
     验证刷新令牌有效性
@@ -238,11 +294,15 @@ async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
         return None
     
     # 获取关联的用户信息
-    user_query = select(User).where(User.id == refresh_token_record.user_id)
+    user_query = select(User).where(
+        User.id == refresh_token_record.user_id,
+        User.is_active.is_(True),
+        User.is_deleted.is_(False),
+    )
     user_result = await db.execute(user_query)
     user = user_result.scalar_one_or_none()
     
-    if not user:
+    if not user or not user.is_active or user.is_deleted:
         return None
     
     return {
@@ -254,6 +314,97 @@ async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
         "class_name": user.class_name,
         "study_year": user.study_year
     }
+
+
+async def rotate_refresh_token(
+    db,
+    token: str,
+    *,
+    commit: bool = True,
+) -> Optional[Dict[str, Any]]:
+    """原子消费旧刷新令牌并签发新令牌，防止并发重放。"""
+    from sqlalchemy import and_, select
+    from app.models import RefreshToken, User
+    import secrets
+
+    try:
+        # 先只读取 user_id，再按与登录一致的顺序获取“用户行 -> token 行”锁。
+        # 锁后必须重新校验 token，避免登录在等待期间已经将其撤销。
+        owner_query = select(RefreshToken.user_id).where(
+            and_(
+                RefreshToken.token == token,
+                RefreshToken.expires_at > datetime.now(timezone.utc),
+                RefreshToken.is_revoked.is_(False),
+            )
+        )
+        owner_result = await db.execute(owner_query)
+        user_id = owner_result.scalar_one_or_none()
+        if user_id is None:
+            await db.rollback()
+            return None
+
+        user_query = (
+            select(User)
+            .where(
+                User.id == user_id,
+                User.is_active.is_(True),
+                User.is_deleted.is_(False),
+            )
+            .with_for_update()
+        )
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active or user.is_deleted:
+            await db.rollback()
+            return None
+
+        token_query = (
+            select(RefreshToken)
+            .where(
+                and_(
+                    RefreshToken.token == token,
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.expires_at > datetime.now(timezone.utc),
+                    RefreshToken.is_revoked.is_(False),
+                )
+            )
+            .with_for_update()
+        )
+        result = await db.execute(token_query)
+        refresh_token_record = result.scalar_one_or_none()
+        if not refresh_token_record:
+            await db.rollback()
+            return None
+
+        new_token = secrets.token_urlsafe(64)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        refresh_token_record.is_revoked = True
+        db.add(
+            RefreshToken(
+                user_id=user.id,
+                token=new_token,
+                expires_at=expires_at,
+                is_revoked=False,
+            )
+        )
+        if commit:
+            await db.commit()
+
+        return {
+            "user_id": user.id,
+            "role_code": user.role_code,
+            "username": user.username,
+            "student_id": user.student_id,
+            "full_name": user.full_name,
+            "class_name": user.class_name,
+            "study_year": user.study_year,
+            "refresh_token": new_token,
+        }
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def revoke_refresh_token(db, token: str) -> bool:
@@ -285,7 +436,12 @@ async def revoke_refresh_token(db, token: str) -> bool:
     return True
 
 
-async def revoke_all_user_refresh_tokens(db, user_id: int) -> bool:
+async def revoke_all_user_refresh_tokens(
+    db,
+    user_id: int,
+    *,
+    commit: bool = True,
+) -> bool:
     """
     撤销用户的所有刷新令牌
     
@@ -305,7 +461,8 @@ async def revoke_all_user_refresh_tokens(db, user_id: int) -> bool:
     ).values(is_revoked=True)
     
     await db.execute(stmt)
-    await db.commit()
+    if commit:
+        await db.commit()
     
     return True
 

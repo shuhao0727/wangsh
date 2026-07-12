@@ -37,7 +37,64 @@ export interface AuthState {
   error: string | null;
 }
 
-let sharedFetchPromise: Promise<User | null> | null = null;
+export const raceWithTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => void,
+): Promise<T | null> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      resolve(null);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+type AuthRequest = {
+  epoch: number;
+  controller: AbortController;
+  signal: AbortSignal;
+};
+
+export class AuthRequestGate {
+  private epoch = 0;
+  private controller: AbortController | null = null;
+
+  begin(): AuthRequest {
+    this.controller?.abort();
+    const controller = new AbortController();
+    const request = {
+      epoch: this.epoch + 1,
+      controller,
+      signal: controller.signal,
+    };
+    this.epoch = request.epoch;
+    this.controller = controller;
+    return request;
+  }
+
+  cancel() {
+    this.epoch += 1;
+    this.controller?.abort();
+    this.controller = null;
+  }
+
+  isCurrent(request: AuthRequest) {
+    return request.epoch === this.epoch && !request.signal.aborted;
+  }
+
+  release(request: AuthRequest) {
+    if (this.controller === request.controller) {
+      this.controller = null;
+    }
+  }
+}
 
 const AuthContext = createContext<ReturnType<typeof useAuthController> | null>(null);
 
@@ -50,6 +107,16 @@ const useAuthController = () => {
   });
 
   const initialFetchRef = useRef(false);
+  const mountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const authRequestGateRef = useRef(new AuthRequestGate());
+
+  const cancelCurrentRequest = useCallback(() => {
+    requestSeqRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+  }, []);
 
   const getToken = useCallback(() => {
     return getStoredAccessToken() || getCookieToken();
@@ -57,12 +124,24 @@ const useAuthController = () => {
 
   // 获取当前用户信息（增强版，添加调试和错误处理）
   const fetchCurrentUser = useCallback((): Promise<User | null> => {
-    if (sharedFetchPromise) return sharedFetchPromise;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+    const isCurrent = () =>
+      mountedRef.current &&
+      requestSeqRef.current === requestSeq &&
+      !controller.signal.aborted;
 
-    sharedFetchPromise = (async (): Promise<User | null> => {
+    return (async (): Promise<User | null> => {
       try {
         logger.debug("fetchCurrentUser: 调用authApi.getCurrentUser()");
-        const response = await authApi.getCurrentUser({ silent: true, timeout: 8000 } as import("axios").AxiosRequestConfig & { silent?: boolean });
+        const response = await authApi.getCurrentUser({
+          silent: true,
+          timeout: 8000,
+          signal: controller.signal,
+        } as import("axios").AxiosRequestConfig & { silent?: boolean });
         logger.debug("fetchCurrentUser: API响应成功", response);
 
         let userData = response.data;
@@ -77,15 +156,18 @@ const useAuthController = () => {
           throw new Error("无效的用户数据格式");
         }
 
-        setAuthState({
-          user: userData as User,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        });
+        if (isCurrent()) {
+          setAuthState({
+            user: userData as User,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        }
 
-        return userData as User;
+        return isCurrent() ? userData as User : null;
       } catch (error: any) {
+        if (!isCurrent() || error?.code === "ERR_CANCELED") return null;
         const status = error?.response?.status;
         const hadStoredToken = Boolean(getStoredAccessToken() || getCookieToken());
         const responseDetail = extractAuthErrorDetail(error) || "";
@@ -120,24 +202,32 @@ const useAuthController = () => {
         });
         return null;
       } finally {
-        sharedFetchPromise = null;
+        if (requestControllerRef.current === controller) {
+          requestControllerRef.current = null;
+        }
       }
     })();
-
-    return sharedFetchPromise;
   }, []);
   // 登录
   const login = useCallback(
     async (username: string, password: string) => {
+      const request = authRequestGateRef.current.begin();
       setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        await authApi.login(username, password);
+        await authApi.login(username, password, { signal: request.signal });
+        if (!authRequestGateRef.current.isCurrent(request)) {
+          return { success: false, error: "登录已取消" };
+        }
         clearPersistedAuthExpiredDetail();
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), 8000),
+        const user = await raceWithTimeout(
+          fetchCurrentUser(),
+          8000,
+          cancelCurrentRequest,
         );
-        const user = (await Promise.race([fetchCurrentUser(), timeoutPromise])) as User | null;
+        if (!authRequestGateRef.current.isCurrent(request)) {
+          return { success: false, error: "登录已取消" };
+        }
         if (!user) {
           const msg = "登录成功但会话未建立，请检查部署域名/Cookie/反向代理配置";
           setAuthState((prev) => ({ ...prev, isLoading: false, error: msg }));
@@ -146,6 +236,12 @@ const useAuthController = () => {
         setAuthState((prev) => ({ ...prev, isLoading: false, error: null }));
         return { success: true, user };
       } catch (error: any) {
+        if (
+          !authRequestGateRef.current.isCurrent(request) ||
+          error?.code === "ERR_CANCELED"
+        ) {
+          return { success: false, error: "登录已取消" };
+        }
         const errorMessage =
           error.response?.data?.detail ||
           error.response?.data?.message ||
@@ -156,13 +252,17 @@ const useAuthController = () => {
           error: errorMessage,
         }));
         return { success: false, error: errorMessage };
+      } finally {
+        authRequestGateRef.current.release(request);
       }
     },
-    [fetchCurrentUser],
+    [cancelCurrentRequest, fetchCurrentUser],
   );
 
   // 登出
   const logout = useCallback(async () => {
+    authRequestGateRef.current.cancel();
+    cancelCurrentRequest();
     try {
       await authApi.logout();
     } catch (error) {
@@ -176,7 +276,7 @@ const useAuthController = () => {
         error: null,
       });
     }
-  }, []);
+  }, [cancelCurrentRequest]);
 
   // 获取用户角色
   const getUserRole = useCallback(() => {
@@ -236,12 +336,25 @@ const useAuthController = () => {
         target.__wsInitialAuthToken = token;
       } catch {
       }
-      const isAdminPath =
-        typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+      const shouldProbeSession =
+        currentPath.startsWith("/admin") ||
+        currentPath.startsWith("/task-analysis");
       // 新标签打开后台时可能只有 HttpOnly Cookie、没有可读 token；
-      // 对 admin 路径额外探测一次 /auth/me 以恢复会话。
-      if (token || isAdminPath) {
-        void fetchCurrentUser();
+      // 对受保护路径额外探测一次 /auth/me 以恢复会话。
+      if (token || shouldProbeSession) {
+        void raceWithTimeout(
+          fetchCurrentUser(),
+          8000,
+          cancelCurrentRequest,
+        ).then((user) => {
+          if (!user && mountedRef.current) {
+            setAuthState((prev) =>
+              prev.isLoading ? { ...prev, isLoading: false } : prev,
+            );
+          }
+        });
       } else {
         // 无 token，直接设为未登录状态，不发请求
         setAuthState({
@@ -252,12 +365,25 @@ const useAuthController = () => {
         });
       }
     }
-  }, [fetchCurrentUser]);
+  }, [cancelCurrentRequest, fetchCurrentUser]);
+
+  useEffect(() => {
+    const authRequestGate = authRequestGateRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      initialFetchRef.current = false;
+      authRequestGate.cancel();
+      cancelCurrentRequest();
+    };
+  }, [cancelCurrentRequest]);
 
   // 统一处理全局会话过期事件（由 API 层在 refresh 失败时触发）
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onAuthExpired = (event: Event) => {
+      authRequestGateRef.current.cancel();
+      cancelCurrentRequest();
       const detail = (event as CustomEvent<{ reason?: string; kind?: string }>).detail;
       const reason =
         typeof detail?.reason === "string" && detail.reason.trim()
@@ -282,7 +408,7 @@ const useAuthController = () => {
     }
 
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
-  }, []);
+  }, [cancelCurrentRequest]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

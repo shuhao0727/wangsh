@@ -98,7 +98,8 @@ async def rotate_user_session(user_id: int, keep_ip: Optional[str] = None) -> Di
     """旋转用户会话nonce，踢出旧会话。"""
     nonce = secrets.token_urlsafe(16)
     data = {"nonce": nonce, "ip": keep_ip or "", "updated_at": _now_iso()}
-    await set_user_session(user_id, data)
+    if not await set_user_session(user_id, data):
+        raise RuntimeError("无法写入服务端会话")
     return data
 
 
@@ -132,11 +133,7 @@ async def verify_request_session_detail(
     token_nonce = str(token_payload.get("sn", ""))
     stored = await get_user_session(user_id)
     if not stored:
-        if not token_nonce:
-            return {"ok": False, "reason": "expired_or_missing"}
-        ip = extract_client_ip(request) if request is not None else ""
-        await set_user_session(user_id, {"nonce": token_nonce, "ip": ip, "updated_at": _now_iso()})
-        return {"ok": True, "reason": "ok"}
+        return {"ok": False, "reason": "expired_or_missing"}
     stored_nonce = str(stored.get("nonce", ""))
     if not token_nonce:
         return {"ok": False, "reason": "expired_or_missing"}

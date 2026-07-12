@@ -11,6 +11,18 @@ from fastapi import HTTPException
 import app.api.endpoints.auth.auth as auth_api
 
 
+class _LoginDB:
+    def __init__(self):
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    async def commit(self):
+        self.commit_count += 1
+
+    async def rollback(self):
+        self.rollback_count += 1
+
+
 def _make_request(ip="127.0.0.1"):
     return Request({
         "type": "http",
@@ -32,11 +44,19 @@ def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127
     def fake_create_access_token(data, expires_delta=None):
         return "mock-access-token"
 
-    async def fake_create_refresh_token(db, user_id):
-        return "mock-refresh-token"
-
-    async def fake_revoke_all_user_refresh_tokens(db, user_id):
+    async def fake_lock_user_for_login(db, user_id):
         return True
+
+    async def fake_issue_login_refresh_token(
+        db,
+        user_id,
+        *,
+        user_locked=False,
+        commit=True,
+    ):
+        assert user_locked is True
+        assert commit is False
+        return "mock-refresh-token"
 
     async def fake_rate_limiter_check(key, interval_seconds):
         pass  # 默认不限流
@@ -44,8 +64,12 @@ def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127
     monkeypatch.setattr(auth_api, "authenticate_user_auto", fake_authenticate)
     monkeypatch.setattr(auth_api, "on_successful_login", fake_on_successful_login)
     monkeypatch.setattr(auth_api, "create_access_token", fake_create_access_token)
-    monkeypatch.setattr(auth_api, "create_refresh_token", fake_create_refresh_token)
-    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all_user_refresh_tokens)
+    monkeypatch.setattr(auth_api, "lock_user_for_login", fake_lock_user_for_login)
+    monkeypatch.setattr(
+        auth_api,
+        "issue_login_refresh_token",
+        fake_issue_login_refresh_token,
+    )
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
 
 
@@ -64,7 +88,7 @@ def test_login_success_admin(monkeypatch):
         request=_make_request(),
         username="admin",
         password="correct",
-        db=object(),
+        db=_LoginDB(),
     ))
 
     assert result["access_token"] == "mock-access-token"
@@ -91,7 +115,7 @@ def test_login_success_student(monkeypatch):
         request=_make_request(),
         username="20240001",
         password="correct",
-        db=object(),
+        db=_LoginDB(),
     ))
 
     assert result["role_code"] == "student"
@@ -151,7 +175,7 @@ def test_login_rate_limit_key_includes_ip(monkeypatch):
         request=_make_request(ip="10.0.0.1"),
         username="admin",
         password="correct",
-        db=object(),
+        db=_LoginDB(),
     ))
 
     assert "login:" in captured["key"]

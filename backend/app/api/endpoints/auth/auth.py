@@ -9,11 +9,19 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Form, Body, Response, Request
 import jwt
 from jwt.exceptions import PyJWTError
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, get_access_token, get_current_user as require_current_user
-from app.services.auth import authenticate_user_auto, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token, revoke_all_user_refresh_tokens
+from app.core.deps import get_db, get_current_user as require_current_user
+from app.services.auth import (
+    authenticate_user_auto,
+    create_access_token,
+    issue_login_refresh_token,
+    lock_user_for_login,
+    rotate_refresh_token,
+    revoke_all_user_refresh_tokens,
+)
 from app.schemas.user_info import UserInfo
 from app.core.session_guard import on_successful_login, get_user_session, rotate_user_session, extract_client_ip
 from app.utils.rate_limit import rate_limiter
@@ -55,20 +63,33 @@ async def login_for_access_token(
         "type": "admin"
     }
     
-    # 会话绑定：为该登录颁发会话nonce，并处理IP唯一性
-    nonce, client_ip = await on_successful_login(int(user["id"]), request)
+    user_id = int(user["id"])
+    if not await lock_user_for_login(db, user_id):
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="账号已停用或不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    # 同账号新登录时撤销此前所有 refresh token，防止旧设备通过 refresh 续命
-    await revoke_all_user_refresh_tokens(db, int(user["id"]))
-
-    # 创建访问令牌，加入会话nonce（sn）
-    access_token = create_access_token(
-        data={**token_data, "sn": nonce},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    # 创建刷新令牌
-    refresh_token = await create_refresh_token(db, user["id"])
+    try:
+        # 用户行锁覆盖 Redis nonce 旋转和 refresh token 替换，确保并发登录
+        # 只有最后一个完成的事务保留可刷新的会话。
+        nonce, client_ip = await on_successful_login(user_id, request)
+        access_token = create_access_token(
+            data={**token_data, "sn": nonce},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        refresh_token = await issue_login_refresh_token(
+            db,
+            user_id,
+            user_locked=True,
+            commit=False,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     
     response.set_cookie(
         key=settings.ACCESS_TOKEN_COOKIE_NAME,
@@ -112,17 +133,6 @@ async def login_for_access_token(
     
     return response_data
 
-
-@router.post("/register")
-async def register_user() -> Dict[str, Any]:
-    """
-    用户注册端点 - 返回模拟数据
-    """
-    return {
-        "message": "用户注册功能已简化",
-        "user_id": "mock_user_id",
-        "created_at": datetime.now().isoformat(),
-    }
 
 
 
@@ -174,7 +184,8 @@ async def logout(
     用户登出 - 撤销所有刷新令牌并轮换会话nonce，确保已颁发的令牌无法再使用
     适用于共享电脑场景（如教室机房），防止登出后令牌被复用
     """
-    # 尝试从请求中提取访问令牌以获取用户ID
+    # 服务端撤销是尽力而为：无论数据库或 Redis 是否可用，当前浏览器
+    # 都必须收到一个正常响应和清 Cookie 指令。
     try:
         token = (
             request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
@@ -195,17 +206,39 @@ async def logout(
                 result = await db.execute(query)
                 user_id = result.scalar_one_or_none()
                 if user_id:
-                    # 撤销该用户所有刷新令牌
-                    await revoke_all_user_refresh_tokens(db, user_id)
-                    # 轮换会话nonce，使当前access token中的sn失效
-                    await rotate_user_session(user_id)
+                    if await lock_user_for_login(db, user_id):
+                        session = await get_user_session(user_id)
+                        token_nonce = str(payload.get("sn", ""))
+                        current_nonce = str(session.get("nonce", "")) if session else ""
+                        if token_nonce and token_nonce == current_nonce:
+                            # 与 login/refresh 使用同一用户锁顺序，避免并发 refresh
+                            # 在 logout 的撤销快照之后插入仍有效的新 token。
+                            await revoke_all_user_refresh_tokens(
+                                db,
+                                user_id,
+                                commit=False,
+                            )
+                            await rotate_user_session(user_id)
+                            await db.commit()
+                        else:
+                            await db.rollback()
+                    else:
+                        await db.rollback()
     except (PyJWTError, ValueError, TypeError):
         # 令牌无效、已过期或数据异常 - 仍然允许登出（清除cookie即可）
         pass
-
-    # 始终清除客户端cookie
-    response.delete_cookie(key=settings.ACCESS_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
-    response.delete_cookie(key=settings.REFRESH_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
+    except Exception:
+        logger.warning("登出时服务端会话撤销失败，继续清理客户端 Cookie", exc_info=True)
+        rollback = getattr(db, "rollback", None)
+        if rollback is not None:
+            try:
+                await rollback()
+            except Exception:
+                logger.warning("登出失败后的数据库回滚也未完成", exc_info=True)
+    finally:
+        # 即使服务端撤销失败，也必须清除当前浏览器的认证 Cookie。
+        response.delete_cookie(key=settings.ACCESS_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
+        response.delete_cookie(key=settings.REFRESH_TOKEN_COOKIE_NAME, path="/", domain=settings.COOKIE_DOMAIN)
     return {
         "message": "登出成功",
         "timestamp": datetime.now().isoformat(),
@@ -236,7 +269,7 @@ async def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_info = await verify_refresh_token(db, rt)
+    user_info = await rotate_refresh_token(db, rt, commit=False)
     if not user_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -244,38 +277,44 @@ async def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 撤销旧的刷新令牌
-    await revoke_refresh_token(db, rt)
-    
-    # 准备新的访问令牌数据
-    token_data = {
-        "sub": user_info.get("username") or user_info.get("student_id") or "anonymous",
-        "role_code": user_info.get("role_code", "guest"),
-        "name": user_info.get("full_name", ""),
-        "username": user_info.get("username", ""),
-        "type": "admin"
-    }
-    
-    # 从会话守卫读取当前nonce；若不存在则基于当前请求自举新会话nonce
     try:
-        user_id = int(user_info.get("user_id"))
+        # 准备新的访问令牌数据
+        token_data = {
+            "sub": user_info.get("username") or user_info.get("student_id") or "anonymous",
+            "role_code": user_info.get("role_code", "guest"),
+            "name": user_info.get("full_name", ""),
+            "username": user_info.get("username", ""),
+            "type": "admin"
+        }
+
+        # 从会话守卫读取当前nonce；若不存在则由 refresh 流程显式建立新会话
+        user_id = int(user_info["user_id"])
         sess = await get_user_session(user_id)
         nonce = (sess or {}).get("nonce")
         if not nonce:
-            client_ip = extract_client_ip(request)
-            sess = await rotate_user_session(user_id, keep_ip=client_ip)
+            try:
+                sess = await rotate_user_session(user_id, keep_ip=client_ip)
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="无法建立登录会话，请重新登录",
+                ) from exc
             nonce = (sess or {}).get("nonce")
-    except Exception:
-        nonce = None
+        if not nonce:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="无法建立登录会话，请重新登录",
+            )
 
-    # 创建新的访问令牌（带会话nonce）
-    access_token = create_access_token(
-        data=({**token_data, "sn": nonce} if nonce else token_data),
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    # 创建新的刷新令牌
-    new_refresh_token = await create_refresh_token(db, user_info["user_id"])
+        access_token = create_access_token(
+            data={**token_data, "sn": nonce},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        new_refresh_token = user_info["refresh_token"]
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     
     # 准备响应数据
     response_data = {
@@ -308,30 +347,6 @@ async def refresh_access_token(
     )
 
     return response_data
-
-
-@router.get("/verify")
-async def verify_token(
-    token: str = Depends(get_access_token)
-) -> Dict[str, Any]:
-    """
-    验证令牌有效性
-    """
-    if not token:
-        return {"valid": False, "reason": "未提供认证令牌"}
-
-    try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        return {
-            "valid": True,
-            "user_id": payload.get("sub"),
-            "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat(),
-            "issued_at": datetime.fromtimestamp(payload.get("iat", 0)).isoformat(),
-        }
-    except PyJWTError:
-        return {"valid": False, "reason": "令牌无效或已过期"}
 
 
 @router.get("/health")

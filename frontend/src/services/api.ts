@@ -636,7 +636,11 @@ export const healthApi = {
 export const authApi = {
   // 登录 - 使用表单格式 (application/x-www-form-urlencoded)
   // 注意：后端auth端点返回直接响应，没有ApiResponse包装
-  login: (username: string, password: string) => {
+  login: (
+    username: string,
+    password: string,
+    config?: AxiosRequestConfig,
+  ) => {
     const params = new URLSearchParams();
     params.append("username", username);
     params.append("password", password);
@@ -645,7 +649,9 @@ export const authApi = {
     // 注意：baseURL已经包含/api/v1，这里只需要/auth/login
     return api.client
       .post("/auth/login", params.toString(), {
+        ...config,
         headers: {
+          ...config?.headers,
           "Content-Type": "application/x-www-form-urlencoded",
         },
       })
@@ -657,9 +663,6 @@ export const authApi = {
         return resp;
       });
   },
-
-  // 注册
-  register: (userData: Record<string, unknown>) => api.client.post("/auth/register", userData),
 
   // 获取用户信息 - 后端返回直接用户对象，没有包装
   getCurrentUser: (config?: AxiosRequestConfig) => api.client.get("/auth/me", config),
@@ -675,10 +678,6 @@ export const authApi = {
     const token = refreshToken || getStoredRefreshToken();
     return postRefreshRequest(api.client, token, requestConfig);
   },
-
-  // 验证令牌
-  verifyToken: (token?: string) =>
-    api.client.get("/auth/verify", token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
 };
 
 export default api;

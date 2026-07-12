@@ -1,161 +1,51 @@
 """
 用户管理 API 端点
 与 sys_users 表交互，提供用户数据的 CRUD 操作
-支持管理员管理所有用户，包括学生和管理员
+普通管理员仅管理学生和教师，超级管理员可管理全部角色
 """
 
-from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
-from datetime import datetime
-import csv
-import io
-from urllib.parse import quote
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, UploadFile
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from openpyxl import Workbook, load_workbook
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, Field, ConfigDict
 
 from app.core.deps import require_admin, get_db
 from app.utils.errors import safe_error_detail
 from app.models import User
 from app.core.pubsub import publish
 
+from . import import_service
+from .import_service import (
+    USER_IMPORT_HEADERS,
+    USER_IMPORT_REQUIRED_FIELDS,
+    USER_IMPORT_TEMPLATE_ROWS,
+    normalize_cell_value as _normalize_cell_value,
+    parse_csv_rows as _parse_csv_rows,
+    parse_import_rows as _parse_import_rows,
+    parse_xlsx_rows as _parse_xlsx_rows,
+)
+from .policy import (
+    ADMIN_MANAGEABLE_ROLES,
+    PRIVILEGED_ROLES,
+    assert_role_assignment_allowed as _assert_role_assignment_allowed,
+    assert_users_deletable as _assert_users_deletable,
+    assert_users_mutable as _assert_users_mutable,
+    is_plain_admin as _is_plain_admin,
+)
+from .schemas import (
+    BatchDeleteRequest,
+    ImportUserResponse,
+    UserCreate,
+    UserImportResult,
+    UserListResponse,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdate,
+)
+
 router = APIRouter()
-
-USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名", "角色"]
-USER_IMPORT_REQUIRED_FIELDS = ["学号", "姓名"]
-USER_IMPORT_TEMPLATE_ROWS = [
-    ["20230001", "张三", "2025", "高一(1)班", "true", "zhangsan", "student"],
-    ["20230002", "李四", "2025", "高一(2)班", "true", "lisi", "student"],
-    ["20230003", "王五", "2025", "高一(3)班", "false", "wangwu", "student"],
-    ["20230004", "赵六", "2025", "高一(1)班", "true", "", "teacher"],
-]
-
-
-def _normalize_cell_value(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value).strip()
-
-
-def _parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    content_text = content.decode("utf-8-sig")
-    csv_file = io.StringIO(content_text)
-    reader = csv.DictReader(csv_file)
-    if not reader.fieldnames:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CSV文件为空或格式不正确",
-        )
-
-    fieldnames = [str(name).strip() for name in reader.fieldnames if name]
-    return fieldnames, reader
-
-
-def _parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    workbook = load_workbook(filename=io.BytesIO(content), data_only=True, read_only=True)
-    worksheet = workbook.active
-    assert worksheet is not None  # XLSX 文件总是有 active sheet
-    row_iterator = worksheet.iter_rows(values_only=True)
-    header_row = next(row_iterator, None)
-    if not header_row:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Excel文件为空或格式不正确",
-        )
-
-    fieldnames = [_normalize_cell_value(value) for value in header_row]
-    if not any(fieldnames):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Excel文件缺少表头",
-        )
-
-    def row_generator() -> Iterator[Dict[str, str]]:
-        for row in row_iterator:
-            current_row = row or ()
-            parsed_row: Dict[str, str] = {}
-            for idx, header in enumerate(fieldnames):
-                if not header:
-                    continue
-                value = current_row[idx] if idx < len(current_row) else ""
-                parsed_row[header] = _normalize_cell_value(value)
-            yield parsed_row
-
-    return [header for header in fieldnames if header], row_generator()
-
-
-def _parse_import_rows(file_name: str, content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    lower_name = file_name.lower()
-    if lower_name.endswith((".csv", ".txt")):
-        return _parse_csv_rows(content)
-    if lower_name.endswith(".xlsx"):
-        return _parse_xlsx_rows(content)
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="只支持 CSV、TXT 或 XLSX 文件",
-    )
-
-
-# Pydantic 模型定义
-class UserCreate(BaseModel):
-    """用户创建请求模型"""
-    student_id: Optional[str] = Field(None, max_length=50, description="学号")
-    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
-    full_name: str = Field(..., max_length=100, description="全名")
-    password: Optional[str] = Field(None, min_length=6, max_length=128, description="密码（仅教职工需要）")
-    class_name: Optional[str] = Field(None, max_length=50, description="班级名称")
-    study_year: Optional[str] = Field(None, max_length=10, description="学年")
-    role_code: Optional[str] = Field("student", max_length=20, description="角色代码")
-    is_active: Optional[bool] = Field(True, description="是否激活")
-
-
-class UserUpdate(BaseModel):
-    """用户更新请求模型"""
-    student_id: Optional[str] = Field(None, max_length=50, description="学号")
-    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
-    full_name: Optional[str] = Field(None, max_length=100, description="全名")
-    class_name: Optional[str] = Field(None, max_length=50, description="班级名称")
-    study_year: Optional[str] = Field(None, max_length=10, description="学年")
-    role_code: Optional[str] = Field(None, max_length=20, description="角色代码")
-    is_active: Optional[bool] = Field(None, description="是否激活")
-
-
-class UserResponse(BaseModel):
-    """用户响应模型"""
-    id: int
-    student_id: Optional[str]
-    username: Optional[str]
-    full_name: str
-    class_name: Optional[str]
-    study_year: Optional[str]
-    role_code: str
-    is_active: bool
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserListResponse(BaseModel):
-    """用户列表响应模型"""
-    users: List[UserResponse]
-    total: int
-    skip: int
-    limit: int
-    has_more: bool
-
-
-class UserStatsResponse(BaseModel):
-    """用户统计响应"""
-    total: int = Field(..., description="用户总数（未删除）")
-    active: int = Field(..., description="激活用户数")
-    inactive: int = Field(..., description="禁用用户数")
-    by_role: Dict[str, int] = Field(default_factory=dict, description="按角色分组计数")
 
 
 @router.get("/stats", response_model=UserStatsResponse)
@@ -164,8 +54,12 @@ async def get_user_stats(
     current_user: User = Depends(require_admin),
 ):
     """获取用户统计数据（总数、激活数、角色分布）"""
-    base = select(func.count(User.id)).where(User.is_deleted == False)
-    total_query = select(func.count(User.id)).where(User.is_deleted == False)
+    conditions = [User.is_deleted == False]
+    if _is_plain_admin(current_user):
+        conditions.append(User.role_code.in_(ADMIN_MANAGEABLE_ROLES))
+
+    base = select(func.count(User.id)).where(*conditions)
+    total_query = select(func.count(User.id)).where(*conditions)
     total = (await db.execute(total_query)).scalar() or 0
     active = (await db.execute(
         base.where(User.is_active == True)
@@ -176,7 +70,7 @@ async def get_user_stats(
 
     role_query = (
         select(User.role_code, func.count(User.id))
-        .where(User.is_deleted == False)
+        .where(*conditions)
         .group_by(User.role_code)
     )
     role_rows = (await db.execute(role_query)).all()
@@ -201,13 +95,21 @@ async def list_users(
     默认排除超级管理员（安全考虑），管理员/教师/学生可见
     """
     try:
+        if _is_plain_admin(current_user) and role_code in PRIVILEGED_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看管理员或超级管理员",
+            )
+
         # 构建查询条件
         conditions = []
         # 使用SQLAlchemy正确的语法
         conditions.append(User.is_deleted == False)
         
         # 默认排除超级管理员（安全考虑），管理员/教师/学生可见
-        if not role_code:
+        if _is_plain_admin(current_user):
+            conditions.append(User.role_code.in_(ADMIN_MANAGEABLE_ROLES))
+        elif not role_code:
             conditions.append(User.role_code.notin_(['super_admin']))
         
         if search:
@@ -258,6 +160,8 @@ async def list_users(
             has_more=skip + limit < total
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -288,6 +192,16 @@ async def get_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
+
+        if (
+            _is_plain_admin(current_user)
+            and user.role_code in PRIVILEGED_ROLES
+            and user.id != current_user.get("id")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看该用户信息",
+            )
         
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(user)
@@ -311,6 +225,9 @@ async def create_user(
     创建新用户（需要管理员权限）
     """
     try:
+        target_role = user_data.role_code or "student"
+        _assert_role_assignment_allowed(current_user, target_role)
+
         # 检查唯一性约束 - 检查值是否为None，而不是SQLAlchemy对象
         existing_checks = []
         
@@ -351,7 +268,7 @@ async def create_user(
             hashed_password=hashed_password,
             class_name=user_data.class_name,
             study_year=user_data.study_year,
-            role_code=user_data.role_code or "student",
+            role_code=target_role,
             is_active=user_data.is_active if user_data.is_active is not None else True
         )
         
@@ -396,7 +313,7 @@ async def update_user(
         query = select(User).where(
             User.id == user_id,
             User.is_deleted == False
-        )
+        ).with_for_update()
         result = await db.execute(query)
         user = result.scalar_one_or_none()
         
@@ -407,7 +324,7 @@ async def update_user(
             )
 
         # 普通管理员不能修改超级管理员和其他管理员（允许修改自己）
-        is_current_admin = current_user.get("role_code") == "admin"
+        is_current_admin = _is_plain_admin(current_user)
         if is_current_admin and user.role_code in ("super_admin", "admin") and user.id != current_user.get("id"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -416,11 +333,8 @@ async def update_user(
 
         # 普通管理员只能将角色改为 student 或 teacher
         if is_current_admin:
-            if user_data.role_code and user_data.role_code not in ("student", "teacher"):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="管理员只能设置学生或教师角色"
-                )
+            if user_data.role_code:
+                _assert_role_assignment_allowed(current_user, user_data.role_code)
 
         # 检查唯一性约束（排除当前用户）
         existing_checks = []
@@ -516,7 +430,7 @@ async def delete_user(
         query = select(User).where(
             User.id == user_id,
             User.is_deleted == False
-        )
+        ).with_for_update()
         result = await db.execute(query)
         user = result.scalar_one_or_none()
         
@@ -527,12 +441,11 @@ async def delete_user(
             )
 
         # 普通管理员不能删除管理员或超级管理员
-        is_current_admin = current_user.get("role_code") == "admin"
-        if is_current_admin and user.role_code in ("super_admin", "admin"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="无权删除该用户"
-            )
+        _assert_users_deletable(
+            current_user,
+            [user],
+            detail="无权删除该用户",
+        )
 
         # 软删除：标记为已删除
         # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
@@ -560,7 +473,7 @@ async def delete_user(
 
 @router.post("/batch-delete")
 async def batch_delete_users(
-    user_ids: List[int] = Body(...),
+    request: BatchDeleteRequest,
     current_user = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ) -> dict:
@@ -568,19 +481,30 @@ async def batch_delete_users(
     批量删除用户（软删除，需要管理员权限）
     """
     try:
+        normalized_ids = list(dict.fromkeys(request.user_ids))
+        if not normalized_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="请选择要删除的用户",
+            )
+
         # 获取符合条件的用户 - 使用SQLAlchemy正确的语法
         query = select(User).where(
-            User.id.in_(user_ids),
+            User.id.in_(normalized_ids),
             User.is_deleted == False
-        )
+        ).with_for_update()
         result = await db.execute(query)
         users = result.scalars().all()
-        
-        if not users:
+
+        found_ids = {user.id for user in users}
+        missing_ids = [user_id for user_id in normalized_ids if user_id not in found_ids]
+        if missing_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到要删除的用户"
+                detail=f"以下用户不存在或已删除: {missing_ids}",
             )
+
+        _assert_users_deletable(current_user, list(users))
         
         # 批量软删除
         deleted_ids = []
@@ -609,27 +533,6 @@ async def batch_delete_users(
         )
 
 
-class ImportUserResponse(BaseModel):
-    """单行导入响应模型"""
-    row_number: int
-    student_id: Optional[str] = None
-    full_name: str
-    status: str  # success, error
-    message: Optional[str] = None
-    user_id: Optional[int] = None
-
-
-class UserImportResult(BaseModel):
-    """用户导入结果模型"""
-    success: bool
-    message: str
-    total_rows: int
-    imported_count: int = 0
-    updated_count: int = 0
-    error_count: int = 0
-    errors: List[ImportUserResponse] = []
-
-
 @router.get("/import/template")
 async def download_user_import_template(
     format: str = Query("xlsx", pattern="^(xlsx|csv)$"),
@@ -638,51 +541,7 @@ async def download_user_import_template(
     """
     下载用户导入模板，支持 xlsx / csv。
     """
-    file_name = f"user_import_template.{format}"
-    encoded_name = quote(file_name)
-    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"}
-
-    if format == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(USER_IMPORT_HEADERS)
-        writer.writerow(["# 注意：角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
-        writer.writerow(["# 状态：true=激活，false=未激活（可选，默认为true）"])
-        writer.writerow(["# 用户名：可选字段，如果不填将使用学号作为登录账号"])
-        writer.writerow(["# 示例数据："])
-        for sample_row in USER_IMPORT_TEMPLATE_ROWS:
-            writer.writerow(sample_row)
-
-        csv_bytes = output.getvalue().encode("utf-8-sig")
-        return StreamingResponse(
-            io.BytesIO(csv_bytes),
-            media_type="text/csv; charset=utf-8",
-            headers=headers,
-        )
-
-    workbook = Workbook()
-    worksheet = workbook.active
-    assert worksheet is not None  # Workbook() 总是有一个 active sheet
-    worksheet.title = "用户导入模板"
-    worksheet.append(USER_IMPORT_HEADERS)
-    for sample_row in USER_IMPORT_TEMPLATE_ROWS:
-        worksheet.append(sample_row)
-
-    notes_sheet = workbook.create_sheet(title="填写说明")
-    notes_sheet.append(["说明"])
-    notes_sheet.append(["1. 角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)"])
-    notes_sheet.append(["2. 状态字段可填 true/false（默认为 true）"])
-    notes_sheet.append(["3. 用户名字段可选，不填将使用学号作为登录账号"])
-    notes_sheet.append(["4. 学号、姓名为必填字段"])
-
-    output = io.BytesIO()
-    workbook.save(output)
-    output.seek(0)
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=headers,
-    )
+    return import_service.build_user_import_template(format)
 
 
 @router.post("/import", response_model=UserImportResult)
@@ -693,173 +552,10 @@ async def import_users(
 ) -> UserImportResult:
     """
     批量导入用户（CSV / XLSX 格式，需要管理员权限）
-    注意：角色列可选值：student(学生)/teacher(教师)/admin(管理员)/super_admin(超级管理员)
+    导入规则：
+    - 普通 admin 只能导入 student（学生）或 teacher（教师），不能创建或更新 admin / super_admin。
+    - 高权限角色行不会自动降级；该行会失败，并在 UserImportResult.errors 中逐行返回。
+    - super_admin 可导入全部角色。
+    模板角色列仍使用统一格式，本轮不按当前角色动态生成模板。
     """
-    try:
-        # 检查文件类型
-        if not file.filename:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="文件名不能为空"
-            )
-
-        # 读取文件内容
-        content = await file.read()
-        fieldnames, reader = _parse_import_rows(file.filename, content)
-
-        # 验证必要字段
-        for field in USER_IMPORT_REQUIRED_FIELDS:
-            if field not in fieldnames:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"导入文件缺少必要字段: {field}"
-                )
-        
-        results = []
-        imported_count = 0
-        updated_count = 0
-        error_count = 0
-        
-        # 按行处理
-        for i, row in enumerate(reader, start=1):
-            savepoint = None
-            try:
-                # 跳过注释行
-                if any(str(value).startswith('#') for value in row.values() if value):
-                    continue
-
-                savepoint = await db.begin_nested()
-                
-                # 提取数据
-                student_id = row.get('学号', '').strip()
-                full_name = row.get('姓名', '').strip()
-                study_year = row.get('学年', '').strip() or None
-                class_name = row.get('班级', '').strip() or None
-                status_str = row.get('状态', 'true').strip().lower()
-                username = row.get('用户名', '').strip() or None
-                
-                # 验证必填字段
-                if not student_id or not full_name:
-                    raise ValueError("学号和姓名为必填字段")
-                
-                # 验证状态
-                is_active = True
-                if status_str in ['false', '0', 'no', '否']:
-                    is_active = False
-                elif status_str not in ['true', '1', 'yes', '是', '']:
-                    raise ValueError(f"状态值无效: {status_str}")
-                
-                # 读取角色（默认 student，支持 teacher/admin/super_admin）
-                role_code = row.get('角色', 'student').strip() or 'student'
-                if role_code not in ('student', 'teacher', 'admin', 'super_admin'):
-                    role_code = 'student'
-                # 普通管理员只能导入学生和教师
-                if current_user.get("role_code") == "admin" and role_code in ('admin', 'super_admin'):
-                    role_code = 'student'
-                
-                # 检查是否已存在（按学号）
-                existing_query = select(User).where(
-                    User.student_id == student_id,
-                    User.is_deleted == False
-                )
-                result = await db.execute(existing_query)
-                existing_user = result.scalar_one_or_none()
-                
-                if existing_user:
-                    # 更新现有用户
-                    existing_user.full_name = full_name  # type: ignore[assignment]
-                    existing_user.study_year = study_year or existing_user.study_year  # type: ignore[assignment]
-                    existing_user.class_name = class_name or existing_user.class_name  # type: ignore[assignment]
-                    existing_user.is_active = is_active  # type: ignore[assignment]
-                    if username and username != existing_user.username:
-                        # 检查用户名是否已被其他用户使用
-                        username_check = select(User).where(
-                            User.username == username,
-                            User.id != existing_user.id,
-                            User.is_deleted == False
-                        )
-                        username_result = await db.execute(username_check)
-                        if username_result.scalar_one_or_none():
-                            raise ValueError(f"用户名 '{username}' 已被其他用户使用")
-                        existing_user.username = username  # type: ignore[assignment]
-
-                    await db.flush()
-
-                    results.append(ImportUserResponse(
-                        row_number=i,
-                        student_id=student_id,
-                        full_name=full_name,
-                        status="success",
-                        message="用户信息已更新",
-                        user_id=existing_user.id  # type: ignore[arg-type]
-                    ))
-                    updated_count += 1
-                else:
-                    # 创建新用户
-                    # 检查用户名唯一性
-                    if username:
-                        username_check = select(User).where(
-                            User.username == username,
-                            User.is_deleted == False
-                        )
-                        username_result = await db.execute(username_check)
-                        if username_result.scalar_one_or_none():
-                            raise ValueError(f"用户名 '{username}' 已存在")
-                    
-                    new_user = User(
-                        student_id=student_id,
-                        username=username,
-                        full_name=full_name,
-                        class_name=class_name,
-                        study_year=study_year,
-                        role_code=role_code,
-                        is_active=is_active
-                    )
-                    
-                    db.add(new_user)
-                    await db.flush()
-
-                    results.append(ImportUserResponse(
-                        row_number=i,
-                        student_id=student_id,
-                        full_name=full_name,
-                        status="success",
-                        message="用户创建成功",
-                        user_id=new_user.id  # type: ignore[arg-type]
-                    ))
-                    imported_count += 1
-                    
-            except Exception as e:
-                error_msg = str(e)
-                results.append(ImportUserResponse(
-                    row_number=i,
-                    student_id=row.get('学号', ''),
-                    full_name=row.get('姓名', ''),
-                    status="error",
-                    message=error_msg
-                ))
-                error_count += 1
-                if savepoint is not None:
-                    await savepoint.rollback()
-        
-        # 最终提交
-        await db.commit()
-        
-        return UserImportResult(
-            success=True if error_count == 0 else False,
-            message=f"导入完成。成功导入: {imported_count}, 更新: {updated_count}, 失败: {error_count}",
-            total_rows=len(results),
-            imported_count=imported_count,
-            updated_count=updated_count,
-            error_count=error_count,
-            errors=[r for r in results if r.status == "error"]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_detail("导入用户失败", e)
-        )
+    return await import_service.import_users(file, current_user, db)

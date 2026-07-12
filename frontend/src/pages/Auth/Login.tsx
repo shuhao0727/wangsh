@@ -11,6 +11,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+const resolveLoginDestination = (role: string, redirect: string) => {
+  if (redirect !== "/home") return redirect;
+  if (role === "teacher") return "/admin/classroom-interaction";
+  if (role === "admin" || role === "super_admin") return "/admin/dashboard";
+  return redirect;
+};
+
 const LoginPage: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -58,7 +65,9 @@ const LoginPage: React.FC = () => {
       void auth.logout();
       return;
     }
-    void navigate(redirect, { replace: true });
+    void navigate(resolveLoginDestination(auth.user?.role_code || "", redirect), {
+      replace: true,
+    });
   }, [auth, navigate, redirect, requireAdmin]);
 
   const onFinish = async (values: LoginFormValues) => {
@@ -76,18 +85,7 @@ const LoginPage: React.FC = () => {
     }
     localStorage.removeItem("ws_guest_mode");
     showMessage.success("登录成功");
-    // Role-based redirect
-    if (!requireAdmin) {
-      if (role === "teacher") {
-        void navigate("/admin/classroom-interaction", { replace: true });
-      } else if (isStaffUser) {
-        void navigate("/admin/dashboard", { replace: true });
-      } else {
-        void navigate(redirect, { replace: true });
-      }
-    } else {
-      void navigate(redirect, { replace: true });
-    }
+    void navigate(resolveLoginDestination(role, redirect), { replace: true });
   };
 
   return (
@@ -205,7 +203,7 @@ const LoginPage: React.FC = () => {
             <div className="text-center text-sm text-text-secondary mt-6">
               <button
                 type="button"
-                onClick={() => { localStorage.setItem("ws_guest_mode", "1"); navigate("/home"); }}
+                onClick={() => { localStorage.setItem("ws_guest_mode", "1"); void navigate("/home"); }}
                 className="text-text-tertiary hover:text-text-secondary transition-colors underline underline-offset-4"
               >
                 访客模式进入
