@@ -268,7 +268,18 @@ def evaluate_migration_state(
                     "then run an explicit Alembic stamp only after confirming the schema matches the target revision.",
                 ],
             )
-        return MigrationCheckResult(ok=True, messages=["empty database without alembic_version; Alembic can initialize it"])
+        if len(heads) != 1:
+            return MigrationCheckResult(
+                ok=False,
+                messages=[f"expected exactly one Alembic head, found: {sorted(heads)}"],
+            )
+        return MigrationCheckResult(
+            ok=True,
+            messages=[
+                "empty database without alembic_version; run bootstrap_db.py --initial-only "
+                "before alembic upgrade head"
+            ],
+        )
 
     try:
         pending = pending_revisions_from_current(current_revisions, revisions, down_revisions, heads)

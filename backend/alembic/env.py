@@ -16,6 +16,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.database import Base
+from app.db.alembic_compat import ensure_alembic_version_capacity
 from app.core.config import settings
 
 import app.models
@@ -65,6 +66,12 @@ async def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     
+    # Commit the legacy version-table expansion before Alembic opens its own
+    # migration transaction. Otherwise SQLAlchemy's implicit transaction would
+    # make Alembic reuse a transaction it does not commit.
+    async with connectable.begin() as connection:
+        await connection.run_sync(ensure_alembic_version_capacity)
+
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     

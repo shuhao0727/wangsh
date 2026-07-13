@@ -49,7 +49,7 @@ from .assessment import (
 )
 
 # 课堂互动模型 (znt_ 前缀)
-from .classroom import ClassroomActivity, ClassroomResponse
+from .classroom import ClassroomActivity, ClassroomResponse, ClassroomPlan, ClassroomPlanItem
 
 # 信息技术模型 (xxjs_ 前缀)
 from .xxjs.dianming import XxjsDianming
@@ -98,6 +98,8 @@ __all__ = [
     "AssessmentConfigAgent",
     "ClassroomActivity",
     "ClassroomResponse",
+    "ClassroomPlan",
+    "ClassroomPlanItem",
     "LearningProgress",
     "LearningContentItem",
     "LearningChapter",

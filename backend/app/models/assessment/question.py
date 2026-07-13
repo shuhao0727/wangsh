@@ -24,7 +24,7 @@ class AssessmentQuestion(Base):
     knowledge_point = Column(String(200), nullable=True, comment="对应知识点")
     explanation = Column(Text, nullable=True, comment="答案解析")
     source = Column(String(20), nullable=False, default="ai_generated", comment="来源: ai_generated/manual/ai_realtime")
-    mode = Column(String(20), nullable=False, default="fixed", comment="模式: fixed(固定题)/adaptive(知识点自适应)")
+    mode = Column(String(20), nullable=False, default="fixed", server_default="fixed", comment="模式: fixed(固定题)/adaptive(知识点自适应)")
     adaptive_config = Column(Text, nullable=True, comment="自适应配置 JSON: {mastery_streak, max_attempts, prompt_hint}")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment="创建时间")
 

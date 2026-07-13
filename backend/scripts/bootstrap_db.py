@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -11,27 +12,29 @@ from app.db.database import engine
 from app.models import Base
 
 
-def _find_alembic_head() -> str:
-    versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
-    revisions: set[str] = set()
-    down_revisions: set[str] = set()
-
-    for file in versions_dir.glob("*.py"):
-        namespace: dict[str, object] = {}
-        exec(file.read_text(encoding="utf-8"), namespace)
-        revision = namespace.get("revision")
-        down_revision = namespace.get("down_revision")
-        if isinstance(revision, str):
-            revisions.add(revision)
-        if isinstance(down_revision, str):
-            down_revisions.add(down_revision)
-        elif isinstance(down_revision, (tuple, list)):
-            down_revisions.update(item for item in down_revision if isinstance(item, str))
-
-    heads = revisions - down_revisions
-    if len(heads) != 1:
-        raise RuntimeError(f"Expected exactly one Alembic head, found: {sorted(heads)}")
-    return next(iter(heads))
+LEGACY_BASELINE_TABLES = (
+    "sys_users",
+    "sys_refresh_tokens",
+    "sys_feature_flags",
+    "znt_agents",
+    "znt_conversations",
+    "znt_group_discussion_sessions",
+    "znt_group_discussion_members",
+    "znt_group_discussion_messages",
+    "znt_group_discussion_analyses",
+    "znt_optimize_logs",
+    "inf_typst_notes",
+    "inf_typst_assets",
+    "wz_categories",
+    "wz_markdown_styles",
+    "wz_articles",
+    "xbk_courses",
+    "xbk_students",
+    "xbk_selections",
+    "xxjs_dianming",
+)
+MIGRATION_ORIGIN_COLUMNS = (("znt_group_discussion_members", "muted_until"),)
+VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 
 async def _has_alembic_version(conn) -> bool:
@@ -56,14 +59,39 @@ async def _get_existing_public_tables(conn) -> set[str]:
     return {str(row[0]) for row in result}
 
 
-async def _legacy_create_all_and_stamp(conn) -> None:
-    """空库初始化路径：创建当前 ORM schema，并标记为当前 Alembic head。"""
-    await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, checkfirst=True))
-    head = _find_alembic_head()
-    await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(64) NOT NULL)"))
-    await conn.execute(text("DELETE FROM alembic_version"))
-    await conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head})
-    print(f"Database schema created and stamped at Alembic head: {head}")
+async def _create_legacy_baseline(conn) -> None:
+    """Create only tables that predate the maintained Alembic migration chain."""
+    tables = [Base.metadata.tables[name] for name in LEGACY_BASELINE_TABLES]
+    await conn.run_sync(
+        lambda sync_conn: Base.metadata.create_all(
+            sync_conn,
+            tables=tables,
+            checkfirst=True,
+        )
+    )
+    for index_name in _migration_managed_indexes():
+        await conn.execute(text(f'DROP INDEX IF EXISTS "{index_name}"'))
+    for table_name, column_name in MIGRATION_ORIGIN_COLUMNS:
+        await conn.execute(
+            text(f'ALTER TABLE "{table_name}" DROP COLUMN IF EXISTS "{column_name}"')
+        )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS alembic_version "
+            "(version_num VARCHAR(64) NOT NULL)"
+        )
+    )
+    print("Legacy baseline tables created; Alembic version remains unset")
+
+
+def _migration_managed_indexes() -> set[str]:
+    indexes: set[str] = set()
+    pattern = re.compile(
+        r"""op\.create_index\(\s*(?:op\.f\()?['"]([^'"]+)['"]"""
+    )
+    for path in VERSIONS_DIR.glob("*.py"):
+        indexes.update(pattern.findall(path.read_text(encoding="utf-8")))
+    return indexes
 
 
 async def _ensure_compat_columns(conn) -> None:
@@ -123,12 +151,15 @@ async def main(*, initial_only: bool = False) -> None:
                     "Run `python /app/scripts/check_migration_state.py`, back up the database, "
                     "inspect the schema, and stamp only a verified revision."
                 )
-            await _legacy_create_all_and_stamp(conn)
+            if initial_only:
+                await _create_legacy_baseline(conn)
+                return
+            raise RuntimeError(
+                "Empty database has not been migrated. Run `alembic upgrade head` before "
+                "applying compatibility patches and views."
+            )
         elif initial_only:
             print("Alembic version already exists; initial bootstrap skipped")
-            return
-
-        if initial_only:
             return
 
         await _ensure_compat_columns(conn)

@@ -4,11 +4,15 @@
 """
 
 import asyncio
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import select, text
 from loguru import logger
 
 from app.core.config import settings
-from app.db.database import engine, Base, AsyncSessionLocal
+from app.db.database import engine, AsyncSessionLocal
 from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.core.http_client import HttpClientManager
@@ -23,11 +27,10 @@ from app.services.informatics.github_sync import get_or_create_sync_settings
 
 
 async def init_database():
-    """开发环境/首次部署时自动创建表、视图并同步 Alembic 版本。
+    """开发环境空库使用 Alembic 初始化；已有库只维护兼容视图。
 
     已有数据库必须通过 Alembic 迁移演进，避免 DEBUG 模式下
-    ``Base.metadata.create_all`` 先创建新模型表，导致 alembic_version
-    落后于真实 schema。
+    应用启动自动修改或标记未经验证的 schema。
     """
     if not (settings.DEBUG or settings.AUTO_CREATE_TABLES):
         return
@@ -46,10 +49,10 @@ async def init_database():
             await _ensure_views(conn)
             return
 
-        logger.info("检测到空数据库，执行开发/首次部署自动建表并标记 Alembic head")
-        await conn.run_sync(Base.metadata.create_all)
+    logger.info("检测到空数据库，执行 Alembic upgrade head")
+    await _upgrade_database_to_head()
+    async with engine.begin() as conn:
         await _ensure_views(conn)
-        await _sync_alembic_version(conn)
 
 
 async def init_super_admin():
@@ -250,71 +253,11 @@ async def _ensure_views(conn):
         logger.warning("创建视图失败，跳过")
 
 
-async def _sync_alembic_version(conn):
-    """开发环境：Alembic 版本表不存在时自动创建并同步到最新。
+async def _upgrade_database_to_head() -> None:
+    from scripts.bootstrap_db import main as bootstrap_database
 
-    ⚠️ 生产环境应始终使用 `alembic upgrade head`，不要依赖此函数。
-    """
-    try:
-        await conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(64) NOT NULL)"))
-        result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
-        current = result.scalar_one_or_none()
-        if not current:
-            head_rev = _find_alembic_head()
-            if not head_rev:
-                logger.warning("无法自动检测 Alembic head，跳过版本标记")
-                return
-            # 开发环境首次创建表时 Alembic 版本表可能为空，
-            # 此时所有迁移都通过 Base.metadata.create_all 落实，
-            # 直接 stamp head 标记当前 schema 为最新版本
-            logger.info(
-                "开发环境：Alembic 版本表为空，正在标记为 head (%s) —— "
-                "后续请运行 alembic upgrade head 确认迁移状态一致",
-                head_rev,
-            )
-            await conn.execute(text("DELETE FROM alembic_version"))
-            await conn.execute(
-                text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
-                {"rev": head_rev},
-            )
-    except Exception:
-        logger.warning("同步 Alembic 版本失败，如果数据库已是最新状态可安全忽略")
-
-
-def _find_alembic_head() -> "str | None":
-    """扫描 alembic/versions/ 目录，找出迁移链的 head 版本号。
-
-    通过解析每个迁移文件中的 revision / down_revision 变量，
-    找出不被任何其他迁移作为 down_revision 引用的 revision（即 head）。
-    """
-    from pathlib import Path
-
-    versions_dir = Path(__file__).resolve().parents[2] / "alembic" / "versions"
-    if not versions_dir.is_dir():
-        return None
-
-    revisions: set[str] = set()
-    down_revisions: set[str] = set()
-
-    for f in versions_dir.glob("*.py"):
-        try:
-            namespace: dict[str, object] = {}
-            exec(f.read_text(encoding="utf-8"), namespace)
-            revision = namespace.get("revision")
-            down_revision = namespace.get("down_revision")
-            if isinstance(revision, str):
-                revisions.add(revision)
-            if isinstance(down_revision, str):
-                down_revisions.add(down_revision)
-            elif isinstance(down_revision, (tuple, list)):
-                down_revisions.update(item for item in down_revision if isinstance(item, str))
-        except Exception:
-            logger.debug("解析迁移文件 %s 失败，跳过", f.name)
-
-    heads = revisions - down_revisions
-    if len(heads) == 1:
-        return heads.pop()
-    if len(heads) > 1:
-        logger.warning("检测到多个 Alembic head: %s，将使用第一个", sorted(heads))
-        return sorted(heads)[0]
-    return None
+    backend_dir = Path(__file__).resolve().parents[2]
+    config = Config(str(backend_dir / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_dir / "alembic"))
+    await bootstrap_database(initial_only=True)
+    await asyncio.to_thread(command.upgrade, config, "head")

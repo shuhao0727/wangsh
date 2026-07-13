@@ -24,8 +24,8 @@ class AssessmentAnswer(Base):
     ai_feedback = Column(Text, nullable=True, comment="AI 评语")
     max_score = Column(Integer, nullable=False, comment="该题满分")
     knowledge_point = Column(String(200), nullable=True, comment="知识点（冗余存储）")
-    attempt_seq = Column(Integer, default=1, comment="同知识点第几次尝试")
-    is_adaptive = Column(Boolean, default=False, comment="是否为AI追加的自适应题")
+    attempt_seq = Column(Integer, nullable=False, default=1, server_default="1", comment="同知识点第几次尝试")
+    is_adaptive = Column(Boolean, nullable=False, default=False, server_default="false", comment="是否为AI追加的自适应题")
     answered_at = Column(DateTime(timezone=True), nullable=True, comment="作答时间")
 
     session = relationship("AssessmentSession", back_populates="answers", lazy="select")
