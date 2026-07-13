@@ -304,7 +304,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4 [&_input]:h-8 [&_input]:text-xs">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
@@ -337,7 +337,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                     <FormLabel>学期</FormLabel>
                     <Select value={field.value || undefined} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="请选择学期" />
                         </SelectTrigger>
                       </FormControl>
@@ -365,7 +365,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                       onValueChange={(v) => field.onChange(v === "__none__" ? "" : (v as "高一" | "高二"))}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="选择年级" />
                         </SelectTrigger>
                       </FormControl>
@@ -435,7 +435,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                         onValueChange={(v) => field.onChange(v === "__none__" ? "" : (v as "男" | "女"))}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs">
                             <SelectValue placeholder="选择性别" />
                           </SelectTrigger>
                         </FormControl>
@@ -575,11 +575,11 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
               </>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+              <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
                 取消
               </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 保存
               </Button>
             </DialogFooter>

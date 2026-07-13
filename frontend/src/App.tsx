@@ -6,6 +6,8 @@ import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
+import RoleGuard from "@components/Auth/RoleGuard";
+import { IT_GAMES_ADMIN_ROLES } from "@components/Auth/ITGamesAccess";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
 import PageErrorBoundary from "@components/Common/PageErrorBoundary";
 import { AUTH_EXPIRED_EVENT, type AuthExpiredKind } from "@services/api";
@@ -50,9 +52,11 @@ const TaskAnalysisComparePage = lazy(() => import("./pages/Admin/AgentData/TaskA
 const LockCrackerPage = lazy(() => import("./pages/Games/LockCracker"));
 const GamesPage = lazy(() => import("./pages/Games"));
 const GameConfigPage = lazy(() => import("./pages/Games/GameConfig"));
+const GamesRepoPage = lazy(() => import("./pages/ITTechnology/GamesRepo"));
 const AdminGroupDiscussionPage = lazy(() => import("./pages/Admin/GroupDiscussion"));
 const AdminInformaticsPage = lazy(() => import("./pages/Admin/Informatics"));
 const AdminITTechnologyPage = lazy(() => import("./pages/Admin/ITTechnology"));
+const AdminGamesManagerPage = lazy(() => import("./pages/Admin/ITTechnology/GamesManager"));
 const AdminPersonalProgramsPage = lazy(
   () => import("./pages/Admin/PersonalPrograms"),
 );
@@ -139,6 +143,7 @@ function App() {
               <Route path="/informatics" element={<PageErrorBoundary pageName="informatics"><InformaticsPage /></PageErrorBoundary>} />
               <Route path="/informatics/:id" element={<PageErrorBoundary pageName="informatics-detail"><InformaticsDetailPage /></PageErrorBoundary>} />
               <Route path="/it-technology" element={<PageErrorBoundary pageName="it-technology"><ITTechnologyPage /></PageErrorBoundary>} />
+              <Route path="/it-technology/games" element={<PageErrorBoundary pageName="it-games-repo"><GamesRepoPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/it-technology/python-lab/:id" element={<PageErrorBoundary pageName="python-lab"><ITTechnologyPythonLabPage /></PageErrorBoundary>} />
               <Route path="/personal-programs" element={<PageErrorBoundary pageName="personal-programs"><PersonalProgramsPage /></PageErrorBoundary>} />
@@ -162,6 +167,16 @@ function App() {
               <Route path="/admin/group-discussion" element={<PageErrorBoundary pageName="admin-group-discussion"><AdminGroupDiscussionPage /></PageErrorBoundary>} />
               <Route path="/admin/informatics" element={<PageErrorBoundary pageName="admin-informatics"><AdminInformaticsPage /></PageErrorBoundary>} />
               <Route path="/admin/it-technology" element={<PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary>} />
+              <Route
+                path="/admin/it-technology/games"
+                element={
+                  <RoleGuard roles={IT_GAMES_ADMIN_ROLES}>
+                    <PageErrorBoundary pageName="admin-games-manager">
+                      <AdminGamesManagerPage />
+                    </PageErrorBoundary>
+                  </RoleGuard>
+                }
+              />
               <Route path="/admin/personal-programs" element={<PageErrorBoundary pageName="admin-personal-programs"><AdminPersonalProgramsPage /></PageErrorBoundary>} />
               <Route path="/admin/articles" element={<PageErrorBoundary pageName="admin-articles"><AdminArticlesPage /></PageErrorBoundary>} />
               <Route path="/admin/assessment" element={<PageErrorBoundary pageName="admin-assessment"><AdminAssessmentPage /></PageErrorBoundary>} />

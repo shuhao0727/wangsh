@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.articles.markdown_styles import upsert_style
+from app.services.articles.markdown_styles import get_style, upsert_style
 
 
 STYLE_EXAMPLES: list[dict] = [
@@ -166,6 +166,8 @@ STYLE_EXAMPLES: list[dict] = [
 
 async def ensure_style_examples(db) -> None:
     for item in STYLE_EXAMPLES:
+        if await get_style(db=db, key=item["key"]):
+            continue
         await upsert_style(
             db=db,
             key=item["key"],

@@ -111,7 +111,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
           <div>
             <div className="ws-modal-label">导出类型</div>
             <Select value={exportType} onValueChange={(v) => setExportType(v as XbkExportType)}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -131,6 +131,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
                 min={2000}
                 max={2100}
                 step={1}
+                className="h-8 text-xs"
                 value={yearStart ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -144,6 +145,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
                 min={2000}
                 max={2100}
                 step={1}
+                className="h-8 text-xs"
                 value={yearEnd ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -160,11 +162,11 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({ open, onCancel, 
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel} disabled={exporting}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={exporting}>
             取消
           </Button>
-          <Button type="button" onClick={handleExport} disabled={exporting}>
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <Button type="button" size="sm" onClick={handleExport} disabled={exporting}>
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             导出
           </Button>
         </DialogFooter>

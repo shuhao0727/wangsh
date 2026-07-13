@@ -2,7 +2,7 @@
  * 公共思维导图广场 + 我的导图
  * 编辑在新标签页打开 Demo，预览独立页面
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,34 +31,105 @@ const MindmapGallery: React.FC = () => {
   const [pubMaps, setPubMaps] = useState<MindmapItem[]>([]);
   const [myMaps, setMyMaps] = useState<MindmapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [pubError, setPubError] = useState("");
+  const [myError, setMyError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
+  const refreshRequestRef = useRef(0);
+  const refreshAbortRef = useRef<AbortController | null>(null);
 
-  const fetchPub = useCallback(async () => {
-    try {
-      const res = await fetch(API_BASE, { headers: authHeaders(), credentials: "include" });
-      if (res.ok) setPubMaps(await res.json());
-    } catch {}
+  const fetchPub = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch(API_BASE, { credentials: "include", signal });
+    if (!res.ok) throw new Error(`Failed to load public mindmaps: ${res.status}`);
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []) as MindmapItem[];
   }, []);
 
-  const fetchMy = useCallback(async () => {
-    try {
-      const res = await fetch(API_BASE + "/my", { headers: authHeaders(), credentials: "include" });
-      if (res.ok) setMyMaps(await res.json());
-    } catch {}
+  const fetchMy = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch(API_BASE + "/my", {
+      headers: authHeaders(),
+      credentials: "include",
+      signal,
+    });
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error(`Failed to load personal mindmaps: ${res.status}`);
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []) as MindmapItem[];
   }, []);
+
+  const refreshMaps = useCallback(async (showLoading = false) => {
+    const requestId = ++refreshRequestRef.current;
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    setPubError("");
+    setMyError("");
+    if (showLoading) setLoading(true);
+
+    try {
+      const [publicResult, myResult] = await Promise.allSettled([
+        fetchPub(controller.signal),
+        fetchMy(controller.signal),
+      ]);
+      if (requestId !== refreshRequestRef.current) return;
+
+      const errors: string[] = [];
+      if (publicResult.status === "fulfilled") {
+        setPubMaps(publicResult.value);
+      } else {
+        const message = publicResult.reason instanceof Error
+          ? publicResult.reason.message
+          : "公共导图加载失败";
+        setPubError(message);
+        errors.push("公共导图加载失败");
+      }
+      if (myResult.status === "fulfilled") {
+        const personalMaps = myResult.value;
+        setAuthenticated(personalMaps !== null);
+        setMyMaps(personalMaps ?? []);
+      } else {
+        const message = myResult.reason instanceof Error
+          ? myResult.reason.message
+          : "我的导图加载失败";
+        setMyError(message);
+        errors.push("我的导图加载失败");
+      }
+      if (errors.length > 0) {
+        showMessage.error(errors.join("，"));
+      }
+    } catch (error) {
+      if (
+        requestId !== refreshRequestRef.current ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "公共导图加载失败";
+      setPubError(message);
+      showMessage.error("公共导图加载失败");
+    } finally {
+      if (requestId === refreshRequestRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [fetchMy, fetchPub]);
 
   useEffect(() => {
-    (async () => { setLoading(true); await Promise.all([fetchPub(), fetchMy()]); setLoading(false); })();
-  }, [fetchPub, fetchMy]);
+    void refreshMaps(true);
+    return () => {
+      refreshRequestRef.current += 1;
+      refreshAbortRef.current?.abort();
+    };
+  }, [refreshMaps]);
 
   // 页面聚焦时自动刷新（编辑新标签页返回后）
   useEffect(() => {
-    const onFocus = () => { fetchMy(); fetchPub(); };
+    const onFocus = () => { void refreshMaps(); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [fetchMy, fetchPub]);
+  }, [refreshMaps]);
 
   // 新建后在新标签页打开编辑
   const handleCreate = async () => {
@@ -81,13 +152,17 @@ const MindmapGallery: React.FC = () => {
         }));
         window.open(`/mindmap-demo/index.html?id=${item.id}`, "_blank");
         setCreateOpen(false); setNewTitle("");
-        await fetchMy(); setTab("my");
-      } else { showMessage.error("创建失败，请先登录"); }
+        await refreshMaps();
+        setTab("my");
+      } else if (res.status === 401) {
+        setAuthenticated(false);
+        showMessage.error("请先登录");
+      } else { showMessage.error("创建失败"); }
     } catch { showMessage.error("创建失败"); }
-    setCreating(false);
+    finally { setCreating(false); }
   };
 
-  const handleEdit = async (item: MindmapItem) => {
+  const handleEdit = (item: MindmapItem) => {
     // 写入数据到 localStorage
     const title = item.title || "未命名";
     const md = item.content?.markdown || `# ${title}`;
@@ -115,7 +190,7 @@ const MindmapGallery: React.FC = () => {
       const res = await fetch(`${API_BASE}/${id}`, {
         method: "DELETE", headers: authHeaders(), credentials: "include",
       });
-      if (res.ok) { showMessage.success("已删除"); await fetchMy(); }
+      if (res.ok) { showMessage.success("已删除"); await refreshMaps(); }
       else showMessage.error("删除失败");
     } catch { showMessage.error("删除失败"); }
   };
@@ -142,7 +217,7 @@ const MindmapGallery: React.FC = () => {
           </Button>
           {isMine && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive"
-              onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} title="删除">
+              onClick={(e) => { e.stopPropagation(); void handleDelete(item.id); }} title="删除">
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -171,12 +246,15 @@ const MindmapGallery: React.FC = () => {
 
         <TabsContent value="pub" className="flex-1 overflow-auto outline-none">
           {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-text-tertiary" /></div>
+          : pubError ? <LoadError message={pubError} onRetry={() => void refreshMaps(true)} />
           : pubMaps.length === 0 ? <Empty icon={<Globe className="h-12 w-12" />} text="导图广场暂无内容" />
           : <Grid>{pubMaps.map(m => renderCard(m, false))}</Grid>}
         </TabsContent>
 
         <TabsContent value="my" className="flex-1 overflow-auto outline-none">
           {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-text-tertiary" /></div>
+          : myError ? <LoadError message={myError} onRetry={() => void refreshMaps(true)} />
+          : !authenticated ? <Empty icon={<BookOpen className="h-12 w-12" />} text="登录后查看我的导图" />
           : myMaps.length === 0 ? <Empty icon={<BookOpen className="h-12 w-12" />} text="还没有导图" action="创建第一个导图" onAction={() => setCreateOpen(true)} />
           : <Grid>{myMaps.map(m => renderCard(m, true))}</Grid>}
         </TabsContent>
@@ -205,6 +283,13 @@ const MindmapGallery: React.FC = () => {
 
 const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+);
+
+const LoadError: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+  <div role="alert" className="flex h-40 flex-col items-center justify-center gap-3 text-destructive">
+    <p className="text-sm">{message}</p>
+    <Button variant="outline" size="sm" onClick={onRetry}>重新加载</Button>
+  </div>
 );
 
 const Empty: React.FC<{ icon: React.ReactNode; text: string; action?: string; onAction?: () => void }> = ({ icon, text, action, onAction }) => (

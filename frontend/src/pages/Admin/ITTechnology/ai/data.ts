@@ -3023,9 +3023,9 @@ export const MINDMAP_MARKDOWN = mindmapMd;
 export const RESOURCE_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   book: { label: "书籍", color: "var(--ws-color-primary)" },
   course: { label: "课程", color: "var(--ws-color-success)" },
-  paper: { label: "论文", color: "var(--ws-color-purple, #8B5CF6)" },
-  website: { label: "网站", color: "var(--ws-color-info, #3B82F6)" },
+  paper: { label: "论文", color: "var(--ws-color-purple)" },
+  website: { label: "网站", color: "var(--ws-color-info)" },
   competition: { label: "竞赛", color: "var(--ws-color-warning)" },
-  community: { label: "社区", color: "var(--ws-color-orange, #F97316)" },
-  github: { label: "GitHub", color: "var(--ws-color-purple, #8B5CF6)" },
+  community: { label: "社区", color: "var(--ws-tag-orange)" },
+  github: { label: "GitHub", color: "var(--ws-color-purple)" },
 };

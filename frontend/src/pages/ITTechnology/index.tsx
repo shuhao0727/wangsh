@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, RotateCcw,
   Volume2, Code, FileText, GitBranch, ChevronRight, TriangleAlert,
-  Cpu, Sparkles, Network
+  Cpu, Sparkles, Network, Gamepad2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RollCallPlayer from './RollCallPlayer';
@@ -84,7 +84,16 @@ const APPS = [
     action: 'agents',
     available: true,
   },
-  { key: 'it_game_lock_cracker_enabled', title: '小游戏', description: '枚举法 · 密码锁破解 · 更多教学小游戏', icon: <Network className="h-5 w-5" />, color: '#F59E0B', bg: 'color-mix(in srgb, #F59E0B 8%, transparent)', ring: 'color-mix(in srgb, #F59E0B 22%, transparent)', action: 'games', available: true },
+  { key: 'it_game_lock_cracker_enabled', title: '小游戏', description: '枚举法 · 密码锁破解 · 更多教学小游戏', icon: <Network className="h-5 w-5" />, color: 'var(--ws-color-warning)', bg: 'color-mix(in srgb, var(--ws-color-warning) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-warning) 22%, transparent)', action: 'games', available: true },
+  {
+    key: 'it_game_repo_enabled',
+    title: '游戏',
+    description: '游戏资源库，浏览与下载游戏安装包。',
+    icon: <Gamepad2 className="h-5 w-5" />,
+    color: 'var(--ws-color-purple)', bg: 'color-mix(in srgb, var(--ws-color-purple) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-purple) 22%, transparent)',
+    action: 'games-repo',
+    available: true,
+  },
 ];
 
 const ITTechnologyPage: React.FC = () => {
@@ -99,7 +108,7 @@ const ITTechnologyPage: React.FC = () => {
   const loadFlags = async () => {
     setLoading(true); setError(null);
     try {
-      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled', 'it_game_lock_cracker_enabled'];
+      const keys = ['it_dianming_enabled', 'it_survey_enabled', 'it_mindmap_enabled', 'it_python_lab_enabled', 'it_machine_learning_enabled', 'it_ai_exploration_enabled', 'it_agent_exploration_enabled', 'it_game_lock_cracker_enabled', 'it_game_repo_enabled'];
       const results = await Promise.all(
         keys.map(key => featureFlagsApi.getPublic(key).catch(() => ({ value: { enabled: false } } as any)))
       );
@@ -274,6 +283,7 @@ it_game_lock_cracker_enabled: 'games',
           if (app.action === 'agents') window.open('/it-technology/agents', '_blank');
           if (app.action === 'lock-cracker') window.open('/games/lock-cracker', '_blank');
           if (app.action === 'games') window.open('/games', '_self');
+          if (app.action === 'games-repo') void navigate('/it-technology/games');
           if (app.action === 'mindmap') window.open('/mindmaps', '_blank');
         }}
       />

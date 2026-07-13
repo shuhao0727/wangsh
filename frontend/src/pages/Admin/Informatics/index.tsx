@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
+import useAuth from "@hooks/useAuth";
 
 const FILTER_ALL = "__all__";
 
@@ -74,6 +75,8 @@ const clampPercent = (value?: number) => {
 };
 
 const AdminInformatics: React.FC = () => {
+  const auth = useAuth();
+  const canManageGithubSync = auth.isAdmin();
   const [loading, setLoading] = useState(false);
   const [publishingIds, setPublishingIds] = useState<Set<number>>(new Set());
   const [items, setItems] = useState<TypstNoteListItem[]>([]);
@@ -169,13 +172,13 @@ const AdminInformatics: React.FC = () => {
   useAdminSSE("informatics_changed", load);
 
   useEffect(() => {
-    if (syncModalOpen) {
+    if (syncModalOpen && canManageGithubSync) {
       void loadSync();
     }
-  }, [syncModalOpen, loadSync]);
+  }, [syncModalOpen, canManageGithubSync, loadSync]);
 
   useEffect(() => {
-    if (!syncModalOpen || !syncTaskId) return;
+    if (!canManageGithubSync || !syncModalOpen || !syncTaskId) return;
     let stopped = false;
     const tick = async () => {
       try {
@@ -200,7 +203,7 @@ const AdminInformatics: React.FC = () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [syncModalOpen, syncTaskId, loadSync]);
+  }, [canManageGithubSync, syncModalOpen, syncTaskId, loadSync]);
 
   useEffect(() => {
     const completedTaskId = syncTaskStatus?.task_id || syncTaskId;
@@ -497,10 +500,12 @@ const AdminInformatics: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => setSyncModalOpen(true)}>
-            <RefreshCw className="h-4 w-4" />
-            GitHub同步
-          </Button>
+          {canManageGithubSync ? (
+            <Button type="button" variant="outline" onClick={() => setSyncModalOpen(true)}>
+              <RefreshCw className="h-4 w-4" />
+              GitHub同步
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             刷新
@@ -543,6 +548,7 @@ const AdminInformatics: React.FC = () => {
         ) : null}
       </div>
 
+      {canManageGithubSync ? (
       <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
         <DialogContent className="sm:max-w-[780px]">
           <DialogHeader>
@@ -913,6 +919,7 @@ const AdminInformatics: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      ) : null}
 
       <Dialog open={syncResultOpen} onOpenChange={setSyncResultOpen}>
         <DialogContent className="sm:max-w-[780px]">

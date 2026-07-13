@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.core.deps import require_super_admin, require_user
-from app.schemas.articles import CategoryCreate, CategoryUpdate, CategoryResponse
+from app.schemas.articles import (
+    CategoryArticlesResponse,
+    CategoryCreate,
+    CategoryResponse,
+    CategoryUpdate,
+)
 from app.services.articles.category import CategoryService
 from app.core.config import settings
 from app.utils.errors import safe_error_detail
@@ -282,14 +287,14 @@ async def get_category_stats(
         )
 
 
-@router.get("/{category_id}/articles", response_model=Dict[str, Any])
+@router.get("/{category_id}/articles", response_model=CategoryArticlesResponse)
 async def get_category_articles(
     category_id: int,
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(settings.ARTICLE_PAGE_SIZE_DEFAULT, ge=1, le=settings.ARTICLE_PAGE_SIZE_MAX, description="每页数量"),
     published_only: bool = Query(True, description="是否只显示已发布的文章"),
     db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_user)
+    current_user: Dict[str, Any] = Depends(require_user)
 ) -> Dict[str, Any]:
     """
     获取属于该分类的文章列表
@@ -311,7 +316,10 @@ async def get_category_articles(
         db=db,
         page=page,
         size=size,
-        published_only=published_only,
+        published_only=(
+            published_only
+            or current_user.get("role_code") != "super_admin"
+        ),
         category_id=category_id,
         include_relations=True
     )

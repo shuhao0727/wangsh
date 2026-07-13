@@ -20,7 +20,8 @@ from .category import (
     CategoryCreate,
     CategoryUpdate,
     CategoryInDB,
-    CategoryResponse
+    CategoryResponse,
+    CategoryArticlesResponse,
 )
 
 from .markdown_style import (
@@ -46,6 +47,7 @@ __all__ = [
     "CategoryUpdate",
     "CategoryInDB",
     "CategoryResponse",
+    "CategoryArticlesResponse",
 
     # Markdown样式Schema
     "MarkdownStyleListItem",

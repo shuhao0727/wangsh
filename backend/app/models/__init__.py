@@ -60,6 +60,9 @@ from .learning import LearningChapter, LearningContentItem, LearningProgress
 # ML 学习书模型 (ml_ 前缀)
 from .ml import MLBook, MLBookChapter  # noqa: F401
 
+# IT 游戏资源库模型 (it_ 前缀)
+from .it import GameResource, GameDownloadLog
+
 __all__ = [
     "Base", 
     "User", 
@@ -100,4 +103,6 @@ __all__ = [
     "LearningChapter",
     "MLBook",
     "MLBookChapter",
+    "GameResource",
+    "GameDownloadLog",
 ]

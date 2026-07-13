@@ -266,7 +266,7 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
 
   // 从数据库加载思维导图
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch("/api/v1/learning/content/agents");
         if (!res.ok) return;
@@ -277,7 +277,9 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
         if (mindmapItem?.content?.markdown) {
           setMindmapMarkdown(mindmapItem.content.markdown);
         }
-      } catch {}
+      } catch {
+        showMessage.error("加载失败");
+      }
     })();
   }, []);
 
@@ -945,9 +947,13 @@ const ExperimentCard: React.FC<{
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
-                      onClick={() => {
-                        navigator.clipboard.writeText(experiment.code || "");
-                        showMessage.success("代码已复制到剪贴板");
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(experiment.code || "");
+                          showMessage.success("代码已复制到剪贴板");
+                        } catch {
+                          showMessage.error("复制失败");
+                        }
                       }}
                     >
                       <Copy className="h-3.5 w-3.5" />复制代码

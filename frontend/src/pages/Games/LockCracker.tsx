@@ -47,7 +47,6 @@ const LockCrackerPage: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { pickPassword(lockType); }, [lockType]);
   useEffect(() => {
     timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now()-startTime)/1000)), 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -59,6 +58,8 @@ const LockCrackerPage: React.FC = () => {
     setAttempts([]); setUnlocked(false); setResult(null); setGuess("");
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
+
+  useEffect(() => { pickPassword(lockType); }, [lockType, pickPassword]);
 
   const handleGuess = () => {
     const g = guess.trim();

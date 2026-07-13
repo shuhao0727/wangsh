@@ -181,7 +181,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-text-tertiary">导入类型:</span>
             <Select value={importScope} onValueChange={(v) => setImportScope(v as XbkScope)}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="h-8 text-xs w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -196,7 +196,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
               value={selectedGrade || "__none__"}
               onValueChange={(v) => setSelectedGrade(v === "__none__" ? undefined : (v as "高一" | "高二"))}
             >
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger className="h-8 text-xs w-[120px]">
                 <SelectValue placeholder="选择年级" />
               </SelectTrigger>
               <SelectContent>
@@ -206,8 +206,8 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
               </SelectContent>
             </Select>
 
-            <Button type="button" variant="outline" onClick={handleDownloadTemplate}>
-              <Download className="h-4 w-4" />
+            <Button type="button" variant="outline" size="sm" onClick={handleDownloadTemplate}>
+              <Download className="h-3.5 w-3.5" />
               下载模板
             </Button>
           </div>
@@ -231,9 +231,10 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload className="h-4 w-4" />
+              <Upload className="h-3.5 w-3.5" />
               选择 Excel 文件
             </Button>
 
@@ -244,7 +245,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
+                  className="h-7 px-2 text-xs"
                   onClick={() => {
                     setImportFile(null);
                     setPreview(null);
@@ -329,10 +330,10 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({ open, onCancel, 
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel} disabled={importing}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={importing}>
             取消
           </Button>
-          <Button type="button" onClick={handleImport} disabled={!canImport || importing}>
+          <Button type="button" size="sm" onClick={handleImport} disabled={!canImport || importing}>
             {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             导入
           </Button>

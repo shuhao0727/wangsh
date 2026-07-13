@@ -408,9 +408,13 @@ const ArticleDetailPage: React.FC = () => {
                         <button
                           type="button"
                           className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-[var(--ws-color-surface-2)] px-2 py-1 text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
-                          onClick={() => {
-                            navigator.clipboard.writeText(codeText);
-                            showMessage.success("代码已复制到剪贴板");
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(codeText);
+                              showMessage.success("代码已复制到剪贴板");
+                            } catch {
+                              showMessage.error("复制失败");
+                            }
                           }}
                         >
                           <Copy className="h-3 w-3" />

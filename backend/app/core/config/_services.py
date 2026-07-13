@@ -57,9 +57,14 @@ class ServicesSettingsMixin:
     GROUP_DISCUSSION_COMPARE_CACHE_TTL: int = Field(default=600)
     GROUP_DISCUSSION_LIST_RECENT_HOURS: int = Field(default=1)
 
+    # ==================== IT 游戏资源库 ====================
+    IT_GAME_MAX_UPLOAD_BYTES: int = Field(default=500 * 1024 * 1024, gt=0)
+
     # ==================== Typst 编译 ====================
     TYPST_COMPILE_MAX_CONCURRENCY: int = Field(default=2)
     TYPST_COMPILE_RATE_LIMIT_SECONDS: int = Field(default=1)
+    # 单次 typst 编译最大耗时（秒），超时则终止，防止恶意/超大文件阻塞有限的编译并发槽
+    TYPST_COMPILE_TIMEOUT_SECONDS: int = Field(default=120)
     TYPST_COMPILE_USE_CELERY: bool = Field(default=False)
     TYPST_PDF_STORAGE_DIR: str = Field(default="/app/data/typst_pdfs")
     TYPST_STORE_PDF_IN_DB: bool = Field(default=False)

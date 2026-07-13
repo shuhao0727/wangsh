@@ -27,25 +27,48 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!isPersonal);
+  const [loadError, setLoadError] = useState("");
 
   // 模块模式：从 DB 加载
   useEffect(() => {
-    if (isPersonal) { setLoading(false); return; }
-    const mk = moduleKey ?? "ml";
-    (async () => {
-      try {
-        const res = await fetch(`/api/v1/learning/content/${mk}`);
-        if (res.ok) {
-          const items = await res.json();
-          const mm = (items || []).find((d: any) => d.section_key === "mindmap" && d.item_key === "overview");
-          if (mm?.content?.markdown) {
-            setMarkdown(mm.content.markdown);
-            setTitle(mm.title || "");
-          }
-        }
-      } catch {}
+    if (isPersonal) {
+      setLoadError("");
       setLoading(false);
+      return;
+    }
+    const mk = moduleKey ?? "ml";
+    const controller = new AbortController();
+    let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    void (async () => {
+      try {
+        const res = await fetch(`/api/v1/learning/content/${mk}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`加载失败: ${res.status}`);
+        }
+        const items = await res.json();
+        const mm = (Array.isArray(items) ? items : [])
+          .find((d: any) => d.section_key === "mindmap" && d.item_key === "overview");
+        if (!cancelled && mm?.content?.markdown) {
+          setMarkdown(mm.content.markdown);
+          setTitle(mm.title || "");
+        }
+      } catch (error) {
+        if (cancelled || (error instanceof DOMException && error.name === "AbortError")) return;
+        const message = error instanceof Error ? error.message : "加载失败";
+        setLoadError(message);
+        showMessage.error(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [moduleKey, isPersonal]);
 
   const handleSave = async () => {
@@ -87,20 +110,48 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
   useEffect(() => {
     if (viewMode !== "preview" || !previewRef.current || !markdown) return;
     const container = previewRef.current;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     container.innerHTML = "";
     const tryRender = () => {
+      if (cancelled) return;
       const m = (window as any).markmap;
-      if (!m?.Transformer || !m?.Markmap) { setTimeout(tryRender, 200); return; }
+      if (!m?.Transformer || !m?.Markmap) {
+        retryTimer = setTimeout(tryRender, 200);
+        return;
+      }
       const { root } = new m.Transformer().transform(markdown);
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "100%"); svg.setAttribute("height", "100%");
+      const bounds = container.getBoundingClientRect();
+      const width = Math.max(1, Math.round(bounds.width || container.clientWidth || 1));
+      const height = Math.max(
+        1,
+        Math.round(bounds.height || container.clientHeight || 500),
+      );
+      svg.setAttribute("width", String(width));
+      svg.setAttribute("height", String(height));
+      svg.style.width = "100%";
+      svg.style.height = "100%";
       container.appendChild(svg);
       m.Markmap.create(svg, {}, root);
     };
     tryRender();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      container.innerHTML = "";
+    };
   }, [viewMode, markdown]);
 
   if (loading) return <div className="flex h-full items-center justify-center text-sm">加载中...</div>;
+  if (loadError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-text-secondary">
+        <p>{loadError}</p>
+        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>重新加载</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface">

@@ -156,4 +156,12 @@ describe('queryKeys', () => {
       expect(queryKeys.activeAgents.all).toEqual(['active-agents']);
     });
   });
+
+  describe('itGames', () => {
+    it('keeps public, admin and log caches in one namespace', () => {
+      expect(queryKeys.itGames.list({ page: 1 })).toEqual(['it-games', 'list', { page: 1 }]);
+      expect(queryKeys.itGames.adminList({ page: 1 })).toEqual(['it-games', 'admin-list', { page: 1 }]);
+      expect(queryKeys.itGames.logs(7, 1, 50)).toEqual(['it-games', 'logs', 7, 1, 50]);
+    });
+  });
 });

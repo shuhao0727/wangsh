@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from .article import ArticleWithRelations
+
 
 class CategoryBase(BaseModel):
     """分类基础模型"""
@@ -83,6 +85,44 @@ class CategoryWithUsage(CategoryResponse):
     article_count: int = Field(0, description="该分类下的文章数量")
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategorySummary(BaseModel):
+    """分类文章列表中的分类摘要。"""
+
+    id: int
+    name: str
+    slug: str
+    description: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryArticleAuthor(BaseModel):
+    """分类文章列表可公开的作者摘要。"""
+
+    id: int
+    username: str
+    full_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryArticleWithRelations(ArticleWithRelations):
+    """分类文章响应，避免暴露作者敏感联系方式。"""
+
+    author: Optional[CategoryArticleAuthor] = None
+
+
+class CategoryArticlesResponse(BaseModel):
+    """按分类查询文章的分页响应。"""
+
+    category: CategorySummary
+    total: int
+    articles: List[CategoryArticleWithRelations]
+    page: int
+    size: int
+    total_pages: int
 
 
 class CategoryList(BaseModel):

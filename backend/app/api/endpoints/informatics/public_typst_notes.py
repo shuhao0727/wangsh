@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db
 from app.models.informatics.github_sync_source import InformaticsGithubSyncSource
 from app.schemas.informatics.typst_note import TypstNotePublicListItem, TypstNotePublicResponse
-from app.services.informatics.typst_notes import compile_note_pdf, get_note, list_published_notes
+from app.services.informatics.typst_notes import get_cached_note_pdf, get_note, list_published_notes
 
 router = APIRouter(prefix="/public/informatics/typst-notes")
 
@@ -84,10 +84,13 @@ async def public_export_pdf(
     if not note or not note.published:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="内容不存在")
 
-    try:
-        pdf_bytes, _ = await compile_note_pdf(db=db, note=note)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    # 公开端点仅返回已编译的 PDF 缓存，不触发服务器编译（防止匿名用户 DoS）
+    pdf_bytes = await get_cached_note_pdf(db, note)
+    if not pdf_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF 暂未生成，请联系管理员编译",
+        )
     filename = f"typst-note-{note.id}.pdf"
     return Response(
         content=pdf_bytes,

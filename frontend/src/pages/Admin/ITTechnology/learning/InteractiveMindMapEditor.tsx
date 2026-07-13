@@ -246,7 +246,7 @@ const InteractiveMindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, in
   // Keyboard
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); handleSave(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); void handleSave(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); handleRedo(); }
       if (e.key === "Tab" && selectedId) { e.preventDefault(); handleAddChild(selectedId); }

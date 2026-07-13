@@ -88,12 +88,12 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
         if (!silent) showMessage.success("导图已保存");
         // 只有手动保存才触发 onSaved（不静默保存）
         if (!silent) onSavedRef.current?.();
-      } else if (!silent) {
+      } else {
         if (res.status === 401) showMessage.error("未登录，请先登录后再保存");
         else showMessage.error(`保存失败 (${res.status})`);
       }
     } catch {
-      if (!silent) showMessage.error("网络错误，保存失败");
+      showMessage.error("网络错误，保存失败");
     }
     if (!silent) setSaving(false);
   }, []);
@@ -102,7 +102,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
   useEffect(() => {
     const h = (e: MessageEvent) => {
       if (e.data?.type === "mindmap:save" && e.data.data) {
-        handleSaveData(e.data.data, true); // 静默保存，不退出编辑
+        void handleSaveData(e.data.data, true); // 静默保存，不退出编辑
       }
     };
     window.addEventListener("message", h);
@@ -122,7 +122,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     try {
       const w = iframeRef.current?.contentWindow as any;
       if (w?._mmData) {
-        handleSaveData(w._mmData.root || w._mmData);
+        void handleSaveData(w._mmData.root || w._mmData);
       } else {
         // fallback: request data from iframe
         iframeRef.current?.contentWindow?.postMessage({ type: "mindmap:getData" }, "*");

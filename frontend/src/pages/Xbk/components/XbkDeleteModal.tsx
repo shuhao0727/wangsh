@@ -86,7 +86,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
           <div>
             <Label className="ws-modal-label">删除范围</Label>
             <Select value={deleteType} onValueChange={(v) => setDeleteType(v as typeof deleteType)}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -104,11 +104,11 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({ open, onCancel, 
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel} disabled={deleting}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={deleting}>
             取消
           </Button>
-          <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
-            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <Button type="button" variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             确认删除
           </Button>
         </DialogFooter>

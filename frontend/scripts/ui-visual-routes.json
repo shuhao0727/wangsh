@@ -5,10 +5,12 @@
     "/articles",
     "/informatics",
     "/it-technology",
+    "/it-technology/games",
     "/admin/dashboard",
     "/admin/ai-agents",
     "/admin/informatics",
     "/admin/it-technology",
+    "/admin/it-technology/games",
     "/admin/articles"
   ]
 }

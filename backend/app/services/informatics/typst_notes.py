@@ -28,6 +28,9 @@ from app.models.informatics.typst_style import TypstStyle
 _compile_locks: dict[int, asyncio.Lock] = {}
 _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPILE_MAX_CONCURRENCY", 2))))
 
+# 单次 typst 编译超时秒数：防止恶意/超大 .typ 文件无限阻塞编译并发槽（仅 2 并发）
+TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
+
 
 def _sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
@@ -35,6 +38,96 @@ def _sha256_hex(s: str) -> str:
 
 def _sha256_bytes_hex(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+
+def _canonical_compile_assets(assets: List[TypstAsset]) -> List[TypstAsset]:
+    def sort_key(asset: TypstAsset) -> tuple[str, int, str]:
+        path = normalize_asset_path(str(asset.path or ""))
+        asset_id = getattr(asset, "id", None)
+        stable_id = asset_id if isinstance(asset_id, int) else 2**63 - 1
+        digest = _sha256_bytes_hex(bytes(asset.content))
+        return path, stable_id, digest
+
+    canonical: List[TypstAsset] = []
+    seen_paths: set[str] = set()
+    for asset in sorted(assets or [], key=sort_key):
+        path = normalize_asset_path(str(asset.path or ""))
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        canonical.append(asset)
+    return canonical
+
+
+async def _load_note_compile_inputs(
+    db: AsyncSession,
+    note: TypstNote,
+) -> tuple[List[TypstAsset], dict, str, str, str]:
+    assets: List[TypstAsset] = []
+    if note.id:
+        res = await db.execute(select(TypstAsset).where(TypstAsset.note_id == note.id))
+        assets = list(res.scalars().all())
+
+    files = (
+        dict(note.files)
+        if isinstance(note.files, dict)
+        else {"main.typ": note.content_typst or ""}
+    )
+    entry_path = note.entry_path or "main.typ"
+    style_key = note.style_key or "my_style"
+    style_text = ""
+    has_project_style = bool(str(files.get("style/my_style.typ") or "").strip())
+    if not has_project_style:
+        res = await db.execute(select(TypstStyle).where(TypstStyle.key == style_key))
+        style = res.scalar_one_or_none()
+        style_text = (style.content if style else "") or ""
+        if not style_text.strip():
+            style_text = read_resource_style(key=style_key)
+
+    return _canonical_compile_assets(assets), files, entry_path, style_key, style_text
+
+
+def _compile_input_hash(
+    *,
+    assets: List[TypstAsset],
+    files: dict,
+    entry_path: str,
+    style_key: str,
+    style_text: str,
+) -> str:
+    asset_sig = [
+        {
+            "path": normalize_asset_path(str(asset.path or "")),
+            "sha256": _sha256_bytes_hex(bytes(asset.content)),
+        }
+        for asset in _canonical_compile_assets(assets)
+    ]
+    return _sha256_hex(
+        json.dumps(
+            {
+                "style_key": style_key,
+                "style_text": style_text,
+                "entry_path": entry_path,
+                "files": files,
+                "assets": asset_sig,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+
+
+async def compute_note_compile_hash(db: AsyncSession, note: TypstNote) -> str:
+    assets, files, entry_path, style_key, style_text = (
+        await _load_note_compile_inputs(db, note)
+    )
+    return _compile_input_hash(
+        assets=assets,
+        files=files,
+        entry_path=entry_path,
+        style_key=style_key,
+        style_text=style_text,
+    )
 
 
 def _title_natural_order():
@@ -127,6 +220,15 @@ async def update_note(
     toc: Optional[list] = None,
     content_typst: Optional[str] = None,
 ) -> TypstNote:
+    compile_inputs_changed = (
+        (style_key is not None and style_key != note.style_key)
+        or (entry_path is not None and entry_path != note.entry_path)
+        or (files is not None and files != note.files)
+        or (
+            content_typst is not None
+            and content_typst != note.content_typst
+        )
+    )
     if title is not None:
         note.title = title
     if summary is not None:
@@ -148,6 +250,12 @@ async def update_note(
         note.toc = toc
     if content_typst is not None:
         note.content_typst = content_typst
+    if compile_inputs_changed:
+        note.compiled_hash = None
+        note.compiled_pdf_path = None
+        note.compiled_pdf_size = None
+        note.compiled_pdf = None
+        note.compiled_at = None
 
     await db.commit()
     await db.refresh(note)
@@ -190,7 +298,16 @@ def _compile_typst_to_pdf_bytes(content_typst: str) -> bytes:
             f.write(content_typst or "")
 
         cmd = ["typst", "compile", input_path, output_path, "--root", tmpdir]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        # 加 timeout 防止恶意/超大 typst 文件无限阻塞；超时抛 RuntimeError 由调用方转 HTTP 504
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=TYPST_COMPILE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Typst 编译超时（{TYPST_COMPILE_TIMEOUT_SECONDS}s）")
         if proc.returncode != 0:
             msg = (proc.stderr or proc.stdout or "").strip()
             raise RuntimeError(msg or "typst 编译失败")
@@ -270,8 +387,8 @@ def _write_project_files(tmpdir: str, entry_path: str, files: dict, assets: List
         with open(abs_path, "w", encoding="utf-8") as f:
             f.write(source or "")
 
-    for a in assets or []:
-        p = (a.path or "").lstrip("/").strip()
+    for a in _canonical_compile_assets(assets):
+        p = normalize_asset_path(str(a.path or ""))
         if not p:
             continue
         abs_path = os.path.join(tmpdir, p)
@@ -294,7 +411,16 @@ def _compile_typst_project_to_pdf_bytes(entry_path: str, files: dict, assets: Li
         output_path = os.path.join(tmpdir, "main.pdf")
 
         cmd = ["typst", "compile", input_path, output_path, "--root", tmpdir]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        # 加 timeout 防止恶意/超大 typst 文件无限阻塞；超时抛 RuntimeError 由调用方转 HTTP 504
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=TYPST_COMPILE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Typst 编译超时（{TYPST_COMPILE_TIMEOUT_SECONDS}s）")
         if proc.returncode != 0:
             msg = (proc.stderr or proc.stdout or "").strip()
             raise RuntimeError(msg or "typst 编译失败")
@@ -310,33 +436,15 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
     except Exception:
         pass
     async with lock:
-        assets = []
-        if note.id:
-            res = await db.execute(select(TypstAsset).where(TypstAsset.note_id == note.id))
-            assets = list(res.scalars().all())
-
-        files = dict(note.files) if isinstance(note.files, dict) else {"main.typ": note.content_typst or ""}
-        entry_path = note.entry_path or "main.typ"
-        style_key = note.style_key or "my_style"
-        style_text = ""
-        has_project_style = bool(str(files.get("style/my_style.typ") or "").strip())
-        if not has_project_style:
-            try:
-                res = await db.execute(select(TypstStyle).where(TypstStyle.key == style_key))
-                s = res.scalar_one_or_none()
-                style_text = (s.content if s else "") or ""
-            except Exception:
-                style_text = ""
-            if not style_text.strip():
-                style_text = read_resource_style(key=style_key)
-
-        asset_sig = [{"path": a.path, "sha256": _sha256_bytes_hex(bytes(a.content))} for a in assets]
-        h = _sha256_hex(
-            json.dumps(
-                {"style_key": style_key, "style_text": style_text, "entry_path": entry_path, "files": files, "assets": asset_sig},
-                ensure_ascii=False,
-                sort_keys=True,
-            )
+        assets, files, entry_path, style_key, style_text = (
+            await _load_note_compile_inputs(db, note)
+        )
+        h = _compile_input_hash(
+            assets=assets,
+            files=files,
+            entry_path=entry_path,
+            style_key=style_key,
+            style_text=style_text,
         )
         if note.compiled_hash == h:
             # 优先读取磁盘缓存文件
@@ -458,6 +566,42 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
         if not pdf_bytes:
             pdf_bytes = b""
         return pdf_bytes, h
+
+
+async def get_cached_note_pdf(db: AsyncSession, note: TypstNote) -> Optional[bytes]:
+    """仅读取已编译的 PDF 缓存（磁盘文件 > 数据库二进制），不触发任何编译。
+
+    供公开/匿名端点使用：避免无认证用户访问未缓存笔记引发服务器编译（DoS 风险）。
+    返回 None 表示当前无可用缓存，调用方应返回 404。
+    """
+    try:
+        current_hash = await compute_note_compile_hash(db, note)
+    except Exception:
+        logger.warning(
+            "typst.cache validation_failed note_id={}",
+            getattr(note, "id", None),
+        )
+        return None
+    if not note.compiled_hash or note.compiled_hash != current_hash:
+        return None
+
+    # 1) 优先读取磁盘缓存文件
+    if note.compiled_pdf_path:
+        try:
+            p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, note.compiled_pdf_path)
+            if os.path.exists(p):
+                return await asyncio.to_thread(lambda: Path(p).read_bytes())
+        except Exception:
+            pass
+
+    # 2) 回退读取数据库中的二进制 PDF（注意：公开端点不回写文件缓存，避免副作用）
+    if note.compiled_pdf:
+        try:
+            return bytes(note.compiled_pdf)
+        except Exception:
+            pass
+
+    return None
 
 
 async def list_assets(db: AsyncSession, note_id: int) -> List[TypstAsset]:

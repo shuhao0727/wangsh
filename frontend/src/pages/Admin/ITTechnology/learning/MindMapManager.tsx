@@ -48,24 +48,27 @@ const MindMapManager: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<MindmapItem | null>(null);
 
   const fetchMy = useCallback(async () => {
-    try {
-      const res = await fetch(API_BASE + "/my", { credentials: "include" });
-      if (res.ok) setMyMaps(await res.json());
-    } catch {}
+    const res = await fetch(API_BASE + "/my", { credentials: "include" });
+    if (!res.ok) throw new Error(`Failed to load personal mindmaps: ${res.status}`);
+    setMyMaps(await res.json());
   }, []);
 
   const fetchPub = useCallback(async () => {
-    try {
-      const res = await fetch(API_BASE, { credentials: "include" });
-      if (res.ok) setPubMaps(await res.json());
-    } catch {}
+    const res = await fetch(API_BASE, { credentials: "include" });
+    if (!res.ok) throw new Error(`Failed to load public mindmaps: ${res.status}`);
+    setPubMaps(await res.json());
   }, []);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       setLoading(true);
-      await Promise.all([fetchMy(), fetchPub()]);
-      setLoading(false);
+      try {
+        await Promise.all([fetchMy(), fetchPub()]);
+      } catch {
+        showMessage.error("加载失败");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [fetchMy, fetchPub]);
 

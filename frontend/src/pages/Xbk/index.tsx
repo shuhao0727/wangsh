@@ -492,16 +492,18 @@ const XbkPage: React.FC = () => {
 
   const openCreateModal = useCallback(
     (kind: "students" | "courses" | "selections") => {
+      if (!canEdit) return;
       setEditKind(kind);
       setEditMode("create");
       setEditRecord(null);
       setEditVisible(true);
     },
-    [],
+    [canEdit],
   );
 
   const openEditModal = useCallback(
     (kind: "students" | "courses" | "selections", record: any) => {
+      if (!canEdit) return;
       const isVirtualSelection = kind === "selections" && Number(record?.id || 0) <= 0;
       setEditKind(kind);
       setEditMode(isVirtualSelection ? "create" : "edit");
@@ -519,11 +521,12 @@ const XbkPage: React.FC = () => {
       }
       setEditVisible(true);
     },
-    [],
+    [canEdit],
   );
 
   const handleDeleteRow = useCallback(
     async (kind: "students" | "courses" | "selections", id: number) => {
+      if (!canEdit) return;
       try {
         if (kind === "students") await xbkDataApi.deleteStudent(id);
         else if (kind === "courses") await xbkDataApi.deleteCourse(id);
@@ -534,7 +537,7 @@ const XbkPage: React.FC = () => {
         showMessage.error(getErrorMsg(e, "删除失败"));
       }
     },
-    [loadMeta, loadSummary, reloadCurrentData],
+    [canEdit, loadMeta, loadSummary, reloadCurrentData],
   );
 
   const makeActionCol = useCallback(
@@ -550,7 +553,7 @@ const XbkPage: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              className="h-7 px-2"
+              className="h-8 px-3"
               onClick={() => openEditModal(kind, record)}
             >
               {isVirtualSelection ? "补录" : "编辑"}
@@ -558,8 +561,8 @@ const XbkPage: React.FC = () => {
             {!isVirtualSelection ? (
               <Button
                 size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-destructive hover:text-destructive"
+                variant="outline"
+                className="h-8 px-3 border-destructive/30 text-destructive hover:bg-destructive/10"
                 onClick={() => {
                   setConfirmState({ message: "确认删除？", onOk: () => { void handleDeleteRow(kind, record.id); } });
                 }}
@@ -716,11 +719,18 @@ const XbkPage: React.FC = () => {
         title: "限报",
         dataIndex: "quota",
         width: quotaWidth,
-        render: (v) => (
-          <span className="inline-flex rounded-full bg-[var(--ws-color-warning-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ws-color-warning)]">
-            {Number.isFinite(v as number) ? (v as number) : "-"}
-          </span>
-        ),
+        render: (v) => {
+          const quota = typeof v === 'number' && Number.isFinite(v) ? v : null;
+          return (
+            <span className={
+              quota !== null
+                ? "inline-flex items-center rounded-full bg-[var(--ws-color-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ws-color-primary)]"
+                : "inline-flex items-center rounded-full bg-[var(--ws-color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--ws-color-text-tertiary)]"
+            }>
+              {quota !== null ? quota : "不限"}
+            </span>
+          );
+        },
       },
       {
         title: "地点",
@@ -975,7 +985,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger id="xbk-filter-year" aria-label="年份">
+                <SelectTrigger id="xbk-filter-year" className="h-8 text-xs" aria-label="年份">
                   <SelectValue placeholder="选择年份" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1000,7 +1010,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger id="xbk-filter-term" aria-label="学期">
+                <SelectTrigger id="xbk-filter-term" className="h-8 text-xs" aria-label="学期">
                   <SelectValue placeholder="选择学期" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1023,7 +1033,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger id="xbk-filter-grade" aria-label="年级">
+                <SelectTrigger id="xbk-filter-grade" className="h-8 text-xs" aria-label="年级">
                   <SelectValue placeholder="选择年级" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1045,7 +1055,7 @@ const XbkPage: React.FC = () => {
                   }))
                 }
               >
-                <SelectTrigger id="xbk-filter-class" aria-label="班级">
+                <SelectTrigger id="xbk-filter-class" className="h-8 text-xs" aria-label="班级">
                   <SelectValue placeholder="选择班级" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1066,7 +1076,7 @@ const XbkPage: React.FC = () => {
                 <Input
                   id="xbk-filter-search"
                   aria-label="搜索"
-                  className="pl-[var(--ws-search-input-padding-start)]"
+                  className="h-8 text-xs pl-[var(--ws-search-input-padding-start)]"
                   value={filters.search_text || ""}
                   placeholder="关键字搜索..."
                   onChange={(e) =>
@@ -1076,14 +1086,17 @@ const XbkPage: React.FC = () => {
               </div>
             </div>
 
-            <Button variant="outline" className="w-full" onClick={resetFilters}>
-              重置筛选
-            </Button>
+            <div className="pt-2 border-t border-border">
+              <Button variant="ghost" size="sm" className="w-full h-8 text-xs" onClick={resetFilters}>
+                重置筛选
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
 
       <div className="xbk-main">
+          <h1 className="text-lg font-semibold text-text">校本课管理</h1>
         <div className="xbk-header-bar">
           <div className="xbk-header-row">
             <div className="xbk-kpis">
@@ -1110,16 +1123,19 @@ const XbkPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => setImportVisible(true)}>
-                <Upload className="h-4 w-4" />
-                导入
-              </Button>
-              <Button variant="outline" onClick={() => setExportVisible(true)}>
+              {canEdit ? (
+                <Button variant="outline" size="sm" onClick={() => setImportVisible(true)}>
+                  <Upload className="h-4 w-4" />
+                  导入
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => setExportVisible(true)}>
                 <Download className="h-4 w-4" />
                 导出
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 title="导出当前表格页面的内容"
                 onClick={() => void handleExportCurrentTable()}
                 disabled={exportingCurrent}
@@ -1135,25 +1151,28 @@ const XbkPage: React.FC = () => {
               (activeTab === "students" ||
                 activeTab === "courses" ||
                 activeTab === "selections") ? (
-                <Button onClick={() => openCreateModal(activeTab)}>
+                <Button size="sm" onClick={() => openCreateModal(activeTab)} disabled={dataLoading}>
                   <Plus className="h-4 w-4" />
                   新增
                 </Button>
               ) : null}
-              <Button variant="outline" onClick={() => setAnalysisVisible(true)}>
+              <Button variant="outline" size="sm" onClick={() => setAnalysisVisible(true)}>
                 <BarChart3 className="h-4 w-4" />
                 分析
               </Button>
+              {canEdit ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteVisible(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  删除
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteVisible(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-                删除
-              </Button>
-              <Button
-                variant="outline"
+                size="sm"
                 onClick={() => void handleRefresh()}
                 disabled={dataLoading}
               >
@@ -1210,7 +1229,7 @@ const XbkPage: React.FC = () => {
           </div>
         </div>
 
-        <XbkImportModal
+        {canEdit ? <XbkImportModal
           open={importVisible}
           onCancel={() => setImportVisible(false)}
           onSuccess={async () => {
@@ -1218,7 +1237,7 @@ const XbkPage: React.FC = () => {
             await Promise.all([loadMeta(), loadSummary(), reloadCurrentData()]);
           }}
           filters={{ year: filters.year, term: filters.term, grade: filters.grade }}
-        />
+        /> : null}
         <XbkExportModal
           open={exportVisible}
           onCancel={() => setExportVisible(false)}
@@ -1229,7 +1248,7 @@ const XbkPage: React.FC = () => {
             class_name: filters.class_name,
           }}
         />
-        <XbkDeleteModal
+        {canEdit ? <XbkDeleteModal
           open={deleteVisible}
           onCancel={() => setDeleteVisible(false)}
           onSuccess={async () => {
@@ -1242,7 +1261,7 @@ const XbkPage: React.FC = () => {
             grade: filters.grade,
             class_name: filters.class_name,
           }}
-        />
+        /> : null}
         <XbkAnalysisModal
           open={analysisVisible}
           onCancel={() => setAnalysisVisible(false)}
@@ -1253,7 +1272,7 @@ const XbkPage: React.FC = () => {
             class_name: filters.class_name,
           }}
         />
-        <XbkEditModal
+        {canEdit ? <XbkEditModal
           open={editVisible}
           onCancel={() => setEditVisible(false)}
           onSuccess={async () => {
@@ -1270,7 +1289,7 @@ const XbkPage: React.FC = () => {
             grade: filters.grade,
           }}
           meta={meta}
-        />
+        /> : null}
       </div>
     </div>
 

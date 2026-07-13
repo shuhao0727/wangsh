@@ -47,7 +47,7 @@ const StatCard: React.FC<{ title: string; value: number; valueClassName?: string
 }) => (
   <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2">
     <div className="text-sm text-text-tertiary">{title}：</div>
-    <div className={`text-3xl font-semibold leading-none ${valueClassName || ""}`}>{value}</div>
+    <div className={`text-2xl font-semibold leading-none ${valueClassName || ""}`}>{value}</div>
   </div>
 );
 
@@ -316,7 +316,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-              <TabsList className="w-full justify-start overflow-x-auto">
+              <TabsList className="w-full justify-start overflow-x-auto h-auto">
                 <TabsTrigger value="overview">概览</TabsTrigger>
                 <TabsTrigger value="courses">课程统计详情</TabsTrigger>
                 <TabsTrigger value="classes">班级统计详情</TabsTrigger>
@@ -348,7 +348,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                     placeholder="搜索课程代码/名称"
                     value={courseQuery}
                     onChange={(e) => setCourseQuery(e.target.value)}
-                    className="max-w-[300px] flex-shrink-0"
+                    className="max-w-[300px] flex-shrink-0 h-8 text-xs"
                   />
                   <CourseTable data={filteredCourseStats} className="min-h-0 flex-1" />
                 </div>
@@ -372,7 +372,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                     placeholder="搜索班级/姓名/学号"
                     value={studentQuery}
                     onChange={(e) => setStudentQuery(e.target.value)}
-                    className="max-w-[300px] flex-shrink-0"
+                    className="max-w-[300px] flex-shrink-0 h-8 text-xs"
                   />
                   <NoSelectionTable data={filteredNoSelection} className="min-h-0 flex-1" />
                 </div>
@@ -382,7 +382,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
         )}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             关闭
           </Button>
         </DialogFooter>

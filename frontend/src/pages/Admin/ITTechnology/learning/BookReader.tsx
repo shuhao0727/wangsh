@@ -25,13 +25,6 @@ const difficultyLabel: Record<string, string> = {
   beginner: "入门", intermediate: "进阶", advanced: "高级", expert: "专家",
 };
 
-const difficultyColor: Record<string, string> = {
-  beginner: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  intermediate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  advanced: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  expert: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-};
-
 /* ─── Group derivation ─── */
 
 interface ChapterGroup { name: string; chapters: LearningBookChapter[] }

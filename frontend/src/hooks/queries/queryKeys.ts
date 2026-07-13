@@ -126,4 +126,19 @@ export const queryKeys = {
     list: (params: Record<string, unknown>) =>
       [...queryKeys.users.all, params] as const,
   },
+
+  // ── IT Games ──
+  itGames: {
+    all: ["it-games"] as const,
+    lists: () => [...queryKeys.itGames.all, "list"] as const,
+    list: (params: Record<string, unknown>) =>
+      [...queryKeys.itGames.lists(), params] as const,
+    adminLists: () => [...queryKeys.itGames.all, "admin-list"] as const,
+    adminList: (params: Record<string, unknown>) =>
+      [...queryKeys.itGames.adminLists(), params] as const,
+    categories: () => [...queryKeys.itGames.all, "categories"] as const,
+    detail: (id: number) => [...queryKeys.itGames.all, "detail", id] as const,
+    logs: (id: number, page: number, size: number) =>
+      [...queryKeys.itGames.all, "logs", id, page, size] as const,
+  },
 } as const;
