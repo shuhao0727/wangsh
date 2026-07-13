@@ -170,7 +170,7 @@ const BasicLayout: React.FC = () => {
             )}
             <UserMenu
               showName={!isMobile}
-              onMenuClick={(key) => { if (key === "login") navigate("/login"); }}
+              onMenuClick={(key) => { if (key === "login") void navigate("/login"); }}
             />
           </div>
         </div>

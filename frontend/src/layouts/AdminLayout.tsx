@@ -38,6 +38,10 @@ import useAuth from "@hooks/useAuth";
 import useAppMeta from "@hooks/useAppMeta";
 import { useBreakpoint } from "@hooks/useBreakpoint";
 import { PageTransitionShell } from "@/components/Common/PageTransitionShell";
+import {
+  canAccessAdminProfile,
+  getAdminMenuWhitelist,
+} from "@/components/Auth/roleAccess";
 
 type AdminMenuItem = {
   key: string;
@@ -106,22 +110,10 @@ const AdminLayout: React.FC = () => {
     if (isMobile) setCollapsed(true);
   }, [isMobile]);
 
-  // Role-based menu item keys: super_admin sees all, admin excludes system/articles, teacher sees teaching only
-  const menuWhitelist = useMemo(() => {
-    if (auth.isSuperAdmin()) return null; // null = show all
-    if (auth.isAdmin()) return new Set([
-      "/admin/dashboard", "/admin/ai-agents", "/admin/users",
-      "/admin/agent-data", "/admin/group-discussion", "/admin/assessment",
-      "/admin/classroom-interaction", "/admin/classroom-plan",
-    ]);
-    if (auth.isTeacher()) return new Set([
-      "/admin/dashboard",
-      "/admin/classroom-interaction", "/admin/classroom-plan",
-      "/admin/assessment", "/admin/group-discussion",
-      "/admin/informatics", "/admin/it-technology",
-    ]);
-    return new Set<string>();
-  }, [auth]);
+  const menuWhitelist = useMemo(
+    () => getAdminMenuWhitelist(auth.user?.role_code),
+    [auth.user?.role_code],
+  );
 
   const visibleMenuItems = useMemo(() => {
     if (!menuWhitelist) return adminMenuItems;
@@ -139,14 +131,19 @@ const AdminLayout: React.FC = () => {
 
   const ROLE_LABELS: Record<string, string> = { super_admin: "超级管理员", admin: "管理员", teacher: "教师", student: "学生用户" };
   const roleLabel = ROLE_LABELS[auth.user?.role_code || ""] || "访客";
+  const showAdminProfile = canAccessAdminProfile(auth.user?.role_code);
 
   const renderUserDropdownItems = () => (
     <>
-      <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
-        <User className="mr-2 h-4 w-4" />
-        管理员资料
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
+      {showAdminProfile ? (
+        <>
+          <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
+            <User className="mr-2 h-4 w-4" />
+            管理员资料
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuItem onClick={() => window.location.href = "/login"}>
         <Home className="mr-2 h-4 w-4" />
         返回首页

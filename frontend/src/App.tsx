@@ -8,6 +8,13 @@ import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
 import RoleGuard from "@components/Auth/RoleGuard";
 import { IT_GAMES_ADMIN_ROLES } from "@components/Auth/ITGamesAccess";
+import {
+  ADMIN_ROLES,
+  IT_TECHNOLOGY_MANAGEMENT_ROLES,
+  STAFF_ROLES,
+  SUPER_ADMIN_ROLES,
+  type AppRole,
+} from "@components/Auth/roleAccess";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
 import PageErrorBoundary from "@components/Common/PageErrorBoundary";
 import { AUTH_EXPIRED_EVENT, type AuthExpiredKind } from "@services/api";
@@ -25,9 +32,6 @@ const InformaticsPage = lazy(() => import("./pages/Informatics"));
 const InformaticsDetailPage = lazy(() => import("./pages/Informatics/Detail"));
 const ITTechnologyPage = lazy(() => import("./pages/ITTechnology"));
 const ITTechnologyPythonLabPage = lazy(() => import("./pages/ITTechnology/PythonLab"));
-const MLPage = lazy(() => import("./pages/ITTechnology/MLPage"));
-const AIPage = lazy(() => import("./pages/ITTechnology/AIPage"));
-const AgentsPage = lazy(() => import("./pages/ITTechnology/AgentsPage"));
 const MLFullPage = lazy(() => import("./pages/ITTechnology/MLFullPage"));
 const AIFullPage = lazy(() => import("./pages/ITTechnology/AIFullPage"));
 const AgentsFullPage = lazy(() => import("./pages/ITTechnology/AgentsFullPage"));
@@ -83,6 +87,10 @@ const LoadingIndicator = (
   </div>
 );
 
+const guarded = (roles: readonly AppRole[], element: React.ReactNode) => (
+  <RoleGuard roles={roles}>{element}</RoleGuard>
+);
+
 function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -126,14 +134,14 @@ function App() {
             <Route path="/it-technology/ml" element={<PageErrorBoundary pageName="ml"><MLFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/ai" element={<PageErrorBoundary pageName="ai"><AIFullPage /></PageErrorBoundary>} />
             <Route path="/it-technology/agents" element={<PageErrorBoundary pageName="agents"><AgentsFullPage /></PageErrorBoundary>} />
-            <Route path="/task-analysis/new" element={<PageErrorBoundary pageName="task-analysis-new"><TaskAnalysisNewPage /></PageErrorBoundary>} />
-            <Route path="/task-analysis/compare" element={<PageErrorBoundary pageName="task-analysis-compare"><TaskAnalysisComparePage /></PageErrorBoundary>} />
-            <Route path="/task-analysis/:analysisId" element={<PageErrorBoundary pageName="task-analysis-result"><TaskAnalysisResultPage /></PageErrorBoundary>} />
-            <Route path="/task-analysis/hot/:analysisId" element={<PageErrorBoundary pageName="hot-analysis"><HotAnalysisResultPage /></PageErrorBoundary>} />
-            <Route path="/task-analysis/chains/:analysisId" element={<PageErrorBoundary pageName="chain-analysis"><ChainAnalysisResultPage /></PageErrorBoundary>} />
+            <Route path="/task-analysis/new" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="task-analysis-new"><TaskAnalysisNewPage /></PageErrorBoundary>)} />
+            <Route path="/task-analysis/compare" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="task-analysis-compare"><TaskAnalysisComparePage /></PageErrorBoundary>)} />
+            <Route path="/task-analysis/:analysisId" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="task-analysis-result"><TaskAnalysisResultPage /></PageErrorBoundary>)} />
+            <Route path="/task-analysis/hot/:analysisId" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="hot-analysis"><HotAnalysisResultPage /></PageErrorBoundary>)} />
+            <Route path="/task-analysis/chains/:analysisId" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="chain-analysis"><ChainAnalysisResultPage /></PageErrorBoundary>)} />
             <Route path="/games/lock-cracker" element={<PageErrorBoundary pageName="lock-cracker"><LockCrackerPage /></PageErrorBoundary>} />
             <Route path="/games" element={<PageErrorBoundary pageName="games"><GamesPage /></PageErrorBoundary>} />
-            <Route path="/admin/games/config" element={<PageErrorBoundary pageName="game-config"><GameConfigPage /></PageErrorBoundary>} />
+            <Route path="/admin/games/config" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="game-config"><GameConfigPage /></PageErrorBoundary>)} />
             <Route path="/mindmaps" element={<PageErrorBoundary pageName="mindmap-gallery"><MindmapGalleryPage /></PageErrorBoundary>} />
             <Route path="/mindmap-preview" element={<PageErrorBoundary pageName="mindmap-preview"><MindmapPreviewPage /></PageErrorBoundary>} />
 
@@ -161,12 +169,12 @@ function App() {
               }
             >
               <Route path="/admin/dashboard" element={<PageErrorBoundary pageName="admin-dashboard"><AdminDashboardPage /></PageErrorBoundary>} />
-              <Route path="/admin/users" element={<PageErrorBoundary pageName="admin-users"><AdminUsersPage /></PageErrorBoundary>} />
-              <Route path="/admin/ai-agents" element={<PageErrorBoundary pageName="admin-ai-agents"><AdminAIAgentsPage /></PageErrorBoundary>} />
-              <Route path="/admin/agent-data" element={<PageErrorBoundary pageName="admin-agent-data"><AdminAgentDataPage /></PageErrorBoundary>} />
+              <Route path="/admin/users" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-users"><AdminUsersPage /></PageErrorBoundary>)} />
+              <Route path="/admin/ai-agents" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-ai-agents"><AdminAIAgentsPage /></PageErrorBoundary>)} />
+              <Route path="/admin/agent-data" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-agent-data"><AdminAgentDataPage /></PageErrorBoundary>)} />
               <Route path="/admin/group-discussion" element={<PageErrorBoundary pageName="admin-group-discussion"><AdminGroupDiscussionPage /></PageErrorBoundary>} />
-              <Route path="/admin/informatics" element={<PageErrorBoundary pageName="admin-informatics"><AdminInformaticsPage /></PageErrorBoundary>} />
-              <Route path="/admin/it-technology" element={<PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary>} />
+              <Route path="/admin/informatics" element={guarded(STAFF_ROLES, <PageErrorBoundary pageName="admin-informatics"><AdminInformaticsPage /></PageErrorBoundary>)} />
+              <Route path="/admin/it-technology" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="admin-it-technology"><AdminITTechnologyPage /></PageErrorBoundary>)} />
               <Route
                 path="/admin/it-technology/games"
                 element={
@@ -177,15 +185,15 @@ function App() {
                   </RoleGuard>
                 }
               />
-              <Route path="/admin/personal-programs" element={<PageErrorBoundary pageName="admin-personal-programs"><AdminPersonalProgramsPage /></PageErrorBoundary>} />
-              <Route path="/admin/articles" element={<PageErrorBoundary pageName="admin-articles"><AdminArticlesPage /></PageErrorBoundary>} />
-              <Route path="/admin/assessment" element={<PageErrorBoundary pageName="admin-assessment"><AdminAssessmentPage /></PageErrorBoundary>} />
-              <Route path="/admin/assessment/:id/questions" element={<PageErrorBoundary pageName="admin-assessment-questions"><AdminAssessmentQuestionsPage /></PageErrorBoundary>} />
-              <Route path="/admin/assessment/:id/statistics" element={<PageErrorBoundary pageName="admin-assessment-statistics"><AdminAssessmentStatisticsPage /></PageErrorBoundary>} />
+              <Route path="/admin/personal-programs" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="admin-personal-programs"><AdminPersonalProgramsPage /></PageErrorBoundary>)} />
+              <Route path="/admin/articles" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="admin-articles"><AdminArticlesPage /></PageErrorBoundary>)} />
+              <Route path="/admin/assessment" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-assessment"><AdminAssessmentPage /></PageErrorBoundary>)} />
+              <Route path="/admin/assessment/:id/questions" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-assessment-questions"><AdminAssessmentQuestionsPage /></PageErrorBoundary>)} />
+              <Route path="/admin/assessment/:id/statistics" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="admin-assessment-statistics"><AdminAssessmentStatisticsPage /></PageErrorBoundary>)} />
               <Route path="/admin/classroom-interaction" element={<PageErrorBoundary pageName="admin-classroom-interaction"><AdminClassroomInteractionPage /></PageErrorBoundary>} />
               <Route path="/admin/classroom-plan" element={<PageErrorBoundary pageName="admin-classroom-plan"><AdminClassroomPlanPage /></PageErrorBoundary>} />
-              <Route path="/admin/it-technology/ml-book-editor" element={<PageErrorBoundary pageName="admin-ml-book-editor"><AdminMLBookEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/system" element={<PageErrorBoundary pageName="admin-system"><AdminSystemPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology/ml-book-editor" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="admin-ml-book-editor"><AdminMLBookEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/system" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="admin-system"><AdminSystemPage /></PageErrorBoundary>)} />
             </Route>
 
             <Route
@@ -195,17 +203,17 @@ function App() {
                 </AdminGuard>
               }
             >
-              <Route path="/admin/articles/editor/new" element={<PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/articles/editor/:id" element={<PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/articles/editor/new" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/articles/editor/:id" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>)} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
               <Route path="/admin/articles/edit/:id" element={<ArticleEditRedirect />} />
-              <Route path="/admin/it-technology/learning/:moduleKey" element={<PageErrorBoundary pageName="learning-editor"><AdminLearningEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/it-technology/learning/:moduleKey/:section" element={<PageErrorBoundary pageName="tab-editor"><AdminTabEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/it-technology/mindmap/:moduleKey" element={<PageErrorBoundary pageName="mindmap-editor"><AdminMindMapEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/informatics/editor/new" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/informatics/editor/:id" element={<PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/assessment/editor/new" element={<PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>} />
-              <Route path="/admin/assessment/editor/:id" element={<PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>} />
+              <Route path="/admin/it-technology/learning/:moduleKey" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="learning-editor"><AdminLearningEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/it-technology/learning/:moduleKey/:section" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="tab-editor"><AdminTabEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/it-technology/mindmap/:moduleKey" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="mindmap-editor"><AdminMindMapEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/informatics/editor/new" element={guarded(STAFF_ROLES, <PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/informatics/editor/:id" element={guarded(STAFF_ROLES, <PageErrorBoundary pageName="informatics-editor"><AdminTypstEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/assessment/editor/new" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/assessment/editor/:id" element={guarded(ADMIN_ROLES, <PageErrorBoundary pageName="assessment-editor"><AdminAssessmentEditorPage /></PageErrorBoundary>)} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

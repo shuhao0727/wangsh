@@ -19,6 +19,89 @@ const importOptionalModule = new Function(
   "return import(specifier)"
 ) as (specifier: string) => Promise<VisualizerModule>;
 
+function manualChunkForModule(id: string) {
+  const normalizedId = id.replaceAll("\\", "/");
+  // Worker graphs are independent Rollup entries in Vite 8. Assigning
+  // them to an application vendor chunk makes worker bytes look like
+  // eagerly loaded entry code and can also break worker emission.
+  if (
+    normalizedId.includes("?worker") ||
+    normalizedId.includes("pdf.worker") ||
+    normalizedId.includes("/workers/")
+  ) {
+    return undefined;
+  }
+  const modulePath = normalizedId.split("node_modules/").pop();
+  if (!modulePath) {
+    return undefined;
+  }
+
+  const isPackage = (name: string) =>
+    modulePath === name || modulePath.startsWith(`${name}/`);
+
+  if (
+    isPackage("react") ||
+    isPackage("react-dom") ||
+    isPackage("react-router") ||
+    isPackage("react-router-dom") ||
+    isPackage("scheduler")
+  ) {
+    return "react-vendor";
+  }
+
+  if (isPackage("echarts")) {
+    return "echarts-vendor";
+  }
+
+  if (isPackage("pdfjs-dist")) {
+    return "pdf-vendor";
+  }
+
+  if (
+    isPackage("@hpcc-js/wasm") ||
+    modulePath.startsWith("@hpcc-js/wasm/")
+  ) {
+    return "graphviz-vendor";
+  }
+
+  if (
+    isPackage("@myriaddreamin/typst.ts") ||
+    isPackage("@myriaddreamin/typst-ts-renderer") ||
+    isPackage("@myriaddreamin/typst-ts-web-compiler")
+  ) {
+    return "typst-vendor";
+  }
+
+  if (
+    isPackage("xterm") ||
+    isPackage("xterm-addon-fit") ||
+    isPackage("xterm-addon-webgl")
+  ) {
+    return "terminal-vendor";
+  }
+
+  if (
+    isPackage("react-markdown") ||
+    isPackage("remark-gfm") ||
+    isPackage("remark-math") ||
+    isPackage("remark-parse") ||
+    isPackage("remark-rehype") ||
+    isPackage("rehype-katex") ||
+    isPackage("katex") ||
+    isPackage("unified") ||
+    isPackage("micromark") ||
+    modulePath.startsWith("micromark-") ||
+    modulePath.startsWith("mdast-") ||
+    modulePath.startsWith("hast-") ||
+    modulePath.startsWith("unist-") ||
+    modulePath.startsWith("vfile")
+  ) {
+    return "markdown-vendor";
+  }
+
+  return undefined;
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
   // 加载 .env 文件
@@ -45,6 +128,7 @@ export default defineConfig(async ({ mode }) => {
               console.log("PDF worker file copied to:", pdfWorkerDest);
             } catch (error) {
               console.error("Failed to copy PDF worker file:", error);
+              throw error;
             }
           }
         },
@@ -114,6 +198,7 @@ export default defineConfig(async ({ mode }) => {
     // 构建配置
     build: {
       outDir: "build", // 与 CRA 保持一致（CRA 默认输出到 build/）
+      manifest: true,
       sourcemap: mode !== "production",
       cssCodeSplit: false,
       // 关闭自动 modulepreload，避免首页提前下载 Monaco/Graphviz 等重型功能包。
@@ -122,89 +207,18 @@ export default defineConfig(async ({ mode }) => {
       // 分包策略
       rollupOptions: {
         output: {
-          manualChunks(id: string) {
-            const normalizedId = id.replaceAll("\\", "/");
-            const modulePath = normalizedId.split("node_modules/").pop();
-            if (!modulePath) {
-              return undefined;
-            }
+          manualChunks: manualChunkForModule,
+        },
+      },
+    },
 
-            const isPackage = (name: string) =>
-              modulePath === name || modulePath.startsWith(`${name}/`);
-
-            if (
-              isPackage("@monaco-editor/react") ||
-              isPackage("monaco-editor")
-            ) {
-              return "monaco-vendor";
-            }
-
-            if (
-              isPackage("react") ||
-              isPackage("react-dom") ||
-              isPackage("react-router") ||
-              isPackage("react-router-dom") ||
-              isPackage("scheduler")
-            ) {
-              return "react-vendor";
-            }
-
-            if (
-              isPackage("echarts") ||
-              isPackage("echarts-for-react") ||
-              isPackage("zrender")
-            ) {
-              return "echarts-vendor";
-            }
-
-            if (isPackage("pdfjs-dist")) {
-              return "pdf-vendor";
-            }
-
-            if (
-              isPackage("@hpcc-js/wasm") ||
-              modulePath.startsWith("@hpcc-js/wasm/")
-            ) {
-              return "graphviz-vendor";
-            }
-
-            if (
-              isPackage("@myriaddreamin/typst.ts") ||
-              isPackage("@myriaddreamin/typst-ts-renderer") ||
-              isPackage("@myriaddreamin/typst-ts-web-compiler")
-            ) {
-              return "typst-vendor";
-            }
-
-            if (
-              isPackage("xterm") ||
-              isPackage("xterm-addon-fit") ||
-              isPackage("xterm-addon-webgl")
-            ) {
-              return "terminal-vendor";
-            }
-
-            if (
-              isPackage("react-markdown") ||
-              isPackage("remark-gfm") ||
-              isPackage("remark-math") ||
-              isPackage("remark-parse") ||
-              isPackage("remark-rehype") ||
-              isPackage("rehype-katex") ||
-              isPackage("katex") ||
-              isPackage("unified") ||
-              isPackage("micromark") ||
-              modulePath.startsWith("micromark-") ||
-              modulePath.startsWith("mdast-") ||
-              modulePath.startsWith("hast-") ||
-              modulePath.startsWith("unist-") ||
-              modulePath.startsWith("vfile")
-            ) {
-              return "markdown-vendor";
-            }
-
-            return undefined;
-          },
+    // Vite 8 builds worker graphs as independent entries. Keep those files in
+    // their own directory so entry-bundle accounting only covers browser UI
+    // chunks while workers remain loaded on demand by Monaco/PythonLab.
+    worker: {
+      rollupOptions: {
+        output: {
+          entryFileNames: "assets/workers/[name]-[hash].js",
         },
       },
     },

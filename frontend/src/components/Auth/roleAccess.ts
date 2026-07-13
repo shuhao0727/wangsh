@@ -3,6 +3,7 @@ export type AppRole = "super_admin" | "admin" | "teacher" | "student";
 export const ADMIN_ROLES = ["admin", "super_admin"] as const satisfies readonly AppRole[];
 export const STAFF_ROLES = ["teacher", "admin", "super_admin"] as const satisfies readonly AppRole[];
 export const SUPER_ADMIN_ROLES = ["super_admin"] as const satisfies readonly AppRole[];
+export const IT_TECHNOLOGY_MANAGEMENT_ROLES = ADMIN_ROLES;
 
 export const canAccessRoles = (
   role: string | undefined,
@@ -11,6 +12,9 @@ export const canAccessRoles = (
 
 export const canManageFeatureFlags = (role: string | undefined) =>
   role === "super_admin";
+
+export const canAccessAdminProfile = (role: string | undefined) =>
+  canAccessRoles(role, ADMIN_ROLES);
 
 export function getAdminMenuWhitelist(role: string | undefined): Set<string> | null {
   if (role === "super_admin") return null;

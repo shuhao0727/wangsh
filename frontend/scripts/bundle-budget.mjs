@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
 import process from "node:process";
+import {
+  collectChunks,
+  collectStaticRuntimeChunks,
+  createManifestGraph,
+  summarizeChunks,
+} from "./bundle-budget-lib.mjs";
 
 const cwd = process.cwd();
-const assetsDir = path.join(cwd, "build", "assets");
+const buildDir = path.join(cwd, "build");
+const assetsDir = path.join(buildDir, "assets");
+const manifestPath = path.join(buildDir, ".vite", "manifest.json");
 
 // ---- Thresholds (in bytes) ----
 const CHUNK_WARN = 500 * 1024; // 500 KB
@@ -16,58 +23,6 @@ const ENTRY_JS_WARN = 5 * 1024 * 1024; // 5 MB
 const ENTRY_JS_ERROR = 8 * 1024 * 1024; // 8 MB
 const TOTAL_JS_WARN = 10 * 1024 * 1024; // 10 MB
 const TOTAL_JS_ERROR = 15 * 1024 * 1024; // 15 MB
-
-// ---- Chunk name mappings for key libraries ----
-const KEY_CHUNKS = {
-  monaco: ["monaco", "editor.api2", "editor.worker"],
-  echarts: ["echarts"],
-  graphviz: ["graphviz"],
-  pyodide: ["pyodide"],
-  xterm: ["terminal"],
-  pdfjs: ["pdf", "pdf.worker"],
-  markdown: ["markdown"],
-  typst: ["typst"],
-};
-
-const DEFERRED_KEY_CHUNKS = new Set([
-  "echarts",
-  "graphviz",
-  "monaco",
-  "pdfjs",
-  "pyodide",
-  "typst",
-  "xterm",
-]);
-
-/**
- * Identify if a filename belongs to a key chunk category.
- * Returns the category name or null.
- */
-function identifyKeyChunk(filename) {
-  const lower = filename.toLowerCase();
-  for (const [category, patterns] of Object.entries(KEY_CHUNKS)) {
-    for (const pattern of patterns) {
-      if (lower.includes(pattern)) {
-        return category;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Get gzip size of a buffer.
- */
-function gzipSize(buf) {
-  return zlib.gzipSync(buf).length;
-}
-
-/**
- * Get brotli size of a buffer.
- */
-function brotliSize(buf) {
-  return zlib.brotliCompressSync(buf).length;
-}
 
 /**
  * Format bytes to KB string with one decimal.
@@ -85,16 +40,27 @@ function chunkStatus(size) {
   return "OK";
 }
 
-function isDeferredChunk(chunk) {
-  return chunk.key && DEFERRED_KEY_CHUNKS.has(chunk.key);
-}
-
 function chunkBudgetStatus(chunk) {
-  const warn = isDeferredChunk(chunk) ? DEFERRED_CHUNK_WARN : CHUNK_WARN;
-  const error = isDeferredChunk(chunk) ? DEFERRED_CHUNK_ERROR : CHUNK_ERROR;
+  const warn = chunk.deferred ? DEFERRED_CHUNK_WARN : CHUNK_WARN;
+  const error = chunk.deferred ? DEFERRED_CHUNK_ERROR : CHUNK_ERROR;
   if (chunk.rawSize >= error) return "ERROR";
   if (chunk.rawSize >= warn) return "WARN";
   return "OK";
+}
+
+function readManifest() {
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(
+      `Vite manifest not found: ${manifestPath}\n` +
+        `Run 'npm run build' with build.manifest enabled first.`
+    );
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    throw new Error(`Failed to read Vite manifest: ${error.message}`);
+  }
 }
 
 // ---- Main ----
@@ -107,38 +73,39 @@ function main() {
     process.exit(1);
   }
 
-  const files = fs.readdirSync(assetsDir);
-  const jsFiles = files.filter((f) => f.endsWith(".js") && !f.endsWith(".js.map"));
-
-  if (jsFiles.length === 0) {
-    console.warn("WARNING: No JS files found in build/assets/");
-    process.exit(0);
+  let manifest;
+  try {
+    manifest = readManifest();
+  } catch (error) {
+    console.error(`ERROR: ${error.message}`);
+    process.exit(1);
   }
 
-  // Collect data for each chunk
-  const chunks = [];
-  let totalJsSize = 0;
+  const applicationChunks = collectChunks(assetsDir, manifest);
+  const staticRuntimeChunks = collectStaticRuntimeChunks(
+    buildDir,
+    "pyodide",
+    "pyodide",
+  );
 
-  for (const file of jsFiles) {
-    const filePath = path.join(assetsDir, file);
-    const raw = fs.readFileSync(filePath);
-    const rawSize = raw.length;
-    const gzSize = gzipSize(raw);
-    const brSize = brotliSize(raw);
-    const key = identifyKeyChunk(file);
+  if (applicationChunks.length === 0 && staticRuntimeChunks.length === 0) {
+    console.error("ERROR: No JS files found in build/assets/");
+    process.exit(1);
+  }
 
-    totalJsSize += rawSize;
+  const manifestGraph = createManifestGraph(manifest);
+  const hasApplicationEntry = applicationChunks.some((chunk) =>
+    manifestGraph.entryFiles.has(chunk.name),
+  );
+  if (!hasApplicationEntry) {
+    console.error("ERROR: No application entry JavaScript found in Vite manifest.");
+    process.exit(1);
+  }
 
-    const chunk = {
-      name: file,
-      key,
-      rawSize,
-      gzSize,
-      brSize,
-    };
+  const chunks = [...applicationChunks, ...staticRuntimeChunks];
+
+  for (const chunk of chunks) {
     chunk.status = chunkBudgetStatus(chunk);
-    chunk.deferred = isDeferredChunk(chunk);
-    chunks.push(chunk);
   }
 
   // Sort: key chunks first (alphabetically by category), then by size descending
@@ -190,14 +157,14 @@ function main() {
   }
 
   // ---- Summary ----
-  const totalGz = chunks.reduce((s, c) => s + c.gzSize, 0);
-  const totalBr = chunks.reduce((s, c) => s + c.brSize, 0);
-  const entryChunks = chunks.filter((c) => !c.deferred);
-  const deferredChunks = chunks.filter((c) => c.deferred);
-  const entryJsSize = entryChunks.reduce((s, c) => s + c.rawSize, 0);
-  const entryGz = entryChunks.reduce((s, c) => s + c.gzSize, 0);
-  const entryBr = entryChunks.reduce((s, c) => s + c.brSize, 0);
-  const deferredJsSize = deferredChunks.reduce((s, c) => s + c.rawSize, 0);
+  const summary = summarizeChunks(chunks);
+  const totalJsSize = summary.totalRawSize;
+  const totalGz = summary.totalGzSize;
+  const totalBr = summary.totalBrSize;
+  const entryJsSize = summary.entryRawSize;
+  const entryGz = summary.entryGzSize;
+  const entryBr = summary.entryBrSize;
+  const deferredJsSize = summary.deferredRawSize;
 
   console.log(`\n--- Summary ---`);
   console.log(`Total chunks:     ${chunks.length}`);
@@ -205,6 +172,9 @@ function main() {
   console.log(`Entry JS (gzip):  ${formatKB(entryGz)} KB (${(entryGz / 1024 / 1024).toFixed(2)} MB)`);
   console.log(`Entry JS (brotli):${formatKB(entryBr)} KB (${(entryBr / 1024 / 1024).toFixed(2)} MB)`);
   console.log(`Deferred JS raw:  ${formatKB(deferredJsSize)} KB (${(deferredJsSize / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`Worker JS (raw):  ${formatKB(summary.workerRawSize)} KB (${(summary.workerRawSize / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`Worker JS (gzip): ${formatKB(summary.workerGzSize)} KB (${(summary.workerGzSize / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`Worker JS (brotli):${formatKB(summary.workerBrSize)} KB (${(summary.workerBrSize / 1024 / 1024).toFixed(2)} MB)`);
   console.log(`Total JS (raw):   ${formatKB(totalJsSize)} KB (${(totalJsSize / 1024 / 1024).toFixed(2)} MB)`);
   console.log(`Total JS (gzip):  ${formatKB(totalGz)} KB (${(totalGz / 1024 / 1024).toFixed(2)} MB)`);
   console.log(`Total JS (brotli):${formatKB(totalBr)} KB (${(totalBr / 1024 / 1024).toFixed(2)} MB)`);
