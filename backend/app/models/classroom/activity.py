@@ -16,6 +16,10 @@ class ClassroomActivity(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     activity_type: Mapped[str] = mapped_column(String(20), nullable=False, comment="活动类型: vote/fill_blank")
     title: Mapped[str] = mapped_column(String(200), nullable=False, comment="活动标题")
+    # 班级名称：用于学生端班级隔离。nullable=True 仅兼容历史数据，空班级不向学生端开放
+    class_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True, comment="班级名称")
+    # 活动描述：教师可附加说明文本，学生端可展示
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="活动描述")
     options: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, comment='投票选项 [{"key":"A","text":"..."},...]')
     correct_answer: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, comment="正确答案")
     allow_multiple: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="是否多选投票")

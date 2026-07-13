@@ -85,8 +85,6 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     return Number.isFinite(earliest) ? earliest : Date.now();
   }, [mergedGroups, studentChains, startTime]);
 
-  const toMinute = (iso: string) => Math.round((dayjs(iso).valueOf() - baseTime) / 60000);
-
   // 构建合并点索引：message_id → group
   const messageToGroup = useMemo(() => {
     const map = new Map<number, MergedGroup>();
@@ -97,16 +95,16 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
   // 为每个合并组计算 Y 坐标
   // 独立点(1人): Y = 该学生的 idx
   // 共享点(多人): Y = 参与学生 idx 的平均值
-  const getStudentIdx = (userId: number | null) => students.findIndex((s) => s.id === userId);
-
   const groupYMap = useMemo(() => {
     const map = new Map<number, number>();
     mergedGroups.forEach((g) => {
       if (g.member_count <= 1) {
-        const idx = getStudentIdx(g.student_ids[0]);
+        const idx = students.findIndex((student) => student.id === g.student_ids[0]);
         map.set(g.group_id, idx >= 0 ? idx : 0);
       } else {
-        const yValues = g.student_ids.map((sid) => getStudentIdx(sid)).filter((i) => i >= 0);
+        const yValues = g.student_ids
+          .map((studentId) => students.findIndex((student) => student.id === studentId))
+          .filter((index) => index >= 0);
         const avgY = yValues.length > 0 ? yValues.reduce((s, v) => s + v, 0) / yValues.length : students.length / 2;
         map.set(g.group_id, avgY);
       }
@@ -122,6 +120,8 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     if (!ref.current || students.length === 0) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
     const theme = getAgentChartTheme();
+    const toMinute = (iso: string) =>
+      Math.round((dayjs(iso).valueOf() - baseTime) / 60000);
 
     // 计算时间范围
     let maxMinute = 40;

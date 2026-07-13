@@ -23,10 +23,16 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     task_soft_time_limit=300,   # 5 分钟软超时
     task_time_limit=600,        # 10 分钟硬超时
-    include=["app.tasks.typst_compile", "app.tasks.pythonlab", "app.tasks.informatics_sync"],
+    include=[
+        "app.tasks.typst_compile",
+        "app.tasks.pythonlab",
+        "app.tasks.informatics_sync",
+        "app.tasks.classroom",
+    ],
     task_routes={
         "app.tasks.typst_compile.compile_typst_note": {"queue": "typst"},
         "app.tasks.informatics_sync.sync_informatics_from_github": {"queue": "typst"},
+        "app.tasks.classroom.analyze_ended_classroom_activity": {"queue": "celery"},
     },
     beat_schedule={
         # 每 5 分钟清理孤儿容器（无对应 Redis 会话的 Docker 容器）

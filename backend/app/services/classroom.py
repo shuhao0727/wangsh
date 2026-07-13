@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 
 from sqlalchemy import delete, select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
 from app.models.agents import AIAgent
+from app.models.core.user import User
 
 from loguru import logger
 
@@ -21,6 +23,16 @@ from app.core.pubsub import publish, subscribe, unsubscribe  # noqa: F401
 _last_auto_end_check: float = 0.0
 
 
+class ClassroomAnalysisRetryableError(RuntimeError):
+    """AI providers failed after the observable failure state was committed."""
+
+
+def normalize_class_name(value: Optional[str]) -> Optional[str]:
+    """课堂班级统一使用去首尾空白后的非空字符串。"""
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
 # ─── CRUD ───
 
 async def create_activity(db: AsyncSession, data: dict, user_id: int) -> ClassroomActivity:
@@ -29,6 +41,8 @@ async def create_activity(db: AsyncSession, data: dict, user_id: int) -> Classro
     activity = ClassroomActivity(
         activity_type=data["activity_type"],
         title=data["title"],
+        class_name=normalize_class_name(data.get("class_name")),
+        description=data.get("description"),
         options=[o if isinstance(o, dict) else o.dict() for o in (data.get("options") or [])],
         correct_answer=data.get("correct_answer"),
         allow_multiple=data.get("allow_multiple", False),
@@ -47,10 +61,12 @@ async def create_activity(db: AsyncSession, data: dict, user_id: int) -> Classro
 
 async def update_activity(db: AsyncSession, activity_id: int, data: dict) -> ClassroomActivity:
     activity = await _get_activity(db, activity_id)
-    if activity.status == "active":
-        raise ValueError("进行中的活动不可编辑")
+    if activity.status != "draft":
+        raise ValueError("只有草稿状态的活动可以编辑")
     for k, v in data.items():
         if v is not None:
+            if k == "class_name":
+                v = normalize_class_name(v)
             if k == "options" and v is not None:
                 v = [o if isinstance(o, dict) else o.dict() for o in v]
             setattr(activity, k, v)
@@ -61,21 +77,21 @@ async def update_activity(db: AsyncSession, activity_id: int, data: dict) -> Cla
 
 async def delete_activity(db: AsyncSession, activity_id: int):
     activity = await _get_activity(db, activity_id)
-    if activity.status == "active":
-        raise ValueError("进行中的活动不可删除")
+    if activity.status != "draft":
+        raise ValueError("只有草稿状态的活动可以删除")
     await db.delete(activity)
     await db.commit()
 
 
 async def bulk_delete_activities(db: AsyncSession, activity_ids: List[int]) -> dict:
-    """批量删除活动（进行中的不可删除）"""
+    """批量删除活动，仅草稿状态可删除。"""
     result = await db.execute(
         select(ClassroomActivity).where(ClassroomActivity.id.in_(activity_ids))
     )
     activities = result.scalars().all()
     deleted, skipped = [], []
     for act in activities:
-        if act.status != "active":
+        if act.status == "draft":
             await db.delete(act)
             deleted.append(act.id)
         else:
@@ -91,6 +107,8 @@ async def duplicate_activity(db: AsyncSession, activity_id: int, user_id: int) -
     new_act = ClassroomActivity(
         activity_type=src.activity_type,
         title=src.title + "（副本）",
+        class_name=normalize_class_name(src.class_name),
+        description=src.description,
         options=src.options,
         correct_answer=src.correct_answer,
         allow_multiple=src.allow_multiple,
@@ -107,7 +125,14 @@ async def duplicate_activity(db: AsyncSession, activity_id: int, user_id: int) -
     return new_act
 
 
-async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, status: Optional[str] = None):
+async def list_activities(
+    db: AsyncSession,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    status: Optional[str] = None,
+    owner_id: Optional[int] = None,
+):
     global _last_auto_end_check
     now = time.monotonic()
     if now - _last_auto_end_check >= 30.0:
@@ -115,6 +140,9 @@ async def list_activities(db: AsyncSession, *, skip: int = 0, limit: int = 20, s
         await _auto_end_overdue_activities(db)
     q = select(ClassroomActivity).order_by(ClassroomActivity.id.desc())
     count_q = select(func.count(ClassroomActivity.id))
+    if owner_id is not None:
+        q = q.where(ClassroomActivity.created_by == owner_id)
+        count_q = count_q.where(ClassroomActivity.created_by == owner_id)
     if status:
         q = q.where(ClassroomActivity.status == status)
         count_q = count_q.where(ClassroomActivity.status == status)
@@ -138,10 +166,65 @@ async def get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
     return activity
 
 
-async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
+def _append_activity_event(
+    events: list[dict[str, Any]],
+    event_type: str,
+    activity: ClassroomActivity,
+) -> None:
+    events.append(
+        {
+            "type": event_type,
+            "activity_id": activity.id,
+            "created_by": activity.created_by,
+            "class_name": normalize_class_name(activity.class_name),
+        }
+    )
+
+
+async def dispatch_activity_events(
+    db: AsyncSession,
+    events: list[dict[str, Any]],
+) -> None:
+    """数据库提交成功后先发布全部事件，再投递结束分析后台任务。"""
+    ended_activity_ids: list[int] = []
+    for event in events:
+        activity_id = event["activity_id"]
+        event_type = event["type"]
+        class_name = event.get("class_name")
+        student_channel = (
+            f"student_{class_name}"
+            if class_name
+            else f"student_unassigned_activity_{activity_id}"
+        )
+        payload = {"type": event_type, "activity_id": activity_id}
+        await publish(student_channel, payload)
+        await publish(f"admin_{event['created_by']}", payload)
+        await publish("admin_global", payload)
+        if event_type == "activity_ended":
+            ended_activity_ids.append(activity_id)
+
+    for activity_id in dict.fromkeys(ended_activity_ids):
+        try:
+            await _enqueue_auto_analysis(activity_id)
+        except Exception:
+            logger.exception("课堂活动自动分析任务入队失败: activity_id=%s", activity_id)
+
+
+async def start_activity(
+    db: AsyncSession,
+    activity_id: int,
+    *,
+    commit: bool = True,
+    deferred_events: Optional[list[dict[str, Any]]] = None,
+) -> ClassroomActivity:
     activity = await _get_activity(db, activity_id)
     if activity.status != "draft":
         raise ValueError("只能开始草稿状态的活动")
+    await _lock_activity_owner(db, activity.created_by)
+    activity = await _get_activity_for_update(db, activity_id)
+    if activity.status != "draft":
+        raise ValueError("只能开始草稿状态的活动")
+    events = deferred_events if deferred_events is not None else []
     # 自动结束同教师其他 active 活动
     active_q = select(ClassroomActivity).where(
         ClassroomActivity.created_by == activity.created_by,
@@ -150,14 +233,25 @@ async def start_activity(db: AsyncSession, activity_id: int) -> ClassroomActivit
     active_rows = (await db.execute(active_q)).scalars().all()
     now = datetime.now(timezone.utc)
     for a in active_rows:
-        await end_activity(db, a.id)
+        await end_activity(
+            db,
+            a.id,
+            commit=False,
+            deferred_events=events,
+        )
     activity.status = "active"
     activity.started_at = now
-    await db.commit()
+    _append_activity_event(events, "activity_started", activity)
+    if not commit:
+        await db.flush()
+        return activity
+    try:
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
     await db.refresh(activity)
-    await publish("student", {"type": "activity_started", "activity_id": activity.id})
-    await publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
-    await publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
+    await dispatch_activity_events(db, events)
     return activity
 
 
@@ -166,8 +260,14 @@ async def end_activity(
     activity_id: int,
     analysis_agent_id: Optional[int] = None,
     analysis_prompt: Optional[str] = None,
+    *,
+    commit: bool = True,
+    deferred_events: Optional[list[dict[str, Any]]] = None,
 ) -> ClassroomActivity:
     activity = await _get_activity(db, activity_id)
+    if activity.status != "active":
+        raise ValueError("只能结束进行中的活动")
+    activity = await _get_activity_for_update(db, activity_id)
     if activity.status != "active":
         raise ValueError("只能结束进行中的活动")
     if analysis_agent_id is not None:
@@ -183,21 +283,51 @@ async def end_activity(
         )).scalars().all()
         for r in responses:
             r.is_correct = _check_correct(r.answer, activity.correct_answer, activity.allow_multiple)
-    await db.commit()
+    events = deferred_events if deferred_events is not None else []
+    _append_activity_event(events, "activity_ended", activity)
+    if not commit:
+        await db.flush()
+        return activity
+    try:
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
     await db.refresh(activity)
-    await publish("student", {"type": "activity_ended", "activity_id": activity.id})
-    await publish(f"admin_{activity.created_by}", {"type": "activity_ended", "activity_id": activity.id})
-    await publish("admin_global", {"type": "activity_ended", "activity_id": activity.id})
-    await _run_auto_analysis_for_ended_activity(db, activity.id)
+    await dispatch_activity_events(db, events)
     await db.refresh(activity)
     return activity
 
 
-async def restart_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity:
+async def restart_activity(
+    db: AsyncSession,
+    activity_id: int,
+    *,
+    commit: bool = True,
+    deferred_events: Optional[list[dict[str, Any]]] = None,
+) -> ClassroomActivity:
     """重新开始一个已结束的活动（清除旧答题，重置为 active）"""
     activity = await _get_activity(db, activity_id)
     if activity.status != "ended":
         raise ValueError("只能重新开始已结束的活动")
+    await _lock_activity_owner(db, activity.created_by)
+    activity = await _get_activity_for_update(db, activity_id)
+    if activity.status != "ended":
+        raise ValueError("只能重新开始已结束的活动")
+    events = deferred_events if deferred_events is not None else []
+    active_q = select(ClassroomActivity).where(
+        ClassroomActivity.created_by == activity.created_by,
+        ClassroomActivity.status == "active",
+        ClassroomActivity.id != activity.id,
+    )
+    active_rows = (await db.execute(active_q)).scalars().all()
+    for active_activity in active_rows:
+        await end_activity(
+            db,
+            active_activity.id,
+            commit=False,
+            deferred_events=events,
+        )
     # 清除旧答题记录
     await db.execute(
         delete(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
@@ -210,11 +340,17 @@ async def restart_activity(db: AsyncSession, activity_id: int) -> ClassroomActiv
     activity.analysis_status = "pending" if activity.activity_type == "fill_blank" else "not_applicable"
     activity.analysis_result = None
     activity.analysis_error = None
-    await db.commit()
+    _append_activity_event(events, "activity_started", activity)
+    if not commit:
+        await db.flush()
+        return activity
+    try:
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
     await db.refresh(activity)
-    await publish("student", {"type": "activity_started", "activity_id": activity.id})
-    await publish(f"admin_{activity.created_by}", {"type": "activity_started", "activity_id": activity.id})
-    await publish("admin_global", {"type": "activity_started", "activity_id": activity.id})
+    await dispatch_activity_events(db, events)
     return activity
 
 
@@ -231,10 +367,17 @@ async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answ
     activity = await _get_activity(db, activity_id)
     if activity.status != "active":
         raise ValueError("活动未在进行中")
+    # FOR SHARE 允许同一活动的学生并发提交，但会阻止教师结束活动，
+    # 直到所有已开始的答题事务提交，确保结束统计不会漏掉在途响应。
+    activity = await _get_activity_for_update(db, activity_id, read=True)
+    if activity.status != "active":
+        raise ValueError("活动未在进行中")
     # 检查超时
     if activity.time_limit > 0 and activity.started_at:
         elapsed = (datetime.now(timezone.utc) - activity.started_at).total_seconds()
         if elapsed > activity.time_limit + 2:  # 2s 容差
+            # 释放共享锁后再用排他锁结束活动，避免并发答题间锁升级。
+            await db.rollback()
             await end_activity(db, activity_id)
             raise ValueError("活动已超时结束")
     # 检查重复
@@ -254,7 +397,11 @@ async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answ
         answer=answer, is_correct=is_correct,
     )
     db.add(resp)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ValueError("已提交过答案") from exc
     await db.refresh(resp)
     await publish(f"admin_{activity.created_by}", {
         "type": "new_response", "activity_id": activity_id,
@@ -263,7 +410,12 @@ async def submit_response(db: AsyncSession, activity_id: int, user_id: int, answ
     return resp
 
 
-async def get_statistics(db: AsyncSession, activity_id: int) -> dict:
+async def get_statistics(
+    db: AsyncSession,
+    activity_id: int,
+    *,
+    include_correct_answers: bool = True,
+) -> dict:
     activity = await _get_activity(db, activity_id)
     responses = (await db.execute(
         select(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
@@ -301,14 +453,16 @@ async def get_statistics(db: AsyncSession, activity_id: int) -> dict:
         blank_slot_stats = []
         for idx, right in enumerate(correct_parts):
             wrong_top = sorted(slot_wrong_maps[idx].items(), key=lambda x: x[1], reverse=True)[:5]
-            blank_slot_stats.append({
+            slot_stats = {
                 "slot_index": idx + 1,
-                "correct_answer": right,
                 "total_count": total,
                 "correct_count": slot_correct_counts[idx],
                 "correct_rate": round(slot_correct_counts[idx] / total * 100, 1) if total > 0 else None,
                 "top_wrong_answers": [{"answer": k, "count": v} for k, v in wrong_top],
-            })
+            }
+            if include_correct_answers:
+                slot_stats["correct_answer"] = right
+            blank_slot_stats.append(slot_stats)
         top_wrong_answers = [
             {"answer": k, "count": v}
             for k, v in sorted(overall_wrong_map.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -348,16 +502,25 @@ async def analyze_fill_blank_stats(db: AsyncSession, activity_id: int, agent_id:
     }
 
 
-async def get_active_activities(db: AsyncSession) -> List[ClassroomActivity]:
+async def get_active_activities(
+    db: AsyncSession,
+    class_name: Optional[str] = None,
+) -> List[ClassroomActivity]:
+    """仅返回与学生非空班级完全匹配的进行中活动。"""
     global _last_auto_end_check
     now = time.monotonic()
     if now - _last_auto_end_check >= 30.0:
         _last_auto_end_check = now
         await _auto_end_overdue_activities(db)
-    rows = (await db.execute(
-        select(ClassroomActivity).where(ClassroomActivity.status == "active")
-        .order_by(ClassroomActivity.started_at.desc())
-    )).scalars().all()
+    class_name = normalize_class_name(class_name)
+    if not class_name:
+        return []
+    q = select(ClassroomActivity).where(
+        ClassroomActivity.status == "active",
+        ClassroomActivity.class_name == class_name,
+    )
+    q = q.order_by(ClassroomActivity.started_at.desc())
+    rows = (await db.execute(q)).scalars().all()
     return list(rows)
 
 
@@ -378,14 +541,32 @@ def calc_remaining(activity: ClassroomActivity) -> Optional[int]:
     return remaining
 
 
-async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: int) -> None:
-    activity = await _get_activity(db, activity_id)
+async def _run_auto_analysis_for_ended_activity(
+    db: AsyncSession,
+    activity_id: int,
+    *,
+    allow_running_retry: bool = False,
+) -> None:
+    activity = await _get_activity_for_update(db, activity_id)
+    if activity.status != "ended":
+        await db.commit()
+        return
     if activity.activity_type != "fill_blank":
         if activity.analysis_status != "not_applicable":
             activity.analysis_status = "not_applicable"
             activity.analysis_updated_at = datetime.now(timezone.utc)
-            await db.commit()
+        await db.commit()
         return
+    if activity.analysis_status in {"success", "skipped", "not_applicable"}:
+        await db.commit()
+        return
+    if activity.analysis_status == "failed" and not allow_running_retry:
+        await db.commit()
+        return
+    if activity.analysis_status == "running" and not allow_running_retry:
+        await db.commit()
+        return
+    claimed_ended_at = activity.ended_at
     stats = await get_statistics(db, activity_id)
     context = _build_analysis_context(activity, stats)
     if stats.get("total_responses", 0) <= 0 or not context.get("risk_slots"):
@@ -417,25 +598,39 @@ async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: i
     from app.services.agents.chat_blocking import run_agent_chat_blocking
 
     errors = []
-    for agent_id in candidate_ids:
+    for index, agent_id in enumerate(candidate_ids):
         try:
             analysis_text = await run_agent_chat_blocking(
                 db,
                 agent_id=agent_id,
                 message=prompt,
             )
-            activity.analysis_agent_id = agent_id
-            activity.analysis_status = "success"
-            activity.analysis_result = analysis_text
-            activity.analysis_context = context
-            activity.analysis_error = None
-            activity.analysis_updated_at = datetime.now(timezone.utc)
-            await db.commit()
-            return
         except Exception as exc:
+            await db.rollback()
+            activity = await _get_activity_for_update(db, activity_id)
+            if not _analysis_claim_is_current(activity, claimed_ended_at):
+                await db.commit()
+                return
             errors.append(f"agent#{agent_id}: {str(exc)[:200]}")
             logger.warning("课堂分析 agent#%s 失败，尝试下一个: %s", agent_id, exc)
+            if index < len(candidate_ids) - 1:
+                # 不在下一次外部 AI 请求期间持有活动行锁。
+                await db.commit()
             continue
+        # get_agent() 会开启读事务；结束后重新锁行确认活动仍是同一结束轮次。
+        await db.rollback()
+        activity = await _get_activity_for_update(db, activity_id)
+        if not _analysis_claim_is_current(activity, claimed_ended_at):
+            await db.commit()
+            return
+        activity.analysis_agent_id = agent_id
+        activity.analysis_status = "success"
+        activity.analysis_result = analysis_text
+        activity.analysis_context = context
+        activity.analysis_error = None
+        activity.analysis_updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
 
     # 所有候选都失败
     logger.error("课堂互动自动分析失败: activity_id=%s, 尝试了 %d 个智能体均失败", activity_id, len(candidate_ids))
@@ -445,6 +640,24 @@ async def _run_auto_analysis_for_ended_activity(db: AsyncSession, activity_id: i
     activity.analysis_error = f"已尝试 {len(candidate_ids)} 个智能体均失败：{'; '.join(errors)}"
     activity.analysis_updated_at = datetime.now(timezone.utc)
     await db.commit()
+    raise ClassroomAnalysisRetryableError(activity.analysis_error)
+
+
+def _analysis_claim_is_current(
+    activity: ClassroomActivity,
+    claimed_ended_at: Optional[datetime],
+) -> bool:
+    return (
+        activity.status == "ended"
+        and activity.analysis_status == "running"
+        and activity.ended_at == claimed_ended_at
+    )
+
+
+async def _enqueue_auto_analysis(activity_id: int) -> None:
+    from app.tasks.classroom import analyze_ended_classroom_activity
+
+    await asyncio.to_thread(analyze_ended_classroom_activity.delay, activity_id)
 
 
 async def _list_candidate_agents(db: AsyncSession, preferred_id: Optional[int] = None) -> List[int]:
@@ -542,6 +755,34 @@ async def _get_activity(db: AsyncSession, activity_id: int) -> ClassroomActivity
     if not activity:
         raise ValueError("活动不存在")
     return activity
+
+
+async def _get_activity_for_update(
+    db: AsyncSession,
+    activity_id: int,
+    *,
+    read: bool = False,
+) -> ClassroomActivity:
+    activity = (
+        await db.execute(
+            select(ClassroomActivity)
+            .where(ClassroomActivity.id == activity_id)
+            .with_for_update(read=read)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not activity:
+        raise ValueError("活动不存在")
+    return activity
+
+
+async def _lock_activity_owner(db: AsyncSession, user_id: int) -> None:
+    """同一教师的活动启动/重启必须串行，保证最多一个 active 活动。"""
+    result = await db.execute(
+        select(User.id).where(User.id == user_id).with_for_update()
+    )
+    if result.scalar_one_or_none() is None:
+        raise ValueError("活动创建者不存在")
 
 
 def _check_correct(student_answer: str, correct_answer: str, allow_multiple: bool) -> bool:

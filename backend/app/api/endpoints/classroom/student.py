@@ -8,22 +8,48 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import require_student
 from app.schemas.user_info import UserInfo
 from app.schemas.classroom import ResponseSubmit
 from app.services import classroom as svc
-from app.services.classroom import calc_remaining
+from app.services.classroom import calc_remaining, normalize_class_name
 
 from loguru import logger
 router = APIRouter()
 
 
+def _student_safe_stats(stats: dict) -> dict:
+    """学生端统计只保留判定结果，不暴露任何标准答案字段。"""
+    safe_stats = dict(stats)
+    safe_stats["blank_slot_stats"] = [
+        {key: value for key, value in slot.items() if key != "correct_answer"}
+        for slot in (stats.get("blank_slot_stats") or [])
+    ]
+    return safe_stats
+
+
+def _assert_student_activity_access(activity, current_user: UserInfo) -> None:
+    """学生与活动必须具有完全相同的非空班级。"""
+    student_class = normalize_class_name(current_user.get("class_name"))
+    activity_class = normalize_class_name(activity.class_name)
+    if not student_class or not activity_class or student_class != activity_class:
+        raise HTTPException(status_code=403, detail="无权访问其他班级的课堂活动")
+
+
+def _student_stream_channel(current_user: UserInfo) -> str:
+    class_name = normalize_class_name(current_user.get("class_name"))
+    if not class_name:
+        raise HTTPException(status_code=403, detail="学生尚未分配班级")
+    return f"student_{class_name}"
+
+
 @router.get("/active")
 async def get_active_activities(
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student),
 ):
-    activities = await svc.get_active_activities(db)
+    class_name = normalize_class_name(current_user.get("class_name"))
+    activities = await svc.get_active_activities(db, class_name=class_name)
     user_id = current_user.get("id")
     result = []
     for a in activities:
@@ -34,12 +60,13 @@ async def get_active_activities(
 
 @router.get("/stream")
 async def student_stream(
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student),
 ):
     sub_id = str(uuid.uuid4())
+    channel = _student_stream_channel(current_user)
 
     async def gen():
-        q = await svc.subscribe("student", sub_id)
+        q = await svc.subscribe(channel, sub_id)
         try:
             yield f"data: {json.dumps({'type': 'connected'})}\n\n"
             while True:
@@ -51,7 +78,7 @@ async def student_stream(
                 except asyncio.CancelledError:
                     break
         finally:
-            await svc.unsubscribe("student", sub_id)
+            await svc.unsubscribe(channel, sub_id)
 
     return StreamingResponse(
         gen(),
@@ -68,15 +95,21 @@ async def student_stream(
 async def get_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student),
 ):
     try:
         activity = await svc.get_activity(db, activity_id)
+        _assert_student_activity_access(activity, current_user)
         my_resp = await svc.get_user_response(db, activity_id, current_user.get("id"))
         view = _to_student_view(activity, my_resp)
         if activity.status == "ended":
-            view["correct_answer"] = activity.correct_answer
-            view["stats"] = await svc.get_statistics(db, activity_id)
+            view["stats"] = _student_safe_stats(
+                await svc.get_statistics(
+                    db,
+                    activity_id,
+                    include_correct_answers=False,
+                )
+            )
         return view
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -87,9 +120,11 @@ async def submit_response(
     activity_id: int,
     data: ResponseSubmit,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student),
 ):
     try:
+        activity = await svc.get_activity(db, activity_id)
+        _assert_student_activity_access(activity, current_user)
         resp = await svc.submit_response(db, activity_id, current_user.get("id"), data.answer)
         return {
             "id": resp.id,
@@ -105,20 +140,26 @@ async def submit_response(
 async def get_result(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student),
 ):
     try:
         activity = await svc.get_activity(db, activity_id)
+        _assert_student_activity_access(activity, current_user)
         if activity.status != "ended":
             raise HTTPException(status_code=400, detail="活动尚未结束")
         my_resp = await svc.get_user_response(db, activity_id, current_user.get("id"))
-        stats = await svc.get_statistics(db, activity_id)
+        stats = _student_safe_stats(
+            await svc.get_statistics(
+                db,
+                activity_id,
+                include_correct_answers=False,
+            )
+        )
         return {
             "id": activity.id,
             "activity_type": activity.activity_type,
             "title": activity.title,
             "options": activity.options,
-            "correct_answer": activity.correct_answer,
             "allow_multiple": activity.allow_multiple,
             "my_answer": my_resp.answer if my_resp else None,
             "is_correct": my_resp.is_correct if my_resp else None,
@@ -133,6 +174,8 @@ def _to_student_view(activity, my_resp=None) -> dict:
         "id": activity.id,
         "activity_type": activity.activity_type,
         "title": activity.title,
+        "class_name": normalize_class_name(activity.class_name),
+        "description": activity.description,
         "options": activity.options,
         "allow_multiple": activity.allow_multiple,
         "time_limit": activity.time_limit,

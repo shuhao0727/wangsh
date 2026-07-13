@@ -1,7 +1,7 @@
 /**
  * 任务分析列表面板 — 使用 AdminTablePanel + DataTable 统一表格风格
  */
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -39,57 +39,100 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
   const newAnalysisUrl = `/task-analysis/new?type=${isChain ? "chains" : "hot"}`;
   const [records, setRecords] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const loadRequestRef = useRef(0);
+  const scopeGenerationRef = useRef(0);
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
+    setLoadError("");
     try {
       const res = isChain
         ? await agentDataApi.listChainAnalyses()
         : await agentDataApi.listHotAnalyses();
-      if (res.success) setRecords(res.data as AnalysisRecord[]);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  };
+      if (!res.success) {
+        throw new Error(res.message || "加载失败");
+      }
+      if (requestId === loadRequestRef.current) {
+        setRecords(res.data as AnalysisRecord[]);
+      }
+    } catch (error) {
+      if (requestId !== loadRequestRef.current) return;
+      const detail = error instanceof Error ? error.message : "加载失败";
+      const message = `分析记录加载失败：${detail}`;
+      setLoadError(message);
+      showMessage.error(message);
+    } finally {
+      if (requestId === loadRequestRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [isChain]);
 
-  useEffect(() => { void loadRecords(); }, []);
+  useEffect(() => {
+    scopeGenerationRef.current += 1;
+    setSelectedIds(new Set());
+    void loadRecords();
+    return () => {
+      scopeGenerationRef.current += 1;
+      loadRequestRef.current += 1;
+    };
+  }, [loadRecords]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     if (!window.confirm("确定删除这条分析记录？")) return;
-    const res = isChain
-      ? await agentDataApi.deleteChainAnalysis(id)
-      : await agentDataApi.deleteHotAnalysis(id);
-    if (res.success) { showMessage.success("已删除"); void loadRecords(); }
-    else showMessage.error("删除失败");
-  };
+    const scopeGeneration = scopeGenerationRef.current;
+    try {
+      const res = isChain
+        ? await agentDataApi.deleteChainAnalysis(id)
+        : await agentDataApi.deleteHotAnalysis(id);
+      if (!res.success) {
+        throw new Error(res.message || "删除失败");
+      }
+      showMessage.success("已删除");
+      if (scopeGeneration === scopeGenerationRef.current) {
+        await loadRecords();
+      }
+    } catch (error) {
+      showMessage.error(error instanceof Error ? error.message : "删除失败");
+    }
+  }, [isChain, loadRecords]);
 
-  const handleDownload = async (id: number) => {
-    const res = isChain
-      ? await agentDataApi.getChainAnalysis(id)
-      : await agentDataApi.getHotAnalysis(id);
-    if (!res.success) { showMessage.error("获取失败"); return; }
-    const d: any = res.data;
-    const r = d.result || {};
-    const lines: string[] = [];
-    lines.push(`# ${d.title || "分析报告"}`);
-    lines.push(`> 生成时间：${d.created_at || ""}`);
-    lines.push("");
-    const wc = r.word_cloud || [];
-    if (wc.length > 0) { lines.push("## 热点词 Top 10"); wc.slice(0, 10).forEach((w: any) => lines.push(`- **${w.word || w.name}** (${w.count || w.value}次)`)); lines.push(""); }
-    const cov = r.covered || [];
-    if (cov.length > 0) { lines.push("## 任务单已覆盖"); cov.forEach((c: any) => lines.push(`- ${c.topic} (${c.count}次)`)); lines.push(""); }
-    const uncov = r.uncovered || [];
-    if (uncov.length > 0) { lines.push("## 学生生成性问题"); uncov.forEach((u: any) => { lines.push(`### ${u.topic} (${u.count}次)`); (u.questions || []).forEach((q: string) => lines.push(`- ${q}`)); lines.push(""); }); }
-    const suggestions = r.teaching_suggestions || [];
-    if (suggestions.length > 0) { lines.push("## 教学建议"); suggestions.forEach((s: any) => lines.push(`- **${s.theme}**：${s.suggestion || ""}`)); lines.push(""); }
-    const md = lines.join("\n");
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `任务分析_${d.title || ""}_${dayjs(d.created_at).format("YYYYMMDD")}.md`; a.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleDownload = useCallback(async (id: number) => {
+    try {
+      const res = isChain
+        ? await agentDataApi.getChainAnalysis(id)
+        : await agentDataApi.getHotAnalysis(id);
+      if (!res.success) {
+        throw new Error(res.message || "获取失败");
+      }
+      const d: any = res.data;
+      const r = d.result || {};
+      const lines: string[] = [];
+      lines.push(`# ${d.title || "分析报告"}`);
+      lines.push(`> 生成时间：${d.created_at || ""}`);
+      lines.push("");
+      const wc = r.word_cloud || [];
+      if (wc.length > 0) { lines.push("## 热点词 Top 10"); wc.slice(0, 10).forEach((w: any) => lines.push(`- **${w.word || w.name}** (${w.count || w.value}次)`)); lines.push(""); }
+      const cov = r.covered || [];
+      if (cov.length > 0) { lines.push("## 任务单已覆盖"); cov.forEach((c: any) => lines.push(`- ${c.topic} (${c.count}次)`)); lines.push(""); }
+      const uncov = r.uncovered || [];
+      if (uncov.length > 0) { lines.push("## 学生生成性问题"); uncov.forEach((u: any) => { lines.push(`### ${u.topic} (${u.count}次)`); (u.questions || []).forEach((q: string) => lines.push(`- ${q}`)); lines.push(""); }); }
+      const suggestions = r.teaching_suggestions || [];
+      if (suggestions.length > 0) { lines.push("## 教学建议"); suggestions.forEach((s: any) => lines.push(`- **${s.theme}**：${s.suggestion || ""}`)); lines.push(""); }
+      const md = lines.join("\n");
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `任务分析_${d.title || ""}_${dayjs(d.created_at).format("YYYYMMDD")}.md`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showMessage.error(error instanceof Error ? error.message : "获取失败");
+    }
+  }, [isChain]);
 
   const filtered = search.trim()
     ? records.filter((r) => r.title.toLowerCase().includes(search.toLowerCase()))
@@ -162,11 +205,11 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
             {resolvedView === "beam" ? "光束图" : "时序"}
           </a>
-          <button onClick={() => handleDownload(row.original.id)} title="下载"
+          <button onClick={() => void handleDownload(row.original.id)} title="下载"
             className="text-text-tertiary hover:text-primary transition-colors">
             <Download className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => handleDelete(row.original.id)}
+          <button onClick={() => void handleDelete(row.original.id)}
             className="text-text-tertiary hover:text-destructive transition-colors">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -174,7 +217,7 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
       ),
       size: 140,
     },
-  ], [isChain, resolvedView, filtered, selectedIds]);
+  ], [isChain, resolvedView, filtered, selectedIds, handleDelete, handleDownload]);
 
   const table = useReactTable({
     data: filtered,
@@ -201,15 +244,22 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
         </Button>
       </div>
 
-      <AdminTablePanel
-        loading={loading}
-        isEmpty={!loading && records.length === 0}
-        emptyDescription={isChain ? "暂无学生问题链分析记录" : "暂无热点问题分析记录"}
-        noResults={!loading && records.length > 0 && filtered.length === 0}
-        noResultsDescription="未找到匹配的分析记录"
-      >
-        <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[800px] table-fixed" />
-      </AdminTablePanel>
+      {loadError ? (
+        <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-surface p-6 text-sm text-destructive">
+          <p>{loadError}</p>
+          <Button variant="outline" size="sm" onClick={() => void loadRecords()}>重新加载</Button>
+        </div>
+      ) : (
+        <AdminTablePanel
+          loading={loading}
+          isEmpty={!loading && records.length === 0}
+          emptyDescription={isChain ? "暂无学生问题链分析记录" : "暂无热点问题分析记录"}
+          noResults={!loading && records.length > 0 && filtered.length === 0}
+          noResultsDescription="未找到匹配的分析记录"
+        >
+          <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[800px] table-fixed" />
+        </AdminTablePanel>
+      )}
     </div>
   );
 };

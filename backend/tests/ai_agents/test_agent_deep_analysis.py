@@ -1,12 +1,32 @@
 import asyncio
+import importlib
+import importlib.util
 from datetime import datetime, timedelta, timezone
 
+import app.services.agents.agent_deep_analysis as deep_analysis
 from app.services.agents.agent_deep_analysis import (
     analyze_hot_questions_v2,
     analyze_student_chains_v2,
     summarize_chain_list_item,
     summarize_hot_list_item,
 )
+
+
+def test_deep_analysis_is_split_into_focused_modules():
+    module_names = [
+        "app.services.agents.agent_analysis_events",
+        "app.services.agents.agent_hot_analysis",
+        "app.services.agents.agent_chain_analysis",
+        "app.services.agents.agent_analysis_summaries",
+    ]
+    for module_name in module_names:
+        assert importlib.util.find_spec(module_name) is not None
+
+    summaries = importlib.import_module(
+        "app.services.agents.agent_analysis_summaries"
+    )
+    assert deep_analysis.summarize_hot_list_item is summaries.summarize_hot_list_item
+    assert deep_analysis.summarize_chain_list_item is summaries.summarize_chain_list_item
 
 
 class FakeResult:

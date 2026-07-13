@@ -10,13 +10,14 @@ from .ai_agent import (
     StudentChainAnalysis,
     AgentAnalysisPromptTemplate,
 )
-from .group_discussion import GroupDiscussionAnalysis, GroupDiscussionMessage, GroupDiscussionSession
+from .group_discussion import GroupDiscussionAnalysis, GroupDiscussionMember, GroupDiscussionMessage, GroupDiscussionSession
 from .optimization import OptimizeLog
 
 __all__ = [
     "AIAgent",
     "ZntConversation",
     "GroupDiscussionSession",
+    "GroupDiscussionMember",
     "GroupDiscussionMessage",
     "GroupDiscussionAnalysis",
     "OptimizeLog",

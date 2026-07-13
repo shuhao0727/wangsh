@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import { Button } from "@/components/ui/button";
+import { showMessage } from "@/lib/toast";
 import { agentDataApi } from "@services/znt/api";
 
 type AnalysisRecord = {
@@ -38,23 +39,55 @@ const TaskAnalysisComparePage: React.FC = () => {
   const analysisType = searchParams.get("type");
   const [records, setRecords] = useState<NormalizedAnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const bloomRef = React.useRef<HTMLDivElement>(null);
   const timelineRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ids.length < 2) { setLoading(false); return; }
+    if (ids.length < 2) {
+      setRecords([]);
+      setLoadError("");
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
     const fetcher = analysisType === "chains"
       ? agentDataApi.getChainAnalysis
       : analysisType === "hot"
         ? agentDataApi.getHotAnalysis
         : agentDataApi.getTaskAnalysis;
     setLoading(true);
-    Promise.all(ids.map((id) => fetcher(id)))
-      .then((results) => {
-        setRecords(results.filter((r: any) => r.success).map((r: any, index: number) => normalizeRecord(r.data as AnalysisRecord, index)));
-      })
-      .finally(() => setLoading(false));
+    setLoadError("");
+    setRecords([]);
+    void (async () => {
+      try {
+        const results = await Promise.all(ids.map((id) => fetcher(id)));
+        const failed = results
+          .map((result, index) => ({ result, id: ids[index] }))
+          .filter(({ result }) => !result.success);
+        if (failed.length > 0) {
+          const details = failed
+            .map(({ result, id }) => `#${id} ${result.message || "获取失败"}`)
+            .join("；");
+          throw new Error(details);
+        }
+        if (!cancelled) {
+          setRecords(results.map((result, index) => normalizeRecord(result.data as AnalysisRecord, index)));
+        }
+      } catch (error) {
+        if (cancelled) return;
+        const detail = error instanceof Error ? error.message : "获取失败";
+        const message = `对比分析加载失败：${detail}`;
+        setLoadError(message);
+        showMessage.error(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [ids, analysisType]);
 
   // Bloom 对比图
@@ -144,6 +177,12 @@ const TaskAnalysisComparePage: React.FC = () => {
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      ) : loadError ? (
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div role="alert" className="max-w-xl rounded-xl border border-destructive/30 bg-surface p-5 text-center">
+            <p className="text-sm text-destructive">{loadError}</p>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 max-w-6xl mx-auto w-full">
           {/* ① 对比概览表格 */}

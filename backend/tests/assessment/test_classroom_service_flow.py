@@ -80,12 +80,17 @@ def test_submit_response_rejects_duplicate_answer(monkeypatch):
         return activity
 
     monkeypatch.setattr(svc, "_get_activity", fake_get_activity)
-    db = _FakeDB(execute_results=[_FakeResult(value=SimpleNamespace(id=99))])
+    db = _FakeDB(
+        execute_results=[
+            _FakeResult(value=activity),
+            _FakeResult(value=SimpleNamespace(id=99)),
+        ]
+    )
 
     with pytest.raises(ValueError, match="已提交过答案"):
         asyncio.run(svc.submit_response(db, activity_id=11, user_id=1001, answer="A"))
 
-    assert db.execute_count == 1
+    assert db.execute_count == 2
     assert db.commit_count == 0
     assert db.added == []
 
@@ -121,7 +126,7 @@ def test_end_activity_requires_active_status(monkeypatch):
     assert db.commit_count == 0
 
 
-def test_bulk_delete_skips_active_activities():
+def test_bulk_delete_only_deletes_draft_activities():
     act_active = SimpleNamespace(id=1, status="active")
     act_draft = SimpleNamespace(id=2, status="draft")
     act_ended = SimpleNamespace(id=3, status="ended")
@@ -129,6 +134,6 @@ def test_bulk_delete_skips_active_activities():
 
     result = asyncio.run(svc.bulk_delete_activities(db, [1, 2, 3]))
 
-    assert result == {"deleted": [2, 3], "skipped": [1]}
-    assert db.deleted == [act_draft, act_ended]
+    assert result == {"deleted": [2], "skipped": [1, 3]}
+    assert db.deleted == [act_draft]
     assert db.commit_count == 1

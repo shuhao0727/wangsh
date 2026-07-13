@@ -6,6 +6,8 @@ from datetime import datetime
 
 
 ActivityType = Literal["vote", "fill_blank"]
+# 说明：产品文档曾提及 5 种活动类型，但当前仅 vote(投票)/fill_blank(填空) 两种已实现，
+# 前端也仅消费这两种。其余类型未实现，强行扩展会引入空壳端点，故保持现状。
 
 
 class OptionItem(BaseModel):
@@ -16,6 +18,9 @@ class OptionItem(BaseModel):
 class ActivityCreate(BaseModel):
     activity_type: ActivityType
     title: str = Field(..., min_length=1, max_length=200)
+    # 班级名称：留空的旧活动不会向学生端开放。
+    class_name: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
     options: Optional[List[OptionItem]] = None
     correct_answer: Optional[str] = None
     allow_multiple: bool = False
@@ -26,6 +31,8 @@ class ActivityCreate(BaseModel):
 
 class ActivityUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
+    class_name: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
     options: Optional[List[OptionItem]] = None
     correct_answer: Optional[str] = None
     allow_multiple: Optional[bool] = None
@@ -43,6 +50,8 @@ class ActivityResponse(BaseModel):
     id: int
     activity_type: str
     title: str
+    class_name: Optional[str] = None
+    description: Optional[str] = None
     options: Optional[list] = None
     correct_answer: Optional[str] = None
     allow_multiple: bool
@@ -70,6 +79,8 @@ class ActivityStudentView(BaseModel):
     id: int
     activity_type: str
     title: str
+    class_name: Optional[str] = None
+    description: Optional[str] = None
     options: Optional[list] = None
     allow_multiple: bool
     time_limit: int
@@ -113,7 +124,6 @@ class ActivityResultView(BaseModel):
     activity_type: str
     title: str
     options: Optional[list] = None
-    correct_answer: Optional[str] = None
     allow_multiple: bool
     my_answer: Optional[str] = None
     is_correct: Optional[bool] = None

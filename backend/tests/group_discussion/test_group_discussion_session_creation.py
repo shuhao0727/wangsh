@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 import app.services.agents.group_discussion as gd
+import app.services.agents.group_discussion.session_service as session_service
 from app.core.config import settings
 from app.utils.cache import cache
 
@@ -322,6 +323,41 @@ class TestGetOrCreateTodaySession:
 
 class TestListTodayGroups:
     """测试 list_today_groups 函数"""
+
+    def test_list_groups_uses_same_local_date_as_session_creation(self, monkeypatch):
+        """北京时间跨日但 UTC 未跨日时，默认列表仍查询本地当天会话。"""
+        _patch_settings(monkeypatch)
+        monkeypatch.setattr(settings, "GROUP_DISCUSSION_LIST_RECENT_HOURS", 0, raising=False)
+
+        class LocalDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 7, 12)
+
+        class UtcDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                if tz is None:
+                    return cls(2026, 7, 12, 0, 30)
+                return cls(2026, 7, 11, 16, 30, tzinfo=timezone.utc)
+
+        monkeypatch.setattr(session_service, "date", LocalDate)
+        monkeypatch.setattr(session_service, "datetime", UtcDateTime)
+        db = _FakeDB([[]])
+
+        asyncio.run(
+            session_service.list_today_groups(
+                db=db,
+                date=None,
+                class_name="测试班级",
+                keyword=None,
+                limit=50,
+                ignore_time_limit=False,
+            )
+        )
+
+        params = db.statements[0].compile().params
+        assert LocalDate(2026, 7, 12) in params.values()
 
     def test_list_groups_basic(self, monkeypatch):
         """测试基础列表查询"""

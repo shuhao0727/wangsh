@@ -42,6 +42,9 @@ from app.services.agents import (
 )
 from app.services.agents.hot_agent import deep_analyze_hot_questions
 from app.services.agents.chain_agent import deep_analyze_student_chains
+from app.services.agents.analysis_compatibility import (
+    delete_compatible_sibling as _delete_compatible_siblings,
+)
 from app.services.agents.providers.common import resolve_credentials
 
 router = APIRouter()
@@ -90,6 +93,10 @@ def _task_analysis_payload(row: Any) -> Dict[str, Any]:
 
 
 async def _find_task_analysis_compatible(db: AsyncSession, analysis_id: int) -> Any:
+    # 双写说明：save_task_analysis_stream / save_task_analysis 在保存时同时写入
+    # 新表(HotQuestionAnalysis 或 StudentChainAnalysis)与旧兼容表(TaskAnalysisModel)，
+    # 三张表各自持有独立的自增主键 id（不共享），仅靠业务键(title/agent_id/class_name/
+    # start_at/end_at/created_by)关联同一次保存产生的副本。因此按 id 仅能在一张表命中。
     for model in (TaskAnalysisModel, HotQuestionAnalysis, StudentChainAnalysis):
         row = (await db.execute(select(model).where(model.id == analysis_id))).scalar_one_or_none()
         if row:
@@ -1115,7 +1122,9 @@ async def delete_task_analysis(
     row = await _find_task_analysis_compatible(db, analysis_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+    # 删除命中记录后，同步清理另两张表里同源的双写副本，避免孤儿记录
     await db.delete(row)
+    await _delete_compatible_siblings(db, row)
     await db.commit()
     return {"ok": True}
 

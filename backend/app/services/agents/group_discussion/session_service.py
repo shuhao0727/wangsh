@@ -191,7 +191,7 @@ async def list_today_groups(
     ignore_time_limit: bool = False,
 ) -> List[Tuple[GroupDiscussionSession, int]]:
     """列出今日小组"""
-    target_date = date or datetime.now(timezone.utc).date()
+    target_date = date or datetime.now().date()
     class_raw = (class_name or "").strip()
 
     stmt = (
