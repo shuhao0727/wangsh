@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-07-13
+> 最后更新：2026-07-14
 
 ## 一、概览
 
@@ -107,6 +107,13 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
     做防放宽比较
   - 前端：脚本测试、CSS token 完整性、组件测试、type-check、lint、UI audit、
     生产构建和 bundle budget
+- **测试环境合同**：
+  - PostgreSQL 连接和四项测试专用安全配置统一声明在 `backend-pytest` job 的
+    `env`，迁移、bootstrap 和 pytest 使用同一套配置。
+  - CI 不设置 `DEBUG=true` 绕过生产安全校验；测试值必须非默认，
+    `SECRET_KEY` 不少于 32 字符，加密键使用合法 Fernet 格式。
+  - 前端必须通过干净 `npm ci`；ECharts 与词云插件的 peer major、manifest 和
+    lockfile 版本由 workflow contracts 保持一致。
 - **目的**：覆盖全仓基础质量，不仅限于 PythonLab 路径
 
 ---

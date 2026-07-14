@@ -66,7 +66,7 @@
     "dagre": "^0.8.5",
     "dayjs": "^1.11.7",
     "dompurify": "^3.3.3",
-    "echarts": "^6.0.0",
+    "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.6",
     "echarts-wordcloud": "^2.1.0",
     "eventsource-parser": "^1.1.2",

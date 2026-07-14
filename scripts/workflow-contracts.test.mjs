@@ -809,3 +809,77 @@ test("CI runs repository governance gates", () => {
     assert.ok(workflow.includes(required), `missing CI governance gate: ${required}`);
   }
 });
+
+test("backend CI exposes complete test settings to migrations and pytest", () => {
+  const workflow = read(".github/workflows/ci-quality.yml");
+  const backendJob = workflow.match(
+    /  backend-pytest:[\s\S]*?(?=\n  frontend-quality:)/,
+  )?.[0];
+
+  assert.ok(backendJob, "backend-pytest job is missing");
+  assert.match(backendJob, /runs-on:\s*ubuntu-latest\n    env:\n[\s\S]*?\n    services:/);
+
+  for (const required of [
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
+    "POSTGRES_DB",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "SECRET_KEY",
+    "SUPER_ADMIN_PASSWORD",
+    "AGENT_API_KEY_ENCRYPTION_KEY",
+  ]) {
+    assert.match(
+      backendJob,
+      new RegExp(`^      ${required}:`, "m"),
+      `backend CI job env is missing ${required}`,
+    );
+  }
+
+  const envValue = (name) =>
+    backendJob.match(new RegExp(`^      ${name}:\\s*"?([^"\\n]+)"?`, "m"))?.[1]?.trim() ?? "";
+  for (const required of [
+    "POSTGRES_PASSWORD",
+    "SECRET_KEY",
+    "SUPER_ADMIN_PASSWORD",
+    "AGENT_API_KEY_ENCRYPTION_KEY",
+  ]) {
+    const value = envValue(required);
+    assert.ok(value, `backend CI job env has an empty ${required}`);
+    assert.notEqual(value, "change_me", `backend CI job env uses default ${required}`);
+  }
+
+  assert.ok(envValue("SECRET_KEY").length >= 32, "backend CI SECRET_KEY is too short");
+  assert.match(
+    envValue("AGENT_API_KEY_ENCRYPTION_KEY"),
+    /^[A-Za-z0-9_-]{43}=$/,
+    "backend CI agent encryption key must be a Fernet-compatible test key",
+  );
+});
+
+test("frontend chart dependencies use a compatible ECharts peer major", () => {
+  const packageJson = JSON.parse(read("frontend/package.json"));
+  const packageLock = JSON.parse(read("frontend/package-lock.json"));
+  const echartsRange = packageJson.dependencies?.echarts ?? "";
+  const lockedEchartsVersion =
+    packageLock.packages?.["node_modules/echarts"]?.version ?? "";
+  const wordCloudPeer =
+    packageLock.packages?.["node_modules/echarts-wordcloud"]?.peerDependencies?.echarts ?? "";
+  const echartsMajor = echartsRange.match(/\d+/)?.[0];
+  const lockedEchartsMajor = lockedEchartsVersion.match(/\d+/)?.[0];
+  const peerMajor = wordCloudPeer.match(/\d+/)?.[0];
+
+  assert.ok(echartsMajor, "frontend ECharts dependency range is missing");
+  assert.ok(lockedEchartsMajor, "frontend ECharts lockfile version is missing");
+  assert.ok(wordCloudPeer, "echarts-wordcloud peer dependency is missing from the lockfile");
+  assert.equal(
+    lockedEchartsMajor,
+    echartsMajor,
+    `lockfile ECharts ${lockedEchartsVersion} does not match package range ${echartsRange}`,
+  );
+  assert.equal(
+    echartsMajor,
+    peerMajor,
+    `echarts ${echartsRange} does not satisfy echarts-wordcloud peer ${wordCloudPeer}`,
+  );
+});

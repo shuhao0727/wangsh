@@ -126,17 +126,21 @@ def test_concurrent_refresh_rotation_allows_only_one_consumer():
         engine = create_async_engine(settings.DATABASE_URL)
         Session = async_sessionmaker(engine, expire_on_commit=False)
         seed_token = f"concurrency-{datetime.now(timezone.utc).timestamp()}"
+        suffix = str(datetime.now(timezone.utc).timestamp()).replace(".", "")
+        username = f"refresh-race-{suffix}"
         results = []
 
         async with Session() as db:
-            user_id = (
-                await db.execute(
-                    select(User.id).where(
-                        User.is_active.is_(True),
-                        User.is_deleted.is_(False),
-                    ).limit(1)
-                )
-            ).scalar_one()
+            user = User(
+                username=username,
+                full_name="Refresh Rotation Race Test",
+                role_code="teacher",
+                is_active=True,
+                is_deleted=False,
+            )
+            db.add(user)
+            await db.flush()
+            user_id = user.id
             db.add(
                 RefreshToken(
                     user_id=user_id,
@@ -168,6 +172,7 @@ def test_concurrent_refresh_rotation_allows_only_one_consumer():
                         )
                     )
                 )
+                await db.execute(delete(User).where(User.id == user_id))
                 await db.commit()
             await engine.dispose()
 

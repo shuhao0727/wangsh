@@ -52,6 +52,15 @@ jobs:
 
   backend-pytest:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "55433"
+      POSTGRES_DB: wangsh_ci
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
+      SUPER_ADMIN_PASSWORD: ci-admin-password
+      AGENT_API_KEY_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
     services:
       postgres:
         image: postgres:16-alpine
@@ -101,15 +110,6 @@ jobs:
             python scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
           fi
       - name: migrate and bootstrap clean database
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: "55433"
-          POSTGRES_DB: wangsh_ci
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
-          SUPER_ADMIN_PASSWORD: ci-admin-password
-          AGENT_API_KEY_ENCRYPTION_KEY: ci-agent-key
         run: |
           python scripts/check_migration_state.py
           python scripts/bootstrap_db.py --initial-only
