@@ -5,7 +5,6 @@
 - 下载日志记录
 """
 
-import hashlib
 import logging
 import os
 import re
@@ -22,6 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.it.game import GameDownloadLog, GameResource
+from app.services.it.game_uploads import (
+    portable_stored_name as _portable_stored_name,
+    rollback_failed_upload as _rollback_failed_upload,
+    stream_upload_to_file as _stream_upload_to_file,
+    validated_game_extension as _validated_game_extension,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -125,17 +130,6 @@ def _signature_error(ext: str) -> ValueError:
     policy = _FORMAT_VALIDATION_POLICIES.get(ext)
     suffix = f"；校验策略：{policy}" if policy else ""
     return ValueError(f"文件内容与 {ext} 格式签名不匹配，疑似伪装或损坏文件{suffix}")
-
-
-def _safe_unlink(path: Optional[Path]) -> None:
-    if path is None:
-        return
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
-    except OSError:
-        logger.exception("临时游戏文件清理失败: %s", path)
 
 
 def resolve_game_file_path(game: GameResource) -> Optional[Path]:
@@ -267,15 +261,9 @@ async def create_game(
     校验失败抛 ValueError，由 endpoint 转换为 HTTPException(400)。
     """
     raw_name = file.filename or ""
-    ext = Path(raw_name or "unknown").suffix.lower()
-    if not ext:
-        raise ValueError("文件缺少扩展名，无法识别游戏包类型")
-    if ext not in ALLOWED_GAME_EXTENSIONS:
-        allowed = ", ".join(sorted(ALLOWED_GAME_EXTENSIONS))
-        raise ValueError(f"不支持的文件类型：{ext}，仅允许 {allowed}")
+    ext = _validated_game_extension(raw_name, ALLOWED_GAME_EXTENSIONS)
 
     upload_dir = _ensure_upload_dir()
-    slug = _slugify(title)
     game = GameResource(
         title=title,
         description=description,
@@ -296,12 +284,14 @@ async def create_game(
         if game.id is None:
             raise RuntimeError("数据库未生成游戏资源 ID")
 
-        fixed_name_bytes = len(f"{game.id}_{ext}".encode("utf-8"))
-        slug = _truncate_utf8(
-            slug,
-            max(1, MAX_GAME_FILENAME_BYTES - fixed_name_bytes),
-        ) or "game"
-        stored_name = f"{game.id}_{slug}{ext}"
+        stored_name, slug = _portable_stored_name(
+            game_id=game.id,
+            title=title,
+            extension=ext,
+            max_filename_bytes=MAX_GAME_FILENAME_BYTES,
+            slugify=_slugify,
+            truncate_utf8=_truncate_utf8,
+        )
         dest_path = upload_dir / stored_name
         fd, temp_name = tempfile.mkstemp(
             prefix=f".{game.id}_{slug}_",
@@ -310,27 +300,12 @@ async def create_game(
         )
         temp_path = Path(temp_name)
 
-        total = 0
-        sha256 = hashlib.sha256()
-        max_size = int(settings.IT_GAME_MAX_UPLOAD_BYTES)
-        with os.fdopen(fd, "wb") as destination:
-            while True:
-                chunk = await file.read(UPLOAD_CHUNK_SIZE)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > max_size:
-                    raise ValueError(
-                        f"文件过大（已超过 {max_size} 字节上限），请压缩或拆分后上传"
-                    )
-                destination.write(chunk)
-                destination.flush()
-                sha256.update(chunk)
-            destination.flush()
-            os.fsync(destination.fileno())
-
-        if total == 0:
-            raise ValueError("上传文件内容为空")
+        total, sha256 = await _stream_upload_to_file(
+            file,
+            fd,
+            max_size=int(settings.IT_GAME_MAX_UPLOAD_BYTES),
+            chunk_size=UPLOAD_CHUNK_SIZE,
+        )
         if not _check_file_signature(ext, temp_path):
             raise _signature_error(ext)
 
@@ -340,16 +315,16 @@ async def create_game(
 
         game.stored_path = str(dest_path)
         game.file_size = total
-        game.file_sha256 = sha256.hexdigest()
+        game.file_sha256 = sha256
         await db.commit()
         return game
     except BaseException:
-        try:
-            await db.rollback()
-        finally:
-            _safe_unlink(temp_path)
-            if renamed:
-                _safe_unlink(dest_path)
+        await _rollback_failed_upload(
+            db,
+            temp_path=temp_path,
+            dest_path=dest_path,
+            renamed=renamed,
+        )
         raise
 
 

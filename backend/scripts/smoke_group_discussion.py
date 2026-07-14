@@ -272,29 +272,22 @@ def _ensure_active_agent(
     return 0
 
 
-def _admin_login(base_url: str, *, username: str, password_candidates: list[str]) -> str:
-    tried: list[str] = []
-    unexpected_errors: list[str] = []
-    for pw in password_candidates:
-        p = (pw or "").strip()
-        if not p:
-            continue
-        if p in tried:
-            continue
-        tried.append(p)
-        code, payload = _login_with_backoff(base_url, username=username, password=p, login_label="admin login")
-        if code in {401, 403}:
-            continue
-        if code != 200:
-            unexpected_errors.append(f"http {code} payload={payload}")
-            continue
-        token = _extract_access_token(payload)
-        if token:
-            return token
-        unexpected_errors.append(f"http {code} payload={payload}")
-    if unexpected_errors:
-        _die(f"admin login failed: {'; '.join(unexpected_errors[:3])}")
-    _die("admin login failed (all password candidates rejected)")
+def _admin_login(base_url: str, *, username: str, password: str) -> str:
+    password = (password or "").strip()
+    if not password:
+        _die("missing ADMIN_PASSWORD")
+    code, payload = _login_with_backoff(
+        base_url,
+        username=username,
+        password=password,
+        login_label="admin login",
+    )
+    if code != 200:
+        _die(f"admin login failed: http {code} payload={payload}")
+    token = _extract_access_token(payload)
+    if token:
+        return token
+    _die(f"admin login response missing access_token: payload={payload}")
     return ""
 
 
@@ -317,14 +310,18 @@ def _run_round(
     base_url: str,
     *,
     admin_username: str,
-    admin_password_candidates: list[str],
+    admin_password: str,
     agent_id: int,
     round_i: int,
 ):
     suffix = f"{int(time.time())}-{round_i}"
     today = _today_iso()
 
-    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+    admin_token = _admin_login(
+        base_url,
+        username=admin_username,
+        password=admin_password,
+    )
 
     code, pub = _http_json("GET", f"{base_url}/ai-agents/group-discussion/public-config", timeout=12)
     _expect(code, pub, 200, "public-config get failed")
@@ -503,7 +500,11 @@ def _run_round(
     ):
         _die(f"student groups list missing session: payload={sg}")
 
-    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+    admin_token = _admin_login(
+        base_url,
+        username=admin_username,
+        password=admin_password,
+    )
 
     code, classes_today = _http_json(
         "GET",
@@ -599,6 +600,8 @@ def main() -> int:
     admin_username = _env_get(dotenv, "ADMIN_USERNAME", "SUPER_ADMIN_USERNAME") or "admin"
     admin_password = _env_get(dotenv, "ADMIN_PASSWORD", "SUPER_ADMIN_PASSWORD") or ""
     analysis_agent_id = _env_get(dotenv, "ANALYSIS_AGENT_ID") or ""
+    if not admin_password:
+        _die("missing ADMIN_PASSWORD")
 
     print(f"[INFO] base_url={base_url}")
 
@@ -610,8 +613,11 @@ def main() -> int:
             _die(f"health check failed: http {code} payload={payload} / fallback http {code2} payload={payload2}")
     print("[OK] health")
 
-    admin_password_candidates = [admin_password, "dev_admin_password", "change_me", "wangshuhao0727"]
-    admin_token = _admin_login(base_url, username=admin_username, password_candidates=admin_password_candidates)
+    admin_token = _admin_login(
+        base_url,
+        username=admin_username,
+        password=admin_password,
+    )
     print("[OK] admin login")
 
     agent_id = _ensure_active_agent(
@@ -626,7 +632,7 @@ def main() -> int:
         _run_round(
             base_url,
             admin_username=admin_username,
-            admin_password_candidates=admin_password_candidates,
+            admin_password=admin_password,
             agent_id=agent_id,
             round_i=i,
         )

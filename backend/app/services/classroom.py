@@ -1,7 +1,6 @@
 """课堂互动 Service 层"""
 
 import asyncio
-import json
 import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
@@ -11,20 +10,31 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
-from app.models.agents import AIAgent
 from app.models.core.user import User
-
-from loguru import logger
+from app.services.classroom_analysis import (
+    ClassroomAnalysisRetryableError,
+    list_candidate_agents as _list_candidate_agents,
+    mark_analysis_enqueue_failed,
+    normalize_prompt as _normalize_prompt,
+    run_auto_analysis_for_ended_activity as _execute_auto_analysis,
+)
+from app.services.classroom_events import (
+    dispatch_activity_events as _dispatch_activity_events,
+)
+from app.services.classroom_lifecycle import (
+    auto_end_overdue_activities as _execute_auto_end,
+    ensure_activity_not_overdue as _execute_overdue_check,
+)
+from app.services.classroom_statistics import (
+    check_correct as _check_correct,
+    collect_statistics as _collect_statistics,
+)
 
 # ─── SSE pub/sub（已提取到 app.core.pubsub，此处保持向后兼容导入）───
 from app.core.pubsub import publish, subscribe, unsubscribe  # noqa: F401
 
 # 超时检查节流：最多每30秒执行一次
 _last_auto_end_check: float = 0.0
-
-
-class ClassroomAnalysisRetryableError(RuntimeError):
-    """AI providers failed after the observable failure state was committed."""
 
 
 def normalize_class_name(value: Optional[str]) -> Optional[str]:
@@ -185,29 +195,13 @@ async def dispatch_activity_events(
     db: AsyncSession,
     events: list[dict[str, Any]],
 ) -> None:
-    """数据库提交成功后先发布全部事件，再投递结束分析后台任务。"""
-    ended_activity_ids: list[int] = []
-    for event in events:
-        activity_id = event["activity_id"]
-        event_type = event["type"]
-        class_name = event.get("class_name")
-        student_channel = (
-            f"student_{class_name}"
-            if class_name
-            else f"student_unassigned_activity_{activity_id}"
-        )
-        payload = {"type": event_type, "activity_id": activity_id}
-        await publish(student_channel, payload)
-        await publish(f"admin_{event['created_by']}", payload)
-        await publish("admin_global", payload)
-        if event_type == "activity_ended":
-            ended_activity_ids.append(activity_id)
-
-    for activity_id in dict.fromkeys(ended_activity_ids):
-        try:
-            await _enqueue_auto_analysis(activity_id)
-        except Exception:
-            logger.exception("课堂活动自动分析任务入队失败: activity_id=%s", activity_id)
+    await _dispatch_activity_events(
+        db,
+        events,
+        publish_event=publish,
+        enqueue_analysis=_enqueue_auto_analysis,
+        mark_enqueue_failed=_mark_analysis_enqueue_failed,
+    )
 
 
 async def start_activity(
@@ -339,7 +333,9 @@ async def restart_activity(
     activity.ended_at = None
     activity.analysis_status = "pending" if activity.activity_type == "fill_blank" else "not_applicable"
     activity.analysis_result = None
+    activity.analysis_context = None
     activity.analysis_error = None
+    activity.analysis_updated_at = None
     _append_activity_event(events, "activity_started", activity)
     if not commit:
         await db.flush()
@@ -416,66 +412,12 @@ async def get_statistics(
     *,
     include_correct_answers: bool = True,
 ) -> dict:
-    activity = await _get_activity(db, activity_id)
-    responses = (await db.execute(
-        select(ClassroomResponse).where(ClassroomResponse.activity_id == activity_id)
-    )).scalars().all()
-    total = len(responses)
-    correct_count = sum(1 for r in responses if r.is_correct is True)
-    option_counts: Optional[dict] = None
-    blank_slot_stats: Optional[list] = None
-    top_wrong_answers: Optional[list] = None
-    if activity.activity_type == "vote" and activity.options:
-        option_counts = {}
-        for opt in activity.options:
-            key = opt["key"] if isinstance(opt, dict) else opt.key
-            option_counts[key] = sum(1 for r in responses if key in (r.answer or "").split(","))
-    elif activity.activity_type == "fill_blank" and activity.correct_answer:
-        correct_parts = _parse_blank_answers(activity.correct_answer)
-        if correct_parts is None:
-            correct_parts = [activity.correct_answer.strip()]
-        slot_wrong_maps: list[dict[str, int]] = [dict() for _ in range(len(correct_parts))]
-        slot_correct_counts = [0 for _ in range(len(correct_parts))]
-        overall_wrong_map: dict[str, int] = {}
-        for r in responses:
-            student_parts = _parse_blank_answers(r.answer or "")
-            if student_parts is None:
-                student_parts = [(r.answer or "").strip()]
-            for idx, right in enumerate(correct_parts):
-                student_val = student_parts[idx].strip() if idx < len(student_parts) else ""
-                if student_val.upper() == right.strip().upper():
-                    slot_correct_counts[idx] += 1
-                elif student_val:
-                    slot_wrong_maps[idx][student_val] = slot_wrong_maps[idx].get(student_val, 0) + 1
-            combined_wrong = " | ".join(student_parts).strip()
-            if not r.is_correct and combined_wrong:
-                overall_wrong_map[combined_wrong] = overall_wrong_map.get(combined_wrong, 0) + 1
-        blank_slot_stats = []
-        for idx, right in enumerate(correct_parts):
-            wrong_top = sorted(slot_wrong_maps[idx].items(), key=lambda x: x[1], reverse=True)[:5]
-            slot_stats = {
-                "slot_index": idx + 1,
-                "total_count": total,
-                "correct_count": slot_correct_counts[idx],
-                "correct_rate": round(slot_correct_counts[idx] / total * 100, 1) if total > 0 else None,
-                "top_wrong_answers": [{"answer": k, "count": v} for k, v in wrong_top],
-            }
-            if include_correct_answers:
-                slot_stats["correct_answer"] = right
-            blank_slot_stats.append(slot_stats)
-        top_wrong_answers = [
-            {"answer": k, "count": v}
-            for k, v in sorted(overall_wrong_map.items(), key=lambda x: x[1], reverse=True)[:10]
-        ]
-    return {
-        "activity_id": activity_id,
-        "total_responses": total,
-        "option_counts": option_counts,
-        "correct_count": correct_count,
-        "correct_rate": round(correct_count / total * 100, 1) if total > 0 else None,
-        "blank_slot_stats": blank_slot_stats,
-        "top_wrong_answers": top_wrong_answers,
-    }
+    return await _collect_statistics(
+        db,
+        activity_id,
+        include_correct_answers=include_correct_answers,
+        get_activity=_get_activity,
+    )
 
 
 async def analyze_fill_blank_stats(db: AsyncSession, activity_id: int, agent_id: Optional[int] = None) -> dict:
@@ -487,7 +429,11 @@ async def analyze_fill_blank_stats(db: AsyncSession, activity_id: int, agent_id:
     if agent_id is not None:
         activity.analysis_agent_id = agent_id
         await db.commit()
-        await _run_auto_analysis_for_ended_activity(db, activity.id)
+        await _run_auto_analysis_for_ended_activity(
+            db,
+            activity.id,
+            allow_running_retry=True,
+        )
         await db.refresh(activity)
     context = activity.analysis_context or {}
     risk_slots = context.get("risk_slots") or []
@@ -547,203 +493,55 @@ async def _run_auto_analysis_for_ended_activity(
     *,
     allow_running_retry: bool = False,
 ) -> None:
-    activity = await _get_activity_for_update(db, activity_id)
-    if activity.status != "ended":
-        await db.commit()
-        return
-    if activity.activity_type != "fill_blank":
-        if activity.analysis_status != "not_applicable":
-            activity.analysis_status = "not_applicable"
-            activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        return
-    if activity.analysis_status in {"success", "skipped", "not_applicable"}:
-        await db.commit()
-        return
-    if activity.analysis_status == "failed" and not allow_running_retry:
-        await db.commit()
-        return
-    if activity.analysis_status == "running" and not allow_running_retry:
-        await db.commit()
-        return
-    claimed_ended_at = activity.ended_at
-    stats = await get_statistics(db, activity_id)
-    context = _build_analysis_context(activity, stats)
-    if stats.get("total_responses", 0) <= 0 or not context.get("risk_slots"):
-        activity.analysis_status = "skipped"
-        activity.analysis_result = "暂无可分析作答数据，已跳过自动分析。"
-        activity.analysis_context = context
-        activity.analysis_error = None
-        activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        return
-
-    # 构建候选智能体列表：优先用指定的，再 fallback 到其他可用智能体
-    candidate_ids = await _list_candidate_agents(db, preferred_id=activity.analysis_agent_id)
-    if not candidate_ids:
-        activity.analysis_status = "failed"
-        activity.analysis_result = None
-        activity.analysis_context = context
-        activity.analysis_error = "未找到可用智能体，请先配置并启用AI智能体。"
-        activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        return
-
-    activity.analysis_status = "running"
-    activity.analysis_error = None
-    activity.analysis_updated_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    prompt = _build_analysis_prompt(context, activity.analysis_prompt)
-    from app.services.agents.chat_blocking import run_agent_chat_blocking
-
-    errors = []
-    for index, agent_id in enumerate(candidate_ids):
-        try:
-            analysis_text = await run_agent_chat_blocking(
-                db,
-                agent_id=agent_id,
-                message=prompt,
-            )
-        except Exception as exc:
-            await db.rollback()
-            activity = await _get_activity_for_update(db, activity_id)
-            if not _analysis_claim_is_current(activity, claimed_ended_at):
-                await db.commit()
-                return
-            errors.append(f"agent#{agent_id}: {str(exc)[:200]}")
-            logger.warning("课堂分析 agent#%s 失败，尝试下一个: %s", agent_id, exc)
-            if index < len(candidate_ids) - 1:
-                # 不在下一次外部 AI 请求期间持有活动行锁。
-                await db.commit()
-            continue
-        # get_agent() 会开启读事务；结束后重新锁行确认活动仍是同一结束轮次。
-        await db.rollback()
-        activity = await _get_activity_for_update(db, activity_id)
-        if not _analysis_claim_is_current(activity, claimed_ended_at):
-            await db.commit()
-            return
-        activity.analysis_agent_id = agent_id
-        activity.analysis_status = "success"
-        activity.analysis_result = analysis_text
-        activity.analysis_context = context
-        activity.analysis_error = None
-        activity.analysis_updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        return
-
-    # 所有候选都失败
-    logger.error("课堂互动自动分析失败: activity_id=%s, 尝试了 %d 个智能体均失败", activity_id, len(candidate_ids))
-    activity.analysis_status = "failed"
-    activity.analysis_result = None
-    activity.analysis_context = context
-    activity.analysis_error = f"已尝试 {len(candidate_ids)} 个智能体均失败：{'; '.join(errors)}"
-    activity.analysis_updated_at = datetime.now(timezone.utc)
-    await db.commit()
-    raise ClassroomAnalysisRetryableError(activity.analysis_error)
-
-
-def _analysis_claim_is_current(
-    activity: ClassroomActivity,
-    claimed_ended_at: Optional[datetime],
-) -> bool:
-    return (
-        activity.status == "ended"
-        and activity.analysis_status == "running"
-        and activity.ended_at == claimed_ended_at
+    await _execute_auto_analysis(
+        db,
+        activity_id,
+        allow_running_retry=allow_running_retry,
+        get_activity_for_update=_get_activity_for_update,
+        get_statistics=get_statistics,
+        list_candidate_agents=_list_candidate_agents,
     )
 
 
 async def _enqueue_auto_analysis(activity_id: int) -> None:
     from app.tasks.classroom import analyze_ended_classroom_activity
 
-    await asyncio.to_thread(analyze_ended_classroom_activity.delay, activity_id)
-
-
-async def _list_candidate_agents(db: AsyncSession, preferred_id: Optional[int] = None) -> List[int]:
-    """返回候选智能体 ID 列表，优先指定的，再按 ID 排序取其他可用的"""
-    rows = await db.execute(
-        select(AIAgent.id)
-        .where(AIAgent.is_active == True, AIAgent.is_deleted == False)
-        .order_by(AIAgent.id.asc())
-    )
-    all_ids = [r[0] for r in rows.all()]
-    if not all_ids:
-        return []
-    if preferred_id and preferred_id in all_ids:
-        # 优先指定的，其余作为 fallback
-        return [preferred_id] + [i for i in all_ids if i != preferred_id]
-    return all_ids
-
-
-def _build_analysis_prompt(context: dict, custom_prompt: Optional[str]) -> str:
-    custom = _normalize_prompt(custom_prompt)
-    if custom:
-        # 用户自定义提示词，直接使用
-        return f"{custom}\n\n统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
-
-    # 默认提示词
-    return (
-        "你是教学诊断助手。请基于以下填空题统计数据，输出简洁的Markdown分析报告。\n\n"
-        "**格式要求：**\n"
-        "1. 总体结论（1-2句话）\n"
-        "2. 易错分析（逐空位列出，每个空位2-3句话）\n"
-        "3. 教学建议（3条，每条1句话）\n"
-        "4. 最后输出JSON代码块：```json\n{\"risk_slots\": [...], \"common_mistakes\": [...], \"teaching_actions\": [...]}\n```\n\n"
-        "**字数限制：分析内容（不含JSON）控制在200字以内。**\n\n"
-        f"统计数据如下：\n{json.dumps(context, ensure_ascii=False)}"
+    await asyncio.to_thread(
+        analyze_ended_classroom_activity.apply_async,
+        args=[activity_id],
+        retry=True,
+        retry_policy={
+            "max_retries": 3,
+            "interval_start": 0,
+            "interval_step": 1,
+            "interval_max": 3,
+        },
     )
 
 
-def _build_analysis_context(activity: ClassroomActivity, stats: dict) -> dict:
-    risk_slots = []
-    for slot in sorted(stats.get("blank_slot_stats") or [], key=lambda x: x.get("correct_rate") or 0):
-        risk_slots.append(
-            {
-                "slot_index": slot.get("slot_index"),
-                "correct_answer": slot.get("correct_answer"),
-                "correct_rate": slot.get("correct_rate"),
-                "total_count": slot.get("total_count"),
-                "top_wrong_answers": (slot.get("top_wrong_answers") or [])[:5],
-            }
-        )
-    return {
-        "activity_id": activity.id,
-        "title": activity.title,
-        "total_responses": stats.get("total_responses"),
-        "overall_correct_rate": stats.get("correct_rate"),
-        "risk_slots": risk_slots,
-        "common_mistakes": (stats.get("top_wrong_answers") or [])[:10],
-        "blank_slot_stats": stats.get("blank_slot_stats") or [],
-    }
+async def _mark_analysis_enqueue_failed(
+    db: AsyncSession,
+    activity_id: int,
+    error: Exception,
+) -> None:
+    await mark_analysis_enqueue_failed(
+        db,
+        activity_id,
+        error,
+        get_activity_for_update=_get_activity_for_update,
+    )
 
 
 async def _auto_end_overdue_activities(db: AsyncSession) -> None:
-    """自动结束超时活动：仅查询已超时的活动，避免加载全部活跃活动再逐个检查。"""
-    now = datetime.now(timezone.utc)
-    rows = (await db.execute(
-        select(ClassroomActivity).where(
-            ClassroomActivity.status == "active",
-            ClassroomActivity.time_limit > 0,
-            ClassroomActivity.started_at.is_not(None),
-            func.extract("epoch", now - ClassroomActivity.started_at) >= ClassroomActivity.time_limit,
-        )
-    )).scalars().all()
-    for activity in rows:
-        await end_activity(db, activity.id)
+    await _execute_auto_end(db, end_activity=end_activity)
 
 
 async def _ensure_activity_not_overdue(db: AsyncSession, activity: ClassroomActivity) -> bool:
-    """检查单个活动是否超时（保留供 submit_response 等外部调用方使用）。"""
-    if activity.status != "active":
-        return False
-    if activity.time_limit <= 0 or not activity.started_at:
-        return False
-    elapsed = (datetime.now(timezone.utc) - activity.started_at).total_seconds()
-    if elapsed < activity.time_limit:
-        return False
-    await end_activity(db, activity.id)
-    return True
+    return await _execute_overdue_check(
+        db,
+        activity,
+        end_activity=end_activity,
+    )
 
 
 # ─── helpers ───
@@ -783,45 +581,3 @@ async def _lock_activity_owner(db: AsyncSession, user_id: int) -> None:
     )
     if result.scalar_one_or_none() is None:
         raise ValueError("活动创建者不存在")
-
-
-def _check_correct(student_answer: str, correct_answer: str, allow_multiple: bool) -> bool:
-    parsed_correct = _parse_blank_answers(correct_answer)
-    if parsed_correct is not None:
-        parsed_student = _parse_blank_answers(student_answer)
-        if parsed_student is None:
-            parsed_student = [student_answer.strip()]
-        if len(parsed_student) != len(parsed_correct):
-            return False
-        for idx in range(len(parsed_correct)):
-            if parsed_student[idx].strip().upper() != parsed_correct[idx].strip().upper():
-                return False
-        return True
-    if allow_multiple:
-        student_set = set(s.strip().upper() for s in student_answer.split(",") if s.strip())
-        correct_set = set(s.strip().upper() for s in correct_answer.split(",") if s.strip())
-        return student_set == correct_set
-    return student_answer.strip().upper() == correct_answer.strip().upper()
-
-
-def _parse_blank_answers(value: str) -> Optional[List[str]]:
-    raw = (value or "").strip()
-    if not raw:
-        return []
-    if not raw.startswith("[") and not raw.startswith("{"):
-        return None
-    try:
-        parsed = json.loads(raw)
-    except Exception:
-        return None
-    if isinstance(parsed, list):
-        return [str(x).strip() for x in parsed]
-    if isinstance(parsed, dict):
-        keys = sorted(parsed.keys(), key=lambda k: int(k) if str(k).isdigit() else str(k))
-        return [str(parsed[k]).strip() for k in keys]
-    return None
-
-
-def _normalize_prompt(value: Optional[str]) -> Optional[str]:
-    text = (value or "").strip()
-    return text if text else None

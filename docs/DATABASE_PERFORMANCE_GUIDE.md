@@ -1,11 +1,11 @@
 # 数据库性能指南
 
-> 最后更新：2026-04-11
-> 
-> 本文档整合了原有的三个数据库性能相关文档：
-> - `DATABASE_PERFORMANCE_ANALYSIS.md` - 分析方法和过程
-> - `DATABASE_OPTIMIZATION_GUIDE.md` - 优化技术和最佳实践  
-> - `QUERY_OPTIMIZATION_EXAMPLES.md` - 具体代码示例和修复方案
+> 状态：reference
+> Owner：database
+> 最后更新：2026-07-07
+>
+> 来源说明：本文档已整合早期的数据库性能分析、优化指南和查询示例。原独立文档不再
+> 作为当前入口；现行数据库结构变更仍必须通过 Alembic migration。
 
 ## 概述
 
@@ -174,7 +174,36 @@ ON znt_assessment_attempts(session_id, question_id);
 3. **复合索引原则**：将等值查询字段放在前面，范围查询字段放在后面
 4. **排序原则**：索引方向应与ORDER BY子句一致
 
+### 2.5 已实施的索引优化（2026-04 后）
+
+以下索引已通过 Alembic 迁移落地：
+
+1. **GroupDiscussionSession.created_at 索引** — 20260211 迁移，优化会话列表按时间排序
+2. **znt_conversations 复合索引** — 20260428 迁移：
+   - `(agent_id, message_type, created_at)` — 智能体对话分类查询
+   - `(session_id, created_at)` — 会话消息时序查询
+3. **sys_users.full_name 索引** — 20260614 迁移，优化姓名登录查询性能
+4. **InformaticsGithubSyncSource.note_id 索引** — 20260311 迁移，外键列索引
+
 ## 第三部分：ORM查询优化
+
+### 2026年4月后新增表
+
+以下表为 2026-04 之后新增，可能需要根据查询模式追加索引：
+
+| 表名 | 新增时间 | 关键字段（候选索引） |
+|------|---------|------------------|
+| sys_learning_chapters | 2026-05 | module_key, section_key |
+| sys_learning_content_items | 2026-05 | module_key, section_key |
+| sys_learning_progress | 2026-05 | module_key, section_key |
+| ml_books | 2026-05 | module_key |
+| ml_book_chapters | 2026-05 | book_id |
+| znt_task_analyses | 2026-05-22 | — |
+| znt_hot_question_analyses | 2026-05-22 | — |
+| znt_student_chain_analyses | 2026-05-22 | — |
+| znt_agent_analysis_prompt_templates | 2026-05-29 | — |
+| it_games | 2026-06-24 | category, uploaded_by |
+| it_game_download_logs | 2026-06-24 | category, uploaded_by |
 
 ### 3.1 避免N+1查询问题
 
@@ -271,6 +300,15 @@ async def get_articles_keyset(db: AsyncSession, last_id: int, size: int):
     result = await db.execute(query)
     return result.scalars().all()
 ```
+
+### 3.3.1 Keyset 分页实践案例
+
+**正面案例：** `group_discussion` 的 `list_messages` 使用 `after_id` 游标分页，避免了大 offset 带来的性能退化。
+
+**待优化：** 以下模块仍使用 offset/limit 分页，数据量增长后建议迁移到 keyset 模式：
+- `it/games` 游戏列表
+- `users` 用户管理列表
+- `xbk/selections` 选择列表
 
 ### 3.4 只选择需要的字段
 
@@ -398,10 +436,12 @@ async def update_article(article_id: int, data: dict):
 ```python
 # 推荐配置
 DATABASE_POOL_SIZE = 20  # 连接池大小
-DATABASE_MAX_OVERFLOW = 10  # 最大溢出连接数
+DATABASE_MAX_OVERFLOW = 20  # 最大溢出连接数（实际配置 DB_MAX_OVERFLOW=20）
 DATABASE_POOL_RECYCLE = 3600  # 连接回收时间（秒）
 DATABASE_POOL_TIMEOUT = 30  # 连接超时时间（秒）
 ```
+
+> **注意：** 实际项目未设置 `pool_recycle`，建议设为 3600 以避免 PostgreSQL 连接超时断开。
 
 ### 5.2 连接使用最佳实践
 
@@ -451,7 +491,7 @@ LIMIT 100;
 
 ### 7.1 修复分组讨论服务
 
-**问题文件**：`app/services/agents/group_discussion.py`
+**问题文件**：`app/services/agents/group_discussion/session_service.py`
 
 **修复前**：
 ```python
@@ -503,6 +543,10 @@ async def get_session_with_messages(db: AsyncSession, session_id: int):
         'messages': session.messages  # 已经包含author信息
     }
 ```
+
+### 7.2 正面案例：article service 的 eager loading
+
+article service 正确使用了 `selectinload` 进行关联数据的预加载，避免了 N+1 查询问题，是 ORM 最佳实践的良好示例。
 
 ## 第八部分：优化检查清单
 
@@ -602,7 +646,4 @@ async def get_session_with_messages(db: AsyncSession, session_id: int):
 
 > **文档历史**：
 > - 2026-04-11：整合三个数据库性能文档，创建统一指南
-> - 原始文档已备份：
->   - `DATABASE_PERFORMANCE_ANALYSIS.md.backup`
->   - `DATABASE_OPTIMIZATION_GUIDE.md.backup`
->   - `QUERY_OPTIMIZATION_EXAMPLES.md.backup`
+> - 2026-07-13：移除不存在的旧备份路径说明，明确本文件是当前整合入口

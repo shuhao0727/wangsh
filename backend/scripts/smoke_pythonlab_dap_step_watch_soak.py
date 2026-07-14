@@ -10,8 +10,10 @@ import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
-USERNAME = os.getenv("USERNAME", "admin")
-PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
+# 统一使用 PYTHONLAB_SMOKE_USERNAME / PYTHONLAB_SMOKE_PASSWORD（见 README secrets 约定）。
+# USERNAME 保留公开默认值 admin；PASSWORD 严禁硬编码 fallback，缺失即参数错误退出。
+USERNAME = os.getenv("PYTHONLAB_SMOKE_USERNAME", "admin")
+PASSWORD = os.getenv("PYTHONLAB_SMOKE_PASSWORD", "")
 ROUNDS = int(os.getenv("ROUNDS", "10"))
 TIMEOUT_SECONDS = float(os.getenv("TIMEOUT_SECONDS", "20"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/tmp/pythonlab_stepwatch_soak"))
@@ -329,6 +331,9 @@ async def run_round(token: str, idx: int) -> dict:
 
 
 def main() -> int:
+    if not PASSWORD:
+        log("PYTHONLAB_SMOKE_PASSWORD 未设置（禁止硬编码密码，请通过 secret 注入）")
+        return 2
     if ROUNDS <= 0:
         log("ROUNDS must be positive")
         return 2

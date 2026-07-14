@@ -1,7 +1,39 @@
 # 数据库设计（7 张新表）
 
 > 隶属于 [ASSESSMENT_DESIGN.md](./ASSESSMENT_DESIGN.md)
-> 最后更新：2026-04-11
+> 最后更新：2026-07-11
+
+---
+
+## Alembic 迁移状态
+
+当前 head 为 `20260711_0002_restore_legacy_baseline_indexes`。前一条
+`20260711_0001_add_assessment_availability` migration 修复了模型中已经使用、
+但历史 Alembic 链遗漏的 7 个字段：
+
+| 表 | 补齐字段 |
+|---|---|
+| `znt_assessment_configs` | `available_start`、`available_end` |
+| `znt_assessment_questions` | `mode`、`adaptive_config` |
+| `znt_assessment_answers` | `knowledge_point`、`attempt_seq`、`is_adaptive` |
+
+升级先使用 `ADD COLUMN IF NOT EXISTS` 兼容字段已被开发期建表或人工补齐的数据库，
+随后统一字段类型，并对 `mode`、`attempt_seq`、`is_adaptive` 回填空值、设置默认值和
+`NOT NULL`。这是 repair migration，无法确认字段最初由哪条历史路径创建，因此
+`downgrade()` 保守保留字段和数据，不执行 `DROP COLUMN`。`time_limit_minutes` 不属于
+本次修复，它已由最初的 `20260318_0001_assessment_tables` migration 管理。
+
+部署已有数据库时必须先执行正式 Alembic 升级，不能依赖 ORM `create_all` 补列：
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+`20260711_0002_restore_legacy_baseline_indexes` 幂等补齐 legacy baseline 路径可能
+跳过的 5 个 XBK/文章索引。2026-07-11 本地复核确认单一 head、migration 合同测试，
+以及独立 PostgreSQL 临时库从 legacy baseline 完整升级到 head 均通过；正式生产
+数据库升级仍应在维护窗口内备份后执行。
 
 ---
 
@@ -13,14 +45,15 @@
 |------|------|------|
 | id | Integer PK | 自增主键 |
 | title | String(200) | 测评标题，如"Python循环结构课堂检测" |
-| subject | String(100) | 学科，如"信息技术" |
-| grade | String(20) | 年级，如"高一" |
+| grade | String(20) | 年级，如"高一"（nullable） |
 | teaching_objectives | Text | 教学目标（支持 Markdown） |
 | knowledge_points | Text | 知识点列表，JSON 数组格式，如 `["for循环","while循环","循环嵌套","break/continue"]` |
 | total_score | Integer | 总分，默认 100 |
 | question_config | Text | 题型配置 JSON，如 `{"choice":{"count":5,"score":10},"fill":{"count":3,"score":10},"short_answer":{"count":2,"score":10}}` |
 | ai_prompt | Text | 教师自定义的出题提示词（与系统模板合并） |
-| agent_id | Integer FK → znt_agents.id | 用于出题和评分的 AI 智能体 |
+| agent_id | Integer FK → znt_agents.id (ondelete='SET NULL') | 用于出题和评分的 AI 智能体 |
+| available_start | DateTime(timezone=True) | 测评可用开始时间（nullable） |
+| available_end | DateTime(timezone=True) | 测评可用结束时间（nullable） |
 | time_limit_minutes | Integer | 答题时限（分钟），0 表示不限时 |
 | enabled | Boolean | 是否对学生开放 |
 | created_by_user_id | Integer FK → sys_users.id | 创建者（教师） |
@@ -46,6 +79,8 @@
 | knowledge_point | String(200) | 对应的知识点 |
 | explanation | Text | 答案解析 |
 | source | String(20) | 来源：`ai_generated`（预生成）/ `manual`（手动录入）/ `ai_realtime`（实时生成） |
+| mode | String(20) | 题目模式：`fixed`（固定）/ `adaptive`（自适应），默认 `fixed` |
+| adaptive_config | Text | 自适应出题配置 JSON（nullable，仅 adaptive 模式使用） |
 | created_at | DateTime | 创建时间 |
 
 ---
@@ -88,6 +123,9 @@
 | ai_score | Integer (nullable) | AI 评分（填空/简答题） |
 | ai_feedback | Text | AI 评语（每道题的个性化反馈） |
 | max_score | Integer | 该题满分 |
+| knowledge_point | String(200) | 对应知识点（nullable，冗余存储便于统计） |
+| attempt_seq | Integer | 同一知识点的作答序号，默认 1 |
+| is_adaptive | Boolean | 是否来自 AI 自适应补充题，默认 False |
 | answered_at | DateTime | 作答时间 |
 
 ---

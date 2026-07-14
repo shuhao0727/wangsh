@@ -172,6 +172,7 @@ frontend/coverage/
 frontend/build/
 frontend/dist/
 frontend/test-results/
+coverage/
 
 # misc
 frontend/.DS_Store
@@ -230,6 +231,9 @@ backend/docker/bin/
 
 # 模拟部署临时文件
 docker-compose.sim.yml
+
+# 发布验证产物
+release-set.txt
 
 # ==================== 自动化临时产物 ====================
 .playwright-cli/

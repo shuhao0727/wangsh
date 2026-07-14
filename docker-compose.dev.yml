@@ -186,7 +186,7 @@ services:
     command: >
       sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q typst -c ${TYPST_WORKER_CONCURRENCY:-1}"
 
-  # PythonLab Worker 服务（代码执行沙箱任务）
+  # 默认 celery 队列 Worker（PythonLab 沙箱任务 + 课堂结束后的 AI 分析）
   pythonlab-worker:
     build:
       context: ./backend
@@ -264,7 +264,7 @@ services:
       - wangsh-network
     depends_on:
       - backend
-    command: ["sh", "-c", "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 6608"]
+    command: ["sh", "-c", "npm config set registry https://registry.npmmirror.com && npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 6608"]
 
   # Caddy 服务 (仅用于生产/模拟生产，开发时可不启动)
   # 开发时直接访问 http://localhost:6608，API 通过 Vite proxy 转发

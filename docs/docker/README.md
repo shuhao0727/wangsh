@@ -12,7 +12,10 @@
 - [RELEASE_NOTES.md](RELEASE_NOTES.md) - 发布记录与运维变更
 - [deploy/DEPLOY.md](deploy/DEPLOY.md) - Docker 开发/生产部署指南
 - [deploy/CICD.md](deploy/CICD.md) - 镜像、工作流与 CI/CD 说明
-- [../ARCHIVE_SUMMARY.md](../ARCHIVE_SUMMARY.md) - 历史归档摘要
+- [plans/README.md](plans/README.md) - 计划与分析索引
+- [testing/README.md](testing/README.md) - 测试与验证入口
+- [frontend/README.md](frontend/README.md) - 前端 UI 文档索引
+- [archive/README.md](archive/README.md) - 归档文档
 
 ## 前端
 
@@ -20,44 +23,45 @@
 
 ### 当前保留文档
 
-- [frontend/UI-PAGES.md](frontend/UI-PAGES.md) - 前端可见页面清单
-- [frontend/ui-style-guardrails.md](frontend/ui-style-guardrails.md) - UI 风格护栏和视觉约束
+- [frontend/UI-PAGES.md](frontend/UI-PAGES.md) - 前端核心页面与重点浮层清单
 - [frontend/ACCESSIBILITY_GUIDE.md](frontend/ACCESSIBILITY_GUIDE.md) - 无障碍访问改进指南
+- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 样式、单页治理、体检模板和回归基线
 
 ### 归档报告
 
-历史 UI 审计与修复报告已合并至 [../ARCHIVE_SUMMARY.md](../ARCHIVE_SUMMARY.md)。
+历史 UI 审计与修复报告已合并至 [archive/README.md](archive/README.md)。
 
 ### 前端策略
 
-- 入口层只保留可持续复用的页面清单和样式规则。
-- 带明确时间戳、且已标记"问题全部修复"的 UI 审计报告统一转入 `archive/frontend-ui/`。
+- 入口层只保留可持续复用的页面清单、无障碍指南和 UI 治理入口。
+- 带明确时间戳、且已标记"问题全部修复"的 UI 审计报告统一转入 `archive/`，
+  并更新 `archive/README.md`；需要建立专题子目录时再同步创建索引。
 - 保留：页面清单、视觉规范、长期治理规则。
 - 归档：一次性审计、修复快照、最终复盘报告。
 
 ## 计划文档
 
-`docs/docker/plans/` 只保留当前仍在推进的计划、治理基线和复用模板。
+`docs/docker/plans/` 保留当前计划、治理基线、复用模板和仍承担稳定参考作用的文档。
 
-### 当前活跃文档
+### 当前入口文档
 
-- [plans/pythonlab-capability-inventory.md](plans/pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
-- [plans/sse-redis-pubsub-migration.md](plans/sse-redis-pubsub-migration.md) - SSE pub/sub 从进程内迁移到 Redis 的方案
-- [plans/2026-05-03-learning-platform-improvement.md](plans/2026-05-03-learning-platform-improvement.md) - ML/AI/Agents 学习平台改进实施计划
-- [plans/2026-05-03-it-technology-markdown-book-system.md](plans/2026-05-03-it-technology-markdown-book-system.md) - IT Technology Markdown Book 系统实施计划
-- [plans/2026-05-03-learning-platform-improvement-design.md](plans/2026-05-03-learning-platform-improvement-design.md) - 学习平台设计说明
-- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - 单页治理基线
-- [plans/ui-page-health-template.md](plans/ui-page-health-template.md) - 单页体检模板
-- [plans/ui-final-regression-checklist.md](plans/ui-final-regression-checklist.md) - UI 回归检查清单
+- [plans/README.md](plans/README.md) - 当前计划、reference、redirect 的完整索引
+- [../features/PYTHONLAB.md](../features/PYTHONLAB.md#能力边界) - PythonLab 能力矩阵与删除/拆分边界
+- [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 治理与回归唯一参考
+- [plans/2026-07-11-project-health-and-improvement-report.md](plans/2026-07-11-project-health-and-improvement-report.md) - 2026-07-13 项目健康快照
+- [plans/2026-07-11-project-governance-30-60-90-execution-plan.md](plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
+- [plans/2026-07-12-project-consolidation-and-release-plan.md](plans/2026-07-12-project-consolidation-and-release-plan.md) - 当前整理、提交、PR 和发布收口计划
+- [plans/2026-07-11-change-batch-manifest.md](plans/2026-07-11-change-batch-manifest.md) - 当前工作区变更批次和提交边界
 
 ### 已归档计划
 
-归档总览请查看 [../ARCHIVE_SUMMARY.md](../ARCHIVE_SUMMARY.md)。
+归档总览请查看 [archive/README.md](archive/README.md)。
 
 ### 计划策略
 
-- 当前入口层只保留"仍要继续执行"的计划、治理基线、回归台账和复用模板。
-- 已完成、明显带时间戳、或内容已经被后续改动覆盖的分析报告统一转入 `archive/plans/`。
+- 当前入口层只保留仍要执行的计划、治理基线、回归台账、复用模板和稳定参考文档。
+- 已完成、明显带时间戳、且长期结论已沉淀到 owner 文档的分析报告统一转入
+  `archive/`，并更新 `archive/README.md`。
 
 ## 测试
 
@@ -65,7 +69,9 @@
 
 ### 当前入口
 
-- [testing/test-script-cleanup-inventory.md](testing/test-script-cleanup-inventory.md) - 测试脚本保留/归档/删除清单
+- [testing/README.md](testing/README.md) - 测试策略和 owner 导航
+- [testing/TEST_STATUS.md](testing/TEST_STATUS.md) - 当前测试事实、证据和待执行门禁
+- [testing/test-script-cleanup-inventory.md](testing/test-script-cleanup-inventory.md) - 历史路径 redirect
 - [../DOCUMENTATION_RULES.md](../DOCUMENTATION_RULES.md) - 文档维护规范
 
 ### 就近测试说明

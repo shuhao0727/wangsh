@@ -160,3 +160,49 @@ def test_plain_session_container_uses_interactive_shell(monkeypatch, tmp_path):
     assert "tail -f /dev/null" not in docker_run
     assert "--network" in docker_run
     assert result["docker_container_id"] == "plain-container-id"
+
+
+def test_container_namespace_defaults_to_existing_pythonlab_names(monkeypatch):
+    monkeypatch.setitem(docker_api.settings.__dict__, "PYTHONLAB_CONTAINER_NAMESPACE", "pythonlab")
+    provider = docker_api.DockerProvider()
+
+    assert provider._container_name({"owner_user_id": 7, "session_id": "session-1"}) == "pythonlab_u7"
+    assert provider._container_name({"session_id": "session-1"}) == "pythonlab_session-1"
+
+
+def test_container_namespace_scopes_names_and_active_session_listing(monkeypatch):
+    calls: list[list[str]] = []
+
+    async def fake_run_async(cmd: list[str], timeout_s: int = 30):
+        calls.append(list(cmd))
+        return (
+            0,
+            "\n".join(
+                [
+                    "wangsh_sim_u7",
+                    "pythonlab_u8",
+                    "wangsh_simulation_u9",
+                    "wangsh_sim_session-2",
+                ]
+            ),
+            "",
+        )
+
+    monkeypatch.setitem(docker_api.settings.__dict__, "PYTHONLAB_CONTAINER_NAMESPACE", "wangsh_sim")
+    monkeypatch.setattr(docker_api, "_run_async", fake_run_async)
+    provider = docker_api.DockerProvider()
+
+    assert provider._container_name({"owner_user_id": 7, "session_id": "session-1"}) == "wangsh_sim_u7"
+    assert provider._container_name({"session_id": "session-1"}) == "wangsh_sim_session-1"
+    assert asyncio.run(provider.list_active_sessions()) == ["u7", "session-2"]
+    assert calls == [
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            "name=^/wangsh_sim_",
+            "--format",
+            "{{.Names}}",
+        ]
+    ]

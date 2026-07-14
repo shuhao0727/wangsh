@@ -446,9 +446,9 @@ start_docker_infrastructure() {
         cd "${PROJECT_ROOT}"
         # 使用 .env.dev 如果存在
         if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker compose.dev.yml up -d postgres
+            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres
         else
-            docker compose -f docker compose.dev.yml up -d postgres
+            docker compose -f docker-compose.dev.yml up -d postgres
         fi
         
         # 等待数据库就绪
@@ -494,9 +494,9 @@ start_docker_infrastructure() {
         print_info "启动Redis容器..."
         cd "${PROJECT_ROOT}"
         if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker compose.dev.yml up -d redis
+            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d redis
         else
-            docker compose -f docker compose.dev.yml up -d redis
+            docker compose -f docker-compose.dev.yml up -d redis
         fi
         
         # 等待Redis就绪
@@ -512,9 +512,9 @@ start_docker_infrastructure() {
         print_info "启动Adminer数据库管理界面..."
         cd "${PROJECT_ROOT}"
         if [ -f ".env.dev" ]; then
-            docker compose --env-file .env.dev -f docker compose.dev.yml up -d adminer
+            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d adminer
         else
-            docker compose -f docker compose.dev.yml up -d adminer
+            docker compose -f docker-compose.dev.yml up -d adminer
         fi
         sleep 2
         print_success "Adminer已启动，访问: http://localhost:8081"
@@ -527,9 +527,9 @@ start_docker_infrastructure() {
             print_info "启动Typst Worker容器..."
             cd "${PROJECT_ROOT}"
             if [ -f ".env.dev" ]; then
-                docker compose --env-file .env.dev -f docker compose.dev.yml up -d typst-worker
+                docker compose --env-file .env.dev -f docker-compose.dev.yml up -d typst-worker
             else
-                docker compose -f docker compose.dev.yml up -d typst-worker
+                docker compose -f docker-compose.dev.yml up -d typst-worker
             fi
             print_success "Typst Worker已启动"
         else
@@ -555,9 +555,9 @@ start_docker_infrastructure() {
             print_info "启动PythonLab Worker容器..."
             cd "${PROJECT_ROOT}"
             if [ -f ".env.dev" ]; then
-                docker compose --env-file .env.dev -f docker compose.dev.yml up -d pythonlab-worker
+                docker compose --env-file .env.dev -f docker-compose.dev.yml up -d pythonlab-worker
             else
-                docker compose -f docker compose.dev.yml up -d pythonlab-worker
+                docker compose -f docker-compose.dev.yml up -d pythonlab-worker
             fi
             print_success "PythonLab Worker已启动"
         else
@@ -574,9 +574,9 @@ start_docker_stack() {
     print_info "启动Docker开发环境服务栈..."
     cd "${PROJECT_ROOT}"
     if [ -f ".env.dev" ]; then
-        docker compose --env-file .env.dev -f docker compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
+        docker compose --env-file .env.dev -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
     else
-        docker compose -f docker compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
+        docker compose -f docker-compose.dev.yml up -d postgres redis adminer backend typst-worker pythonlab-worker frontend
     fi
 
     print_info "等待前端服务就绪..."
@@ -586,7 +586,7 @@ start_docker_stack() {
     while ! curl -fsS "http://localhost:${frontend_port}" > /dev/null 2>&1; do
         if [ ${attempt} -ge ${max_attempts} ]; then
             print_error "Docker服务栈启动超时（前端未就绪）"
-            docker compose -f docker compose.dev.yml ps
+            docker compose -f docker-compose.dev.yml ps
             exit 1
         fi
         print_info "等待入口服务... (${attempt}/${max_attempts})"

@@ -58,10 +58,10 @@ jobs:
 
       - name: validate required secrets
         env:
-          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
         run: |
-          if [ -z "${USERNAME}" ] || [ -z "${PASSWORD}" ]; then
+          if [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
             echo "missing required secrets: PYTHONLAB_SMOKE_USERNAME/PYTHONLAB_SMOKE_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
             exit 2
           fi
@@ -70,10 +70,11 @@ jobs:
         env:
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
-          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
         run: |
-          python backend/scripts/smoke_pythonlab_print_visibility_probe.py
+          python scripts/prod-smoke/redact_exec.py -- \
+            python backend/scripts/smoke_pythonlab_print_visibility_probe.py
 
       - name: run phase c soak gate
         id: gate
@@ -81,11 +82,12 @@ jobs:
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
           ROUNDS: ${{ inputs.rounds || github.event.inputs.rounds || vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
-          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
           LOG_DIR: /tmp/phasec_soak
         run: |
-          python backend/scripts/soak_pythonlab_phasec.py
+          python scripts/prod-smoke/redact_exec.py -- \
+            python backend/scripts/soak_pythonlab_phasec.py
 
       - name: write summary
         if: ${{ always() }}

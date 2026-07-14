@@ -1,6 +1,6 @@
 # 前端实时更新功能文档
 
-> 最后更新：2026-04-11
+> 最后更新：2026-07-11
 
 ## 概述
 
@@ -66,4 +66,7 @@ useAdminSSE('article_changed', loadArticles);
 1. **SSE 连接**：需要管理员权限，自动携带 token
 2. **自动重连**：连接断开后指数退避重连（1s → 30s cap）
 3. **全局频道**：所有管理员共享同一频道，确保多用户协作时数据同步
-4. **⚠️ 单进程限制（重要）**：后端 pub/sub 为进程内实现，`UVICORN_WORKERS` 必须设为 `1`。多 worker 时不同进程间无法共享 SSE 事件，会导致部分管理员收不到实时推送。未来如需多 worker 扩容，需将 pub/sub 迁移到 Redis Pub/Sub
+4. **多 Worker 支持**：后端 pub/sub 已迁移到 Redis Pub/Sub（优先），当 Redis 不可用时自动降级为进程内模式（仅单 worker 有效）。多 worker 部署时确保 Redis 可用且 `SSE_REDIS_PUBSUB_ENABLED=True` 即可实现跨 worker SSE 广播。
+5. **订阅就绪保证**：`subscribe()` 会等待 Redis 完成 `SUBSCRIBE` 后才返回，本频道并发订阅者共享 ready 信号；发布和订阅握手由按频道锁串行化，发布先发生时会在继续 Redis 广播的同时补发本地队列，避免首事件丢失或重复。
+6. **按频道降级**：单个频道 listener 启动失败或超时只将该频道切换为本地分发，不会把其他健康频道的 Redis 广播一并禁用；等待期间取消连接会同步移除本地订阅。
+7. **关闭兼容性**：清理 Redis PubSub 时优先使用 `aclose()`，并兼容旧客户端的 `close()`；即使 `unsubscribe()` 失败也会继续关闭底层连接。

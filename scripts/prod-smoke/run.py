@@ -9,6 +9,7 @@ import subprocess
 import sys
 import textwrap
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,6 +57,69 @@ STATUS_RANK = {
 }
 
 DEFAULT_LOGIN_THROTTLE_SECONDS = 2.2
+REDACTED_VALUE = "<redacted>"
+SENSITIVE_FIELD_PATTERN = (
+    r"(?:access_token|refresh_token|session[_-]?token|token|password|passwd|"
+    r"(?:x[_-]?)?api[_-]?key|client_secret|authorization|cookie|set[_-]?cookie|secret)"
+)
+SENSITIVE_COLON_FIELD_PATTERN = (
+    r"(?:access_token|refresh_token|session[_-]?token|password|passwd|"
+    r"(?:x[_-]?)?api[_-]?key|client_secret|secret)"
+)
+SENSITIVE_ENV_KEY_PATTERN = re.compile(
+    r"(?:^|_)(?:PASSWORD|PASSWD|TOKEN|API_KEY|PRIVATE_KEY|SECRET|"
+    r"AUTHORIZATION|CREDENTIAL|COOKIE)(?:$|_)",
+    re.IGNORECASE,
+)
+SENSITIVE_ENV_EXACT_KEYS = {
+    "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
+    "DATABASE_URL",
+    "REDIS_URL",
+}
+SAFE_DIAGNOSTIC_VALUES = {
+    "<empty>",
+    "<redacted>",
+    "false",
+    "invalid",
+    "missing",
+    "no",
+    "none",
+    "null",
+    "present",
+    "required",
+    "set",
+    "true",
+    "unset",
+    "yes",
+}
+CHILD_ENV_PASSTHROUGH_KEYS = {
+    "CI",
+    "COLORTERM",
+    "CURL_CA_BUNDLE",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "NODE_EXTRA_CA_CERTS",
+    "NO_PROXY",
+    "PATH",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "REQUESTS_CA_BUNDLE",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TERM",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+    "USER",
+    "VIRTUAL_ENV",
+    "WINDIR",
+    "XDG_CACHE_HOME",
+    "no_proxy",
+}
 
 
 @dataclass
@@ -86,11 +150,12 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def ensure_dirs() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    STEP_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    SERVICE_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+def ensure_dirs(*, clean: bool = False) -> None:
+    if clean and OUTPUT_DIR.exists():
+        shutil.rmtree(OUTPUT_DIR)
+    for path in (OUTPUT_DIR, STEP_LOG_DIR, SERVICE_LOG_DIR, SCREENSHOT_DIR):
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.chmod(0o700)
 
 
 def parse_dotenv(path: Path) -> dict[str, str]:
@@ -134,13 +199,252 @@ def env_float(config: dict[str, str], key: str, default: float) -> float:
         return default
 
 
-def write_json(path: Path, payload: Any) -> None:
+def build_child_env(source: dict[str, str] | None = None) -> dict[str, str]:
+    source_env = source if source is not None else dict(os.environ)
+    return {
+        key: value
+        for key, value in source_env.items()
+        if key in CHILD_ENV_PASSTHROUGH_KEYS and value
+    }
+
+
+def compose_command(config: dict[str, str], *args: str) -> list[str]:
+    command = ["docker", "compose"]
+    project_name = env_get(
+        config,
+        "PROD_SMOKE_COMPOSE_PROJECT_NAME",
+        env_get(config, "COMPOSE_PROJECT_NAME"),
+    )
+    env_file = env_get(
+        config,
+        "PROD_SMOKE_COMPOSE_ENV_FILE",
+        env_get(config, "ENV_FILE"),
+    )
+    compose_file = env_get(
+        config,
+        "PROD_SMOKE_COMPOSE_FILE",
+        env_get(config, "COMPOSE_FILE"),
+    )
+
+    if project_name:
+        command.extend(["--project-name", project_name])
+    if env_file:
+        command.extend(["--env-file", env_file])
+    if compose_file:
+        command.extend(["-f", compose_file])
+    command.extend(args)
+    return command
+
+
+def write_text_private(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o600)
+
+
+def write_json(path: Path, payload: Any) -> None:
+    write_text_private(
+        path,
+        json.dumps(payload, ensure_ascii=False, indent=2),
+    )
 
 
 def sanitize_name(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "-", name.strip()).strip("-").lower() or "step"
+
+
+def collect_sensitive_values(
+    config: dict[str, str],
+    extra_values: list[str] | None = None,
+) -> list[str]:
+    values: set[str] = set()
+    for key, value in config.items():
+        if key not in SENSITIVE_ENV_EXACT_KEYS and not SENSITIVE_ENV_KEY_PATTERN.search(key):
+            continue
+        text = str(value).strip()
+        if len(text) >= 4 and text != REDACTED_VALUE:
+            values.add(text)
+    for value in extra_values or []:
+        text = str(value).strip()
+        if len(text) >= 4 and text != REDACTED_VALUE:
+            values.add(text)
+    return sorted(values, key=len, reverse=True)
+
+
+def redact_command(command: list[str], sensitive_values: list[str] | None = None) -> list[str]:
+    return [
+        _redact_known_values(str(part), sensitive_values)
+        for part in command
+    ]
+
+
+def _sensitive_value_variants(value: str) -> list[str]:
+    variants = {
+        value,
+        urllib.parse.quote(value, safe=""),
+        urllib.parse.quote_plus(value, safe=""),
+        json.dumps(value, ensure_ascii=False)[1:-1],
+    }
+    return sorted(
+        (item for item in variants if len(item) >= 4),
+        key=len,
+        reverse=True,
+    )
+
+
+def _redact_known_values(
+    text: str,
+    sensitive_values: list[str] | None = None,
+) -> str:
+    redacted = text
+    variants: set[str] = set()
+    for sensitive_value in sensitive_values or []:
+        if sensitive_value:
+            variants.update(_sensitive_value_variants(sensitive_value))
+    for variant in sorted(variants, key=len, reverse=True):
+        if len(variant) >= 8 or not variant.isalnum():
+            redacted = redacted.replace(variant, REDACTED_VALUE)
+            continue
+        redacted = re.sub(
+            rf"(?<![A-Za-z0-9]){re.escape(variant)}(?![A-Za-z0-9])",
+            REDACTED_VALUE,
+            redacted,
+        )
+    return redacted
+
+
+def _redact_unquoted_field(match: re.Match[str]) -> str:
+    value = match.group("value")
+    if value.lower() in SAFE_DIAGNOSTIC_VALUES:
+        return match.group(0)
+    return f"{match.group('prefix')}{REDACTED_VALUE}"
+
+
+def redact_sensitive_output(output: str, sensitive_values: list[str] | None = None) -> str:
+    redacted = _redact_known_values(output, sensitive_values)
+    redacted = re.sub(
+        r"(\b[a-z][a-z0-9+.-]*://[^:/@\s]+:)[^@\s]+(@)",
+        rf"\1{REDACTED_VALUE}\2",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        r"(\b(?:Set-Cookie|Cookie)\s*:\s*)[^\r\n]+",
+        rf"\1{REDACTED_VALUE}",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        r"(\bAuthorization\s*:\s*(?:Bearer|Basic)\s+)[^\s,;\"']+",
+        rf"\1{REDACTED_VALUE}",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf"([?&]{SENSITIVE_FIELD_PATTERN}=)[^&\s\"']+",
+        rf"\1{REDACTED_VALUE}",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        r"(\b(?:Bearer|Basic)\s+)[A-Za-z0-9._~+/=-]{12,}",
+        rf"\1{REDACTED_VALUE}",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        r"\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
+        REDACTED_VALUE,
+        redacted,
+    )
+    redacted = re.sub(
+        rf'(\\\"{SENSITIVE_FIELD_PATTERN}\\\"\s*:\s*\\\").*?(\\\")',
+        rf"\1{REDACTED_VALUE}\2",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf'("{SENSITIVE_FIELD_PATTERN}"\s*:\s*")[^"]*(")',
+        rf"\1{REDACTED_VALUE}\2",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf"('{SENSITIVE_FIELD_PATTERN}'\s*:\s*')[^']*(')",
+        rf"\1{REDACTED_VALUE}\2",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf'(?P<prefix>\b{SENSITIVE_FIELD_PATTERN}\s*[=:]\s*)'
+        rf'"(?:\\.|[^"\\])*"',
+        lambda match: f'{match.group("prefix")}"{REDACTED_VALUE}"',
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf"(?P<prefix>\b{SENSITIVE_FIELD_PATTERN}\s*[=:]\s*)"
+        rf"'(?:\\.|[^'\\])*'",
+        lambda match: f"{match.group('prefix')}'{REDACTED_VALUE}'",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf"(?P<prefix>\b{SENSITIVE_FIELD_PATTERN}\s*=\s*)"
+        rf"(?P<value>(?![\"'])[^&;\s,}}\]]+)",
+        _redact_unquoted_field,
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(
+        rf"(?P<prefix>\b{SENSITIVE_COLON_FIELD_PATTERN}\s*:\s*)"
+        rf"(?P<value>(?![\"'])[^,\s}}\]]+)",
+        _redact_unquoted_field,
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    return redacted
+
+
+def redact_sensitive_payload(
+    payload: Any,
+    sensitive_values: list[str] | None = None,
+) -> Any:
+    if isinstance(payload, str):
+        return redact_sensitive_output(payload, sensitive_values)
+    if isinstance(payload, list):
+        return [
+            redact_sensitive_payload(item, sensitive_values)
+            for item in payload
+        ]
+    if isinstance(payload, tuple):
+        return tuple(
+            redact_sensitive_payload(item, sensitive_values)
+            for item in payload
+        )
+    if isinstance(payload, dict):
+        return {
+            key: redact_sensitive_payload(value, sensitive_values)
+            for key, value in payload.items()
+        }
+    return payload
+
+
+def read_redacted_json(
+    path: Path,
+    sensitive_values: list[str] | None = None,
+) -> Any:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    redacted = redact_sensitive_payload(payload, sensitive_values)
+    write_json(path, redacted)
+    return redacted
+
+
+def harden_output_permissions() -> None:
+    if not OUTPUT_DIR.exists():
+        return
+    for path in OUTPUT_DIR.rglob("*"):
+        path.chmod(0o700 if path.is_dir() else 0o600)
 
 
 def parse_markers(output: str) -> dict[str, list[str]]:
@@ -166,6 +470,7 @@ def run_subprocess(
     env: dict[str, str] | None = None,
     cwd: Path = ROOT,
     log_stem: str | None = None,
+    sensitive_values: list[str] | None = None,
 ) -> tuple[StepRecord, str]:
     started = time.time()
     started_at = now_iso()
@@ -181,10 +486,11 @@ def run_subprocess(
     output = proc.stdout
     if proc.stderr:
         output = f"{output}\n{proc.stderr}" if output else proc.stderr
+    output = redact_sensitive_output(output, sensitive_values)
 
     base_name = sanitize_name(log_stem or name)
     log_path = STEP_LOG_DIR / f"{base_name}.log"
-    log_path.write_text(output, encoding="utf-8")
+    write_text_private(log_path, output)
 
     markers = parse_markers(output)
     status = "PASS"
@@ -201,7 +507,7 @@ def run_subprocess(
         started_at=started_at,
         finished_at=finished_at,
         duration_seconds=round(duration, 3),
-        command=command,
+        command=redact_command(command, sensitive_values),
         rc=proc.returncode,
         log_path=str(log_path.relative_to(ROOT)),
         ok_count=len(markers["OK"]),
@@ -219,10 +525,19 @@ def output_has_rate_limit(output: str) -> bool:
     return "429" in lowered or "too many requests" in lowered or "rate limit" in lowered
 
 
-def run_command_step(spec_item: dict[str, Any], *, login_throttle_seconds: float) -> StepRecord:
+def run_command_step(
+    spec_item: dict[str, Any],
+    *,
+    login_throttle_seconds: float,
+    sensitive_values: list[str] | None = None,
+) -> StepRecord:
     retry_on_rate_limit = bool(spec_item.get("retry_on_rate_limit", spec_item.get("login_heavy", False)))
     login_heavy = bool(spec_item.get("login_heavy", False))
     attempt_logs: list[str] = []
+    step_sensitive_values = collect_sensitive_values(
+        spec_item["env"],
+        [*(sensitive_values or []), *(spec_item.get("sensitive_values") or [])],
+    )
 
     def run_attempt(attempt: int) -> tuple[StepRecord, str]:
         if login_heavy and login_throttle_seconds > 0:
@@ -235,6 +550,7 @@ def run_command_step(spec_item: dict[str, Any], *, login_throttle_seconds: float
             command=spec_item["command"],
             env=spec_item["env"],
             log_stem=log_stem,
+            sensitive_values=step_sensitive_values,
         )
         if step.log_path:
             attempt_logs.append(step.log_path)
@@ -324,7 +640,12 @@ def http_form(
         return exc.code, payload
 
 
-def base_auth_checks(origin: str, admin_username: str, admin_password: str) -> StepRecord:
+def base_auth_checks(
+    origin: str,
+    admin_username: str,
+    admin_password: str,
+    sensitive_values: list[str] | None = None,
+) -> StepRecord:
     started = time.time()
     started_at = now_iso()
     api_v1 = f"{origin}/api/v1"
@@ -336,6 +657,8 @@ def base_auth_checks(origin: str, admin_username: str, admin_password: str) -> S
 
     def record(name: str, ok: bool, expected: str, actual: str, detail: str = "") -> None:
         status = "PASS" if ok else "FAIL"
+        actual = redact_sensitive_output(actual, sensitive_values)
+        detail = redact_sensitive_output(detail, sensitive_values)
         checks.append(
             {
                 "name": name,
@@ -377,8 +700,20 @@ def base_auth_checks(origin: str, admin_username: str, admin_password: str) -> S
             opener=opener,
             body={"refresh_token": refresh_token},
         )
-        ok = code == 200 and isinstance(refreshed, dict) and bool(refreshed.get("access_token"))
-        record("auth refresh", ok, "200 refreshed token", f"{code} {refreshed}")
+        refreshed_access_token = (
+            str(refreshed.get("access_token") or "") if isinstance(refreshed, dict) else ""
+        )
+        refreshed_refresh_token = (
+            str(refreshed.get("refresh_token") or "") if isinstance(refreshed, dict) else ""
+        )
+        ok = code == 200 and bool(refreshed_access_token)
+        record(
+            "auth refresh",
+            ok,
+            "200 refreshed token",
+            f"{code} access_token={'yes' if refreshed_access_token else 'no'} "
+            f"refresh_token={'yes' if refreshed_refresh_token else 'no'}",
+        )
     else:
         warnings.append("auth refresh skipped: refresh_token missing from login payload")
 
@@ -409,20 +744,26 @@ def base_auth_checks(origin: str, admin_username: str, admin_password: str) -> S
     )
 
 
-def export_openapi_spec() -> dict[str, Any]:
-    command = [
-        "docker",
-        "compose",
+def export_openapi_spec(
+    config: dict[str, str],
+    sensitive_values: list[str] | None = None,
+) -> dict[str, Any]:
+    command = compose_command(
+        config,
         "exec",
         "-T",
         "backend",
         "python",
         "-c",
         "import json; from main import app; print(json.dumps(app.openapi(), ensure_ascii=False))",
-    ]
+    )
     proc = subprocess.run(command, cwd=str(ROOT), text=True, capture_output=True)
     if proc.returncode != 0:
-        raise RuntimeError(f"openapi export failed: {proc.stderr.strip() or proc.stdout.strip()}")
+        detail = redact_sensitive_output(
+            proc.stderr.strip() or proc.stdout.strip(),
+            sensitive_values,
+        )
+        raise RuntimeError(f"openapi export failed: {detail}")
     spec = json.loads(proc.stdout)
     write_json(OPENAPI_JSON_PATH, spec)
     return spec
@@ -441,7 +782,7 @@ def ensure_prereqs() -> None:
     raise RuntimeError(f"missing prerequisites: {', '.join(missing)}")
 
 
-def installability_checks() -> StepRecord:
+def installability_checks(sensitive_values: list[str] | None = None) -> StepRecord:
     started = time.time()
     started_at = now_iso()
     checks: list[dict[str, Any]] = []
@@ -460,7 +801,10 @@ def installability_checks() -> StepRecord:
                 "name": f"python import {module}",
                 "status": "PASS" if ok else "FAIL",
                 "expected": "import ok",
-                "actual": proc.stdout.strip() or proc.stderr.strip(),
+                "actual": redact_sensitive_output(
+                    proc.stdout.strip() or proc.stderr.strip(),
+                    sensitive_values,
+                ),
             }
         )
         if not ok:
@@ -481,7 +825,10 @@ def installability_checks() -> StepRecord:
             "name": "node import playwright",
             "status": "PASS" if ok else "FAIL",
             "expected": "import ok",
-            "actual": proc.stdout.strip() or proc.stderr.strip(),
+            "actual": redact_sensitive_output(
+                proc.stdout.strip() or proc.stderr.strip(),
+                sensitive_values,
+            ),
         }
     )
     if not ok:
@@ -503,23 +850,28 @@ def installability_checks() -> StepRecord:
     )
 
 
-def collect_service_logs(run_started_at: str) -> list[str]:
+def collect_service_logs(
+    config: dict[str, str],
+    run_started_at: str,
+    *,
+    sensitive_values: list[str] | None = None,
+) -> list[str]:
     collected: list[str] = []
     for service in ["gateway", "backend", "frontend", "pythonlab-worker", "typst-worker"]:
         path = SERVICE_LOG_DIR / f"{service}.log"
-        command = [
-            "docker",
-            "compose",
+        command = compose_command(
+            config,
             "logs",
             "--since",
             run_started_at,
             service,
-        ]
+        )
         proc = subprocess.run(command, cwd=str(ROOT), text=True, capture_output=True)
         content = proc.stdout
         if proc.stderr:
             content = f"{content}\n{proc.stderr}" if content else proc.stderr
-        path.write_text(content, encoding="utf-8")
+        content = redact_sensitive_output(content, sensitive_values)
+        write_text_private(path, content)
         collected.append(str(path.relative_to(ROOT)))
     return collected
 
@@ -569,22 +921,27 @@ def build_failures_md(steps: list[StepRecord], service_logs: list[str]) -> str:
 
 
 def main() -> int:
-    ensure_dirs()
+    ensure_dirs(clean=True)
     ensure_prereqs()
     config = env_config()
     admin_username = env_get(config, "SUPER_ADMIN_USERNAME", "admin")
     admin_password = env_get(config, "SUPER_ADMIN_PASSWORD", "")
+    sensitive_values = collect_sensitive_values(config, [admin_password])
     base_origin = env_get(config, "PROD_SMOKE_ORIGIN", "http://localhost:6608")
     login_throttle_seconds = env_float(config, "PROD_SMOKE_LOGIN_THROTTLE_SECONDS", DEFAULT_LOGIN_THROTTLE_SECONDS)
     run_started_at = now_iso()
     steps: list[StepRecord] = []
 
-    prereq_step = installability_checks()
+    prereq_step = installability_checks(sensitive_values)
     steps.append(prereq_step)
     if prereq_step.status == "FAIL":
-        service_logs = collect_service_logs(run_started_at)
+        service_logs = collect_service_logs(
+            config,
+            run_started_at,
+            sensitive_values=sensitive_values,
+        )
         failures_md = build_failures_md(steps, service_logs)
-        FAILURES_MD_PATH.write_text(failures_md, encoding="utf-8")
+        write_text_private(FAILURES_MD_PATH, failures_md)
         write_json(
             SUMMARY_PATH,
             {
@@ -593,12 +950,18 @@ def main() -> int:
                 "modules": build_module_matrix(steps),
             },
         )
+        harden_output_permissions()
         return 1
 
-    base_step = base_auth_checks(base_origin, admin_username, admin_password)
+    base_step = base_auth_checks(
+        base_origin,
+        admin_username,
+        admin_password,
+        sensitive_values,
+    )
     steps.append(base_step)
 
-    spec = export_openapi_spec()
+    spec = export_openapi_spec(config, sensitive_values)
     path_count = len(spec.get("paths") or {})
     method_count = sum(
         len([m for m in ops if m.lower() in {"get", "post", "put", "patch", "delete"}])
@@ -606,7 +969,7 @@ def main() -> int:
         if isinstance(ops, dict)
     )
 
-    common_env = os.environ.copy()
+    common_env = build_child_env()
     common_env.update(
         {
             "ADMIN_USERNAME": admin_username,
@@ -687,7 +1050,11 @@ def main() -> int:
             "kind": "async/worker flows",
             "modules": ["debug/pythonlab"],
             "command": [str(VENV_PYTHON), "backend/scripts/smoke_pythonlab_ws_owner_concurrency.py"],
-            "env": {**common_env, "USERNAME": admin_username, "PASSWORD": admin_password},
+            "env": {
+                **common_env,
+                "PYTHONLAB_SMOKE_USERNAME": admin_username,
+                "PYTHONLAB_SMOKE_PASSWORD": admin_password,
+            },
             "login_heavy": True,
         },
         {
@@ -695,7 +1062,12 @@ def main() -> int:
             "kind": "async/worker flows",
             "modules": ["debug/pythonlab"],
             "command": [str(VENV_PYTHON), "backend/scripts/smoke_pythonlab_dap_step_watch_soak.py"],
-            "env": {**common_env, "USERNAME": admin_username, "PASSWORD": admin_password, "ROUNDS": "3"},
+            "env": {
+                **common_env,
+                "PYTHONLAB_SMOKE_USERNAME": admin_username,
+                "PYTHONLAB_SMOKE_PASSWORD": admin_password,
+                "ROUNDS": "3",
+            },
             "login_heavy": True,
         },
         {
@@ -703,7 +1075,11 @@ def main() -> int:
             "kind": "async/worker flows",
             "modules": ["debug/pythonlab"],
             "command": [str(VENV_PYTHON), "backend/scripts/smoke_pythonlab_print_visibility_probe.py"],
-            "env": {**common_env, "USERNAME": admin_username, "PASSWORD": admin_password},
+            "env": {
+                **common_env,
+                "PYTHONLAB_SMOKE_USERNAME": admin_username,
+                "PYTHONLAB_SMOKE_PASSWORD": admin_password,
+            },
             "login_heavy": True,
         },
         {
@@ -717,14 +1093,17 @@ def main() -> int:
                 base_origin,
                 "--username",
                 admin_username,
-                "--password",
-                admin_password,
                 "--report-path",
                 str(AUTH_RELOGIN_REPORT_PATH),
                 "--screenshots-dir",
                 str(SCREENSHOT_DIR / "auth-replaced-login"),
             ],
-            "env": os.environ.copy(),
+            "env": {
+                **common_env,
+                "ADMIN_USERNAME": admin_username,
+                "ADMIN_PASSWORD": admin_password,
+            },
+            "sensitive_values": [admin_password],
             "login_heavy": True,
         },
         {
@@ -747,26 +1126,47 @@ def main() -> int:
                 base_origin,
                 "--username",
                 admin_username,
-                "--password",
-                admin_password,
                 "--report-path",
                 str(UI_REPORT_PATH),
                 "--screenshots-dir",
                 str(SCREENSHOT_DIR),
             ],
-            "env": os.environ.copy(),
+            "env": {
+                **common_env,
+                "ADMIN_USERNAME": admin_username,
+                "ADMIN_PASSWORD": admin_password,
+            },
+            "sensitive_values": [admin_password],
             "login_heavy": True,
         },
     ]
 
     for spec_item in command_specs:
-        step = run_command_step(spec_item, login_throttle_seconds=login_throttle_seconds)
+        step = run_command_step(
+            spec_item,
+            login_throttle_seconds=login_throttle_seconds,
+            sensitive_values=sensitive_values,
+        )
         steps.append(step)
 
-    service_logs = collect_service_logs(run_started_at)
+    service_logs = collect_service_logs(
+        config,
+        run_started_at,
+        sensitive_values=sensitive_values,
+    )
 
-    openapi_report = json.loads(OPENAPI_REPORT_PATH.read_text(encoding="utf-8")) if OPENAPI_REPORT_PATH.exists() else {}
-    ui_report = json.loads(UI_REPORT_PATH.read_text(encoding="utf-8")) if UI_REPORT_PATH.exists() else {}
+    openapi_report = (
+        read_redacted_json(OPENAPI_REPORT_PATH, sensitive_values)
+        if OPENAPI_REPORT_PATH.exists()
+        else {}
+    )
+    ui_report = (
+        read_redacted_json(UI_REPORT_PATH, sensitive_values)
+        if UI_REPORT_PATH.exists()
+        else {}
+    )
+    if AUTH_RELOGIN_REPORT_PATH.exists():
+        read_redacted_json(AUTH_RELOGIN_REPORT_PATH, sensitive_values)
 
     module_matrix = build_module_matrix(steps)
     overall_status = "PASS"
@@ -787,7 +1187,7 @@ def main() -> int:
         "status": overall_status,
         "started_at": run_started_at,
         "finished_at": now_iso(),
-        "base_origin": base_origin,
+        "base_origin": redact_sensitive_output(base_origin, sensitive_values),
         "openapi": {
             "path_count": path_count,
             "method_count": method_count,
@@ -829,11 +1229,12 @@ def main() -> int:
     write_json(SUMMARY_PATH, summary)
     write_json(API_RESULTS_PATH, api_results)
     write_json(SKIPS_PATH, {"items": all_skips})
-    FAILURES_MD_PATH.write_text(failures_md, encoding="utf-8")
+    write_text_private(FAILURES_MD_PATH, failures_md)
 
     if not UI_REPORT_PATH.exists():
         write_json(UI_REPORT_PATH, {"status": "FAIL", "message": "ui report missing"})
 
+    harden_output_permissions()
     print(json.dumps(summary["counts"], ensure_ascii=False))
     return 1 if overall_status == "FAIL" else 0
 
@@ -842,5 +1243,16 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except RuntimeError as exc:
-        sys.stderr.write(f"{exc}\n")
+        try:
+            sensitive_values = collect_sensitive_values(env_config())
+        except Exception:
+            sensitive_values = []
+        sys.stderr.write(redact_sensitive_output(f"{exc}\n", sensitive_values))
+        raise SystemExit(1)
+    except Exception:
+        try:
+            sensitive_values = collect_sensitive_values(env_config())
+        except Exception:
+            sensitive_values = []
+        sys.stderr.write(redact_sensitive_output(traceback.format_exc(), sensitive_values))
         raise SystemExit(1)

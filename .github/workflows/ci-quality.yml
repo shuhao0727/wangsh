@@ -1,6 +1,7 @@
 name: ci-quality
 
 on:
+  workflow_call:
   pull_request:
     paths-ignore:
       - "docs/**"
@@ -17,23 +18,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - name: version consistency
         run: node scripts/check-version-consistency.mjs
+      - name: workflow contracts
+        run: node --test scripts/workflow-contracts.test.mjs
       - name: shell syntax
         run: bash -n scripts/deploy.sh
       - name: compose config validation
         run: |
           docker compose --env-file .env.example -f docker-compose.yml config --quiet
-          docker compose --env-file .env.dev -f docker-compose.dev.yml config --quiet
+          docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
       - name: compose image tags
         run: |
           expected="$(node -p "require('./frontend/package.json').version")"
           images="$(docker compose --env-file .env.example -f docker-compose.yml config --images)"
           echo "$images"
-          wangsh_images="$(echo "$images" | grep -E '/wangsh-[^:]+:' || true)"
+          wangsh_images="$(echo "$images" | grep -E '/(wangsh-[^:]+|pythonlab-sandbox):' || true)"
           if [ -z "$wangsh_images" ]; then
             echo "No wangsh images found in production compose config."
             exit 1
@@ -66,16 +71,36 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - name: install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: bootstrap and migrate clean database
+          pip install -r requirements-dev.txt
+      - name: python governance
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          WORKFLOW_CALL_BASE_REF: origin/main
+        run: |
+          python scripts/check_python_governance.py check
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            python scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            python scripts/check_python_governance.py check --base-ref "$PUSH_BEFORE_SHA"
+          elif [ "$EVENT_NAME" = "workflow_call" ]; then
+            git fetch --no-tags origin main
+            python scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
+          fi
+      - name: migrate and bootstrap clean database
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: "55433"
@@ -86,14 +111,21 @@ jobs:
           SUPER_ADMIN_PASSWORD: ci-admin-password
           AGENT_API_KEY_ENCRYPTION_KEY: ci-agent-key
         run: |
-          python scripts/bootstrap_db.py
+          python scripts/check_migration_state.py
+          python scripts/bootstrap_db.py --initial-only
           alembic upgrade head
+          python scripts/bootstrap_db.py
           python - <<'PY'
           import os
           import asyncio
           import asyncpg
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
 
           async def main():
+              heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
+              assert len(heads) == 1, heads
+              expected_head = heads[0]
               conn = await asyncpg.connect(
                   host=os.environ["POSTGRES_HOST"],
                   port=int(os.environ["POSTGRES_PORT"]),
@@ -102,8 +134,9 @@ jobs:
                   password=os.environ["POSTGRES_PASSWORD"],
               )
               try:
-                  version = await conn.fetchval("SELECT version_num FROM alembic_version")
-                  assert version == "20260430_migrate_dev_schema", version
+                  versions = await conn.fetch("SELECT version_num FROM alembic_version")
+                  current_heads = [row["version_num"] for row in versions]
+                  assert current_heads == [expected_head], (current_heads, expected_head)
                   has_view = await conn.fetchval("SELECT to_regclass('public.v_conversations_with_deleted') IS NOT NULL")
                   assert has_view is True
                   has_column = await conn.fetchval(
@@ -115,6 +148,37 @@ jobs:
                       """
                   )
                   assert has_column is True
+                  expected_indexes = {
+                      ("ix_xbk_courses_grade", "xbk_courses", "grade"),
+                      ("ix_xbk_selections_grade", "xbk_selections", "grade"),
+                      ("ix_xbk_students_grade", "xbk_students", "grade"),
+                      ("idx_wz_markdown_styles_sort", "wz_markdown_styles", "sort_order"),
+                      ("ix_wz_articles_style_key", "wz_articles", "style_key"),
+                  }
+                  index_rows = await conn.fetch(
+                      """
+                      SELECT index_rel.relname AS index_name,
+                             table_rel.relname AS table_name,
+                             attr.attname AS column_name
+                      FROM pg_class AS table_rel
+                      JOIN pg_index AS idx ON idx.indrelid = table_rel.oid
+                      JOIN pg_class AS index_rel ON index_rel.oid = idx.indexrelid
+                      JOIN LATERAL unnest(idx.indkey) AS key(attnum) ON true
+                      JOIN pg_attribute AS attr
+                        ON attr.attrelid = table_rel.oid
+                       AND attr.attnum = key.attnum
+                      WHERE index_rel.relname = ANY($1::text[])
+                      """,
+                      [index_name for index_name, _, _ in expected_indexes],
+                  )
+                  actual_indexes = {
+                      (row["index_name"], row["table_name"], row["column_name"])
+                      for row in index_rows
+                  }
+                  assert actual_indexes == expected_indexes, (
+                      actual_indexes,
+                      expected_indexes,
+                  )
               finally:
                   await conn.close()
 
@@ -137,6 +201,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: install deps
         run: npm ci
+      - name: script tests
+        run: npm run -s test:scripts
+      - name: CSS token gate
+        run: npm run -s token:check:ci
       - name: tests
         run: npm test
       - name: type-check
@@ -146,4 +214,4 @@ jobs:
       - name: ui-audit-gate
         run: npm run -s ui:audit:ci
       - name: production build
-        run: npm run build
+        run: npm run build:check

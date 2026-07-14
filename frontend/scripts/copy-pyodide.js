@@ -1,6 +1,16 @@
 const fs = require("fs");
 const path = require("path");
 
+const REQUIRED_RUNTIME_FILES = [
+  "pyodide.js",
+  "pyodide.mjs",
+  "pyodide.asm.js",
+  "pyodide.asm.wasm",
+  "python_stdlib.zip",
+  "pyodide-lock.json",
+];
+const VERSION_MARKER = ".wangsh-pyodide-version";
+
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
 }
@@ -39,6 +49,44 @@ function copyDir(srcDir, dstDir) {
   }
 }
 
+function hasCompleteRuntime(directory, expectedVersion) {
+  const filesComplete = REQUIRED_RUNTIME_FILES.every((file) => {
+    const filePath = path.join(directory, file);
+    return fs.existsSync(filePath) && fs.statSync(filePath).size > 0;
+  });
+  if (!filesComplete || !expectedVersion) {
+    return filesComplete;
+  }
+
+  const markerPath = path.join(directory, VERSION_MARKER);
+  return (
+    fs.existsSync(markerPath) &&
+    fs.readFileSync(markerPath, "utf8").trim() === expectedVersion
+  );
+}
+
+function replaceRuntime(tempDst, dst, operations = fs) {
+  const backupDst = `${dst}.backup-${process.pid}`;
+  operations.rmSync(backupDst, { recursive: true, force: true });
+  const hadPreviousRuntime = operations.existsSync(dst);
+
+  if (hadPreviousRuntime) {
+    operations.renameSync(dst, backupDst);
+  }
+
+  try {
+    operations.renameSync(tempDst, dst);
+  } catch (error) {
+    if (hadPreviousRuntime) {
+      operations.rmSync(dst, { recursive: true, force: true });
+      operations.renameSync(backupDst, dst);
+    }
+    throw error;
+  }
+
+  operations.rmSync(backupDst, { recursive: true, force: true });
+}
+
 function main() {
   const projectRoot = path.resolve(__dirname, "..");
   const pkgRoot = path.join(projectRoot, "node_modules", "pyodide");
@@ -49,15 +97,33 @@ function main() {
 
   const src = pkgRoot;
   const dst = path.join(projectRoot, "public", "pyodide");
+  const packageVersion = JSON.parse(
+    fs.readFileSync(path.join(pkgRoot, "package.json"), "utf8"),
+  ).version;
 
-  ensureDir(dst);
-  copyDir(src, dst);
+  if (hasCompleteRuntime(dst, packageVersion)) {
+    console.log("pyodide already copied, skipping...");
+    return;
+  }
 
-  const mainJs = path.join(dst, "pyodide.js");
-  if (!fs.existsSync(mainJs)) {
-    console.error("pyodide.js not found after copy at", mainJs);
+  const tempDst = `${dst}.tmp-${process.pid}`;
+  fs.rmSync(tempDst, { recursive: true, force: true });
+  try {
+    copyDir(src, tempDst);
+    fs.writeFileSync(path.join(tempDst, VERSION_MARKER), `${packageVersion}\n`);
+    if (!hasCompleteRuntime(tempDst, packageVersion)) {
+      throw new Error(`pyodide runtime is incomplete after copy at ${tempDst}`);
+    }
+    replaceRuntime(tempDst, dst);
+  } catch (error) {
+    fs.rmSync(tempDst, { recursive: true, force: true });
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { hasCompleteRuntime, replaceRuntime };

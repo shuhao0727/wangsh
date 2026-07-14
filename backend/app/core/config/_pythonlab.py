@@ -27,6 +27,7 @@ class PythonLabSettingsMixin:
     # Phase 3: Sandbox Upgrade
     PYTHONLAB_SANDBOX_PROVIDER: str = Field(default="docker")  # docker, k8s, nomad
     PYTHONLAB_DOCKER_RUNTIME: str = Field(default="runc")  # runc, runsc (gVisor), kata-runtime
+    PYTHONLAB_CONTAINER_NAMESPACE: str = Field(default="pythonlab")
 
     # Phase 3.1: Resource Limits
     PYTHONLAB_DEFAULT_CPU_QUOTA: int = Field(default=50000)

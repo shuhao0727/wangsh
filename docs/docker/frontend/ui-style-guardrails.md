@@ -1,24 +1,9 @@
 # UI Style Guardrails
 
-Reference workflow:
-- `../plans/ui-single-page-governance.md`
-- `../plans/ui-page-health-template.md`
-- ~~`../plans/ui-page-tracker.md`~~（已归档至 `../../archive/plans/ui-page-tracker.md`）
+> 状态：redirect
+> Owner：frontend
+> 最近复核：2026-07-13
+> 替代文档：[UI 治理与回归基线](../plans/ui-single-page-governance.md#样式护栏)
 
-## Allowed
-- Use global tokens in `src/styles/index.css` (typography, spacing, radius, shell width).
-- Prefer semantic Tailwind sizes (`text-sm`, `text-base`, `px-3`, `py-2`) over raw pixel literals.
-- Use shared admin/user layout containers (`ws-fluid-container`, `ws-admin-page`, `panel-card-*`).
-- Keep exceptions isolated and documented with local comments.
-
-## Disallowed (Default)
-- New hardcoded pixel typography (`font-size: 13px`, `text-[13px]`) in business pages.
-- New hardcoded layout dimensions for major containers (`w-[256px]`, `height: 64px`) without token mapping.
-- Mixed local scale systems in one screen (header/title/content each using unrelated size ladders).
-- Reintroducing unbounded spacing drift (random `6/10/14/22px` combinations in same module).
-
-## Exception Policy
-- If product constraints require fixed values (e.g., canvas, media viewport, drag handles), keep them:
-  - localized in one file/module,
-  - documented with a short reason comment,
-  - excluded minimally from future refactors.
+样式允许项、禁止项和例外策略已合并到
+[UI 治理与回归基线](../plans/ui-single-page-governance.md#样式护栏)。本文件只保留旧路径兼容。

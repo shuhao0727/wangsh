@@ -1,0 +1,236 @@
+name: pythonlab-pr-runtime
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      rounds:
+        required: false
+        type: string
+        default: "5"
+      timeout_seconds:
+        required: false
+        type: string
+        default: "20"
+      expect_owner_behavior:
+        required: false
+        type: string
+        default: "steal"
+jobs:
+  current-pr-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wangsh_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wangsh_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DEPLOYMENT_ENV: development
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "55433"
+      POSTGRES_DB: wangsh_ci
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "56379"
+      CELERY_BROKER_URL: redis://127.0.0.1:56379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:56379/0
+      SECRET_KEY: pythonlab-pr-runtime-secret-key-2026-ci
+      AGENT_API_KEY_ENCRYPTION_KEY: pythonlab-pr-runtime-agent-key
+      SUPER_ADMIN_USERNAME: pythonlab-ci-admin
+      SUPER_ADMIN_PASSWORD: pythonlab-ci-password-2026
+      AUTO_CREATE_TABLES: "false"
+      COOKIE_SECURE: "false"
+      PYTHONLAB_SANDBOX_IMAGE: pythonlab-sandbox:ci
+      PYTHONLAB_SANDBOX_PROVIDER: docker
+      PYTHONLAB_DOCKER_RUNTIME: runc
+      PYTHONLAB_WORKSPACE_ROOT: /tmp/pythonlab/workspaces
+      HOST_WORKSPACE_ROOT: /tmp/pythonlab/workspaces
+      PYTHONLAB_READINESS_TIMEOUT_SECONDS: "60"
+      PYTHONLAB_DEFAULT_MEMORY_MB: "128"
+      PYTHONLAB_ORPHAN_CLEANUP_ENABLED: "true"
+      API_URL: http://127.0.0.1:8000
+      PYTHONLAB_SMOKE_USERNAME: pythonlab-ci-admin
+      PYTHONLAB_SMOKE_PASSWORD: pythonlab-ci-password-2026
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: install current PR dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt aiohttp
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install current PR frontend dependencies
+        working-directory: frontend
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: build PythonLab sandbox
+        run: |
+          docker build -t pythonlab-sandbox:ci backend/docker/pythonlab-sandbox
+
+      - name: migrate current PR database
+        working-directory: backend
+        run: |
+          python scripts/check_migration_state.py
+          python scripts/bootstrap_db.py --initial-only
+          alembic upgrade head
+          python scripts/bootstrap_db.py
+
+      - name: start current PR backend and worker
+        working-directory: backend
+        run: |
+          mkdir -p /tmp/pythonlab/workspaces
+          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8000 > /tmp/pythonlab-backend.log 2>&1 &
+          echo $! > /tmp/pythonlab-backend.pid
+          nohup celery -A app.celery_app:celery worker -l INFO -Q celery -c 2 --include app.tasks.pythonlab > /tmp/pythonlab-worker.log 2>&1 &
+          echo $! > /tmp/pythonlab-worker.pid
+
+      - name: wait for current PR runtime
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              python scripts/prod-smoke/redact.py --tail 200 /tmp/pythonlab-backend.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+          for attempt in $(seq 1 60); do
+            if (cd backend && celery -A app.celery_app:celery inspect ping --timeout 2) | grep -q pong; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              python scripts/prod-smoke/redact.py --tail 200 /tmp/pythonlab-worker.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: start current PR Vite
+        working-directory: frontend
+        run: |
+          nohup env DEV_PROXY_TARGET=http://127.0.0.1:8000 \
+            npm run dev -- --host 127.0.0.1 --port 6608 \
+            > /tmp/pythonlab-frontend.log 2>&1 &
+          echo $! > /tmp/pythonlab-frontend.pid
+
+      - name: wait for current PR frontend
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:6608/login >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              python scripts/prod-smoke/redact.py --tail 200 /tmp/pythonlab-frontend.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: run frontend PythonLab pointer-click smoke
+        working-directory: frontend
+        env:
+          ADMIN_PASSWORD: ${{ env.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          python ../scripts/prod-smoke/redact_exec.py -- \
+            node scripts/pythonlab-debug-smoke.mjs \
+              --base-url http://127.0.0.1:6608 \
+              --username "$PYTHONLAB_SMOKE_USERNAME" \
+              --report-path "$GITHUB_WORKSPACE/test-results/pythonlab/debug-smoke-report.json" \
+              --screenshots-dir "$GITHUB_WORKSPACE/test-results/pythonlab/screenshots" \
+              --scenario debug-happy-path \
+              --scenario debug-multi-breakpoint-continue-to-end
+
+      - name: run current PR PythonLab smoke
+        env:
+          OWNER_MODE: matrix
+          EXPECT_OWNER_BEHAVIOR: ${{ inputs.expect_owner_behavior }}
+          ROUNDS: ${{ inputs.rounds }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        run: |
+          if [ "${{ inputs.mode }}" = "owner" ]; then
+            python scripts/prod-smoke/redact_exec.py -- \
+              python backend/scripts/smoke_pythonlab_ws_owner_concurrency.py
+          elif [ "${{ inputs.mode }}" = "phasec" ]; then
+            python scripts/prod-smoke/redact_exec.py -- \
+              python backend/scripts/smoke_pythonlab_print_visibility_probe.py
+            python scripts/prod-smoke/redact_exec.py -- \
+              python backend/scripts/soak_pythonlab_phasec.py
+          else
+            echo "unsupported PythonLab PR runtime mode: ${{ inputs.mode }}"
+            exit 2
+          fi
+
+      - name: publish failure logs
+        if: ${{ failure() }}
+        run: |
+          echo "## PythonLab current PR runtime logs" >> "$GITHUB_STEP_SUMMARY"
+          for log_file in /tmp/pythonlab-backend.log /tmp/pythonlab-worker.log; do
+            echo "### ${log_file}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            python scripts/prod-smoke/redact.py --tail 200 "$log_file" >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "### /tmp/pythonlab-frontend.log" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          python scripts/prod-smoke/redact.py --tail 200 /tmp/pythonlab-frontend.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: cleanup current PR runtime
+        if: ${{ always() }}
+        run: |
+          if [ -f /tmp/pythonlab-worker.pid ]; then
+            kill "$(cat /tmp/pythonlab-worker.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/pythonlab-backend.pid ]; then
+            kill "$(cat /tmp/pythonlab-backend.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/pythonlab-frontend.pid ]; then
+            kill "$(cat /tmp/pythonlab-frontend.pid)" 2>/dev/null || true
+          fi
+          docker ps -aq --filter "name=pythonlab_" | xargs -r docker rm -f
+          rm -rf /tmp/pythonlab/workspaces

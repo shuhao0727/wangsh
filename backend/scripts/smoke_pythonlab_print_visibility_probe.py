@@ -10,8 +10,10 @@ import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
-USERNAME = os.getenv("USERNAME", "admin")
-PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
+# 统一使用 PYTHONLAB_SMOKE_USERNAME / PYTHONLAB_SMOKE_PASSWORD（见 README secrets 约定）。
+# USERNAME 保留公开默认值 admin；PASSWORD 严禁硬编码 fallback，缺失即参数错误退出。
+USERNAME = os.getenv("PYTHONLAB_SMOKE_USERNAME", "admin")
+PASSWORD = os.getenv("PYTHONLAB_SMOKE_PASSWORD", "")
 TIMEOUT_SECONDS = float(os.getenv("TIMEOUT_SECONDS", "20"))
 EXIT_OK = 0
 EXIT_PARAM = 2
@@ -373,6 +375,12 @@ async def run_probe(token: str, sid: str, run_id: str) -> None:
 
 def main() -> None:
     try:
+        if not PASSWORD:
+            raise SmokeFailure(
+                EXIT_PARAM,
+                "param",
+                "PYTHONLAB_SMOKE_PASSWORD 未设置（禁止硬编码密码，请通过 secret 注入）",
+            )
         if TIMEOUT_SECONDS <= 0:
             raise SmokeFailure(EXIT_PARAM, "param", "TIMEOUT_SECONDS must be positive")
         run_id = str(int(time.time() * 1000))

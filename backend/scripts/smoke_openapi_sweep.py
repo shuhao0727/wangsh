@@ -9,6 +9,14 @@ from typing import Any
 import httpx
 
 
+STUDENT_ONLY_GET_PATHS = {
+    "/api/v1/classroom/active",
+    "/api/v1/classroom/plans/active-plan",
+    "/api/v1/classroom/{activity_id}",
+    "/api/v1/classroom/{activity_id}/result",
+}
+
+
 @dataclass(frozen=True)
 class Env:
     origin: str
@@ -132,6 +140,9 @@ def _expected_skip_status(raw_path: str, path: str, status_code: int, payload: A
 
     if status_code == 403 and path == "/api/v1/config" and "仅在开发环境可用" in detail:
         return True, "dev-only endpoint disabled in production"
+
+    if status_code == 403 and raw_path in STUDENT_ONLY_GET_PATHS:
+        return True, "student-only endpoint rejected the admin smoke identity"
 
     if status_code == 422:
         return True, "probe input incomplete for this endpoint"

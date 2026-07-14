@@ -5,20 +5,41 @@ on:
     paths:
       - "backend/app/api/pythonlab/**"
       - "backend/app/api/endpoints/debug/**"
+      - "backend/app/api/v2/pythonlab/**"
+      - "backend/app/tasks/pythonlab.py"
+      - "backend/app/celery_app.py"
+      - "backend/app/core/celery_app.py"
+      - "backend/app/core/config/**"
+      - "backend/app/core/deps.py"
+      - "backend/app/core/sandbox/**"
+      - "backend/app/core/startup.py"
+      - "backend/app/db/**"
+      - "backend/app/services/auth.py"
+      - "backend/app/utils/cache.py"
+      - "backend/Dockerfile.dev"
+      - "backend/docker/pythonlab-sandbox/**"
+      - "backend/requirements*.txt"
       - "backend/scripts/smoke_pythonlab_ws_owner_concurrency.py"
+      - "frontend/src/lib/monacoSetup.ts"
+      - "frontend/src/lib/monacoWorkers.ts"
+      - "frontend/src/pages/Admin/ITTechnology/pythonLab/**"
+      - "frontend/src/pages/ITTechnology/PythonLab.tsx"
+      - "frontend/scripts/pythonlab-debug-smoke.mjs"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "frontend/vite.config.*"
+      - "scripts/prod-smoke/**"
+      - "docker-compose.yml"
+      - "docker-compose.dev.yml"
       - ".github/workflows/pythonlab-owner-concurrency.yml"
+      - ".github/workflows/pythonlab-pr-runtime.yml"
       - ".github/workflows/pr-pythonlab-owner-gate.yml"
   workflow_dispatch:
 
 jobs:
   owner-concurrency-pr-gate:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
-    uses: ./.github/workflows/pythonlab-owner-concurrency.yml
+    uses: ./.github/workflows/pythonlab-pr-runtime.yml
     with:
-      api_url: ${{ vars.PYTHONLAB_API_URL || '' }}
-      owner_mode: matrix
+      mode: owner
       expect_owner_behavior: ${{ vars.PYTHONLAB_EXPECT_OWNER_BEHAVIOR || 'steal' }}
       timeout_seconds: ${{ vars.PYTHONLAB_TIMEOUT_SECONDS || '8' }}
-    secrets:
-      PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-      PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}

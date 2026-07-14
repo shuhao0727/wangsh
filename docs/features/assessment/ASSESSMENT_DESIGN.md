@@ -1,7 +1,7 @@
 # WangSh 自主检测系统 + 多维画像分析 — 开发指导文档
 
 > 版本：v2.0
-> 最后更新：2026-04-11
+> 最后更新：2026-07-07
 > 状态：第 2 期已完成，第 3 期进行中
 
 ---
@@ -127,6 +127,8 @@
 | [ASSESSMENT_FRONTEND.md](./ASSESSMENT_FRONTEND.md) | 前端设计（浮动窗口 + 管理页面 + 画像查看） |
 | [ASSESSMENT_PROMPTS.md](./ASSESSMENT_PROMPTS.md) | AI Prompt 设计（出题 + 评分 + 画像） |
 | [ASSESSMENT_FILES.md](./ASSESSMENT_FILES.md) | 文件清单 + 注意事项 |
+| [chain_agent.md](./chain_agent.md) | 链式分析智能体设计 |
+| [hot_agent.md](./hot_agent.md) | 热点问题分析智能体设计 |
 
 ---
 

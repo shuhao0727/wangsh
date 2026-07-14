@@ -1,63 +1,164 @@
 # 发布与运维记录
 
+> 状态：active
+> Owner：release-ops
+> 最近复核：2026-07-13
+> 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
+>
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 
-## v1.6.0（2026-06-15）
+## 未发布 v1.6.0（2026-07-11）
 
-### 1. 变更范围
+当前源码版本继续使用 `1.6.0`。截至 2026-07-12，远端 Git 尚无 `v1.6.0` tag，
+Docker Hub 六个正式 `1.6.0` 镜像也尚不存在。2026-06-15 早期候选内容已合并到本节，
+下方只保留日期入口，不能视为第二个发布版本。
 
-**安全修复**：
-- JWT 库从 `python-jose`（有 CVE）迁移到 `PyJWT[crypto]==2.9.0`
-- Logout 端点增加 refresh token 撤销 + session nonce 轮换
-- 学习内容/章节 GET 接口增加 `get_current_user` 鉴权
+- 修复普通 admin/teacher 从无显式 redirect 的登录页进入时，角色跳转先执行、随后又被
+  登录页认证 effect 覆盖为 `/home` 的竞态；登录提交和已登录恢复现在复用同一跳转
+  规则，并增加 super_admin/admin/teacher/student 四角色组件回归。
+- 修复管理员从 `/task-analysis/*` 等受保护深链进入登录页后被角色默认落点覆盖的问题；
+  只有缺省 `/home` 才应用角色默认页，合法显式 redirect 会保留路径和查询参数。
+- 修复统一“姓名 + 学号”登录遇到同名用户时在校验学号前抛
+  `MultipleResultsFound`、返回 HTTP 500 的问题；认证现在先取得候选账号，再用学号
+  或历史密码唯一消歧，无法唯一匹配时按认证失败处理。
+- 修复 React StrictMode 开发模式下认证初始化请求被首次 effect cleanup 取消后，
+  `initialFetchRef` 阻止重新探测，导致后台直达页面永久停留在 loading 的问题；
+  新增真实 `AuthProvider + React.StrictMode` 回归测试。
+- 修复 Markmap 预览 SVG 使用百分比 `width/height` 时 D3 读取 `SVGLength.value`
+  抛出运行时错误的问题；SVG 属性改用容器实际像素尺寸，CSS 继续保持响应式填充。
+- 修复应用启动时覆盖管理员自定义 Markdown 样式的问题：默认 `terminal`、`paper`、
+  `minimal` 样式现在只在缺失时创建，已有记录的标题、CSS 内容和排序保持不变；
+  管理端 upsert/update API 行为不变。
+- 修复用户管理 P0 越权：普通 admin 不能通过创建或导入生成 admin/super_admin，
+  也不能通过导入更新已有高权限账号；批量删除会锁定并完整核对目标，
+  缺失目标或包含 admin/super_admin 时整批拒绝，避免部分删除和高权限账号失效。
+- 课堂活动和计划增加严格班级隔离与教师对象所有权校验，学生 active plan 不再返回正确答案。
+- refresh token 改为数据库行锁下的原子轮换；停用/删除用户不可刷新，服务端会话缺失时旧 access token 不再自举。
+- Redis SSE 订阅增加 listener ready 握手和按频道发布锁，消除首事件竞态；listener 超时改为按频道降级，并确保取消订阅失败时仍关闭连接。
+- Logout 改为基础设施故障下的客户端强制登出：数据库或 Redis 撤销失败会告警并尽力回滚，但响应仍清除 access/refresh Cookie。
+- IT 游戏上传改为分块临时文件、增量 SHA256、原子重命名与数据库失败补偿，并增加 `IT_GAME_MAX_UPLOAD_BYTES`。
+- 前端增加真实角色路由守卫、认证超时取消和 IT 游戏 Query key 治理。
+- 课堂管理 SSE 修复静态路由被动态活动 ID 路由抢占的问题；管理员改为订阅全局频道，学生班级频道统一规范化。
+- 课堂活动严格限定仅草稿可编辑/删除；并发重复答题统一回滚为业务错误。
+- 课堂计划推进改为活动、item、计划状态同事务提交，失败不再吞错或继续推进，SSE/分析延迟到提交后执行。
+- 同一教师的活动启动/重启通过教师行锁串行化，重启也会自动结束其他 active 活动，避免并发产生多个进行中活动。
+- 课堂填空分析改为 Celery 后台任务；SSE 全部发布后再入队，终态重复投递幂等，异常重试可接管遗留 `running` 状态，旧轮次结果不会覆盖已重启的新轮次。
+- 课堂填空分析在所有候选提供商失败时先提交 `failed` 状态和错误摘要，再抛出专用
+  可重试异常；Celery 重试可重新接管 `failed`，而未配置可用智能体仍作为配置失败
+  直接结束，避免无意义重试。
+- 课堂分析任务发布增加 broker 侧有限重试，最终入队失败会写入可观察的 `failed`
+  状态并允许教师手工重投；课堂 Celery 任务启用 late ack 和 worker-lost 重投，
+  redelivery 可接管遗留 `running` 状态。
+- 多进程自动结束改为逐条 `FOR UPDATE SKIP LOCKED` 认领，已被其他进程结束的候选
+  会幂等跳过；活动 restart 同时清空旧分析上下文和更新时间。
+- 课堂班级迁移会锁定活动表、清洗历史班级空格，并在仍有 active 活动时阻断升级；部署文档要求维护窗口停写后再执行迁移。
+- 新增 Python 物理行数与 AST 圈复杂度 ratchet，19 个历史超长文件和历史复杂函数
+  使用逐项 baseline；CI 阻止 ceiling 放宽、一对多债务迁移和超期例外。
+- 前端清零 `no-floating-promises`，CSS token 检查覆盖源码、Tailwind 映射、注释和
+  多行引用；相关脚本测试与 token 门禁已接入 CI。
+- PythonLab PR 门禁改为在 runner 启动当前 PR 的 PostgreSQL、Redis、backend、
+  Celery、sandbox 和 Vite；使用隔离临时账号，fork PR 也可执行，并通过 Playwright
+  Chromium 覆盖真实 pointer-click 的基础调试和多断点 Continue。
+- PythonLab PR 门禁等待失败和汇总失败日志统一通过 prod-smoke 脱敏器，只发布最后
+  200 行；实时 smoke 也统一通过 `redact_exec.py`。脱敏覆盖 query/userinfo、
+  Bearer/Basic、JSON/字典、Cookie、password、api_key、已知环境值和跨行凭据，
+  同时保留普通退出码及 shell 兼容的信号退出码。
+- prod-smoke 子进程改用环境白名单，不再继承宿主无关 API token；子脚本 JSON 报告
+  递归清洗后以 `0600` 重写，证据目录使用 `0700`，Phase C 每轮日志落盘前先脱敏。
+- 删除小组讨论 smoke 中的硬编码管理员密码候选，仅接受显式环境注入。历史候选曾与
+  本地有效凭据重合，因此发布前必须轮换对应管理员凭据。
+- 镜像发布强制 tag 与源码版本一致，默认不推广 `latest`；六个镜像先推 staging，
+  推广后生成已验证 digest 清单 `release-set.txt`。正式部署会强制校验版本、六镜像、
+  Compose 引用和 registry manifest digest。Registry 不支持跨仓库事务，但不完整
+  release-set 不能进入 `compose pull/up`。
+- Bundle 门禁改为读取 Vite manifest 静态/动态 import 图；移除会造成依赖倒置的
+  Monaco 手工 vendor 分包，Entry 降至 `0.96 MB`，重型 Monaco/ECharts 保持按需加载。
+- 修复课堂计划行锁刷新后的异步关系加载：计划和 item 的
+  `populate_existing` 查询保留 eager-load 选项，避免写操作访问 `items/activity`
+  时触发 SQLAlchemy `MissingGreenlet`；新增独立临时 schema 的真实 AsyncSession
+  回归测试。
+- 手动镜像发布调用通用 CI 时也会相对 `origin/main` 执行 Python governance
+  防放宽比较；已有 exception 禁止滚动延长到期日。
+- `up-no-build` 现在同样强制验证 `release-set.txt`；Monaco worker 配置变化会
+  触发 PythonLab PR 真实浏览器门禁。
+- 登录流程增加可取消 epoch gate，logout、组件卸载或会话过期会使迟到的 login
+  响应失效，避免显式退出后恢复会话。
+- 修复 legacy、热点和学生问题链三张独立分析表出现相同整数主键时，兼容删除可能
+  命中错误类型记录的问题；legacy 路由不再跨表猜 ID，typed 删除仅清理唯一快照
+  匹配的 legacy 双写副本。
+- Bundle budget 将 `build/pyodide/` 的生产 JavaScript 纳入 Deferred 和总量，
+  修正此前约 `1.22 MB` 的漏算。
+- 修复本地生产模拟被正式 release-set 门禁误阻断的问题：`simulate` 会在清理旧模拟
+  数据前验证全部本地镜像，不再调用 `up-no-build`；可通过
+  `SIM_RUN_PROD_SMOKE=true` 在同一进程安全传递临时凭据执行完整 smoke，并通过
+  `SIM_CLEANUP=true` 保证成功或失败后清理隔离模拟栈。正式部署门禁保持不变。
+- 前端 Docker 构建上下文排除生成型 `public/pyodide`，避免宿主机绝对符号链接或
+  陈旧运行时覆盖容器内资产；生产 Dockerfile 同时在 `npm ci` 缓存层校验完整且
+  非空的 Pyodide 核心文件和 PDF worker，Vite 复制失败或最终 worker 缺失时构建会
+  立即失败。
+- 后端生产构建增加可配置 Debian 主仓库和 security 镜像源；Compose 默认使用已验证
+  的阿里云镜像，避免 amd64 Typst 大字体包在官方源直连下长时间重试，部署方仍可通过
+  环境变量切回官方源。
+- 新增 `20260711_0001_add_assessment_availability` migration，正式补齐 assessment
+  模型历史上遗漏的 7 个字段：配置开放时间 2 个、题目自适应字段 2 个、答案知识点/
+  尝试序号/自适应标记 3 个。
+- 新增 `20260711_0002_restore_legacy_baseline_indexes` migration，幂等恢复空库
+  legacy baseline 路径可能跳过的 3 个 XBK `grade` 索引和 2 个文章样式索引。
+- `prod-smoke` 的 Docker Compose 命令继承 simulate 的 project、env file 和 compose
+  file，日志与容器检查不再回落到默认 project。
+- simulate 动态沙箱清理严格限定 `wangsh_sim_*`，并在删除后复查残留；默认开发
+  `pythonlab_*` 沙箱不在匹配范围内。
+- 用户单体 update/delete 在鉴权和修改前锁定目标行；普通 admin 的列表、详情和统计
+  仅暴露 student/teacher（本人详情除外），不能通过筛选探测高权限账号。
+- PythonLab PR 浏览器 smoke 的密码仅通过环境变量传入，不再出现在命令参数中。
+- Pyodide 复制增加 npm 包版本 marker、完整性检查和临时目录原子替换；旧版本、缺文件
+  或空文件均不会被误判为可复用运行时。
+- `.env.example` 明确 Redis 服务名、PythonLab 容器 namespace、Compose 宿主机
+  workspace bind mount 与 DockerProvider 显式回退路径之间的合同。
+- assessment repair migration 会统一已有字段的类型、默认值和 nullable 约束，保守
+  downgrade 不删除来源不明的历史字段；Alembic online 环境会在升级前将旧式
+  `alembic_version VARCHAR(32)` 扩容为 `VARCHAR(64)`。
+- `prod-smoke` 不再把 refresh 响应中的有效 access/refresh token 写入 JSON 报告；
+  用户批量删除 API 与前端统一为 `{ "user_ids": [...] }` 请求体。
+- `prod-smoke` 的步骤日志和 Compose 服务日志增加统一敏感信息脱敏，URL query
+  token、Bearer token 和 JSON access/refresh token 不再进入本地测试证据。
+- `simulate` 增加主机级互斥锁，避免并发运行共享 `wangsh_sim` 资源；Pyodide 目录替换
+  增加失败恢复，UI smoke 仅通过真实 NotFound 页面标记判定 404，不再扫描整页业务文本。
 
-**性能优化**：
-- `sys_users.full_name` 增加索引（Alembic migration）
-- ClassroomActivity relationship 改为 `noload`，消除 N+1 查询
-- ECharts tree-shaking：vendor chunk 从 1,147 KB 降至 734 KB（-36%）
-- StudentBeamChart `buildContinuousBeamData` 预计算 + Map 缓存
+### 验证结果
 
-**前端重构**：
-- 移除暗色模式全套实现（hooks、CSS、toggle、isDark 逻辑）
-- 热点问题/问题链结果页重新设计（1279 行 → 529 行）
-- 核心图表重构：教师提问标记 + 教学区间 + 生成性问题柱状图
-- 问题链光束图 demo
+当前测试事实、覆盖矩阵、证据路径和待执行远端门禁统一维护在
+[testing/TEST_STATUS.md](testing/TEST_STATUS.md)，本页不再复制会持续变化的测试数字。
+此前工作区快照已完成后端、前端、脚本、Workflow、Compose、Alembic、
+Python governance 和隔离生产模拟本地门禁；Commit 6-8 完成后仍须从最终 HEAD 重跑，
+不能把阶段快照外推为正式发布结果。
 
-**后端新增**：
-- `_merge_similar_questions` 聚类算法 + `positive/negative_count` 字段
-- `merge_threshold` 参数化
-- LLM 提示词优化（噪声过滤 + 合并审查指令）
+- Alembic 单一 head 为 `20260711_0002_restore_legacy_baseline_indexes`；真实临时
+  PostgreSQL 升级验证通过，确认旧 `VARCHAR(32)` 版本列扩容到 `VARCHAR(64)`、
+  7 个 assessment 字段和 5 个 legacy baseline 条件索引均正确。
+- 完整 Docker 生产模拟：`14/14 PASS / 0 WARN / 0 FAIL / 0 SKIP`；UI smoke：
+  `13/13 PASS`。模拟容器、卷、网络、沙箱、workspace 和 host lock 均已清理，
+  开发栈容器 ID 与 HTTP 健康状态保持不变。
+- 修复北京时间跨零点时小组讨论默认列表错用 UTC 日期而看不到刚创建会话的问题，
+  新增跨日回归测试并通过完整生产模拟。
+- 生产 smoke 报告和落盘日志的敏感扫描均为 0 命中，refresh 实际结果仅记录
+  `access_token=yes refresh_token=yes`；日志脱敏专项测试 `3 passed`。
+- 本地 `backend`、`pythonlab-worker`、`frontend`、`typst-worker` 的 `1.6.0`
+  镜像已重建并通过模拟验证；尚未推送 Docker Hub，也尚未在真实 GitHub Actions
+  PR runner 上执行 workflow，因此本节是本地 release-gate 记录，不是远端发布完成声明。
+- 私有 `.env` 的版本和镜像 tag 已保持 `1.6.0`，并继续由 `.gitignore` 排除。
+- 开发模式四角色登录已真实复测：super_admin/admin 默认进入 dashboard，teacher
+  进入课堂互动，student 进入首页且访问后台被守卫拒绝；重复姓名教师登录接口恢复
+  `200`。
+- PythonLab 开发模式真实 UI `run-happy-path`、`debug-happy-path` 及 DAP
+  step/watch smoke 均通过；临时报告保存在 `/tmp/wangsh-pythonlab-dev-validation/`，
+  未写入仓库。
 
-**代码质量**：
-- 输入校验（Pydantic 字段长度限制 + 50KB 负载上限）
-- 修复路由函数重名导致 `/analysis/trends` 不可达
-- httpx 全局连接池替代临时 AsyncClient
-- 删除 6 个未使用前端组件，清理死 import
+## v1.6.0 早期候选快照（2026-06-15）
 
-### 2. 配置影响
-
-- `backend/requirements.txt`: `python-jose[cryptography]` → `PyJWT[crypto]==2.9.0`
-- 新 Alembic migration: `20260614_0001_add_fullname_index.py`
-- `tailwind.config.js`: 移除 `darkMode: ["class"]`
-- `frontend/src/styles/index.css`: 移除 `.dark {}` 变量覆盖块（-136 行）
-
-### 3. 验证
-
-```bash
-# 后端
-curl http://localhost:8000/health  # healthy
-python -c "import ast; ..." # 259 个 .py 文件语法通过
-
-# 前端
-npx tsc --noEmit  # 0 errors
-npm run build     # ✓ built in 1.73s
-
-# 功能验证
-curl -X POST /api/v1/auth/login  # PyJWT 登录正常
-curl /api/v1/learning/content/ml (无 token)  # 401
-curl /api/v1/ai-agents/analysis/trends  # 200（路由修复）
-curl -X PUT /api/v1/learning/progress/ml (超长 notes)  # 422
-```
+该未远端发布快照的安全、性能、前后端和迁移内容已合并到上方“未发布 v1.6.0”。
+当前验收事实统一见 [testing/TEST_STATUS.md](testing/TEST_STATUS.md)；本节只保留日期
+入口，避免同一版本维护两份发布正文。
 
 ---
 

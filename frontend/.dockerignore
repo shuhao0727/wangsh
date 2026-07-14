@@ -25,3 +25,4 @@ src/**/*.test.*
 src/**/*.spec.*
 build
 dist
+public/pyodide

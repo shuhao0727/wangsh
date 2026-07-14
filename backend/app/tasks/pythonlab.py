@@ -281,7 +281,10 @@ def stop_session(session_id: str, force: bool = False):
                 if has_other_active:
                     skip_provider_stop = True
             except Exception:
-                skip_provider_stop = False
+                # 保守处理：查询其它活跃会话时抛异常，无法确认该 owner 是否还有
+                # 其它活跃会话。此时宁可保留共享容器，也绝不误杀可能正在运行的
+                # 同 owner 调试会话（debugpy 共用同一容器）。
+                skip_provider_stop = True
 
         logger.info(
             "pythonlab.stop_session decision session_id=%s force=%s owner=%s has_other_active=%s skip_provider_stop=%s",

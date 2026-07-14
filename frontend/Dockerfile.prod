@@ -43,10 +43,25 @@ ENV NO_PROXY=
 RUN npm config set registry https://registry.npmmirror.com/
 
 COPY package*.json ./
-RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY npm ci --include=dev --legacy-peer-deps
+RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
+      npm ci --include=dev --legacy-peer-deps \
+    && test -s node_modules/pyodide/pyodide.js \
+    && test -s node_modules/pyodide/pyodide.mjs \
+    && test -s node_modules/pyodide/pyodide.asm.js \
+    && test -s node_modules/pyodide/pyodide.asm.wasm \
+    && test -s node_modules/pyodide/python_stdlib.zip \
+    && test -s node_modules/pyodide/pyodide-lock.json \
+    && test -s node_modules/pdfjs-dist/build/pdf.worker.js
 
 COPY . .
-RUN npm run build
+RUN npm run build \
+    && test -s build/pyodide/pyodide.js \
+    && test -s build/pyodide/pyodide.mjs \
+    && test -s build/pyodide/pyodide.asm.js \
+    && test -s build/pyodide/pyodide.asm.wasm \
+    && test -s build/pyodide/python_stdlib.zip \
+    && test -s build/pyodide/pyodide-lock.json \
+    && test -s build/assets/pdf.worker.js
 
 FROM ${CADDY_IMAGE} AS production
 

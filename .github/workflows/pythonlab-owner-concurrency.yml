@@ -80,10 +80,10 @@ jobs:
 
       - name: validate required secrets
         env:
-          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
         run: |
-          if [ -z "${USERNAME}" ] || [ -z "${PASSWORD}" ]; then
+          if [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
             {
               echo "## PythonLab Owner Concurrency Smoke"
               echo "- exit_code: 2"
@@ -102,11 +102,12 @@ jobs:
           OWNER_MODE: ${{ inputs.owner_mode || github.event.inputs.owner_mode || vars.PYTHONLAB_OWNER_MODE || 'matrix' }}
           EXPECT_OWNER_BEHAVIOR: ${{ inputs.expect_owner_behavior || github.event.inputs.expect_owner_behavior || vars.PYTHONLAB_EXPECT_OWNER_BEHAVIOR || '' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '8' }}
-          USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
         run: |
           set +e
-          python backend/scripts/smoke_pythonlab_ws_owner_concurrency.py
+          python scripts/prod-smoke/redact_exec.py -- \
+            python backend/scripts/smoke_pythonlab_ws_owner_concurrency.py
           code=$?
           case "$code" in
             0) category="success" ;;

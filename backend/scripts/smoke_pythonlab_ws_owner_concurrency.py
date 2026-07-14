@@ -10,8 +10,10 @@ import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
-USERNAME = os.getenv("USERNAME", "admin")
-PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
+# 统一使用 PYTHONLAB_SMOKE_USERNAME / PYTHONLAB_SMOKE_PASSWORD（见 README secrets 约定）。
+# USERNAME 保留公开默认值 admin；PASSWORD 严禁硬编码 fallback，缺失即参数错误退出。
+USERNAME = os.getenv("PYTHONLAB_SMOKE_USERNAME", "admin")
+PASSWORD = os.getenv("PYTHONLAB_SMOKE_PASSWORD", "")
 OWNER_MODE = os.getenv("OWNER_MODE", "auto").strip().lower()
 EXPECT_OWNER_BEHAVIOR = os.getenv("EXPECT_OWNER_BEHAVIOR", "").strip().lower()
 TIMEOUT_SECONDS = float(os.getenv("TIMEOUT_SECONDS", "8"))
@@ -232,6 +234,12 @@ async def run_owner_mode_smoke(
 
 def main() -> None:
     try:
+        if not PASSWORD:
+            raise SmokeFailure(
+                EXIT_PARAM,
+                "param",
+                "PYTHONLAB_SMOKE_PASSWORD 未设置（禁止硬编码密码，请通过 secret 注入）",
+            )
         if OWNER_MODE not in {"auto", "deny", "steal", "matrix"}:
             raise SmokeFailure(
                 EXIT_PARAM,

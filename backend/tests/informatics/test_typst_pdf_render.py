@@ -2,6 +2,8 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from app.services.informatics import typst_notes
 
 
@@ -304,3 +306,82 @@ def test_duplicate_asset_paths_use_the_same_content_for_hash_and_compilation(tmp
     assert forward_hash == reverse_hash
     assert (forward_dir / "image.png").read_bytes() == b"FIRST"
     assert (reverse_dir / "image.png").read_bytes() == b"FIRST"
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    [
+        "../escape.typ",
+        "/absolute.typ",
+        r"..\escape.typ",
+        "nul\x00.typ",
+    ],
+)
+def test_project_writer_rejects_unsafe_entry_paths(tmp_path, unsafe_path):
+    with pytest.raises(ValueError, match="Typst 项目路径非法"):
+        typst_notes._write_project_files(
+            tmpdir=str(tmp_path),
+            entry_path=unsafe_path,
+            files={"main.typ": "SAFE"},
+            assets=[],
+            style_text="",
+        )
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    [
+        "../escape.typ",
+        "/absolute.typ",
+        r"..\escape.typ",
+        "nul\x00.typ",
+    ],
+)
+def test_project_writer_rejects_unsafe_file_keys(tmp_path, unsafe_path):
+    with pytest.raises(ValueError, match="Typst 项目路径非法"):
+        typst_notes._write_project_files(
+            tmpdir=str(tmp_path),
+            entry_path="main.typ",
+            files={unsafe_path: "UNSAFE"},
+            assets=[],
+            style_text="",
+        )
+
+
+def test_project_writer_rejects_source_symlink_escape(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    outside = tmp_path / "outside.typ"
+    outside.write_text("ORIGINAL", encoding="utf-8")
+    (project_dir / "main.typ").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="Typst 项目路径非法"):
+        typst_notes._write_project_files(
+            tmpdir=str(project_dir),
+            entry_path="main.typ",
+            files={"main.typ": "UNSAFE"},
+            assets=[],
+            style_text="",
+        )
+
+    assert outside.read_text(encoding="utf-8") == "ORIGINAL"
+
+
+def test_project_writer_rejects_asset_symlink_escape(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"ORIGINAL")
+    (project_dir / "image.bin").symlink_to(outside)
+    asset = SimpleNamespace(id=1, path="image.bin", content=b"UNSAFE")
+
+    with pytest.raises(ValueError, match="Typst 项目路径非法"):
+        typst_notes._write_project_files(
+            tmpdir=str(project_dir),
+            entry_path="main.typ",
+            files={"main.typ": "SAFE"},
+            assets=[asset],
+            style_text="",
+        )
+
+    assert outside.read_bytes() == b"ORIGINAL"

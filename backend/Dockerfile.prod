@@ -3,6 +3,8 @@
 # ============================================
 
 ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 FROM ${PYTHON_IMAGE} AS builder
 
 WORKDIR /app
@@ -45,6 +47,9 @@ FROM ${PYTHON_IMAGE} AS runtime_base
 
 WORKDIR /app
 
+ARG DEBIAN_MIRROR
+ARG DEBIAN_SECURITY_MIRROR
+
 # 再次清除代理变量：runtime 阶段也需要确保干净的代理环境
 ARG http_proxy
 ARG https_proxy
@@ -72,7 +77,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
 # Install Docker CLI
-RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+RUN sed -i \
+      -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+      -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends docker-cli \
     && rm -rf /var/lib/apt/lists/*
 
@@ -98,8 +107,14 @@ FROM runtime_base AS typst_worker_runtime
 USER root
 
 ARG TYPST_VERSION=0.14.2
+ARG DEBIAN_MIRROR
+ARG DEBIAN_SECURITY_MIRROR
 
-RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
+RUN sed -i \
+      -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+      -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::Retries=5 -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
     ca-certificates curl wget xz-utils fontconfig \
     fonts-noto-cjk fonts-noto-core \

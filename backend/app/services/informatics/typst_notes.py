@@ -1,9 +1,5 @@
-import hashlib
 import asyncio
-import json
 import os
-import posixpath
-import re
 import shutil
 import subprocess
 import tempfile
@@ -22,6 +18,17 @@ from app.utils.typst_pdf_storage import abs_pdf_path, pdf_rel_path, write_pdf_by
 from app.utils.typst_asset_validation import normalize_asset_path
 from app.models.informatics.typst_note import TypstNote
 from app.models.informatics.typst_asset import TypstAsset
+from app.services.informatics.typst_note_state import (
+    apply_note_updates as _apply_note_updates,
+    canonical_compile_assets,
+    clear_compile_cache_metadata as _clear_compile_cache_metadata,
+    compile_input_hash as _compile_input_hash,
+    compile_inputs_changed as _compile_inputs_changed,
+    sha256_bytes_hex as _sha256_bytes_hex,
+)
+from app.services.informatics.typst_project_files import (
+    write_project_files as _write_project_files,
+)
 from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
 
@@ -30,33 +37,6 @@ _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPI
 
 # 单次 typst 编译超时秒数：防止恶意/超大 .typ 文件无限阻塞编译并发槽（仅 2 并发）
 TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
-
-
-def _sha256_hex(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
-
-def _sha256_bytes_hex(b: bytes) -> str:
-    return hashlib.sha256(b).hexdigest()
-
-
-def _canonical_compile_assets(assets: List[TypstAsset]) -> List[TypstAsset]:
-    def sort_key(asset: TypstAsset) -> tuple[str, int, str]:
-        path = normalize_asset_path(str(asset.path or ""))
-        asset_id = getattr(asset, "id", None)
-        stable_id = asset_id if isinstance(asset_id, int) else 2**63 - 1
-        digest = _sha256_bytes_hex(bytes(asset.content))
-        return path, stable_id, digest
-
-    canonical: List[TypstAsset] = []
-    seen_paths: set[str] = set()
-    for asset in sorted(assets or [], key=sort_key):
-        path = normalize_asset_path(str(asset.path or ""))
-        if path in seen_paths:
-            continue
-        seen_paths.add(path)
-        canonical.append(asset)
-    return canonical
 
 
 async def _load_note_compile_inputs(
@@ -84,37 +64,7 @@ async def _load_note_compile_inputs(
         if not style_text.strip():
             style_text = read_resource_style(key=style_key)
 
-    return _canonical_compile_assets(assets), files, entry_path, style_key, style_text
-
-
-def _compile_input_hash(
-    *,
-    assets: List[TypstAsset],
-    files: dict,
-    entry_path: str,
-    style_key: str,
-    style_text: str,
-) -> str:
-    asset_sig = [
-        {
-            "path": normalize_asset_path(str(asset.path or "")),
-            "sha256": _sha256_bytes_hex(bytes(asset.content)),
-        }
-        for asset in _canonical_compile_assets(assets)
-    ]
-    return _sha256_hex(
-        json.dumps(
-            {
-                "style_key": style_key,
-                "style_text": style_text,
-                "entry_path": entry_path,
-                "files": files,
-                "assets": asset_sig,
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
-    )
+    return canonical_compile_assets(assets), files, entry_path, style_key, style_text
 
 
 async def compute_note_compile_hash(db: AsyncSession, note: TypstNote) -> str:
@@ -220,42 +170,27 @@ async def update_note(
     toc: Optional[list] = None,
     content_typst: Optional[str] = None,
 ) -> TypstNote:
-    compile_inputs_changed = (
-        (style_key is not None and style_key != note.style_key)
-        or (entry_path is not None and entry_path != note.entry_path)
-        or (files is not None and files != note.files)
-        or (
-            content_typst is not None
-            and content_typst != note.content_typst
-        )
+    compile_inputs_changed = _compile_inputs_changed(
+        note,
+        style_key=style_key,
+        entry_path=entry_path,
+        files=files,
+        content_typst=content_typst,
     )
-    if title is not None:
-        note.title = title
-    if summary is not None:
-        note.summary = summary
-    if category_path is not None:
-        note.category_path = category_path
-    if published is not None and bool(published) != bool(note.published):
-        note.published = bool(published)
-        note.published_at = datetime.now() if note.published else None
-    if style_key is not None:
-        note.style_key = style_key
-    if entry_path is not None:
-        note.entry_path = entry_path
-    if files is not None:
-        note.files = files
-        if isinstance(files, dict) and "main.typ" in files:
-            note.content_typst = files.get("main.typ") or ""
-    if toc is not None:
-        note.toc = toc
-    if content_typst is not None:
-        note.content_typst = content_typst
+    _apply_note_updates(
+        note,
+        title=title,
+        summary=summary,
+        category_path=category_path,
+        published=published,
+        style_key=style_key,
+        entry_path=entry_path,
+        files=files,
+        toc=toc,
+        content_typst=content_typst,
+    )
     if compile_inputs_changed:
-        note.compiled_hash = None
-        note.compiled_pdf_path = None
-        note.compiled_pdf_size = None
-        note.compiled_pdf = None
-        note.compiled_at = None
+        _clear_compile_cache_metadata(note)
 
     await db.commit()
     await db.refresh(note)
@@ -313,90 +248,6 @@ def _compile_typst_to_pdf_bytes(content_typst: str) -> bytes:
             raise RuntimeError(msg or "typst 编译失败")
         with open(output_path, "rb") as f:
             return f.read()
-
-
-def _write_project_files(tmpdir: str, entry_path: str, files: dict, assets: List[TypstAsset], style_text: str) -> str:
-    ep = (entry_path or "main.typ").lstrip("/").strip()
-    if not ep:
-        ep = "main.typ"
-
-    if not isinstance(files, dict) or len(files) == 0:
-        files = {"main.typ": ""}
-    else:
-        files = dict(files)
-
-    if style_text and style_text.strip() and not str(files.get("style/my_style.typ") or "").strip():
-        files["style/my_style.typ"] = style_text
-
-    def _normalize_source(source: str, entry: str) -> str:
-        s = source or ""
-        entry_dir = posixpath.dirname(entry or "main.typ") or "."
-        style_rel = posixpath.relpath("style/my_style.typ", entry_dir)
-        style_line = f'#import "{style_rel}":my_style'
-        style_import_pattern = r'(#import\s+)(["\'])([^"\']*style/my_style\.typ)(["\'])'
-        s = re.sub(style_import_pattern, lambda m: f"{m.group(1)}{m.group(2)}{style_rel}{m.group(4)}", s)
-        if not re.search(style_import_pattern, s):
-            s = style_line + "\n" + s
-
-        base = entry_dir
-
-        def _replace_image_ref(m: re.Match) -> str:
-            q = m.group(1)
-            ref = m.group(2)
-            if "://" in ref:
-                return m.group(0)
-            if ref.startswith("image/"):
-                rel = posixpath.relpath(ref, base)
-                return f'image({q}{rel}{q}'
-            joined = posixpath.normpath(posixpath.join(base, ref))
-            while joined.startswith("../"):
-                joined = joined[3:]
-            if joined.startswith("image/"):
-                rel = posixpath.relpath(joined, base)
-                return f'image({q}{rel}{q}'
-            return m.group(0)
-
-        s = re.sub(r'image\(\s*(["\'])([^"\']+)\1', _replace_image_ref, s)
-        lines = s.splitlines()
-        first_h1 = -1
-        for i, ln in enumerate(lines):
-            if re.match(r"^\s*=\s+.+$", ln):
-                first_h1 = i
-                break
-        if first_h1 >= 0 and re.match(r"^\s*=\s*第[\d一二三四五六七八九十百千]+章", lines[first_h1]):
-            has_h2 = any(re.match(r"^\s*==\s+.+$", ln) for ln in lines[first_h1 + 1 :])
-            if has_h2:
-                lines.pop(first_h1)
-                s = "\n".join(lines)
-        return s
-
-    try:
-        if ep in files:
-            files[ep] = _normalize_source(files.get(ep) or "", ep)
-    except Exception:
-        pass
-
-    for rel_path, source in files.items():
-        if not isinstance(rel_path, str):
-            continue
-        p = rel_path.lstrip("/").strip()
-        if not p:
-            continue
-        abs_path = os.path.join(tmpdir, p)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        with open(abs_path, "w", encoding="utf-8") as f:
-            f.write(source or "")
-
-    for a in _canonical_compile_assets(assets):
-        p = normalize_asset_path(str(a.path or ""))
-        if not p:
-            continue
-        abs_path = os.path.join(tmpdir, p)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        with open(abs_path, "wb") as f:
-            f.write(bytes(a.content))
-
-    return ep
 
 
 def _compile_typst_project_to_pdf_bytes(entry_path: str, files: dict, assets: List[TypstAsset], style_text: str) -> bytes:

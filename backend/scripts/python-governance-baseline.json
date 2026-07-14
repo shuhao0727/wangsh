@@ -1,0 +1,504 @@
+{
+  "complexity_ceilings": {
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::_prepare_chain_deep_analysis_input": {
+      "ceiling": 20
+    },
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::_prepare_hot_deep_analysis_input": {
+      "ceiling": 22
+    },
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::get_trends_summary": {
+      "ceiling": 23
+    },
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::save_hot_question_analysis_stream.event_generator": {
+      "ceiling": 13
+    },
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::save_student_chain_analysis_stream.event_generator": {
+      "ceiling": 14
+    },
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py::save_task_analysis_stream.event_generator": {
+      "ceiling": 14
+    },
+    "backend/app/api/endpoints/agents/ai_agents/export.py::export_hot_questions_excel.build_excel_bytes": {
+      "ceiling": 15
+    },
+    "backend/app/api/endpoints/agents/ai_agents/export.py::export_selected_conversations_excel.build_excel_bytes": {
+      "ceiling": 26
+    },
+    "backend/app/api/endpoints/agents/ai_agents/export.py::export_student_chains_excel.build_excel_bytes": {
+      "ceiling": 25
+    },
+    "backend/app/api/endpoints/agents/ai_agents/group_discussion.py::stream_group_discussion_messages.gen": {
+      "ceiling": 13
+    },
+    "backend/app/api/endpoints/agents/ai_agents/group_discussion.py::stream_public_config.gen": {
+      "ceiling": 14
+    },
+    "backend/app/api/endpoints/agents/ai_agents/usage.py::read_agent_usage_statistics": {
+      "ceiling": 13
+    },
+    "backend/app/api/endpoints/content/articles/articles.py::get_article": {
+      "ceiling": 21
+    },
+    "backend/app/api/endpoints/content/articles/articles.py::get_article_by_slug": {
+      "ceiling": 18
+    },
+    "backend/app/api/endpoints/content/articles/articles.py::get_public_article_by_slug": {
+      "ceiling": 17
+    },
+    "backend/app/api/endpoints/content/articles/articles.py::list_articles": {
+      "ceiling": 17
+    },
+    "backend/app/api/endpoints/content/articles/articles.py::list_public_articles": {
+      "ceiling": 17
+    },
+    "backend/app/api/endpoints/informatics/github_sync.py::get_task_status": {
+      "ceiling": 17
+    },
+    "backend/app/api/endpoints/informatics/typst_notes.py::api_compile_pdf": {
+      "ceiling": 20
+    },
+    "backend/app/api/endpoints/management/users/users.py::create_user": {
+      "ceiling": 13
+    },
+    "backend/app/api/endpoints/management/users/users.py::import_users": {
+      "ceiling": 32
+    },
+    "backend/app/api/endpoints/management/users/users.py::update_user": {
+      "ceiling": 25
+    },
+    "backend/app/api/endpoints/xbk/analysis.py::course_stats": {
+      "ceiling": 30
+    },
+    "backend/app/api/endpoints/xbk/analysis.py::get_summary": {
+      "ceiling": 17
+    },
+    "backend/app/api/endpoints/xbk/bulk_ops.py::delete_data": {
+      "ceiling": 14
+    },
+    "backend/app/api/endpoints/xbk/bulk_ops.py::get_meta": {
+      "ceiling": 15
+    },
+    "backend/app/api/endpoints/xbk/import_export.py::export_data": {
+      "ceiling": 57
+    },
+    "backend/app/api/endpoints/xbk/import_export.py::import_data": {
+      "ceiling": 54
+    },
+    "backend/app/api/endpoints/xbk/import_export.py::preview_import": {
+      "ceiling": 21
+    },
+    "backend/app/api/endpoints/xbk/selections.py::list_course_results": {
+      "ceiling": 14
+    },
+    "backend/app/api/pythonlab/cfg.py::_build_stmt": {
+      "ceiling": 14
+    },
+    "backend/app/api/pythonlab/flow/ai_service.py::_ensure_conservative_code_optimization": {
+      "ceiling": 14
+    },
+    "backend/app/api/pythonlab/flow/ast_transformer.py::_lower_block": {
+      "ceiling": 15
+    },
+    "backend/app/api/pythonlab/flow/ast_transformer.py::_lower_stmt": {
+      "ceiling": 124
+    },
+    "backend/app/api/pythonlab/flow/builder.py::_build_flow": {
+      "ceiling": 43
+    },
+    "backend/app/api/pythonlab/flow/builder.py::parse_flow_internal": {
+      "ceiling": 14
+    },
+    "backend/app/api/pythonlab/flow/utils.py::_expr_complexity_score": {
+      "ceiling": 13
+    },
+    "backend/app/api/pythonlab/flow/utils.py::_header_title": {
+      "ceiling": 36
+    },
+    "backend/app/api/pythonlab/flow/utils.py::_teaching_action_title": {
+      "ceiling": 19
+    },
+    "backend/app/api/pythonlab/sessions.py::cleanup_sessions": {
+      "ceiling": 16
+    },
+    "backend/app/api/pythonlab/sessions.py::list_sessions": {
+      "ceiling": 13
+    },
+    "backend/app/api/pythonlab/structured_ir.py::_build_stmt": {
+      "ceiling": 52
+    },
+    "backend/app/api/pythonlab/structured_ir.py::_format_sig": {
+      "ceiling": 20
+    },
+    "backend/app/api/pythonlab/structured_ir.py::_range_parts": {
+      "ceiling": 13
+    },
+    "backend/app/api/pythonlab/utils.py::kind_of": {
+      "ceiling": 26
+    },
+    "backend/app/api/pythonlab/ws/bridge.py::DapSessionBridge._ensure_conn": {
+      "ceiling": 16
+    },
+    "backend/app/api/pythonlab/ws/bridge.py::DapSessionBridge._pump_tcp_to_client": {
+      "ceiling": 50
+    },
+    "backend/app/api/pythonlab/ws/bridge.py::DapSessionBridge.handle_client_text": {
+      "ceiling": 16
+    },
+    "backend/app/api/pythonlab/ws/handlers.py::_allow_bridge_progress": {
+      "ceiling": 14
+    },
+    "backend/app/api/pythonlab/ws/handlers.py::dap_ws": {
+      "ceiling": 75
+    },
+    "backend/app/api/pythonlab/ws/handlers.py::terminal_ws": {
+      "ceiling": 19
+    },
+    "backend/app/api/pythonlab/ws/handlers.py::terminal_ws.pump_tty_to_ws": {
+      "ceiling": 17
+    },
+    "backend/app/api/pythonlab/ws/validation.py::_validate_dap_request_payload": {
+      "ceiling": 13
+    },
+    "backend/app/core/config/__init__.py::Settings.validate_security_settings": {
+      "ceiling": 31
+    },
+    "backend/app/core/deps.py::get_current_user": {
+      "ceiling": 18
+    },
+    "backend/app/core/pubsub.py::_redis_listener": {
+      "ceiling": 13,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "Redis pubsub reliability and cancellation-safety refactor transition"
+      }
+    },
+    "backend/app/core/sandbox/docker.py::DockerProvider._debugpy_dap_ready": {
+      "ceiling": 14
+    },
+    "backend/app/core/sandbox/docker.py::DockerProvider._get_current_container_bind_mounts": {
+      "ceiling": 16
+    },
+    "backend/app/core/sandbox/docker.py::DockerProvider._resolve_host_mount_path_from_mountinfo": {
+      "ceiling": 21
+    },
+    "backend/app/core/sandbox/docker.py::DockerProvider.start_session": {
+      "ceiling": 27
+    },
+    "backend/app/core/sandbox/k8s.py::K8sProvider.start_session": {
+      "ceiling": 14
+    },
+    "backend/app/core/session_guard.py::extract_client_ip": {
+      "ceiling": 14
+    },
+    "backend/app/services/agents/agent_analysis.py::_build_timeline_buckets": {
+      "ceiling": 19
+    },
+    "backend/app/services/agents/agent_analysis.py::_call_llm_analysis": {
+      "ceiling": 14
+    },
+    "backend/app/services/agents/agent_analysis.py::analyze_student_chains": {
+      "ceiling": 18
+    },
+    "backend/app/services/agents/agent_analysis.py::analyze_task_sheet": {
+      "ceiling": 13
+    },
+    "backend/app/services/agents/agent_analysis.py::stream_task_sheet_analysis": {
+      "ceiling": 13
+    },
+    "backend/app/services/agents/agent_analysis_events.py::_extract_terms": {
+      "ceiling": 14,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for extracted agent-analysis event normalization"
+      }
+    },
+    "backend/app/services/agents/agent_analysis_summaries.py::summarize_hot_list_item._qc": {
+      "ceiling": 16,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for agent-analysis summary quality controls"
+      }
+    },
+    "backend/app/services/agents/agent_chain_analysis.py::_build_ai_main_question_chain": {
+      "ceiling": 15,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for extracted main-question chain analysis"
+      }
+    },
+    "backend/app/services/agents/agent_chain_analysis.py::_build_student_question_chains": {
+      "ceiling": 13,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for extracted student-question chain analysis"
+      }
+    },
+    "backend/app/services/agents/agent_hot_analysis.py::_build_course_hotspot_sequence": {
+      "ceiling": 21,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for course hotspot sequence extraction"
+      }
+    },
+    "backend/app/services/agents/agent_hot_analysis.py::_build_timeline": {
+      "ceiling": 29,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for hot-question timeline extraction"
+      }
+    },
+    "backend/app/services/agents/agent_hot_analysis.py::_cluster_questions": {
+      "ceiling": 22,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for hot-question clustering extraction"
+      }
+    },
+    "backend/app/services/agents/agent_hot_analysis.py::_merge_similar_questions": {
+      "ceiling": 27,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for hot-question similarity merge extraction"
+      }
+    },
+    "backend/app/services/agents/agent_usage.py::create_agent_usage": {
+      "ceiling": 24
+    },
+    "backend/app/services/agents/agent_usage.py::get_agent_usage_list": {
+      "ceiling": 15
+    },
+    "backend/app/services/agents/ai_agent.py::update_agent": {
+      "ceiling": 21
+    },
+    "backend/app/services/agents/chain_agent.py::_build_chain_prompt": {
+      "ceiling": 29
+    },
+    "backend/app/services/agents/chat_blocking.py::run_agent_chat_blocking": {
+      "ceiling": 31
+    },
+    "backend/app/services/agents/chat_stream.py::stream_agent_chat": {
+      "ceiling": 23
+    },
+    "backend/app/services/agents/code_generator.py::CodeGeneratorClient.generate_code": {
+      "ceiling": 21
+    },
+    "backend/app/services/agents/dify_test.py::run_dify_test": {
+      "ceiling": 21
+    },
+    "backend/app/services/agents/group_discussion/analysis_service.py::admin_compare_analyze_sessions": {
+      "ceiling": 41
+    },
+    "backend/app/services/agents/group_discussion/analysis_service.py::admin_cross_system_analysis": {
+      "ceiling": 33
+    },
+    "backend/app/services/agents/group_discussion/core.py::admin_list_all_sessions": {
+      "ceiling": 15
+    },
+    "backend/app/services/agents/group_discussion/core.py::admin_list_sessions": {
+      "ceiling": 18
+    },
+    "backend/app/services/agents/group_discussion/session_service.py::get_or_create_today_session": {
+      "ceiling": 23
+    },
+    "backend/app/services/agents/group_discussion/session_service.py::send_message": {
+      "ceiling": 25
+    },
+    "backend/app/services/agents/hot_agent.py::_build_analysis_prompt": {
+      "ceiling": 23
+    },
+    "backend/app/services/agents/llm_agent_base.py::_call_openai_compatible": {
+      "ceiling": 13
+    },
+    "backend/app/services/agents/llm_agent_base.py::_call_openai_compatible_stream": {
+      "ceiling": 15
+    },
+    "backend/app/services/agents/model_discovery.py::ModelDiscoveryService.discover_models": {
+      "ceiling": 15
+    },
+    "backend/app/services/agents/model_discovery.py::ModelDiscoveryService.discover_models_openai": {
+      "ceiling": 14
+    },
+    "backend/app/services/agents/model_discovery.py::ModelDiscoveryService.normalize_api_endpoint": {
+      "ceiling": 16
+    },
+    "backend/app/services/agents/providers/common.py::extract_provider_detail": {
+      "ceiling": 13
+    },
+    "backend/app/services/agents/providers/common.py::should_retry_openrouter_fallback": {
+      "ceiling": 17
+    },
+    "backend/app/services/articles/article.py::ArticleService.list_articles": {
+      "ceiling": 14
+    },
+    "backend/app/services/articles/article.py::ArticleService.update_article": {
+      "ceiling": 14
+    },
+    "backend/app/services/assessment/basic_profile_service.py::generate_basic_profile": {
+      "ceiling": 19
+    },
+    "backend/app/services/assessment/export_service.py::build_assessment_export_xlsx": {
+      "ceiling": 31
+    },
+    "backend/app/services/assessment/profile_service.py::_collect_agent_data": {
+      "ceiling": 15
+    },
+    "backend/app/services/assessment/profile_service.py::_collect_assessment_data": {
+      "ceiling": 13
+    },
+    "backend/app/services/assessment/profile_service.py::_collect_group_data": {
+      "ceiling": 13
+    },
+    "backend/app/services/assessment/question_service.py::_build_generate_prompt": {
+      "ceiling": 17
+    },
+    "backend/app/services/assessment/question_service.py::_parse_questions_json": {
+      "ceiling": 17
+    },
+    "backend/app/services/assessment/session_service.py::get_available_configs": {
+      "ceiling": 23
+    },
+    "backend/app/services/assessment/session_service.py::get_config_sessions": {
+      "ceiling": 15
+    },
+    "backend/app/services/assessment/session_service.py::start_session": {
+      "ceiling": 15
+    },
+    "backend/app/services/assessment/session_service.py::submit_answer": {
+      "ceiling": 36
+    },
+    "backend/app/services/assessment/session_service.py::submit_session": {
+      "ceiling": 14
+    },
+    "backend/app/services/informatics/github_sync.py::run_github_sync": {
+      "ceiling": 93
+    },
+    "backend/app/services/informatics/typst_notes.py::_write_project_files": {
+      "ceiling": 20
+    },
+    "backend/app/services/informatics/typst_notes.py::compile_note_pdf": {
+      "ceiling": 40
+    },
+    "backend/app/services/informatics/typst_notes.py::update_note": {
+      "ceiling": 15
+    },
+    "backend/app/services/informatics/typst_pdf_cleanup.py::cleanup_unreferenced_pdfs": {
+      "ceiling": 20
+    },
+    "backend/app/services/it/games.py::_check_file_signature": {
+      "ceiling": 13,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for IT-game upload signature validation"
+      }
+    },
+    "backend/app/services/it/games.py::create_game": {
+      "ceiling": 15,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "First baseline transition for IT-game creation safety validation"
+      }
+    },
+    "backend/app/services/xbk/exports/teacher_distribution.py::_apply_merged_cell_borders": {
+      "ceiling": 19
+    },
+    "backend/app/services/xbk/exports/teacher_distribution.py::build_teacher_distribution_xlsx": {
+      "ceiling": 14
+    },
+    "backend/app/tasks/pythonlab.py::cleanup_stale_sessions.run": {
+      "ceiling": 27
+    },
+    "backend/app/tasks/pythonlab.py::stop_session.run": {
+      "ceiling": 14
+    },
+    "backend/app/utils/metrics.py::collect_typst_metrics": {
+      "ceiling": 22
+    },
+    "backend/app/utils/typst_asset_validation.py::detect_mime_by_magic": {
+      "ceiling": 18
+    }
+  },
+  "file_ceilings": {
+    "backend/app/api/endpoints/agents/ai_agents/analysis.py": {
+      "ceiling": 1390,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "AI analysis endpoint safety refactor and service-extraction transition"
+      }
+    },
+    "backend/app/api/endpoints/agents/ai_agents/group_discussion.py": {
+      "ceiling": 780
+    },
+    "backend/app/api/endpoints/assessment/admin.py": {
+      "ceiling": 735
+    },
+    "backend/app/api/endpoints/content/articles/articles.py": {
+      "ceiling": 767
+    },
+    "backend/app/api/endpoints/management/users/users.py": {
+      "ceiling": 913,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "User-management authentication and authorization safety refactor transition"
+      }
+    },
+    "backend/app/api/endpoints/xbk/import_export.py": {
+      "ceiling": 894
+    },
+    "backend/app/api/pythonlab/ws/bridge.py": {
+      "ceiling": 799
+    },
+    "backend/app/api/pythonlab/ws/handlers.py": {
+      "ceiling": 653
+    },
+    "backend/app/core/sandbox/docker.py": {
+      "ceiling": 756
+    },
+    "backend/app/services/agents/agent_analysis.py": {
+      "ceiling": 697
+    },
+    "backend/app/services/agents/ai_agent.py": {
+      "ceiling": 629
+    },
+    "backend/app/services/agents/group_discussion/session_service.py": {
+      "ceiling": 508
+    },
+    "backend/app/services/agents/model_discovery.py": {
+      "ceiling": 682
+    },
+    "backend/app/services/assessment/profile_service.py": {
+      "ceiling": 614
+    },
+    "backend/app/services/assessment/session_service.py": {
+      "ceiling": 1386
+    },
+    "backend/app/services/informatics/github_sync.py": {
+      "ceiling": 665
+    },
+    "backend/app/services/informatics/typst_notes.py": {
+      "ceiling": 570,
+      "exception": {
+        "expires_at": "2026-08-10",
+        "owner": "project-governance",
+        "reason": "Typst note validation and file-handling safety refactor transition"
+      }
+    },
+    "backend/app/utils/cache.py": {
+      "ceiling": 516
+    }
+  },
+  "schema_version": 1,
+  "source_ref": "worktree-2026-07-11-verified"
+}

@@ -12,25 +12,30 @@
 
 ## 语义色一览
 
-|------|-------|------|------|------|
-| **primary** | `--ws-color-primary` | `#0D9488` (Teal 600) | `#2DD4BF` | 主按钮、链接、选中 |
-| **primary-hover** | `--ws-color-primary-hover` | `#14B8A6` | `#5EEAD4` | primary 元素 hover 态 |
-| **primary-muted** | `--ws-color-primary-muted` | `#CCFBF1` (Teal 100) | `#134E4A` | 大面积浅色背景、tag bg |
-| **secondary** | `--ws-color-secondary` | `#7C3AED` (Violet 600) | `#A78BFA` | 焦点环、装饰强调 |
-| **accent** | `--ws-color-accent` | `#7C3AED` | `#A78BFA` | CTA、强调边框、点缀条 |
-| **success** | `--ws-color-success` | `#059669` (Emerald) | `#34D399` | 完成、通过、正向指标 |
-| **warning** | `--ws-color-warning` | `#D97706` (Amber) | `#FBBF24` | 警告、待处理 |
-| **error** | `--ws-color-error` | `#DC2626` (Red) | `#F87171` | 错误、删除、危险操作 |
-| **info** | `--ws-color-info` | `#0EA5E9` (Sky 500) | `#38BDF8` | 信息提示、帮助文本 |
-| **purple** | `--ws-color-purple` | `#7C3AED` | `#A78BFA` | 课堂互动模块识别色 |
+| 语义 | Token | 浅色值 | 用途 |
+|------|-------|------|------|
+| **primary** | `--ws-color-primary` | `#0D9488` (Teal 600) | 主按钮、链接、选中 |
+| **primary-hover** | `--ws-color-primary-hover` | `#14B8A6` | primary 元素 hover 态 |
+| **primary-muted** | `--ws-color-primary-muted` | `#CCFBF1` (Teal 100) | 大面积浅色背景、tag bg |
+| **secondary** | `--ws-color-secondary` | `#7C3AED` (Violet 600) | 焦点环、装饰强调 |
+| **accent** | `--ws-color-accent` | `#7C3AED` | CTA、强调边框、点缀条 |
+| **success** | `--ws-color-success` | `#059669` (Emerald) | 完成、通过、正向指标 |
+| **warning** | `--ws-color-warning` | `#D97706` (Amber) | 警告、待处理 |
+| **error** | `--ws-color-error` | `#DC2626` (Red) | 错误、删除、危险操作 |
+| **info** | `--ws-color-info` | `#0EA5E9` (Sky 500) | 信息提示、帮助文本 |
+| **purple** | `--ws-color-purple` | `#C026D3` | 课堂互动模块识别色 |
 
 ## 模块识别色
 
 | 模块 | Token | 色值 |
 |------|-------|------|
-| ML（机器学习） | `--ws-color-purple` | `#7C3AED` |
+| ML（机器学习） | `--ws-color-secondary` | `#7C3AED` |
 | AI（人工智能） | `--ws-tag-blue` | `#2563EB` |
 | Agents（智能体） | `--ws-color-primary` | `#0D9488` |
+
+资源分类中的社区标签使用 `--ws-tag-orange`（`#F97316`）。数据标签色必须从
+`--ws-tag-*` palette 中选择，不要新增无定义的 `--ws-color-*` 引用或用 fallback
+掩盖缺失 token。
 
 ## 使用方式
 
@@ -68,3 +73,4 @@
 1. 在 `index.css` 的 `:root` 块中定义
 2. 更新本文档
 3. 若需 Tailwind class 支持，同步 `tailwind.config.js` 的 `theme.extend.colors`
+4. 运行 `npm run token:check:ci`，确保所有 `var(--ws-*)` 引用均有定义

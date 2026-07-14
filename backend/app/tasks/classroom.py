@@ -20,6 +20,14 @@ async def _analyze_ended_activity(
         )
 
 
+def _request_allows_running_retry(request) -> bool:
+    delivery_info = getattr(request, "delivery_info", None) or {}
+    return bool(
+        getattr(request, "retries", 0) > 0
+        or delivery_info.get("redelivered")
+    )
+
+
 @celery_app.task(
     bind=True,
     name="app.tasks.classroom.analyze_ended_classroom_activity",
@@ -27,11 +35,13 @@ async def _analyze_ended_activity(
     max_retries=2,
     retry_backoff=True,
     retry_backoff_max=60,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def analyze_ended_classroom_activity(self, activity_id: int) -> None:
     run_async(
         _analyze_ended_activity(
             activity_id,
-            allow_running_retry=self.request.retries > 0,
+            allow_running_retry=_request_allows_running_retry(self.request),
         )
     )

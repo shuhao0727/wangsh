@@ -15,7 +15,7 @@ x-common-env: &common-env
   POSTGRES_DB: ${POSTGRES_DB:-wangsh_db}
   POSTGRES_USER: ${POSTGRES_USER:-admin}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-  REDIS_HOST: wangsh-redis
+  REDIS_HOST: redis
   REDIS_PORT: "6379"
   SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-admin}
   SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD is required}
@@ -25,7 +25,7 @@ x-common-env: &common-env
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
   ALL_PROXY: ""
-  NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+  NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
 
 # 包含 common-env + PythonLab 环境变量的合并版本
 x-common-with-pythonlab-env: &common-with-pythonlab-env
@@ -33,7 +33,9 @@ x-common-with-pythonlab-env: &common-with-pythonlab-env
   PYTHONLAB_SANDBOX_IMAGE: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:${IMAGE_TAG:-1.6.0}}
   PYTHONLAB_SANDBOX_PROVIDER: ${PYTHONLAB_SANDBOX_PROVIDER:-docker}
   PYTHONLAB_DOCKER_RUNTIME: ${PYTHONLAB_DOCKER_RUNTIME:-runc}
+  PYTHONLAB_CONTAINER_NAMESPACE: ${PYTHONLAB_CONTAINER_NAMESPACE:-pythonlab}
   PYTHONLAB_WORKSPACE_ROOT: ${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
+  PYTHONLAB_HOST_WORKSPACE_ROOT: ${PYTHONLAB_HOST_WORKSPACE_ROOT:-./data/pythonlab/workspaces}
   PYTHONLAB_SESSION_TTL_SECONDS: ${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
   PYTHONLAB_UNATTACHED_TTL_SECONDS: ${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
   PYTHONLAB_MAX_SESSIONS_PER_USER: ${PYTHONLAB_MAX_SESSIONS_PER_USER:-5}
@@ -49,7 +51,7 @@ x-common-with-pythonlab-env: &common-with-pythonlab-env
   PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS: ${PYTHONLAB_ORPHAN_CLEANUP_INTERVAL_SECONDS:-300}
   PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS: ${PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS:-180}
   PYTHONLAB_IDLE_TIMEOUT_SECONDS: ${PYTHONLAB_IDLE_TIMEOUT_SECONDS:-3600}
-  HOST_WORKSPACE_ROOT: ${HOST_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
+  HOST_WORKSPACE_ROOT: "${HOST_WORKSPACE_ROOT:-}"
 
 x-depends-infra: &depends-infra
   postgres:
@@ -88,7 +90,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: wangsh-redis
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -120,6 +121,8 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-backend:${IMAGE_TAG:-1.6.0}
     restart: unless-stopped
     logging:
@@ -157,8 +160,8 @@ services:
       - dify_network  # 可选：仅在部署了 Dify 时需要；未部署时删除此行和底部 dify_network 定义
     # 生产启动顺序：
     # 1. 只读检查迁移状态，提前阻断 alembic_version 与真实 schema 漂移
-    # 2. 仅空库允许 ORM 首次建表并 stamp head（已有库不会 create_all）
-    # 3. 运行正式 Alembic 迁移
+    # 2. 空库仅补 Alembic 历史之前的 legacy 基线表，不 stamp
+    # 3. 空库和已有库都通过正式 Alembic 迁移到唯一 head
     # 4. 创建兼容视图/极少量历史兼容补丁
     command: [ "sh", "-c", "python /app/scripts/check_migration_state.py && python /app/scripts/bootstrap_db.py --initial-only && alembic -c /app/alembic.ini upgrade head && python /app/scripts/bootstrap_db.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
@@ -171,7 +174,7 @@ services:
       #   2. 或在 Kubernetes 中使用 Pod API，避免暴露 Docker socket
       #   3. 至少确保 backend 容器不暴露到公网，且代码中无命令注入漏洞
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ${PYTHONLAB_HOST_WORKSPACE_ROOT:-./data/pythonlab/workspaces}:${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     group_add:
@@ -195,6 +198,8 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG:-1.6.0}
     restart: unless-stopped
     logging:
@@ -229,6 +234,7 @@ services:
           memory: 512M
           cpus: '1.0'
 
+  # 默认 celery 队列 worker：处理 PythonLab 任务和课堂结束后的 AI 分析。
   pythonlab-worker:
     platform: linux/amd64
     build:
@@ -238,6 +244,8 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG:-1.6.0}
     restart: unless-stopped
     logging:
@@ -263,7 +271,7 @@ services:
       - wangsh-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # PythonLab 沙箱容器管理所需，安全风险见 backend 注释
-      - ./data/pythonlab/workspaces:/tmp/pythonlab/workspaces
+      - ${PYTHONLAB_HOST_WORKSPACE_ROOT:-./data/pythonlab/workspaces}:${PYTHONLAB_WORKSPACE_ROOT:-/tmp/pythonlab/workspaces}
     deploy:
       resources:
         limits:
@@ -277,7 +285,7 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
-    image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:1.6.0}
+    image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:${IMAGE_TAG:-1.6.0}}
     restart: unless-stopped
     command: [ "sh", "-lc", "sleep infinity" ]
     networks:
@@ -311,7 +319,7 @@ services:
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
       ALL_PROXY: ""
-      NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend"
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend"
     networks:
       - wangsh-network
     healthcheck:
@@ -348,7 +356,7 @@ services:
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
       ALL_PROXY: ""
-      NO_PROXY: "localhost,127.0.0.1,postgres,redis,wangsh-redis,backend,frontend"
+      NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend,frontend"
     depends_on:
       - frontend
       - backend

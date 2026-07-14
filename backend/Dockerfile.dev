@@ -4,7 +4,7 @@
 # ============================================
 
 # 基础镜像：Python 3.11（Slim 轻量版）
-FROM python:3.11-slim AS development
+FROM public.ecr.aws/docker/library/python:3.11-slim AS development
 
 # 设置工作目录
 WORKDIR /app
@@ -114,7 +114,7 @@ CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000
 # ============================================
 # 生产构建阶段
 # ============================================
-FROM python:3.11-slim AS builder
+FROM public.ecr.aws/docker/library/python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -155,7 +155,7 @@ COPY . .
 # ============================================
 # 生产运行阶段
 # ============================================
-FROM python:3.11-slim AS production
+FROM public.ecr.aws/docker/library/python:3.11-slim AS production
 
 WORKDIR /app
 

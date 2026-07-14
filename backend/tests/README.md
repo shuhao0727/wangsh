@@ -11,9 +11,12 @@ tests/
 ├── assessment/        # 测评配置、会话、画像、课堂联动
 ├── auth/              # 登录、登出、刷新、nonce
 ├── classroom/         # 课堂计划与课堂域服务
+├── content/           # 学习内容、章节和内容访问边界
 ├── core/              # 核心依赖、限流、缓存、会话守卫
 ├── group_discussion/  # 小组讨论访问控制、成员切换、消息流
 ├── informatics/       # Typst 笔记与 PDF 渲染
+├── it/                # IT 游戏资源上传、下载和安全校验
+├── pythonlab/         # 沙箱、WebSocket、DAP 和资源限制
 ├── system/            # feature flags、metrics
 ├── users/             # 用户 CRUD 与导入
 ├── xbk/               # 校本课程结构、导入导出规则

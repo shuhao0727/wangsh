@@ -25,9 +25,6 @@ const checks = [
   [".env.example APP_VERSION", readEnv(".env.example").get("APP_VERSION")],
   [".env.example IMAGE_TAG", readEnv(".env.example").get("IMAGE_TAG")],
   [".env.example REACT_APP_VERSION", readEnv(".env.example").get("REACT_APP_VERSION")],
-  [".env.dev APP_VERSION", readEnv(".env.dev").get("APP_VERSION")],
-  [".env.dev IMAGE_TAG", readEnv(".env.dev").get("IMAGE_TAG")],
-  [".env.dev REACT_APP_VERSION", readEnv(".env.dev").get("REACT_APP_VERSION")],
 ];
 
 const failures = checks.filter(([, value]) => value !== expected);

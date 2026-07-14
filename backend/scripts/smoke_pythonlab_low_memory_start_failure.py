@@ -6,8 +6,10 @@ import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 PYTHONLAB_V2_ROOT = "/api/v2/pythonlab"
-USERNAME = os.getenv("USERNAME", "admin")
-PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
+# 统一使用 PYTHONLAB_SMOKE_USERNAME / PYTHONLAB_SMOKE_PASSWORD（见 README secrets 约定）。
+# USERNAME 保留公开默认值 admin；PASSWORD 严禁硬编码 fallback，缺失即参数错误退出。
+USERNAME = os.getenv("PYTHONLAB_SMOKE_USERNAME", "admin")
+PASSWORD = os.getenv("PYTHONLAB_SMOKE_PASSWORD", "")
 MEMORY_MB = int(os.getenv("MEMORY_MB", "64"))
 EXPECT_DETAIL = os.getenv("EXPECT_DETAIL", "调试服务启动超时")
 POLL_TIMEOUT_SECONDS = float(os.getenv("POLL_TIMEOUT_SECONDS", "90"))
@@ -77,6 +79,9 @@ def wait_terminal_status(headers: dict[str, str], sid: str) -> dict:
 
 
 def main() -> int:
+    if not PASSWORD:
+        print("PYTHONLAB_SMOKE_PASSWORD 未设置（禁止硬编码密码，请通过 secret 注入）", file=sys.stderr)
+        return 2
     token = login()
     headers = {"Authorization": f"Bearer {token}"}
     cleanup_sessions(headers)

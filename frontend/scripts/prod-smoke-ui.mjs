@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { chromium } from "playwright";
+import { isNotFoundPage } from "./prod-smoke-ui-lib.mjs";
 
 function getArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -161,7 +162,7 @@ async function smokeRoute(context, route) {
       if (!bodyText) {
         status = "FAIL";
         note = "blank body text";
-      } else if (/404|Not Found|页面未找到/i.test(bodyText)) {
+      } else if (await isNotFoundPage(page)) {
         status = "FAIL";
         note = "not found page";
       }

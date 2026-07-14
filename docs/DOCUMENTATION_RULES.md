@@ -1,306 +1,186 @@
-# 文档维护规范
+# 文档维护与归属规范
 
-> 最后更新：2026-05-02
+> 状态：active
+> Owner：docs
+> 最近复核：2026-07-13
+> 复核周期：每 90 天
 
-## 核心原则
+本文是 WangSh 文档维护、归属、生命周期、整理和自动检查的唯一权威规则。
+目标是让每个主题只有一个当前入口，历史信息可追溯，操作说明与代码保持一致。
 
-**每次代码变更必须同步更新相关文档，确保文档与代码保持一致。**
+## 一、核心原则
 
----
+1. 代码行为变化必须同步更新对应 owner 文档。
+2. 一个主题只保留一个权威来源，其他文档只引用，不复制动态事实。
+3. 当前行为放 owner 文档，未来动作放 active plan，历史过程放 archive。
+4. 先迁移有效内容，再 redirect、archive 或删除旧文档。
+5. 部署、回滚、数据库、CI、安全、PythonLab 和测试恢复资料从严处理。
+6. 自动检查只报告和阻断问题，不自动移动或删除文件。
+7. 项目文档统计排除 `node_modules`、`venv`、构建产物、coverage 和 data 目录。
 
-## 文档分层与落位
+## 二、权威来源
 
-- `docs/`：稳定、长期维护的项目文档，例如 API、功能设计、全局文档规则。
-- `docs/docker/`：Docker 部署、发布记录、测试治理、阶段计划、前端专项文档和历史归档。
-- 模块专用说明优先就近放置，例如 `backend/tests/README.md`、`scripts/xbk/README.md`。
-- 新增文档前先查看 `docs/README.md`，不要把临时分析和正式文档混放。
-- 文档 owner、生命周期状态、redirect/archive/delete 条件遵守 `docs/DOCUMENTATION_OWNERSHIP.md`。
-- 统计项目文档时应排除 `venv`、`node_modules`、构建产物目录中的第三方 Markdown 文件。
+| 主题 | 权威文档 | 触发更新 |
+|---|---|---|
+| 项目入口与快速启动 | `README.md` | 启动方式、端口、核心导航变化 |
+| 文档导航与治理 | `docs/README.md`、本文件 | 新增、移动、归档文档或规则变化 |
+| 工程质量门禁 | `docs/ENGINEERING_GOVERNANCE.md` | 文件规模、复杂度、模块边界和发布规则变化 |
+| Agent 默认行为 | `AGENTS.md` | Agent 工作方式、项目约定变化 |
+| API 契约 | `docs/development/API.md` | API 路径、参数、权限或响应变化 |
+| 数据库结构 | 对应功能的数据库文档 | 表、字段、索引、约束、枚举和 migration 变化 |
+| 部署与环境变量 | `docs/docker/deploy/DEPLOY.md` | Compose、Docker、网关、环境变量和回滚变化 |
+| CI/CD | `docs/docker/deploy/CICD.md` | workflow、镜像和质量门禁变化 |
+| 测试策略 | `docs/docker/testing/README.md` | 测试分层、smoke/soak 和脚本入口变化 |
+| 当前测试结果 | `docs/docker/testing/TEST_STATUS.md` | 本地或远端验证结果变化 |
+| 发布记录 | `docs/docker/RELEASE_NOTES.md` | 重要 bug fix、发布行为和版本变化 |
+| 功能行为 | `docs/features/*.md` | 功能、架构、权限和用户可见行为变化 |
+| Assessment | `docs/features/assessment/` | 评估设计、DB、API、前端或提示词变化 |
+| 脚本入口 | 各脚本目录 README | 新增、删除、迁移或重命名脚本 |
+| 当前执行计划 | `docs/docker/plans/` | 当前批次、治理或发布动作变化 |
+| 历史归档 | `docs/docker/archive/README.md` | 新增、移动或删除归档正文 |
 
----
+动态数字只写入 `TEST_STATUS.md`。当前发布步骤只写入
+`2026-07-12-project-consolidation-and-release-plan.md`。其他文档引用这两个入口，
+不得复制新的“最终结果”。
 
-## 文档更新规则
+## 三、文档类型与目录
 
-### 规则 1：修改前先读文档
+| 类型 | 目的 | 主要位置 |
+|---|---|---|
+| Tutorial | 帮助新成员第一次完成操作 | 根 README、模块入门 |
+| How-to | 完成部署、回滚、测试等具体任务 | `docs/docker/`、脚本 README |
+| Reference | 描述 API、DB、配置、能力清单 | `docs/development/`、`docs/features/` |
+| Explanation | 解释架构、设计取舍和治理原因 | 功能文档、工程治理文档 |
 
-在进行任何代码修改前，必须：
-1. 读取相关的文档文件
-2. 了解现有的设计和实现
-3. 根据 `docs/DOCUMENTATION_OWNERSHIP.md` 确认对应 owner 文档
-4. 确认修改不会与现有设计冲突
+目录职责：
 
-**示例**：
-- 修改 API 端点 → 先读 `docs/development/API.md`
-- 修改数据库模型 → 先读 `docs/features/assessment/ASSESSMENT_DATABASE.md`（如果是 assessment 模块）
-- 修改部署配置 → 先读 `docs/docker/deploy/DEPLOY.md`
+- `docs/`：长期维护的全局规则、API 和功能文档。
+- `docs/docker/deploy/`：部署、环境变量、CI/CD、回滚。
+- `docs/docker/testing/`：测试策略、当前状态和验证入口。
+- `docs/docker/plans/`：仍有当前价值的计划、治理台账和 reference。
+- `docs/docker/frontend/`：前端页面清单和无障碍说明。
+- `docs/docker/archive/`：历史记录，不指导当前操作。
+- 模块 README：只说明本模块的测试或脚本使用方式。
+- 一次性分析和临时接力优先不入库。
 
-### 规则 2：修改后立即更新文档
+## 四、生命周期
 
-代码修改完成后，立即更新对应文档：
+计划、报告、治理台账和历史文档在文件顶部使用：
 
-| 代码变更类型 | 需要更新的文档 |
-|-------------|---------------|
-| 新增/修改 API 端点 | `docs/development/API.md` |
-| 新增/修改数据库表 | 对应模块的 DATABASE.md |
-| 修改部署配置 | `docs/docker/deploy/DEPLOY.md` |
-| 修改 CI/CD 工作流 | `docs/docker/deploy/CICD.md` |
-| 调整测试脚本/烟测入口/测试治理规则 | `docs/docker/testing/README.md` 或对应测试治理文档 |
-| 新增功能模块 | 创建对应的模块文档 |
-| 修改环境变量 | `docs/docker/deploy/DEPLOY.md` + `.env.example` |
-| 修复重要 Bug | `docs/docker/RELEASE_NOTES.md` |
-| 修改 Docker 配置 | `docs/docker/deploy/DEPLOY.md` |
-
-更完整的 owner 映射见 `docs/DOCUMENTATION_OWNERSHIP.md`。
-
-### 规则 3：文档更新检查清单
-
-每次提交代码前，检查：
-- [ ] 是否读取了相关文档？
-- [ ] 文档是否已更新？
-- [ ] 文档中的示例代码是否正确？
-- [ ] 文档中的文件路径是否准确？
-- [ ] 是否需要更新 `README.md` 或 `docs/README.md` 的文档索引？
-
----
-
-## 具体场景
-
-### 场景 1：新增 API 端点
-
-**步骤**：
-1. 读取 `docs/development/API.md`，了解现有 API 结构
-2. 编写新的 API 端点代码
-3. 在 `docs/development/API.md` 对应章节添加新端点
-4. 更新 `docs/development/API.md` 顶部的"最后更新"时间
-
-**示例**：
 ```markdown
-## 七、AI 智能体（/ai-agents）
-
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| POST | `/ai-agents/new-endpoint` | 新功能说明 | 是 |
+> 状态：active | reference | superseded | archived | redirect
+> Owner：docs | frontend | backend | ops | feature-name
+> 最近复核：YYYY-MM-DD
+> 替代文档：path/to/doc.md
+> 归档条件：完成或移除条件
 ```
 
-### 场景 2：修改数据库模型
+| 状态 | 含义 | 处理方式 |
+|---|---|---|
+| `active` | 当前操作或开发依据 | 相关变更必须同步更新 |
+| `reference` | 稳定参考资料 | 定期复核，不维护动态结果 |
+| `superseded` | 已被替代但短期保留 | 明确替代文档和移除条件 |
+| `archived` | 只用于历史追溯 | 放入 archive，不指导当前操作 |
+| `redirect` | 兼容旧链接 | 不超过 25 行，只保留状态、说明和目标链接 |
 
-**步骤**：
-1. 读取对应模块的 DATABASE.md（如 `docs/features/assessment/ASSESSMENT_DATABASE.md`）
-2. 修改数据库模型代码
-3. 创建 Alembic 迁移文件
-4. 更新 DATABASE.md 中的表结构说明
-5. 更新字段说明和关系图
+## 五、标准更新流程
 
-### 场景 3：新增功能模块
+### 修改前
 
-**步骤**：
-1. 创建模块文档（如 `docs/features/NEW_MODULE.md`）
-2. 编写模块代码
-3. 在 `docs/README.md` 的"功能模块"章节添加链接
-4. 在 `README.md` 的"文档索引"中补充入口（如有必要）
-5. 在 `docs/development/API.md` 中添加对应的 API 章节
+1. 从权威来源表找到 owner 文档。
+2. 阅读 owner 文档和相关模块 README。
+3. 确认 API、DB、权限、部署或测试合同是否受影响。
 
-### 场景 4：修改配置
+### 修改时
 
-**步骤**：
-1. 读取 `docs/docker/deploy/DEPLOY.md`
-2. 修改配置文件（`.env.example`、`docker-compose.yml` 等）
-3. 更新 `docs/docker/deploy/DEPLOY.md` 中的配置说明
-4. 如果是新增环境变量，在"环境变量配置"章节添加说明
+1. 保持一个主题一个来源。
+2. 示例命令必须使用当前脚本、服务名、环境变量和真实路径。
+3. 不把测试快照写成永久事实。
+4. 不把历史计划重新包装成当前指南。
 
-### 场景 5：修复重要 Bug
+### 修改后
 
-**步骤**：
-1. 修复 Bug
-2. 在 `docs/docker/RELEASE_NOTES.md` 顶部添加新版本记录
-3. 说明修复的问题、根因、影响范围
-4. 如果涉及配置变更，同步更新 `docs/docker/deploy/DEPLOY.md`
+1. 更新 owner 文档。
+2. 新增、移动或归档文档时更新 `docs/README.md` 和对应目录 README。
+3. 脚本变化同步脚本目录 README；删除记录同步 `docs/scripts/ARCHIVE_INDEX.md`。
+4. 运行最小可靠验证和 Markdown 合同。
 
----
+常见映射：
 
-## 文档模板
+- API 变化：更新 `docs/development/API.md`。
+- DB/model/migration 变化：更新模块数据库文档。
+- Docker、环境变量、网关变化：更新 `DEPLOY.md`。
+- GitHub Actions 变化：更新 `CICD.md`。
+- 测试或 smoke/soak 变化：更新测试 README 或脚本 README。
+- 重要 bug fix：更新 `RELEASE_NOTES.md`。
 
-### API 端点模板
+## 六、新文档决策
 
-```markdown
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET/POST/PUT/DELETE | `/path/to/endpoint` | 端点功能说明 | 是/否/管理员 |
-```
+新增文件前按顺序判断：
 
-### 数据库表模板
+1. 项目入口或最短启动路径：更新根 `README.md`。
+2. 全局导航：更新 `docs/README.md`。
+3. API、DB、部署、CI 或测试事实：更新现有 owner 文档。
+4. 功能行为或架构：更新 `docs/features/` 对应文档。
+5. 脚本使用方法：更新脚本所在目录 README。
+6. 当前计划或迁移方案：放 `docs/docker/plans/`，并设置生命周期。
+7. 已完成报告或事故：先沉淀长期结论，再放 archive。
+8. 一次性排查记录：使用系统临时目录，不提交。
 
-```markdown
-### 表名：znt_table_name
+## 七、合并、归档与删除
 
-**用途**：表的用途说明
+### 合并
 
-**关键字段**：
-- `id` - 主键
-- `field_name` - 字段说明
-- `created_at` - 创建时间
-- `updated_at` - 更新时间
+- 先确定新的唯一 owner。
+- 把仍然有效的规则、命令和结论迁入 owner 文档。
+- 删除重复叙述和过期数字。
+- 旧 tracked 路径仍可能被引用时保留 redirect。
 
-**关系**：
-- 外键：`foreign_table_id` → `znt_foreign_table.id`
-```
+### 归档
 
-### 配置说明模板
+适用于有历史价值、但不再指导当前操作的日期型计划、审计和事故报告。
+归档后必须更新 `docs/docker/archive/README.md`。
 
-```markdown
-### 配置项名称
+### 删除
+
+只有同时满足以下条件才直接删除：
+
+- 不属于部署、回滚、数据库、CI、安全、PythonLab 或测试恢复资料。
+- 没有唯一历史决策。
+- 没有 README、workflow、脚本或代码引用。
+- 已有 owner 文档完整替代。
+- 删除原因可在变更记录中说明。
+
+可重建生成物、未引用且已完全替代的临时 handoff 可以直接清理。
+
+## 八、自动检查
+
+当前只读门禁：
 
 ```bash
-CONFIG_KEY=default_value
+node scripts/check-markdown-contracts.mjs
+node --test scripts/markdown-contracts.test.mjs
+git diff --check
 ```
 
-**说明**：配置项的用途和影响
+`markdown-quality.yml` 在 Markdown、检查脚本或 workflow 自身变化时运行，覆盖：
 
-**可选值**：
-- `value1` - 说明
-- `value2` - 说明
+- 相对链接、reference-style 链接和标题锚点。
+- 仓库外绝对路径和 symlink 逃逸。
+- fenced/inline code 排除、围栏平衡和单 H1。
+- lifecycle metadata、redirect 长度和目标链接。
+- archive 唯一索引、学习章节数量和派生统计。
 
-**注意事项**：特殊说明
-```
+自动检查不替代人工判断。内容是否准确仍需对照代码、配置和运行结果。
 
----
+## 九、提交前清单
 
-## Claude AI 协作规范
+- [ ] 每个主题只有一个当前 owner。
+- [ ] 动态测试结果只出现在 `TEST_STATUS.md`。
+- [ ] 示例命令、端口、版本、服务名和路径与代码一致。
+- [ ] active/reference/redirect/archive 状态正确。
+- [ ] 索引和旧路径引用已同步。
+- [ ] 没有提交生成物、临时接力或敏感信息。
+- [ ] Markdown 合同和 `git diff --check` 通过。
 
-### Claude 的职责
-
-1. **修改前检查**：
-   - 自动读取相关文档
-   - 提醒可能的冲突
-   - 建议最佳实践
-
-2. **修改后更新**：
-   - 自动更新相关文档
-   - 保持文档格式一致
-   - 更新"最后更新"时间
-
-3. **文档质量**：
-   - 确保文档准确性
-   - 保持文档完整性
-   - 及时同步变更
-
-### 开发者的职责
-
-1. **明确告知变更**：
-   - 清楚说明要做什么修改
-   - 提供必要的上下文
-   - 确认文档更新范围
-
-2. **审查文档更新**：
-   - 检查 Claude 更新的文档
-   - 确认内容准确
-   - 补充遗漏信息
-
-3. **提交前检查**：
-   - 确认所有相关文档已更新
-   - 运行测试验证
-   - 提交时注明文档变更
-
----
-
-## 文档审查流程
-
-### 定期审查（每月）
-
-1. 检查所有文档的"最后更新"时间
-2. 对比代码变更，确认文档同步
-3. 修正发现的不一致
-4. 更新过时的示例代码
-
-### PR 审查
-
-1. 检查 PR 是否包含文档更新
-2. 验证文档更新的准确性
-3. 确认文档格式符合规范
-4. 要求补充缺失的文档
-
----
-
-## 常见问题
-
-### Q: 小改动也要更新文档吗？
-
-A: 是的。即使是小改动，如果影响到：
-- API 接口
-- 配置项
-- 数据库结构
-- 部署流程
-
-都必须更新文档。
-
-### Q: 文档更新太麻烦怎么办？
-
-A:
-1. 使用 Claude AI 自动更新
-2. 遵循文档模板，减少思考时间
-3. 修改时立即更新，避免积累
-
-### Q: 如何确保文档不过时？
-
-A:
-1. 每次代码变更必须同步文档
-2. 定期审查文档（每月）
-3. PR 审查时检查文档
-4. 使用 Claude 记忆系统辅助
-
----
-
-## 工具支持
-
-### Claude AI 自动化
-
-Claude 会自动：
-- 读取相关文档
-- 提醒需要更新的文档
-- 生成文档更新内容
-- 保持格式一致
-
-### Git Hooks（可选）
-
-可以配置 Git Hooks 检查：
-- 代码变更是否包含文档更新
-- 文档格式是否正确
-- 文档路径是否有效
-
----
-
-## 附录：文档清单
-
-### 核心文档
-- `docs/README.md` - 总索引
-- `README.md` - 项目入口
-- `docs/DOCUMENTATION_OWNERSHIP.md` - 文档归属、生命周期和自动整理策略
-- `docs/development/API.md` - API 接口清单
-- `docs/docker/deploy/DEPLOY.md` - 部署指南
-- `docs/docker/deploy/CICD.md` - CI/CD 说明
-- `docs/docker/testing/README.md` - 测试与验证入口
-- `docs/docker/RELEASE_NOTES.md` - 版本记录
-- `docs/DATABASE_PERFORMANCE_GUIDE.md` - 数据库性能优化指南（整合版）
-
-### 功能模块文档
-- `docs/features/AI_AGENTS.md` - AI 智能体
-- `docs/features/CLASSROOM.md` - 课堂互动
-- `docs/features/INFORMATICS.md` - 信息学笔记
-- `docs/features/PYTHONLAB.md` - 调试环境
-- `docs/features/assessment/` - 自主检测系统（6 个文件）
-
-### 其他文档
-- `docs/development/CLAUDE_GUIDE.md` - Claude 使用指南
-- `docs/development/CLAUDE_MEMORY.md` - Claude 项目知识快照
-- `docs/docker/archive/plans/IMPROVEMENT_CHECKLIST.md` - 已归档改进检查清单
-- `docs/docker/frontend/ACCESSIBILITY_GUIDE.md` - 无障碍访问改进指南
-- `docs/docker/archive/deploy/database-migration-fix.md` - 数据库迁移
-- `docs/docker/archive/deploy/migration_analysis.md` - 迁移链分析
-- `docs/docker/plans/README.md` - 计划与分析索引
-- `docs/docker/testing/README.md` - 测试与验证索引
-- `docs/docker/frontend/README.md` - 前端 UI 文档索引
-- `backend/tests/README.md` - 后端测试说明
-- `backend/scripts/README.md` - 后端 smoke/soak 脚本说明
-- `scripts/README.md` - 根层脚本说明
-- `frontend/scripts/README.md` - 前端脚本说明
-- `scripts/xbk/README.md` - 脚本使用说明
+旧路径 `docs/DOCUMENTATION_OWNERSHIP.md` 仅作为兼容 redirect 保留。

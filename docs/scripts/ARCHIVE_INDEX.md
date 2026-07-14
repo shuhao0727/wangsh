@@ -1,13 +1,16 @@
 # 脚本归档索引
 
-> 更新时间：2026-05-02
-> 状态：归档索引（历史脚本清理记录）
+> 状态：reference
+> Owner：scripts
+> 最近复核：2026-07-13
 
 ---
 
 ## 概述
 
-本文档记录了项目中已删除的历史脚本，仅作为追溯参考。所有当前活跃脚本请参考对应的README文档。
+本文记录退出原活动路径的历史脚本。部分脚本已物理删除，部分仍保存在
+`backend/scripts/archive/` 等历史目录；表中的“原路径”表示当前不再使用的正式入口。
+所有当前活跃脚本请参考对应 README。
 
 ## 脚本清理原则
 
@@ -16,7 +19,7 @@
 3. **前端脚本**：只保留当前仍接入npm命令、CI或生产烟测链路的脚本
 4. **测试脚本**：pytest用例放 `backend/tests/`，专项验证脚本放对应脚本目录
 
-## 已删除的历史脚本记录
+## 已退出活动入口的脚本记录
 
 ### 1. 根层脚本（原 `scripts/archive/`）
 
@@ -52,7 +55,9 @@
 | `seed_experiments.py` | `backend/scripts/seed_experiments.py` | 历史实验数据种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
 | `seed_learning.py` | `backend/scripts/seed_learning.py` | 学习模块旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
 | `seed_learning_content.py` | `backend/scripts/seed_learning_content.py` | 学习内容旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_ml_book.py` | `backend/scripts/seed_ml_book.py` | 机器学习书籍旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `seed_ml_book.py` | `backend/scripts/seed_ml_book.py` | 机器学习书籍旧种子脚本 | 含硬编码数据库凭据且无正式入口，已物理删除；相关凭据需轮换 |
+| `run_analysis.py` | `backend/scripts/run_analysis.py` | 固定课堂分析写库脚本 | 硬编码日期、班级和账号，未接入正式入口，避免误写生产数据 |
+| `seed_conversation_mock_data.py` | `backend/scripts/seed_conversation_mock_data.py` | 固定课堂对话种子脚本 | 会删除并重建固定测试用户和对话，已由正式测试和 API 流程替代 |
 
 ### 3. 前端脚本（原 `frontend/scripts/archive/`）
 
@@ -63,6 +68,7 @@
 | `verify-pdf-fix.js` | `frontend/verify-pdf-fix.js` | PDF 修复手工验证脚本 | 未接入 npm、CI 或文档入口 |
 | `test-pdf.html` | `frontend/test-pdf.html` | PDF 手工测试页 | 未作为 Vite 构建入口或正式文档入口 |
 | `test-pdf-config.html` | `frontend/test-pdf-config.html` | PDF.js 配置手工验证页 | 未作为 Vite 构建入口或正式文档入口 |
+| `seed-learning.ts` | `frontend/scripts/seed-learning.ts` | 学习内容种子脚本 | 未接入 npm、CI、README 或生产 smoke，且依赖未声明的 `tsx` |
 
 ## 当前活跃脚本入口
 

@@ -9,9 +9,27 @@ from pathlib import Path
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 ROUNDS = int(os.getenv("ROUNDS", "50"))
 TIMEOUT_SECONDS = os.getenv("TIMEOUT_SECONDS", "20")
-USERNAME = os.getenv("USERNAME", "admin")
-PASSWORD = os.getenv("PASSWORD", "wangshuhao0727")
+# 统一使用 PYTHONLAB_SMOKE_USERNAME / PYTHONLAB_SMOKE_PASSWORD（见 README secrets 约定）。
+# USERNAME 保留公开默认值 admin；PASSWORD 严禁硬编码 fallback，缺失即参数错误退出。
+USERNAME = os.getenv("PYTHONLAB_SMOKE_USERNAME", "admin")
+PASSWORD = os.getenv("PYTHONLAB_SMOKE_PASSWORD", "")
 LOG_DIR = Path(os.getenv("LOG_DIR", "/tmp/phasec_soak"))
+REDACTOR_PATH = (
+    Path(__file__).resolve().parents[2] / "scripts" / "prod-smoke" / "redact.py"
+)
+PASSTHROUGH_ENV_KEYS = {
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "NO_PROXY",
+    "PATH",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+    "no_proxy",
+}
 
 TIME_RE = re.compile(r"^\[(\d\d):(\d\d):(\d\d)\] (.*)$")
 
@@ -34,12 +52,29 @@ def delta(start: str | None, end: str | None) -> int | None:
     return d
 
 
+def redact_for_log(output: str) -> str:
+    proc = subprocess.run(
+        [sys.executable, str(REDACTOR_PATH), "-"],
+        input=output,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if proc.returncode != 0:
+        return "[redaction failed; raw output withheld]\n"
+    return proc.stdout
+
+
 def run_once(idx: int) -> dict:
-    env = os.environ.copy()
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key in PASSTHROUGH_ENV_KEYS and value
+    }
     env["API_URL"] = API_URL
     env["TIMEOUT_SECONDS"] = TIMEOUT_SECONDS
-    env["USERNAME"] = USERNAME
-    env["PASSWORD"] = PASSWORD
+    env["PYTHONLAB_SMOKE_USERNAME"] = USERNAME
+    env["PYTHONLAB_SMOKE_PASSWORD"] = PASSWORD
     proc = subprocess.run(
         [sys.executable, "scripts/smoke_pythonlab_print_visibility_probe.py"],
         cwd=str(Path(__file__).resolve().parents[1]),
@@ -48,8 +83,10 @@ def run_once(idx: int) -> dict:
         text=True,
     )
     output = (proc.stdout or "") + ("\n" if proc.stdout and proc.stderr else "") + (proc.stderr or "")
+    redacted_output = redact_for_log(output)
     log_path = LOG_DIR / f"run_{idx}.log"
-    log_path.write_text(output, encoding="utf-8")
+    log_path.write_text(redacted_output, encoding="utf-8")
+    log_path.chmod(0o600)
 
     marks: dict[str, str] = {}
     for line in output.splitlines():
@@ -98,7 +135,8 @@ def main() -> int:
     if ROUNDS <= 0:
         log("ROUNDS must be positive")
         return 2
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    LOG_DIR.chmod(0o700)
     records = [run_once(i) for i in range(1, ROUNDS + 1)]
     passed = [r for r in records if r["passed"]]
     failed = [r for r in records if not r["passed"]]
@@ -118,10 +156,12 @@ def main() -> int:
         ),
         "log_dir": str(LOG_DIR),
     }
-    (LOG_DIR / "summary.json").write_text(
+    summary_path = LOG_DIR / "summary.json"
+    summary_path.write_text(
         json.dumps({"summary": summary, "records": records}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    summary_path.chmod(0o600)
     log("SUMMARY " + json.dumps(summary, ensure_ascii=False))
     if failed:
         log("FAILED_ROUNDS " + ",".join(str(r["round"]) for r in failed))

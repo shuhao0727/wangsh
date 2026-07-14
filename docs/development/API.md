@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-05-03
+> 最后更新：2026-07-11
 
 ## 一、健康检查
 
@@ -17,15 +17,17 @@
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | POST | `/auth/login` | 用户登录（Form: username, password） | 否 |
-| POST | `/auth/register` | 用户注册 | 否 |
 | GET | `/auth/me` | 获取当前用户信息 | 是 |
-| POST | `/auth/logout` | 用户登出 | 是 |
-| POST | `/auth/refresh` | 刷新访问令牌 | 是 |
-| GET | `/auth/verify` | 验证令牌有效性 | 是 |
+| POST | `/auth/logout` | 撤销刷新令牌、轮换会话并清除 Cookie | 登录令牌可选 |
+| POST | `/auth/refresh` | 使用 refresh token 原子轮换访问令牌 | Refresh token |
 | GET | `/auth/health` | 认证服务健康检查 | 否 |
 
-补充说明（2026-03-24）：
-- `/auth/refresh` 采用 refresh token 轮换策略：同一个 refresh token 成功换发一次后会被撤销，再次使用应返回 `401`。
+`/auth/logout` 始终清除当前浏览器的 access/refresh Cookie。若 Redis 会话轮换暂时失败，已持久化的 refresh token 仍会先撤销；若数据库本身不可用，服务端撤销会记录告警并尽力回滚，但客户端登出仍返回成功，不会因基础设施故障保留浏览器 Cookie。
+
+补充说明（2026-07-11）：
+- `/auth/refresh` 使用数据库行锁，在单个事务内撤销旧 token 并创建新 token；同一个 refresh token 并发或重复使用时只允许一次成功。
+- refresh token 关联用户已停用或软删除时返回 `401`。
+- 服务端 session nonce 缺失时，旧 access token 不会根据自身 nonce 重建会话；合法 refresh token 流程可以显式创建新的 session nonce。
 - 前端 API 客户端在出现 `401 -> refresh 失败` 时，会触发 `ws:auth-expired` 全局事件，统一将页面登录态回收，避免“前端仍显示已登录但接口持续 401”。
 - 若会话因为“同一账号在其他地方重新登录”而失效，后端会返回“账号已在其他地方登录，请重新登录”，前端会强提示当前设备已下线。
 - 成功登录同一账号会重新旋转 session nonce，因此旧设备即使仍持有未过期 access token，也会在下一次访问受保护接口（包括 `/auth/me`）时收到 `401`。
@@ -55,12 +57,19 @@
 |------|------|------|------|
 | GET | `/users/` | 获取用户列表 | 管理员 |
 | GET | `/users/{user_id}` | 获取用户详情 | 管理员 |
-| POST | `/users/` | 创建用户 | 管理员 |
+| POST | `/users/` | 创建用户；普通 admin 仅可创建 student/teacher | 管理员 |
 | PUT | `/users/{user_id}` | 更新用户 | 管理员 |
-| DELETE | `/users/{user_id}` | 删除用户 | 管理员 |
-| POST | `/users/batch-delete` | 批量删除用户 | 管理员 |
+| DELETE | `/users/{user_id}` | 删除用户；普通 admin 无权删除高权限用户 | 管理员 |
+| POST | `/users/batch-delete` | 批量删除，请求体为 `{ "user_ids": [1, 2] }`；目标缺失或普通 admin 遇到高权限账号时整批拒绝 | 管理员 |
 | GET | `/users/import/template` | 获取导入模板（Excel） | 管理员 |
-| POST | `/users/import` | 导入用户（Excel） | 管理员 |
+| POST | `/users/import` | 导入用户；普通 admin 仅可新增/更新 student、teacher；高权限行在 `UserImportResult.errors` 中逐行失败 | 管理员 |
+
+用户管理权限说明：
+- 普通 `admin` 只能管理和导入 `student`、`teacher`，不能创建、修改或删除 `admin`、`super_admin`。
+- 导入文件中的高权限角色行不会自动降级；该行单独失败并继续处理后续行，失败明细通过 `UserImportResult.errors` 返回。
+- 批量删除在目标缺失或包含普通 `admin` 无权删除的高权限账号时整批拒绝，不执行部分删除。
+- 批量删除请求体与前端统一为对象结构 `{ "user_ids": number[] }`，不接受裸数组。
+- 导入模板本轮仍为统一模板，暂不按当前角色动态变化。
 
 ## 五、文章系统（/articles）
 
@@ -156,6 +165,10 @@
 - 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
 - 热点问题与学生问题链已拆分为两个深度分析流。热点结果使用 `analysis_version=hot_v2`，包含 `word_cloud`、`themes`、`timeline_buckets`、`teacher_questions`、`course_hotspot_sequence` 和 `evidence_index`。学生问题链结果使用 `analysis_version=chain_v2`，包含 `teacher_mainline`、`ai_main_question_chain`、`student_question_chains`、`beam_nodes`、`beam_edges`、`lanes` 和 `evidence_index`。
 - `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
+- legacy `GET/DELETE /ai-agents/task-analysis/{analysis_id}` 只接受
+  `task_analyses.id`，不会再用裸整数 ID 跨热点/问题链表猜测记录。热点和学生问题链
+  必须使用各自 typed 详情/删除端点；typed 删除只在完整快照唯一匹配时清理 legacy
+  双写副本，歧义记录会安全保留。
 - 小组讨论班级归属策略：
   - 学生调用 `/ai-agents/group-discussion/join` 时，班级以登录态 `class_name` 为准；跨班级请求会被拒绝（`403`）。
   - 管理员新建/加入未显式传 `class_name` 时，后端优先使用管理员账号自身 `class_name`；若两者都为空则返回 `422`。前端创建表单已改为班级必填。
@@ -502,42 +515,68 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| POST | `/classroom/admin/` | 创建活动 | 管理员 |
-| PUT | `/classroom/admin/{activity_id}` | 更新活动 | 管理员 |
-| DELETE | `/classroom/admin/{activity_id}` | 删除活动 | 管理员 |
-| POST | `/classroom/admin/{activity_id}/duplicate` | 复制活动 | 管理员 |
-| POST | `/classroom/admin/{activity_id}/restart` | 重启活动 | 管理员 |
-| POST | `/classroom/admin/bulk-delete` | 批量删除 | 管理员 |
-| GET | `/classroom/admin/` | 活动列表 | 管理员 |
-| GET | `/classroom/admin/{activity_id}` | 活动详情 | 管理员 |
-| POST | `/classroom/admin/{activity_id}/start` | 开始活动 | 管理员 |
-| POST | `/classroom/admin/{activity_id}/end` | 结束活动 | 管理员 |
-| GET | `/classroom/admin/{activity_id}/statistics` | 活动统计 | 管理员 |
-| GET | `/classroom/admin/stream` | SSE 活动流 | 管理员 |
+| POST | `/classroom/admin/` | 创建活动 | `require_staff` |
+| PUT | `/classroom/admin/{activity_id}` | 更新活动，仅 `draft` | `require_staff` + 教师所有权 |
+| DELETE | `/classroom/admin/{activity_id}` | 删除活动，仅 `draft` | `require_staff` + 教师所有权 |
+| POST | `/classroom/admin/{activity_id}/duplicate` | 复制活动 | `require_staff` + 教师所有权 |
+| POST | `/classroom/admin/{activity_id}/restart` | 重启活动 | `require_staff` + 教师所有权 |
+| POST | `/classroom/admin/bulk-delete` | 批量删除，仅删除 `draft` | `require_staff` + 教师所有权 |
+| GET | `/classroom/admin/` | 活动列表 | `require_staff`，教师仅本人 |
+| GET | `/classroom/admin/{activity_id}` | 活动详情 | `require_staff` + 教师所有权 |
+| POST | `/classroom/admin/{activity_id}/start` | 开始活动 | `require_staff` + 教师所有权 |
+| POST | `/classroom/admin/{activity_id}/end` | 结束活动 | `require_staff` + 教师所有权 |
+| GET | `/classroom/admin/{activity_id}/statistics` | 活动统计 | `require_staff` + 教师所有权 |
+| GET | `/classroom/admin/stream` | SSE 活动流 | `require_staff` |
 
 ### 学生端（/classroom）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/classroom/active` | 当前活动 | 是 |
-| GET | `/classroom/stream` | SSE 活动流 | 是 |
-| GET | `/classroom/{activity_id}` | 活动详情 | 是 |
-| POST | `/classroom/{activity_id}/respond` | 提交响应 | 是 |
-| GET | `/classroom/{activity_id}/result` | 查看活动结果 | 是 |
+| GET | `/classroom/active` | 当前活动 | `require_student` + 班级匹配 |
+| GET | `/classroom/stream` | SSE 活动流 | `require_student` + 非空班级 |
+| GET | `/classroom/{activity_id}` | 活动详情 | `require_student` + 班级匹配 |
+| POST | `/classroom/{activity_id}/respond` | 提交响应 | `require_student` + 班级匹配 |
+| GET | `/classroom/{activity_id}/result` | 查看活动结果 | `require_student` + 班级匹配 |
 
 ### 课堂计划（/classroom/plans）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| POST | `/classroom/plans/admin` | 创建计划 | 管理员 |
-| PUT | `/classroom/plans/admin/{plan_id}` | 更新计划 | 管理员 |
-| DELETE | `/classroom/plans/admin/{plan_id}` | 删除计划 | 管理员 |
-| GET | `/classroom/plans/admin` | 计划列表 | 管理员 |
-| GET | `/classroom/plans/admin/{plan_id}` | 计划详情 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/start` | 启动计划 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/reset` | 重置计划 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/next` | 下一项 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/end` | 结束计划 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/start` | 启动计划项 | 管理员 |
-| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/end` | 结束计划项 | 管理员 |
-| GET | `/classroom/plans/active-plan` | 当前生效计划 | 是 |
+| POST | `/classroom/plans/admin` | 创建计划 | `require_staff` + 活动所有权 |
+| PUT | `/classroom/plans/admin/{plan_id}` | 更新计划 | `require_staff` + 计划所有权 |
+| DELETE | `/classroom/plans/admin/{plan_id}` | 删除计划 | `require_staff` + 计划所有权 |
+| GET | `/classroom/plans/admin` | 计划列表 | `require_staff`，教师仅本人 |
+| GET | `/classroom/plans/admin/{plan_id}` | 计划详情 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/start` | 启动计划 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/reset` | 重置计划 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/next` | 下一项 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/end` | 结束计划 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/start` | 启动计划项 | `require_staff` + 计划所有权 |
+| POST | `/classroom/plans/admin/{plan_id}/items/{item_id}/end` | 结束计划项 | `require_staff` + 计划所有权 |
+| GET | `/classroom/plans/active-plan` | 当前生效计划 | `require_student` + 班级匹配 |
+
+课堂权限与数据边界：
+- 学生端全部使用 `require_student`，活动详情、答题、结果、活动列表、SSE 和 active plan 都要求学生与活动具有完全匹配的非空 `class_name`。
+- active plan 仅返回所有活动均属于当前学生班级的计划，并始终移除 `correct_answer`。
+- 教师只能查看和管理自己创建的活动、计划及计划内活动；`admin`、`super_admin` 可全局管理。
+- 教师 SSE 订阅 `admin_{user_id}`，`admin` / `super_admin` 订阅 `admin_global`；静态 `/stream` 路由优先于动态活动 ID 路由。
+- 计划推进使用单一事务，活动转换失败会回滚计划状态；SSE 与自动分析在提交后触发。
+- 并发重复答题触发唯一约束时会回滚，并稳定返回“已提交过答案”，不会留下失败事务。
+- 同一教师的活动启动/重启按教师行锁串行化，并自动结束其他 active 活动。
+- 填空活动结束后的 AI 分析投递到 Celery `celery` 队列；终态任务幂等，异常重试可接管遗留的 `running` 状态。
+
+## 十六、IT 游戏资源库（/it/games）
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/it/games` | 上架游戏列表，`page >= 1`、`size <= 100` | 否 |
+| GET | `/it/games/categories` | 上架游戏分类 | 否 |
+| GET | `/it/games/{game_id}` | 上架游戏详情 | 否 |
+| GET | `/it/games/{game_id}/download` | 下载文件并记录日志 | 是 |
+| GET | `/admin/it/games` | 全部游戏列表，`size <= 100` | 管理员 |
+| POST | `/admin/it/games` | 流式上传游戏安装包 | 管理员 |
+| PUT | `/admin/it/games/{game_id}` | 编辑元数据与上下架状态 | 管理员 |
+| DELETE | `/admin/it/games/{game_id}` | 删除数据库记录和物理文件 | 管理员 |
+| GET | `/admin/it/games/{game_id}/logs` | 下载日志，`size <= 200` | 管理员 |
+
+上传使用 1 MiB 分块、临时文件、增量 SHA256 和同目录原子重命名；默认上限由 `IT_GAME_MAX_UPLOAD_BYTES=524288000` 控制。数据库提交失败会回滚并删除最终文件，删除提交失败会恢复隔离文件。

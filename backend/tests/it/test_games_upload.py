@@ -102,6 +102,26 @@ def _create(tmp_path, filename: str, content: bytes, *, db=None, title="Game"):
     return game, session, upload
 
 
+def test_create_game_facade_persists_metadata_and_commits(tmp_path):
+    content = _zip_bytes("game.txt")
+
+    game, session, _upload = _create(
+        tmp_path,
+        "lesson.zip",
+        content,
+        title="Lesson Game",
+    )
+
+    assert session.added == [game]
+    assert session.commit_calls == 1
+    assert session.rollback_calls == 0
+    assert game.title == "Lesson Game"
+    assert game.filename == "lesson.zip"
+    assert game.stored_path == str(tmp_path / "7_lesson_game.zip")
+    assert game.file_size == len(content)
+    assert game.file_sha256 == hashlib.sha256(content).hexdigest()
+
+
 def test_game_upload_limit_defaults_to_500mb_and_can_be_lowered(monkeypatch, tmp_path):
     configured = Settings(
         DEBUG=True,

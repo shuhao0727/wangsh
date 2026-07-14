@@ -1,7 +1,7 @@
 # 文件清单 + 注意事项
 
 > 隶属于 [ASSESSMENT_DESIGN.md](./ASSESSMENT_DESIGN.md)
-> 最后更新：2026-04-11
+> 最后更新：2026-07-07
 
 ---
 
@@ -169,4 +169,5 @@ assessment 模块已进入持续迭代阶段，文件数量会随版本变化。
 4. **前端组件**：管理页面用 AdminPage + AdminTablePanel，浮动窗口复用 GroupDiscussionPanel 的 Portal + 拖拽模式
 5. **API 服务层**：返回 `BaseResponse<T>`，错误用 `asApiError()` + `toDetailMessage()` 处理
 6. **AI 调用**：通过现有的智能体对话接口调用 LLM，不直接调用外部 API
-7. **中文 locale**：Ant Design 已配置 zhCN，分页用 `共 X 条` 格式
+7. **中文分页**：复用项目 `DataTablePagination`，保持 `共 X 条`、每页条数和上一页/
+   下一页中文文案，不引入 Ant Design locale 依赖

@@ -4,81 +4,16 @@ import pty
 import shutil
 import json
 import time
-import uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.config import settings
 from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
-from app.utils.cache import cache
+from app.core.sandbox.docker_runtime import (
+    RedisDistributedLock,
+    run_async as _run_async,
+)
 
 from loguru import logger
-
-class RedisDistributedLock:
-    """Distributed lock implementation using Redis."""
-    def __init__(self, lock_name: str, timeout: int = 30, retry_interval: float = 0.1):
-        self.lock_key = f"lock:docker_pool:{lock_name}"
-        self.timeout = timeout  # Lock expiry in seconds
-        self.retry_interval = retry_interval
-        self.identifier = str(uuid.uuid4())
-        self._locked = False
-
-    async def __aenter__(self):
-        client = await cache.get_client()
-        end_time = time.time() + self.timeout
-        while time.time() < end_time:
-            # NX=True: set only if not exists
-            # PX: set expiry in milliseconds
-            if await client.set(self.lock_key, self.identifier, nx=True, px=self.timeout * 1000):
-                self._locked = True
-                return self
-            await asyncio.sleep(self.retry_interval)
-        
-        raise TimeoutError(f"Could not acquire lock for {self.lock_key}")
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._locked:
-            try:
-                client = await cache.get_client()
-                # Lua script for atomic release: delete only if value matches identifier
-                script = """
-                if redis.call("get", KEYS[1]) == ARGV[1] then
-                    return redis.call("del", KEYS[1])
-                else
-                    return 0
-                end
-                """
-                await client.eval(script, 1, self.lock_key, self.identifier)  # type: ignore[misc]
-            except Exception as e:
-                logger.error(f"Error releasing lock {self.lock_key}: {e}")
-            finally:
-                self._locked = False
-
-async def _run_async(cmd: List[str], timeout_s: int = 30) -> Tuple[int, str, str]:
-    """
-    Asynchronously run a subprocess command.
-    Returns (returncode, stdout, stderr)
-    """
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_s)
-            return (
-                process.returncode or 0,
-                stdout.decode().strip() if stdout else "",
-                stderr.decode().strip() if stderr else ""
-            )
-        except asyncio.TimeoutError:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-            raise RuntimeError(f"Command timed out after {timeout_s}s: {' '.join(cmd)}")
-    except Exception as e:
-        raise RuntimeError(f"Failed to run command {' '.join(cmd)}: {e}")
 
 def _workspace_root() -> Path:
     p = Path(str(getattr(settings, "PYTHONLAB_WORKSPACE_ROOT", "/var/lib/pythonlab/workspaces") or "/var/lib/pythonlab/workspaces"))
@@ -100,6 +35,10 @@ class DockerProvider(SandboxProvider):
     def __init__(self):
         self.runtime = getattr(settings, "PYTHONLAB_DOCKER_RUNTIME", "runc")
         self.image = getattr(settings, "PYTHONLAB_SANDBOX_IMAGE", "pythonlab-sandbox:py311")
+        self.container_namespace = (
+            str(getattr(settings, "PYTHONLAB_CONTAINER_NAMESPACE", "pythonlab") or "pythonlab").strip()
+            or "pythonlab"
+        )
         self.debugpy_port = int(getattr(settings, "PYTHONLAB_DEBUGPY_PORT", 5678) or 5678)
         self.readiness_timeout = float(os.getenv("PYTHONLAB_READINESS_TIMEOUT_SECONDS", None) or getattr(settings, "PYTHONLAB_READINESS_TIMEOUT_SECONDS", 60) or 60)
         self._available_runtimes = None
@@ -283,8 +222,8 @@ class DockerProvider(SandboxProvider):
     def _container_name(self, meta: Dict[str, Any]) -> str:
         user_id = meta.get("owner_user_id")
         if user_id:
-            return f"pythonlab_u{user_id}"
-        return f"pythonlab_{meta.get('session_id')}"
+            return f"{self.container_namespace}_u{user_id}"
+        return f"{self.container_namespace}_{meta.get('session_id')}"
 
     def _ws_path_for_session(self, meta: Dict[str, Any]) -> Path:
         user_id = meta.get("owner_user_id")
@@ -512,14 +451,24 @@ class DockerProvider(SandboxProvider):
 
     async def list_active_sessions(self) -> List[str]:
         try:
+            prefix = f"{self.container_namespace}_"
             # Returns list of user_ids (e.g. "u123") derived from container names
-            rc, out, _ = await _run_async(["docker", "ps", "-a", "--filter", "name=pythonlab_", "--format", "{{.Names}}"], timeout_s=20)
+            rc, out, _ = await _run_async(
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name=^/{prefix}",
+                    "--format",
+                    "{{.Names}}",
+                ],
+                timeout_s=20,
+            )
             if rc != 0:
                 return []
             names = [x.strip() for x in (out or "").splitlines() if x.strip()]
-            # pythonlab_u123 -> u123
-            # pythonlab_sessionuuid -> sessionuuid
-            return [name[len("pythonlab_") :] for name in names if name.startswith("pythonlab_")]
+            return [name[len(prefix) :] for name in names if name.startswith(prefix)]
         except Exception:
             logger.warning("Docker: 列出活动 PythonLab 会话失败")
             return []

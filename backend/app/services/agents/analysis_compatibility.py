@@ -28,20 +28,17 @@ def _normalized_snapshot(row: Any, missing: object) -> tuple[Any, Any, Any] | No
 
 
 def _compatible_targets(row: Any) -> tuple[type, ...]:
-    if isinstance(row, TaskAnalysisModel):
-        # Legacy rows do not store the analysis type. Student-chain analyses
-        # may also contain a task sheet, so both typed tables must be checked.
-        return HotQuestionAnalysis, StudentChainAnalysis
     if isinstance(row, (HotQuestionAnalysis, StudentChainAnalysis)):
         return (TaskAnalysisModel,)
     return ()
 
 
 async def delete_compatible_sibling(db: AsyncSession, kept_row: Any) -> int:
-    """Delete one uniquely identifiable double-write sibling.
+    """Delete one uniquely identifiable legacy sibling of a typed row.
 
     Ambiguous or incomplete snapshots are left untouched to avoid deleting a
-    different analysis run that happens to share the legacy business fields.
+    different analysis run. Legacy rows are never used to authorize deletion
+    from a typed table because the three tables have independent integer IDs.
     """
     targets = _compatible_targets(kept_row)
     if not targets:

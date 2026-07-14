@@ -5,13 +5,14 @@
 ## 快速导航
 
 - [../README.md](../README.md) - 项目入口和本地开发说明
-- [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) - 文档维护规范和落位规则
-- [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md) - 文档归属、生命周期和自动整理策略
+- [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) - 文档维护、owner、生命周期和自动整理规则
+- [ENGINEERING_GOVERNANCE.md](ENGINEERING_GOVERNANCE.md) - 文件规模、模块边界、质量门禁、迁移和发布条例
 - [docker/README.md](docker/README.md) - Docker 文档中心（部署、测试、计划、前端专项、归档）
 
 ## 核心文档
 
-- [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md) - 文档 owner、生命周期状态、清理和归档策略
+- [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) - 文档治理唯一权威入口
+- [ENGINEERING_GOVERNANCE.md](ENGINEERING_GOVERNANCE.md) - 工程治理和稳定发布规则
 - [DATABASE_PERFORMANCE_GUIDE.md](DATABASE_PERFORMANCE_GUIDE.md) - 数据库性能分析与优化指南（整合版）
 - [docker/RELEASE_NOTES.md](docker/RELEASE_NOTES.md) - 发布与运维记录
 - [development/API.md](development/API.md) - API 接口文档
@@ -27,17 +28,17 @@
 - [docker/README.md#前端](docker/README.md#前端) - 前端专项文档入口
 - [docker/frontend/ACCESSIBILITY_GUIDE.md](docker/frontend/ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
 - [docker/README.md#计划文档](docker/README.md#计划文档) - 当前计划与治理入口
-- [ARCHIVE_SUMMARY.md](ARCHIVE_SUMMARY.md) - 历史文档归档摘要（2026年3-5月）
+- [docker/archive/README.md](docker/archive/README.md) - 历史文档归档索引
 
 ### 当前计划与治理 (`docker/plans/`)
 
-- [docker/plans/pythonlab-capability-inventory.md](docker/plans/pythonlab-capability-inventory.md) - PythonLab 能力盘点与删除前核对清单
-- [docker/plans/sse-redis-pubsub-migration.md](docker/plans/sse-redis-pubsub-migration.md) - SSE pub/sub 迁移方案
-- [docker/plans/ui-single-page-governance.md](docker/plans/ui-single-page-governance.md) - 单页治理基线
-- [docker/plans/2026-05-03-learning-platform-improvement.md](docker/plans/2026-05-03-learning-platform-improvement.md) - ML/AI/Agents 学习平台改进实施计划
-- [docker/plans/2026-05-03-it-technology-markdown-book-system.md](docker/plans/2026-05-03-it-technology-markdown-book-system.md) - IT Technology Markdown Book 系统实施计划
+- [docker/plans/README.md](docker/plans/README.md) - 当前计划、reference、redirect 的完整索引
+- [docker/plans/2026-07-11-project-health-and-improvement-report.md](docker/plans/2026-07-11-project-health-and-improvement-report.md) - 2026-07-13 项目健康快照与风险判断
+- [docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
+- [docker/plans/2026-07-12-project-consolidation-and-release-plan.md](docker/plans/2026-07-12-project-consolidation-and-release-plan.md) - 当前整理、提交和发布收口计划
+- [docker/plans/2026-07-11-change-batch-manifest.md](docker/plans/2026-07-11-change-batch-manifest.md) - 当前工作区变更批次和提交边界
 
-> 已归档计划精简摘要详见 [ARCHIVE_SUMMARY.md](ARCHIVE_SUMMARY.md)
+> 已归档计划详见 [docker/archive/README.md](docker/archive/README.md)
 
 ## 功能模块 (`features/`)
 
@@ -46,6 +47,12 @@
 - [features/INFORMATICS.md](features/INFORMATICS.md) - 信息学笔记系统（Typst 编辑、PDF 渲染）
 - [features/PYTHONLAB.md](features/PYTHONLAB.md) - Python 在线实验室（Docker 沙箱、DAP 调试）
 - [features/AUTO_REFRESH.md](features/AUTO_REFRESH.md) - SSE 实时推送机制
+- [features/IT_GAMES.md](features/IT_GAMES.md) - IT 游戏资源库（上传/下载/安全校验）
+- [features/LEARNING.md](features/LEARNING.md) - 学习平台（章节/内容/思维导图/进度）
+- [features/ML_BOOK.md](features/ML_BOOK.md) - ML/AI/Agents 学习书籍系统
+- [features/DIANMING.md](features/DIANMING.md) - XXJS 点名系统
+- [features/XBK.md](features/XBK.md) - 校本课选课系统
+- [features/ARTICLES.md](features/ARTICLES.md) - 文章管理系统
 
 ### 评估系统 (`features/assessment/`)
 
@@ -79,4 +86,4 @@
 - 稳定文档放 `docs/`
 - 部署运维、测试治理、规划、迁移、审计、治理台账和前端专项文档统一放 `docs/docker/`
 - 模块专用说明优先就近放在模块目录，例如 `backend/tests/README.md`
-- 文档归属、生命周期、redirect/archive/delete 条件遵守 [DOCUMENTATION_OWNERSHIP.md](DOCUMENTATION_OWNERSHIP.md)
+- 文档归属、生命周期、redirect/archive/delete 条件遵守 [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md)
