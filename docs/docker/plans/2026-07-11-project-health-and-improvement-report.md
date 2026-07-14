@@ -24,11 +24,12 @@ Assessment、内容学习、信息学、IT 游戏、XBK、PythonLab、Docker 部
 | 前端架构 | 良好 | React 19、TypeScript、Query、懒加载和设计 token 已形成约束 |
 | 自动化测试 | 良好 | 单元、组件、脚本、迁移、smoke、生产模拟均有入口 |
 | 安全与权限 | 良好 | 角色层级、用户管理保护、会话轮换和日志脱敏已加强 |
-| 发布成熟度 | 待收口 | 本地门禁较完整，真实 PR runner、registry 和生产恢复证据尚未闭环 |
+| 发布成熟度 | 待远端闭环 | 最终本地门禁已通过，远端 runner、registry 和生产恢复证据尚未闭环 |
 | 维护成本 | 中等 | 仍有超长 Python、lint warning、bundle 和运行隔离债务 |
 
-结论：项目已经形成可审查本地提交，可以进入最终 HEAD 门禁和远端 PR 验证；在
-GitHub Actions、远端 release-set、数据库备份恢复和回滚演练完成前，不应宣布正式发布完成。
+结论：项目已经形成可审查本地提交，最终 HEAD 门禁和隔离生产模拟已通过，可以合并
+到 `main` 并进入远端验证；在 GitHub Actions、远端 release-set、数据库备份恢复和
+回滚演练完成前，不应宣布正式发布完成。
 
 ## 已完成改进
 
@@ -70,7 +71,7 @@ GitHub Actions、远端 release-set、数据库备份恢复和回滚演练完成
 
 ### 发布
 
-- 原 Commit 6-8 范围已由 `79a0c95` 合并收口，最终分支 HEAD 门禁尚未重跑。
+- 原 Commit 6-8 范围已由 `79a0c95` 合并收口，最终分支 HEAD 门禁和生产模拟已通过。
 - 新增/修改 workflow 尚未经过真实 GitHub Actions PR runner。
 - Docker Hub 六镜像 digest 和 release-set 尚未完成远端验收。
 - 正式生产数据库升级、备份恢复和镜像/数据库回滚尚未演练。
@@ -99,7 +100,7 @@ GitHub Actions、远端 release-set、数据库备份恢复和回滚演练完成
 
 | 优先级 | 工作 |
 |---|---|
-| P0 | 完成最终 HEAD 门禁、凭据轮换和远端 PR 验证 |
+| P0 | 合并并推送 `main`、完成凭据轮换和远端 workflow 验证 |
 | P1 | 真实 PR runner、远端 release-set、数据库备份恢复和回滚 |
 | P1 | 高风险 Python owner 拆分、lint/bundle ratchet、静态资产来源 |
 | P2 | one-shot migrator、角色/无障碍矩阵、供应链证据 |

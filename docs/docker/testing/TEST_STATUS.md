@@ -8,13 +8,13 @@
 
 ## 一、发布基线
 
-下表记录截至 2026-07-14 的当前分支阶段验证。Commit 1-6 已提交，工作区干净；
-仍须从最终分支 HEAD 重跑完整门禁，不得把此前 dirty worktree 定向测试外推为远端发布结果。
+下表记录截至 2026-07-14 的最终分支 HEAD 验证。代码、治理和状态文档已形成提交，
+工作区干净；本页只说明本地结果，不把它外推为 GitHub runner、registry 或正式生产结果。
 
 | 类别 | 当前结果 | 覆盖内容 | 状态 |
 |---|---|---|---|
-| 后端全量 | `661 passed, 3 skipped, 9 warnings` | API、服务、迁移、脚本与核心业务回归 | 当前工作区通过 |
-| 前端全量 | `67 files / 338 passed` | 单元、组件、权限与页面回归 | 当前工作区通过 |
+| 后端全量 | `661 passed, 3 skipped, 9 warnings` | API、服务、迁移、脚本与核心业务回归 | 最终分支通过 |
+| 前端全量 | `67 files / 338 passed` | 单元、组件、权限与页面回归 | 最终分支通过 |
 | TypeScript | `tsc --noEmit` | 类型合同 | 已通过 |
 | 前端 lint | `0 errors / 521 warnings` | ESLint 错误门禁与历史 warning 基线 | 已通过错误门禁 |
 | 前端脚本 | `19 passed` | bundle、Pyodide、token、生产 UI smoke 辅助逻辑 | 已通过 |
@@ -23,7 +23,7 @@
 | Alembic | 单一 head | 四条新增 migration、bootstrap、空库升级 | 已通过 |
 | Compose | 开发/生产配置解析通过 | 服务、环境变量、镜像与网络合同 | 已通过 |
 | 前端生产构建 | bundle `WARN` | Entry `0.96 MB`、Deferred `11.82 MB`、Total `12.78 MB` | 构建通过，预算 warning 非阻断 |
-| Markdown 链接 | `120 files / 263 links / 0 missing` | 当前文档、学习章节与归档相对链接 | 已通过 |
+| Markdown 链接 | `120 files / 264 links / 0 missing` | 当前文档、学习章节与归档相对链接 | 已通过 |
 | Markdown contracts | `10 passed` | 链接/锚点、仓库边界、生命周期、归档、章节数量和 workflow 触发 | 已通过 |
 | 生产模拟 | `14/14 PASS` | API、数据库、Redis、Celery、PythonLab 与日志 | 已通过 |
 | UI smoke | `13/13 PASS` | 登录、后台、关键页面与 PythonLab UI | 已通过 |
@@ -118,7 +118,41 @@ lint 为 `0 errors / 521 warnings`，bundle 总量保持非阻断 warning。
 硬编码密码候选，只接受显式注入凭据；由于历史源码中曾存在有效候选，对应管理员凭据
 必须在发布前轮换。
 
-## 三、功能测试矩阵
+### Commit 7：发布治理文档校正
+
+提交：`2313e6f Update release governance docs for consolidated commit history`
+
+该提交把原八提交计划校准为真实的综合收口历史，删除“Commit 6-8 仍在工作区”的陈旧
+描述，并保持 `TEST_STATUS.md` 为唯一动态测试状态入口。
+
+## 三、2026-07-14 最终 HEAD 验证
+
+| 检查 | 最终结果 |
+|---|---|
+| 后端全量 | `661 passed, 3 skipped, 9 warnings` |
+| 前端全量 | `67 files / 338 passed` |
+| 前端脚本 | `19 passed` |
+| TypeScript | 通过 |
+| ESLint | `0 errors / 521 warnings` |
+| 生产构建与 bundle | 构建通过；总量 `12.78 MB`，保持非阻断 warning |
+| Workflow contracts | `28 passed` |
+| Markdown contracts | `10 passed` |
+| Markdown 链接 | `120 files / 264 links / 0 missing` |
+| Python governance | `0 errors / 4 warnings` |
+| Compose | 开发、生产配置解析通过 |
+| Alembic | 单一 head `20260711_0002_restore_legacy_baseline_indexes` |
+| 版本 | `1.6.0` 一致 |
+| workflow YAML | 8 个文件解析通过 |
+| 隔离生产模拟 | `14/14 PASS` |
+| UI smoke | `13/13 PASS` |
+| OpenAPI sweep | `89/89 OK` |
+| 模拟清理 | `wangsh_sim` 容器、网络、卷和 workspace 均清空 |
+
+第一次生产模拟在最后 UI smoke 创建页面时遇到 Docker Desktop/Chromium 运行时整体中断；
+恢复环境后，UI smoke 单独复测 `13/13 PASS`。随后从零重跑完整模拟得到单次
+`14/14 PASS` 并自动清理，因此最终结论以第二次完整模拟为准。
+
+## 四、功能测试矩阵
 
 | 域 | 主要验证内容 |
 |---|---|
@@ -130,7 +164,7 @@ lint 为 `0 errors / 521 warnings`，bundle 总量保持非阻断 warning。
 | PythonLab | Run、Debug、DAP、Continue、owner concurrency、可见性 |
 | 发布 | Compose、workflow contract、prod-smoke、日志脱敏、release-set |
 
-## 四、证据与保留策略
+## 五、证据与保留策略
 
 发布相关证据保留在：
 
@@ -148,14 +182,13 @@ test-results/prod-smoke/service-logs/
 `__pycache__/`、临时浏览器 `page-*` / `console-*` 文件，以及系统临时目录中的
 PythonLab 验证快照。证据不得包含有效 token、Cookie、密码或其他密钥。
 
-## 五、待执行验证
+## 六、待执行验证
 
-- 从最终分支 HEAD 重跑后端、前端、脚本、Compose 和治理全量门禁。
-- 使用 `SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true` 重跑隔离生产模拟。
-- 在真实 GitHub Actions PR runner 上验证通用 CI 和 PythonLab runtime。
+- 合并到本地 `main` 后重跑最小可靠门禁，并推送 `origin/main`。
+- 在真实 GitHub Actions runner 上验证通用 CI 和相关 workflow。
 - 验证 Docker Hub 六镜像 manifest、`release-set.txt`、数据库升级、备份恢复和回滚。
 
-## 六、重跑入口
+## 七、重跑入口
 
 ```bash
 cd backend
