@@ -1,8 +1,8 @@
 # WangSh 当前工作区变更批次清单
 
-> 状态：active
+> 状态：reference
 > Owner：project-governance
-> 最近复核：2026-07-11
+> 最近复核：2026-07-14
 > 基线来源：`git status --short --branch`、`git diff --stat`、
 > `git diff --name-status`、`git ls-files --others --exclude-standard`
 > 归档条件：当前 dirty worktree 已按本清单形成可审查提交，并由 PR 证据替代
@@ -567,8 +567,7 @@ frontend/package-lock.json
 codex/project-governance-release-1.6.0
 ```
 
-基于 2026-07-11 冻结的 222 个入口，原计划的 5 个 commit 不足以单独容纳 IT 游戏垂直功能和
-独立清理批次，建议扩展为以下 8 个可审查 commit：
+基于 2026-07-11 冻结的 222 个入口，原计划将工作拆为以下 8 个可审查 commit：
 
 1. `fix: harden auth sessions and user management`
 2. `feat: add IT game repository and harden learning surfaces`
@@ -579,21 +578,19 @@ codex/project-governance-release-1.6.0
 7. `chore: remove verified dead code and generated artifacts`
 8. `docs: synchronize governance and release guidance`
 
-执行约束：
+实际执行：
 
-- 已创建分支 `codex/project-governance-release-1.6.0`；Commit 1-5 已完成，
-  Commit 6-8 尚未提交或 push。
-- 每个 commit 必须包含其功能专属测试；跨模块治理测试放第 6 或第 8 个 commit。
-- 第 2、3、4 个 commit 的顺序是 Alembic revision graph 的硬约束，不可交换。
-- 第 7 个清理 commit 只包含本清单列出的 25 个已验证删除入口。
-- 第 8 个文档 commit 只能在前 7 个 commit 的最终行为稳定后收口。
-- 若实际拆分发现单文件同时承载多个不可分割改动，优先保留原子行为，不使用危险的
-  交互式拆块强行切割。
+- 分支 `codex/project-governance-release-1.6.0` 已创建，Commit 1-5 按专题完成。
+- 原 Commit 6-8、后续后端服务拆分和治理增量由
+  `79a0c95 Streamline project structure and remove obsolete code` 合并收口。
+- 25 个删除入口仍严格等于本清单记录的集合，没有扩大删除范围。
+- 由于综合提交已经形成，不通过 rebase 或 amend 改写历史；后续准确性修正使用小提交。
+- 分支尚未 push，最终 HEAD 门禁和真实 GitHub Actions 仍是发布前硬门禁。
 
 ## 八、Task 1 验收
 
 - [x] 实时快照覆盖全部 142 个 tracked 和 80 个 untracked 入口。
 - [x] 222 个入口全部归入七个主批次。
 - [x] 跨批次依赖、受控基线和禁止提交项已标记。
-- [x] 已创建发布治理分支，并将提交边界校准为 8 个 commit；Commit 1-5 已完成。
+- [x] 已创建发布治理分支；原八提交计划实际收口为 6 个本地提交。
 - [x] 下一阶段固定为 Task 2：固化可重复的本地发布证据包。
