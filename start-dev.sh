@@ -456,7 +456,8 @@ start_docker_infrastructure() {
         local max_attempts=30
         local attempt=1
         
-        while ! docker exec wangsh-postgres pg_isready -U "${POSTGRES_USER:-admin}" > /dev/null 2>&1; do
+        while ! docker exec wangsh-postgres \
+            pg_isready -U "${POSTGRES_USER:-admin}" -d "${POSTGRES_DB:-wangsh_db}" > /dev/null 2>&1; do
             if [ ${attempt} -ge ${max_attempts} ]; then
                 print_error "PostgreSQL启动超时"
                 exit 1

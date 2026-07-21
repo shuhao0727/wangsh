@@ -10,7 +10,9 @@ const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick, compact }) => {
     const container = containerRef.current;
     if (!container) return;
     let cancelled = false;
-    let timer: any = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let fitFrame: number | null = null;
+    let fitObserver: ResizeObserver | null = null;
     let mmInstance: any = null;
 
     const render = () => {
@@ -33,14 +35,43 @@ const MindMapViewer: React.FC<Props> = ({ markdown, onNodeClick, compact }) => {
       svg.style.width = "100%";
       svg.style.height = "100%";
       container.appendChild(svg);
-      mmInstance = m.Markmap.create(svg, { duration: 300 }, root);
-      renderedRef.current = true;
+      const instance = m.Markmap.create(svg, {
+        autoFit: false,
+        duration: compact ? 0 : 300,
+      });
+      mmInstance = instance;
+
+      const fitWhenMeasurable = () => {
+        if (cancelled || mmInstance !== instance) return;
+        const viewport = svg.getBoundingClientRect();
+        const layout = instance.state?.rect;
+        const layoutIsFinite = !layout || [layout.x1, layout.x2, layout.y1, layout.y2]
+          .every(Number.isFinite);
+        if (viewport.width > 0 && viewport.height > 0 && layoutIsFinite) {
+          fitObserver?.disconnect();
+          fitObserver = null;
+          void instance.fit();
+          return;
+        }
+        if (!fitObserver && typeof ResizeObserver !== "undefined") {
+          fitObserver = new ResizeObserver(fitWhenMeasurable);
+          fitObserver.observe(container);
+        }
+      };
+
+      void instance.setData(root).then(() => {
+        if (cancelled || mmInstance !== instance) return;
+        renderedRef.current = true;
+        fitFrame = window.requestAnimationFrame(fitWhenMeasurable);
+      });
     };
 
     render();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (fitFrame != null) window.cancelAnimationFrame(fitFrame);
+      fitObserver?.disconnect();
       if (mmInstance) try { mmInstance.destroy(); } catch {}
       if (container && renderedRef.current) container.innerHTML = "";
       renderedRef.current = false;

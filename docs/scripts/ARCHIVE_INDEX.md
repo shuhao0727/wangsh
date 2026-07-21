@@ -2,7 +2,7 @@
 
 > 状态：reference
 > Owner：scripts
-> 最近复核：2026-07-13
+> 最近复核：2026-07-18
 
 ---
 
@@ -47,14 +47,15 @@
 | `xbk_verify.py` | `backend/scripts/xbk_verify.py` | 旧版XBK验证脚本 | 被新版验证流程替代 |
 | `analyze_db_performance.py` | `backend/scripts/analyze_db_performance.py` | 静态数据库索引启发式分析脚本 | 未维护且默认写报告，当前以数据库性能指南和 Alembic 流程为准 |
 | `check_query_patterns.py` | `backend/scripts/check_query_patterns.py` | 静态查询模式扫描脚本 | 未维护且误报风险高，不作为质量门禁 |
-| `add_missing_indexes.sql` | `backend/scripts/add_missing_indexes.sql` | 数据���索引补丁草案 SQL | 未接入 Alembic / README / workflow，改为仅保留历史参考 |
-| `mindmap_seed.py` | `backend/scripts/mindmap_seed.py` | 一次性思维导图种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_agents_content.py` | `backend/scripts/seed_agents_content.py` | 智能体内容种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_ai_content.py` | `backend/scripts/seed_ai_content.py` | AI 内容种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_all_experiments.py` | `backend/scripts/seed_all_experiments.py` | 历史实验种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_experiments.py` | `backend/scripts/seed_experiments.py` | 历史实验数据种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_learning.py` | `backend/scripts/seed_learning.py` | 学习模块旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
-| `seed_learning_content.py` | `backend/scripts/seed_learning_content.py` | 学习内容旧种子脚本 | 未接入当前文档或执行入口，保留历史参考 |
+| `add_missing_indexes.sql` | `backend/scripts/add_missing_indexes.sql` | 数据库索引补丁草案 SQL | 未接入 Alembic / README / workflow，文件内置拒绝执行保护，仅保留历史参考 |
+| `mindmap_seed.py` | `backend/scripts/mindmap_seed.py` | 一次性思维导图种子脚本 | 内容已由 `frontend/.../ml/data.ts` 的完整 `MINDMAP_MARKDOWN` 覆盖，旧脚本已物理删除 |
+| `seed_agents_content.py` | `backend/scripts/seed_agents_content.py` | 智能体课程内容种子草案 | 保留在 `backend/scripts/archive/` 作为正式课程内容迁移源；当前禁止直接执行 |
+| `seed_ai_content.py` | `backend/scripts/seed_ai_content.py` | AI 课程内容种子草案 | 保留在 `backend/scripts/archive/` 作为正式课程内容迁移源；当前禁止直接执行 |
+| `seed_all_experiments.py` | `backend/scripts/seed_all_experiments.py` | 历史实验种子脚本 | 引用不存在的 JSON 且先删除现有数据，存在误清空风险，已物理删除 |
+| `seed_experiments.py` | `backend/scripts/seed_experiments.py` | 历史实验数据种子脚本 | 引用不存在的 `experiments_seed.json`，无有效入口，已物理删除 |
+| `seed_learning.py` | `backend/scripts/seed_learning.py` | 学习模块旧种子脚本 | 仅含当前 ML 正式内容的旧子集，已由前端 owner 完整覆盖并物理删除 |
+| `seed_learning_content.py` | `backend/scripts/seed_learning_content.py` | 学习内容旧种子脚本 | TS 解析流程未实现且主流程实际不写入内容，已物理删除 |
+| `smoke_pythonlab_low_memory_start_failure.py` | `backend/scripts/smoke_pythonlab_low_memory_start_failure.py` | PythonLab 低内存启动失败故障注入 | 未接入自动化门禁，移入 `backend/scripts/archive/` 保留手工复现能力 |
 | `seed_ml_book.py` | `backend/scripts/seed_ml_book.py` | 机器学习书籍旧种子脚本 | 含硬编码数据库凭据且无正式入口，已物理删除；相关凭据需轮换 |
 | `run_analysis.py` | `backend/scripts/run_analysis.py` | 固定课堂分析写库脚本 | 硬编码日期、班级和账号，未接入正式入口，避免误写生产数据 |
 | `seed_conversation_mock_data.py` | `backend/scripts/seed_conversation_mock_data.py` | 固定课堂对话种子脚本 | 会删除并重建固定测试用户和对话，已由正式测试和 API 流程替代 |

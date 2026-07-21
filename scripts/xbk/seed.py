@@ -17,7 +17,7 @@ from scripts.xbk.common import dump_json, ensure_dir, get_settings, utc_now_iso
 from scripts.xbk.dataset import build_seed_dataset
 
 
-async def reset_and_seed(reset: bool = True) -> Dict[str, Any]:
+async def reset_and_seed(reset: bool = False) -> Dict[str, Any]:
     settings = get_settings()
     dataset = build_seed_dataset(settings)
 
@@ -40,6 +40,13 @@ async def reset_and_seed(reset: bool = True) -> Dict[str, Any]:
                 """
                 INSERT INTO xbk_students (year, term, grade, class_name, student_no, name, gender, is_deleted)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
+                ON CONFLICT (year, term, student_no) DO UPDATE
+                SET grade = EXCLUDED.grade,
+                    class_name = EXCLUDED.class_name,
+                    name = EXCLUDED.name,
+                    gender = EXCLUDED.gender,
+                    is_deleted = FALSE,
+                    updated_at = now()
                 """,
                 [
                     (
@@ -59,6 +66,14 @@ async def reset_and_seed(reset: bool = True) -> Dict[str, Any]:
                 """
                 INSERT INTO xbk_courses (year, term, grade, course_code, course_name, teacher, quota, location, is_deleted)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE)
+                ON CONFLICT (year, term, course_code) DO UPDATE
+                SET grade = EXCLUDED.grade,
+                    course_name = EXCLUDED.course_name,
+                    teacher = EXCLUDED.teacher,
+                    quota = EXCLUDED.quota,
+                    location = EXCLUDED.location,
+                    is_deleted = FALSE,
+                    updated_at = now()
                 """,
                 [
                     (
@@ -79,6 +94,11 @@ async def reset_and_seed(reset: bool = True) -> Dict[str, Any]:
                 """
                 INSERT INTO xbk_selections (year, term, grade, student_no, name, course_code, is_deleted)
                 VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+                ON CONFLICT (year, term, student_no, course_code) DO UPDATE
+                SET grade = EXCLUDED.grade,
+                    name = EXCLUDED.name,
+                    is_deleted = FALSE,
+                    updated_at = now()
                 """,
                 [
                     (
@@ -184,13 +204,13 @@ async def reset_and_seed(reset: bool = True) -> Dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reset and seed XBK tables.")
     parser.add_argument(
-        "--no-reset",
+        "--reset",
         action="store_true",
-        help="Do not truncate existing XBK tables before inserting seed data.",
+        help="Explicitly truncate existing XBK tables before inserting seed data.",
     )
     args = parser.parse_args()
 
-    result = asyncio.run(reset_and_seed(reset=not args.no_reset))
+    result = asyncio.run(reset_and_seed(reset=args.reset))
     print("[xbk-seed] done")
     print(result)
 

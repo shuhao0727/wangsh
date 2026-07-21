@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：docs
-> 最近复核：2026-07-13
+> 最近复核：2026-07-18
 > 复核周期：每 90 天
 
 本文是 WangSh 文档维护、归属、生命周期、整理和自动检查的唯一权威规则。
@@ -13,7 +13,7 @@
 1. 代码行为变化必须同步更新对应 owner 文档。
 2. 一个主题只保留一个权威来源，其他文档只引用，不复制动态事实。
 3. 当前行为放 owner 文档，未来动作放 active plan，历史过程放 archive。
-4. 先迁移有效内容，再 redirect、archive 或删除旧文档。
+4. 先迁移有效内容，再根据真实引用和历史价值决定 redirect、archive 或删除。
 5. 部署、回滚、数据库、CI、安全、PythonLab 和测试恢复资料从严处理。
 6. 自动检查只报告和阻断问题，不自动移动或删除文件。
 7. 项目文档统计排除 `node_modules`、`venv`、构建产物、coverage 和 data 目录。
@@ -34,14 +34,14 @@
 | 当前测试结果 | `docs/docker/testing/TEST_STATUS.md` | 本地或远端验证结果变化 |
 | 发布记录 | `docs/docker/RELEASE_NOTES.md` | 重要 bug fix、发布行为和版本变化 |
 | 功能行为 | `docs/features/*.md` | 功能、架构、权限和用户可见行为变化 |
-| Assessment | `docs/features/assessment/` | 评估设计、DB、API、前端或提示词变化 |
+| Assessment | `docs/features/ASSESSMENT.md` | 评估设计、DB、API、前端、提示词或测试入口变化 |
 | 脚本入口 | 各脚本目录 README | 新增、删除、迁移或重命名脚本 |
 | 当前执行计划 | `docs/docker/plans/` | 当前批次、治理或发布动作变化 |
 | 历史归档 | `docs/docker/archive/README.md` | 新增、移动或删除归档正文 |
 
-动态数字只写入 `TEST_STATUS.md`。当前发布步骤只写入
-`2026-07-12-project-consolidation-and-release-plan.md`。其他文档引用这两个入口，
-不得复制新的“最终结果”。
+动态测试数字只写入 `TEST_STATUS.md`。当前文件整理步骤只写入
+`2026-07-14-project-file-consolidation-plan.md`；发布操作以 `DEPLOY.md` 为准，
+历史发布结果由 `RELEASE_NOTES.md` 和 reference 计划记录，不得复制新的“最终结果”。
 
 ## 三、文档类型与目录
 
@@ -134,7 +134,8 @@
 - 先确定新的唯一 owner。
 - 把仍然有效的规则、命令和结论迁入 owner 文档。
 - 删除重复叙述和过期数字。
-- 旧 tracked 路径仍可能被引用时保留 redirect。
+- 只有仓库引用、外部稳定入口或迁移窗口确实依赖旧路径时才保留 redirect。
+- 已有 owner 完整替代、仓库无引用且 Git 历史可追溯的旧路径直接删除。
 
 ### 归档
 
@@ -183,4 +184,4 @@ git diff --check
 - [ ] 没有提交生成物、临时接力或敏感信息。
 - [ ] Markdown 合同和 `git diff --check` 通过。
 
-旧路径 `docs/DOCUMENTATION_OWNERSHIP.md` 仅作为兼容 redirect 保留。
+已完全被 owner 替代且没有真实引用的 redirect 不作为长期文档保留。

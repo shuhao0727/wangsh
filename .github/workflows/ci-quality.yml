@@ -28,7 +28,18 @@ jobs:
       - name: workflow contracts
         run: node --test scripts/workflow-contracts.test.mjs
       - name: shell syntax
-        run: bash -n scripts/deploy.sh
+        run: |
+          for script in \
+            scripts/deploy.sh \
+            scripts/rollback.sh \
+            scripts/migrate-db.sh \
+            scripts/health-check-detailed.sh \
+            scripts/prod-smoke/run.sh \
+            start-dev.sh \
+            stop-dev.sh
+          do
+            bash -n "$script"
+          done
       - name: compose config validation
         run: |
           docker compose --env-file .env.example -f docker-compose.yml config --quiet

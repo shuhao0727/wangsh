@@ -159,7 +159,7 @@ const MindMapManager: React.FC = () => {
         onClick={() => setEditing(item)}
         style={{ cursor: "pointer" }}
       >
-        <MindMapViewer markdown={item.content?.markdown || `# ${item.title}`} />
+        <MindMapViewer markdown={item.content?.markdown || `# ${item.title}`} compact />
       </div>
 
       {/* 底部信息 */}

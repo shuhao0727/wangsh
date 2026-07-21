@@ -16,14 +16,13 @@ tests/
 ├── group_discussion/  # 小组讨论访问控制、成员切换、消息流
 ├── informatics/       # Typst 笔记与 PDF 渲染
 ├── it/                # IT 游戏资源上传、下载和安全校验
-├── pythonlab/         # 沙箱、WebSocket、DAP 和资源限制
-├── system/            # feature flags、metrics
+├── pythonlab/         # 沙箱、WebSocket、流程图、DAP 和资源限制
+├── system/            # feature flags、metrics、迁移、bootstrap、生产 smoke 和治理合同
 ├── users/             # 用户 CRUD 与导入
 ├── xbk/               # 校本课程结构、导入导出规则
 ├── xxjs/              # 点名相关测试
 ├── test_health.py     # 全局健康检查
-├── test_pubsub.py     # pubsub 核心行为
-└── test_xbk_performance.py
+└── test_pubsub.py     # pubsub 核心行为
 ```
 
 ## 常用命令
@@ -51,4 +50,23 @@ pytest -q tests/auth/test_auth_login.py
 
 - 不在这里放一次性排障脚本。
 - 不提交 `__pycache__/`、`.pytest_cache/` 等缓存产物。
-- 如果新增测试模块，同时更新本文件的目录说明。
+- 如果新增测试模块，同步更新本文件的目录说明。
+
+## 性能基线
+
+以下是关键 API 端点的性能基线，用于手动回归测试：
+
+| 端点 | 基线 | 说明 |
+|------|------|------|
+| `/api/v1/xbk/analysis/summary` | < 500ms | XBK 统计摘要 |
+| `/api/v1/xbk/analysis/course-stats` | < 300ms | 课程统计 |
+
+**验证方法**:
+```bash
+# 使用 curl + time 或 httpie
+time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024&term=上学期" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**历史记录**: 性能测试文件于 2026-07 整理时移除（commit 39293d2），基线值保留于此作为手动验证参考。
+

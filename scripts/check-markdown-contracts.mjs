@@ -4,6 +4,11 @@ import { execFileSync } from "node:child_process";
 
 const repoRoot = process.cwd();
 const realRepoRoot = fs.realpathSync(repoRoot);
+const assessmentOwner = "docs/features/ASSESSMENT.md";
+const assessmentPromptOwners = [
+  "docs/features/assessment/hot_agent.md",
+  "docs/features/assessment/chain_agent.md",
+];
 
 function listMarkdownFiles() {
   const output = execFileSync(
@@ -12,7 +17,9 @@ function listMarkdownFiles() {
     { cwd: repoRoot, encoding: "utf8" },
   );
 
-  return [...new Set(output.split("\n").filter(Boolean))].sort();
+  return [...new Set(output.split("\n").filter(Boolean))]
+    .filter((file) => fs.existsSync(path.resolve(repoRoot, file)))
+    .sort();
 }
 
 function stripInlineCode(line) {
@@ -336,6 +343,15 @@ function audit() {
     }
   }
 
+  if (!fs.existsSync(path.resolve(repoRoot, assessmentOwner))) {
+    errors.push(`${assessmentOwner}: missing Assessment owner`);
+  }
+  for (const promptOwner of assessmentPromptOwners) {
+    if (!fs.existsSync(path.resolve(repoRoot, promptOwner))) {
+      errors.push(`${promptOwner}: missing Assessment prompt owner`);
+    }
+  }
+
   const learning = fs.readFileSync(path.resolve(repoRoot, "docs/features/LEARNING.md"), "utf8");
   for (const moduleName of ["ml", "ai", "agents"]) {
     const chapterDir = path.resolve(
@@ -350,14 +366,10 @@ function audit() {
   }
 
   const summary = `${files.length} files / ${relativeLinks} links / 0 missing`;
-  for (const file of [
-    "docs/docker/testing/TEST_STATUS.md",
-    "docs/docker/plans/2026-07-12-project-consolidation-and-release-plan.md",
-  ]) {
-    const text = fs.readFileSync(path.resolve(repoRoot, file), "utf8");
-    if (!text.includes(summary)) {
-      errors.push(`${file}: stale Markdown summary, expected ${summary}`);
-    }
+  const testStatus = "docs/docker/testing/TEST_STATUS.md";
+  const testStatusText = fs.readFileSync(path.resolve(repoRoot, testStatus), "utf8");
+  if (!testStatusText.includes(summary)) {
+    errors.push(`${testStatus}: stale Markdown summary, expected ${summary}`);
   }
 
   for (const generated of [

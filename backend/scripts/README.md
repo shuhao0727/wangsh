@@ -2,7 +2,11 @@
 
 > 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
 
-`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。归档的一次性脚本、种子数据和历史富化脚本请查看 `archive/` 子目录。
+`backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。
+
+目录保留 `__init__.py` 作为显式 Python package 标记，保证在 `backend/` 工作目录、
+CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有同名 `scripts/`
+工具包，因此后端测试和脚本仍应按本文命令从 `backend/` 运行。
 
 ## 当前入口
 
@@ -18,13 +22,20 @@
 - `smoke_typst_pipeline.py` - Typst 编译链路验证
 - `smoke_pythonlab_ws_owner_concurrency.py` - PythonLab owner 并发验证
 - `smoke_pythonlab_dap_step_watch_soak.py` - PythonLab DAP 步进 soak
-- `smoke_pythonlab_low_memory_start_failure.py` - PythonLab 低内存启动失败故障注入
 - `smoke_pythonlab_print_visibility_probe.py` - PythonLab print 可见性探针
 - `soak_pythonlab_phasec.py` - PythonLab Phase C 专项门禁
 
 ## 归档目录
 
-- `archive/` - 一次性 enrichment 脚本、旧种子数据、历史生成物、数据库草案 SQL
+- `archive/seed_ai_content.py`、`archive/seed_agents_content.py` - 正式课程内容迁移源，
+  直接执行会退出；完成版本化资源和幂等 seed 迁移前不得删除
+- `archive/add_missing_indexes.sql` - 尚待逐项对照 Alembic 和真实查询的历史索引草案，
+  文件内置 psql 拒绝执行保护，不能直接作为生产结构变更入口
+- `archive/smoke_pythonlab_low_memory_start_failure.py` - 低内存启动失败故障注入工具；
+  未接入自动化门禁，需手工注入 `PYTHONLAB_SMOKE_PASSWORD` 后在隔离环境运行
+
+其余失效、重复或无内容价值的一次性 seed 执行壳已物理删除，原因记录在
+[`../../docs/scripts/ARCHIVE_INDEX.md`](../../docs/scripts/ARCHIVE_INDEX.md)。
 
 ## 分层说明
 
@@ -33,8 +44,11 @@
 
 ## 使用建议
 
-- 想跑整套生产烟测，优先使用 `scripts/prod-smoke/run.sh`
+- 想跑整套生产烟测，优先使用 `scripts/deploy.sh simulate`；直接运行
+  `scripts/prod-smoke/run.sh` 必须显式设置 `PROD_SMOKE_ALLOW_LIVE=true`
 - 只排查单个模块时，再单独执行对应 `smoke_*.py`
+- 状态型 smoke 可能创建用户、课程、会话、文章或智能体；清理失败保护完善前，只在
+  `scripts/deploy.sh simulate` 的隔离栈或专用测试环境运行
 - 不要把一次性排障脚本、旧 seed 脚本或数据库草案重新堆回本目录
 
 ## Python 治理检查

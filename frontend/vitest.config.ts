@@ -26,6 +26,7 @@ export default defineConfig({
     // Query hooks 和 service 层覆盖键值稳定性与 API 形状。
     include: [
       "src/components/**/*.test.{ts,tsx}",
+      "src/pages/AIAgents/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
       "src/hooks/queries/**/*.test.{ts,tsx}",
       "src/services/**/*.test.{ts,tsx}",

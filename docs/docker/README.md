@@ -5,7 +5,8 @@
 这里的目标只有两个：
 
 - 让通用说明文件集中，不再散落在仓库根层
-- 不去打扰模块就近说明，例如 `backend/tests/README.md`、`backend/docker/pythonlab-sandbox/README.md`、`scripts/xbk/README.md`
+- 不去打扰模块就近说明，例如 `backend/tests/README.md`、`backend/scripts/README.md`、
+  `scripts/xbk/README.md`
 
 ## 当前结构
 
@@ -45,13 +46,11 @@
 
 ### 当前入口文档
 
-- [plans/README.md](plans/README.md) - 当前计划、reference、redirect 的完整索引
+- [plans/README.md](plans/README.md) - 当前计划与稳定 reference 索引
 - [../features/PYTHONLAB.md](../features/PYTHONLAB.md#能力边界) - PythonLab 能力矩阵与删除/拆分边界
 - [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 治理与回归唯一参考
-- [plans/2026-07-11-project-health-and-improvement-report.md](plans/2026-07-11-project-health-and-improvement-report.md) - 2026-07-13 项目健康快照
 - [plans/2026-07-11-project-governance-30-60-90-execution-plan.md](plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
-- [plans/2026-07-12-project-consolidation-and-release-plan.md](plans/2026-07-12-project-consolidation-and-release-plan.md) - 当前整理、提交、PR 和发布收口计划
-- [plans/2026-07-11-change-batch-manifest.md](plans/2026-07-11-change-batch-manifest.md) - 当前工作区变更批次和提交边界
+- [plans/2026-07-14-project-file-consolidation-plan.md](plans/2026-07-14-project-file-consolidation-plan.md) - 当前文档、测试和脚本整理执行计划
 
 ### 已归档计划
 
@@ -71,7 +70,6 @@
 
 - [testing/README.md](testing/README.md) - 测试策略和 owner 导航
 - [testing/TEST_STATUS.md](testing/TEST_STATUS.md) - 当前测试事实、证据和待执行门禁
-- [testing/test-script-cleanup-inventory.md](testing/test-script-cleanup-inventory.md) - 历史路径 redirect
 - [../DOCUMENTATION_RULES.md](../DOCUMENTATION_RULES.md) - 文档维护规范
 
 ### 就近测试说明

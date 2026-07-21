@@ -1,10 +1,14 @@
-"""Seed Agents learning content (experiments & tools) into database.
+"""Archived Agents learning content migration source.
 
 Hardcoded from frontend/src/pages/Admin/ITTechnology/agents/data.ts
 experimentLevels and TOOLS_DATA exports.
 
-Run: python backend/scripts/seed_agents_content.py
+Do not execute this file directly. Its course content must first be migrated to
+the versioned, idempotent seed format described by the project plan.
 """
+
+if __name__ == "__main__":
+    raise SystemExit("Archived course source only; direct database seeding is disabled.")
 
 import asyncio
 import json
@@ -647,7 +651,3 @@ async def main():
         await seed_experiments(db, "agents", AGENTS_EXPERIMENTS)
         await seed_tools(db, "agents", AGENTS_TOOLS)
     print("Done!")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

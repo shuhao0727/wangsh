@@ -7,65 +7,86 @@ set -euo pipefail
 cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-check_backend_container() {
-  if ! docker compose -f "$compose_file" ps backend 2>/dev/null | grep -q "Up"; then
-    echo "Error: backend container is not running" >&2
+compose() {
+  docker compose --env-file "$env_file" -f "$compose_file" "$@"
+}
+
+check_database_container() {
+  if ! compose ps postgres 2>/dev/null | grep -q "Up"; then
+    echo "Error: postgres container is not running" >&2
     exit 1
   fi
 }
 
 confirm_rollback() {
-  read -p "⚠️  Confirm rollback? This will modify the database. (yes/no): " answer
+  read -r -p "⚠️  Confirm rollback? This will modify the database. (yes/no): " answer
   [[ "$answer" == "yes" ]]
 }
 
 backup_db() {
   echo "Creating backup before rollback..."
-  if [ -f "./scripts/deploy.sh" ]; then
-    ./scripts/deploy.sh backup-db
-  else
-    echo "Warning: deploy.sh not found, skipping backup"
-  fi
+  ENV_FILE="$env_file" COMPOSE_FILE="$compose_file" \
+    bash "${repo_root}/scripts/deploy.sh" backup-db
+}
+
+stop_application_services() {
+  echo "Stopping application services before database rollback..."
+  compose stop gateway frontend backend typst-worker pythonlab-worker
 }
 
 case "$cmd" in
   rollback)
-    check_backend_container
-
     # Parse arguments: skip flags to find the revision
-    local do_backup=false
-    local revision="-1"
+    do_backup=true
+    revision=""
     shift  # consume "rollback"
     for arg in "$@"; do
       case "$arg" in
         --backup) do_backup=true ;;
-        *) revision="$arg" ;;
+        --no-backup) do_backup=false ;;
+        --*)
+          echo "unknown rollback option: $arg" >&2
+          exit 2
+          ;;
+        *)
+          if [ -n "$revision" ]; then
+            echo "rollback accepts only one revision" >&2
+            exit 2
+          fi
+          revision="$arg"
+          ;;
       esac
     done
+    revision="${revision:--1}"
+    check_database_container
 
     if ! confirm_rollback; then
       echo "Rollback cancelled"
       exit 0
     fi
 
+    stop_application_services
+
     if $do_backup; then
       backup_db
     fi
 
     echo "Rolling back to: $revision"
-    docker compose -f "$compose_file" exec backend alembic downgrade "$revision"
+    compose run --rm --no-deps backend alembic downgrade "$revision"
     echo "✓ Rollback completed"
+    echo "Application services remain stopped. Deploy the verified previous release-set before reopening traffic."
     ;;
 
   *)
     cat <<EOF
-Usage: $0 rollback [revision] [--backup]
+Usage: $0 rollback [revision] [--backup|--no-backup]
 
 Commands:
-  rollback [-1]       Rollback one version
+  rollback [-1]       Backup, then rollback one version
   rollback <rev>      Rollback to specific revision
-  rollback --backup   Backup before rollback
+  rollback --no-backup  Skip the backup only when it is intentionally unnecessary
 
 Examples:
   $0 rollback -1              # Rollback one version

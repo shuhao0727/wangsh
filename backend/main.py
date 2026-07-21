@@ -29,6 +29,7 @@ from app.db.database import AsyncSessionLocal
 from app.api import api_router
 from app.api.v2.pythonlab import router as v2_pythonlab_router
 from app.core.celery_app import celery_app
+from app.core.log_sanitizer import redact_log_exception, redact_log_message
 from app.utils.cache import cache
 from app.core.startup import (
     init_database,
@@ -49,9 +50,12 @@ class _InterceptHandler(logging.Handler):
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage(),
-        )
+        message = redact_log_message(record.getMessage())
+        if record.exc_info:
+            exception_text = redact_log_exception(record.exc_info).rstrip()
+            if exception_text:
+                message = f"{message}\n{exception_text}"
+        logger.opt(depth=depth).log(level, message)
 
 
 logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
@@ -196,7 +200,11 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
                 if status_code >= 500:
                     pipe.incr("http:req:5xx")
                 pipe.lpush("http:req:dur_ms", dur_ms)
-                pipe.ltrim("http:req:dur_ms", 0, max(0, int(settings.HTTP_METRICS_SAMPLE_SIZE) - 1))
+                sample_size = int(settings.HTTP_METRICS_SAMPLE_SIZE)
+                if sample_size > 0:
+                    pipe.ltrim("http:req:dur_ms", 0, sample_size - 1)
+                else:
+                    pipe.delete("http:req:dur_ms")
                 await pipe.execute()
             except Exception:
                 logger.debug("HTTP metrics: pipeline 批量写入失败，本次请求指标将丢失")

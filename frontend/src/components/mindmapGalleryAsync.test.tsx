@@ -108,4 +108,30 @@ describe("MindmapGallery async loading", () => {
     );
     expect(screen.queryByText("登录后查看我的导图")).not.toBeInTheDocument();
   });
+
+  it("opens a single-root tree when a stored mindmap already starts with an H1", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(200, [{
+        id: 3,
+        title: "课堂导图",
+        content: { markdown: "# 课堂导图\n## 最新节点\n" },
+        updated_at: "2026-07-19",
+      }]))
+      .mockResolvedValueOnce(response(401));
+
+    render(<MindmapGallery />);
+
+    await screen.findByText("课堂导图");
+    fireEvent.click(screen.getByTitle("编辑（新标签页）"));
+
+    expect(JSON.parse(localStorage.getItem("_wangsh_mindmap_data") || "{}").root).toEqual({
+      data: { text: "课堂导图", uid: "n1" },
+      children: [{
+        data: { text: "最新节点", uid: "n2" },
+        children: [],
+      }],
+    });
+    expect(open).toHaveBeenCalledWith("/mindmap-demo/index.html?id=3", "_blank");
+  });
 });

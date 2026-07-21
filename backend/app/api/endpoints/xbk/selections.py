@@ -2,7 +2,7 @@
 XBK 选课管理 CRUD 端点（含选课结果查询）
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -93,7 +93,7 @@ async def create_selection(
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
     row.is_deleted = False  # type: ignore[assignment]
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     db.add(row)
     try:
         await db.commit()
@@ -126,7 +126,7 @@ async def update_selection(
     )
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:
         await db.commit()
     except Exception:
@@ -146,7 +146,7 @@ async def delete_selection(
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="选课记录不存在")
     row.is_deleted = True  # type: ignore[assignment]
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     await db.commit()
     return None
 

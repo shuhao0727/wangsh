@@ -12,8 +12,33 @@ on:
         required: true
         default: "false"
 
+concurrency:
+  group: dockerhub-amd64-release
+  cancel-in-progress: false
+
 jobs:
+  source-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: require current main source
+        run: |
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Docker Hub release publishing is only allowed from main."
+            exit 1
+          }
+          git fetch --no-tags origin main
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
+            echo "Checked-out commit is not the current origin/main commit."
+            exit 1
+          }
+
   quality-gate:
+    needs: source-guard
     uses: ./.github/workflows/ci-quality.yml
 
   build-and-push:

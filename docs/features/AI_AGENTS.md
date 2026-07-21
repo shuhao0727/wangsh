@@ -1,6 +1,6 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-05-29
+> 最后更新：2026-07-18
 > 
 > **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
 
@@ -62,11 +62,11 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 
 **修复方案（3层）**：
 
-1. **后端 `chat_stream.py`**：
+1. **后端 `backend/app/services/agents/chat_stream.py`**：
    - 使用 `aiter_bytes()` 透传 Dify 原始 SSE 字节流
    - 避免使用 `aiter_text()` 或 `aiter_lines()`（会缓冲）
 
-2. **后端 `stream.py`**：
+2. **后端 `backend/app/api/endpoints/agents/ai_agents/stream.py`**：
    - StreamingResponse 添加响应头：
      - `Cache-Control: no-cache, no-transform`
      - `X-Accel-Buffering: no`
@@ -220,14 +220,14 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 
 ### 核心组件
 
-**位置**：`/Users/wsh/wangsh/frontend/src/pages/AIAgents/`
+**位置**：`frontend/src/pages/AIAgents/`
 
 **主要文件**：
 - `index.tsx` - 主页面
 - `ChatArea.tsx` - 对话区域
 - `AgentSidebar.tsx` - 智能体侧边栏
 - `GroupDiscussion.tsx` - 小组讨论
-- `useStreamEngine.ts` - 流式输出 Hook
+- `hooks/useStreamEngine.ts` - 流式输出 Hook
 
 ### 流式输出实现
 
@@ -301,16 +301,16 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 
 ### 后端
 
-- `/Users/wsh/wangsh/backend/app/api/endpoints/agents/` - API 路由
-- `/Users/wsh/wangsh/backend/app/models/agents/` - 数据模型
-- `/Users/wsh/wangsh/backend/app/services/chat_stream.py` - 流式输出服务
-- `/Users/wsh/wangsh/backend/app/services/stream.py` - SSE 响应封装
+- `backend/app/api/endpoints/agents/` - API 路由
+- `backend/app/models/agents/` - 数据模型
+- `backend/app/services/agents/chat_stream.py` - 流式输出服务
+- `backend/app/api/endpoints/agents/ai_agents/stream.py` - SSE 响应封装
 
 ### 前端
 
-- `/Users/wsh/wangsh/frontend/src/pages/AIAgents/` - 页面组件
-- `/Users/wsh/wangsh/frontend/src/hooks/useStreamEngine.ts` - 流式输出 Hook
-- `/Users/wsh/wangsh/frontend/vite.config.ts` - 开发代理与前端构建配置
+- `frontend/src/pages/AIAgents/` - 页面组件
+- `frontend/src/pages/AIAgents/hooks/useStreamEngine.ts` - 流式输出 Hook
+- `frontend/vite.config.ts` - 开发代理与前端构建配置
 
 ---
 

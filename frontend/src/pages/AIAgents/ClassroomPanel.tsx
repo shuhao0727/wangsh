@@ -162,7 +162,11 @@ const CircleProgress = ({
   );
 };
 
-const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
+const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, userId }) => {
+  const canUse = isAuthenticated && isStudent && userId != null;
+  const participantId = canUse ? userId : null;
+  const participantIdRef = useRef<number | null>(participantId);
+  participantIdRef.current = participantId;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEYS.PINNED) === "true"; } catch { return false; }
@@ -200,6 +204,9 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const streamRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRequestSeqRef = useRef(0);
+  const reviewRequestSeqRef = useRef(0);
   const refreshingRef = useRef(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const viewRef = useRef<ViewType>("idle");
@@ -249,7 +256,16 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   // 轮询活动
   const checkActive = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? true;
-    if (!isAuthenticated) {
+    const requestParticipantId = participantId;
+    const requestSeq = ++activeRequestSeqRef.current;
+    const isCurrentRequest = () => (
+      participantIdRef.current === requestParticipantId
+      && activeRequestSeqRef.current === requestSeq
+    );
+    if (
+      requestParticipantId == null
+      || participantIdRef.current !== requestParticipantId
+    ) {
       if (!silent) showMessage.warning("请先登录后再刷新");
       return false;
     }
@@ -260,6 +276,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         classroomApi.getActive(),
         planApi.getActivePlan().catch(() => null),
       ]);
+      if (!isCurrentRequest()) return false;
       setActivePlan(plan);
       if (list.length > 0) {
         const a = list[0];
@@ -286,6 +303,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
         // 活动结束了
         try {
           const result = await classroomApi.getResult(activity.id);
+          if (!isCurrentRequest()) return false;
           setMyAnswer(result.my_answer);
           setIsCorrect(result.is_correct);
           setStats(result.stats);
@@ -300,6 +318,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
             setView("result");
           }
         } catch {
+          if (!isCurrentRequest()) return false;
           setView("idle");
           setActivity(null);
         }
@@ -309,13 +328,19 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       }
       return true;
     } catch {
+      if (!isCurrentRequest()) return false;
       if (!silent) showMessage.error("刷新失败，请稍后重试");
       return false;
     }
-  }, [isAuthenticated, handleOpen]);
+  }, [participantId, handleOpen]);
 
   useEffect(() => {
-    if (isAuthenticated) return;
+    activeRequestSeqRef.current += 1;
+    reviewRequestSeqRef.current += 1;
+    if (countdownRefreshRef.current) {
+      clearTimeout(countdownRefreshRef.current);
+      countdownRefreshRef.current = null;
+    }
     setOpen(false);
     setView("idle");
     setActivity(null);
@@ -327,32 +352,46 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     setIsCorrect(null);
     setStats(null);
     setRemaining(null);
-  }, [isAuthenticated]);
+    setItemAnswers({});
+    setSelectedDoneActivityId(null);
+    setReviewStats(null);
+    setReviewStatsLoading(false);
+    setSubmitting(false);
+    setRefreshing(false);
+    refreshingRef.current = false;
+  }, [participantId]);
 
   const handleManualRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
+    const requestParticipantId = participantIdRef.current;
+    if (requestParticipantId == null) return;
     refreshingRef.current = true;
     setRefreshing(true);
     try {
       const ok = await checkActive({ silent: false });
-      if (ok) showMessage.success("已刷新");
+      if (ok && participantIdRef.current === requestParticipantId) {
+        showMessage.success("已刷新");
+      }
     } finally {
-      refreshingRef.current = false;
-      setRefreshing(false);
+      if (participantIdRef.current === requestParticipantId) {
+        refreshingRef.current = false;
+        setRefreshing(false);
+      }
     }
   }, [checkActive]);
 
   useEffect(() => {
+    if (participantId == null) return;
     void checkActive({ silent: true });
     pollRef.current = setInterval(() => {
       void checkActive({ silent: true });
     }, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [checkActive]);
+  }, [participantId, checkActive]);
 
   // SSE 增强：优先用实时推送触发刷新，轮询作为兜底
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (participantId == null) return;
     let stopped = false;
     let stream: EventSource | null = null;
 
@@ -407,7 +446,7 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       clearRetry();
       closeStream();
     };
-  }, [isAuthenticated, checkActive]);
+  }, [participantId, checkActive]);
 
   // 倒计时
   useEffect(() => {
@@ -416,7 +455,16 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
       setRemaining(prev => {
         if (prev == null || prev <= 1) {
           clearInterval(timerRef.current);
-          setTimeout(checkActive, 500);
+          const scheduledParticipantId = participantIdRef.current;
+          countdownRefreshRef.current = setTimeout(() => {
+            countdownRefreshRef.current = null;
+            if (
+              scheduledParticipantId != null
+              && participantIdRef.current === scheduledParticipantId
+            ) {
+              void checkActive({ silent: true });
+            }
+          }, 500);
           return 0;
         }
         return prev - 1;
@@ -428,6 +476,8 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
   // 提交答案
   const handleSubmit = async () => {
     if (!activity) return;
+    const requestParticipantId = participantIdRef.current;
+    if (requestParticipantId == null) return;
     let answer = "";
     if (activity.activity_type === "vote") {
       answer = activity.allow_multiple ? multiSelected.sort().join(",") : selectedAnswer;
@@ -440,33 +490,60 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
     setSubmitting(true);
     try {
       const resp = await classroomApi.respond(activity.id, answer);
+      if (participantIdRef.current !== requestParticipantId) return;
       setMyAnswer(resp.answer);
       setIsCorrect(resp.is_correct);
       setItemAnswers(prev => ({ ...prev, [activity.id]: { my_answer: resp.answer, correct_answer: null, is_correct: resp.is_correct } }));
       setView("submitted");
       showMessage.success("已提交");
-    } catch (e: any) { showMessage.error(e.message || "提交失败"); }
-    setSubmitting(false);
+    } catch (e: any) {
+      if (participantIdRef.current === requestParticipantId) {
+        showMessage.error(e.message || "提交失败");
+      }
+    } finally {
+      if (participantIdRef.current === requestParticipantId) {
+        setSubmitting(false);
+      }
+    }
   };
 
   // 清理
   useEffect(() => () => {
+    participantIdRef.current = null;
+    activeRequestSeqRef.current += 1;
+    reviewRequestSeqRef.current += 1;
     if (timerRef.current) clearInterval(timerRef.current);
     if (pollRef.current) clearInterval(pollRef.current);
     if (streamRetryRef.current) clearTimeout(streamRetryRef.current);
+    if (countdownRefreshRef.current) clearTimeout(countdownRefreshRef.current);
   }, []);
 
   // 打开历史题目回顾
   const openReview = useCallback(async (activityId: number) => {
+    const requestParticipantId = participantIdRef.current;
+    if (requestParticipantId == null) return;
+    const requestSeq = ++reviewRequestSeqRef.current;
+    const isCurrentRequest = () => (
+      participantIdRef.current === requestParticipantId
+      && reviewRequestSeqRef.current === requestSeq
+    );
     setSelectedDoneActivityId(activityId);
     setReviewStats(null);
     setView("review");
     setReviewStatsLoading(true);
     try {
       const s = await classroomApi.getStatistics(activityId);
+      if (!isCurrentRequest()) return;
       setReviewStats(s);
-    } catch { showMessage.error("加载班级数据失败"); }
-    setReviewStatsLoading(false);
+    } catch {
+      if (isCurrentRequest()) {
+        showMessage.error("加载班级数据失败");
+      }
+    } finally {
+      if (isCurrentRequest()) {
+        setReviewStatsLoading(false);
+      }
+    }
   }, []);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -493,18 +570,20 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated }) => {
 
   // 注册到全局按钮注册表
   useEffect(() => {
+    if (participantId == null) return;
     floatingBtnRegistry.register("classroom", btnTop, (v) => {
       setBtnTop(v);
       try { localStorage.setItem(STORAGE_KEYS.BTN_TOP, String(v)); } catch {}
     });
     return () => floatingBtnRegistry.unregister("classroom");
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [participantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (participantId == null) return;
     floatingBtnRegistry.updateTop("classroom", btnTop);
-  }, [btnTop]);
+  }, [participantId, btnTop]);
 
-  if (!isAuthenticated) return null;
+  if (!canUse) return null;
 
   const floatingBtn = !open && (
     <div

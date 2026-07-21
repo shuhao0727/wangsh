@@ -1,3 +1,5 @@
+"""PythonLab 流程图语义回归。"""
+
 import textwrap
 from app.api.pythonlab.flow import _build_flow
 from app.api.pythonlab.constants import E_AST_TOO_LARGE, E_SYNTAX

@@ -1,62 +1,59 @@
----
-status: archived
-owner: frontend
-最近复核: 2026-05-10
----
+# 学习平台改进设计归档
 
-# IT Technology Learning Platform Improvement Design
+> 状态：archived
+> Owner：learning
+> 最近复核：2026-07-18
+> 替代文档：[LEARNING.md](../../../features/LEARNING.md)
 
-> Date: 2026-05-03
-> Scope: `/admin/it-technology` and public `/it-technology/{ml,ai,agents}` learning modules
+本文保留 2026-05-03 学习平台改造中仍有长期价值的设计取舍，不再作为实施步骤。
 
-## Goal
+## 目标与边界
 
-Upgrade the machine learning, artificial intelligence exploration, and agent exploration pages from large static knowledge displays into a full-stack, built-in-plus-extensible learning platform. The pages should keep their current rich knowledge structure, but support configurable learning content, stronger learner interactions, durable progress tracking, and better frontend performance.
+- ML、AI、Agents 的现有课程内容是正式内置资产，不是演示数据。
+- 使用轻量通用内容层，不建设独立完整 CMS，也不为每种内容形态创建专用表。
+- `module_key + section_key + item_key` 负责内容命名空间，结构化 JSON 允许 roadmap、
+  knowledge、experiments、tools、resources 等模块保持差异。
+- 现有进度 API 和用户数据必须兼容，内容治理不能顺带重置学习进度。
 
-## Current Problems
+## 内容来源
 
-The three pages currently contain most learning material as static arrays inside very large page files. This makes the content feel like mock data even when the material is useful, and it makes future updates difficult. The interaction model is uneven: ML supports simple stage status and notes, AI supports stage status, and Agents supports stage progress, but experiments, tools, resources, templates, and framework choices are mostly read-only. Performance risk is also increasing because the large files render many sections directly, some tabs force-mount hidden content, and the Agents page renders Mermaid diagrams through iframes.
+- 前端内置内容先提供完整、即时、离线可用的 fallback。
+- 后端内容按 section 合并或覆盖；缺少后端数据时不能显示空白页。
+- 单个 section 结构无效时只忽略该 section，不能让整页崩溃。
+- API 失败应给出非阻断提示；进度保存失败仍需要明确错误提示。
+- 删除内置副本前，必须先证明版本化资源、幂等 seed 和空库内容完整性恢复可用。
 
-## Recommended Architecture
+## 进度兼容
 
-Use a lightweight full-stack content layer rather than building a full CMS. The backend should expose learning content items by module and section. Each item stores structured JSON content so the first iteration can support roadmap stages, knowledge nodes, experiments, tools, resources, templates, cases, and framework rows without creating many specialized tables.
+历史设计建议的进度结构包括：
 
-The frontend should treat built-in content as a fallback and extension seed. Each module owns its own curated content file, while shared hooks and types normalize backend content, local fallback content, progress data, search/filter state, and save actions. This preserves module-specific design while avoiding repeated API and progress logic.
+- `stageStatus`
+- `completedItems`
+- `favoriteItems`
+- `notesByItem`
+- `moduleNotes`
+- `updatedAt`
 
-## Backend Design
+读取旧记录时必须先归一化，再增加新字段；不得因为前端结构升级让已有用户进度失效。
 
-Add a new model tentatively named `LearningContentItem` mapped to `sys_learning_content_items`. Proposed fields are `id`, `module_key`, `section_key`, `item_key`, `title`, `summary`, `content`, `tags`, `difficulty`, `sort_order`, `enabled`, `source_type`, `created_at`, and `updated_at`. `module_key` is limited to `ml`, `ai`, and `agents`. `section_key` groups content such as `roadmap`, `knowledge`, `experiments`, `tools`, `resources`, `prompt`, `ethics`, `frameworks`, and `core-tech`. `content` and `tags` can be stored as JSON text to stay consistent with the existing progress implementation and avoid PostgreSQL-specific coupling in the first slice.
+## 前端性能
 
-Public/authenticated read endpoints should return enabled content for a module. Admin endpoints can later support editing, but the first implementation can safely provide list/upsert/toggle endpoints if existing admin dependencies are clear. The existing `/learning/progress/{module_key}` API remains compatible and continues to store per-user state in `progress_data`.
+- 只渲染活动 Tab，除非隐藏内容必须保持挂载状态。
+- Mermaid、图表和其他重型模块只在对应 Tab 激活后加载。
+- 搜索和筛选状态留在各自模块，避免触发无关区域重渲染。
+- 共享数据请求、进度归一化和过滤逻辑可以复用，但三类课程的视觉布局不应被强行统一。
 
-Because this adds a table, it requires an Alembic migration and the new model must be imported from `backend/app/models/__init__.py`.
+## 分阶段实施
 
-## Frontend Design
+1. 先拆分超长页面中的类型、数据和纯函数，保持行为不变。
+2. 再增加后端内容模型、迁移和读取接口。
+3. 然后接入前端 fallback/覆盖链路和进度兼容。
+4. 最后验证空库恢复、页面交互和性能，再考虑删除重复内容源。
 
-Create shared frontend types and helpers under `frontend/src/pages/Admin/ITTechnology/learning/` or a nearby module-specific shared directory. The shared layer should include a `LearningModuleContent` shape, progress status utilities, content fetch helpers, and pure filtering helpers.
+## 验证要求
 
-Split each large page into a folder structure. For example, ML should move static data to `ml/data.ts`, local types to `ml/types.ts`, and cards/tabs into `ml/components/`. AI and Agents should follow the same pattern only where it reduces file size and improves clarity; avoid over-abstracting visual layouts because the three modules are intentionally different.
+- 后端：模型导入、Alembic、内容 API、进度兼容和异常 rollback。
+- 前端：ML/AI/Agents 页面加载、Tab 切换、筛选、保存和 fallback。
+- 运行时：后端不可用、无效 section、旧进度形状和重型 Tab 懒加载。
 
-Content loading should follow a fallback pattern: render built-in content immediately, request backend content, then merge or replace enabled sections when backend data exists. If backend content fails, the page should show a small non-blocking warning and continue with built-in content.
-
-## Interaction Design
-
-Add consistent, low-risk interactions across the three pages. Roadmap stages should support status changes. Experiments should support filtering by difficulty and marking completion. Tools/resources/frameworks should support keyword search and category filters. Resources and tools should support “已学习/收藏” style user actions stored in `progress_data`. AI Prompt templates should support copy actions. Agents framework comparison should keep selected framework state and add filtering by scenario or difficulty.
-
-The progress shape should become richer but remain JSON-compatible. A recommended shape is `stageStatus`, `completedItems`, `favoriteItems`, `notesByItem`, `moduleNotes`, and `updatedAt`. Existing saved shapes should be normalized on load so current users do not lose progress.
-
-## Performance Design
-
-Render only the active tab unless there is a clear reason to keep hidden content mounted. Use memoized derived data for grouped tools, filtered resources, filtered experiments, and progress statistics. Lazy-render heavyweight visual sections such as Mermaid diagrams only when the relevant tab is active. Keep search/filter state local to each tab to avoid triggering unrelated re-renders. Use `React.memo` for repeated cards after component extraction.
-
-## Error Handling
-
-Content API failures should not block learning pages because built-in content exists. Progress save failures should still show `showMessage.error`. Invalid backend content should be ignored section-by-section rather than crashing the whole page. Any new backend write path should roll back on database exceptions and return project-standard API responses.
-
-## Testing and Verification
-
-Frontend verification should include `npm run type-check` in `frontend/`. Backend verification should include Python import/compile checks for the new model, schema, endpoints, and Alembic migration. If the dev server is running, browser verification should cover `/admin/it-technology`, `/it-technology/ml`, `/it-technology/ai`, and `/it-technology/agents`, including tab switching, filtering, and progress saving.
-
-## Implementation Slices
-
-The safest first slice is to add shared types/helpers, extract module data out of the three page files, add search/filter and richer progress interactions while preserving current UI. The second slice adds backend content item storage and read endpoints. The third slice wires frontend content loading to backend fallback. The fourth slice updates documentation and runs verification.
+完整当前实现见 [LEARNING.md](../../../features/LEARNING.md)。

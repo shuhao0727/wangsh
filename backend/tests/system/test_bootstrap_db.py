@@ -1,6 +1,8 @@
 import asyncio
+from pathlib import Path
 
 import pytest
+import scripts
 
 from scripts import bootstrap_db
 
@@ -24,6 +26,12 @@ class _FakeResult:
 
     def scalar_one_or_none(self):
         return self.value
+
+
+def test_backend_scripts_is_an_explicit_python_package():
+    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+
+    assert Path(scripts.__file__).resolve() == (scripts_dir / "__init__.py").resolve()
 
 
 def test_initial_only_bootstrap_defers_empty_database_to_alembic(monkeypatch):

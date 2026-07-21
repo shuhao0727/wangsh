@@ -1,14 +1,17 @@
 import asyncio
+from contextlib import AbstractAsyncContextManager
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError, MissingGreenlet
 
 import app.services.agents.group_discussion as gd
 import app.services.agents.group_discussion.session_service as session_service
 from app.core.config import settings
+from app.models.agents.group_discussion import GroupDiscussionMember, GroupDiscussionSession
 from app.utils.cache import cache
 
 
@@ -26,20 +29,38 @@ class _FakeResult:
         return self._value if isinstance(self._value, list) else [self._value]
 
 
+class _FakeNestedTransaction(AbstractAsyncContextManager):
+    def __init__(self, db):
+        self.db = db
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        if exc_type is not None:
+            self.db.nested_rollback_count += 1
+        return False
+
+
 class _FakeDB:
-    def __init__(self, execute_values=None, commit_raises=None):
+    def __init__(self, execute_values=None, commit_raises=None, flush_raises=None):
         self._execute_values = list(execute_values or [])
         self.execute_count = 0
         self.commit_count = 0
         self.refresh_count = 0
+        self.flush_count = 0
         self.added = []
         self.deleted = []
         self.commit_raises = commit_raises
+        self.flush_raises = flush_raises
         self.rollback_count = 0
+        self.nested_rollback_count = 0
         self.statements = []
 
-    async def execute(self, _stmt):
-        self.statements.append(_stmt)
+    async def execute(self, stmt):
+        self.statements.append(stmt)
+        if getattr(stmt, "_for_update_arg", None) is not None:
+            return _FakeResult(1)
         if self.execute_count >= len(self._execute_values):
             raise AssertionError(f"unexpected db.execute call #{self.execute_count}")
         value = self._execute_values[self.execute_count]
@@ -62,11 +83,50 @@ class _FakeDB:
     async def rollback(self):
         self.rollback_count += 1
 
+    def begin_nested(self):
+        return _FakeNestedTransaction(self)
+
     async def delete(self, obj):
         self.deleted.append(obj)
 
     async def flush(self):
-        pass
+        self.flush_count += 1
+        if self.flush_raises and self.flush_count == 1:
+            raise self.flush_raises
+        for obj in self.added:
+            if isinstance(obj, GroupDiscussionSession) and obj.id is None:
+                obj.id = 100 + self.flush_count
+
+
+class _MembershipCommitFailureDB(_FakeDB):
+    """Track whether an old membership was committed before the join failed."""
+
+    def __init__(self, execute_values=None):
+        super().__init__(execute_values=execute_values)
+        self.old_membership_persisted = True
+        self.pending_old_membership_delete = False
+
+    async def execute(self, stmt):
+        result = await super().execute(stmt)
+        if getattr(stmt, "is_delete", False):
+            self.pending_old_membership_delete = True
+        return result
+
+    async def commit(self):
+        self.commit_count += 1
+        if any(isinstance(obj, GroupDiscussionMember) for obj in self.added):
+            raise IntegrityError(
+                "insert membership",
+                {},
+                Exception("membership commit failed"),
+            )
+        if self.pending_old_membership_delete:
+            self.old_membership_persisted = False
+            self.pending_old_membership_delete = False
+
+    async def rollback(self):
+        self.rollback_count += 1
+        self.pending_old_membership_delete = False
 
 
 def _create_session(session_id=1, class_name="测试班级", group_no="001", created_by_user_id=1, group_name=None):
@@ -92,6 +152,23 @@ def _create_member(session_id=1, user_id=1, joined_at=None):
         joined_at=joined_at,
         muted_until=None,
     )
+
+
+class _RollbackExpiredMember:
+    def __init__(self, db, session_id=1, user_id=1, joined_at=None):
+        self._db = db
+        self._session_id = session_id
+        self.user_id = user_id
+        self.joined_at = joined_at or datetime.now(timezone.utc) - timedelta(minutes=30)
+        self.muted_until = None
+        self.session_id_reads = 0
+
+    @property
+    def session_id(self):
+        self.session_id_reads += 1
+        if self._db.rollback_count:
+            raise MissingGreenlet("expired ORM attribute accessed after rollback")
+        return self._session_id
 
 
 def _patch_settings(monkeypatch, join_lock_seconds=300):
@@ -127,13 +204,13 @@ class TestGetOrCreateTodaySession:
         ))
 
         assert session is not None
-        assert session.id == 101  # 通过refresh设置
+        assert session.id == 101  # 通过 flush 设置
         assert session.class_name == "测试班级"
         assert session.group_no == "001"
         assert session.group_name == "第一组"
         assert session.created_by_user_id == 1
         assert db.execute_count == 2  # 1. 上次加入记录 2. 目标会话
-        assert db.commit_count == 2  # 创建会话时调用了两次commit
+        assert db.commit_count == 1  # 会话和成员关系只提交一次
         assert len(db.added) == 2  # Session + Member
 
     def test_join_existing_session(self, monkeypatch):
@@ -161,9 +238,53 @@ class TestGetOrCreateTodaySession:
 
         assert session.id == 10  # 现有会话的ID
         assert db.execute_count == 4  # 1. 上次加入记录 2. 现有会话 3. 查询上次会话 4. DELETE 查询
-        assert db.commit_count == 2  # 1. 删除旧成员 2. 添加新成员
+        assert db.commit_count == 1  # 删除旧成员与添加新成员使用同一次原子提交
         # 注意：函数使用 db.execute(delete(...)) 而不是 db.delete(obj)，所以 db.deleted 列表为空
         assert len(db.added) == 1  # 添加了新成员
+
+    def test_failed_membership_commit_preserves_previous_membership(self, monkeypatch):
+        """切组提交失败时，旧成员关系不能被提前永久删除。"""
+        _patch_settings(monkeypatch, join_lock_seconds=0)
+
+        existing_session = _create_session(
+            session_id=10,
+            class_name="测试班级",
+            group_no="001",
+            created_by_user_id=2,
+        )
+        old_session = _create_session(
+            session_id=5,
+            class_name="测试班级",
+            group_no="005",
+            created_by_user_id=2,
+        )
+        db = _MembershipCommitFailureDB(
+            [
+                _create_member(session_id=5, user_id=1),
+                existing_session,
+                old_session,
+                None,
+            ]
+        )
+
+        with pytest.raises(IntegrityError, match="membership commit failed"):
+            asyncio.run(
+                gd.get_or_create_today_session(
+                    db=db,
+                    class_name="测试班级",
+                    group_no="001",
+                    group_name=None,
+                    user={
+                        "id": 1,
+                        "role_code": "student",
+                        "class_name": "测试班级",
+                    },
+                )
+            )
+
+        assert db.old_membership_persisted is True
+        assert db.commit_count == 1
+        assert db.rollback_count == 1
 
     def test_student_already_in_session_returns_directly(self, monkeypatch):
         """测试学生已在目标会话中，直接返回"""
@@ -268,13 +389,153 @@ class TestGetOrCreateTodaySession:
         assert db.commit_count == 0
         assert len(db.added) == 0
 
-    def test_concurrent_session_creation_handles_integrity_error(self, monkeypatch):
-        """测试并发创建同一会话时的完整性错误处理"""
+    def test_concurrent_admin_session_creation_reuses_committed_session(self, monkeypatch):
+        """管理员并发创建冲突后复用另一请求已提交的会话。"""
         _patch_settings(monkeypatch, join_lock_seconds=300)
 
-        # 暂时跳过这个测试，因为模拟IntegrityError的处理比较复杂
-        # 在实际代码中，这个逻辑是处理并发创建同一会话的情况
-        pytest.skip("IntegrityError处理测试暂时跳过，需要更复杂的模拟")
+        committed_session = _create_session(
+            session_id=10,
+            class_name="测试班级",
+            group_no="001",
+            created_by_user_id=2,
+        )
+        db = _FakeDB(
+            [
+                None,
+                committed_session,
+            ],
+            commit_raises=IntegrityError("insert session", {}, Exception("duplicate")),
+        )
+
+        session = asyncio.run(
+            gd.get_or_create_today_session(
+                db=db,
+                class_name="测试班级",
+                group_no="001",
+                group_name=None,
+                user={"id": 1, "role_code": "admin", "class_name": "测试班级"},
+            )
+        )
+
+        assert session is committed_session
+        assert db.rollback_count == 1
+        assert db.execute_count == 2
+        assert db.commit_count == 1
+        assert len(db.added) == 1
+
+    def test_concurrent_session_creation_reuses_committed_session(self, monkeypatch):
+        """并发创建冲突后回滚并复用另一请求已提交的会话。"""
+        _patch_settings(monkeypatch, join_lock_seconds=300)
+
+        committed_session = _create_session(
+            session_id=10,
+            class_name="测试班级",
+            group_no="001",
+            created_by_user_id=2,
+        )
+        db = _FakeDB(
+            [
+                None,  # 上次加入记录
+                None,  # 首次查询时目标会话尚未提交
+                committed_session,  # 冲突回滚后重新查询
+            ],
+            flush_raises=IntegrityError("insert session", {}, Exception("duplicate")),
+        )
+
+        session = asyncio.run(
+            gd.get_or_create_today_session(
+                db=db,
+                class_name="测试班级",
+                group_no="001",
+                group_name=None,
+                user={"id": 1, "role_code": "student", "class_name": "测试班级"},
+            )
+        )
+
+        assert session is committed_session
+        assert db.rollback_count == 0
+        assert db.nested_rollback_count == 1
+        assert db.execute_count == 3
+        assert db.commit_count == 1
+        assert len(db.added) == 2  # 冲突的 Session 对象和最终 Member
+
+    def test_concurrent_session_creation_preserves_outer_membership_transaction(self, monkeypatch):
+        """会话创建冲突只回滚保存点，不结束成员切换事务。"""
+        _patch_settings(monkeypatch, join_lock_seconds=300)
+
+        committed_session = _create_session(
+            session_id=10,
+            class_name="测试班级",
+            group_no="001",
+            created_by_user_id=2,
+        )
+        old_session = _create_session(session_id=5, class_name="测试班级", group_no="005")
+        db = _FakeDB()
+        expired_member = _RollbackExpiredMember(db, session_id=5, user_id=1)
+        db._execute_values = [
+            expired_member,
+            None,  # 首次查询时目标会话尚未提交
+            committed_session,  # 冲突回滚后重新查询
+            old_session,  # 查询旧会话
+            None,  # 删除旧成员
+        ]
+        db.flush_raises = IntegrityError("insert session", {}, Exception("duplicate"))
+
+        session = asyncio.run(
+            gd.get_or_create_today_session(
+                db=db,
+                class_name="测试班级",
+                group_no="001",
+                group_name=None,
+                user={"id": 1, "role_code": "student", "class_name": "测试班级"},
+            )
+        )
+
+        assert session is committed_session
+        assert db.rollback_count == 0
+        assert db.nested_rollback_count == 1
+        assert db.execute_count == 5
+        assert db.commit_count == 1
+        assert len(db.added) == 2  # 冲突的 Session 和最终 Member
+        assert expired_member.session_id_reads == 1
+
+        new_member = db.added[-1]
+        assert new_member.session_id == 10
+        assert new_member.user_id == 1
+
+        delete_stmt = next(stmt for stmt in db.statements if getattr(stmt, "is_delete", False))
+        delete_params = set(delete_stmt.compile().params.values())
+        assert {1, 5}.issubset(delete_params)
+
+    def test_student_membership_query_is_serialized_by_user_row_lock(self, monkeypatch):
+        _patch_settings(monkeypatch, join_lock_seconds=300)
+        existing_session = _create_session(
+            session_id=10,
+            class_name="测试班级",
+            group_no="001",
+            created_by_user_id=1,
+        )
+        db = _FakeDB([
+            _create_member(session_id=10, user_id=1),
+            existing_session,
+        ])
+
+        asyncio.run(
+            gd.get_or_create_today_session(
+                db=db,
+                class_name="测试班级",
+                group_no="001",
+                group_name=None,
+                user={"id": 1, "role_code": "student", "class_name": "测试班级"},
+            )
+        )
+
+        lock_statements = [
+            stmt for stmt in db.statements
+            if getattr(stmt, "_for_update_arg", None) is not None
+        ]
+        assert len(lock_statements) == 1
+        assert "sys_users" in str(lock_statements[0])
 
     def test_student_cannot_join_other_class(self, monkeypatch):
         """测试学生不能加入其他班级"""
@@ -324,24 +585,24 @@ class TestGetOrCreateTodaySession:
 class TestListTodayGroups:
     """测试 list_today_groups 函数"""
 
-    def test_list_groups_uses_same_local_date_as_session_creation(self, monkeypatch):
-        """北京时间跨日但 UTC 未跨日时，默认列表仍查询本地当天会话。"""
+    def test_list_groups_uses_utc_date_consistently(self, monkeypatch):
+        """默认列表使用 UTC 日期，避免跨时区的"今日"判断不一致。
+
+        修复前的行为：使用本地时间 datetime.now().date()
+        修复后的行为：使用 UTC 时间 datetime.now(timezone.utc).date()
+        """
         _patch_settings(monkeypatch)
         monkeypatch.setattr(settings, "GROUP_DISCUSSION_LIST_RECENT_HOURS", 0, raising=False)
-
-        class LocalDate(date):
-            @classmethod
-            def today(cls):
-                return cls(2026, 7, 12)
 
         class UtcDateTime(datetime):
             @classmethod
             def now(cls, tz=None):
-                if tz is None:
-                    return cls(2026, 7, 12, 0, 30)
-                return cls(2026, 7, 11, 16, 30, tzinfo=timezone.utc)
+                # 北京时间 2026-07-12 00:30，对应 UTC 2026-07-11 16:30
+                if tz == timezone.utc:
+                    return cls(2026, 7, 11, 16, 30, tzinfo=timezone.utc)
+                # 如果没有 tz 参数，返回本地时间（不应该被使用）
+                return cls(2026, 7, 12, 0, 30)
 
-        monkeypatch.setattr(session_service, "date", LocalDate)
         monkeypatch.setattr(session_service, "datetime", UtcDateTime)
         db = _FakeDB([[]])
 
@@ -357,7 +618,8 @@ class TestListTodayGroups:
         )
 
         params = db.statements[0].compile().params
-        assert LocalDate(2026, 7, 12) in params.values()
+        # 应该使用 UTC 日期 2026-07-11，而不是本地日期 2026-07-12
+        assert date(2026, 7, 11) in params.values()
 
     def test_list_groups_basic(self, monkeypatch):
         """测试基础列表查询"""

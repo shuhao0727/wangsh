@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -18,12 +24,20 @@ const requiredReleaseImages = [
 ];
 const defaultDigest = "sha256:" + "0".repeat(64);
 
-function runDeployWithFakeDocker({ releaseSet, composeImages = null, dockerDigestOverrides = {} }) {
+function runDeployWithFakeDocker({
+  releaseSet,
+  composeImages = null,
+  dockerDigestOverrides = {},
+  localDigestOverrides = {},
+  envOverrides = {},
+  command = "verify-release-set",
+}) {
   const directory = mkdtempSync(join(tmpdir(), "wangsh-release-set-contract-"));
   const envFile = join(directory, ".env");
   const composeFile = join(directory, "compose.yml");
   const releaseSetFile = join(directory, "release-set.txt");
   const dockerFile = join(directory, "docker");
+  const dockerLogFile = join(directory, "docker.log");
   const expectedImages =
     composeImages ??
     [
@@ -34,20 +48,24 @@ function runDeployWithFakeDocker({ releaseSet, composeImages = null, dockerDiges
       "shuhao07/wangsh-frontend:1.6.0",
       "shuhao07/wangsh-gateway:1.6.0",
     ];
+  const envValues = {
+    APP_VERSION: "1.6.0",
+    IMAGE_TAG: "1.6.0",
+    IMAGE_REPOSITORY_PREFIX: "shuhao07",
+    IMAGE_NAME_BACKEND: "wangsh-backend",
+    IMAGE_NAME_WORKER: "wangsh-typst-worker",
+    IMAGE_NAME_PYTHONLAB_WORKER: "wangsh-pythonlab-worker",
+    IMAGE_NAME_GATEWAY: "wangsh-gateway",
+    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:1.6.0",
+    ...envOverrides,
+  };
 
   writeFileSync(
     envFile,
-    [
-      "APP_VERSION=1.6.0",
-      "IMAGE_TAG=1.6.0",
-      "IMAGE_REPOSITORY_PREFIX=shuhao07",
-      "IMAGE_NAME_BACKEND=wangsh-backend",
-      "IMAGE_NAME_WORKER=wangsh-typst-worker",
-      "IMAGE_NAME_PYTHONLAB_WORKER=wangsh-pythonlab-worker",
-      "IMAGE_NAME_GATEWAY=wangsh-gateway",
-      "PYTHONLAB_SANDBOX_IMAGE=shuhao07/pythonlab-sandbox:1.6.0",
-      "",
-    ].join("\n"),
+    `${Object.entries(envValues)
+      .filter(([, value]) => value != null)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n")}\n`,
   );
   writeFileSync(composeFile, "services: {}\n");
   writeFileSync(releaseSetFile, releaseSet);
@@ -60,9 +78,10 @@ if [[ "$*" == "info" ]]; then
 fi
 if [[ "$*" == *" config --environment" ]]; then
   cat <<'EOF'
-APP_VERSION=1.6.0
-IMAGE_TAG=1.6.0
-IMAGE_REPOSITORY_PREFIX=shuhao07
+${Object.entries(envValues)
+  .filter(([, value]) => value != null)
+  .map(([key, value]) => `${key}=${value}`)
+  .join("\n")}
 EOF
   exit 0
 fi
@@ -84,6 +103,24 @@ ${requiredReleaseImages
   esac
   exit 0
 fi
+if [[ "$*" == image\\ inspect* ]]; then
+  ref="\${!#}"
+  case "$ref" in
+${requiredReleaseImages
+  .map((image) => {
+    const ref = `shuhao07/${image}:1.6.0`;
+    const digest = localDigestOverrides[image] ?? defaultDigest;
+    return `    ${ref}) printf '%s\\n' 'shuhao07/${image}@${digest}' ;;`;
+  })
+  .join("\n")}
+    *) echo "unexpected local image ref: $ref" >&2; exit 1 ;;
+  esac
+  exit 0
+fi
+if [[ "$*" == *" pull "* || "$*" == *" up -d --no-build"* || "$*" == *" ps" ]]; then
+  printf '%s\\n' "$*" >> '${dockerLogFile}'
+  exit 0
+fi
 echo "unexpected fake docker invocation: $*" >&2
 exit 1
 `,
@@ -92,7 +129,7 @@ exit 1
 
   const result = spawnSync(
     "bash",
-    ["scripts/deploy.sh", "verify-release-set", releaseSetFile],
+    ["scripts/deploy.sh", command, releaseSetFile],
     {
       cwd: new URL(repoRoot).pathname,
       env: {
@@ -104,13 +141,22 @@ exit 1
       encoding: "utf8",
     },
   );
-  return { ...result, directory };
+  return {
+    ...result,
+    directory,
+    dockerLog: readFileSync(dockerLogFile, { encoding: "utf8", flag: "a+" }),
+  };
 }
 
-function makeReleaseSet({ version = "1.6.0", rows = requiredReleaseImages, digest = null } = {}) {
+function makeReleaseSet({
+  version = "1.6.0",
+  rows = requiredReleaseImages,
+  digest = null,
+  refOverrides = {},
+} = {}) {
   const lines = ["format=wangsh-release-set-v1", `version=${version}`];
   for (const image of rows) {
-    const ref = `shuhao07/${image}:${version}`;
+    const ref = refOverrides[image] ?? `shuhao07/${image}:${version}`;
     const imageDigest = digest ?? defaultDigest;
     lines.push(`image=${image} ref=${ref} digest=${imageDigest}`);
   }
@@ -124,7 +170,11 @@ test("docker publish validates source version and does not default to latest", (
   assert.match(workflow, /RELEASE_TAG:\s*\$\{\{\s*inputs\.image_tag\s*\}\}/);
   assert.match(workflow, /validate image tag against source version/);
   assert.match(workflow, /frontend\/package\.json/);
-  assert.doesNotMatch(workflow, /run:\s*\|[\s\S]*?\$\{\{\s*inputs\.image_tag\s*\}\}/);
+  const runBlocks = [...workflow.matchAll(/^\s+run:\s*\|\n((?:^\s{10,}.*\n?)*)/gm)]
+    .map((match) => match[1]);
+  for (const runBlock of runBlocks) {
+    assert.doesNotMatch(runBlock, /\$\{\{\s*inputs\.image_tag\s*\}\}/);
+  }
   assert.match(workflow, /promote version tags after all builds/);
   assert.match(workflow, /verify promoted release set/);
   assert.match(workflow, /STAGING_TAG/);
@@ -136,16 +186,33 @@ test("docker publish validates source version and does not default to latest", (
   assert.match(workflow, /Digest:/);
 });
 
+test("docker publish is serialized and only promotes the current main commit", () => {
+  const workflow = read(".github/workflows/dockerhub-amd64.yml");
+
+  assert.match(
+    workflow,
+    /concurrency:\s*\n\s*group:\s*dockerhub-amd64-release\s*\n\s*cancel-in-progress:\s*false/,
+  );
+  assert.match(workflow, /source-guard:/);
+  assert.match(workflow, /\[\[ "\$GITHUB_REF" == "refs\/heads\/main" \]\]/);
+  assert.match(workflow, /git fetch --no-tags origin main/);
+  assert.match(
+    workflow,
+    /\[\[ "\$\(git rev-parse HEAD\)" == "\$\(git rev-parse origin\/main\)" \]\]/,
+  );
+  assert.match(workflow, /quality-gate:[\s\S]*needs:\s*source-guard/);
+});
+
 test("formal deploy and pull-up consume release-set before compose pull/up", () => {
   const deploy = read("scripts/deploy.sh");
   const upNoBuildBody =
     deploy.match(/up-no-build\)([\s\S]*?)\n\s*;;/)?.[1] ?? "";
 
   assert.match(deploy, /verify-release-set/);
-  assert.match(deploy, /pull-up\)[\s\S]*verify_release_set[\s\S]*compose pull[\s\S]*compose up -d --no-build/);
-  assert.match(deploy, /deploy\)[\s\S]*bash scripts\/deploy\.sh pull-up/);
+  assert.match(deploy, /pull-up\)[\s\S]*verify_release_set[\s\S]*compose pull "\$\{release_services\[@\]\}"[\s\S]*compose up -d --no-build --pull never/);
+  assert.match(deploy, /deploy\)[\s\S]*bash "\$\{repo_root\}\/scripts\/deploy\.sh" pull-up[\s\S]*wait_for_detailed_health/);
   assert.match(upNoBuildBody, /verify_release_set/);
-  assert.match(upNoBuildBody, /compose up -d --no-build/);
+  assert.match(upNoBuildBody, /compose up -d --no-build --pull never/);
 });
 
 test("local production simulation uses local images and can smoke with guaranteed cleanup", () => {
@@ -167,6 +234,9 @@ test("local production simulation uses local images and can smoke with guarantee
   assert.match(simulateBody, /PROD_SMOKE_COMPOSE_FILE=.*compose_file/);
   assert.match(simulateBody, /SUPER_ADMIN_PASSWORD=.*admin_password/);
   assert.match(simulateBody, /SIM_CLEANUP/);
+  assert.match(deploy, /require_volume_deletion_confirmation/);
+  assert.match(deploy, /COMPOSE_PROJECT_NAME:-\}" = "wangsh_sim"/);
+  assert.match(deploy, /ALLOW_VOLUME_DELETION/);
   assert.match(simulateBody, /docker ps -aq --filter "name=\^\/\$\{sim_namespace\}_"/);
   assert.match(simulateBody, /docker rm -f/);
   assert.match(simulateBody, /sim_lock_dir/);
@@ -250,6 +320,30 @@ test("production simulation overrides parent variables and owns isolated workspa
   assert.doesNotMatch(simulateBody, /rm -rf[^\n]*data\/pythonlab\/workspaces/);
 });
 
+test("prod-smoke only trusts the exact simulation project on a loopback origin", () => {
+  const script = [
+    "import importlib.util",
+    "import pathlib",
+    "import sys",
+    "path = pathlib.Path('scripts/prod-smoke/run.py').resolve()",
+    "spec = importlib.util.spec_from_file_location('wangsh_prod_smoke_run', path)",
+    "module = importlib.util.module_from_spec(spec)",
+    "sys.modules[spec.name] = module",
+    "spec.loader.exec_module(module)",
+    "check = module.is_isolated_smoke_target",
+    "assert check('wangsh_sim', 'http://127.0.0.1:16608')",
+    "assert check('wangsh_sim', 'http://localhost:16608')",
+    "assert not check('wangsh_sim-production', 'http://127.0.0.1:16608')",
+    "assert not check('wangsh_sim', 'https://production.example')",
+  ].join("; ");
+  const result = spawnSync("python3", ["-c", script], {
+    cwd: new URL(repoRoot).pathname,
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
 test("prod smoke passes PythonLab credentials by contract and redacts recorded commands", () => {
   const runner = read("scripts/prod-smoke/run.py");
 
@@ -271,6 +365,8 @@ test("prod smoke passes PythonLab credentials by contract and redacts recorded c
     runner,
     /collect_service_logs\([\s\S]*?sensitive_values=sensitive_values/,
   );
+  assert.match(runner, /PROD_SMOKE_ALLOW_LIVE/);
+  assert.match(runner, /isolated_project/);
 });
 
 test("PythonLab PR browser smoke passes credentials through environment only", () => {
@@ -712,6 +808,71 @@ test("verify-release-set rejects compose reference and registry digest drift", (
   assert.match(`${digestDrift.stderr}${digestDrift.stdout}`, /digest/i);
 });
 
+test("verify-release-set rejects logical image swaps and version variable drift", () => {
+  const swapped = runDeployWithFakeDocker({
+    releaseSet: makeReleaseSet({
+      refOverrides: {
+        "wangsh-backend": "shuhao07/wangsh-typst-worker:1.6.0",
+        "wangsh-typst-worker": "shuhao07/wangsh-backend:1.6.0",
+      },
+    }),
+  });
+  const versionDrift = runDeployWithFakeDocker({
+    releaseSet: makeReleaseSet(),
+    envOverrides: { REACT_APP_VERSION: "1.5.9" },
+  });
+
+  assert.notEqual(swapped.status, 0);
+  assert.match(`${swapped.stderr}${swapped.stdout}`, /name|mapping|backend|worker/i);
+  assert.notEqual(versionDrift.status, 0);
+  assert.match(`${versionDrift.stderr}${versionDrift.stdout}`, /REACT_APP_VERSION|version/i);
+});
+
+test("up-no-build rejects local images that do not match the release set", () => {
+  const result = runDeployWithFakeDocker({
+    command: "up-no-build",
+    releaseSet: makeReleaseSet(),
+    localDigestOverrides: {
+      "wangsh-backend":
+        "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}${result.stdout}`, /local.*digest|digest.*local/i);
+  assert.doesNotMatch(result.dockerLog, / up -d --no-build/);
+});
+
+test("pull-up verifies pulled image digests before starting services", () => {
+  const result = runDeployWithFakeDocker({
+    command: "pull-up",
+    releaseSet: makeReleaseSet(),
+    localDigestOverrides: {
+      "wangsh-frontend":
+        "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.dockerLog, / pull/);
+  assert.doesNotMatch(result.dockerLog, / up -d --no-build/);
+});
+
+test("pull-up only pulls release services and starts without implicit pulls", () => {
+  const result = runDeployWithFakeDocker({
+    command: "pull-up",
+    releaseSet: makeReleaseSet(),
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(
+    result.dockerLog,
+    / pull backend typst-worker pythonlab-worker pythonlab-sandbox frontend gateway/,
+  );
+  assert.doesNotMatch(result.dockerLog, /pull.*(?:postgres|redis)/);
+  assert.match(result.dockerLog, / up -d --no-build --pull never/);
+});
+
 test("PythonLab PR wrappers execute the checked-out PR runtime", () => {
   const ownerGate = read(".github/workflows/pr-pythonlab-owner-gate.yml");
   const phasecGate = read(".github/workflows/pr-pythonlab-phasec-gate.yml");
@@ -805,9 +966,260 @@ test("CI runs repository governance gates", () => {
     '"$EVENT_NAME" = "workflow_call"',
     "npm run -s test:scripts",
     "npm run -s token:check:ci",
+    "scripts/rollback.sh",
+    "scripts/migrate-db.sh",
+    "scripts/health-check-detailed.sh",
+    "scripts/prod-smoke/run.sh",
+    "start-dev.sh",
+    "stop-dev.sh",
   ]) {
     assert.ok(workflow.includes(required), `missing CI governance gate: ${required}`);
   }
+});
+
+test("CI validates every maintained shell entry separately", () => {
+  const workflow = read(".github/workflows/ci-quality.yml");
+
+  assert.match(
+    workflow,
+    /for script in[\s\S]*?scripts\/deploy\.sh[\s\S]*?scripts\/rollback\.sh[\s\S]*?scripts\/migrate-db\.sh[\s\S]*?scripts\/health-check-detailed\.sh[\s\S]*?scripts\/prod-smoke\/run\.sh[\s\S]*?start-dev\.sh[\s\S]*?stop-dev\.sh[\s\S]*?do[\s\S]*?bash -n "\$script"[\s\S]*?done/,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /bash -n scripts\/deploy\.sh\s+scripts\/rollback\.sh/,
+  );
+});
+
+test("version consistency rejects drift in production and release defaults", () => {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-version-contract-"));
+  const frontendDirectory = join(directory, "frontend");
+  const scriptsDirectory = join(directory, "scripts");
+  const workflowsDirectory = join(directory, ".github", "workflows");
+
+  mkdirSync(frontendDirectory, { recursive: true });
+  mkdirSync(scriptsDirectory, { recursive: true });
+  mkdirSync(workflowsDirectory, { recursive: true });
+  writeFileSync(join(frontendDirectory, "package.json"), '{"version":"1.6.0"}\n');
+  writeFileSync(join(frontendDirectory, "package-lock.json"), '{"version":"1.6.0"}\n');
+  writeFileSync(
+    join(directory, ".env.example"),
+    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6.0\nREACT_APP_VERSION=1.6.0\n",
+  );
+  writeFileSync(
+    join(directory, "docker-compose.yml"),
+    "services:\n  backend:\n    image: repo/wangsh-backend:${IMAGE_TAG:-1.5.9}\n",
+  );
+  writeFileSync(
+    join(scriptsDirectory, "deploy.sh"),
+    'sim_version="${SIM_VERSION:-1.6.0}"\n',
+  );
+  writeFileSync(
+    join(workflowsDirectory, "dockerhub-amd64.yml"),
+    'image_tag:\n  default: "1.6.0"\n',
+  );
+
+  const result = spawnSync("node", ["scripts/check-version-consistency.mjs"], {
+    cwd: new URL(repoRoot).pathname,
+    env: {
+      ...process.env,
+      VERSION_CHECK_ROOT: directory,
+    },
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr, /docker-compose\.yml IMAGE_TAG default/);
+});
+
+test("manual health and Typst smoke defaults match the production gateway", () => {
+  const deploy = read("scripts/deploy.sh");
+  const healthCheck = read("scripts/health-check-detailed.sh");
+  const typstSmoke = read("backend/scripts/smoke_typst_pipeline.py");
+
+  assert.match(healthCheck, /http:\/\/localhost:\$\{WEB_PORT:-6608\}/);
+  assert.match(healthCheck, /check_container "frontend"/);
+  assert.match(healthCheck, /check_container "gateway"/);
+  assert.match(healthCheck, /\[\[ "\$frontend_status" != "ok" \]\]/);
+  assert.match(healthCheck, /\[\[ "\$gateway_status" != "ok" \]\]/);
+  assert.match(healthCheck, /\[\[ "\$typst_status" != "ok" \]\]/);
+  assert.match(healthCheck, /\[\[ "\$pythonlab_status" != "ok" \]\]/);
+  assert.match(healthCheck, /docker inspect --format '\{\{\.State\.Status\}\}'/);
+  assert.match(deploy, /curl -fsS "http:\/\/localhost:\$\{web_port\}\/"/);
+  assert.match(typstSmoke, /http:\/\/localhost:6608\/api\/v1/);
+});
+
+test("local development PostgreSQL readiness targets the configured database", () => {
+  const startDev = read("start-dev.sh");
+
+  assert.match(
+    startDev,
+    /pg_isready -U "\$\{POSTGRES_USER:-admin\}" -d "\$\{POSTGRES_DB:-wangsh_db\}"/,
+  );
+});
+
+test("destructive deploy commands stop before Docker Compose without explicit confirmation", () => {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-deploy-confirmation-contract-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const dockerFile = join(directory, "docker");
+  const envFile = join(directory, ".env");
+  const composeFile = join(directory, "compose.yml");
+  const dumpFile = join(directory, "backup.dump");
+
+  mkdirSync(scriptsDirectory);
+  writeFileSync(envFile, "\n");
+  writeFileSync(composeFile, "services: {}\n");
+  writeFileSync(dumpFile, "fixture");
+  writeFileSync(join(scriptsDirectory, "deploy.sh"), read("scripts/deploy.sh"));
+  chmodSync(join(scriptsDirectory, "deploy.sh"), 0o755);
+  writeFileSync(
+    dockerFile,
+    `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == "info" ]]; then
+  exit 0
+fi
+echo "unexpected Docker call before confirmation: $*" >&2
+exit 99
+`,
+  );
+  chmodSync(dockerFile, 0o755);
+
+  const env = {
+    ...process.env,
+    PATH: `${directory}:${process.env.PATH}`,
+    ENV_FILE: envFile,
+    COMPOSE_FILE: composeFile,
+    COMPOSE_PROJECT_NAME: "wangsh_prod",
+  };
+  const downResult = spawnSync("bash", ["scripts/deploy.sh", "down-v"], {
+    cwd: directory,
+    env,
+    encoding: "utf8",
+  });
+  const restoreResult = spawnSync(
+    "bash",
+    ["scripts/deploy.sh", "restore-db", dumpFile],
+    {
+      cwd: directory,
+      env,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(downResult.status, 2, `${downResult.stderr}\n${downResult.stdout}`);
+  assert.match(downResult.stderr, /Refusing to delete Compose volumes/);
+  assert.equal(restoreResult.status, 2, `${restoreResult.stderr}\n${restoreResult.stdout}`);
+  assert.match(restoreResult.stderr, /Refusing destructive restore/);
+});
+
+test("rollback entry parses arguments, backs up, and reaches the requested revision", () => {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-rollback-contract-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const outsideDirectory = join(directory, "outside");
+  const dockerFile = join(directory, "docker");
+  const dockerLogFile = join(directory, "docker.log");
+  const envFile = join(directory, ".env");
+  const composeFile = join(directory, "compose.yml");
+
+  mkdirSync(scriptsDirectory);
+  mkdirSync(outsideDirectory);
+  writeFileSync(envFile, "\n");
+  writeFileSync(composeFile, "services: {}\n");
+  writeFileSync(join(scriptsDirectory, "rollback.sh"), read("scripts/rollback.sh"));
+  writeFileSync(
+    join(scriptsDirectory, "deploy.sh"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+test "$1" = "backup-db"
+test "$ENV_FILE" = "$EXPECTED_ENV_FILE"
+test "$COMPOSE_FILE" = "$EXPECTED_COMPOSE_FILE"
+echo "backup called"
+`,
+  );
+  chmodSync(join(scriptsDirectory, "rollback.sh"), 0o755);
+  chmodSync(join(scriptsDirectory, "deploy.sh"), 0o755);
+  writeFileSync(
+    dockerFile,
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> '${dockerLogFile}'
+if [[ "$*" == *" ps postgres" ]]; then
+  echo "postgres Up"
+  exit 0
+fi
+if [[ "$*" == *" stop gateway frontend backend typst-worker pythonlab-worker" ]]; then
+  exit 0
+fi
+if [[ "$*" == *" run --rm --no-deps backend alembic downgrade target_revision" ]]; then
+  exit 0
+fi
+echo "unexpected fake docker invocation: $*" >&2
+exit 1
+`,
+  );
+  chmodSync(dockerFile, 0o755);
+
+  const result = spawnSync(
+    "bash",
+    [join(scriptsDirectory, "rollback.sh"), "rollback", "target_revision"],
+    {
+      cwd: outsideDirectory,
+      env: {
+        ...process.env,
+        PATH: `${directory}:${process.env.PATH}`,
+        ENV_FILE: envFile,
+        COMPOSE_FILE: composeFile,
+        EXPECTED_ENV_FILE: envFile,
+        EXPECTED_COMPOSE_FILE: composeFile,
+      },
+      input: "yes\n",
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  assert.match(result.stdout, /Creating backup before rollback/);
+  assert.match(result.stdout, /backup called/);
+  assert.match(result.stdout, /Stopping application services before database rollback/);
+  assert.match(result.stdout, /Rolling back to: target_revision/);
+  assert.doesNotMatch(result.stderr, /local: can only be used in a function/);
+  assert.doesNotMatch(result.stderr, /skipping backup/i);
+  const dockerLog = readFileSync(dockerLogFile, "utf8");
+  assert.ok(
+    dockerLog.indexOf(" stop gateway frontend backend typst-worker pythonlab-worker")
+      < dockerLog.indexOf(" run --rm --no-deps backend alembic downgrade target_revision"),
+    dockerLog,
+  );
+  assert.doesNotMatch(dockerLog, / exec backend alembic downgrade/);
+
+  const invalidResult = spawnSync(
+    "bash",
+    [join(scriptsDirectory, "rollback.sh"), "rollback", "--bakcup"],
+    {
+      cwd: outsideDirectory,
+      env: {
+        ...process.env,
+        PATH: `${directory}:${process.env.PATH}`,
+        ENV_FILE: envFile,
+        COMPOSE_FILE: composeFile,
+      },
+      encoding: "utf8",
+    },
+  );
+  assert.equal(invalidResult.status, 2);
+  assert.match(invalidResult.stderr, /unknown rollback option/i);
+});
+
+test("XBK seed is safe by default and idempotent", () => {
+  const runAll = read("scripts/xbk/run_all.py");
+  const seed = read("scripts/xbk/seed.py");
+
+  assert.match(runAll, /"--reset"/);
+  assert.doesNotMatch(runAll, /"--no-reset"/);
+  assert.match(seed, /reset: bool = False/);
+  assert.match(seed, /ON CONFLICT \(year, term, student_no\) DO UPDATE/);
+  assert.match(seed, /ON CONFLICT \(year, term, course_code\) DO UPDATE/);
+  assert.match(seed, /ON CONFLICT \(year, term, student_no, course_code\) DO UPDATE/);
 });
 
 test("backend CI exposes complete test settings to migrations and pytest", () => {

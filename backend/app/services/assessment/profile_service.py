@@ -268,7 +268,7 @@ async def _collect_class_data(
         sess_result = await db.execute(
             select(AssessmentSession)
             .where(and_(
-                AssessmentSession.config_id == config_id,
+                AssessmentSession.config_id == config_id, AssessmentSession.user_id.in_([student.id for student in students]),
                 AssessmentSession.status == "graded",
             ))
         )

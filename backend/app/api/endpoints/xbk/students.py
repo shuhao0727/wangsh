@@ -2,7 +2,7 @@
 XBK 学生管理 CRUD 端点
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -73,7 +73,7 @@ async def create_student(
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
     row.is_deleted = False  # type: ignore[assignment]
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     db.add(row)
     try:
         await db.commit()
@@ -99,7 +99,7 @@ async def update_student(
         raise HTTPException(status_code=404, detail="学生不存在")
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:
         await db.commit()
     except Exception:
@@ -119,6 +119,6 @@ async def delete_student(
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="学生不存在")
     row.is_deleted = True  # type: ignore[assignment]
-    row.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     await db.commit()
     return None

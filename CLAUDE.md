@@ -2,7 +2,7 @@
 
 > 状态：redirect
 > Owner：project-governance
-> 最近复核：2026-07-13
+> 最近复核：2026-07-18
 > 替代文档：[AGENTS.md](AGENTS.md)
 
 本项目的唯一 Agent 规则源是 [AGENTS.md](AGENTS.md)。Claude Code 在执行任务前应读取

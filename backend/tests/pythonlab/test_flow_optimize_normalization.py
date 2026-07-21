@@ -1,3 +1,5 @@
+"""PythonLab 代码优化结果归一化回归。"""
+
 import pytest
 from fastapi import HTTPException
 
@@ -38,4 +40,3 @@ def test_ensure_conservative_code_optimization_rejects_function_rename():
     with pytest.raises(HTTPException) as exc:
         _ensure_conservative_code_optimization(original, optimized)
     assert exc.value.status_code == 502
-

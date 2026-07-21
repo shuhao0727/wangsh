@@ -1,6 +1,6 @@
 # 部署指南
 
-> 最后更新：2026-07-12
+> 最后更新：2026-07-18
 
 ## 服务器信息
 
@@ -213,13 +213,18 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 # 先独立验证版本、六镜像集合、Compose 引用和 registry digest
 bash scripts/deploy.sh verify-release-set release-set.txt
 
-# 再拉取并启动，不在生产服务器重新构建；deploy 会重复执行同一硬门禁
+# 再拉取并启动，不在生产服务器重新构建。deploy 只拉六个业务镜像，
+# 复核本地 RepoDigest，并等待详细健康检查通过。
 bash scripts/deploy.sh deploy
 
-# 验证网关和后端
-curl http://localhost:6608/api/health
+# 可重复查看 deploy 使用的同一份详细健康状态
+./scripts/health-check-detailed.sh
 docker compose ps
 ```
+
+正式发布不会拉取或隐式更新 `postgres`、`redis`。这两个基础设施镜像必须由运维侧提前
+准备和升级；缺少本地镜像时，`--pull never` 会阻止启动，不能用一次普通发布顺带更新
+数据库或缓存运行时。
 
 ---
 
@@ -245,9 +250,9 @@ Docker Compose 命令：
 |------|------|
 | `bash scripts/deploy.sh build` | 按 `.env` 构建生产镜像 |
 | `bash scripts/deploy.sh push` | 推送 `shuhao07/*:${IMAGE_TAG}` 生产镜像 |
-| `bash scripts/deploy.sh verify-release-set <文件>` | 拉取前校验完整发布镜像集合 |
-| `bash scripts/deploy.sh deploy` | 验证 release-set 后拉取镜像并 `up -d --no-build` |
-| `bash scripts/deploy.sh up-no-build` | 验证 release-set 后使用已有镜像启动，不拉取、不构建 |
+| `bash scripts/deploy.sh verify-release-set <文件>` | 拉取前校验版本、Compose 引用和远端 manifest digest |
+| `bash scripts/deploy.sh deploy` | 验证远端清单，只拉六个业务镜像，复核本地 RepoDigest，以 `--pull never` 启动并等待详细健康门禁 |
+| `bash scripts/deploy.sh up-no-build` | 远端清单与本地 RepoDigest 均一致时才使用已有镜像启动，禁止隐式拉取 |
 | `bash scripts/deploy.sh simulate` | 校验本地镜像后，用临时配置在 `16608` 端口做生产模拟 |
 
 开发环境命令：
@@ -510,13 +515,11 @@ docker compose exec -T postgres sh -c \
 ### 回滚步骤
 
 ```bash
-# 1. 备份当前数据库
-BACKUP_FILE="$(bash scripts/deploy.sh backup-db full)"
+# 1. 使用统一回滚入口；要求输入 yes，先停止业务服务，默认备份，再回退一个 Alembic revision
+bash scripts/rollback.sh rollback -1
 
-# 2. 回滚数据库
-docker compose exec -T backend alembic -c /app/alembic.ini downgrade -1
-
-# 3. 取出发布时归档的旧版本 release-set，并先独立验证
+# 2. 回滚完成后 gateway、frontend、backend 和两个 worker 保持停止；
+#    取出发布时归档的旧版本 release-set，并先独立验证
 OLD_VERSION=1.5.10
 OLD_RELEASE_SET=/secure/releases/release-set-${OLD_VERSION}.txt
 IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERSION} \
@@ -524,25 +527,29 @@ IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERS
   RELEASE_SET_FILE=${OLD_RELEASE_SET} \
   bash scripts/deploy.sh verify-release-set "${OLD_RELEASE_SET}"
 
-# 4. 使用同一份旧 release-set 拉取并启动旧版本
+# 3. 使用同一份旧 release-set 拉取并启动旧版本
 IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERSION} \
   PYTHONLAB_SANDBOX_IMAGE=shuhao07/pythonlab-sandbox:${OLD_VERSION} \
   RELEASE_SET_FILE=${OLD_RELEASE_SET} \
   bash scripts/deploy.sh pull-up "${OLD_RELEASE_SET}"
 
-# 5. 验证
-curl http://localhost:6608/api/health
+# 4. 验证全部服务
+./scripts/health-check-detailed.sh
 ```
 
 每次正式发布都必须把 `release-set.txt` 按版本归档到安全位置。只覆盖
 `IMAGE_TAG`/`APP_VERSION` 而继续使用当前版本的 release-set 会被门禁拒绝，这是预期
-行为，不能通过跳过校验规避。
+行为；`VERSION`、`REACT_APP_VERSION` 如已设置也必须完全一致，不能通过跳过校验规避。
+回滚脚本通过一次性 backend 容器执行 Alembic downgrade，不要求新版 backend 保持
+运行；停止业务服务后不会自动恢复当前版本，必须完成旧 release-set 部署和详细健康检查
+后再开放流量。若备份或 downgrade 失败，也应保持业务服务停止并先排查数据库状态。
+只有已经明确确认不需要新备份时，才使用 `bash scripts/rollback.sh rollback -1 --no-backup`。
 
 ### 回滚失败处理
 
 如果回滚失败，使用备份恢复：
 ```bash
-bash scripts/deploy.sh restore-db "${BACKUP_FILE:-./backups/your-backup.dump}"
+bash scripts/deploy.sh restore-db "${BACKUP_FILE:-./backups/your-backup.dump}" --yes
 ```
 
 ---
@@ -566,12 +573,13 @@ bash scripts/deploy.sh backup-db data
 
 ```bash
 # 恢复脚本按 .env 中的 POSTGRES_USER / POSTGRES_DB 连接当前 Compose 服务
-bash scripts/deploy.sh restore-db ./backups/your-backup.dump
+bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
 ```
 
 `backup-db` 默认输出自定义格式 `.dump`，`restore-db` 使用 `pg_restore --clean
 --if-exists` 恢复；也兼容已有 `.sql` 文件。不要依赖 Compose 自动生成的容器名，也不要
-在未确认备份可恢复前手工删除生产数据库。
+在未确认目标环境前手工删除生产数据库。`restore-db` 必须显式传入 `--yes`；
+`down-v` 必须设置 `ALLOW_VOLUME_DELETION=true`，隔离 `wangsh_sim` 模拟栈清理除外。
 
 ---
 

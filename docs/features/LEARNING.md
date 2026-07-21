@@ -1,6 +1,6 @@
 # 学习平台
 
-> 最后更新：2026-07-07
+> 最后更新：2026-07-18
 
 ## 概述
 
@@ -16,6 +16,19 @@
 ---
 
 ## 架构设计
+
+### 设计边界与内容来源
+
+- 学习平台使用轻量、通用的内容层，不建设独立的完整 CMS。`section_key` 和结构化 JSON
+  承载 roadmap、knowledge、experiments、tools、resources 等不同内容形态。
+- ML、AI、Agents 的内置课程内容是正式教学资产，不是临时 mock。当前前端数据文件作为
+  可审查、可离线使用的 fallback；后端返回有效 section 时按 section 覆盖本地内容。
+- 后端内容不可用或单个 section 结构无效时，页面保留内置内容并显示非阻断提示，不能因
+  一次 API 失败让正式课程整体不可用。
+- 后续若把内置内容完全迁到数据库，必须先建立版本化资源、幂等 seed 和内容完整性校验，
+  证明空库可恢复全部内容后，才能删除前端或归档中的重复来源。
+- `frontend/public/mindmap-demo/` 是思维导图编辑器所需的版本化静态运行时，必须随源码
+  保留；`frontend/public/pyodide/` 则由 `predev` / `prebuild` 从依赖生成，不提交仓库。
 
 ### 数据模型
 
@@ -175,12 +188,18 @@
 
 ## 与 ML Book 的关系
 
-学习平台提供通用的章节/内容/导图/进度基础设施，模块键和 API 端点与 ML Book、AI Book、Agents Book 共享同一套模型。二者的区别：
+学习平台与 ML Book 使用相同的 `module_key` 命名空间，但数据库模型和 API 独立：
 
-- **Learning Platform**：通用化的 CRUD 后端，不预设内容结构。chapters 是扁平的 Markdown 章节列表，content 是灵活的结构化 JSON 配置项。
-- **ML/AI/Agents Book**：前端层面的"书籍"概念，通过 `book.ts` 定义章节元数据和排序，每个模块的 `chapters/` 目录存放 Markdown 源文件。BookReader 组件消费 Learning Platform 的 API 数据并结合前端定义的章节结构渲染分组阅读界面。
+- **Learning Platform**：使用 Learning 模型和 `/learning/*` API，提供通用章节、结构化
+  内容、个人思维导图和学习进度能力。
+- **ML Book 后端**：使用独立的 `ml_books` / `ml_book_chapters` 模型和 `/ml/book/*`
+  API，负责后台书籍元数据与章节管理。
+- **内置 ML/AI/Agents Book**：`book.ts` 与 `chapters/` Markdown 是正式版本化课程
+  fallback。Learning Content 可通过 `section_key=raw`、`item_key=book` 覆盖现有学习页，
+  但不会静默写入或替代 ML Book 数据库记录。
 
-两者共享 `module_key` 命名空间（ml、ai、agents），可以共存且互不冲突。Book 系统为前端构建的"丰富结构化书籍"视图，Learning Platform 为其提供后端持久化支持。
+三条路径可以共存，但不能把共享 `module_key` 误解为共享表或共享 API。完整书籍模型边界
+见 [ML_BOOK.md](ML_BOOK.md)。
 
 ---
 
@@ -198,7 +217,6 @@
 | `MindMapManager.tsx` | 思维导图管理器 |
 | `MindMapEditor.tsx` | 思维导图编辑器 |
 | `MindMapEditorLib.tsx` | 思维导图编辑器底层库 |
-| `InteractiveMindMapEditor.tsx` | 交互式思维导图编辑器 |
 | `MindMapViewer.tsx` | 思维导图查看器 |
 | `types.ts` | 类型定义 |
 | `helpers.ts` | 辅助函数 |

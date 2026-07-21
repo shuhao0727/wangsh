@@ -1,6 +1,6 @@
 # XBK Automation Scripts
 
-- `seed.py`: truncate and seed `xbk_students`, `xbk_courses`, `xbk_selections`.
+- `seed.py`: seed `xbk_students`, `xbk_courses`, `xbk_selections`; default preserves existing rows.
 - `import_samples.py`: generate import sample xlsx files and a manifest.
 - `smoke.py`: run import/preview/update/delete/export smoke checks and save report.
 - `run_all.py`: one-click `seed + import_samples + smoke`.
@@ -10,6 +10,9 @@
 ```bash
 python scripts/xbk/run_all.py
 ```
+
+The default flow is idempotent and does not truncate existing XBK data. Use
+`python scripts/xbk/run_all.py --reset` only in a confirmed local/test database.
 
 Artifacts:
 - `test-results/xbk/seed-summary.json`

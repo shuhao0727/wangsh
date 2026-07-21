@@ -4,13 +4,11 @@ Group Discussion 会话服务模块
 包含会话创建、加入、消息发送、成员管理等核心业务逻辑。
 """
 
-import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, exists, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -19,10 +17,14 @@ from app.models.agents.group_discussion import (
     GroupDiscussionMessage,
     GroupDiscussionSession,
 )
+from app.models.core.user import User
 from app.utils.cache import cache
-
 from .core import _gd_key, _gd_metric_incr, _display_name, _normalize_class_name, _normalize_group_no, _normalize_group_name
-
+from .session_creation import (
+    commit_session_or_get_existing,
+    flush_session_or_get_existing,
+    remove_previous_membership,
+)
 
 async def get_or_create_today_session(
     db: AsyncSession,
@@ -74,9 +76,10 @@ async def get_or_create_today_session(
                 last_message_at=None,
                 message_count=0,
             )
-            db.add(target_session)
-            await db.commit()
-            await db.refresh(target_session)
+            target_session = await commit_session_or_get_existing(
+                db, target_session, session_date=today,
+                class_name=target_class, group_no=group_no_norm,
+            )
             return target_session
 
         if target_session.created_by_user_id == user_id and group_name_norm is not None:
@@ -85,6 +88,13 @@ async def get_or_create_today_session(
             await db.refresh(target_session)
 
         return target_session
+
+    # Serialize membership changes for the same user across concurrent requests.
+    await db.execute(
+        select(User.id)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
 
     # 1. 查询用户上次加入的会话（今天）
     last_member = (
@@ -100,6 +110,7 @@ async def get_or_create_today_session(
             .limit(1)
         )
     ).scalar_one_or_none()
+    last_member_session_id = last_member.session_id if last_member else None
 
     # 2. 查询目标会话（今天、班级、组号）
     target_session = (
@@ -114,7 +125,7 @@ async def get_or_create_today_session(
     ).scalar_one_or_none()
 
     # 3. 如果用户已在目标会话中，直接返回
-    if last_member and target_session and last_member.session_id == target_session.id:
+    if last_member_session_id is not None and target_session and last_member_session_id == target_session.id:
         # 如果是创建者，可以更新组名
         if target_session.created_by_user_id == user_id and group_name_norm is not None:
             target_session.group_name = group_name_norm
@@ -129,6 +140,14 @@ async def get_or_create_today_session(
             last_joined = last_joined.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         elapsed = (now - last_joined).total_seconds()
+
+        # 防护：检测时钟偏移
+        if elapsed < 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="服务器时钟异常：检测到未来的加入时间，请联系管理员",
+            )
+
         if elapsed < int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS or 300):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -146,26 +165,18 @@ async def get_or_create_today_session(
             last_message_at=None,
             message_count=0,
         )
-        db.add(target_session)
-        await db.commit()
-        await db.refresh(target_session)
+        target_session = await flush_session_or_get_existing(
+            db, target_session, session_date=today,
+            class_name=target_class, group_no=group_no_norm,
+        )
 
-    # 6. 如果用户上次加入的是其他会话，删除旧成员记录
-    if last_member and last_member.session_id != target_session.id:
-        # 查询上次会话（用于删除成员）
-        last_session = (
-            await db.execute(
-                select(GroupDiscussionSession).where(GroupDiscussionSession.id == last_member.session_id)
-            )
-        ).scalar_one_or_none()
-        if last_session:
-            await db.execute(
-                delete(GroupDiscussionMember).where(
-                    GroupDiscussionMember.session_id == last_member.session_id,
-                    GroupDiscussionMember.user_id == user_id,
-                )
-            )
-            await db.commit()
+    # 6. 删除旧会话成员关系；仅传递 rollback 前保存的标量 ID。
+    await remove_previous_membership(
+        db,
+        previous_session_id=last_member_session_id,
+        target_session_id=target_session.id,
+        user_id=user_id,
+    )
 
     # 7. 添加用户到目标会话
     new_member = GroupDiscussionMember(
@@ -175,7 +186,11 @@ async def get_or_create_today_session(
         muted_until=None,
     )
     db.add(new_member)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(target_session)
 
     return target_session
@@ -191,7 +206,7 @@ async def list_today_groups(
     ignore_time_limit: bool = False,
 ) -> List[Tuple[GroupDiscussionSession, int]]:
     """列出今日小组"""
-    target_date = date or datetime.now().date()
+    target_date = date or datetime.now(timezone.utc).date()
     class_raw = (class_name or "").strip()
 
     stmt = (
@@ -241,50 +256,6 @@ async def set_group_name(
 
     session.group_name = _normalize_group_name(group_name)
     await db.commit()
-
-
-async def enforce_join_lock(*, user_id: int, requested_group_no: str, user_role: str = "student") -> int:
-    """检查加入锁（仅对学生生效）"""
-    if user_role != "student":
-        return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS or 300)
-
-    if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
-        return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS or 300)
-
-    lock_key = _gd_key("join_lock", int(user_id))
-    locked_data = await cache.get(lock_key)
-    if locked_data is None:
-        return int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS or 300)
-
-    try:
-        data = json.loads(locked_data) if isinstance(locked_data, str) else locked_data
-        locked_group = str(data.get("group_no", ""))
-    except Exception:
-        locked_group = ""
-
-    if locked_group == requested_group_no:
-        return 0  # 可以加入同一组
-
-    ttl = await cache.ttl(lock_key)
-    return max(0, int(ttl or 0))
-
-
-async def set_join_lock(*, user_id: int, requested_group_no: str, user_role: str = "student") -> None:
-    """设置加入锁（仅对学生生效）"""
-    if user_role != "student":
-        return
-
-    if not settings.GROUP_DISCUSSION_REDIS_ENABLED:
-        return
-
-    lock_key = _gd_key("join_lock", int(user_id))
-    data = {"group_no": str(requested_group_no)}
-    await cache.set(
-        lock_key,
-        json.dumps(data, ensure_ascii=False),
-        expire_seconds=int(settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS or 300),
-        nx=True,
-    )
 
 
 async def list_messages(

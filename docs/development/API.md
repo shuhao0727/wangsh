@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-07-11
+> 最后更新：2026-07-18
 
 ## 一、健康检查
 
@@ -389,30 +389,77 @@
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| POST | `/assessment/admin/configs` | 创建测评配置 | 超级管理员 |
-| GET | `/assessment/admin/configs` | 测评配置列表 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}` | 测评配置详情 | 超级管理员 |
-| PUT | `/assessment/admin/configs/{config_id}` | 更新测评配置 | 超级管理员 |
-| DELETE | `/assessment/admin/configs/{config_id}` | 删除测评配置 | 超级管理员 |
-| PUT | `/assessment/admin/configs/{config_id}/toggle` | 开关测评 | 超级管理员 |
-| POST | `/assessment/admin/configs/{config_id}/generate-questions` | AI 生成题目 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}/questions` | 题库列表 | 超级管理员 |
-| POST | `/assessment/admin/questions` | 新增题目 | 超级管理员 |
-| PUT | `/assessment/admin/questions/{question_id}` | 更新题目 | 超级管理员 |
-| DELETE | `/assessment/admin/questions/{question_id}` | 删除题目 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}/class-names` | 已参与班级列表 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}/sessions` | 会话列表 | 超级管理员 |
-| GET | `/assessment/admin/sessions/{session_id}` | 会话详情 | 超级管理员 |
-| GET | `/assessment/admin/sessions/{session_id}/basic-profile` | 学生初级画像 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}/statistics` | 统计数据 | 超级管理员 |
-| POST | `/assessment/admin/sessions/{session_id}/allow-retest` | 单人重测 | 超级管理员 |
-| POST | `/assessment/admin/configs/{config_id}/batch-retest` | 批量重测 | 超级管理员 |
-| GET | `/assessment/admin/configs/{config_id}/export` | 导出 xlsx | 超级管理员 |
-| POST | `/assessment/admin/profiles/generate` | 生成三维画像 | 超级管理员 |
-| POST | `/assessment/admin/profiles/batch-generate` | 批量生成三维画像 | 超级管理员 |
-| GET | `/assessment/admin/profiles` | 画像列表 | 超级管理员 |
-| GET | `/assessment/admin/profiles/{profile_id}` | 画像详情 | 超级管理员 |
-| DELETE | `/assessment/admin/profiles/{profile_id}` | 删除画像 | 超级管理员 |
+| POST | `/assessment/admin/configs` | 创建测评配置 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs` | 测评配置列表 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}` | 测评配置详情 | 管理员（含超级管理员） |
+| PUT | `/assessment/admin/configs/{config_id}` | 更新测评配置 | 管理员（含超级管理员） |
+| DELETE | `/assessment/admin/configs/{config_id}` | 删除测评配置 | 管理员（含超级管理员） |
+| PUT | `/assessment/admin/configs/{config_id}/toggle` | 开关测评 | 管理员（含超级管理员） |
+| POST | `/assessment/admin/configs/{config_id}/generate-questions` | AI 生成题目 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}/questions` | 题库列表 | 管理员（含超级管理员） |
+| POST | `/assessment/admin/questions` | 新增题目 | 管理员（含超级管理员） |
+| PUT | `/assessment/admin/questions/{question_id}` | 更新题目 | 管理员（含超级管理员） |
+| DELETE | `/assessment/admin/questions/{question_id}` | 删除题目 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}/class-names` | 已参与班级列表 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}/sessions` | 会话列表 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/sessions/{session_id}` | 会话详情 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/sessions/{session_id}/basic-profile` | 学生初级画像 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}/statistics` | 统计数据 | 管理员（含超级管理员） |
+| POST | `/assessment/admin/sessions/{session_id}/allow-retest` | 单人重测 | 管理员（含超级管理员） |
+| POST | `/assessment/admin/configs/{config_id}/batch-retest` | 批量重测 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/configs/{config_id}/export` | 导出 xlsx | 管理员（含超级管理员） |
+| POST | `/assessment/admin/profiles/generate` | 生成三维画像 | 管理员（含超级管理员） |
+| POST | `/assessment/admin/profiles/batch-generate` | 批量生成三维画像 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/profiles` | 画像列表 | 管理员（含超级管理员） |
+| GET | `/assessment/admin/profiles/{profile_id}` | 画像详情 | 管理员（含超级管理员） |
+| DELETE | `/assessment/admin/profiles/{profile_id}` | 删除画像 | 管理员（含超级管理员） |
+
+关键请求体：
+
+| 接口 | 必填字段 | 主要约束 |
+|---|---|---|
+| `POST /assessment/admin/configs` | `title` | 可选 `grade`、`teaching_objectives`、`knowledge_points`、`total_score`、`question_config`、`ai_prompt`、`agent_id`、`agent_ids`、`time_limit_minutes`、`available_start/end`；`total_score` 为 1-1000，时限不小于 0 |
+| `POST /assessment/admin/configs/{config_id}/generate-questions` | 无 | 可选 `count`、`question_type`、`difficulty`、`knowledge_points`；配置必须绑定出题智能体 |
+| `POST /assessment/admin/questions` | `config_id`、`question_type`、`content`、`correct_answer`、`score` | 可选 `options`、`difficulty`、`knowledge_point`、`explanation`、`source`、`mode`、`adaptive_config`；题型仅 `choice/fill/short_answer`，模式仅 `fixed/adaptive` |
+| `POST /assessment/admin/configs/{config_id}/batch-retest` | `session_ids` 或 `class_name` | 删除匹配的旧会话及其级联答题/初级画像，并清理对应高级画像 |
+| `POST /assessment/admin/profiles/generate` | `profile_type`、`target_id`、`agent_id` | 可选 `config_id`、`discussion_session_id`、`agent_ids`；小组画像必须绑定讨论会话 |
+| `POST /assessment/admin/profiles/batch-generate` | `user_ids`、`agent_id` | 可选 `config_id`、`discussion_session_id`、`agent_ids`；`user_ids` 至少 1 项，仅批量生成个人画像 |
+| `POST /assessment/sessions/start` | `config_id` | 配置必须启用且题库非空；尽量复用已有 `in_progress` 会话，但数据库没有严格唯一约束 |
+| `POST /assessment/sessions/{session_id}/answer` | `answer_id`、`student_answer` | 会话必须属于当前用户且仍在进行；同一答题记录不可重复提交 |
+
+列表与统计查询参数：
+
+| 接口 | 查询参数 |
+|---|---|
+| `GET /assessment/admin/configs` | `skip>=0`、`1<=limit<=100`，可选 `grade`、`enabled`、`search` |
+| `GET /assessment/admin/configs/{config_id}/questions` | `skip>=0`、`1<=limit<=200`，可选 `question_type`、`difficulty` |
+| `GET /assessment/admin/configs/{config_id}/sessions` | `skip>=0`、`1<=limit<=100`，可选 `class_name`、`status`、`search`、`time_field=submitted_at|started_at`、`start_date/end_date=YYYY-MM-DD` |
+| `GET /assessment/admin/configs/{config_id}/statistics` | 可选 `class_name`、`time_field=submitted_at|started_at`、`start_date/end_date=YYYY-MM-DD` |
+| `GET /assessment/admin/profiles` | `skip>=0`、`1<=limit<=100`，可选 `profile_type`、`target_id` |
+| `GET /assessment/admin/configs/{config_id}/export` | 可选 `class_name`、`status`、`search`、`time_field=submitted_at|started_at`、`start_date/end_date=YYYY-MM-DD` |
+| `GET /assessment/my-profiles` | `skip>=0`、`1<=limit<=100` |
+
+`profile_type` 仅允许 `individual`、`group`、`class`。完整 DB、Prompt 和前端契约见
+[`docs/features/ASSESSMENT.md`](../features/ASSESSMENT.md)。
+
+核心响应字段：
+
+| 场景 | 关键字段 |
+|---|---|
+| 配置详情 | `id`、配置业务字段、`enabled`、`question_count`、`session_count`、`config_agents`、创建者和时间 |
+| 题目详情 | `id`、`config_id`、`question_type`、`content`、`options`、`correct_answer`、`score`、`difficulty`、`knowledge_point`、`explanation`、`source`、`mode`、`adaptive_config` |
+| 开始测评 | `session_id`、`config_title`、`total_questions`、`total_score`、`time_limit_minutes`、`started_at` |
+| 获取题目 | 直接返回题目数组；每题含 `answer_id`、题型、内容、选项、分值、已有答案、是否已答、自适应标记、知识点和尝试序号，不返回正确答案 |
+| 提交单题 | `answer_id`、`question_type`、`is_correct`、`correct_answer`、`explanation`、`earned_score`、`max_score`、`ai_feedback`；自适应题还可能返回下一题和掌握状态 |
+| 提交整卷 | `session_id`、`status=graded`、`earned_score`、`total_score`；初级/高级画像在后台生成，因此初始 `basic_profile_id` 和 `summary` 可为空 |
+| 测评结果 | 会话字段、逐题 `student_answer` / `correct_answer` / `earned_score` / `max_score` / `ai_feedback` / `explanation`、`basic_profile_id` |
+| 初级画像 | 得分、`knowledge_scores`、`wrong_points`、`ai_summary`、`class_knowledge_rates` |
+| 画像状态 | `basic_ready`、`advanced_ready` |
+| 高级画像 | `profile_type`、`target_id`、`config_id`、`discussion_session_id`、`agent_ids`、`data_sources`、`result_text`、`scores` 和创建信息 |
+| 统计 | `total_students`、`submitted_count`、`avg_score`、`max_score`、`min_score`、`pass_rate`、`knowledge_rates`、分数分布和趋势 |
+
+评分时机：选择题立即精确判分；填空题立即 AI 评分，并在未配置智能体或 AI 失败时回退
+文本比对；简答题单题提交时只保存答案，整卷提交后统一评分。
 
 ### 学生端（/assessment）
 

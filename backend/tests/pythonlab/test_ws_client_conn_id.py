@@ -1,3 +1,5 @@
+"""PythonLab WebSocket 客户端连接标识回归。"""
+
 import pytest
 
 from app.api.pythonlab.ws import _normalize_client_conn_id

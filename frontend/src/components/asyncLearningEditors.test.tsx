@@ -3,6 +3,8 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { showMessage } from "@/lib/toast";
 import MindMapEditor from "@/pages/Admin/ITTechnology/learning/MindMapEditor";
+import MindMapEditorLib from "@/pages/Admin/ITTechnology/learning/MindMapEditorLib";
+import MindMapViewer from "@/pages/Admin/ITTechnology/learning/MindMapViewer";
 import TabEditorPage from "@/pages/Admin/ITTechnology/learning/TabEditorPage";
 
 vi.mock("@/lib/toast", () => ({
@@ -41,6 +43,7 @@ describe("async learning editors", () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -112,6 +115,98 @@ describe("async learning editors", () => {
     expect(svg.getAttribute("height")).toMatch(/^\d+$/);
     expect(svg.style.width).toBe("100%");
     expect(svg.style.height).toBe("100%");
+  });
+
+  it("renders compact mindmap cards without a D3 transition", async () => {
+    const setData = vi.fn().mockResolvedValue(undefined);
+    const fit = vi.fn().mockResolvedValue(undefined);
+    const createMarkmap = vi.fn().mockReturnValue({
+      destroy: vi.fn(),
+      fit,
+      setData,
+      state: { rect: { x1: 0, x2: 100, y1: 0, y2: 50 } },
+    });
+    vi.spyOn(SVGSVGElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 160,
+      height: 160,
+      left: 0,
+      right: 300,
+      top: 0,
+      width: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    Object.assign(window, {
+      markmap: {
+        Transformer: class {
+          transform() {
+            return { root: { content: "root" } };
+          }
+        },
+        Markmap: { create: createMarkmap },
+      },
+    });
+
+    render(<MindMapViewer markdown="# Root" compact />);
+
+    await waitFor(() => expect(createMarkmap).toHaveBeenCalledOnce());
+    expect(createMarkmap.mock.calls[0]).toEqual([
+      expect.any(SVGSVGElement),
+      { autoFit: false, duration: 0 },
+    ]);
+    expect(setData).toHaveBeenCalledWith({ content: "root" });
+    await waitFor(() => expect(fit).toHaveBeenCalledOnce());
+    const svg = createMarkmap.mock.calls[0][0] as SVGSVGElement;
+    expect(svg.getAttribute("height")).toBe("160");
+  });
+
+  it("round-trips the embedded mindmap without duplicate roots or rich-text HTML", async () => {
+    vi.mocked(fetch).mockResolvedValue(response(200));
+
+    render(
+      <MindMapEditorLib
+        mindmapId={7}
+        initialTitle="课堂导图"
+        initialMarkdown="# 课堂导图"
+      />,
+    );
+
+    const initialData = JSON.parse(localStorage.getItem("_wangsh_mindmap_data") || "{}");
+    expect(initialData.root).toEqual({
+      data: { text: "课堂导图", uid: "n1" },
+      children: [],
+    });
+
+    const iframe = screen.getByTitle("思维导图编辑器");
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      value: {
+        takeOverAppMethods: {
+          getMindMapData: () => ({
+            root: {
+              data: { text: "<p>课堂中心主题</p>" },
+              children: [
+                { data: { text: "<strong>最新节点</strong>" }, children: [] },
+              ],
+            },
+          }),
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/v1/learning/mindmaps/7");
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      title: "课堂导图",
+      content: {
+        markdown: "# 课堂中心主题\n## 最新节点\n",
+      },
+    });
   });
 
   it("does not report a successful deletion when the DELETE request returns 500", async () => {

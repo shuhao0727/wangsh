@@ -1,7 +1,11 @@
-"""Seed AI learning content (experiments & tools) into database.
+"""Archived AI learning content migration source.
 
-Run: python backend/scripts/seed_ai_content.py
+Do not execute this file directly. Its course content must first be migrated to
+the versioned, idempotent seed format described by the project plan.
 """
+
+if __name__ == "__main__":
+    raise SystemExit("Archived course source only; direct database seeding is disabled.")
 
 import asyncio
 import json
@@ -511,7 +515,3 @@ async def main():
         await seed_experiments(db, "ai", AI_EXPERIMENTS)
         await seed_tools(db, "ai", AI_TOOLS)
     print("Done!")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

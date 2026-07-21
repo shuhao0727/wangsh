@@ -459,7 +459,7 @@ async def list_classes(db: AsyncSession, *, date: Optional[date] = None) -> List
         stmt = stmt.where(GroupDiscussionSession.session_date == date)
     else:
         # 默认查最近30天
-        cutoff = datetime.now().date() - timedelta(days=30)
+        cutoff = datetime.now(timezone.utc).date() - timedelta(days=30)
         stmt = stmt.where(GroupDiscussionSession.session_date >= cutoff)
 
     rows = (await db.execute(stmt.order_by(GroupDiscussionSession.class_name.asc()))).scalars().all()

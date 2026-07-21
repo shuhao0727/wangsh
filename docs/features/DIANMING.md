@@ -111,13 +111,13 @@
 
 ## 点名播放器
 
-前端还提供了点名播放器页面 `frontend/src/pages/Pages/ITTechnology/RollCallPlayer.tsx`，用于上课时随机抽取学生，详情参考教学技术页面。
+前端还提供了点名播放器页面 `frontend/src/pages/ITTechnology/RollCallPlayer.tsx`，用于上课时随机抽取学生，详情参考教学技术页面。
 
 ---
 
 ## 相关文档
 
-- [API 参考](../development/API.md) — 第十二章：信息技术（/xxjs）
+- [API 参考](../development/API.md) — 第十一章：信息技术（/xxjs）
 
 ## 相关文件
 

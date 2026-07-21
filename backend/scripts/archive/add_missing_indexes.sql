@@ -1,3 +1,12 @@
+-- DISABLED ARCHIVE DRAFT: do not execute this file.
+-- Convert individually reviewed indexes into an Alembic migration first.
+\if :{?WANGSH_ALLOW_EXPERIMENTAL_INDEX_DDL}
+\echo 'This archived draft is disabled even when WANGSH_ALLOW_EXPERIMENTAL_INDEX_DDL is set.'
+\quit 2
+\endif
+\echo 'Refusing to execute archived index draft. Use a reviewed Alembic migration.'
+\quit 2
+
 -- 数据库性能优化：添加缺失的索引
 -- 根据性能分析报告生成的索引优化脚本
 

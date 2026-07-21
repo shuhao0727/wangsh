@@ -32,16 +32,16 @@
 
 ### 当前计划与治理 (`docker/plans/`)
 
-- [docker/plans/README.md](docker/plans/README.md) - 当前计划、reference、redirect 的完整索引
-- [docker/plans/2026-07-11-project-health-and-improvement-report.md](docker/plans/2026-07-11-project-health-and-improvement-report.md) - 2026-07-13 项目健康快照与风险判断
+- [docker/plans/README.md](docker/plans/README.md) - 当前计划与稳定 reference 索引
 - [docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
-- [docker/plans/2026-07-12-project-consolidation-and-release-plan.md](docker/plans/2026-07-12-project-consolidation-and-release-plan.md) - 当前整理、提交和发布收口计划
-- [docker/plans/2026-07-11-change-batch-manifest.md](docker/plans/2026-07-11-change-batch-manifest.md) - 当前工作区变更批次和提交边界
+- [docker/plans/2026-07-14-project-file-consolidation-plan.md](docker/plans/2026-07-14-project-file-consolidation-plan.md) - 当前文档、测试和脚本整理执行计划
 
-> 已归档计划详见 [docker/archive/README.md](docker/archive/README.md)
+> 已完成的阶段报告、批次摘要和发布历史已压缩为一份归档摘要，详见
+> [docker/archive/README.md](docker/archive/README.md)。
 
 ## 功能模块 (`features/`)
 
+- [features/AUTH.md](features/AUTH.md) - 认证与权限系统（登录、角色层级、权限控制）
 - [features/AI_AGENTS.md](features/AI_AGENTS.md) - AI 智能体系统（多平台、SSE 流式、分组讨论）
 - [features/CLASSROOM.md](features/CLASSROOM.md) - 课堂互动系统（活动、计划、AI 分析）
 - [features/INFORMATICS.md](features/INFORMATICS.md) - 信息学笔记系统（Typst 编辑、PDF 渲染）
@@ -53,15 +53,10 @@
 - [features/DIANMING.md](features/DIANMING.md) - XXJS 点名系统
 - [features/XBK.md](features/XBK.md) - 校本课选课系统
 - [features/ARTICLES.md](features/ARTICLES.md) - 文章管理系统
+- [features/ASSESSMENT.md](features/ASSESSMENT.md) - 自主检测系统（测评、画像、API、DB、前端和 prompt 总 owner）
 
-### 评估系统 (`features/assessment/`)
+### 评估系统 Prompt Owner (`features/assessment/`)
 
-- [features/assessment/ASSESSMENT_DESIGN.md](features/assessment/ASSESSMENT_DESIGN.md) - 系统设计总览
-- [features/assessment/ASSESSMENT_DATABASE.md](features/assessment/ASSESSMENT_DATABASE.md) - 数据库设计（7 张表）
-- [features/assessment/ASSESSMENT_API.md](features/assessment/ASSESSMENT_API.md) - API 接口设计
-- [features/assessment/ASSESSMENT_FRONTEND.md](features/assessment/ASSESSMENT_FRONTEND.md) - 前端实现
-- [features/assessment/ASSESSMENT_FILES.md](features/assessment/ASSESSMENT_FILES.md) - 文件清单
-- [features/assessment/ASSESSMENT_PROMPTS.md](features/assessment/ASSESSMENT_PROMPTS.md) - AI 提示词设计
 - [features/assessment/hot_agent.md](features/assessment/hot_agent.md) - 热点问题教学诊断智能体指令
 - [features/assessment/chain_agent.md](features/assessment/chain_agent.md) - 学生问题链认知诊断智能体指令
 
@@ -75,6 +70,8 @@
 - [scripts/ARCHIVE_INDEX.md](scripts/ARCHIVE_INDEX.md) - 脚本归档索引（历史脚本清理记录）
 
 ### 就近说明文档
+所有模块专用说明文档（测试、脚本、工具）都在其对应模块目录下，统一由 `docs/README.md` 索引：
+
 - [../backend/tests/README.md](../backend/tests/README.md) - 后端测试说明
 - [../backend/scripts/README.md](../backend/scripts/README.md) - 后端 smoke/soak 脚本说明
 - [../scripts/README.md](../scripts/README.md) - 根层运维与生产烟测脚本说明

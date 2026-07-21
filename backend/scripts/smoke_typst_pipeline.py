@@ -111,7 +111,7 @@ def _die(msg: str):
 
 
 def main() -> int:
-    base_url = os.environ.get("BASE_URL", "http://localhost:8080/api/v1").rstrip("/")
+    base_url = os.environ.get("BASE_URL", "http://localhost:6608/api/v1").rstrip("/")
     admin_username = os.environ.get("ADMIN_USERNAME", "admin")
     admin_password = os.environ.get("ADMIN_PASSWORD", "")
     note_id_env = os.environ.get("NOTE_ID")

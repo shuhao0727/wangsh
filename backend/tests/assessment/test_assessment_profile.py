@@ -58,6 +58,9 @@ class MockScalarResult:
     def all(self):
         return self._values
 
+    def one_or_none(self):
+        return self._value
+
 
 def _make_db(execute_side_effects=None):
     db = AsyncMock()
@@ -191,3 +194,6 @@ def test_generate_basic_profile_knowledge_aggregation():
     wrong = json.loads(added_obj.wrong_points)
     assert "变量" in wrong
     assert "循环" in wrong
+
+    # 注：_collect_class_data 是内部实现，不再直接测试
+    # 其逻辑通过 generate_class_profile 等公共 API 间接验证

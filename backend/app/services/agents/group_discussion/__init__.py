@@ -31,13 +31,12 @@ from .session_service import (
     get_or_create_today_session,
     list_today_groups,
     set_group_name,
-    enforce_join_lock,
-    set_join_lock,
     list_messages,
     send_message,
     mute_member,
     unmute_member,
 )
+from .join_lock_service import enforce_join_lock, set_join_lock
 
 from .prompts import (
     _default_prompt,

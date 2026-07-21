@@ -1,6 +1,6 @@
 # 信息学笔记系统文档
 
-> 最后更新：2026-07-12
+> 最后更新：2026-07-18
 
 ## 概述
 
@@ -218,9 +218,9 @@
 
 ## 前端页面
 
-- `/informatics` — 公开笔记列表（Notes.tsx）
+- `/informatics` — 公开笔记列表（`pages/Informatics/index.tsx`）
 - `/informatics/:id` — PDF 阅读器（Reader.tsx + Detail.tsx）
-- `/admin/informatics` — 笔记管理后台（TypstNotesPanel.tsx）
+- `/admin/informatics` — 笔记管理后台（`pages/Admin/Informatics/index.tsx`）
 - `/admin/informatics/editor/new|:id` — Typst 在线编辑器（EditorPage.tsx）
 
 ---

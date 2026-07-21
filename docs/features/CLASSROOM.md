@@ -1,6 +1,6 @@
 # 课堂互动系统文档
 
-> 最后更新：2026-07-11
+> 最后更新：2026-07-18
 
 ## 概述
 
@@ -349,8 +349,7 @@ frontend/src/pages/Admin/ClassroomInteraction/
 └── utils.ts                         # 工具函数
 
 frontend/src/pages/Admin/ClassroomPlan/
-├── index.tsx                        # 计划列表页面
-└── PlanPage.tsx                     # 计划详情和编辑页
+└── PlanPage.tsx                     # 计划列表、详情和编辑页
 
 frontend/src/pages/AIAgents/
 └── ClassroomPanel.tsx               # 课堂活动分析面板
@@ -451,8 +450,7 @@ frontend/src/hooks/queries/
 | `frontend/src/pages/Admin/ClassroomInteraction/index.tsx` | 管理端活动列表页 |
 | `frontend/src/pages/Admin/ClassroomInteraction/components/ActivityFormDialog.tsx` | 活动表单对话框 |
 | `frontend/src/pages/Admin/ClassroomInteraction/components/ActivityColumns.tsx` | 活动列表列定义 |
-| `frontend/src/pages/Admin/ClassroomPlan/index.tsx` | 计划列表页 |
-| `frontend/src/pages/Admin/ClassroomPlan/PlanPage.tsx` | 计划详情编辑页 |
+| `frontend/src/pages/Admin/ClassroomPlan/PlanPage.tsx` | 计划列表、详情和编辑页 |
 | `frontend/src/services/classroom.ts` | 活动 API 服务 |
 | `frontend/src/services/classroomPlan.ts` | 计划 API 服务 |
 | `frontend/src/hooks/queries/useClassroomQuery.ts` | 活动查询 hooks |

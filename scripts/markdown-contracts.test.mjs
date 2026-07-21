@@ -43,17 +43,35 @@ function runFixture(candidate, summaryLines, setup) {
       `# ${moduleName}\n`,
     );
   }
-
+  writeFixtureFile(
+    fixtureRoot,
+    "docs/features/ASSESSMENT.md",
+    [
+      "# Assessment",
+      "",
+      "> 状态：active",
+      "> Owner：assessment",
+      "",
+      "[hot](assessment/hot_agent.md)",
+      "[chain](assessment/chain_agent.md)",
+      "",
+    ].join("\n"),
+  );
+  writeFixtureFile(
+    fixtureRoot,
+    "docs/features/assessment/hot_agent.md",
+    "# Hot Agent\n",
+  );
+  writeFixtureFile(
+    fixtureRoot,
+    "docs/features/assessment/chain_agent.md",
+    "# Chain Agent\n",
+  );
   const summary = summaryLines.join("\n");
   writeFixtureFile(
     fixtureRoot,
     "docs/docker/testing/TEST_STATUS.md",
     `# Test status\n\n> 状态：active\n> Owner：testing\n\n${summary}\n`,
-  );
-  writeFixtureFile(
-    fixtureRoot,
-    "docs/docker/plans/2026-07-12-project-consolidation-and-release-plan.md",
-    `# Plan\n\n> 状态：active\n> Owner：docs\n\n${summary}\n`,
   );
   writeFixtureFile(
     fixtureRoot,
@@ -93,7 +111,7 @@ test("repository Markdown contracts pass", () => {
 test("rejects absolute links that escape the repository", () => {
   const result = runFixture(
     "# Candidate\n\n> 状态：active\n> Owner：docs\n\n[outside](/etc/passwd)\n",
-    ["9 files / 2 links / 0 missing"],
+    ["11 files / 4 links / 0 missing"],
   );
 
   assert.notEqual(result.status, 0);
@@ -103,7 +121,7 @@ test("rejects absolute links that escape the repository", () => {
 test("rejects symlink links that escape the repository", () => {
   const result = runFixture(
     "# Candidate\n\n> 状态：active\n> Owner：docs\n\n[outside](passwd-link)\n",
-    ["9 files / 2 links / 0 missing"],
+    ["11 files / 4 links / 0 missing"],
     (fixtureRoot) => {
       fs.symlinkSync("/etc/passwd", path.join(fixtureRoot, "docs/docker/plans/passwd-link"));
     },
@@ -116,7 +134,7 @@ test("rejects symlink links that escape the repository", () => {
 test("requires lifecycle metadata in the document preamble", () => {
   const result = runFixture(
     "# Candidate\n\n```yaml\nstatus: active\nowner: docs\n```\n",
-    ["9 files / 1 links / 0 missing"],
+    ["11 files / 3 links / 0 missing"],
   );
 
   assert.notEqual(result.status, 0);
@@ -127,7 +145,7 @@ test("requires lifecycle metadata in the document preamble", () => {
 test("applies redirect rules to YAML frontmatter", () => {
   const result = runFixture(
     "---\nstatus: redirect\nowner: docs\n---\n\n# Candidate\n\nNo target.\n",
-    ["9 files / 1 links / 0 missing"],
+    ["11 files / 3 links / 0 missing"],
   );
 
   assert.notEqual(result.status, 0);
@@ -137,7 +155,7 @@ test("applies redirect rules to YAML frontmatter", () => {
 test("requires the exact derived Markdown summary", () => {
   const result = runFixture(
     "# Candidate\n\n> 状态：active\n> Owner：docs\n",
-    ["files: 9", "links: 1"],
+    ["files: 11", "links: 3"],
   );
 
   assert.notEqual(result.status, 0);
@@ -157,7 +175,7 @@ test("checks reference-style links", () => {
       "[passwd]: /etc/passwd",
       "",
     ].join("\n"),
-    ["9 files / 1 links / 0 missing", "9 files / 2 links / 0 missing"],
+    ["11 files / 3 links / 0 missing", "11 files / 4 links / 0 missing"],
   );
 
   assert.notEqual(result.status, 0);
@@ -179,7 +197,7 @@ test("ignores links in tilde-fenced and inline code", () => {
       "`[inline](/definitely-missing-inline)`",
       "",
     ].join("\n"),
-    ["9 files / 1 links / 0 missing", "9 files / 3 links / 0 missing"],
+    ["11 files / 3 links / 0 missing", "11 files / 5 links / 0 missing"],
   );
 
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`.trim());
@@ -197,7 +215,7 @@ test("rejects an unbalanced tilde fence", () => {
       "never closed",
       "",
     ].join("\n"),
-    ["9 files / 1 links / 0 missing"],
+    ["11 files / 3 links / 0 missing"],
   );
 
   assert.notEqual(result.status, 0);

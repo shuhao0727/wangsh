@@ -11,7 +11,6 @@ import { useNormalizedResult } from "./hooks/useNormalizedResult";
 import { useBeamData } from "./hooks/useBeamData";
 import {
   escapeHtml,
-  shortText,
   safeFilePart,
   formatTimeRange,
   normalizeTimelineBuckets,
@@ -63,19 +62,14 @@ const BasicInfoBar: React.FC<{
 /* ─────────────────────────────────────────────────────────────────── */
 /* Section 2: Core Chart — ChainBeamChart wrapper                     */
 /* ─────────────────────────────────────────────────────────────────── */
-const BUCKET_OPTIONS = [1, 3, 5] as const;
-type BucketMinutes = (typeof BUCKET_OPTIONS)[number];
-
 interface BeamChartSectionProps {
   resultData: any;
   studentChains: any[];
   teacherMarks: ReturnType<typeof normalizeTimelineTeacherMarks>;
   startTime?: string;
-  bucketMin: BucketMinutes;
-  setBucketMin: (v: BucketMinutes) => void;
 }
 
-const BeamChartSection: React.FC<BeamChartSectionProps> = ({ resultData, studentChains, teacherMarks, startTime, bucketMin, setBucketMin }) => {
+const BeamChartSection: React.FC<BeamChartSectionProps> = ({ resultData, studentChains, teacherMarks, startTime }) => {
   // 从 resultData 提取 merged_groups（后端 analyze_student_chains_v2 输出）
   const mergedGroups = useMemo(() => (resultData.merged_groups || []) as any[], [resultData.merged_groups]);
 
@@ -100,24 +94,12 @@ const BeamChartSection: React.FC<BeamChartSectionProps> = ({ resultData, student
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
-        <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5">
-          {BUCKET_OPTIONS.map((m) => (
-            <button key={m} onClick={() => setBucketMin(m)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${bucketMin === m ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-base"}`}>
-              {m}分钟
-            </button>
-          ))}
-        </div>
-      </div>
-      <ChainBeamChart
-        mergedGroups={mergedGroups}
-        studentChains={formattedChains}
-        teacherMarks={formattedTeacherMarks}
-        startTime={startTime}
-      />
-    </div>
+    <ChainBeamChart
+      mergedGroups={mergedGroups}
+      studentChains={formattedChains}
+      teacherMarks={formattedTeacherMarks}
+      startTime={startTime}
+    />
   );
 };
 
@@ -370,8 +352,6 @@ const ChainAnalysisResultPage: React.FC = () => {
   const timelineBuckets = useMemo(() => normalizeTimelineBuckets(resultData, detail), [resultData, detail]);
   const timelineTeacherMarks = useMemo(() => normalizeTimelineTeacherMarks(resultData, detail), [resultData, detail]);
 
-  const [bucketMin, setBucketMin] = useState<BucketMinutes>(3);
-
   // 平均链长
   const avgChainLength = useMemo(() => {
     if (chainCount === 0) return 0;
@@ -450,8 +430,6 @@ const ChainAnalysisResultPage: React.FC = () => {
           studentChains={savedStudentChains || []}
           teacherMarks={timelineTeacherMarks}
           startTime={detail?.start_at}
-          bucketMin={bucketMin}
-          setBucketMin={setBucketMin}
         />
 
         {/* 2.5 Merge Review */}

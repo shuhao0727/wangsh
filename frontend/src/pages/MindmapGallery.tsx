@@ -13,6 +13,7 @@ import {
 import { Loader2, Globe, BookOpen, Plus, Pencil, Eye, Trash2 } from "lucide-react";
 import { showMessage } from "@/lib/toast";
 import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
+import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
 
 type MindmapItem = {
   id: number; title: string; content: { markdown?: string }; updated_at: string;
@@ -167,7 +168,7 @@ const MindmapGallery: React.FC = () => {
     const title = item.title || "未命名";
     const md = item.content?.markdown || `# ${title}`;
     localStorage.setItem("_wangsh_mindmap_data", JSON.stringify({
-      root: parseMarkdownToTree(md, title),
+      root: markdownToMindMapData(md, title),
       theme: { template: "classic4", config: {} },
       layout: "logicalStructure", config: {}, view: null,
     }));
@@ -178,7 +179,7 @@ const MindmapGallery: React.FC = () => {
     const title = item.title || "未命名";
     const md = item.content?.markdown || `# ${title}`;
     localStorage.setItem("_wangsh_mindmap_data", JSON.stringify({
-      root: parseMarkdownToTree(md, title),
+      root: markdownToMindMapData(md, title),
       theme: { template: "classic4", config: {} },
       layout: "logicalStructure", config: {}, view: null,
     }));
@@ -299,19 +300,5 @@ const Empty: React.FC<{ icon: React.ReactNode; text: string; action?: string; on
     {action && <Button variant="link" size="sm" className="mt-2" onClick={onAction}>{action}</Button>}
   </div>
 );
-
-function parseMarkdownToTree(md: string, rootText: string) {
-  const lines = md.split("\n").filter(l => l.trim());
-  const root: any = { data: { text: rootText }, children: [] };
-  const stack: { level: number; node: any }[] = [{ level: 0, node: root }];
-  for (const line of lines) {
-    const m = line.match(/^(#+)\s+(.+)/); if (!m) continue;
-    const child: any = { data: { text: m[2].trim() }, children: [] };
-    while (stack.length > 0 && stack[stack.length - 1].level >= m[1].length) stack.pop();
-    if (stack.length > 0) stack[stack.length - 1].node.children.push(child);
-    stack.push({ level: m[1].length, node: child });
-  }
-  return root;
-}
 
 export default MindmapGallery;

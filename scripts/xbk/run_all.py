@@ -18,11 +18,11 @@ def _run(cmd: list[str]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="One-click XBK reset + seed + import-samples + smoke.")
+    parser = argparse.ArgumentParser(description="One-click XBK seed + import-samples + smoke.")
     parser.add_argument(
-        "--no-reset",
+        "--reset",
         action="store_true",
-        help="Pass --no-reset to seed.py",
+        help="Explicitly truncate the existing XBK tables before seeding.",
     )
     args = parser.parse_args()
 
@@ -33,8 +33,8 @@ def main() -> None:
     smoke_script = root / "scripts" / "xbk" / "smoke.py"
 
     seed_cmd = [python_bin, str(seed_script)]
-    if args.no_reset:
-        seed_cmd.append("--no-reset")
+    if args.reset:
+        seed_cmd.append("--reset")
 
     _run(seed_cmd)
     _run([python_bin, str(import_script)])

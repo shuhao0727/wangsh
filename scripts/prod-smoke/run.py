@@ -461,6 +461,36 @@ def worst_status(current: str, new: str) -> str:
     return new if STATUS_RANK[new] > STATUS_RANK[current] else current
 
 
+def finalize_smoke_status(
+    steps: list[StepRecord],
+    *,
+    ui_report_exists: bool,
+) -> str:
+    if not ui_report_exists:
+        ui_step = next((step for step in steps if step.name == "ui-smoke"), None)
+        if ui_step is None:
+            timestamp = now_iso()
+            ui_step = StepRecord(
+                name="ui-smoke",
+                kind="core UI",
+                modules=["system/gateway"],
+                status="FAIL",
+                started_at=timestamp,
+                finished_at=timestamp,
+                duration_seconds=0.0,
+            )
+            steps.append(ui_step)
+        if "ui report missing" not in ui_step.failures:
+            ui_step.failures.append("ui report missing")
+            ui_step.fail_count += 1
+        ui_step.status = "FAIL"
+
+    overall_status = "PASS"
+    for step in steps:
+        overall_status = worst_status(overall_status, step.status)
+    return overall_status
+
+
 def run_subprocess(
     name: str,
     *,
@@ -920,6 +950,15 @@ def build_failures_md(steps: list[StepRecord], service_logs: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def is_isolated_smoke_target(project_name: str, origin: str) -> bool:
+    parsed = urllib.parse.urlparse(origin)
+    return (
+        project_name == "wangsh_sim"
+        and parsed.scheme in {"http", "https"}
+        and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    )
+
+
 def main() -> int:
     ensure_dirs(clean=True)
     ensure_prereqs()
@@ -928,6 +967,17 @@ def main() -> int:
     admin_password = env_get(config, "SUPER_ADMIN_PASSWORD", "")
     sensitive_values = collect_sensitive_values(config, [admin_password])
     base_origin = env_get(config, "PROD_SMOKE_ORIGIN", "http://localhost:6608")
+    isolated_project = is_isolated_smoke_target(
+        env_get(config, "PROD_SMOKE_COMPOSE_PROJECT_NAME"),
+        base_origin,
+    )
+    if not isolated_project and env_get(config, "PROD_SMOKE_ALLOW_LIVE", "false").lower() != "true":
+        print(
+            "Refusing stateful prod-smoke outside the exact wangsh_sim project on a loopback origin. "
+            "Set PROD_SMOKE_ALLOW_LIVE=true only after confirming the target environment.",
+            file=sys.stderr,
+        )
+        return 2
     login_throttle_seconds = env_float(config, "PROD_SMOKE_LOGIN_THROTTLE_SECONDS", DEFAULT_LOGIN_THROTTLE_SECONDS)
     run_started_at = now_iso()
     steps: list[StepRecord] = []
@@ -1160,18 +1210,20 @@ def main() -> int:
         if OPENAPI_REPORT_PATH.exists()
         else {}
     )
-    ui_report = (
-        read_redacted_json(UI_REPORT_PATH, sensitive_values)
-        if UI_REPORT_PATH.exists()
-        else {}
-    )
+    ui_report_exists = UI_REPORT_PATH.exists()
+    if ui_report_exists:
+        ui_report = read_redacted_json(UI_REPORT_PATH, sensitive_values)
+    else:
+        ui_report = {"status": "FAIL", "message": "ui report missing"}
+        write_json(UI_REPORT_PATH, ui_report)
     if AUTH_RELOGIN_REPORT_PATH.exists():
         read_redacted_json(AUTH_RELOGIN_REPORT_PATH, sensitive_values)
 
+    overall_status = finalize_smoke_status(
+        steps,
+        ui_report_exists=ui_report_exists,
+    )
     module_matrix = build_module_matrix(steps)
-    overall_status = "PASS"
-    for step in steps:
-        overall_status = worst_status(overall_status, step.status)
 
     all_skips: list[dict[str, Any]] = []
     for step in steps:
@@ -1230,9 +1282,6 @@ def main() -> int:
     write_json(API_RESULTS_PATH, api_results)
     write_json(SKIPS_PATH, {"items": all_skips})
     write_text_private(FAILURES_MD_PATH, failures_md)
-
-    if not UI_REPORT_PATH.exists():
-        write_json(UI_REPORT_PATH, {"status": "FAIL", "message": "ui report missing"})
 
     harden_output_permissions()
     print(json.dumps(summary["counts"], ensure_ascii=False))

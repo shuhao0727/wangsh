@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-07-14
+> 最后更新：2026-07-18
 
 ## 一、概览
 
@@ -11,7 +11,8 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
                                 ↓
                     DockerHub（镜像仓库）
                                 ↓
-              服务器 → 验证 release-set → compose pull/up（整组镜像部署）
+              服务器 → 验证远端 release-set → 拉六个业务镜像
+                     → 校验本地 digest → 禁止隐式拉取启动 → 详细健康门禁
 ```
 
 ---
@@ -25,12 +26,21 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   - `image_tag`（必填）：镜像版本号，如 `1.6.0`
   - `push_latest`（可选）：是否同时推送 `latest` 标签，默认 `false`
 - **构建平台**：`linux/amd64`
-- **发布门禁**：构建推送前先调用 reusable `ci-quality.yml`；质量门禁失败时不发布镜像
+- **发布门禁**：workflow 通过 concurrency 串行执行，只允许当前 `origin/main` 对应
+  commit 调用 reusable `ci-quality.yml`；非 main、落后提交或质量门禁失败时不发布镜像
 - **版本约束**：`image_tag` 必须符合版本格式并与 `frontend/package.json` 完全一致；
   workflow 输入通过环境变量传入 shell，禁止直接拼接执行
 - **推广流程**：六个镜像先推 `${version}-build-${run_id}`，全部 staging
   manifest 可读取后再推广版本 tag；推广后逐镜像校验 registry manifest digest，
   并上传可由 `scripts/deploy.sh` 直接消费的 `release-set-${run_id}` artifact
+- **服务器锁定**：`pull-up/deploy` 拉取后再次检查本地镜像 `RepoDigests`；
+  `up-no-build` 也必须通过同一检查，避免同标签旧镜像或标签漂移绕过清单。
+  release-set 的逻辑名称必须与镜像仓库 basename 一致，所有已设置版本变量必须与
+  清单版本一致
+- **基础设施边界**：正式发布只拉取六个业务服务，PostgreSQL、Redis 不随应用发布
+  隐式升级；Compose 启动使用 `--pull never`
+- **部署完成门禁**：`deploy` 等待首页、API、PostgreSQL、Redis、frontend、gateway、
+  Typst worker 和 PythonLab worker 全部健康后才返回成功
 - **构建的镜像**（共 6 个）：
 
 | 镜像名 | Dockerfile | 构建目标 |
@@ -100,7 +110,11 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   - `push` 到 `main`
   - 文档-only 改动会跳过（`docs/**`、`**/*.md`）
 - **功能**：
+  - 版本：校验 package/lockfile、`.env.example`、生产 Compose 默认标签、Docker Hub
+    workflow 默认输入和生产模拟默认版本
   - Compose：使用已跟踪的 `.env.example` 校验开发/生产配置和镜像版本
+  - 根脚本：对部署、回滚、迁移、健康检查、生产 smoke 和本地开发启动/停止入口执行
+    Bash 语法检查
   - 数据库：动态解析 Alembic heads，强制单 head；空库创建 legacy baseline 后执行完整 `alembic upgrade head`
   - 后端：安装 `backend/requirements-dev.txt`，执行 Python 文件规模/复杂度
     ratchet 和 `pytest -q`；PR、main push 与镜像发布调用都会对旧 baseline
@@ -175,7 +189,6 @@ runner 内的临时本地账号，不读取这两个 secrets。
   和镜像发布；warning 继续作为治理台账中的量化改进项。
 - Python governance 达到 error 阈值时阻止合并；warning 通过 baseline ratchet
   逐步偿还，不得通过提高阈值掩盖新增问题。
-- 本地完整生产模拟通过不能替代真实 GitHub runner、远端 registry、生产数据库备份
-  恢复和回滚演练。
-- 真实 GitHub PR runner、Docker Hub 推送、远端 registry release-set、备份恢复和
-  回滚演练仍待验证。
+- 本地完整生产模拟通过不能替代真实 GitHub runner、生产数据库升级、恢复和回滚演练。
+- 本地/远端执行结果、镜像发布状态和仍待执行门禁统一查看
+  [TEST_STATUS.md](../testing/TEST_STATUS.md) 与 [RELEASE_NOTES.md](../RELEASE_NOTES.md)。

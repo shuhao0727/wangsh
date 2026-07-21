@@ -1,6 +1,6 @@
 # ML/AI/Agents 学习书籍系统
 
-> 最后更新：2026-07-07
+> 最后更新：2026-07-18
 
 ## 概述
 
@@ -11,6 +11,20 @@
 - **丰富的章节元数据**：每章节支持 goals（学习目标）、checklist（检查清单）、experiments（实验任务）、glossary（术语表）、references（参考资料）、prerequisites（前置章节）、keywords（关键词）、quiz（自测题），全部为 JSON 数组格式
 - **章节排序与上下架**：支持 `sort_order` 排序和 `enabled` 启用/禁用，批量重排
 - **公开与管理双模式**：公开接口返回已启用的书籍和章节，管理接口返回完整数据
+
+### 内容来源与兼容策略
+
+- `ml`、`ai`、`agents` 的 `book.ts` 和章节 Markdown 是正式内置课程内容，提供完整离线
+  fallback，不依赖外部链接才能阅读。
+- 学习页面允许 Learning Content 使用 `section_key=raw`、`item_key=book` 覆盖内置
+  `LearningBook`；没有有效覆盖时继续使用内置内容。
+- 专用 `ml_books` / `ml_book_chapters` 表和 `/ml/book/*` API 负责后台书籍管理；Learning
+  Content 覆盖用于兼容现有 IT Technology 学习页，两条路径共享 `module_key`，但不应
+  静默互相覆盖数据库记录。
+- 章节 `slug` 是路由、进度、前置关系和后台编辑的稳定标识。调整标题不应顺带修改 slug；
+  必须改 slug 时，需要同步迁移引用和用户进度。
+- 删除任何内置课程副本前，必须验证后端资源、空库 seed 和章节数量/slug/正文完整性，
+  避免把开发数据库中的临时状态误当成正式内容唯一来源。
 
 ---
 

@@ -1,33 +1,30 @@
 /**
  * 完整思维导图编辑器 — 嵌入官方 simple-mind-map Demo
- * 数据通过 localStorage 注入，保存通过 postMessage 回传
+ * 数据通过 localStorage 注入，保存时读取同源 iframe 暴露的运行时方法。
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showMessage } from "@/lib/toast";
 import { ArrowLeft, Save, ExternalLink } from "lucide-react";
+import {
+  markdownToMindMapData,
+  mindMapDataToMarkdown,
+  type MindMapNode,
+} from "./mindMapData";
 
-/* ═══════ 数据格式转换 ═══════ */
-interface LibNode { data: { text: string; uid?: string; [key: string]: unknown }; children: LibNode[]; }
-function mdToLibData(md: string, rootText: string): LibNode {
-  let uid = 0; const nextUid = () => `n${++uid}`;
-  const lines = md.split("\n").filter((l) => l.trim());
-  const root: LibNode = { data: { text: rootText, uid: nextUid() }, children: [] };
-  const stack: { level: number; node: LibNode }[] = [{ level: 0, node: root }];
-  for (const line of lines) {
-    const m = line.match(/^(#+)\s+(.+)/); if (!m) continue;
-    const child: LibNode = { data: { text: m[2].trim(), uid: nextUid() }, children: [] };
-    while (stack.length > 0 && stack[stack.length - 1].level >= m[1].length) stack.pop();
-    if (stack.length > 0) stack[stack.length - 1].node.children.push(child);
-    stack.push({ level: m[1].length, node: child });
-  }
-  return root;
+interface MindMapRuntimeWindow extends Window {
+  takeOverAppMethods?: {
+    getMindMapData?: () => MindMapNode | { root?: MindMapNode } | null;
+  };
 }
-function libDataToMd(node: LibNode, level = 1): string {
-  let md = `${"#".repeat(level)} ${node.data.text}\n`;
-  for (const c of node.children) md += libDataToMd(c, level + 1);
-  return md;
+
+function readRuntimeRoot(frameWindow: Window | null): MindMapNode | null {
+  const runtime = frameWindow as MindMapRuntimeWindow | null;
+  const payload = runtime?.takeOverAppMethods?.getMindMapData?.();
+  if (!payload) return null;
+  const root = ("root" in payload ? payload.root : payload) as MindMapNode | undefined;
+  return root?.data && Array.isArray(root.children) ? root : null;
 }
 
 interface Props {
@@ -59,7 +56,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
   useEffect(() => {
     const rootText = initialTitle || "中心主题";
     const md = initialMarkdown || `# ${rootText}`;
-    const tree = mdToLibData(md, rootText);
+    const tree = markdownToMindMapData(md, rootText);
     const demoData = {
       root: tree,
       theme: { template: "classic4", config: {} },
@@ -70,19 +67,19 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     try { localStorage.setItem(LS_KEY, JSON.stringify(demoData)); } catch {}
   }, [initialTitle, initialMarkdown]);
 
-  const handleSaveData = useCallback(async (data: LibNode, silent = false) => {
+  const handleSaveData = useCallback(async (data: MindMapNode, silent = false) => {
     const id = mindmapIdRef.current;
     const currentTitle = titleRef.current;
     if (!data || id == null) return;
     if (!silent) setSaving(true);
     try {
-      const md = libDataToMd(data).replace(/^# /, "");
+      const md = mindMapDataToMarkdown(data);
       const token = getToken();
       const headers: Record<string,string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch(`/api/v1/learning/mindmaps/${id}`, {
         method: "PUT", headers, credentials: "include",
-        body: JSON.stringify({ title: currentTitle, content: { markdown: `# ${currentTitle}\n${md}` } }),
+        body: JSON.stringify({ title: currentTitle, content: { markdown: md } }),
       });
       if (res.ok) {
         if (!silent) showMessage.success("导图已保存");
@@ -98,17 +95,6 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
     if (!silent) setSaving(false);
   }, []);
 
-  // 监听 postMessage 保存
-  useEffect(() => {
-    const h = (e: MessageEvent) => {
-      if (e.data?.type === "mindmap:save" && e.data.data) {
-        void handleSaveData(e.data.data, true); // 静默保存，不退出编辑
-      }
-    };
-    window.addEventListener("message", h);
-    return () => window.removeEventListener("message", h);
-  }, [handleSaveData]);
-
   // Ctrl+S
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -120,14 +106,15 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
 
   const handleSave = useCallback(() => {
     try {
-      const w = iframeRef.current?.contentWindow as any;
-      if (w?._mmData) {
-        void handleSaveData(w._mmData.root || w._mmData);
-      } else {
-        // fallback: request data from iframe
-        iframeRef.current?.contentWindow?.postMessage({ type: "mindmap:getData" }, "*");
+      const root = readRuntimeRoot(iframeRef.current?.contentWindow ?? null);
+      if (root) {
+        void handleSaveData(root);
+        return;
       }
-    } catch {}
+      showMessage.error("导图尚未加载完成，请稍后再试");
+    } catch {
+      showMessage.error("无法读取导图数据，请重新打开编辑器");
+    }
   }, [handleSaveData]);
 
   return (

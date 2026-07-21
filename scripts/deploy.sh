@@ -17,6 +17,15 @@ release_image_names=(
   wangsh-gateway
 )
 
+release_services=(
+  backend
+  typst-worker
+  pythonlab-worker
+  pythonlab-sandbox
+  frontend
+  gateway
+)
+
 require_env_file() {
   if [ ! -f "${env_file}" ]; then
     echo "${env_file} not found. run: cp .env.example ${env_file}" >&2
@@ -29,6 +38,17 @@ require_docker() {
     echo "Docker daemon not available. Please start Docker Desktop / Docker Engine first." >&2
     exit 3
   fi
+}
+
+require_volume_deletion_confirmation() {
+  if [ "${COMPOSE_PROJECT_NAME:-}" = "wangsh_sim" ]; then
+    return 0
+  fi
+  if [ "${ALLOW_VOLUME_DELETION:-}" = "true" ]; then
+    return 0
+  fi
+  echo "Refusing to delete Compose volumes. Set ALLOW_VOLUME_DELETION=true only after confirming the target environment." >&2
+  exit 2
 }
 
 raw_env_value() {
@@ -92,6 +112,31 @@ retry() {
   return 1
 }
 
+wait_for_detailed_health() {
+  local attempts="${DEPLOY_HEALTH_ATTEMPTS:-30}"
+  local attempt=1
+  local web_port
+  local output=""
+
+  web_port="$(env_value WEB_PORT)"
+  web_port="${web_port:-6608}"
+  while [ "${attempt}" -le "${attempts}" ]; do
+    if output="$(
+      ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" WEB_PORT="${web_port}" \
+        bash "${repo_root}/scripts/health-check-detailed.sh" json 2>&1
+    )"; then
+      printf '%s\n' "${output}"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  printf '%s\n' "${output}" >&2
+  echo "deployment health check did not become ready after ${attempts} attempts" >&2
+  return 1
+}
+
 registry_manifest_digest() {
   local image_ref="$1"
   local inspect_output
@@ -130,6 +175,9 @@ verify_release_set() {
   local image_name
   local image_ref
   local image_digest
+  local ref_repository_name
+  local version_key
+  local configured_version
   local row_count=0
   local index
   local compose_output
@@ -176,6 +224,12 @@ verify_release_set() {
           echo "unexpected release-set image: ${image_name}" >&2
           return 2
         fi
+        ref_repository_name="${image_ref##*/}"
+        ref_repository_name="${ref_repository_name%%:*}"
+        if [ "${ref_repository_name}" != "${image_name}" ]; then
+          echo "release-set image mapping mismatch: image=${image_name} ref=${image_ref}" >&2
+          return 2
+        fi
         if [ "${release_seen[${index}]:-0}" = "1" ]; then
           echo "duplicate release-set image: ${image_name}" >&2
           return 2
@@ -211,15 +265,18 @@ verify_release_set() {
     fi
   done
 
-  expected_version="$(env_value IMAGE_TAG)"
+  expected_version=""
+  for version_key in IMAGE_TAG APP_VERSION VERSION REACT_APP_VERSION; do
+    configured_version="$(env_value "${version_key}")"
+    [ -z "${configured_version}" ] && continue
+    if [ "${configured_version}" != "${release_version}" ]; then
+      echo "release-set version mismatch for ${version_key}: release=${release_version} configured=${configured_version}" >&2
+      return 2
+    fi
+    [ -z "${expected_version}" ] && expected_version="${configured_version}"
+  done
   if [ -z "${expected_version}" ]; then
-    expected_version="$(env_value APP_VERSION)"
-  fi
-  if [ -z "${expected_version}" ]; then
-    expected_version="$(env_value VERSION)"
-  fi
-  if [ -z "${expected_version}" ] || [ "${release_version}" != "${expected_version}" ]; then
-    echo "release-set version mismatch: release=${release_version} expected=${expected_version:-<missing>}" >&2
+    echo "release-set version mismatch: no configured version value" >&2
     return 2
   fi
 
@@ -268,6 +325,47 @@ verify_release_set() {
   done
 
   echo "release-set verified: ${release_set_file} version=${release_version} images=${row_count}"
+}
+
+verify_local_release_set_images() {
+  local release_set_file="${1:-${release_set_default}}"
+  local line
+  local image_ref
+  local image_digest
+  local repository
+  local expected_repo_digest
+  local local_repo_digests
+  local row_count=0
+
+  while IFS= read -r line || [ -n "${line}" ]; do
+    line="${line%$'\r'}"
+    [[ "${line}" == image=* ]] || continue
+    if [[ ! "${line}" =~ ^image=([^[:space:]]+)[[:space:]]ref=([^[:space:]]+)[[:space:]]digest=(sha256:[0-9a-fA-F]{64})$ ]]; then
+      echo "invalid release-set image row: ${line}" >&2
+      return 2
+    fi
+    image_ref="${BASH_REMATCH[2]}"
+    image_digest="${BASH_REMATCH[3]}"
+    repository="${image_ref%:*}"
+    expected_repo_digest="${repository}@${image_digest}"
+    local_repo_digests="$(docker image inspect \
+      --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+      "${image_ref}" 2>/dev/null)" || {
+      echo "local release image missing: ${image_ref}" >&2
+      return 2
+    }
+    if ! printf '%s\n' "${local_repo_digests}" | grep -Fqx "${expected_repo_digest}"; then
+      echo "local image digest mismatch for ${image_ref}: expected ${expected_repo_digest}" >&2
+      return 2
+    fi
+    row_count=$((row_count + 1))
+  done < "${release_set_file}"
+
+  if [ "${row_count}" -ne "${#release_image_names[@]}" ]; then
+    echo "local release-set verification requires exactly six images" >&2
+    return 2
+  fi
+  echo "local release images verified: ${row_count}"
 }
 
 verify_local_images() {
@@ -325,8 +423,9 @@ case "${cmd}" in
   deploy)
     require_env_file
     require_docker
-    bash scripts/deploy.sh pull-up
-    bash scripts/deploy.sh health
+    ENV_FILE="${env_file}" COMPOSE_FILE="${compose_file}" \
+      bash "${repo_root}/scripts/deploy.sh" pull-up "${2:-${release_set_default}}"
+    wait_for_detailed_health
     web_port="$(env_value WEB_PORT)"
     web_port="${web_port:-6608}"
     echo "web: http://localhost:${web_port}"
@@ -374,15 +473,17 @@ case "${cmd}" in
     require_env_file
     require_docker
     verify_release_set "${2:-${release_set_default}}"
-    compose up -d --no-build
+    verify_local_release_set_images "${2:-${release_set_default}}"
+    compose up -d --no-build --pull never
     compose ps
     ;;
   pull-up)
     require_env_file
     require_docker
     verify_release_set "${2:-${release_set_default}}"
-    compose pull
-    compose up -d --no-build
+    compose pull "${release_services[@]}"
+    verify_local_release_set_images "${2:-${release_set_default}}"
+    compose up -d --no-build --pull never
     compose ps
     ;;
   verify-release-set)
@@ -460,6 +561,7 @@ case "${cmd}" in
   down-v)
     require_env_file
     require_docker
+    require_volume_deletion_confirmation
     compose down -v
     ;;
   logs)
@@ -471,6 +573,7 @@ case "${cmd}" in
     require_env_file
     web_port="$(env_value WEB_PORT)"
     web_port="${web_port:-6608}"
+    curl -fsS "http://localhost:${web_port}/" >/dev/null
     curl -fsS "http://localhost:${web_port}/api/health"
     ;;
   simulate)
@@ -734,9 +837,28 @@ EOF
   restore-db)
     require_env_file
     require_docker
-    dump_path="${2:-}"
+    shift
+    dump_path=""
+    confirm_restore=false
+    for arg in "$@"; do
+      case "${arg}" in
+        --yes) confirm_restore=true ;;
+        --*) echo "unknown restore-db option: ${arg}" >&2; exit 2 ;;
+        *)
+          if [ -n "${dump_path}" ]; then
+            echo "restore-db accepts one dump path" >&2
+            exit 2
+          fi
+          dump_path="${arg}"
+          ;;
+      esac
+    done
     if [ -z "${dump_path}" ] || [ ! -f "${dump_path}" ]; then
-      echo "usage: $0 restore-db <path-to-dump(.dump|.sql)>" >&2
+      echo "usage: $0 restore-db <path-to-dump(.dump|.sql)> --yes" >&2
+      exit 2
+    fi
+    if [ "${confirm_restore}" != "true" ]; then
+      echo "Refusing destructive restore. Re-run with --yes after confirming the target database." >&2
       exit 2
     fi
     db="$(env_value POSTGRES_DB)"

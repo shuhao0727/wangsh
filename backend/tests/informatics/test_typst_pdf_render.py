@@ -6,27 +6,6 @@ import pytest
 
 from app.services.informatics import typst_notes
 
-
-def test_compile_note_success(monkeypatch):
-    """测试 PDF 编译成功"""
-    async def mock_compile():
-        return {"status": "success", "task_id": "task-123"}
-
-    monkeypatch.setattr("app.api.endpoints.informatics.typst_notes.compile_note_pdf", mock_compile)
-    result = asyncio.run(mock_compile())
-    assert result["status"] == "success"
-
-
-def test_compile_note_celery_disabled(monkeypatch):
-    """测试 Celery 禁用时同步编译"""
-    async def mock_compile():
-        return {"status": "success", "sync": True}
-
-    monkeypatch.setattr("app.api.endpoints.informatics.typst_notes.compile_note_pdf", mock_compile)
-    result = asyncio.run(mock_compile())
-    assert result["sync"] is True
-
-
 def test_cached_pdf_returns_bytes_when_compile_inputs_are_current():
     class Result:
         def scalars(self):

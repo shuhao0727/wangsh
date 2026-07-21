@@ -190,6 +190,28 @@ def test_write_json_uses_private_file_permissions(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+def test_missing_ui_report_fails_the_ui_step_and_overall_status():
+    step = prod_smoke.StepRecord(
+        name="ui-smoke",
+        kind="core UI",
+        modules=["system/gateway"],
+        status="PASS",
+        started_at="2026-07-19T00:00:00+00:00",
+        finished_at="2026-07-19T00:00:01+00:00",
+        duration_seconds=1.0,
+    )
+
+    overall_status = prod_smoke.finalize_smoke_status(
+        [step],
+        ui_report_exists=False,
+    )
+
+    assert overall_status == "FAIL"
+    assert step.status == "FAIL"
+    assert step.fail_count == 1
+    assert step.failures == ["ui report missing"]
+
+
 def test_phasec_soak_redacts_each_round_log_before_writing():
     redacted = phasec_soak.redact_for_log(
         "WebSocket failed: wss://example.test/ws?token=phasec-secret\n"

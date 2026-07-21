@@ -1,67 +1,102 @@
-"""XBK 学生管理测试"""
+"""XBK 学生管理端点测试。"""
+
 import asyncio
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+
+import pytest
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+
+from app.api.endpoints.xbk.students import create_student, delete_student
+from app.models import XbkStudent
+from app.schemas.xbk import XbkStudentUpsert
 
 
-def test_list_students_success(monkeypatch):
-    """测试学生列表查询成功"""
-    fake_user = {"id": 1, "role_code": "admin"}
-    fake_students = [
-        SimpleNamespace(id=1, student_no="2024001", name="张三", grade="高一", class_name="1班"),
-        SimpleNamespace(id=2, student_no="2024002", name="李四", grade="高一", class_name="2班"),
-    ]
+class _ScalarResult:
+    def __init__(self, value):
+        self._value = value
 
-    async def mock_list():
-        return fake_students, 2
-
-    monkeypatch.setattr("app.api.endpoints.xbk.students.require_xbk_access", lambda: fake_user)
-    monkeypatch.setattr("app.api.endpoints.xbk.students.list_students", mock_list)
-
-    result = asyncio.run(mock_list())
-    assert len(result[0]) == 2
-    assert result[1] == 2
+    def scalar_one_or_none(self):
+        return self._value
 
 
-def test_list_students_with_filters(monkeypatch):
-    """测试带筛选条件的学生列表"""
-    fake_students = [
-        SimpleNamespace(id=1, student_no="2024001", name="张三", grade="高一", class_name="1班"),
-    ]
+class _CrudDb:
+    def __init__(self, execute_values, commit_error=None):
+        self.execute_values = list(execute_values)
+        self.commit_error = commit_error
+        self.added = []
+        self.commit_count = 0
+        self.rollback_count = 0
+        self.refresh_count = 0
 
-    async def mock_list():
-        return fake_students, 1
+    async def execute(self, _statement):
+        return _ScalarResult(self.execute_values.pop(0))
 
-    monkeypatch.setattr("app.api.endpoints.xbk.students.list_students", mock_list)
+    def add(self, value):
+        self.added.append(value)
 
-    result = asyncio.run(mock_list())
-    assert len(result[0]) == 1
+    async def commit(self):
+        self.commit_count += 1
+        if self.commit_error:
+            raise self.commit_error
 
+    async def rollback(self):
+        self.rollback_count += 1
 
-def test_create_student_success(monkeypatch):
-    """测试创建学生成功"""
-    fake_student = SimpleNamespace(id=1, student_no="2024001", name="张三")
-
-    async def mock_create():
-        return fake_student
-
-    monkeypatch.setattr("app.api.endpoints.xbk.students.create_student", mock_create)
-
-    result = asyncio.run(mock_create())
-    assert result.id == 1
+    async def refresh(self, value):
+        self.refresh_count += 1
+        if value.id is None:
+            value.id = 1
 
 
-def test_create_student_duplicate(monkeypatch):
-    """测试重复学号"""
-    from sqlalchemy.exc import IntegrityError
+def _payload():
+    return XbkStudentUpsert(
+        year=2026,
+        term="上",
+        grade="高一",
+        class_name="1班",
+        student_no="2026001",
+        name="张三",
+        gender="男",
+    )
 
-    async def mock_create():
-        raise IntegrityError("", "", "")
 
-    monkeypatch.setattr("app.api.endpoints.xbk.students.create_student", mock_create)
+def test_create_student_persists_payload():
+    db = _CrudDb([None])
 
-    try:
-        asyncio.run(mock_create())
-        assert False, "Should raise IntegrityError"
-    except IntegrityError:
-        assert True
+    result = asyncio.run(create_student(_payload(), db, {"role_code": "admin"}))
+
+    assert result["id"] == 1
+    assert result["student_no"] == "2026001"
+    assert result["class_name"] == "1班"
+    assert len(db.added) == 1
+    assert db.commit_count == 1
+    assert db.refresh_count == 1
+
+
+def test_create_student_rolls_back_integrity_conflict():
+    db = _CrudDb([None], IntegrityError("", {}, Exception("duplicate")))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(create_student(_payload(), db, {"role_code": "admin"}))
+
+    assert exc_info.value.status_code == 409
+    assert db.rollback_count == 1
+
+
+def test_delete_student_soft_deletes_existing_row():
+    row = XbkStudent(
+        id=8,
+        year=2026,
+        term="上",
+        class_name="1班",
+        student_no="2026001",
+        name="张三",
+        is_deleted=False,
+    )
+    db = _CrudDb([row])
+
+    result = asyncio.run(delete_student(8, db, {"role_code": "admin"}))
+
+    assert result is None
+    assert row.is_deleted is True
+    assert db.commit_count == 1

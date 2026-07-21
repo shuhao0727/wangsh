@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
+import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
@@ -30,7 +31,7 @@ const MindmapPreview: React.FC = () => {
       const rootText = title || "未命名";
       const md = markdown || `# ${rootText}`;
       localStorage.setItem("_wangsh_mindmap_data", JSON.stringify({
-        root: parseMarkdownForPreview(md, rootText),
+        root: markdownToMindMapData(md, rootText),
         theme: { template: "classic4", config: {} },
         layout: "logicalStructure", config: {}, view: null,
       }));
@@ -61,19 +62,5 @@ const MindmapPreview: React.FC = () => {
     </div>
   );
 };
-
-function parseMarkdownForPreview(md: string, rootText: string) {
-  const lines = md.split("\n").filter(l => l.trim());
-  const root: any = { data: { text: rootText }, children: [] };
-  const stack: { level: number; node: any }[] = [{ level: 0, node: root }];
-  for (const line of lines) {
-    const m = line.match(/^(#+)\s+(.+)/); if (!m) continue;
-    const child: any = { data: { text: m[2].trim() }, children: [] };
-    while (stack.length > 0 && stack[stack.length - 1].level >= m[1].length) stack.pop();
-    if (stack.length > 0) stack[stack.length - 1].node.children.push(child);
-    stack.push({ level: m[1].length, node: child });
-  }
-  return root;
-}
 
 export default MindmapPreview;

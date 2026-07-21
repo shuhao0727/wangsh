@@ -1,75 +1,69 @@
 # WangSh
 
-## 本地开发
+高中信息技术教学管理平台，集成 AI 智能体、PythonLab 调试环境、信息学竞赛笔记、课堂互动等功能。
 
-**开发配置**：请使用 `.env.dev`（可从 `.env.example` 复制）。`start-dev.sh` 会自动优先加载它。
+## 快速启动
+
+### 本地开发
 
 ```bash
+# 复制开发配置
 cp .env.example .env.dev
+
+# 启动开发环境（前端 6608，后端 8000）
 bash start-dev.sh
-```
 
-停止：
-
-```bash
+# 停止
 bash stop-dev.sh
 ```
 
-## 生产部署（Docker Compose）
+**开发端口**：前端 `http://localhost:6608`，后端 `http://localhost:8000`
 
-**生产配置**：请使用 `.env` (复制自 `.env.example`)。
-
-看文档： [docs/docker/deploy/DEPLOY.md](./docs/docker/deploy/DEPLOY.md)
-
-最常用的部署命令（服务器上）：
+### 生产部署
 
 ```bash
+# 复制生产配置并修改密钥
 cp .env.example .env
-# 修改 .env 中的密钥和配置
+
+# 部署（校验 + 拉取 + 启动）
 bash scripts/deploy.sh deploy
 ```
 
-`deploy` 会校验 release-set 后拉取并启动整组镜像。构建、推送、首次生成 release-set、
-数据库备份和回滚步骤以部署文档为准，不使用 `up --build` 绕过发布门禁。
+**详细文档**：[docs/docker/deploy/DEPLOY.md](./docs/docker/deploy/DEPLOY.md)
 
-## PythonLab 验证
+---
 
-完整测试矩阵、GitHub Actions、退出码和故障排查由以下文档维护：
+## 文档导航
 
-- [测试与验证索引](./docs/docker/testing/README.md)
-- [CI/CD 说明](./docs/docker/deploy/CICD.md)
-- [PythonLab 功能与验证](./docs/features/PYTHONLAB.md)
+| 类型 | 链接 | 说明 |
+|------|------|------|
+| **总索引** | [docs/README.md](./docs/README.md) | 所有文档的导航入口 |
+| **部署运维** | [docs/docker/README.md](./docs/docker/README.md) | Docker 完整指南 |
+| **开发规范** | [AGENTS.md](./AGENTS.md) | Claude Agent 协作规则 |
+| **API 接口** | [docs/development/API.md](./docs/development/API.md) | 后端接口清单 |
 
-## 文档索引
+**功能模块文档**：`docs/features/` 目录包含所有功能详细说明（AI 智能体、PythonLab、课堂系统等）
 
-### 总览入口
-- 总文档索引：[docs/README.md](./docs/README.md)
-- Docker 文档中心：[docs/docker/README.md](./docs/docker/README.md)
-- 测试与验证索引：[docs/docker/testing/README.md](./docs/docker/testing/README.md)
-- 计划与分析索引：[docs/docker/plans/README.md](./docs/docker/plans/README.md)
-- 前端 UI 文档索引：[docs/docker/frontend/README.md](./docs/docker/frontend/README.md)
+---
 
-### 核心文档
-- 接口清单：[docs/development/API.md](./docs/development/API.md)
-- 部署指南：[docs/docker/deploy/DEPLOY.md](./docs/docker/deploy/DEPLOY.md)
-- CI/CD 说明：[docs/docker/deploy/CICD.md](./docs/docker/deploy/CICD.md)
-- 发布与运维记录：[docs/docker/RELEASE_NOTES.md](./docs/docker/RELEASE_NOTES.md)
+## 技术栈
 
-### 功能模块文档
-- AI 智能体系统：[docs/features/AI_AGENTS.md](./docs/features/AI_AGENTS.md)
-- 课堂互动系统：[docs/features/CLASSROOM.md](./docs/features/CLASSROOM.md)
-- 信息学竞赛笔记：[docs/features/INFORMATICS.md](./docs/features/INFORMATICS.md)
-- PythonLab 调试环境：[docs/features/PYTHONLAB.md](./docs/features/PYTHONLAB.md)
-- 自主检测系统：[docs/features/assessment/ASSESSMENT_DESIGN.md](./docs/features/assessment/ASSESSMENT_DESIGN.md)
-- 前端实时更新：[docs/features/AUTO_REFRESH.md](./docs/features/AUTO_REFRESH.md)
+- **前端**: React + TypeScript + Ant Design
+- **后端**: FastAPI + SQLAlchemy + PostgreSQL + Redis
+- **容器**: Docker + Docker Compose
+- **AI**: Claude API（Anthropic）
 
-### 其他文档
-- 文档维护规范：[docs/DOCUMENTATION_RULES.md](./docs/DOCUMENTATION_RULES.md)
-- Agent 协作规则：[AGENTS.md](./AGENTS.md)
-- Docker 历史归档：[docs/docker/archive/README.md](./docs/docker/archive/README.md)
-- 后端测试说明：[backend/tests/README.md](./backend/tests/README.md)
-- 后端 smoke/soak 脚本说明：[backend/scripts/README.md](./backend/scripts/README.md)
-- 根层脚本说明：[scripts/README.md](./scripts/README.md)
-- 前端脚本说明：[frontend/scripts/README.md](./frontend/scripts/README.md)
-- 网关说明：[gateway/README.md](./gateway/README.md)
-- XBK 脚本说明：[scripts/xbk/README.md](./scripts/xbk/README.md)
+---
+
+## 项目结构
+
+```
+wangsh/
+├── frontend/          # React 前端
+├── backend/           # FastAPI 后端
+├── gateway/           # Nginx 网关
+├── docs/              # 文档中心
+└── scripts/           # 部署与验证脚本
+```
+
+完整说明见 [docs/README.md](./docs/README.md)

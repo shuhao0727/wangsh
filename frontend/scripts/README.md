@@ -12,7 +12,8 @@
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
 - `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
-- `prod-smoke-ui.mjs` - 生产烟测的浏览器 UI 步骤入口
+- `prod-smoke-ui.mjs` - 生产烟测的浏览器 UI 步骤入口；页面加载成功但预期操作控件
+  缺失时记录为 `WARN`，不会误记为 `PASS`
 - `ui-audit.mjs` - UI 审计主脚本
 - `ui-audit-baseline.json` - UI 审计基线
 - `ui-visual-routes.json` - UI 审计页面清单
@@ -24,8 +25,8 @@
 ```bash
 npm run ui:audit
 npm run ui:audit:ci
-npm run ui:page:report
-npm run ui:page:verify
+npm run ui:page:report -- --route /ai-agents
+npm run ui:page:verify -- --route /ai-agents
 npm run ui:migration:metrics
 npm run build:check
 npm run pythonlab:smoke
@@ -48,9 +49,12 @@ npm run test:scripts
   `.wangsh-pyodide-version`。版本不匹配、marker 缺失或任一核心文件缺失/为空时，
   先复制到 `public/pyodide.tmp-<pid>`，完整校验后再替换正式目录；替换时先将旧运行时
   原子改名为进程级备份，激活新目录失败会恢复旧运行时，成功后才删除备份。
-- `test:scripts` 使用 Node test runner 执行 `scripts/*.test.mjs`，新增脚本测试后会自动纳入，包括 bundle budget、Pyodide 版本/完整性、Docker 构建上下文与 token checker。
+- `test:scripts` 使用 Node test runner 执行 `scripts/*.test.mjs`，新增脚本测试后会自动纳入，
+  包括 bundle budget、Pyodide 版本/完整性、Docker 构建上下文、生产 UI smoke 分类与
+  token checker。
 - token checker 对带 fallback 的 `var(--ws-token, fallback)` 同样要求 token 已定义，禁止用 fallback 掩盖设计系统缺口。
-- 单页治理报告默认生成到 `../docs/docker/archive/plans/ui-page-reports/`，不再写入根目录 `plans/`。
+- 单页治理报告默认生成到 `../test-results/ui-page-reports/`，作为可重建验证产物，
+  不进入正式文档或历史归档。
 
 ## 维护规则
 

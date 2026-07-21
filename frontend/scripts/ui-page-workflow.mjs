@@ -5,7 +5,7 @@ import { execSync } from "node:child_process";
 
 const cwd = process.cwd();
 const repoRoot = path.resolve(cwd, "..");
-const reportsDir = path.join(repoRoot, "docs", "docker", "archive", "plans", "ui-page-reports");
+const reportsDir = path.join(repoRoot, "test-results", "ui-page-reports");
 
 const argv = process.argv.slice(2);
 

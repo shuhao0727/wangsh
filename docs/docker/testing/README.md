@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：testing
-> 最近复核：2026-07-13
+> 最近复核：2026-07-18
 
 本目录存放测试策略、冒烟测试清单和测试脚本管理文档。
 
@@ -11,7 +11,6 @@
 | 文件 | 描述 |
 |------|------|
 | [TEST_STATUS.md](TEST_STATUS.md) | 当前唯一测试状态、功能矩阵、证据和重跑入口 |
-| [test-script-cleanup-inventory.md](test-script-cleanup-inventory.md) | 旧清理清单兼容入口，指向当前脚本 owner 和删除记录 |
 
 ## 测试体系概览
 

@@ -198,9 +198,9 @@ frontend/out/
 # nuxt.js
 frontend/.nuxt/
 
-# gatsby
+# Generated frontend runtime assets
 frontend/.cache/
-frontend/public
+frontend/public/pyodide/
 
 # vuepress
 frontend/.vuepress/dist
@@ -240,6 +240,12 @@ release-set.txt
 .playwright-mcp/
 test-results/
 output/
+**/.DS_Store
+
+# ==================== 本地工具状态 ====================
+# Reasonix desktop metadata/config is local to the developer environment.
+.reasonix/
+reasonix.toml
 
 # ==================== IDE配置 ====================
 # Trae
@@ -269,8 +275,6 @@ __marimo__/
 
 # ==================== 操作系统文件 ====================
 # macOS
-.DS_Store
-.DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
@@ -313,14 +317,8 @@ tmp/
 backend/tests/test_*.pyc
 backend/tests/__pycache__/
 
-# 前端构建产物
-frontend/.next/
-frontend/out/
-frontend/.nuxt/
-
 # ==================== 文档生成 ====================
 # 文档构建目录
-docs/_build/
 site/
 
 # ==================== AI工作文件 ====================
@@ -328,7 +326,6 @@ CLAUDE_MEMORY.md
 .claude/
 
 # ==================== 测试产物 ====================
-test-results/
 playwright-report/
 playwright-tests/
 
@@ -352,11 +349,18 @@ docker-compose.local.yml
 # ==================== 个人笔记/说明 ====================
 注意.txt
 frontend/src/.uimax-reviews.json
-frontend/mindmap-demo/
+
+# ==================== 静态资源（不提交到 git）====================
+# mindmap-demo 是第三方构建产物（8.8M），不应提交到仓库
+# 部署时从 CDN 或构建流程获取
+frontend/public/mindmap-demo/
+
+# 截图、临时图片（favicon 等必需资源除外）
 *.png
+!frontend/public/favicon.png
+!frontend/src/assets/*.png
 
 # ==================== 临时构建文件 ====================
 Dockerfile.backend-*
 output/
-test-results/
 beam-demo.html

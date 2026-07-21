@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
 import { chromium } from "playwright";
-import { isNotFoundPage } from "./prod-smoke-ui-lib.mjs";
+import {
+  classifySmokeAction,
+  isNotFoundPage,
+  summarizeSmokeStatuses,
+} from "./prod-smoke-ui-lib.mjs";
 
 function getArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -170,6 +174,11 @@ async function smokeRoute(context, route) {
 
     if (status !== "FAIL" && typeof route.action === "function") {
       action = await route.action(page);
+      const actionResult = classifySmokeAction(action);
+      if (actionResult.status) {
+        status = actionResult.status;
+        note = actionResult.note;
+      }
       await page.waitForTimeout(1200);
     }
 
@@ -245,10 +254,12 @@ async function main() {
   report.summary.pass = report.pages.filter((item) => item.status === "PASS").length;
   report.summary.warn = report.pages.filter((item) => item.status === "WARN").length;
   report.summary.fail = report.pages.filter((item) => item.status === "FAIL").length;
+  const marker = summarizeSmokeStatuses(report.summary);
 
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), "utf-8");
   console.log(`UI smoke report written to ${reportPath}`);
   console.log(`Screenshots written to ${screenshotsDir}`);
+  console.log(`[${marker.level}] ${marker.message}`);
   if (report.summary.fail > 0) process.exit(1);
 }
 
