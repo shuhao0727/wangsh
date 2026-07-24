@@ -16,7 +16,9 @@ def get_provider(agent_type: str, api_endpoint: str, api_key: str) -> LLMProvide
 
     ep = api_endpoint or ""
 
-    if re.search(r"api\.anthropic\.com|anthropic\.com", ep, re.IGNORECASE):
+    if re.search(r"api\.anthropic\.com|anthropic\.com", ep, re.IGNORECASE) or re.search(
+        r"/anthropic(?:/|$)", ep, re.IGNORECASE
+    ):
         return AnthropicProvider(api_endpoint, api_key)
 
     is_openrouter = bool(re.search(r"openrouter\.ai", ep, re.IGNORECASE))

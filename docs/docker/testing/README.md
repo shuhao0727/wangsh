@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：testing
-> 最近复核：2026-07-23
+> 最近复核：2026-07-24
 
 本目录存放测试策略、冒烟测试清单和测试脚本管理文档。
 
@@ -67,7 +67,7 @@ WangSh 项目采用多层次测试策略：
 | 14 | XBK 选课 | 学生、课程、志愿、选课、统计、导入导出 | `/xbk`、PostgreSQL | `tests/xbk/`、`scripts/xbk/`、`smoke_feature_suite.py` |
 | 15 | XXJS 点名 | 班级导入、名单覆盖、点名数据、班级删除 | `/xxjs/dianming` | `tests/xxjs/`、`smoke_xxjs_dianming.py` |
 | 16 | 个人节目与公共内容 | 个人节目、公共模块入口、404 页面 | 前端静态内容与权限路由 | 对应页面巡检、404 和路由合同 |
-| 17 | 前端交互层 | 49 个路由族、Dialog、Sheet、浮动面板、错误边界 | Vite 代理、TanStack Query、懒加载 | Vitest、系统 Chrome、UI audit、`UI-PAGES.md` |
+| 17 | 前端交互层 | 当前路由族、Dialog、Sheet、浮动面板、错误边界 | Vite 代理、TanStack Query、懒加载 | Vitest、系统 Chrome、UI audit、`UI-PAGES.md` |
 | 18 | 数据库、任务与发布基础 | Alembic、bootstrap、日志脱敏、Celery 注册、两套 Compose | PostgreSQL migration、Redis、Typst/PythonLab worker、Caddy | system tests、迁移检查、worker ping、workflow contracts、构建 |
 
 ## Docker 逐项测试计划
@@ -86,7 +86,7 @@ WangSh 项目采用多层次测试策略：
    Redis、文件和容器数据。
 6. **异步与实时链路**：验证 Celery、Typst 编译、Redis Pub/Sub、SSE、PythonLab
    WebSocket/DAP、连续 `Continue`、owner 并发和动态 sandbox 清理。
-7. **完整浏览器面**：按 `UI-PAGES.md` 验证 49 个路由族，再抽查关键 Dialog、Sheet 和
+7. **完整浏览器面**：按 `UI-PAGES.md` 的当前清单验证全部路由族，再抽查关键 Dialog、Sheet 和
    浮动面板；有效 fixture 页面不得出现 page error、失败请求、console error 或意外
    `4xx/5xx`。
 8. **代码门禁**：按改动范围运行 pytest、Vitest、前端脚本、TypeScript、构建、Python
@@ -112,4 +112,4 @@ WangSh 项目采用多层次测试策略：
 
 - [../deploy/CICD.md](../deploy/CICD.md) — CI/CD 工作流
 - [../deploy/DEPLOY.md](../deploy/DEPLOY.md) — 部署指南
-- [../frontend/UI-PAGES.md](../frontend/UI-PAGES.md) — 49 个路由族与重点交互清单
+- [../frontend/UI-PAGES.md](../frontend/UI-PAGES.md) — 当前路由族与重点交互清单

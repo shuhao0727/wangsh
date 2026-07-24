@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：docs
-> 最近复核：2026-07-22
+> 最近复核：2026-07-24
 
 本目录是 WangSh 历史文档的唯一索引。归档内容用于追溯，不再指导当前开发、测试或
 部署；当前入口见 [docs/README.md](../../README.md)。
@@ -44,8 +44,8 @@
   7 月代码审查批次的历史范围。原“全部完成”结论已在 2026-07-22 复核后撤回，
   当前行为与验证结果以代码、测试状态和发布 owner 文档为准。
 - [RELEASE_NOTES_v1.5.x.md](RELEASE_NOTES_v1.5.x.md)
-  v1.5.1 到 v1.5.9 的历史发布记录（14个版本，589行）。当前发布记录由主
-  [RELEASE_NOTES.md](../RELEASE_NOTES.md) 维护，只保留最近3个版本。
+  保留当前仓库可追溯的 v1.5.x 早期版本与 hotfix 记录。当前发布事实由主
+  [RELEASE_NOTES.md](../RELEASE_NOTES.md) 维护。
 
 ## Git 历史主题
 

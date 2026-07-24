@@ -1,6 +1,6 @@
 # ML/AI/Agents 学习书籍系统
 
-> 最后更新：2026-07-18
+> 最后更新：2026-07-24
 
 ## 概述
 
@@ -93,25 +93,8 @@
 
 ## API 端点
 
-共 9 个端点。公开接口 1 个，管理接口 8 个。所有管理接口需要 Admin 权限，`module_key` 仅允许 ml / ai / agents。
-
-### 公开接口
-
-| 方法 | 路径 | 认证 | 说明 |
-|------|------|------|------|
-| `GET` | `/ml/book/{module_key}` | 无 | 获取已启用的书籍及其所有已启用章节，按 `sort_order` 排序。书籍不存在则返回 `{"book": null}` |
-
-### 管理接口
-
-| 方法 | 路径 | 认证 | 说明 |
-|------|------|------|------|
-| `GET` | `/admin/ml/book/{module_key}` | Admin | 获取书籍完整数据，含所有章节（包括停用的） |
-| `PUT` | `/admin/ml/book/{module_key}` | Admin | 创建或更新书籍元数据（upsert），不存在则自动创建 |
-| `GET` | `/admin/ml/book/{module_key}/chapters/{slug}` | Admin | 获取单个章节详情 |
-| `PUT` | `/admin/ml/book/{module_key}/chapters/{slug}` | Admin | 创建或更新章节（upsert），路径 slug 须与请求体一致 |
-| `DELETE` | `/admin/ml/book/{module_key}/chapters/{slug}` | Admin | 删除章节 |
-| `PATCH` | `/admin/ml/book/{module_key}/chapters/reorder` | Admin | 批量重新排序，请求体为 `{items: [{slug, chapter_number}]}` |
-| `PATCH` | `/admin/ml/book/{module_key}/chapters/{slug}/toggle` | Admin | 启用/禁用章节，请求体为 `{enabled: bool}` |
+完整路径、认证和请求合同统一维护在 [API 文档](../development/API.md) 的 ML Book 章节。
+本功能文档只保留书籍模型、内容语义和与 Learning 平台的关系。
 
 ### 请求/响应说明
 

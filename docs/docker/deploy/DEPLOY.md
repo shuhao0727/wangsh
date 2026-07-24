@@ -334,6 +334,7 @@ SECRET_KEY=...                        # 后端密钥
 SUPER_ADMIN_PASSWORD=...              # 管理员密码
 POSTGRES_PASSWORD=...                 # 数据库密码
 AGENT_API_KEY_ENCRYPTION_KEY=...     # 智能体 API 密钥加密
+AI_AGENT_MAX_OUTPUT_TOKENS=8192      # Anthropic 兼容接口单次回答上限
 ```
 
 ### 功能开关

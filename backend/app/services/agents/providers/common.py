@@ -30,8 +30,13 @@ def build_messages(agent, message: str, history: Optional[list] = None) -> List[
     if sys_prompt:
         chat_messages.append({"role": "system", "content": sys_prompt})
     if history:
-        chat_messages.extend(history)
-    else:
+        for item in history:
+            role = item.get("role") if isinstance(item, dict) else None
+            content = item.get("content") if isinstance(item, dict) else None
+            if role in {"user", "assistant"} and isinstance(content, str) and content:
+                chat_messages.append({"role": role, "content": content})
+    current_message = {"role": "user", "content": message}
+    if not chat_messages or chat_messages[-1] != current_message:
         chat_messages.append({"role": "user", "content": message})
     return chat_messages
 

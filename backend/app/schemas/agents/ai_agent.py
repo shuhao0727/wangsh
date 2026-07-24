@@ -114,14 +114,18 @@ class AgentTestRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     """对话历史中的单条消息"""
-    role: Literal["user", "assistant", "system"] = Field(..., description="消息角色")
+    role: Literal["user", "assistant"] = Field(..., description="消息角色")
     content: str = Field(..., min_length=1, max_length=16000, description="消息内容")
 
 
 class AgentChatRequest(BaseModel):
     agent_id: int = Field(..., description="智能体ID")
     message: str = Field(..., min_length=1, max_length=4000, description="当前对话消息")
-    messages: Optional[List[ChatMessage]] = Field(None, description="对话历史（多轮上下文）")
+    messages: Optional[List[ChatMessage]] = Field(
+        None,
+        max_length=20,
+        description="对话历史（最多 20 条，仅允许 user/assistant）",
+    )
     user: Optional[str] = Field(None, description="用户标识")
     inputs: Optional[Dict[str, Any]] = Field(default_factory=dict, description="附加输入")
 

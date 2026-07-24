@@ -133,35 +133,14 @@ async def staff_endpoint(user: dict = Depends(require_staff)):
 
 ---
 
-## 修改角色系统 Checklist
+## 修改角色系统
 
-如果需要修改角色权限系统，必须检查以下文件：
+角色层级、权限矩阵和新增角色检查清单统一由
+[ROLES.md](../../frontend/src/styles/ROLES.md) 维护，本文只说明认证流程和用户可见行为。
 
-### 后端
-
-1. `backend/app/core/deps.py` — 权限依赖
-2. `backend/app/services/auth.py` — 认证服务
-3. `backend/app/api/endpoints/auth/auth.py` — 登录/登出端点
-4. `backend/app/api/endpoints/management/users/users.py` — 用户管理端点
-
-### 前端
-
-5. `frontend/src/hooks/useAuth.ts` — 权限 Hook
-6. `frontend/src/components/Auth/AdminGuard.tsx` — 路由守卫
-7. `frontend/src/layouts/AdminLayout.tsx` — 管理后台布局
-8. `frontend/src/components/Layout/UserMenu.tsx` — 用户菜单
-9. `frontend/src/pages/Login.tsx` — 登录页
-
-### 用户管理
-
-10. `frontend/src/pages/Admin/Users/data.ts` — 用户表格数据
-11. `frontend/src/pages/Admin/Users/columns.tsx` — 用户表格列定义
-12. `frontend/src/pages/Admin/Users/UserForm.tsx` — 用户编辑表单
-
-### 文档
-
-13. `frontend/src/styles/ROLES.md` — 权限矩阵文档
-14. `docs/features/AUTH.md` — 本文档
+修改认证或权限时，至少同步检查后端权限依赖、认证服务、认证/用户端点，以及前端
+`useAuth.ts`、`AdminGuard.tsx`、`AdminLayout.tsx` 和角色矩阵；不要在多个文档中复制
+同一份文件清单。
 
 ---
 

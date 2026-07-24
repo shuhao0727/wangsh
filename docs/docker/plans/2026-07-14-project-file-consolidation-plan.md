@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-07-22
+> 最近复核：2026-07-24
 > 归档条件：当前整理批次提交并通过提交后门禁，剩余专项转入对应 owner 或 30/60/90 计划
 
 本文是当前文件整理工作的唯一执行入口。动态测试结果统一写入
@@ -80,15 +80,30 @@
 - 生产 Caddy 对 Mindmap 路径返回 `404 + no-store` 且不进入 SPA fallback；恢复生产
   能力前，另行建立可复现的资源准备流程。
 
+### 2026-07-24 非功能文件复核
+
+- 文档、测试、脚本、配置和本地产物已由四个只读 agent 分域审计，未发现可批量删除的
+  正式测试、课程 Markdown、部署恢复脚本或受维护 smoke/soak。
+- XBK 与 ML Book 的 API 合同收敛到 `docs/development/API.md`；发布归档和测试索引不再
+  复制易漂移的版本数、文件行数或路由数量。
+- 旧 `backend/db/init_database.py` 已由 Alembic、`bootstrap_db.py` 和
+  `check_migration_state.py` 完整替代并退出活动路径；错误目录中的课堂测试已移入
+  `backend/tests/classroom/`，重复用例已删除。
+- 本地 Docker CLI、Pyodide、Mindmap 和开发缓存继续保留；后端 Docker 构建上下文新增
+  `docker/bin/` 排除，避免发送约 76 MiB 的本地缓存。
+
 ## 四、当前状态
 
-1. 当前最终差异的全量前端、后端、脚本、Markdown、Compose 和格式门禁已通过；
-   前端 lockfile 也已通过真实 clean install 后的全量测试与生产构建。
-2. Git 和 Docker 均已排除 Mindmap 本地运行时，`favicon.svg` 等正式源码资产未被
+1. 本轮非功能整理的后端定向回归、前端脚本、Markdown、workflow、Compose、Dockerfile
+   check 和格式门禁已通过；完整结果见 `TEST_STATUS.md`。
+2. Python governance 当前仍有 `5 errors / 5 warnings`，阻断项来自已有 AI 长回答功能
+   改动的复杂度回退；本轮按边界未修改功能实现，需在下一阶段单独拆分。
+3. Git 和 Docker 均已排除 Mindmap 本地运行时，`favicon.svg` 等正式源码资产未被
    宽泛规则误伤；不含 Mindmap 的临时副本构建已通过。
-3. 本地 `shuhao07/wangsh-frontend:1.6.0` 已从当前工作树重建，并完成独立 Caddy
+4. 本地 `shuhao07/wangsh-frontend:1.6.0` 已从当前工作树重建，并完成独立 Caddy
    容器验证；其余五个业务镜像重建和完整隔离生产模拟仍未执行。
-4. 当前未 stage/commit；push、部署和镜像发布继续要求单独授权。
+5. 当前已有既存 staged、unstaged 和未跟踪修改；本轮未新增 stage/commit，push、部署
+   和镜像发布继续要求单独授权。
 
 ## 五、验证门禁
 

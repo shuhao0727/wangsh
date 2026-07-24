@@ -23,6 +23,16 @@ import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
 import "./ChatArea.css";
 
+const workflowMessagePrefixes = [
+  "工作流启动",
+  "工作流节点：",
+  "节点完成：",
+  "工作流错误：",
+];
+
+export const isWorkflowEventContent = (content: string) =>
+  workflowMessagePrefixes.some((prefix) => content.startsWith(prefix));
+
 const ThinkingBubble = () => (
   <div className="thinking-bubble">
     <div className="thinking-dots">
@@ -106,10 +116,7 @@ const MessageBubble = React.memo<{
   const isWorkflowEvent =
     !isUser &&
     message.content &&
-    (message.content.startsWith("工作流启动") ||
-      message.content.startsWith("工作流节点：") ||
-      message.content.startsWith("节点完成：") ||
-      message.content.includes("错误"));
+    isWorkflowEventContent(message.content);
 
   const parseWorkflow = () => {
     let type: "start" | "node" | "finish" | "error" | "other" = "other";
@@ -127,7 +134,7 @@ const MessageBubble = React.memo<{
         name = m[1] || "";
         detail = m[3] || "";
       }
-    } else if (txt.includes("错误")) type = "error";
+    } else if (txt.startsWith("工作流错误：")) type = "error";
 
     const color =
       type === "start"
@@ -391,11 +398,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     (msg) => String(msg.agentId) === String(currentAgent?.id),
   );
   const isWorkflowMessage = (msg: Message) =>
-    msg.sender !== "user" &&
-    (msg.content.startsWith("工作流启动") ||
-      msg.content.startsWith("工作流节点：") ||
-      msg.content.startsWith("节点完成：") ||
-      msg.content.includes("错误"));
+    msg.sender !== "user" && isWorkflowEventContent(msg.content);
   const visibleMessages = currentAgentMessages.filter(
     (msg) => !isWorkflowMessage(msg),
   );

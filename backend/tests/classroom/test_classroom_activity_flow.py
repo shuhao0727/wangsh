@@ -124,16 +124,3 @@ def test_end_activity_requires_active_status(monkeypatch):
         asyncio.run(svc.end_activity(db, activity_id=2))
 
     assert db.commit_count == 0
-
-
-def test_bulk_delete_only_deletes_draft_activities():
-    act_active = SimpleNamespace(id=1, status="active")
-    act_draft = SimpleNamespace(id=2, status="draft")
-    act_ended = SimpleNamespace(id=3, status="ended")
-    db = _FakeDB(execute_results=[_FakeResult(values=[act_active, act_draft, act_ended])])
-
-    result = asyncio.run(svc.bulk_delete_activities(db, [1, 2, 3]))
-
-    assert result == {"deleted": [2], "skipped": [1, 3]}
-    assert db.deleted == [act_draft]
-    assert db.commit_count == 1

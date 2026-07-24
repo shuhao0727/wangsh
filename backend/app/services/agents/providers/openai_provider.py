@@ -57,7 +57,22 @@ class OpenAIProvider(LLMProvider):
         return str(content) if content else None
 
     def is_stream_done(self, line: str) -> bool:
-        return line.strip() == "data: [DONE]" or line.strip() == "[DONE]"
+        return line.strip() in {"data: [DONE]", "[DONE]"} or self.stream_finish_reason(line) is not None
+
+    def stream_finish_reason(self, line: str) -> Optional[str]:
+        line = line.strip()
+        if not line.startswith("data:"):
+            return None
+        try:
+            obj = json.loads(line[5:].strip())
+        except Exception:
+            return None
+        choices = obj.get("choices") or []
+        for choice in choices:
+            reason = choice.get("finish_reason")
+            if reason is not None:
+                return str(reason)
+        return None
 
     def parse_blocking_response(self, data: Dict[str, Any]) -> str:
         choices = data.get("choices") or []

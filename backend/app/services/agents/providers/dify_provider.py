@@ -14,7 +14,7 @@ class DifyProvider(LLMProvider):
 
     def chat_url(self) -> str:
         base = self.api_endpoint
-        if "/chat/" in base:
+        if base.endswith("/chat-messages") or "/chat/" in base:
             return base
         if base.endswith("/v1"):
             return f"{base}/chat-messages"
@@ -23,7 +23,7 @@ class DifyProvider(LLMProvider):
     def candidate_urls(self) -> List[str]:
         """Dify 可能有多个候选 URL"""
         base = self.api_endpoint
-        if "/chat/" in base:
+        if base.endswith("/chat-messages") or "/chat/" in base:
             return [base]
         candidates = []
         if base.endswith("/v1"):

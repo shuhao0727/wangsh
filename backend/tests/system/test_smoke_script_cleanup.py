@@ -58,17 +58,28 @@ def test_full_deploy_waits_for_typst_job_terminal_success(monkeypatch):
     class Client:
         def __init__(self):
             self.states = iter(["PENDING", "STARTED", "SUCCESS"])
+            self.get_calls = 0
+            self.post_calls = []
 
         def get(self, *_args, **_kwargs):
+            self.get_calls += 1
             return _Response({"state": next(self.states)})
 
+        def post(self, *args, **kwargs):
+            self.post_calls.append((args, kwargs))
+            return _Response()
+
+    client = Client()
     module.wait_typst_job(
-        Client(),
+        client,
         "http://example/api/v1",
         "job-1",
         attempts=3,
         interval_seconds=0,
     )
+
+    assert client.get_calls == 3
+    assert client.post_calls == []
 
 
 def test_feature_suite_cleans_created_user_after_mid_flow_failure():

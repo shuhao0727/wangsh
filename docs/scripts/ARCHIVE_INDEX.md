@@ -2,7 +2,7 @@
 
 > 状态：reference
 > Owner：scripts
-> 最近复核：2026-07-18
+> 最近复核：2026-07-24
 
 ---
 
@@ -59,6 +59,7 @@
 | `seed_ml_book.py` | `backend/scripts/seed_ml_book.py` | 机器学习书籍旧种子脚本 | 含硬编码数据库凭据且无正式入口，已物理删除；相关凭据需轮换 |
 | `run_analysis.py` | `backend/scripts/run_analysis.py` | 固定课堂分析写库脚本 | 硬编码日期、班级和账号，未接入正式入口，避免误写生产数据 |
 | `seed_conversation_mock_data.py` | `backend/scripts/seed_conversation_mock_data.py` | 固定课堂对话种子脚本 | 会删除并重建固定测试用户和对话，已由正式测试和 API 流程替代 |
+| `init_database.py` | `backend/db/init_database.py` | 旧同步数据库初始化器 | 无活动引用，依赖未声明的 `psycopg2`，检查已废弃表且 `--force` 文案与实现不一致；由 Alembic、`bootstrap_db.py` 和 `check_migration_state.py` 替代 |
 
 ### 3. 前端脚本（原 `frontend/scripts/archive/`）
 

@@ -33,6 +33,8 @@ async def run_agent_chat_blocking(
     agent = await get_agent(db, agent_id, use_cache=False)
     if not agent:
         raise ValueError(f"智能体(id={agent_id})不存在或已删除")
+    if not getattr(agent, "is_active", True):
+        raise ValueError(f"agent_inactive: 智能体(id={agent_id})已停用")
 
     api_endpoint, api_key = resolve_credentials(agent)
 
@@ -51,16 +53,23 @@ async def run_agent_chat_blocking(
 
     provider = get_provider(agent.agent_type, api_endpoint, api_key)
     provider_name = type(provider).__name__
+    circuit_key = f"{provider_name}:agent:{agent_id}"
     chat_messages = build_messages(agent, message, history)
     model = agent.model_name or ""
 
     # 熔断检查
-    if breaker.is_open(provider_name):
+    if breaker.is_open(circuit_key):
         raise ValueError("circuit_open: 该服务暂时不可用（连续失败过多），请稍后重试")
 
     # Dify 阻塞式
     if isinstance(provider, DifyProvider):
-        return await _blocking_dify(provider, chat_messages, model, user, inputs)
+        try:
+            result = await _blocking_dify(provider, chat_messages, model, user, inputs)
+        except Exception:
+            breaker.record_failure(circuit_key)
+            raise
+        breaker.record_success(circuit_key)
+        return result
 
     # 非 Dify
     if not model:
@@ -87,7 +96,7 @@ async def run_agent_chat_blocking(
                 break
 
             if resp and resp.status_code == 200:
-                breaker.record_success(provider_name)
+                breaker.record_success(circuit_key)
                 return provider.parse_blocking_response(resp.json())
 
             status_code = int(resp.status_code) if resp else 0
@@ -109,7 +118,7 @@ async def run_agent_chat_blocking(
             last_error = f"provider_status_{status_code}: {msg}{suffix}"
             break
 
-        breaker.record_failure(provider_name)
+        breaker.record_failure(circuit_key)
         raise ValueError(last_error or "provider_request_failed")
 
 

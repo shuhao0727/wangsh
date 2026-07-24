@@ -3,6 +3,8 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from app.core.config import settings
+
 from .base import LLMProvider
 
 
@@ -40,7 +42,7 @@ class AnthropicProvider(LLMProvider):
         payload: Dict[str, Any] = {
             "model": model,
             "messages": chat_msgs,
-            "max_tokens": 4096,
+            "max_tokens": settings.AI_AGENT_MAX_OUTPUT_TOKENS,
             "stream": True,
         }
         if system_text:
@@ -52,7 +54,7 @@ class AnthropicProvider(LLMProvider):
         payload: Dict[str, Any] = {
             "model": model,
             "messages": chat_msgs,
-            "max_tokens": 4096,
+            "max_tokens": settings.AI_AGENT_MAX_OUTPUT_TOKENS,
         }
         if system_text:
             payload["system"] = system_text
@@ -84,6 +86,20 @@ class AnthropicProvider(LLMProvider):
             return obj.get("type") == "message_stop"
         except Exception:
             return False
+
+    def stream_finish_reason(self, line: str) -> Optional[str]:
+        line = line.strip()
+        if not line.startswith("data:"):
+            return None
+        try:
+            obj = json.loads(line[5:].strip())
+        except Exception:
+            return None
+        if obj.get("type") != "message_delta":
+            return None
+        delta = obj.get("delta") or {}
+        reason = delta.get("stop_reason")
+        return str(reason) if reason is not None else None
 
     def parse_blocking_response(self, data: Dict[str, Any]) -> str:
         content = data.get("content") or []

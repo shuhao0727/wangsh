@@ -44,3 +44,7 @@ class LLMProvider(ABC):
     def is_stream_done(self, line: str) -> bool:
         """判断流式响应是否结束"""
         return line.strip() == "[DONE]"
+
+    def stream_finish_reason(self, line: str) -> Optional[str]:
+        """返回流式响应的结束原因；不支持该字段的 Provider 返回 None。"""
+        return None

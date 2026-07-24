@@ -41,6 +41,25 @@ test("Docker context excludes local-only public runtimes", () => {
   );
 });
 
+test("backend Docker context excludes cached Docker CLI binaries", () => {
+  const patterns = activePatterns(path.join(repoRoot, "backend", ".dockerignore")).map(
+    (line) => line.replace(/^\/|\/$/g, ""),
+  );
+
+  assert.ok(
+    patterns.includes("docker/bin"),
+    "backend Docker context must exclude host-cached Docker CLI binaries",
+  );
+});
+
+test("Git ignores local Codex coordination files", () => {
+  const gitignore = activePatterns(path.join(repoRoot, ".gitignore"));
+  assert.ok(
+    gitignore.includes("/.codex/"),
+    ".gitignore must keep local Codex handoff files out of release commits",
+  );
+});
+
 test("Git ignores the complete local Mindmap runtime", () => {
   const gitignore = activePatterns(path.join(repoRoot, ".gitignore"));
   assert.ok(

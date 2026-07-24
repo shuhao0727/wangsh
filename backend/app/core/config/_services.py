@@ -17,6 +17,7 @@ class ServicesSettingsMixin:
     # ==================== 智能体服务配置 ====================
     AGENT_API_URL: Optional[str] = Field(default=None)
     AGENT_API_KEY: Optional[str] = Field(default=None)
+    AI_AGENT_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=256, le=65536)
 
     # ==================== HTTPX 客户端配置 ====================
     HTTPX_MAX_CONNECTIONS: int = Field(default=100)

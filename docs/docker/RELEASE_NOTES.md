@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-07-22
+> 最近复核：2026-07-24
 > 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
 >
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
@@ -14,14 +14,14 @@
 
 ## 📚 历史版本归档
 
-v1.5.9 及之前的版本（v1.5.1 - v1.5.9，共14个版本）已归档到：
+v1.5.x 早期版本和 hotfix 记录已归档到：
 [archive/RELEASE_NOTES_v1.5.x.md](archive/RELEASE_NOTES_v1.5.x.md)
 
-当前文档只保留最近3个版本的发布记录。
+当前发布事实和运维变更继续在本文维护。
 
 ---
 
-## 未发布 v1.6.0（更新至 2026-07-22）
+## 未发布 v1.6.0（更新至 2026-07-23）
 
 当前源码版本继续使用 `1.6.0`。截至 2026-07-14，远端 Git 尚无 `v1.6.0` tag；
 Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并由
@@ -37,6 +37,20 @@ Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并
   备份或降级。恢复成功时保留原操作失败状态，恢复失败时返回恢复状态并明确要求人工
   处理。`--no-backup` 仍是显式危险选项。downgrade 使用一次性 backend 容器，完成后
   写服务保持停止等待旧 release-set。
+- 修复 AI 智能体长回答被前后端固定 120 秒总时长截断的问题；前端改为空闲超时并合并
+  高频分片，后端依赖 HTTPX 读取空闲超时，同时识别连接提前结束和 Dify 部分断流。
+  OpenAI 兼容 provider 遇到 `finish_reason=length`、`max_tokens` 或
+  `max_output_tokens` 时返回 `output_limit_reached`，保留已生成文本并明确提示模型
+  输出长度上限；内容策略、工具调用、上下文窗口超限和未知结束原因也不会再误报完整
+  成功。DeepSeek `/anthropic` base URL 现在会正确选择 Anthropic provider，并读取
+  Anthropic `message_delta.stop_reason`。历史上下文限制为 20 条 user/assistant 消息，
+  当前问题由后端保证只追加一次，停用智能体在连接 Provider 前拒绝，熔断按智能体隔离。
+  前端切换智能体或会话时静默取消旧流，截断终止包不再污染新会话；部分回答在错误时
+  只保留于界面，不作为完整记录自动落库。专项回归为后端 `61 passed`、前端 AIAgents
+  `17 passed`；后端停用拦截同时覆盖流式和阻塞式智能体入口。Docker 开发栈本机
+  Provider stub 完整接收 `80000` 字符并清理临时智能体。
+  真实 DeepSeek 长流测试收到 `7063` 个字符后以
+  `max_tokens` 正常终止，部分内容和明确提示均保留。
 - 扩展应用日志脱敏，PostgreSQL、SQLAlchemy async、Redis 和 AMQP/Celery 连接串中的
   URL userinfo 密码现在统一替换为 `<redacted>`，同时保留 scheme、用户名、主机和路径
   供排错；只有用户名、没有密码的公开 URL 不会被误改。

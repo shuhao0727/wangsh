@@ -45,7 +45,7 @@ import { config } from "@services";
 import { logger } from "@services/logger";
 import { useStreamEngine } from "./hooks/useStreamEngine";
 
-const STREAM_TIMEOUT_MS = 120_000;
+const STREAM_IDLE_TIMEOUT_MS = 120_000;
 
 const generateSessionId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -316,6 +316,10 @@ const AIAgentsPage: React.FC = () => {
 
   // 切换智能体
   const handleAgentChange = (agentId: string) => {
+    stopStream("navigation");
+    setStreamingContent("");
+    setCurrentStreamingMessageId(null);
+    setIsStreaming(false);
     const agent = agents.find((a) => a.id === agentId);
     if (agent) {
       setCurrentAgent(agent);
@@ -523,7 +527,7 @@ const AIAgentsPage: React.FC = () => {
               setIsStreaming(false);
               void persistUsage(fullText);
             },
-            onError: (errText) => {
+            onError: (errText, partialText) => {
               const errMsg: Message = {
                 id: `err-${Date.now()}`,
                 content: `⚠️ ${errText}`,
@@ -531,7 +535,18 @@ const AIAgentsPage: React.FC = () => {
                 timestamp: new Date().toISOString(),
                 agentId: currentAgent.id,
               };
-              setMessages((prev) => [...prev, errMsg]);
+              const partial = partialText?.trim();
+              setMessages((prev) => {
+                if (!partial) return [...prev, errMsg];
+                const partialMsg: Message = {
+                  id: agentMessageId,
+                  content: partial,
+                  sender: "agent",
+                  timestamp: new Date().toISOString(),
+                  agentId: currentAgent.id,
+                };
+                return [...prev, partialMsg, errMsg];
+              });
               setStreamingContent("");
               setCurrentStreamingMessageId(null);
               setIsStreaming(false);
@@ -546,7 +561,7 @@ const AIAgentsPage: React.FC = () => {
             onNodeStarted: (name) => addNode(name),
             onNodeFinished: (name, detail) => finishNode(name, detail),
           },
-          timeoutMs: STREAM_TIMEOUT_MS,
+          timeoutMs: STREAM_IDLE_TIMEOUT_MS,
         });
       } catch (e: any) {
         if (e?.name === "AbortError") return;
@@ -594,6 +609,10 @@ const AIAgentsPage: React.FC = () => {
 
   const handleStartNewConversation = () => {
     if (!currentAgent) return;
+    stopStream("navigation");
+    setStreamingContent("");
+    setCurrentStreamingMessageId(null);
+    setIsStreaming(false);
     createNewConversation(currentAgent);
     handleFocusInput();
   };
@@ -601,6 +620,10 @@ const AIAgentsPage: React.FC = () => {
   const handleSelectSession = async (sessionId: string) => {
     if (!currentAgent) return;
     if (!auth.isAuthenticated) return;
+    stopStream("navigation");
+    setStreamingContent("");
+    setCurrentStreamingMessageId(null);
+    setIsStreaming(false);
     setCurrentSessionId(sessionId);
     try {
       localStorage.setItem(getSessionStorageKey(currentAgent.id), sessionId);
@@ -627,7 +650,7 @@ const AIAgentsPage: React.FC = () => {
   // 组件卸载时中止进行中的流式请求
   useEffect(() => {
     return () => {
-      stopStream();
+      stopStream("unmount");
     };
   }, [stopStream]);
 

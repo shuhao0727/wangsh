@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-07-22
+> 最后更新：2026-07-24
 
 ## 一、健康检查
 
@@ -162,9 +162,16 @@
 - 当使用 OpenRouter 时，后端会自动做模型名双向回退以降低配置误差：
   - `xxx:free` 在 `404/429/5xx` 时可回退尝试 `xxx`
   - `xxx` 在“模型不存在类 404”或 `429/5xx` 时可回退尝试 `xxx:free`
-- `/ai-agents/stream` 的 SSE `error` 事件会透传上游 `detail` 字段，前端会显示更具体的失败原因（如 guardrail/data policy 限制）。
+- `/ai-agents/stream` 的上游 HTTP 错误会保留经过长度限制的 Provider `detail`；内部
+  初始化或运行异常只返回稳定错误码和通用提示，不向普通用户暴露内部异常详情。
 - OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
 - `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
+- `/ai-agents/stream` 的 `messages` 最多 20 条，只允许 `user`/`assistant`。`message`
+  表示本轮问题；若历史末尾尚未包含该问题，后端会自动追加一次，若已包含则不会重复。
+  客户端传入 `system` 历史返回 `422`，系统提示词只来自智能体服务端配置。
+- 停用智能体返回 SSE `agent_inactive`，不会连接外部 Provider。正常结束原因以
+  `stop`、`end_turn`、`stop_sequence` 或明确终止标记为准；输出长度、上下文窗口、
+  内容策略、工具调用和未知结束原因均返回对应 SSE `error`，不伪装成完整成功。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
 - 使用记录列表 `/ai-agents/usage` 返回 `items`、`total`、`page`、`page_size`、
   `total_pages`；写入端点会强制绑定当前登录用户身份（`user_id` 可省略，传入也会被
@@ -635,3 +642,18 @@ Content-Type: application/json
 | GET | `/admin/it/games/{game_id}/logs` | 下载日志，`size <= 200` | 管理员 |
 
 上传使用 1 MiB 分块、临时文件、增量 SHA256 和同目录原子重命名；默认上限由 `IT_GAME_MAX_UPLOAD_BYTES=524288000` 控制。数据库提交失败会回滚并删除最终文件，删除提交失败会恢复隔离文件。
+
+## 十七、ML Book（/ml/book）
+
+`module_key` 仅允许 `ml`、`ai`、`agents`。公开接口不需要认证，管理接口需要管理员权限。
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/ml/book/{module_key}` | 获取已启用书籍及章节；不存在时返回 `{"book": null}` | 否 |
+| GET | `/admin/ml/book/{module_key}` | 获取完整书籍及全部章节 | 管理员 |
+| PUT | `/admin/ml/book/{module_key}` | 创建或更新书籍元数据 | 管理员 |
+| GET | `/admin/ml/book/{module_key}/chapters/{slug}` | 获取章节详情 | 管理员 |
+| PUT | `/admin/ml/book/{module_key}/chapters/{slug}` | 创建或更新章节 | 管理员 |
+| DELETE | `/admin/ml/book/{module_key}/chapters/{slug}` | 删除章节 | 管理员 |
+| PATCH | `/admin/ml/book/{module_key}/chapters/reorder` | 批量重排章节 | 管理员 |
+| PATCH | `/admin/ml/book/{module_key}/chapters/{slug}/toggle` | 启用或停用章节 | 管理员 |
