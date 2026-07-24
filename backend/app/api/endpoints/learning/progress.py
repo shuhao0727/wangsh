@@ -54,6 +54,21 @@ def _progress_payload(progress: LearningProgress) -> Dict[str, Any]:
     }
 
 
+def _default_progress_payload(user_id: int, module_key: str) -> Dict[str, Any]:
+    return {
+        "id": None,
+        "user_id": user_id,
+        "module_key": module_key,
+        "data": {
+            "current_stage": None,
+            "completed_stages": None,
+            "notes": None,
+        },
+        "created_at": None,
+        "updated_at": None,
+    }
+
+
 @router.get("/learning/progress")
 async def list_learning_progress(
     db: AsyncSession = Depends(get_db),
@@ -85,7 +100,7 @@ async def get_learning_progress(
     result = await db.execute(stmt)
     progress = result.scalar_one_or_none()
     if not progress:
-        raise HTTPException(status_code=404, detail="未找到该模块的学习进度")
+        return _default_progress_payload(user_id, module_key)
     return _progress_payload(progress)
 
 
@@ -143,11 +158,13 @@ async def upsert_learning_progress(
             result = await db.execute(stmt)
             progress = result.scalar_one()
             # 应用更新
-            progress.progress_data = json.dumps(data, ensure_ascii=False)
-            progress.current_stage = data.get("current_stage")
-            if "completed_stages" in data:
-                progress.completed_stages = json.dumps(data.get("completed_stages"), ensure_ascii=False)
-            progress.notes = data.get("notes") if isinstance(data.get("notes"), str) else progress.notes
+            progress.progress_data = json.dumps(progress_dict, ensure_ascii=False)
+            if data.current_stage is not None:
+                progress.current_stage = data.current_stage
+            if data.completed_stages is not None:
+                progress.completed_stages = json.dumps(data.completed_stages, ensure_ascii=False)
+            if data.notes is not None:
+                progress.notes = data.notes
 
     await db.commit()
     await db.refresh(progress)

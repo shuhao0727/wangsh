@@ -14,6 +14,7 @@ import {
   collectStaticRuntimeChunks,
   classifyChunk,
   summarizeChunks,
+  validateProductionAssets,
 } from "./bundle-budget-lib.mjs";
 
 test("recursively discovers worker JavaScript without counting source maps", () => {
@@ -225,6 +226,36 @@ test("counts copied Pyodide JavaScript as deferred production runtime", () => {
     assert.equal(chunks[0].name, "pyodide/pyodide.js");
     assert.equal(chunks[0].key, "pyodide");
     assert.equal(chunks[0].deferred, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("validates required and forbidden production assets from the real build tree", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-assets-"));
+  const assets = path.join(root, "assets");
+  fs.mkdirSync(assets, { recursive: true });
+  fs.writeFileSync(path.join(root, "favicon.svg"), "<svg/>");
+  fs.writeFileSync(path.join(assets, "KaTeX_Main-Regular-test.woff2"), "font");
+  fs.writeFileSync(path.join(assets, "codicon-test.ttf"), "font");
+
+  try {
+    const valid = validateProductionAssets(root);
+    assert.deepEqual(valid.errors, []);
+    assert.equal(valid.katexFonts.length, 1);
+    assert.equal(valid.monacoFonts.length, 1);
+
+    fs.mkdirSync(path.join(root, "mindmap-demo"));
+    fs.rmSync(path.join(root, "favicon.svg"));
+    fs.rmSync(path.join(assets, "KaTeX_Main-Regular-test.woff2"));
+    fs.rmSync(path.join(assets, "codicon-test.ttf"));
+
+    assert.deepEqual(validateProductionAssets(root).errors, [
+      "build/favicon.svg is missing or empty",
+      "build/mindmap-demo must not exist in production output",
+      "production output contains no KaTeX fonts",
+      "production output contains no Monaco codicon font",
+    ]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

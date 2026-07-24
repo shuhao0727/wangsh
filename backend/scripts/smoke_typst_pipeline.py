@@ -121,6 +121,7 @@ def main() -> int:
     _OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()), urllib.request.ProxyHandler({}))
 
     created_note_id: int | None = None
+    created_asset_id: int | None = None
     headers: dict[str, str] = {}
     try:
         code, payload = _http_json("GET", base_url + "/health")
@@ -169,6 +170,9 @@ def main() -> int:
         )
         if code not in (200, 201):
             _die(f"asset upload failed: http {code} payload={asset}")
+        if not isinstance(asset, dict) or not asset.get("id"):
+            _die(f"asset upload missing id: payload={asset}")
+        created_asset_id = int(asset["id"])
         print("[OK] asset upload")
 
         code, job = _http_json("POST", base_url + f"/informatics/typst-notes/{note_id}/compile-async", headers=headers)
@@ -211,6 +215,17 @@ def main() -> int:
             _die(f"cleanup dry_run failed: http {code} payload={clean}")
         print("[OK] cleanup dry_run")
 
+        if created_note_id is not None and created_asset_id is not None:
+            code, deleted_asset = _http_json(
+                "DELETE",
+                base_url + f"/informatics/typst-notes/{created_note_id}/assets/{created_asset_id}",
+                headers=headers,
+            )
+            if code != 200:
+                _die(f"delete asset failed: http {code} payload={deleted_asset}")
+            created_asset_id = None
+            print("[OK] delete asset")
+
         if created_note_id is not None:
             code, deleted = _http_json("DELETE", base_url + f"/informatics/typst-notes/{created_note_id}", headers=headers)
             if code != 200:
@@ -222,6 +237,12 @@ def main() -> int:
     finally:
         if created_note_id is not None:
             try:
+                if created_asset_id is not None:
+                    _http_json(
+                        "DELETE",
+                        base_url + f"/informatics/typst-notes/{created_note_id}/assets/{created_asset_id}",
+                        headers=headers,
+                    )
                 _http_json("DELETE", base_url + f"/informatics/typst-notes/{created_note_id}", headers=headers)
             except Exception:
                 pass

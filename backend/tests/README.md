@@ -40,6 +40,10 @@ pytest -q tests/group_discussion
 pytest -q tests/auth/test_auth_login.py
 ```
 
+真实 PostgreSQL 集成用例只允许连接到数据库名包含 `test`、`testing` 或 `ci` 的测试库。
+本机可设置 `TEST_DATABASE_URL` 指向专用测试数据库；未设置且当前数据库不满足安全规则时，
+相关用例会明确跳过，不会在业务库创建临时 schema。
+
 ## 分层约定
 
 - `backend/tests/`：pytest 单元/集成测试
@@ -69,4 +73,3 @@ time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024&te
 ```
 
 **历史记录**: 性能测试文件于 2026-07 整理时移除（commit 39293d2），基线值保留于此作为手动验证参考。
-

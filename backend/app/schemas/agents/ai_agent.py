@@ -9,6 +9,8 @@ from typing import Optional, List, Literal, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyHttpUrl
 from uuid import UUID
 
+from .conversation import ConversationMessage, ConversationSummary, UsageFilterOptions
+
 
 # 智能体类型定义
 # 历史数据中可能存在 openai，这里保留兼容
@@ -213,34 +215,6 @@ class AgentUsageStatistics(BaseModel):
     today_usage: int
     week_usage: int
     month_usage: int
-
-
-class ConversationSummary(BaseModel):
-    session_id: str
-    agent_id: int
-    display_agent_name: Optional[str] = None
-    display_user_name: Optional[str] = None
-    last_at: datetime
-    turns: int = 0
-    preview: Optional[str] = None
-
-
-class ConversationMessage(BaseModel):
-    id: int
-    session_id: str
-    user_id: Optional[int] = None
-    agent_id: Optional[int] = None
-    display_user_name: Optional[str] = None
-    display_agent_name: Optional[str] = None
-    message_type: str
-    content: str
-    response_time_ms: Optional[int] = None
-
-
-class UsageFilterOptions(BaseModel):
-    class_names: List[str] = []
-    grades: List[str] = []
-    agent_names: List[str] = []
 
 
 class HotQuestionExample(BaseModel):

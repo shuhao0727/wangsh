@@ -4,6 +4,8 @@
 
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from pydantic import Field, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -64,6 +66,17 @@ class BaseSettingsMixin:
                 return False
             if normalized in {"debug", "dev", "development"}:
                 return True
+        return value
+
+    @field_validator("TIMEZONE")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"TIMEZONE 必须是有效的 IANA 时区名称，当前值为 {value!r}"
+            ) from exc
         return value
 
     @model_validator(mode="after")

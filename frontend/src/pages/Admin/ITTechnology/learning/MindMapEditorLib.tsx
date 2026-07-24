@@ -6,7 +6,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showMessage } from "@/lib/toast";
+import {
+  isMindmapEditorRuntimeAvailable,
+  MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
+} from "@/lib/mindmapRuntime";
 import { ArrowLeft, Save, ExternalLink } from "lucide-react";
+import MindMapViewer from "./MindMapViewer";
 import {
   markdownToMindMapData,
   mindMapDataToMarkdown,
@@ -40,6 +45,7 @@ function getToken(): string | null {
 }
 
 const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdown, onBack, onSaved }) => {
+  const runtimeAvailable = isMindmapEditorRuntimeAvailable();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [title, setTitle] = useState(initialTitle || "未命名导图");
   const [saving, setSaving] = useState(false);
@@ -54,6 +60,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
 
   // 通过 localStorage 把初始数据传给 iframe
   useEffect(() => {
+    if (!runtimeAvailable) return;
     const rootText = initialTitle || "中心主题";
     const md = initialMarkdown || `# ${rootText}`;
     const tree = markdownToMindMapData(md, rootText);
@@ -65,7 +72,7 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
       view: null,
     };
     try { localStorage.setItem(LS_KEY, JSON.stringify(demoData)); } catch {}
-  }, [initialTitle, initialMarkdown]);
+  }, [initialTitle, initialMarkdown, runtimeAvailable]);
 
   const handleSaveData = useCallback(async (data: MindMapNode, silent = false) => {
     const id = mindmapIdRef.current;
@@ -97,12 +104,13 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
 
   // Ctrl+S
   useEffect(() => {
+    if (!runtimeAvailable) return;
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); handleSave(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, []);
+  }, [runtimeAvailable]);
 
   const handleSave = useCallback(() => {
     try {
@@ -116,6 +124,25 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
       showMessage.error("无法读取导图数据，请重新打开编辑器");
     }
   }, [handleSaveData]);
+
+  if (!runtimeAvailable) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-surface">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
+          <Button variant="ghost" size="sm" onClick={onBack} className="h-7 gap-1 text-xs">
+            <ArrowLeft className="h-3.5 w-3.5" />返回
+          </Button>
+          <span className="text-sm font-medium">{title}</span>
+        </div>
+        <div className="border-b border-warning/25 bg-warning-soft px-4 py-3 text-sm text-warning">
+          {MINDMAP_EDITOR_UNAVAILABLE_MESSAGE}
+        </div>
+        <div className="min-h-0 flex-1 p-4">
+          <MindMapViewer markdown={initialMarkdown || `# ${title}`} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "#fff", display: "flex", flexDirection: "column" }}>

@@ -17,6 +17,29 @@ function normalizePath(value) {
   return value.replaceAll("\\", "/");
 }
 
+function collectFiles(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+
+  const files = [];
+  const visit = (currentDir) => {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+      } else {
+        files.push(
+          path.relative(rootDir, absolutePath).split(path.sep).join("/"),
+        );
+      }
+    }
+  };
+
+  visit(rootDir);
+  return files;
+}
+
 function manifestAssetName(file) {
   const normalized = normalizePath(file);
   const assetsMarker = "/assets/";
@@ -88,26 +111,44 @@ export function createManifestGraph(manifest = {}) {
 }
 
 export function collectJavaScriptFiles(rootDir) {
-  const files = [];
+  return collectFiles(rootDir).filter(
+    (name) =>
+      [".js", ".mjs"].includes(path.extname(name)) &&
+      !name.endsWith(".map"),
+  );
+}
 
-  const visit = (currentDir) => {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-      .sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const absolutePath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        visit(absolutePath);
-      } else if (
-        [".js", ".mjs"].includes(path.extname(entry.name)) &&
-        !entry.name.endsWith(".map")
-      ) {
-        files.push(path.relative(rootDir, absolutePath).split(path.sep).join("/"));
-      }
-    }
+export function validateProductionAssets(buildDir) {
+  const errors = [];
+  const faviconPath = path.join(buildDir, "favicon.svg");
+  const mindmapPath = path.join(buildDir, "mindmap-demo");
+  const assetFiles = collectFiles(path.join(buildDir, "assets"));
+  const katexFonts = assetFiles.filter(
+    (name) => /^KaTeX_.*\.(?:ttf|woff2?)$/i.test(path.basename(name)),
+  );
+  const monacoFonts = assetFiles.filter(
+    (name) => /^codicon-.*\.ttf$/i.test(path.basename(name)),
+  );
+
+  if (!fs.existsSync(faviconPath) || fs.statSync(faviconPath).size === 0) {
+    errors.push("build/favicon.svg is missing or empty");
+  }
+  if (fs.existsSync(mindmapPath)) {
+    errors.push("build/mindmap-demo must not exist in production output");
+  }
+  if (katexFonts.length === 0) {
+    errors.push("production output contains no KaTeX fonts");
+  }
+  if (monacoFonts.length === 0) {
+    errors.push("production output contains no Monaco codicon font");
+  }
+
+  return {
+    errors,
+    faviconPath,
+    katexFonts,
+    monacoFonts,
   };
-
-  visit(rootDir);
-  return files;
 }
 
 export function identifyKeyChunk(filename) {

@@ -8,9 +8,19 @@
 
 	root * /usr/share/caddy
 
+	# Mindmap 的第三方运行时只保留在本地开发环境，不进入生产镜像。
+	# 生产端明确返回 404，避免缺失资源被 SPA fallback 错误替换为 HTML。
+	@mindmap_runtime path /mindmap-demo /mindmap-demo/*
+	handle @mindmap_runtime {
+		header Cache-Control "no-store"
+		header Pragma "no-cache"
+		header Expires "0"
+		respond "" 404
+	}
+
 	# 构建产物与运行时静态文件必须命中真实文件；缺失时返回 404，
 	# 不能回退到 index.html，否则浏览器会把 HTML 当成模块脚本加载。
-	@static_assets path /assets/* /static/* /pyodide/* /favicon.ico /robots.txt /manifest.json
+	@static_assets path /assets/* /static/* /pyodide/* /favicon.ico /favicon.svg /robots.txt /manifest.json
 	handle @static_assets {
 		try_files {path} =404
 		header Cache-Control "public, max-age=31536000, immutable"

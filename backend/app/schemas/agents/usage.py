@@ -56,6 +56,9 @@ class AgentUsageResponse(BaseModel):
 class AgentUsageListResponse(BaseModel):
     items: List[AgentUsageResponse]
     total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class AgentUsageStatistics(BaseModel):

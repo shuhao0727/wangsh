@@ -129,7 +129,6 @@ const ITTechnologyPage: React.FC = () => {
         it_machine_learning_enabled: 'ml',
         it_ai_exploration_enabled: 'ai',
         it_agent_exploration_enabled: 'agents',
-it_game_lock_cracker_enabled: 'games',
       };
       const enabledLearningKeys = Object.keys(moduleMap).filter(k => newFlags[k]);
       if (enabledLearningKeys.length > 0) {

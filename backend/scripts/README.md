@@ -1,6 +1,6 @@
 # 后端脚本说明
 
-> 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
+> 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 `backend/scripts/` 只保留当前仍在使用的后端验证脚本和数据库初始化脚本。
 

@@ -306,21 +306,22 @@ async def admin_delete_session(db: AsyncSession, *, session_id: int) -> None:
     await db.commit()
 
 
-async def admin_delete_sessions(db: AsyncSession, *, session_ids: List[int]) -> None:
+async def admin_delete_sessions(db: AsyncSession, *, session_ids: List[int]) -> int:
     """批量删除会话"""
     if not session_ids:
-        return
+        return 0
 
     ids = [int(i) for i in session_ids if int(i) > 0]
     if not ids:
-        return
+        return 0
 
     # 删除相关记录
     await db.execute(delete(GroupDiscussionAnalysis).where(GroupDiscussionAnalysis.session_id.in_(ids)))
     await db.execute(delete(GroupDiscussionMessage).where(GroupDiscussionMessage.session_id.in_(ids)))
     await db.execute(delete(GroupDiscussionMember).where(GroupDiscussionMember.session_id.in_(ids)))
-    await db.execute(delete(GroupDiscussionSession).where(GroupDiscussionSession.id.in_(ids)))
+    result = await db.execute(delete(GroupDiscussionSession).where(GroupDiscussionSession.id.in_(ids)))
     await db.commit()
+    return int(result.rowcount or 0)
 
 
 async def admin_list_analyses(

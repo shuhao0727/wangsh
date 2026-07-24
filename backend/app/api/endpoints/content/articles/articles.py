@@ -584,15 +584,14 @@ async def list_public_articles(
     cache_key = ArticleCacheKeys.public_list(
         page=page,
         size=size,
-        category_id=category_id
+        category_id=category_id,
+        q=q,
     )
     
-    # 有搜索关键词时跳过缓存
-    if not q:
-        # 尝试从缓存获取
-        cached_result = await cache.get(cache_key)
-        if cached_result is not None:
-            return cached_result
+    # 尝试从缓存获取
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
     
     # 缓存未命中，从数据库获取
     result = await ArticleService.list_articles(

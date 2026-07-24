@@ -2,26 +2,29 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ConversationSummary(BaseModel):
-    id: int
-    status: str
-    user_name: Optional[str] = None
-    student_id: Optional[str] = None
-    class_name: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    question_count: int = 0
-    answer_count: int = 0
-    last_question: Optional[str] = None
+    session_id: str
+    agent_id: int
+    display_agent_name: Optional[str] = None
+    display_user_name: Optional[str] = None
+    last_at: datetime
+    turns: int = 0
+    preview: Optional[str] = None
 
 
 class ConversationMessage(BaseModel):
     id: int
+    session_id: str
+    user_id: Optional[int] = None
+    agent_id: Optional[int] = None
+    display_user_name: Optional[str] = None
+    display_agent_name: Optional[str] = None
     message_type: str
     content: str
+    response_time_ms: Optional[int] = None
     created_at: datetime
 
 

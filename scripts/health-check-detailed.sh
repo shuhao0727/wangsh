@@ -13,11 +13,65 @@ if [[ -n "${ENV_FILE:-}" ]]; then
   compose_args=(--env-file "$ENV_FILE" "${compose_args[@]}")
 fi
 
+required_commands=(awk cat curl date df docker sed)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  required_commands+=(vm_stat)
+else
+  required_commands+=(free)
+fi
+for required_command in "${required_commands[@]}"; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    echo "Error: required command not found: $required_command" >&2
+    exit 2
+  fi
+done
+
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 status="healthy"
 
 check_api() {
-  if curl -sf "$api_url/api/health" >/dev/null 2>&1; then
+  local response response_body http_status
+  if ! response=$(
+    curl --silent --show-error --connect-timeout 2 --max-time 5 \
+      --write-out $'\n%{http_code}' "$api_url/api/health" 2>/dev/null
+  ); then
+    echo "failed"
+    return
+  fi
+
+  http_status="${response##*$'\n'}"
+  response_body="${response%$'\n'*}"
+  if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    echo "failed"
+    return
+  fi
+
+  if printf '%s' "$response_body" |
+    docker compose "${compose_args[@]}" exec -T backend python -c '
+import json
+import sys
+
+
+class JSONObject(dict):
+    def __init__(self, pairs):
+        self.pairs = pairs
+        super().__init__(pairs)
+
+
+try:
+    payload = json.load(sys.stdin, object_pairs_hook=JSONObject)
+except (json.JSONDecodeError, UnicodeError):
+    raise SystemExit(1)
+
+status_count = sum(key == "status" for key, _ in payload.pairs) if isinstance(payload, JSONObject) else 0
+raise SystemExit(
+    0
+    if isinstance(payload, JSONObject)
+    and status_count == 1
+    and payload.get("status") == "healthy"
+    else 1
+)
+' >/dev/null 2>&1; then
     echo "ok"
   else
     echo "failed"
@@ -35,7 +89,7 @@ check_container() {
 
   state=$(docker inspect --format '{{.State.Status}}' "$container_id" 2>/dev/null || true)
   health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id" 2>/dev/null || true)
-  if [[ "$state" == "running" ]] && [[ "$health" == "healthy" || "$health" == "none" ]]; then
+  if [[ "$state" == "running" ]] && [[ "$health" == "healthy" ]]; then
     echo "ok"
   else
     echo "failed"

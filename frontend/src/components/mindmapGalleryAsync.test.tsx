@@ -1,13 +1,22 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MindmapGallery from "@/pages/MindmapGallery";
+
+const runtimeAvailable = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock("@/lib/toast", () => ({
   showMessage: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/mindmapRuntime", () => ({
+  isMindmapEditorRuntimeAvailable: runtimeAvailable,
+  MINDMAP_EDITOR_UNAVAILABLE_MESSAGE: "生产环境暂不提供旧版思维导图编辑器，已有导图仍可预览。",
 }));
 
 vi.mock("@/pages/Admin/ITTechnology/learning/MindMapViewer", () => ({
@@ -32,6 +41,7 @@ describe("MindmapGallery async loading", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    runtimeAvailable.mockReturnValue(true);
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -92,6 +102,24 @@ describe("MindmapGallery async loading", () => {
     expect(screen.getByText("最新导图")).toBeInTheDocument();
   });
 
+  it("does not abort the initial request during StrictMode effect replay", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(200, []))
+      .mockResolvedValueOnce(response(401))
+      .mockResolvedValueOnce(response(200, []))
+      .mockResolvedValueOnce(response(401));
+    const abortSpy = vi.spyOn(AbortController.prototype, "abort");
+
+    render(
+      <StrictMode>
+        <MindmapGallery />
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+    expect(abortSpy).not.toHaveBeenCalled();
+  });
+
   it("shows a personal-load error instead of claiming the user is logged out", async () => {
     const user = userEvent.setup();
     vi.mocked(fetch)
@@ -133,5 +161,48 @@ describe("MindmapGallery async loading", () => {
       }],
     });
     expect(open).toHaveBeenCalledWith("/mindmap-demo/index.html?id=3", "_blank");
+  });
+
+  it("uses the built-in preview page without the excluded runtime", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(200, [{
+        id: 4,
+        title: "可预览导图",
+        content: { markdown: "# 可预览导图\n## 节点\n" },
+        updated_at: "2026-07-22",
+      }]))
+      .mockResolvedValueOnce(response(401));
+
+    render(<MindmapGallery />);
+
+    await screen.findByText("可预览导图");
+    fireEvent.click(screen.getByTitle("预览"));
+
+    expect(JSON.parse(localStorage.getItem("_wangsh_preview_data") || "{}")).toMatchObject({
+      id: 4,
+      title: "可预览导图",
+      content: { markdown: "# 可预览导图\n## 节点\n" },
+    });
+    expect(open).toHaveBeenCalledWith("/mindmap-preview?id=4", "_blank");
+  });
+
+  it("blocks production editing before creating an unusable record", async () => {
+    const { showMessage } = await import("@/lib/toast");
+    runtimeAvailable.mockReturnValue(false);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(200, []))
+      .mockResolvedValueOnce(response(401));
+
+    render(<MindmapGallery />);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: /新建导图/ }));
+
+    expect(showMessage.warning).toHaveBeenCalledWith(
+      "生产环境暂不提供旧版思维导图编辑器，已有导图仍可预览。",
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

@@ -6,6 +6,11 @@ import { useSearchParams } from "react-router-dom";
 import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
 import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
 import { Button } from "@/components/ui/button";
+import { showMessage } from "@/lib/toast";
+import {
+  isMindmapEditorRuntimeAvailable,
+  MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
+} from "@/lib/mindmapRuntime";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 const MindmapPreview: React.FC = () => {
@@ -27,6 +32,10 @@ const MindmapPreview: React.FC = () => {
   }, []);
 
   const handleEdit = () => {
+    if (!isMindmapEditorRuntimeAvailable()) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (id) {
       const rootText = title || "未命名";
       const md = markdown || `# ${rootText}`;

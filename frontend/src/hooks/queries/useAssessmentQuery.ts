@@ -96,14 +96,29 @@ const parseAdaptiveConfig = (raw: string | null) => {
   }
 };
 
+const ASSESSMENT_QUESTION_PAGE_SIZE = 200;
+
 export function useAdaptiveKPs(configId: number | null) {
   return useQuery({
     queryKey: queryKeys.assessmentQuestions.adaptive(configId!),
     queryFn: async () => {
-      const resp = await assessmentQuestionApi.list(configId!, {
-        limit: 1000,
-      });
-      return resp.items
+      const questions: AssessmentQuestion[] = [];
+      let skip = 0;
+      let total = Number.POSITIVE_INFINITY;
+
+      while (skip < total) {
+        const resp = await assessmentQuestionApi.list(configId!, {
+          skip,
+          limit: ASSESSMENT_QUESTION_PAGE_SIZE,
+        });
+        questions.push(...resp.items);
+        total = resp.total;
+
+        if (resp.items.length === 0) break;
+        skip += resp.items.length;
+      }
+
+      return questions
         .filter((q: AssessmentQuestion) => q.mode === "adaptive")
         .map((q: AssessmentQuestion): AdaptiveKP => {
           const cfg = parseAdaptiveConfig(q.adaptive_config);

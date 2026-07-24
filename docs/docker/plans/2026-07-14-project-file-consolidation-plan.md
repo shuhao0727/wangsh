@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-07-19
+> 最近复核：2026-07-22
 > 归档条件：当前整理批次提交并通过提交后门禁，剩余专项转入对应 owner 或 30/60/90 计划
 
 本文是当前文件整理工作的唯一执行入口。动态测试结果统一写入
@@ -39,6 +39,8 @@
 - Assessment 的设计、数据库、API、前端和测试入口收敛到
   [ASSESSMENT.md](../../features/ASSESSMENT.md)，Prompt 保留独立 owner。
 - 删除无真实引用的旧 redirect、重复短摘要和已被 owner 完整替代的历史正文。
+- 删除结论错误且无引用的 `PROJECT_CLEANUP_2026-07-21.md`；将 7 月代码审查长报告
+  压缩为历史快照，撤回过强的“全部完成”和“生产就绪”结论。
 - 三份 2026-07 长计划的唯一历史结论合并到
   [7 月归档摘要](../archive/plans/2026-07-project-consolidation-history.md)。
 - SSE 恢复资料和学习平台设计取舍保留为精简 archive。
@@ -49,6 +51,9 @@
 - 删除已被同名 package 替代的 Python 兼容壳和无路由引用的旧前端页面/组件。
 - 删除永久 skip、只断言自建 mock 或无真实入口的空壳测试；移动测试保持原行为。
 - GroupDiscussion 并发冲突、Assessment 班级隔离、XBK 端点和日志脱敏已有直接回归。
+- 日志脱敏已覆盖 FastAPI、Celery、标准 logging、Loguru、异常链和异常长输入；
+  GroupDiscussion 业务日期使用配置时区，无效时区启动期失败；Assessment 班级隔离
+  由真实 PostgreSQL 临时 schema 验证。
 - 5 个失效、危险或重复的 seed 壳已删除；正式课程迁移源继续保留。
 - `backend/scripts/__init__.py` 已补充，并覆盖仓库根目录导入与空库启动路径。
 - 思维导图保存使用 iframe 当前运行时数据，富文本转为纯文本 Markdown，不再重复根节点；
@@ -60,20 +65,30 @@
 - release-set 校验覆盖六镜像集合、逻辑名称、版本变量、registry digest 和本地 RepoDigest。
 - 正式发布只拉六个业务服务，启动使用 `--pull never`，不隐式更新 PostgreSQL/Redis。
 - `deploy` 等待首页、API、数据库、Redis、frontend、gateway 和两个 worker 全部健康。
-- 回滚、恢复、删除 volume、XBK reset 和 live prod-smoke 均要求显式授权。
+- API 健康状态要求 HTTP 2xx 和顶层唯一 `status=healthy`；默认回滚先记录并停止三个
+  数据库写服务建立无写入窗口，再执行备份和 downgrade。停止或备份失败时不降级，
+  并尝试恢复停止前原本运行的写服务。恢复、删除 volume、XBK reset 和 live
+  prod-smoke 仍要求显式授权。
 
 ### 静态资源
 
-- `frontend/public/mindmap-demo/` 和 `favicon.svg` 作为版本化运行资产保留。
+- `favicon.svg` 等正式源码资产继续跟踪。
 - `frontend/public/pyodide/` 继续作为可重建 runtime 忽略。
-- 静态资源合同校验 mindmap demo 的全部本地引用。
+- `frontend/public/mindmap-demo/` 保留在开发机，但目录内字体、SVG、图片和打包 JS
+  整体排除 Git 与 Docker 构建上下文；Vite 生产构建结束后还会删除复制到
+  `build/mindmap-demo` 的本地副本，不再维护逐文件白名单或 manifest。
+- 生产 Caddy 对 Mindmap 路径返回 `404 + no-store` 且不进入 SPA fallback；恢复生产
+  能力前，另行建立可复现的资源准备流程。
 
-## 四、剩余动作
+## 四、当前状态
 
-1. 完成当前最新差异的全量前端、后端、脚本、Markdown、Compose 和格式门禁。
-2. 清理真实浏览器验证创建的临时思维导图，确认保存后无 D3/控制台错误。
-3. 核对 tracked 删除与 untracked 新增必须在同一提交中原子到达。
-4. 用户明确要求提交后再 stage/commit；push、生产模拟和镜像发布单独执行。
+1. 当前最终差异的全量前端、后端、脚本、Markdown、Compose 和格式门禁已通过；
+   前端 lockfile 也已通过真实 clean install 后的全量测试与生产构建。
+2. Git 和 Docker 均已排除 Mindmap 本地运行时，`favicon.svg` 等正式源码资产未被
+   宽泛规则误伤；不含 Mindmap 的临时副本构建已通过。
+3. 本地 `shuhao07/wangsh-frontend:1.6.0` 已从当前工作树重建，并完成独立 Caddy
+   容器验证；其余五个业务镜像重建和完整隔离生产模拟仍未执行。
+4. 当前未 stage/commit；push、部署和镜像发布继续要求单独授权。
 
 ## 五、验证门禁
 

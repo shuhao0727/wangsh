@@ -4,13 +4,58 @@
 """
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+import os
+import re
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
+import pytest
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+from app.db.database import Base
+from app.models import User
+from app.models.agents import AIAgent, GroupDiscussionSession
+from app.models.assessment import AssessmentConfig, AssessmentSession, StudentProfile
+from app.schemas.assessment.profile import ProfileGenerateRequest
 from app.services.assessment.basic_profile_service import (
     generate_basic_profile,
     get_basic_profile,
 )
+from app.services.assessment.profile_service import generate_profile
+
+
+_TEST_DATABASE_NAME_RE = re.compile(r"(?:^|[_-])(?:test|testing|ci)(?:$|[_-])")
+
+
+def _assessment_integration_database_url() -> str:
+    explicit_url = os.environ.get("TEST_DATABASE_URL", "").strip()
+    database_url = explicit_url or str(settings.DATABASE_URL or "")
+    if not database_url:
+        pytest.skip("Assessment PostgreSQL integration test has no database URL")
+
+    parsed = make_url(database_url)
+    database_name = (parsed.database or "").lower()
+    if not parsed.drivername.startswith("postgresql"):
+        pytest.skip("Assessment SQL isolation regression requires PostgreSQL")
+    if not _TEST_DATABASE_NAME_RE.search(database_name):
+        message = (
+            "Assessment SQL isolation regression requires a database name containing "
+            "'test', 'testing', or 'ci'"
+        )
+        if explicit_url:
+            pytest.fail(message)
+        pytest.skip(f"{message}; set TEST_DATABASE_URL to a dedicated test database")
+
+    host = (parsed.host or "").lower()
+    if not explicit_url and host not in {"127.0.0.1", "localhost", "::1"}:
+        pytest.skip(
+            "Non-local Assessment integration databases require explicit TEST_DATABASE_URL"
+        )
+    return database_url
 
 
 def _make_question(knowledge_point="变量", correct_answer="A"):
@@ -197,3 +242,194 @@ def test_generate_basic_profile_knowledge_aggregation():
 
     # 注：_collect_class_data 是内部实现，不再直接测试
     # 其逻辑通过 generate_class_profile 等公共 API 间接验证
+
+
+@patch(
+    "app.services.agents.chat_blocking.run_agent_chat_blocking",
+    new_callable=AsyncMock,
+)
+def test_generate_class_profile_isolates_students_by_class(mock_ai):
+    """公共入口必须让真实 SQL 查询隔离目标班级的 graded sessions。"""
+    mock_ai.return_value = """班级画像
+```json
+{"dimensions": {"知识掌握": 80}}
+```"""
+
+    async def run():
+        database_url = _assessment_integration_database_url()
+        schema = f"test_assessment_profile_{uuid4().hex}"
+        admin_engine = create_async_engine(database_url)
+        async with admin_engine.begin() as connection:
+            await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+
+        engine = create_async_engine(
+            database_url,
+            connect_args={
+                "server_settings": {
+                    "search_path": f"{schema},public",
+                }
+            },
+        )
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(
+                    lambda sync_connection: Base.metadata.create_all(
+                        sync_connection,
+                        tables=[
+                            User.__table__,
+                            AIAgent.__table__,
+                            AssessmentConfig.__table__,
+                            AssessmentSession.__table__,
+                            GroupDiscussionSession.__table__,
+                            StudentProfile.__table__,
+                        ],
+                        checkfirst=False,
+                    )
+                )
+
+            async with Session() as db:
+                teacher = User(
+                    full_name="画像教师",
+                    role_code="teacher",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                in_class_a = User(
+                    full_name="班内学生甲",
+                    student_id=f"in-a-{uuid4().hex}",
+                    class_name="高一(1)班",
+                    role_code="student",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                in_class_b = User(
+                    full_name="班内学生乙",
+                    student_id=f"in-b-{uuid4().hex}",
+                    class_name="高一(1)班",
+                    role_code="student",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                outside_student = User(
+                    full_name="班外学生",
+                    student_id=f"out-{uuid4().hex}",
+                    class_name="高一(2)班",
+                    role_code="student",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                same_class_teacher = User(
+                    full_name="同班教师",
+                    class_name="高一(1)班",
+                    role_code="teacher",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                deleted_student = User(
+                    full_name="已删除学生",
+                    student_id=f"deleted-{uuid4().hex}",
+                    class_name="高一(1)班",
+                    role_code="student",
+                    is_active=False,
+                    is_deleted=True,
+                )
+                agent = AIAgent(
+                    name="画像回归测试智能体",
+                    agent_type="custom",
+                    is_active=True,
+                    is_deleted=False,
+                )
+                db.add_all(
+                    [
+                        teacher,
+                        in_class_a,
+                        in_class_b,
+                        outside_student,
+                        same_class_teacher,
+                        deleted_student,
+                        agent,
+                    ]
+                )
+                await db.flush()
+
+                config = AssessmentConfig(
+                    title="Python 基础",
+                    total_score=100,
+                    agent_id=agent.id,
+                    enabled=True,
+                    created_by_user_id=teacher.id,
+                )
+                db.add(config)
+                await db.flush()
+
+                db.add_all(
+                    [
+                        AssessmentSession(
+                            config_id=config.id,
+                            user_id=in_class_a.id,
+                            status="graded",
+                            total_score=100,
+                            earned_score=90,
+                        ),
+                        AssessmentSession(
+                            config_id=config.id,
+                            user_id=in_class_b.id,
+                            status="graded",
+                            total_score=100,
+                            earned_score=70,
+                        ),
+                        AssessmentSession(
+                            config_id=config.id,
+                            user_id=outside_student.id,
+                            status="graded",
+                            total_score=100,
+                            earned_score=1,
+                        ),
+                        AssessmentSession(
+                            config_id=config.id,
+                            user_id=deleted_student.id,
+                            status="graded",
+                            total_score=100,
+                            earned_score=2,
+                        ),
+                        AssessmentSession(
+                            config_id=config.id,
+                            user_id=in_class_a.id,
+                            status="submitted",
+                            total_score=100,
+                            earned_score=100,
+                        ),
+                    ]
+                )
+                await db.commit()
+
+                request = ProfileGenerateRequest(
+                    profile_type="class",
+                    target_id="高一(1)班",
+                    config_id=config.id,
+                    agent_id=agent.id,
+                )
+                profile = await generate_profile(db, request, user_id=teacher.id)
+
+                assert profile.id is not None
+                assert profile.profile_type == "class"
+                assert profile.target_id == "高一(1)班"
+        finally:
+            await engine.dispose()
+            async with admin_engine.begin() as connection:
+                await connection.execute(
+                    text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+                )
+            await admin_engine.dispose()
+
+    asyncio.run(run())
+
+    prompt = mock_ai.await_args.kwargs["message"]
+    assert "【班级】高一(1)班（共 2 人）" in prompt
+    assert "平均分：80.0/100" in prompt
+    assert "最高分：90，最低分：70" in prompt
+    assert "通过率（≥60%）：2/2 (100%)" in prompt
+    assert "班外学生" not in prompt
+    assert "平均分：40.8/100" not in prompt

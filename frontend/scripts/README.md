@@ -1,6 +1,6 @@
 # 前端脚本说明
 
-> 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
+> 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 `frontend/scripts/` 只保留当前仍接入 npm 命令、CI 或生产烟测链路的脚本。
 
@@ -8,7 +8,7 @@
 
 - `copy-pyodide.js` - `predev` / `prebuild` 复制 Pyodide 资源；仅在目标目录包含
   当前依赖版本 marker 和全部非空核心文件时跳过
-- `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体预算门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，并将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量
+- `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
 - `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
@@ -49,9 +49,13 @@ npm run test:scripts
   `.wangsh-pyodide-version`。版本不匹配、marker 缺失或任一核心文件缺失/为空时，
   先复制到 `public/pyodide.tmp-<pid>`，完整校验后再替换正式目录；替换时先将旧运行时
   原子改名为进程级备份，激活新目录失败会恢复旧运行时，成功后才删除备份。
+- Vite 开发服务器仍可读取本机 `public/mindmap-demo`，但生产构建完成后会删除
+  `build/mindmap-demo`；正式 KaTeX 字体和 `favicon.svg` 不受该目录级规则影响。
 - `test:scripts` 使用 Node test runner 执行 `scripts/*.test.mjs`，新增脚本测试后会自动纳入，
   包括 bundle budget、Pyodide 版本/完整性、Docker 构建上下文、生产 UI smoke 分类与
-  token checker。
+  token checker。静态资产合同只允许 Git 跟踪明确审核的
+  `frontend/public/favicon.svg`；新增字体、图片、SVG、WASM 或 source map 必须先说明
+  运行用途、大小和构建来源，再更新白名单。
 - token checker 对带 fallback 的 `var(--ws-token, fallback)` 同样要求 token 已定义，禁止用 fallback 掩盖设计系统缺口。
 - 单页治理报告默认生成到 `../test-results/ui-page-reports/`，作为可重建验证产物，
   不进入正式文档或历史归档。

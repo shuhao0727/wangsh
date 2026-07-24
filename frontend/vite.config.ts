@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { copyFileSync, mkdirSync } from "fs";
+import { copyFileSync, rmSync } from "fs";
 import { join } from "path";
 
 type VisualizerModule = {
@@ -107,6 +107,7 @@ export default defineConfig(async ({ mode }) => {
   // 加载 .env 文件
   const env = loadEnv(mode, process.cwd(), "");
   const isAnalyze = process.env.ANALYZE === "true";
+  const isProductionBuild = mode === "production";
 
   const plugins: PluginOption[] = [
     react(),
@@ -131,6 +132,16 @@ export default defineConfig(async ({ mode }) => {
               throw error;
             }
           }
+        },
+      },
+      {
+        name: "exclude-local-mindmap-runtime",
+        apply: () => isProductionBuild,
+        closeBundle() {
+          rmSync(join(__dirname, "build/mindmap-demo"), {
+            recursive: true,
+            force: true,
+          });
         },
       },
     ];

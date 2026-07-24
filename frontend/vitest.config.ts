@@ -29,6 +29,7 @@ export default defineConfig({
       "src/pages/AIAgents/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
       "src/hooks/queries/**/*.test.{ts,tsx}",
+      "src/lib/**/*.test.{ts,tsx}",
       "src/services/**/*.test.{ts,tsx}",
     ],
   },

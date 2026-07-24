@@ -23,6 +23,21 @@ const requiredReleaseImages = [
   "wangsh-gateway",
 ];
 const defaultDigest = "sha256:" + "0".repeat(64);
+const healthyHealthResponse =
+  '{"status":"healthy","checks":{"database":"healthy","redis":"healthy"},"system":{"version":"1.6.0","debug_mode":false}}';
+const detailedHealthContainerServices = [
+  "postgres",
+  "redis",
+  "frontend",
+  "gateway",
+  "typst-worker",
+  "pythonlab-worker",
+];
+
+function writeExecutable(path, contents) {
+  writeFileSync(path, contents);
+  chmodSync(path, 0o755);
+}
 
 function runDeployWithFakeDocker({
   releaseSet,
@@ -163,6 +178,339 @@ function makeReleaseSet({
   return `${lines.join("\n")}\n`;
 }
 
+function runDetailedHealthCheck({
+  composeExecStatus = 0,
+  containerWithoutHealth = "",
+  curlStatus = 0,
+  httpStatus = 200,
+  response,
+}) {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-detailed-health-contract-"));
+  const composeFile = join(directory, "compose.yml");
+  const containerPythonFile = join(directory, "container-python");
+  const composeExecInputFile = join(directory, "compose-exec-input.json");
+  const composeExecLogFile = join(directory, "compose-exec.log");
+  const python3LogFile = join(directory, "python3.log");
+
+  writeFileSync(composeFile, "services: {}\n");
+  writeExecutable(
+    containerPythonFile,
+    `#!${process.execPath}
+const fs = require("node:fs");
+
+const input = fs.readFileSync(0);
+const code = process.argv[3] ?? "";
+fs.writeFileSync(process.env.MOCK_COMPOSE_EXEC_INPUT, input);
+if (
+  process.argv[2] !== "-c" ||
+  !code.includes("object_pairs_hook=JSONObject") ||
+  !code.includes("status_count == 1") ||
+  !code.includes('payload.get("status") == "healthy"')
+) {
+  process.exit(98);
+}
+process.exit(Number(process.env.MOCK_COMPOSE_EXEC_STATUS ?? "1"));
+`,
+  );
+  writeExecutable(
+    join(directory, "curl"),
+    `#!/usr/bin/env bash
+printf '%s\\n%s' "\${MOCK_HEALTH_RESPONSE:-}" "\${MOCK_HEALTH_STATUS:-000}"
+exit "\${MOCK_CURL_STATUS:-0}"
+`,
+  );
+  writeExecutable(
+    join(directory, "docker"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "compose" && "$*" == *" exec -T backend python -c "* ]]; then
+  printf 'exec\\n' >> "\${MOCK_COMPOSE_EXEC_LOG}"
+  "\${MOCK_CONTAINER_PYTHON}" -c "\${!#}"
+  exit $?
+fi
+if [[ "$1" == "compose" && "$*" == *" ps -q "* ]]; then
+  printf '%s-id\\n' "\${!#}"
+  exit 0
+fi
+if [[ "$1" == "inspect" && "$*" == *".State.Status"* ]]; then
+  printf 'running\\n'
+  exit 0
+fi
+if [[ "$1" == "inspect" && "$*" == *".State.Health"* ]]; then
+  container_id="\${!#}"
+  if [[ "$container_id" == "\${MOCK_CONTAINER_WITHOUT_HEALTH:-missing}-id" ]]; then
+    printf 'none\\n'
+  else
+    printf 'healthy\\n'
+  fi
+  exit 0
+fi
+echo "unexpected fake docker invocation: $*" >&2
+exit 1
+`,
+  );
+  writeExecutable(
+    join(directory, "python3"),
+    `#!/usr/bin/env bash
+printf 'unexpected host python3 invocation\\n' >> "\${MOCK_PYTHON3_LOG}"
+exit 97
+`,
+  );
+  writeExecutable(
+    join(directory, "df"),
+    `#!/usr/bin/env bash
+printf 'Filesystem Size Used Avail Capacity Mounted on\\n'
+printf '/dev/mock 100G 10G 90G 10%% /\\n'
+`,
+  );
+  writeExecutable(
+    join(directory, "vm_stat"),
+    `#!/usr/bin/env bash
+printf 'Pages active: 50.\\n'
+printf 'Pages free: 50.\\n'
+`,
+  );
+  writeExecutable(
+    join(directory, "free"),
+    `#!/usr/bin/env bash
+printf 'Mem: 100 50 50\\n'
+`,
+  );
+
+  const result = spawnSync("/bin/bash", ["scripts/health-check-detailed.sh", "json"], {
+    cwd: new URL(repoRoot).pathname,
+    env: {
+      ...process.env,
+      PATH: `${directory}:/usr/bin:/bin`,
+      API_URL: "http://mock-health",
+      COMPOSE_FILE: composeFile,
+      MOCK_COMPOSE_EXEC_STATUS: String(composeExecStatus),
+      MOCK_CURL_STATUS: String(curlStatus),
+      MOCK_CONTAINER_PYTHON: containerPythonFile,
+      MOCK_CONTAINER_WITHOUT_HEALTH: containerWithoutHealth,
+      MOCK_COMPOSE_EXEC_INPUT: composeExecInputFile,
+      MOCK_COMPOSE_EXEC_LOG: composeExecLogFile,
+      MOCK_HEALTH_RESPONSE: response,
+      MOCK_HEALTH_STATUS: String(httpStatus),
+      MOCK_PYTHON3_LOG: python3LogFile,
+    },
+    encoding: "utf8",
+  });
+  return {
+    ...result,
+    composeExecInput: readFileSync(composeExecInputFile, {
+      encoding: "utf8",
+      flag: "a+",
+    }),
+    composeExecLog: readFileSync(composeExecLogFile, {
+      encoding: "utf8",
+      flag: "a+",
+    }),
+    python3Log: readFileSync(python3LogFile, {
+      encoding: "utf8",
+      flag: "a+",
+    }),
+  };
+}
+
+function composeServiceBody(composePath, service) {
+  const compose = read(composePath);
+  const services =
+    compose.match(/^services:\n([\s\S]*?)(?=^networks:\n|^volumes:\n)/m)?.[1] ?? "";
+  const serviceSource = `${services}\n  __contract_end__:\n`;
+  const escapedService = service.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return (
+    serviceSource.match(
+      new RegExp(
+        `^  ${escapedService}:\\n([\\s\\S]*?)(?=^  [a-zA-Z0-9_-]+:\\n|^networks:\\n|^volumes:\\n)`,
+        "m",
+      ),
+    )?.[1] ?? ""
+  );
+}
+
+function backendHealthcheckCommand(composePath) {
+  const backendBody = composeServiceBody(composePath, "backend");
+  const testArray = backendBody.match(/^\s+test:\s*(\[.*\])\s*$/m)?.[1];
+
+  assert.ok(testArray, `missing backend healthcheck in ${composePath}`);
+  const [kind, command] = JSON.parse(testArray);
+  assert.equal(kind, "CMD-SHELL");
+  return command;
+}
+
+function runComposeBackendHealthcheck(
+  composePath,
+  { connectionError = false, httpStatus = 200, response },
+) {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-compose-health-contract-"));
+  const siteCustomize = join(directory, "sitecustomize.py");
+  const closeLogFile = join(directory, "close.log");
+
+  writeFileSync(
+    siteCustomize,
+    `import http.client
+import os
+
+class MockResponse:
+    status = int(os.environ.get("MOCK_HEALTH_STATUS", "200"))
+
+    def read(self):
+        return os.environ.get("MOCK_HEALTH_RESPONSE", "").encode()
+
+class MockConnection:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def request(self, *args, **kwargs):
+        if os.environ.get("MOCK_CONNECTION_ERROR") == "true":
+            raise OSError("mock connection failure")
+
+    def getresponse(self):
+        return MockResponse()
+
+    def close(self):
+        with open(os.environ["MOCK_CLOSE_LOG"], "a", encoding="utf-8") as log:
+            log.write("closed\\n")
+
+http.client.HTTPConnection = MockConnection
+`,
+  );
+  writeExecutable(
+    join(directory, "python"),
+    `#!/usr/bin/env bash
+exec python3 "$@"
+`,
+  );
+  writeExecutable(
+    join(directory, "seq"),
+    `#!/usr/bin/env bash
+printf '1\\n'
+`,
+  );
+  writeExecutable(
+    join(directory, "sleep"),
+    `#!/usr/bin/env bash
+exit 0
+`,
+  );
+
+  const result = spawnSync("bash", ["-c", backendHealthcheckCommand(composePath)], {
+    cwd: new URL(repoRoot).pathname,
+    env: {
+      ...process.env,
+      PATH: `${directory}:${process.env.PATH}`,
+      PYTHONPATH: directory,
+      MOCK_CONNECTION_ERROR: String(connectionError),
+      MOCK_HEALTH_RESPONSE: response,
+      MOCK_HEALTH_STATUS: String(httpStatus),
+      MOCK_CLOSE_LOG: closeLogFile,
+    },
+    encoding: "utf8",
+  });
+  return {
+    ...result,
+    closeLog: readFileSync(closeLogFile, {
+      encoding: "utf8",
+      flag: "a+",
+    }),
+  };
+}
+
+function runRollback({
+  backupStatus = 0,
+  noBackup = false,
+  restartStatus = 0,
+  rollbackOptions = [],
+  runningWriteServices = ["backend", "typst-worker", "pythonlab-worker"],
+  stopStatus = 0,
+} = {}) {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-rollback-contract-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const outsideDirectory = join(directory, "outside");
+  const dockerFile = join(directory, "docker");
+  const operationLogFile = join(directory, "operations.log");
+  const envFile = join(directory, ".env");
+  const composeFile = join(directory, "compose.yml");
+
+  mkdirSync(scriptsDirectory);
+  mkdirSync(outsideDirectory);
+  writeFileSync(envFile, "\n");
+  writeFileSync(composeFile, "services: {}\n");
+  writeFileSync(join(scriptsDirectory, "rollback.sh"), read("scripts/rollback.sh"));
+  writeExecutable(
+    join(scriptsDirectory, "deploy.sh"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+test "$1" = "backup-db"
+test "$ENV_FILE" = "$EXPECTED_ENV_FILE"
+test "$COMPOSE_FILE" = "$EXPECTED_COMPOSE_FILE"
+printf 'backup\\n' >> '${operationLogFile}'
+exit ${backupStatus}
+`,
+  );
+  chmodSync(join(scriptsDirectory, "rollback.sh"), 0o755);
+  writeExecutable(
+    dockerFile,
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf 'docker %s\\n' "$*" >> '${operationLogFile}'
+if [[ "$*" == *" ps postgres" ]]; then
+  echo "postgres Up"
+  exit 0
+fi
+if [[ "$*" == *" ps --status running --services backend typst-worker pythonlab-worker" ]]; then
+  cat <<'EOF'
+${runningWriteServices.join("\n")}
+EOF
+  exit 0
+fi
+if [[ "$*" == *" stop backend typst-worker pythonlab-worker" ]]; then
+  exit ${stopStatus}
+fi
+if [[ "$*" == *" start "* ]]; then
+  exit ${restartStatus}
+fi
+if [[ "$*" == *" run --rm --no-deps backend alembic downgrade target_revision" ]]; then
+  exit 0
+fi
+echo "unexpected fake docker invocation: $*" >&2
+exit 1
+`,
+  );
+
+  const args = [
+    join(scriptsDirectory, "rollback.sh"),
+    "rollback",
+    "target_revision",
+  ];
+  if (noBackup) {
+    args.push("--no-backup");
+  }
+  args.push(...rollbackOptions);
+  const result = spawnSync("bash", args, {
+    cwd: outsideDirectory,
+    env: {
+      ...process.env,
+      PATH: `${directory}:${process.env.PATH}`,
+      ENV_FILE: envFile,
+      COMPOSE_FILE: composeFile,
+      EXPECTED_ENV_FILE: envFile,
+      EXPECTED_COMPOSE_FILE: composeFile,
+    },
+    input: "yes\n",
+    encoding: "utf8",
+  });
+
+  return {
+    ...result,
+    operations: readFileSync(operationLogFile, {
+      encoding: "utf8",
+      flag: "a+",
+    }),
+  };
+}
+
 test("docker publish validates source version and does not default to latest", () => {
   const workflow = read(".github/workflows/dockerhub-amd64.yml");
 
@@ -265,6 +613,70 @@ test("production compose isolates Redis and PythonLab runtime resources", () => 
       ) ?? []
     ).length,
     2,
+  );
+});
+
+test("Compose passes the configured application timezone to backend services", () => {
+  const compose = read("docker-compose.yml");
+  const devCompose = read("docker-compose.dev.yml");
+  const applicationServices = ["backend", "typst-worker", "pythonlab-worker"];
+  const timezoneDefault = "\\$\\{TIMEZONE:-Asia/Shanghai\\}";
+
+  assert.match(
+    compose,
+    new RegExp(`^  TIMEZONE: ${timezoneDefault}$`, "m"),
+  );
+  assert.match(compose, new RegExp(`^  TZ: ${timezoneDefault}$`, "m"));
+  assert.match(
+    compose,
+    /^x-common-with-pythonlab-env: &common-with-pythonlab-env\n  <<: \*common-env$/m,
+  );
+
+  for (const service of applicationServices) {
+    const productionBody = composeServiceBody("docker-compose.yml", service);
+    const developmentBody = composeServiceBody("docker-compose.dev.yml", service);
+
+    assert.match(
+      productionBody,
+      /^\s+<<: \*common(?:-with-pythonlab)?-env$/m,
+      `production ${service} must inherit the application timezone`,
+    );
+    assert.match(
+      developmentBody,
+      new RegExp(`^\\s+- TIMEZONE=${timezoneDefault}$`, "m"),
+      `development ${service} is missing TIMEZONE`,
+    );
+    assert.match(
+      developmentBody,
+      new RegExp(`^\\s+- TZ=${timezoneDefault}$`, "m"),
+      `development ${service} is missing container TZ`,
+    );
+  }
+
+  const productionPostgres = composeServiceBody("docker-compose.yml", "postgres");
+  const developmentPostgres = composeServiceBody(
+    "docker-compose.dev.yml",
+    "postgres",
+  );
+
+  assert.match(
+    productionPostgres,
+    new RegExp(`^\\s+TZ: ${timezoneDefault}$`, "m"),
+  );
+  assert.match(
+    developmentPostgres,
+    new RegExp(`^\\s+TZ: ${timezoneDefault}$`, "m"),
+  );
+  assert.match(
+    developmentPostgres,
+    new RegExp(`^\\s+PGTZ: ${timezoneDefault}$`, "m"),
+  );
+  assert.match(
+    developmentPostgres,
+    new RegExp(
+      `^\\s+command: \\[ "postgres", "-c", "timezone=${timezoneDefault}" \\]$`,
+      "m",
+    ),
   );
 });
 
@@ -1044,8 +1456,176 @@ test("manual health and Typst smoke defaults match the production gateway", () =
   assert.match(healthCheck, /\[\[ "\$typst_status" != "ok" \]\]/);
   assert.match(healthCheck, /\[\[ "\$pythonlab_status" != "ok" \]\]/);
   assert.match(healthCheck, /docker inspect --format '\{\{\.State\.Status\}\}'/);
+  assert.match(
+    healthCheck,
+    /docker compose "\$\{compose_args\[@\]\}" exec -T backend python -c/,
+  );
+  assert.doesNotMatch(healthCheck, /\bpython3\b/);
+  assert.doesNotMatch(healthCheck, /json_status_is_healthy/);
+  assert.doesNotMatch(healthCheck, /\$health" == "none"/);
   assert.match(deploy, /curl -fsS "http:\/\/localhost:\$\{web_port\}\/"/);
   assert.match(typstSmoke, /http:\/\/localhost:6608\/api\/v1/);
+});
+
+test("production detailed-health services all define Compose healthchecks", () => {
+  for (const service of detailedHealthContainerServices) {
+    const serviceBody = composeServiceBody("docker-compose.yml", service);
+    assert.ok(serviceBody, `missing production Compose service: ${service}`);
+    assert.match(
+      serviceBody,
+      /^\s+healthcheck:\s*$/m,
+      `missing healthcheck for production service: ${service}`,
+    );
+  }
+});
+
+test("detailed health validates 2xx JSON through backend container stdin", () => {
+  for (const httpStatus of [200, 299]) {
+    const result = runDetailedHealthCheck({
+      httpStatus,
+      response: healthyHealthResponse,
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(JSON.parse(result.stdout).checks.api, "ok");
+    assert.equal(result.composeExecLog, "exec\n");
+    assert.equal(result.composeExecInput, healthyHealthResponse);
+    assert.equal(result.python3Log, "");
+  }
+
+  for (const fixture of [
+    {
+      expectExec: false,
+      httpStatus: 300,
+      response: '{"status":"healthy"}',
+    },
+    {
+      expectExec: false,
+      httpStatus: 401,
+      response: '{"status":"healthy"}',
+    },
+    {
+      expectExec: false,
+      httpStatus: 503,
+      response: '{"status":"healthy"}',
+    },
+    {
+      composeExecStatus: 1,
+      expectExec: true,
+      httpStatus: 200,
+      response: '{"status":"unhealthy"}',
+    },
+    {
+      composeExecStatus: 1,
+      expectExec: true,
+      httpStatus: 200,
+      response: '{"status":',
+    },
+    {
+      composeExecStatus: 1,
+      expectExec: true,
+      httpStatus: 200,
+      response: '{"status":"healthy","status":"healthy"}',
+    },
+    {
+      composeExecStatus: 1,
+      expectExec: true,
+      httpStatus: 200,
+      response: "[]",
+    },
+    {
+      composeExecStatus: 1,
+      expectExec: true,
+      httpStatus: 200,
+      response: "",
+    },
+    {
+      composeExecStatus: 125,
+      expectExec: true,
+      httpStatus: 200,
+      response: healthyHealthResponse,
+    },
+    {
+      curlStatus: 7,
+      expectExec: false,
+      httpStatus: 0,
+      response: "",
+    },
+  ]) {
+    const result = runDetailedHealthCheck(fixture);
+    assert.equal(
+      result.status,
+      1,
+      `accepted ${JSON.stringify(fixture)}\n${result.stderr}\n${result.stdout}`,
+    );
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "unhealthy");
+    assert.equal(report.checks.api, "failed");
+    assert.equal(result.composeExecLog, fixture.expectExec ? "exec\n" : "");
+    assert.equal(
+      result.composeExecInput,
+      fixture.expectExec ? fixture.response : "",
+    );
+    assert.equal(result.python3Log, "");
+  }
+});
+
+test("detailed health rejects required containers without Docker health", () => {
+  const result = runDetailedHealthCheck({
+    containerWithoutHealth: "frontend",
+    httpStatus: 200,
+    response: healthyHealthResponse,
+  });
+
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.status, "unhealthy");
+  assert.equal(report.checks.api, "ok");
+  assert.equal(report.checks.frontend, "failed");
+  assert.equal(result.python3Log, "");
+});
+
+test("compose backend healthchecks require HTTP 2xx and healthy JSON", () => {
+  for (const composePath of ["docker-compose.yml", "docker-compose.dev.yml"]) {
+    for (const httpStatus of [200, 299]) {
+      const result = runComposeBackendHealthcheck(composePath, {
+        httpStatus,
+        response: healthyHealthResponse,
+      });
+      assert.equal(
+        result.status,
+        0,
+        `${composePath}: ${result.stderr}\n${result.stdout}`,
+      );
+      assert.match(result.closeLog, /^closed\n$/);
+    }
+
+    for (const fixture of [
+      { httpStatus: 300, response: '{"status":"healthy"}' },
+      { httpStatus: 401, response: '{"status":"healthy"}' },
+      { httpStatus: 503, response: '{"status":"healthy"}' },
+      { httpStatus: 200, response: '{"status":"unhealthy"}' },
+      { httpStatus: 200, response: '{"status":' },
+      {
+        httpStatus: 200,
+        response: '{"status":"healthy","status":"healthy"}',
+      },
+      { httpStatus: 200, response: '[["status","healthy"]]' },
+      { httpStatus: 200, response: "" },
+      {
+        connectionError: true,
+        httpStatus: 0,
+        response: "",
+      },
+    ]) {
+      const result = runComposeBackendHealthcheck(composePath, fixture);
+      assert.notEqual(
+        result.status,
+        0,
+        `${composePath} accepted ${JSON.stringify(fixture)}`,
+      );
+      assert.match(result.closeLog, /^closed\n$/);
+    }
+  }
 });
 
 test("local development PostgreSQL readiness targets the configured database", () => {
@@ -1112,85 +1692,142 @@ exit 99
   assert.match(restoreResult.stderr, /Refusing destructive restore/);
 });
 
-test("rollback entry parses arguments, backs up, and reaches the requested revision", () => {
-  const directory = mkdtempSync(join(tmpdir(), "wangsh-rollback-contract-"));
-  const scriptsDirectory = join(directory, "scripts");
-  const outsideDirectory = join(directory, "outside");
-  const dockerFile = join(directory, "docker");
-  const dockerLogFile = join(directory, "docker.log");
-  const envFile = join(directory, ".env");
-  const composeFile = join(directory, "compose.yml");
-
-  mkdirSync(scriptsDirectory);
-  mkdirSync(outsideDirectory);
-  writeFileSync(envFile, "\n");
-  writeFileSync(composeFile, "services: {}\n");
-  writeFileSync(join(scriptsDirectory, "rollback.sh"), read("scripts/rollback.sh"));
-  writeFileSync(
-    join(scriptsDirectory, "deploy.sh"),
-    `#!/usr/bin/env bash
-set -euo pipefail
-test "$1" = "backup-db"
-test "$ENV_FILE" = "$EXPECTED_ENV_FILE"
-test "$COMPOSE_FILE" = "$EXPECTED_COMPOSE_FILE"
-echo "backup called"
-`,
-  );
-  chmodSync(join(scriptsDirectory, "rollback.sh"), 0o755);
-  chmodSync(join(scriptsDirectory, "deploy.sh"), 0o755);
-  writeFileSync(
-    dockerFile,
-    `#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\\n' "$*" >> '${dockerLogFile}'
-if [[ "$*" == *" ps postgres" ]]; then
-  echo "postgres Up"
-  exit 0
-fi
-if [[ "$*" == *" stop gateway frontend backend typst-worker pythonlab-worker" ]]; then
-  exit 0
-fi
-if [[ "$*" == *" run --rm --no-deps backend alembic downgrade target_revision" ]]; then
-  exit 0
-fi
-echo "unexpected fake docker invocation: $*" >&2
-exit 1
-`,
-  );
-  chmodSync(dockerFile, 0o755);
-
-  const result = spawnSync(
-    "bash",
-    [join(scriptsDirectory, "rollback.sh"), "rollback", "target_revision"],
-    {
-      cwd: outsideDirectory,
-      env: {
-        ...process.env,
-        PATH: `${directory}:${process.env.PATH}`,
-        ENV_FILE: envFile,
-        COMPOSE_FILE: composeFile,
-        EXPECTED_ENV_FILE: envFile,
-        EXPECTED_COMPOSE_FILE: composeFile,
-      },
-      input: "yes\n",
-      encoding: "utf8",
-    },
-  );
-
+test("rollback stops write services before backing up and downgrading", () => {
+  const result = runRollback();
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
-  assert.match(result.stdout, /Creating backup before rollback/);
-  assert.match(result.stdout, /backup called/);
-  assert.match(result.stdout, /Stopping application services before database rollback/);
+  assert.match(result.stdout, /Stopping application write services/);
+  assert.match(result.stdout, /Creating backup inside the no-write window/);
   assert.match(result.stdout, /Rolling back to: target_revision/);
   assert.doesNotMatch(result.stderr, /local: can only be used in a function/);
   assert.doesNotMatch(result.stderr, /skipping backup/i);
-  const dockerLog = readFileSync(dockerLogFile, "utf8");
-  assert.ok(
-    dockerLog.indexOf(" stop gateway frontend backend typst-worker pythonlab-worker")
-      < dockerLog.indexOf(" run --rm --no-deps backend alembic downgrade target_revision"),
-    dockerLog,
+  const runningServicesIndex = result.operations.indexOf(
+    " ps --status running --services backend typst-worker pythonlab-worker",
   );
-  assert.doesNotMatch(dockerLog, / exec backend alembic downgrade/);
+  const backupIndex = result.operations.indexOf("backup");
+  const stopIndex = result.operations.indexOf(
+    " stop backend typst-worker pythonlab-worker",
+  );
+  const downgradeIndex = result.operations.indexOf(
+    " run --rm --no-deps backend alembic downgrade target_revision",
+  );
+
+  assert.ok(runningServicesIndex >= 0, result.operations);
+  assert.ok(backupIndex >= 0, result.operations);
+  assert.ok(stopIndex >= 0, result.operations);
+  assert.ok(downgradeIndex >= 0, result.operations);
+  assert.ok(
+    runningServicesIndex < stopIndex,
+    result.operations,
+  );
+  assert.ok(
+    stopIndex < backupIndex,
+    result.operations,
+  );
+  assert.ok(
+    backupIndex < downgradeIndex,
+    result.operations,
+  );
+  assert.doesNotMatch(result.operations, / exec backend alembic downgrade/);
+});
+
+test("rollback backup failure restarts only originally running write services", () => {
+  const result = runRollback({
+    backupStatus: 17,
+    runningWriteServices: ["backend", "pythonlab-worker"],
+  });
+
+  assert.equal(result.status, 17, `${result.stderr}\n${result.stdout}`);
+  assert.match(result.stderr, /backup failed with status 17/i);
+  assert.match(result.stderr, /no database downgrade was attempted/i);
+  assert.match(result.stdout, /Restarting originally running application write services/);
+  assert.match(result.stdout, /Application write services restored/);
+  const stopIndex = result.operations.indexOf(
+    " stop backend typst-worker pythonlab-worker",
+  );
+  const backupIndex = result.operations.indexOf("backup");
+  const restartIndex = result.operations.indexOf(
+    " start backend pythonlab-worker",
+  );
+
+  assert.ok(stopIndex >= 0, result.operations);
+  assert.ok(backupIndex > stopIndex, result.operations);
+  assert.ok(restartIndex > backupIndex, result.operations);
+  assert.doesNotMatch(result.operations, / start typst-worker/);
+  assert.doesNotMatch(result.operations, /alembic downgrade/);
+});
+
+test("rollback stop failure restores original services without backup or downgrade", () => {
+  const result = runRollback({
+    runningWriteServices: ["backend", "typst-worker"],
+    stopStatus: 19,
+  });
+
+  assert.equal(result.status, 19, `${result.stderr}\n${result.stdout}`);
+  assert.match(result.stderr, /stopping application write services failed with status 19/i);
+  assert.match(result.stderr, /no database downgrade was attempted/i);
+  assert.match(result.operations, / stop backend typst-worker pythonlab-worker/);
+  assert.match(result.operations, / start backend typst-worker/);
+  assert.doesNotMatch(result.operations, /^backup$/m);
+  assert.doesNotMatch(result.operations, /alembic downgrade/);
+});
+
+test("rollback reports backup and service recovery failures without downgrading", () => {
+  const result = runRollback({
+    backupStatus: 17,
+    restartStatus: 23,
+    runningWriteServices: ["backend", "typst-worker"],
+  });
+
+  assert.equal(result.status, 23, `${result.stderr}\n${result.stdout}`);
+  assert.match(result.operations, / start backend typst-worker/);
+  assert.doesNotMatch(result.operations, /alembic downgrade/);
+  assert.match(result.stderr, /backup failed with status 17/i);
+  assert.match(
+    result.stderr,
+    /failed to restart original application write services \(status 23\)/i,
+  );
+  assert.match(result.stderr, /manual recovery required/i);
+  assert.match(result.stderr, /no database downgrade was attempted/i);
+});
+
+test("rollback --no-backup explicitly stops services and downgrades", () => {
+  const result = runRollback({ noBackup: true });
+
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  assert.match(result.stdout, /DANGER: --no-backup skips the rollback backup/i);
+  assert.doesNotMatch(result.operations, /^backup$/m);
+  assert.match(
+    result.operations,
+    / stop backend typst-worker pythonlab-worker/,
+  );
+  assert.match(
+    result.operations,
+    / run --rm --no-deps backend alembic downgrade target_revision/,
+  );
+});
+
+test("rollback rejects conflicting backup flags before touching Docker", () => {
+  for (const rollbackOptions of [
+    ["--backup", "--no-backup"],
+    ["--no-backup", "--backup"],
+  ]) {
+    const result = runRollback({ rollbackOptions });
+
+    assert.equal(result.status, 2, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stderr, /--backup and --no-backup cannot be used together/);
+    assert.equal(result.operations, "");
+  }
+});
+
+test("rollback rejects unknown options before touching Docker", () => {
+  const directory = mkdtempSync(join(tmpdir(), "wangsh-rollback-options-contract-"));
+  const scriptsDirectory = join(directory, "scripts");
+  const outsideDirectory = join(directory, "outside");
+
+  mkdirSync(scriptsDirectory);
+  mkdirSync(outsideDirectory);
+  writeFileSync(join(scriptsDirectory, "rollback.sh"), read("scripts/rollback.sh"));
+  chmodSync(join(scriptsDirectory, "rollback.sh"), 0o755);
 
   const invalidResult = spawnSync(
     "bash",
@@ -1199,9 +1836,7 @@ exit 1
       cwd: outsideDirectory,
       env: {
         ...process.env,
-        PATH: `${directory}:${process.env.PATH}`,
-        ENV_FILE: envFile,
-        COMPOSE_FILE: composeFile,
+        PATH: process.env.PATH,
       },
       encoding: "utf8",
     },

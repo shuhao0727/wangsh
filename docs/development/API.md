@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-07-18
+> 最后更新：2026-07-22
 
 ## 一、健康检查
 
@@ -83,7 +83,7 @@
 | DELETE | `/articles/{article_id}` | 删除文章 | 管理员 |
 | POST | `/articles/{article_id}/publish` | 发布/取消发布 | 管理员 |
 | GET | `/articles/{article_id}/tags` | 获取文章标签 | 是 |
-| GET | `/articles/public/list` | 公开文章列表 | 否 |
+| GET | `/articles/public/list` | 公开文章列表；支持 `page`、`size`、`category_id`、`q`，缓存按搜索词隔离 | 否 |
 | GET | `/articles/public/{slug}` | 公开文章详情 | 否 |
 
 ### 文章样式（/articles/markdown-styles）
@@ -120,7 +120,7 @@
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/ai-agents/` | 获取智能体列表 | 管理员 |
-| GET | `/ai-agents/active` | 获取活跃智能体 | 否 |
+| GET | `/ai-agents/active` | 获取活跃智能体 | 是 |
 | GET | `/ai-agents/statistics` | 智能体统计 | 管理员 |
 | GET | `/ai-agents/{agent_id}` | 获取智能体详情 | 管理员 |
 | POST | `/ai-agents/` | 创建智能体 | 管理员 |
@@ -154,6 +154,11 @@
 | GET | `/ai-agents/admin/export/student-chains` | 导出学生链 | 管理员 |
 
 补充说明（2026-03-24）：
+- `GET /ai-agents/conversations` 返回按 `session_id` 聚合的会话摘要：
+  `session_id`、`agent_id`、`display_agent_name`、`display_user_name`、`last_at`、
+  `turns`、`preview`。会话详情与管理员详情返回消息的 `id`、`session_id`、
+  `user_id`、`agent_id`、显示名称、`message_type`、`content`、`response_time_ms`
+  和 `created_at`。这两类响应共用 `schemas/agents/conversation.py` 的权威模型。
 - 当使用 OpenRouter 时，后端会自动做模型名双向回退以降低配置误差：
   - `xxx:free` 在 `404/429/5xx` 时可回退尝试 `xxx`
   - `xxx` 在“模型不存在类 404”或 `429/5xx` 时可回退尝试 `xxx:free`
@@ -161,7 +166,10 @@
 - OpenRouter 运行时流式调用与“连接测试”统一请求头：`HTTP-Referer`、`X-Title`，减少“测试可用但对话报模型不存在”的配置偏差。
 - `/ai-agents/stream` 在上游 `HTTP 200` 且无文本产出时仍会发送 `message_end`；前端若检测到空结果会明确提示“模型未返回内容”，避免界面长时间转圈。
 - 多平台并用时（如 OpenRouter + SiliconFlow），OpenRouter 全局 Key 仅用于 OpenRouter Endpoint，不再兜底到其他平台；其他平台请在智能体配置中填写对应 API Key。
-- 使用记录写入端点 `/ai-agents/usage` 会强制绑定当前登录用户身份（`user_id` 可省略，传入也会被忽略），并以服务端接收时间作为记录时间（忽略客户端 `used_at`），用于防止伪造归属和客户端时钟错误。
+- 使用记录列表 `/ai-agents/usage` 返回 `items`、`total`、`page`、`page_size`、
+  `total_pages`；写入端点会强制绑定当前登录用户身份（`user_id` 可省略，传入也会被
+  忽略），并以服务端接收时间作为记录时间（忽略客户端 `used_at`），用于防止伪造
+  归属和客户端时钟错误。
 - 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
 - 热点问题与学生问题链已拆分为两个深度分析流。热点结果使用 `analysis_version=hot_v2`，包含 `word_cloud`、`themes`、`timeline_buckets`、`teacher_questions`、`course_hotspot_sequence` 和 `evidence_index`。学生问题链结果使用 `analysis_version=chain_v2`，包含 `teacher_mainline`、`ai_main_question_chain`、`student_question_chains`、`beam_nodes`、`beam_edges`、`lanes` 和 `evidence_index`。
 - `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
@@ -199,7 +207,7 @@
 | GET | `.../admin/sessions` | 管理员会话列表 | 管理员 |
 | GET | `.../admin/export-sessions` | 导出筛选后的会话列表（Excel，默认最多 5000 条，上限 10000 条） | 管理员 |
 | DELETE | `.../admin/sessions/{id}` | 删除会话 | 管理员 |
-| POST | `.../admin/sessions/batch-delete` | 批量删除会话 | 管理员 |
+| POST | `.../admin/sessions/batch-delete` | 批量删除会话；响应 `deleted` 为实际删除的会话数量 | 管理员 |
 | GET | `.../admin/messages` | 管理员消息列表 | 管理员 |
 | GET | `.../admin/members` | 管理员成员列表 | 管理员 |
 | GET | `.../admin/classes` | 获取班级列表 | 管理员 |
@@ -482,7 +490,7 @@
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/learning/progress/{module_key}` | 获取当前用户学习进度，`module_key` 支持 `ml`、`ai`、`agents` | 是 |
+| GET | `/learning/progress/{module_key}` | 获取当前用户学习进度；首次无记录返回 `200` 和同构默认 payload，`module_key` 支持 `ml`、`ai`、`agents` | 是 |
 | POST | `/learning/progress/{module_key}` | 保存当前用户学习进度 JSON，前端会按模块保留阶段状态、收藏、完成项和笔记 | 是 |
 | GET | `/learning/content/{module_key}` | 获取启用的学习内容扩展项；无数据库内容时前端回退内置内容 | 是 |
 | GET | `/learning/content/{module_key}/admin` | 管理员获取学习内容扩展项（包含禁用项） | 管理员 |
@@ -617,7 +625,7 @@ Content-Type: application/json
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/it/games` | 上架游戏列表，`page >= 1`、`size <= 100` | 否 |
-| GET | `/it/games/categories` | 上架游戏分类 | 否 |
+| GET | `/it/games/categories` | 上架游戏分类，响应为 `{"categories": string[]}` | 否 |
 | GET | `/it/games/{game_id}` | 上架游戏详情 | 否 |
 | GET | `/it/games/{game_id}/download` | 下载文件并记录日志 | 是 |
 | GET | `/admin/it/games` | 全部游戏列表，`size <= 100` | 管理员 |

@@ -7,6 +7,7 @@ import {
   collectStaticRuntimeChunks,
   createManifestGraph,
   summarizeChunks,
+  validateProductionAssets,
 } from "./bundle-budget-lib.mjs";
 
 const cwd = process.cwd();
@@ -101,6 +102,21 @@ function main() {
     console.error("ERROR: No application entry JavaScript found in Vite manifest.");
     process.exit(1);
   }
+
+  const productionAssets = validateProductionAssets(buildDir);
+  if (productionAssets.errors.length > 0) {
+    console.error("ERROR: Production asset contract failed:");
+    for (const error of productionAssets.errors) {
+      console.error(`  - ${error}`);
+    }
+    process.exit(1);
+  }
+  console.log(
+    "Production asset contract passed: " +
+      `${productionAssets.katexFonts.length} KaTeX fonts, ` +
+      `${productionAssets.monacoFonts.length} Monaco font, ` +
+      "favicon present, Mindmap runtime absent.",
+  );
 
   const chunks = [...applicationChunks, ...staticRuntimeChunks];
 

@@ -1,6 +1,6 @@
 # 根层脚本说明
 
-> 详细文档请参考：`docs/scripts/ARCHIVE_INDEX.md`
+> 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 仓库根层 `scripts/` 只保留跨模块、运维级和统一入口级脚本。
 
@@ -35,6 +35,11 @@ PYTHONLAB_SMOKE_PASSWORD='从 secret 注入' \
 # 部署后健康检查；默认访问网关 6608，并要求 frontend、gateway、数据库、Redis 和两个 worker 健康
 ./scripts/health-check-detailed.sh
 
+# 宿主依赖 Bash、Docker CLI、curl 和基础 Unix 工具，不依赖宿主 Python
+# HTTP 2xx 后由已运行的 backend 容器使用 Python 标准库校验 JSON；
+# 仅顶层对象包含唯一 status=healthy 时通过
+# 所有列出的必需容器都必须为 Docker Health=healthy，未定义 healthcheck 同样失败
+
 # 生产镜像构建、推送与部署
 bash scripts/deploy.sh build
 bash scripts/deploy.sh push
@@ -45,8 +50,10 @@ bash scripts/deploy.sh deploy
 # 迁移前只读检查 + Alembic 升级
 bash scripts/migrate-db.sh upgrade
 
-# 先停止业务服务，默认备份，再用一次性 backend 容器回退一个 revision；
-# 执行后保持停止，直到旧 release-set 部署并通过健康检查
+# 默认先记录并停止 backend、typst-worker、pythonlab-worker，建立数据库无写入窗口，
+# 再备份并用一次性 backend 容器回退一个 revision；停止或备份失败时只重启原先运行的
+# 写服务，恢复失败会明确报错且绝不 downgrade；--no-backup 是显式危险选项，会跳过备份；
+# 成功回滚后写服务保持停止，直到旧 release-set 部署并通过健康检查
 bash scripts/rollback.sh rollback -1
 
 # 恢复数据库必须显式确认目标库

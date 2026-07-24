@@ -77,6 +77,16 @@ def create_session(token: str, title: str) -> str:
     return str(resp.json()["session_id"])
 
 
+def stop_session(token: str, sid: str) -> None:
+    resp = requests.post(
+        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}/stop",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=20,
+    )
+    if resp.status_code not in {200, 404}:
+        resp.raise_for_status()
+
+
 def wait_ready(token: str, sid: str) -> None:
     started = time.time()
     while time.time() - started < 90:
@@ -176,158 +186,165 @@ async def wait_attach_ready(ws: aiohttp.ClientWebSocketResponse, timeout_s: floa
 
 async def run_round(token: str, idx: int) -> dict:
     sid = create_session(token, f"stepwatch_round_{idx}")
-    wait_ready(token, sid)
-    commands_ok: list[str] = []
-    events_seen: list[str] = []
-    t0 = time.time()
-    async with aiohttp.ClientSession() as session:
-        async with session.ws_connect(ws_url(token, sid, f"stepwatch_{idx}")) as ws:
-            await ws.send_str(
-                json.dumps(
-                    {
-                        "seq": 1,
-                        "type": "request",
-                        "command": "initialize",
-                        "arguments": {
-                            "adapterID": "python",
-                            "linesStartAt1": True,
-                            "columnsStartAt1": True,
-                            "pathFormat": "path",
-                        },
-                    }
+    primary_error: BaseException | None = None
+    try:
+        wait_ready(token, sid)
+        commands_ok: list[str] = []
+        events_seen: list[str] = []
+        t0 = time.time()
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(ws_url(token, sid, f"stepwatch_{idx}")) as ws:
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "seq": 1,
+                            "type": "request",
+                            "command": "initialize",
+                            "arguments": {
+                                "adapterID": "python",
+                                "linesStartAt1": True,
+                                "columnsStartAt1": True,
+                                "pathFormat": "path",
+                            },
+                        }
+                    )
                 )
-            )
-            r = await wait_response(ws, "initialize", 20, events_seen)
-            if not r.get("success"):
-                raise RuntimeError("initialize failed")
-            commands_ok.append("initialize")
+                r = await wait_response(ws, "initialize", 20, events_seen)
+                if not r.get("success"):
+                    raise RuntimeError("initialize failed")
+                commands_ok.append("initialize")
 
-            await ws.send_str(
-                json.dumps(
-                    {
-                        "seq": 2,
-                        "type": "request",
-                        "command": "attach",
-                        "arguments": {
-                            "name": "Remote",
-                            "type": "python",
-                            "request": "attach",
-                            "pathMappings": [{"localRoot": "/workspace", "remoteRoot": "/workspace"}],
-                            "justMyCode": True,
-                        },
-                    }
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "seq": 2,
+                            "type": "request",
+                            "command": "attach",
+                            "arguments": {
+                                "name": "Remote",
+                                "type": "python",
+                                "request": "attach",
+                                "pathMappings": [{"localRoot": "/workspace", "remoteRoot": "/workspace"}],
+                                "justMyCode": True,
+                            },
+                        }
+                    )
                 )
-            )
-            await wait_attach_ready(ws, 20, events_seen)
-            commands_ok.append("attach")
+                await wait_attach_ready(ws, 20, events_seen)
+                commands_ok.append("attach")
 
-            await ws.send_str(
-                json.dumps(
-                    {
-                        "seq": 3,
-                        "type": "request",
-                        "command": "setBreakpoints",
-                        "arguments": {
-                            "source": {"path": "/workspace/main.py"},
-                            "breakpoints": [{"line": 9}],
-                        },
-                    }
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "seq": 3,
+                            "type": "request",
+                            "command": "setBreakpoints",
+                            "arguments": {
+                                "source": {"path": "/workspace/main.py"},
+                                "breakpoints": [{"line": 9}],
+                            },
+                        }
+                    )
                 )
-            )
-            sb = await wait_response(ws, "setBreakpoints", 20, events_seen)
-            if not sb.get("success"):
-                raise RuntimeError("setBreakpoints failed")
-            commands_ok.append("setBreakpoints")
+                sb = await wait_response(ws, "setBreakpoints", 20, events_seen)
+                if not sb.get("success"):
+                    raise RuntimeError("setBreakpoints failed")
+                commands_ok.append("setBreakpoints")
 
-            await ws.send_str(json.dumps({"seq": 4, "type": "request", "command": "configurationDone", "arguments": {}}))
-            await wait_response(ws, "configurationDone", 20, events_seen)
-            commands_ok.append("configurationDone")
+                await ws.send_str(json.dumps({"seq": 4, "type": "request", "command": "configurationDone", "arguments": {}}))
+                await wait_response(ws, "configurationDone", 20, events_seen)
+                commands_ok.append("configurationDone")
 
-            stopped = await wait_event(ws, "stopped", 20, events_seen)
-            thread_id = int((stopped.get("body") or {}).get("threadId") or 1)
+                stopped = await wait_event(ws, "stopped", 20, events_seen)
+                thread_id = int((stopped.get("body") or {}).get("threadId") or 1)
 
-            await ws.send_str(
-                json.dumps(
-                    {"seq": 5, "type": "request", "command": "stackTrace", "arguments": {"threadId": thread_id, "startFrame": 0, "levels": 20}}
+                await ws.send_str(
+                    json.dumps(
+                        {"seq": 5, "type": "request", "command": "stackTrace", "arguments": {"threadId": thread_id, "startFrame": 0, "levels": 20}}
+                    )
                 )
-            )
-            st = await wait_response(ws, "stackTrace", 10, events_seen)
-            commands_ok.append("stackTrace")
-            frames = ((st.get("body") or {}).get("stackFrames") or [])
-            if not frames:
-                raise RuntimeError("empty stackFrames")
-            frame_id = int(frames[0].get("id") or 0)
-            if frame_id <= 0:
-                raise RuntimeError("invalid frame id")
+                st = await wait_response(ws, "stackTrace", 10, events_seen)
+                commands_ok.append("stackTrace")
+                frames = ((st.get("body") or {}).get("stackFrames") or [])
+                if not frames:
+                    raise RuntimeError("empty stackFrames")
+                frame_id = int(frames[0].get("id") or 0)
+                if frame_id <= 0:
+                    raise RuntimeError("invalid frame id")
 
-            await ws.send_str(json.dumps({"seq": 6, "type": "request", "command": "scopes", "arguments": {"frameId": frame_id}}))
-            scopes_resp = await wait_response(ws, "scopes", 10, events_seen)
-            commands_ok.append("scopes")
-            scopes = ((scopes_resp.get("body") or {}).get("scopes") or [])
-            vars_ref = 0
-            for s in scopes:
-                vr = int(s.get("variablesReference") or 0)
-                if vr > 0:
-                    vars_ref = vr
-                    break
-            if vars_ref <= 0:
-                raise RuntimeError("variablesReference missing")
+                await ws.send_str(json.dumps({"seq": 6, "type": "request", "command": "scopes", "arguments": {"frameId": frame_id}}))
+                scopes_resp = await wait_response(ws, "scopes", 10, events_seen)
+                commands_ok.append("scopes")
+                scopes = ((scopes_resp.get("body") or {}).get("scopes") or [])
+                vars_ref = 0
+                for s in scopes:
+                    vr = int(s.get("variablesReference") or 0)
+                    if vr > 0:
+                        vars_ref = vr
+                        break
+                if vars_ref <= 0:
+                    raise RuntimeError("variablesReference missing")
 
-            await ws.send_str(
-                json.dumps({"seq": 7, "type": "request", "command": "variables", "arguments": {"variablesReference": vars_ref}})
-            )
-            vr = await wait_response(ws, "variables", 10, events_seen)
-            if not vr.get("success"):
-                raise RuntimeError("variables failed")
-            commands_ok.append("variables")
-
-            await ws.send_str(
-                json.dumps(
-                    {
-                        "seq": 8,
-                        "type": "request",
-                        "command": "evaluate",
-                        "arguments": {"expression": "b", "frameId": frame_id, "context": "watch"},
-                    }
+                await ws.send_str(
+                    json.dumps({"seq": 7, "type": "request", "command": "variables", "arguments": {"variablesReference": vars_ref}})
                 )
-            )
-            ev = await wait_response(ws, "evaluate", 10, events_seen)
-            if not ev.get("success"):
-                raise RuntimeError("evaluate failed")
-            commands_ok.append("evaluate")
+                vr = await wait_response(ws, "variables", 10, events_seen)
+                if not vr.get("success"):
+                    raise RuntimeError("variables failed")
+                commands_ok.append("variables")
 
-            await ws.send_str(json.dumps({"seq": 9, "type": "request", "command": "stepIn", "arguments": {"threadId": thread_id}}))
-            await wait_response(ws, "stepIn", 10, events_seen)
-            commands_ok.append("stepIn")
-            await wait_event(ws, "stopped", 10, events_seen)
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "seq": 8,
+                            "type": "request",
+                            "command": "evaluate",
+                            "arguments": {"expression": "b", "frameId": frame_id, "context": "watch"},
+                        }
+                    )
+                )
+                ev = await wait_response(ws, "evaluate", 10, events_seen)
+                if not ev.get("success"):
+                    raise RuntimeError("evaluate failed")
+                commands_ok.append("evaluate")
 
-            await ws.send_str(json.dumps({"seq": 10, "type": "request", "command": "stepOut", "arguments": {"threadId": thread_id}}))
-            await wait_response(ws, "stepOut", 10, events_seen)
-            commands_ok.append("stepOut")
-            await wait_event(ws, "stopped", 10, events_seen)
+                await ws.send_str(json.dumps({"seq": 9, "type": "request", "command": "stepIn", "arguments": {"threadId": thread_id}}))
+                await wait_response(ws, "stepIn", 10, events_seen)
+                commands_ok.append("stepIn")
+                await wait_event(ws, "stopped", 10, events_seen)
 
-            await ws.send_str(json.dumps({"seq": 11, "type": "request", "command": "next", "arguments": {"threadId": thread_id}}))
-            await wait_response(ws, "next", 10, events_seen)
-            commands_ok.append("next")
+                await ws.send_str(json.dumps({"seq": 10, "type": "request", "command": "stepOut", "arguments": {"threadId": thread_id}}))
+                await wait_response(ws, "stepOut", 10, events_seen)
+                commands_ok.append("stepOut")
+                await wait_event(ws, "stopped", 10, events_seen)
 
-            await ws.send_str(json.dumps({"seq": 12, "type": "request", "command": "continue", "arguments": {"threadId": thread_id}}))
-            await wait_response(ws, "continue", 10, events_seen)
-            commands_ok.append("continue")
-            await wait_event(ws, "terminated", 20, events_seen)
+                await ws.send_str(json.dumps({"seq": 11, "type": "request", "command": "next", "arguments": {"threadId": thread_id}}))
+                await wait_response(ws, "next", 10, events_seen)
+                commands_ok.append("next")
 
-    requests.post(
-        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}/stop",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=20,
-    )
-    return {
-        "round": idx,
-        "session_id": sid,
-        "passed": True,
-        "commands_ok": commands_ok,
-        "events_seen": events_seen,
-        "elapsed_s": round(time.time() - t0, 2),
-    }
+                await ws.send_str(json.dumps({"seq": 12, "type": "request", "command": "continue", "arguments": {"threadId": thread_id}}))
+                await wait_response(ws, "continue", 10, events_seen)
+                commands_ok.append("continue")
+                await wait_event(ws, "terminated", 20, events_seen)
+
+        return {
+            "round": idx,
+            "session_id": sid,
+            "passed": True,
+            "commands_ok": commands_ok,
+            "events_seen": events_seen,
+            "elapsed_s": round(time.time() - t0, 2),
+        }
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        try:
+            stop_session(token, sid)
+        except Exception as cleanup_exc:
+            if primary_error is None:
+                raise
+            log(f"round={idx} session cleanup failed: {type(cleanup_exc).__name__}: {cleanup_exc}")
 
 
 def main() -> int:

@@ -39,7 +39,7 @@ bash scripts/deploy.sh deploy
 |------|------|------|
 | **总索引** | [docs/README.md](./docs/README.md) | 所有文档的导航入口 |
 | **部署运维** | [docs/docker/README.md](./docs/docker/README.md) | Docker 完整指南 |
-| **开发规范** | [AGENTS.md](./AGENTS.md) | Claude Agent 协作规则 |
+| **开发规范** | [AGENTS.md](./AGENTS.md) | Agent 协作与项目工程规则 |
 | **API 接口** | [docs/development/API.md](./docs/development/API.md) | 后端接口清单 |
 
 **功能模块文档**：`docs/features/` 目录包含所有功能详细说明（AI 智能体、PythonLab、课堂系统等）
@@ -48,10 +48,10 @@ bash scripts/deploy.sh deploy
 
 ## 技术栈
 
-- **前端**: React + TypeScript + Ant Design
-- **后端**: FastAPI + SQLAlchemy + PostgreSQL + Redis
-- **容器**: Docker + Docker Compose
-- **AI**: Claude API（Anthropic）
+- **前端**: React 19 + TypeScript + Vite + Tailwind CSS + TanStack Query/Table
+- **后端**: FastAPI + SQLAlchemy async + PostgreSQL + Redis + Celery
+- **容器**: Docker + Docker Compose + Caddy
+- **AI**: OpenRouter、Dify、SiliconFlow 和自定义 OpenAI 兼容端点
 
 ---
 
@@ -61,7 +61,7 @@ bash scripts/deploy.sh deploy
 wangsh/
 ├── frontend/          # React 前端
 ├── backend/           # FastAPI 后端
-├── gateway/           # Nginx 网关
+├── gateway/           # Caddy 网关
 ├── docs/              # 文档中心
 └── scripts/           # 部署与验证脚本
 ```

@@ -128,6 +128,8 @@ def _should_skip_path(path: str) -> bool:
         return True
     if "/compile" in path:
         return True
+    if "/download" in path:
+        return True
     if "/metrics" in path and not path.endswith("/health"):
         return True
     return False

@@ -316,8 +316,8 @@ async def create_game(
         game.stored_path = str(dest_path)
         game.file_size = total
         game.file_sha256 = sha256
+        await db.flush()
         await db.commit()
-        return game
     except BaseException:
         await _rollback_failed_upload(
             db,
@@ -326,6 +326,8 @@ async def create_game(
             renamed=renamed,
         )
         raise
+    await db.refresh(game)
+    return game
 
 
 async def update_game(

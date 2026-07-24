@@ -69,6 +69,16 @@ def create_session(token: str) -> str:
     return str(resp.json()["session_id"])
 
 
+def stop_session(token: str, sid: str) -> None:
+    resp = requests.post(
+        f"{API_URL}{PYTHONLAB_V2_ROOT}/sessions/{sid}/stop",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=20,
+    )
+    if resp.status_code not in {200, 404}:
+        resp.raise_for_status()
+
+
 def wait_for_ready(token: str, sid: str) -> None:
     started = time.time()
     while time.time() - started < 90:
@@ -232,7 +242,10 @@ async def run_owner_mode_smoke(
         )
 
 
-def main() -> None:
+def main() -> int:
+    token = ""
+    created_sessions: list[str] = []
+    exit_code = EXIT_OK
     try:
         if not PASSWORD:
             raise SmokeFailure(
@@ -256,12 +269,14 @@ def main() -> None:
         token = login()
         if OWNER_MODE == "matrix":
             sid_detect = create_session(token)
+            created_sessions.append(sid_detect)
             log(f"matrix detect session created: {sid_detect}")
             wait_for_ready(token, sid_detect)
             log("matrix detect session ready")
             detected = asyncio.run(run_owner_mode_smoke(token, sid_detect, "auto"))
             strict_expect = EXPECT_OWNER_BEHAVIOR or detected
             sid_strict = create_session(token)
+            created_sessions.append(sid_strict)
             log(f"matrix strict session created: {sid_strict}")
             wait_for_ready(token, sid_strict)
             log("matrix strict session ready")
@@ -269,22 +284,33 @@ def main() -> None:
             log(f"matrix strict assertion passed with expected={strict_expect}")
         else:
             sid = create_session(token)
+            created_sessions.append(sid)
             log(f"session created: {sid}")
             wait_for_ready(token, sid)
             log("session ready")
             asyncio.run(run_owner_mode_smoke(token, sid, OWNER_MODE, EXPECT_OWNER_BEHAVIOR))
         log("owner concurrency smoke passed")
-        sys.exit(EXIT_OK)
     except SmokeFailure as e:
         log(f"owner concurrency smoke failed: category={e.category} {e}")
-        sys.exit(e.code)
+        exit_code = e.code
     except (requests.RequestException, aiohttp.ClientError, asyncio.TimeoutError) as e:
         log(f"owner concurrency smoke failed: category=network {type(e).__name__}: {e}")
-        sys.exit(EXIT_NETWORK)
+        exit_code = EXIT_NETWORK
     except Exception as e:
         log(f"owner concurrency smoke failed: {type(e).__name__}: {e}")
-        sys.exit(EXIT_UNKNOWN)
+        exit_code = EXIT_UNKNOWN
+    finally:
+        if token:
+            for sid in reversed(created_sessions):
+                try:
+                    stop_session(token, sid)
+                    log(f"session cleanup requested: {sid}")
+                except Exception as exc:
+                    log(f"session cleanup failed: sid={sid} {type(exc).__name__}: {exc}")
+                    if exit_code == EXIT_OK:
+                        exit_code = EXIT_NETWORK
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -376,16 +376,15 @@ class ArticleCacheKeys:
     
     @staticmethod
     def public_list(
-        page: int = 1,
-        size: int = 20,
-        category_id: Optional[int] = None
+        page: int = 1, size: int = 20, category_id: Optional[int] = None, q: Optional[str] = None
     ) -> str:
         """公开文章列表缓存键（紧凑版）"""
         return compact_cache_key_generator(
             "articles:p:list",
             page,
             size,
-            category_id or 0
+            category_id or 0,
+            q or "",
         )
     
     @staticmethod

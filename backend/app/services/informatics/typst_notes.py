@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from pathlib import Path
 
-from sqlalchemy import select, func, cast, Integer, case, literal
+from sqlalchemy import delete, select, func, cast, Integer, case, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loguru import logger
@@ -37,6 +37,10 @@ _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPI
 
 # 单次 typst 编译超时秒数：防止恶意/超大 .typ 文件无限阻塞编译并发槽（仅 2 并发）
 TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
+
+
+class TypstNoteDeletedError(RuntimeError):
+    pass
 
 
 async def _load_note_compile_inputs(
@@ -78,6 +82,24 @@ async def compute_note_compile_hash(db: AsyncSession, note: TypstNote) -> str:
         style_key=style_key,
         style_text=style_text,
     )
+
+
+async def _lock_note_for_compile(
+    db: AsyncSession,
+    note: TypstNote,
+) -> TypstNote:
+    result = await db.execute(
+        select(TypstNote)
+        .where(
+            TypstNote.id == note.id,
+            TypstNote.is_deleted.is_(False),
+        )
+        .with_for_update()
+    )
+    locked_note = result.scalar_one_or_none()
+    if locked_note is None:
+        raise TypstNoteDeletedError("笔记已删除，取消编译")
+    return locked_note
 
 
 def _title_natural_order():
@@ -218,8 +240,32 @@ async def invalidate_note_pdf_cache(db: AsyncSession, note: TypstNote, *, remove
 
 
 async def delete_note(db: AsyncSession, note: TypstNote) -> None:
+    refresh = getattr(db, "refresh", None)
+    if refresh is not None:
+        await refresh(note)
+    old_rel = getattr(note, "compiled_pdf_path", None)
+    if note.id:
+        await db.execute(delete(TypstAsset).where(TypstAsset.note_id == note.id))
     note.is_deleted = True
-    await db.commit()
+    _clear_compile_cache_metadata(note)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    if old_rel:
+        try:
+            old_abs = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, old_rel)
+            if os.path.exists(old_abs):
+                await asyncio.to_thread(os.remove, old_abs)
+        except Exception as exc:
+            logger.warning(
+                "typst.delete orphan_pdf_cleanup_failed note_id={} path={} err={}",
+                note.id,
+                old_rel,
+                str(exc),
+            )
 
 
 def _compile_typst_to_pdf_bytes(content_typst: str) -> bytes:
@@ -280,6 +326,8 @@ def _compile_typst_project_to_pdf_bytes(entry_path: str, files: dict, assets: Li
 
 
 async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, str]:
+    note = await _lock_note_for_compile(db, note)
+
     lock = _compile_locks.setdefault(note.id or 0, asyncio.Lock())
     started = time.perf_counter()
     try:

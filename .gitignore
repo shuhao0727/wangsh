@@ -350,15 +350,13 @@ docker-compose.local.yml
 注意.txt
 frontend/src/.uimax-reviews.json
 
-# ==================== 静态资源（不提交到 git）====================
-# mindmap-demo 是第三方构建产物（8.8M），不应提交到仓库
-# 部署时从 CDN 或构建流程获取
+# ==================== 本地静态运行时（不提交到 Git）====================
+# mindmap-demo 保留在本机供开发使用，但字体、SVG、图片和打包 JS 等第三方构建资产
+# 不进入主线。新 checkout 和生产镜像需要通过单独、可复现的资源准备流程补齐。
 frontend/public/mindmap-demo/
 
-# 截图、临时图片（favicon 等必需资源除外）
-*.png
-!frontend/public/favicon.png
-!frontend/src/assets/*.png
+# 截图和视觉测试产物由上方 test-results、Playwright、Cypress 等目录规则排除。
+# 不全局忽略图片扩展名，避免文档插图和测试 fixture 被静默漏提交。
 
 # ==================== 临时构建文件 ====================
 Dockerfile.backend-*

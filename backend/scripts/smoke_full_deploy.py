@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from dataclasses import dataclass
 
@@ -28,6 +29,28 @@ def env() -> Env:
 
 def ok(msg: str):
     print(f"[OK] {msg}", flush=True)
+
+
+def warn(msg: str):
+    print(f"[WARN] {msg}", flush=True)
+
+
+def cleanup_delete(
+    client: httpx.Client,
+    url: str,
+    label: str,
+    *,
+    suppress_errors: bool,
+) -> None:
+    try:
+        r = client.delete(url, timeout=30)
+        r.raise_for_status()
+        ok(f"cleanup {label}")
+    except Exception as exc:
+        if suppress_errors:
+            warn(f"cleanup {label} failed: {type(exc).__name__}: {exc}")
+            return
+        raise
 
 
 def wait_health(client: httpx.Client, url: str, timeout_s: int = 60):
@@ -67,34 +90,78 @@ def me(client: httpx.Client, url: str):
 def verify_refresh(client: httpx.Client, url: str, refresh_token: str):
     r = client.post(f"{url}/auth/refresh", json={"refresh_token": refresh_token}, timeout=20)
     r.raise_for_status()
+    payload = r.json()
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise RuntimeError("refresh response missing access_token")
+    client.headers.update({"Authorization": f"Bearer {access_token}"})
     ok("auth/refresh")
-    return r.json()
+    return payload
+
+
+def wait_typst_job(
+    client: httpx.Client,
+    url: str,
+    job_id: str,
+    *,
+    attempts: int = 120,
+    interval_seconds: float = 0.5,
+) -> None:
+    for _ in range(attempts):
+        r = client.get(
+            f"{url}/informatics/typst-notes/compile-jobs/{job_id}",
+            timeout=30,
+        )
+        r.raise_for_status()
+        payload = r.json()
+        state = str(payload.get("state") or "")
+        if state == "SUCCESS":
+            ok("compile-async complete")
+            return
+        if state == "FAILURE":
+            raise RuntimeError(f"compile-async failed: {payload.get('error')}")
+        time.sleep(interval_seconds)
+    client.post(
+        f"{url}/informatics/typst-notes/compile-jobs/{job_id}/cancel",
+        timeout=30,
+    )
+    raise TimeoutError(f"compile-async timeout job_id={job_id}")
 
 
 def typst_note_smoke(client: httpx.Client, url: str):
     payload = {"title": "smoke-typst", "content_typst": "= Smoke\nHello"}
-    r = client.post(f"{url}/informatics/typst-notes", json=payload, timeout=30)
-    r.raise_for_status()
-    note = r.json()
-    note_id = note.get("id")
-    if not note_id:
-        raise RuntimeError(f"typst note id missing: {note}")
-    ok(f"create typst-note id={note_id}")
-
-    r = client.get(f"{url}/informatics/typst-notes/{note_id}", timeout=30)
-    r.raise_for_status()
-    ok("get typst-note")
-
-    r = client.post(f"{url}/informatics/typst-notes/{note_id}/compile-async", timeout=30)
-    if r.status_code == 400:
-        ok("compile-async disabled (skip)")
-    else:
+    note_id: int | None = None
+    try:
+        r = client.post(f"{url}/informatics/typst-notes", json=payload, timeout=30)
         r.raise_for_status()
-        ok("compile-async submit")
+        note = r.json()
+        note_id = int(note.get("id") or 0)
+        if note_id <= 0:
+            raise RuntimeError(f"typst note id missing: {note}")
+        ok(f"create typst-note id={note_id}")
 
-    r = client.delete(f"{url}/informatics/typst-notes/{note_id}", timeout=30)
-    r.raise_for_status()
-    ok("delete typst-note")
+        r = client.get(f"{url}/informatics/typst-notes/{note_id}", timeout=30)
+        r.raise_for_status()
+        ok("get typst-note")
+
+        r = client.post(f"{url}/informatics/typst-notes/{note_id}/compile-async", timeout=30)
+        if r.status_code == 400:
+            ok("compile-async disabled (skip)")
+        else:
+            r.raise_for_status()
+            job_id = str(r.json().get("job_id") or "")
+            if not job_id:
+                raise RuntimeError(f"compile-async response missing job_id: {r.text}")
+            ok("compile-async submit")
+            wait_typst_job(client, url, job_id)
+    finally:
+        if note_id is not None:
+            cleanup_delete(
+                client,
+                f"{url}/informatics/typst-notes/{note_id}",
+                "typst-note",
+                suppress_errors=sys.exc_info()[0] is not None,
+            )
 
 
 def articles_smoke(client: httpx.Client, url: str, author_id: int):
@@ -108,25 +175,31 @@ def articles_smoke(client: httpx.Client, url: str, author_id: int):
         "author_id": author_id,
         "category_id": None,
     }
-    r = client.post(f"{url}/articles", json=payload, timeout=30)
-    r.raise_for_status()
-    a = r.json()
-    article_id = a.get("id")
-    if not article_id:
-        raise RuntimeError(f"article id missing: {a}")
-    ok(f"create article id={article_id}")
+    article_id: int | None = None
+    try:
+        r = client.post(f"{url}/articles", json=payload, timeout=30)
+        r.raise_for_status()
+        a = r.json()
+        article_id = int(a.get("id") or 0)
+        if article_id <= 0:
+            raise RuntimeError(f"article id missing: {a}")
+        ok(f"create article id={article_id}")
 
-    r = client.get(f"{url}/articles/{article_id}", timeout=30)
-    r.raise_for_status()
-    ok("get article")
+        r = client.get(f"{url}/articles/{article_id}", timeout=30)
+        r.raise_for_status()
+        ok("get article")
 
-    r = client.put(f"{url}/articles/{article_id}", json={"title": "smoke-article-2"}, timeout=30)
-    r.raise_for_status()
-    ok("update article")
-
-    r = client.delete(f"{url}/articles/{article_id}", timeout=30)
-    r.raise_for_status()
-    ok("delete article")
+        r = client.put(f"{url}/articles/{article_id}", json={"title": "smoke-article-2"}, timeout=30)
+        r.raise_for_status()
+        ok("update article")
+    finally:
+        if article_id is not None:
+            cleanup_delete(
+                client,
+                f"{url}/articles/{article_id}",
+                "article",
+                suppress_errors=sys.exc_info()[0] is not None,
+            )
 
 
 def agents_smoke(client: httpx.Client, url: str, openrouter_api_url: str, openrouter_api_key: str | None):
@@ -170,22 +243,28 @@ def agents_smoke(client: httpx.Client, url: str, openrouter_api_url: str, openro
         "max_tokens": 256,
         "is_active": True,
     }
-    r = client.post(f"{url}/ai-agents", json=agent_payload, timeout=60)
-    r.raise_for_status()
-    agent = r.json()
-    agent_id = agent.get("id") or agent.get("data", {}).get("id")
-    if not agent_id:
-        raise RuntimeError(f"agent id missing: {agent}")
-    ok(f"create ai-agent id={agent_id}")
+    agent_id: int | None = None
+    try:
+        r = client.post(f"{url}/ai-agents", json=agent_payload, timeout=60)
+        r.raise_for_status()
+        agent = r.json()
+        agent_id = int(agent.get("id") or agent.get("data", {}).get("id") or 0)
+        if agent_id <= 0:
+            raise RuntimeError(f"agent id missing: {agent}")
+        ok(f"create ai-agent id={agent_id}")
 
-    test_payload = {"agent_id": agent_id, "message": "Say 'ok' and nothing else."}
-    r = client.post(f"{url}/ai-agents/test", json=test_payload, timeout=120)
-    r.raise_for_status()
-    ok("ai-agents/test")
-
-    r = client.delete(f"{url}/ai-agents/{agent_id}", timeout=60)
-    r.raise_for_status()
-    ok("delete ai-agent")
+        test_payload = {"agent_id": agent_id, "message": "Say 'ok' and nothing else."}
+        r = client.post(f"{url}/ai-agents/test", json=test_payload, timeout=120)
+        r.raise_for_status()
+        ok("ai-agents/test")
+    finally:
+        if agent_id is not None:
+            cleanup_delete(
+                client,
+                f"{url}/ai-agents/{agent_id}",
+                "ai-agent",
+                suppress_errors=sys.exc_info()[0] is not None,
+            )
 
 
 def main():

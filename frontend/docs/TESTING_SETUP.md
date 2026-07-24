@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：frontend
-> 最近复核：2026-07-13
+> 最近复核：2026-07-22
 
 本文只说明 WangSh 当前真实的前端测试配置。全项目最新测试数字、证据和待执行门禁见
 [TEST_STATUS.md](../../docs/docker/testing/TEST_STATUS.md)。
@@ -19,8 +19,10 @@
 
 ```text
 src/components/**/*.test.{ts,tsx}
+src/pages/AIAgents/**/*.test.{ts,tsx}
 src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}
 src/hooks/queries/**/*.test.{ts,tsx}
+src/lib/**/*.test.{ts,tsx}
 src/services/**/*.test.{ts,tsx}
 ```
 

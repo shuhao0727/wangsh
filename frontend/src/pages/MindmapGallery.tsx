@@ -12,6 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Globe, BookOpen, Plus, Pencil, Eye, Trash2 } from "lucide-react";
 import { showMessage } from "@/lib/toast";
+import {
+  isMindmapEditorRuntimeAvailable,
+  MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
+} from "@/lib/mindmapRuntime";
 import MindMapViewer from "./Admin/ITTechnology/learning/MindMapViewer";
 import { markdownToMindMapData } from "./Admin/ITTechnology/learning/mindMapData";
 
@@ -39,20 +43,18 @@ const MindmapGallery: React.FC = () => {
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const refreshRequestRef = useRef(0);
-  const refreshAbortRef = useRef<AbortController | null>(null);
 
-  const fetchPub = useCallback(async (signal?: AbortSignal) => {
-    const res = await fetch(API_BASE, { credentials: "include", signal });
+  const fetchPub = useCallback(async () => {
+    const res = await fetch(API_BASE, { credentials: "include" });
     if (!res.ok) throw new Error(`Failed to load public mindmaps: ${res.status}`);
     const data = await res.json();
     return (Array.isArray(data) ? data : []) as MindmapItem[];
   }, []);
 
-  const fetchMy = useCallback(async (signal?: AbortSignal) => {
+  const fetchMy = useCallback(async () => {
     const res = await fetch(API_BASE + "/my", {
       headers: authHeaders(),
       credentials: "include",
-      signal,
     });
     if (res.status === 401) return null;
     if (!res.ok) throw new Error(`Failed to load personal mindmaps: ${res.status}`);
@@ -62,17 +64,14 @@ const MindmapGallery: React.FC = () => {
 
   const refreshMaps = useCallback(async (showLoading = false) => {
     const requestId = ++refreshRequestRef.current;
-    refreshAbortRef.current?.abort();
-    const controller = new AbortController();
-    refreshAbortRef.current = controller;
     setPubError("");
     setMyError("");
     if (showLoading) setLoading(true);
 
     try {
       const [publicResult, myResult] = await Promise.allSettled([
-        fetchPub(controller.signal),
-        fetchMy(controller.signal),
+        fetchPub(),
+        fetchMy(),
       ]);
       if (requestId !== refreshRequestRef.current) return;
 
@@ -121,7 +120,6 @@ const MindmapGallery: React.FC = () => {
     void refreshMaps(true);
     return () => {
       refreshRequestRef.current += 1;
-      refreshAbortRef.current?.abort();
     };
   }, [refreshMaps]);
 
@@ -132,8 +130,20 @@ const MindmapGallery: React.FC = () => {
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshMaps]);
 
+  const requestCreate = () => {
+    if (!isMindmapEditorRuntimeAvailable()) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    setCreateOpen(true);
+  };
+
   // 新建后在新标签页打开编辑
   const handleCreate = async () => {
+    if (!isMindmapEditorRuntimeAvailable()) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (!newTitle.trim()) return;
     setCreating(true);
     try {
@@ -164,6 +174,10 @@ const MindmapGallery: React.FC = () => {
   };
 
   const handleEdit = (item: MindmapItem) => {
+    if (!isMindmapEditorRuntimeAvailable()) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
     // 写入数据到 localStorage
     const title = item.title || "未命名";
     const md = item.content?.markdown || `# ${title}`;
@@ -178,12 +192,12 @@ const MindmapGallery: React.FC = () => {
   const handlePreview = (item: MindmapItem) => {
     const title = item.title || "未命名";
     const md = item.content?.markdown || `# ${title}`;
-    localStorage.setItem("_wangsh_mindmap_data", JSON.stringify({
-      root: markdownToMindMapData(md, title),
-      theme: { template: "classic4", config: {} },
-      layout: "logicalStructure", config: {}, view: null,
+    localStorage.setItem("_wangsh_preview_data", JSON.stringify({
+      ...item,
+      title,
+      content: { ...item.content, markdown: md },
     }));
-    window.open(`/mindmap-demo/index.html?id=${item.id}&readonly=1`, "_blank");
+    window.open(`/mindmap-preview?id=${item.id}`, "_blank");
   };
 
   const handleDelete = async (id: number) => {
@@ -199,7 +213,7 @@ const MindmapGallery: React.FC = () => {
   const renderCard = (item: MindmapItem, isMine: boolean) => (
     <div key={item.id} className="group relative rounded-lg border border-border bg-surface transition-shadow hover:shadow-md">
       <div className="h-40 w-full cursor-pointer overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
-        onClick={() => handleEdit(item)}>
+        onClick={() => handlePreview(item)}>
         <MindMapViewer compact markdown={item.content?.markdown || `# ${item.title}`} />
       </div>
       <div className="flex items-center justify-between px-3 py-2">
@@ -234,7 +248,7 @@ const MindmapGallery: React.FC = () => {
           <h1 className="text-xl font-bold">思维导图</h1>
           <p className="mt-1 text-sm text-text-secondary">浏览导图广场或创作个人导图</p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" className="gap-1.5" onClick={requestCreate}>
           <Plus className="h-4 w-4" />新建导图
         </Button>
       </div>
@@ -256,7 +270,7 @@ const MindmapGallery: React.FC = () => {
           {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-text-tertiary" /></div>
           : myError ? <LoadError message={myError} onRetry={() => void refreshMaps(true)} />
           : !authenticated ? <Empty icon={<BookOpen className="h-12 w-12" />} text="登录后查看我的导图" />
-          : myMaps.length === 0 ? <Empty icon={<BookOpen className="h-12 w-12" />} text="还没有导图" action="创建第一个导图" onAction={() => setCreateOpen(true)} />
+          : myMaps.length === 0 ? <Empty icon={<BookOpen className="h-12 w-12" />} text="还没有导图" action="创建第一个导图" onAction={requestCreate} />
           : <Grid>{myMaps.map(m => renderCard(m, true))}</Grid>}
         </TabsContent>
       </Tabs>

@@ -33,7 +33,7 @@ export interface StudentProfileData {
   advanced: StudentProfile | null;
 }
 
-const PAGE_SIZE = 500;
+const PAGE_SIZE = 100;
 
 type ProfileListParams = NonNullable<Parameters<typeof profileApi.list>[0]> & {
   config_id?: number;

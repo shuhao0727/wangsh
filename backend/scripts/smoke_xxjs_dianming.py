@@ -91,6 +91,9 @@ def main() -> int:
     suffix = str(int(time.time()))
     year = "2026"
     class_name = f"{PREFIX}-{suffix}"
+    token: str | None = None
+    cleanup_needed = False
+    failure: Exception | None = None
 
     try:
         token = _login()
@@ -117,6 +120,7 @@ def main() -> int:
         _expect(code, imported, 200, "xxjs import students")
         if not isinstance(imported, list) or len(imported) != 3:
             raise RuntimeError(f"xxjs import unexpected payload={imported}")
+        cleanup_needed = True
         _ok("xxjs import students")
 
         query = urllib.parse.urlencode({"year": year, "class_name": class_name})
@@ -161,6 +165,7 @@ def main() -> int:
             token=token,
         )
         _expect(code, deleted, 200, "xxjs delete class")
+        cleanup_needed = False
         _ok("xxjs delete class")
 
         code, students_after = _http_json(
@@ -172,10 +177,29 @@ def main() -> int:
         if not isinstance(students_after, list) or students_after:
             raise RuntimeError(f"xxjs expected empty students after delete payload={students_after}")
         _ok("xxjs cleanup verified")
-        return 0
     except Exception as exc:
-        _fail(str(exc))
+        failure = exc
+    finally:
+        if cleanup_needed and token:
+            query = urllib.parse.urlencode({"year": year, "class_name": class_name})
+            try:
+                code, payload = _http_json(
+                    "DELETE",
+                    f"{BASE_URL}/xxjs/dianming/class?{query}",
+                    token=token,
+                )
+                _expect(code, payload, 200, "xxjs failure cleanup")
+                _ok("xxjs failure cleanup")
+            except Exception as cleanup_exc:
+                if failure is None:
+                    failure = cleanup_exc
+                else:
+                    _fail(f"xxjs cleanup also failed: {cleanup_exc}")
+
+    if failure is not None:
+        _fail(str(failure))
         return 1
+    return 0
 
 
 if __name__ == "__main__":

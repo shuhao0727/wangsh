@@ -1,9 +1,15 @@
 """游戏资源库 — Pydantic Schema"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+
+NonBlankCategory = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 
 class GameResourceBase(BaseModel):
@@ -21,7 +27,7 @@ class GameResourceUpdate(BaseModel):
     """管理员编辑游戏信息（不重新上传文件）"""
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    category: Optional[str] = Field(None, max_length=100)
+    category: Optional[NonBlankCategory] = None
     icon_url: Optional[str] = Field(None, max_length=500)
     is_active: Optional[bool] = None
 

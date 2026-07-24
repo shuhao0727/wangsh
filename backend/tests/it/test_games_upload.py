@@ -33,17 +33,27 @@ class FakeUpload:
 
 
 class FakeSession:
-    def __init__(self, *, game_id: int = 7, commit_error: Exception | None = None):
+    def __init__(
+        self,
+        *,
+        game_id: int = 7,
+        commit_error: Exception | None = None,
+        refresh_error: Exception | None = None,
+    ):
         self.game_id = game_id
         self.commit_error = commit_error
+        self.refresh_error = refresh_error
         self.added = []
+        self.flush_calls = 0
         self.commit_calls = 0
+        self.refresh_calls = 0
         self.rollback_calls = 0
 
     def add(self, value):
         self.added.append(value)
 
     async def flush(self):
+        self.flush_calls += 1
         for value in self.added:
             if isinstance(value, GameResource) and value.id is None:
                 value.id = self.game_id
@@ -52,6 +62,11 @@ class FakeSession:
         self.commit_calls += 1
         if self.commit_error:
             raise self.commit_error
+
+    async def refresh(self, _value):
+        self.refresh_calls += 1
+        if self.refresh_error:
+            raise self.refresh_error
 
     async def rollback(self):
         self.rollback_calls += 1
@@ -113,7 +128,9 @@ def test_create_game_facade_persists_metadata_and_commits(tmp_path):
     )
 
     assert session.added == [game]
+    assert session.flush_calls == 2
     assert session.commit_calls == 1
+    assert session.refresh_calls == 1
     assert session.rollback_calls == 0
     assert game.title == "Lesson Game"
     assert game.filename == "lesson.zip"
@@ -284,6 +301,31 @@ def test_commit_failure_rolls_back_and_removes_renamed_file(tmp_path):
 
     assert db.rollback_calls == 1
     assert list(tmp_path.iterdir()) == []
+
+
+def test_refresh_failure_after_commit_preserves_the_committed_upload(tmp_path):
+    games.GAMES_UPLOAD_DIR = tmp_path
+    db = FakeSession(refresh_error=RuntimeError("refresh failed"))
+    content = _zip_bytes("game.txt")
+    expected_path = tmp_path / "7_game.zip"
+
+    with pytest.raises(RuntimeError, match="refresh failed"):
+        asyncio.run(
+            games.create_game(
+                db,
+                title="Game",
+                description=None,
+                category="tool",
+                file=FakeUpload("game.zip", content),
+                uploaded_by=3,
+            )
+        )
+
+    assert db.flush_calls == 2
+    assert db.refresh_calls == 1
+    assert db.commit_calls == 1
+    assert db.rollback_calls == 0
+    assert expected_path.read_bytes() == content
 
 
 def test_atomic_rename_failure_rolls_back_and_cleans_temp_file(monkeypatch, tmp_path):

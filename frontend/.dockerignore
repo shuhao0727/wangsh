@@ -26,3 +26,4 @@ src/**/*.spec.*
 build
 dist
 public/pyodide
+public/mindmap-demo

@@ -13,8 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, Globe, ArrowLeft, BookOpen } from "lucide-react";
+import { Loader2, Plus, Pencil, Eye, Trash2, Globe, ArrowLeft, BookOpen } from "lucide-react";
 import { showMessage } from "@/lib/toast";
+import {
+  isMindmapEditorRuntimeAvailable,
+  MINDMAP_EDITOR_UNAVAILABLE_MESSAGE,
+} from "@/lib/mindmapRuntime";
 import MindMapViewer from "./MindMapViewer";
 import MindMapEditorLib from "./MindMapEditorLib";
 
@@ -31,6 +35,7 @@ type MindmapItem = {
 const API_BASE = "/api/v1/learning/mindmaps";
 
 const MindMapManager: React.FC = () => {
+  const runtimeAvailable = isMindmapEditorRuntimeAvailable();
   const [tab, setTab] = useState("my");
   const [myMaps, setMyMaps] = useState<MindmapItem[]>([]);
   const [pubMaps, setPubMaps] = useState<MindmapItem[]>([]);
@@ -72,7 +77,19 @@ const MindMapManager: React.FC = () => {
     })();
   }, [fetchMy, fetchPub]);
 
+  const requestCreate = () => {
+    if (!runtimeAvailable) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    setCreateOpen(true);
+  };
+
   const handleCreate = async () => {
+    if (!runtimeAvailable) {
+      showMessage.warning(MINDMAP_EDITOR_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (!newTitle.trim()) return;
     setCreating(true);
     try {
@@ -135,6 +152,10 @@ const MindMapManager: React.FC = () => {
     await fetchMy();
   };
 
+  const openMindmap = (item: MindmapItem) => {
+    setEditing(item);
+  };
+
   // 全屏编辑模式
   if (editing) {
     return (
@@ -156,7 +177,7 @@ const MindMapManager: React.FC = () => {
       {/* 缩略预览 */}
       <div
         className="h-40 w-full overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
-        onClick={() => setEditing(item)}
+        onClick={() => openMindmap(item)}
         style={{ cursor: "pointer" }}
       >
         <MindMapViewer markdown={item.content?.markdown || `# ${item.title}`} compact />
@@ -175,8 +196,11 @@ const MindMapManager: React.FC = () => {
           {isMine && (
             <>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                onClick={() => setEditing(item)} title="编辑">
-                <Pencil className="h-3.5 w-3.5" />
+                onClick={() => openMindmap(item)}
+                title={runtimeAvailable ? "编辑" : "预览"}>
+                {runtimeAvailable
+                  ? <Pencil className="h-3.5 w-3.5" />
+                  : <Eye className="h-3.5 w-3.5" />}
               </Button>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive"
                 onClick={() => setDeleteTarget(item)} title="删除">
@@ -204,7 +228,7 @@ const MindMapManager: React.FC = () => {
         </Button>
         <h2 className="text-sm font-semibold">思维导图管理</h2>
         <div className="ml-auto">
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={requestCreate}>
             <Plus className="h-3.5 w-3.5" />新建导图
           </Button>
         </div>

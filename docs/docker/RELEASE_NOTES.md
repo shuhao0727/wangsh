@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-07-21
+> 最近复核：2026-07-22
 > 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
 >
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
@@ -21,7 +21,7 @@ v1.5.9 及之前的版本（v1.5.1 - v1.5.9，共14个版本）已归档到：
 
 ---
 
-## 未发布 v1.6.0（2026-07-11）
+## 未发布 v1.6.0（更新至 2026-07-22）
 
 当前源码版本继续使用 `1.6.0`。截至 2026-07-14，远端 Git 尚无 `v1.6.0` tag；
 Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并由
@@ -31,11 +31,35 @@ Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并
 
 - 修复 `scripts/rollback.sh` 在函数外使用 `local` 导致回滚入口运行即失败的问题；
   Compose 检查、备份和 downgrade 现在统一使用显式 `ENV_FILE` / `COMPOSE_FILE`，
-  并增加隔离 Docker 桩合同测试。回滚入口按脚本自身路径定位备份工具，执行 downgrade
-  前停止 gateway、frontend、backend 和两个 worker，避免新版服务继续访问已降级结构；
-  downgrade 使用一次性 backend 容器，完成后保持业务服务停止等待旧 release-set。
+  并增加隔离 Docker 桩合同测试。默认回滚先记录原运行状态并停止 `backend`、
+  `typst-worker`、`pythonlab-worker` 建立无写入窗口，再备份和 downgrade；备份失败
+  绝不降级，并只重启原先运行的写服务。停止写服务失败也采用同一恢复保护，不会继续
+  备份或降级。恢复成功时保留原操作失败状态，恢复失败时返回恢复状态并明确要求人工
+  处理。`--no-backup` 仍是显式危险选项。downgrade 使用一次性 backend 容器，完成后
+  写服务保持停止等待旧 release-set。
+- 扩展应用日志脱敏，PostgreSQL、SQLAlchemy async、Redis 和 AMQP/Celery 连接串中的
+  URL userinfo 密码现在统一替换为 `<redacted>`，同时保留 scheme、用户名、主机和路径
+  供排错；只有用户名、没有密码的公开 URL 不会被误改。
+- 生产和开发 Compose 现在把 `${TIMEZONE:-Asia/Shanghai}` 同时传给 backend、Typst
+  worker 和 PythonLab worker 的 `TIMEZONE`/`TZ`；开发 PostgreSQL 的 `TZ`、`PGTZ`
+  和启动参数也使用同一值，避免容器时区与应用业务日期计算漂移。
+- Vitest 默认范围新增 `src/lib/**/*.test.{ts,tsx}`，旧 Mindmap 运行时的生产禁用边界
+  测试不再需要显式路径才能执行。
+- 修复 `frontend/package-lock.json` 丢失 `@emnapi/core`、`@emnapi/runtime` 和
+  `@emnapi/wasi-threads` 可选 peer 条目导致全新环境 `npm ci` 拒绝安装的问题；
+  lockfile 已按当前 npm 重新归一化，并通过真实 clean install、全量测试和生产构建。
 - 修复浏览器 UI smoke 在目标输入框或管理按钮不存在时仍把 `skip-*` 动作计为
   `PASS` 的问题；未执行到预期动作现在记录为 `WARN` 并进入 skip 汇总。
+- 修复 `/admin/assessment/editor/new` 使用静态路由时 `useParams().id` 为空、页面却
+  永久显示加载动画的问题；参数缺失现在正确进入新建模式，并增加静态路由组件回归。
+  Docker 开发模式 UI smoke 已从 `12 PASS / 1 WARN` 提升为
+  `13 PASS / 0 WARN / 0 FAIL`。
+- 修复 `GET /ai-agents/conversations` 在存在真实会话数据时因响应 schema 错配返回
+  `500` 的问题；会话列表和详情模型现在与 SQL 服务及前端合同一致，详情不再静默丢弃
+  `session_id`、用户/智能体字段和响应时间。拆分前的旧导入路径改为指向
+  `schemas/agents/conversation.py` 的兼容别名，避免同名模型再次漂移。
+- 修复 AI 使用记录列表响应模型静默裁掉 `page`、`page_size` 和 `total_pages` 的
+  问题；后端现在完整保留服务分页结果，与前端分页类型一致。
 - 修复 `prod-smoke` 在 `ui-results.json` 缺失时仍可能写入成功汇总并返回 0 的问题；
   当前会把 `ui-smoke` 步骤、总状态和退出码统一标记为失败，并生成失败报告。
 - 修复正式部署只在拉取前校验 registry tag 的时间差风险；`pull-up/deploy` 现在会在
@@ -49,7 +73,9 @@ Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并
   相似项目前缀或外部 origin 不再被误认为隔离环境。
 - 部署健康门禁新增首页可用性检查，详细健康报告同时覆盖 `frontend`、`gateway`、
   PostgreSQL、Redis 和两个 worker；正式 `deploy` 会等待详细健康门禁通过，避免 API
-  正常但前端或异步任务不可用时误报部署成功。
+  正常但前端或异步任务不可用时误报部署成功。API 现在必须同时满足 HTTP 2xx、有效
+  JSON 和顶层唯一 `status=healthy`；宿主不新增 Python 依赖，JSON 由 backend 容器
+  标准库校验，两份 Compose backend healthcheck 采用相同状态语义。
 - 修复嵌入式思维导图保存按钮依赖不存在的 `_mmData/postMessage` 协议的问题；当前从
   同源 iframe 的 `takeOverAppMethods` 读取最新树后保存，富文本节点会转换为纯文本
   Markdown，首个一级标题不再重复生成同名根节点；独立窗口保存按钮也复用同一运行时
@@ -59,19 +85,31 @@ Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并
 - 文档和历史脚本完成一轮低风险收口：无真实引用的 redirect、重复历史摘要和长篇实施
   正文的长期结论已迁入 owner；SSE 恢复资料和学习平台设计取舍保留为精简 archive。5 个失效或重复
   seed 执行壳已删除；AI/Agents 正式课程内容迁移源和未完成审计的索引 SQL 继续保留。
-- 修复 `.gitignore` 将整个 `frontend/public/` 当作 Gatsby 产物忽略的问题；当前只忽略
-  可重建的 Pyodide 运行时，思维导图静态资源和 favicon 随源码保留，确保新 checkout
-  可以完成相同的前端构建。
+- 修复 `.gitignore` 将整个 `frontend/public/` 当作 Gatsby 产物忽略的问题；favicon
+  等正式源码资产继续跟踪，Pyodide 和 Mindmap 本地运行时使用独立目录规则。Mindmap
+  中的字体、SVG、图片和打包 JS 保留在开发机但不进入 Git 或 Docker 构建上下文；
+  Vite 生产构建还会删除复制到输出目录的本地副本。生产 Caddy 对 `/mindmap-demo`
+  明确返回 `404 + no-store`，避免缺失资源进入 SPA fallback。恢复生产编辑器前需要
+  补充可复现的资源准备流程。生产前端同步阻止用户端和管理端新建/编辑，避免生成无法
+  再编辑的记录；已有导图仍可通过内置查看器只读预览。Caddy 将 `/favicon.svg` 纳入
+  真实静态文件匹配，`test:scripts` 和 `build:check` 分别增加 Git 静态资产白名单与
+  最终构建产物合同。
 - 修复普通 admin/teacher 从无显式 redirect 的登录页进入时，角色跳转先执行、随后又被
   登录页认证 effect 覆盖为 `/home` 的竞态；登录提交和已登录恢复现在复用同一跳转
   规则，并增加 super_admin/admin/teacher/student 四角色组件回归。
 - 修复 GroupDiscussion 同日同班同组并发创建触发唯一约束时直接失败的问题；当前会
   rollback 并复用另一请求已提交的会话；切组路径会在 rollback 前保存旧成员会话 ID，
   不再读取过期 ORM 对象，避免 `MissingGreenlet` 500，管理员和学生路径均有回归覆盖。
-- 应用 access log 在写入 loguru 前会脱敏 SSE 查询参数中的 token，避免运行日志保存
-  可重放的认证凭据。
+  创建和默认列表还统一使用 `TIMEZONE` 配置的业务日期；`joined_at`、冷却和
+  recent-hours 仍使用 UTC，无效 IANA 时区在配置加载期直接失败。批量删除接口现在
+  返回数据库实际删除的会话数量，不再把 `deleted` 序列化为 `null`。
+- 应用标准 logging 和 Loguru 在最终 sink 前统一脱敏 query、JSON/Python 字典字段、
+  Authorization/Proxy-Authorization、Cookie 和异常链中的凭据；多行、未闭合引号和
+  超长输入使用有界扫描，避免泄漏和正则回溯。FastAPI 与 Celery worker 入口均安装
+  同一脱敏器，普通 bearer/cookie 说明文本保持不变。
 - 修复 Assessment 群体画像按配置统计全部班级 graded session 的问题；当前统计同时
-  限定目标班级学生 ID，避免跨班成绩混入画像。
+  限定目标班级学生 ID，避免跨班成绩混入画像；公共 `generate_profile` 回归使用真实
+  PostgreSQL 临时 schema 覆盖班级、角色、删除状态和 session 状态隔离。
 - 修复管理员从 `/task-analysis/*` 等受保护深链进入登录页后被角色默认落点覆盖的问题；
   只有缺省 `/home` 才应用角色默认页，合法显式 redirect 会保留路径和查询参数。
 - 修复统一“姓名 + 学号”登录遇到同名用户时在校验学号前抛
@@ -92,7 +130,14 @@ Docker Hub 六个正式 `1.6.0` amd64 镜像已通过手工发布链推送，并
 - refresh token 改为数据库行锁下的原子轮换；停用/删除用户不可刷新，服务端会话缺失时旧 access token 不再自举。
 - Redis SSE 订阅增加 listener ready 握手和按频道发布锁，消除首事件竞态；listener 超时改为按频道降级，并确保取消订阅失败时仍关闭连接。
 - Logout 改为基础设施故障下的客户端强制登出：数据库或 Redis 撤销失败会告警并尽力回滚，但响应仍清除 access/refresh Cookie。
-- IT 游戏上传改为分块临时文件、增量 SHA256、原子重命名与数据库失败补偿，并增加 `IT_GAME_MAX_UPLOAD_BYTES`。
+- IT 游戏上传改为分块临时文件、增量 SHA256、原子重命名与数据库失败补偿，并增加
+  `IT_GAME_MAX_UPLOAD_BYTES`。上传会在元数据二次 flush 后 commit，commit 成功后
+  才 refresh ORM 对象，以加载数据库时间戳供响应序列化使用；commit 前或 commit
+  失败仍会回滚并清理文件，commit 后的 refresh 失败不会删除已提交记录对应的文件。
+  更新接口拒绝空分类；下载在记日志前持有稳定文件描述符，保留 Range 能力并避免
+  并发删除导致已开始的下载失败，审计 IP 复用统一的可信代理头解析。
+- 公开文章列表缓存键纳入搜索参数 `q`；不同搜索词以及有、无搜索词的列表使用独立
+  缓存，避免搜索结果与普通列表或其他搜索结果串用。
 - 前端增加真实角色路由守卫、认证超时取消和 IT 游戏 Query key 治理。
 - 课堂管理 SSE 修复静态路由被动态活动 ID 路由抢占的问题；管理员改为订阅全局频道，学生班级频道统一规范化。
 - 课堂活动严格限定仅草稿可编辑/删除；并发重复答题统一回滚为业务错误。
@@ -294,4 +339,3 @@ IMAGE_TAG=1.5.9 docker compose up -d
 ```
 
 ---
-

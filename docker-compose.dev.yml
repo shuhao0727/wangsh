@@ -17,9 +17,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS}
       POSTGRES_STATEMENT_TIMEOUT: ${POSTGRES_STATEMENT_TIMEOUT}
-      TZ: Asia/Shanghai
-      PGTZ: Asia/Shanghai
-    command: [ "postgres", "-c", "timezone=Asia/Shanghai" ]
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+      PGTZ: ${TIMEZONE:-Asia/Shanghai}
+    command: [ "postgres", "-c", "timezone=${TIMEZONE:-Asia/Shanghai}" ]
     volumes:
       # 数据持久化到本地 data 目录
       - ./data/postgres:/var/lib/postgresql/data
@@ -88,7 +88,8 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=True
       - LOG_LEVEL=INFO
-      - TZ=Asia/Shanghai
+      - TIMEZONE=${TIMEZONE:-Asia/Shanghai}
+      - TZ=${TIMEZONE:-Asia/Shanghai}
       - APP_VERSION=${APP_VERSION:-1.6.0}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - AGENT_API_KEY_ENCRYPTION_KEY=${AGENT_API_KEY_ENCRYPTION_KEY}
@@ -138,7 +139,7 @@ services:
     command: >
       sh -c "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --timeout-keep-alive 2 --timeout-graceful-shutdown 2"
     healthcheck:
-      test: [ "CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1" ]
+      test: [ "CMD-SHELL", "python -c \"import atexit,http.client,json,sys; JSONObject=type('JSONObject',(list,),{}); c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); atexit.register(c.close); c.request('GET','/health'); r=c.getresponse(); payload=json.loads(r.read(),object_pairs_hook=JSONObject); statuses=[value for key,value in payload if key == 'status'] if isinstance(payload,JSONObject) else []; sys.exit(0 if 200 <= r.status < 300 and len(statuses) == 1 and statuses[0] == 'healthy' else 1)\"" ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -159,7 +160,8 @@ services:
       - AGENT_API_KEY_ENCRYPTION_KEY=${AGENT_API_KEY_ENCRYPTION_KEY}
       - DEBUG=True
       - LOG_LEVEL=INFO
-      - TZ=Asia/Shanghai
+      - TIMEZONE=${TIMEZONE:-Asia/Shanghai}
+      - TZ=${TIMEZONE:-Asia/Shanghai}
       - APP_VERSION=${APP_VERSION:-1.6.0}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -201,7 +203,8 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=True
       - LOG_LEVEL=INFO
-      - TZ=Asia/Shanghai
+      - TIMEZONE=${TIMEZONE:-Asia/Shanghai}
+      - TZ=${TIMEZONE:-Asia/Shanghai}
       - APP_VERSION=${APP_VERSION:-1.6.0}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

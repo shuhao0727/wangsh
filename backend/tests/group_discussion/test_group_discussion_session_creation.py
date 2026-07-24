@@ -3,16 +3,44 @@ from contextlib import AbstractAsyncContextManager
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, MissingGreenlet
 
 import app.services.agents.group_discussion as gd
 import app.services.agents.group_discussion.session_service as session_service
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.models.agents.group_discussion import GroupDiscussionMember, GroupDiscussionSession
 from app.utils.cache import cache
+
+
+_FIXED_UTC_NOW = datetime(2026, 7, 11, 16, 30, tzinfo=timezone.utc)
+
+
+def _install_strict_clock(monkeypatch):
+    class StrictDateTime(datetime):
+        calls = []
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                raise AssertionError("datetime.now() must receive an explicit timezone")
+            cls.calls.append(tz)
+            instant = cls(
+                _FIXED_UTC_NOW.year,
+                _FIXED_UTC_NOW.month,
+                _FIXED_UTC_NOW.day,
+                _FIXED_UTC_NOW.hour,
+                _FIXED_UTC_NOW.minute,
+                tzinfo=timezone.utc,
+            )
+            return instant.astimezone(tz)
+
+    monkeypatch.setattr(session_service, "datetime", StrictDateTime)
+    return StrictDateTime
 
 
 class _FakeResult:
@@ -129,6 +157,20 @@ class _MembershipCommitFailureDB(_FakeDB):
         self.pending_old_membership_delete = False
 
 
+class _BatchDeleteDB:
+    def __init__(self, deleted_count: int):
+        self.deleted_count = deleted_count
+        self.execute_count = 0
+        self.commit_count = 0
+
+    async def execute(self, _stmt):
+        self.execute_count += 1
+        return SimpleNamespace(rowcount=self.deleted_count if self.execute_count == 4 else 0)
+
+    async def commit(self):
+        self.commit_count += 1
+
+
 def _create_session(session_id=1, class_name="测试班级", group_no="001", created_by_user_id=1, group_name=None):
     return SimpleNamespace(
         id=session_id,
@@ -177,12 +219,59 @@ def _patch_settings(monkeypatch, join_lock_seconds=300):
     monkeypatch.setattr(settings, "GROUP_DISCUSSION_METRICS_ENABLED", False, raising=False)
 
 
+def test_admin_batch_delete_returns_deleted_session_count():
+    db = _BatchDeleteDB(deleted_count=2)
+
+    deleted = asyncio.run(gd.admin_delete_sessions(db, session_ids=[11, 12, 0, -1]))
+
+    assert deleted == 2
+    assert db.execute_count == 4
+    assert db.commit_count == 1
+
+
+def test_settings_timezone_preserves_default_and_valid_iana_name():
+    assert Settings(DEBUG=True).TIMEZONE == "Asia/Shanghai"
+    assert Settings(DEBUG=True, TIMEZONE="America/New_York").TIMEZONE == "America/New_York"
+
+
+def test_settings_timezone_rejects_invalid_iana_name_during_loading():
+    with pytest.raises(
+        ValidationError,
+        match=r"TIMEZONE 必须是有效的 IANA 时区名称.*Mars/Phobos",
+    ):
+        Settings(DEBUG=True, TIMEZONE="Mars/Phobos")
+
+
 class TestGetOrCreateTodaySession:
     """测试 get_or_create_today_session 函数"""
+
+    def test_create_session_uses_business_local_date(self, monkeypatch):
+        """北京时间凌晨创建的会话应归入北京时间当天。"""
+        _patch_settings(monkeypatch)
+        monkeypatch.setattr(settings, "TIMEZONE", "Asia/Shanghai", raising=False)
+        clock = _install_strict_clock(monkeypatch)
+        db = _FakeDB([None])
+
+        session = asyncio.run(
+            session_service.get_or_create_today_session(
+                db=db,
+                class_name="测试班级",
+                group_no="001",
+                group_name="第一组",
+                user={"id": 1, "role_code": "admin", "class_name": "测试班级"},
+            )
+        )
+
+        assert session.session_date == date(2026, 7, 12)
+        assert len(clock.calls) == 1
+        assert isinstance(clock.calls[0], ZoneInfo)
+        assert clock.calls[0].key == "Asia/Shanghai"
 
     def test_create_new_session_for_student(self, monkeypatch):
         """测试学生创建新会话"""
         _patch_settings(monkeypatch, join_lock_seconds=300)
+        monkeypatch.setattr(settings, "TIMEZONE", "Asia/Shanghai", raising=False)
+        clock = _install_strict_clock(monkeypatch)
 
         # 模拟数据库返回：
         # 1. 无上次加入记录
@@ -212,6 +301,11 @@ class TestGetOrCreateTodaySession:
         assert db.execute_count == 2  # 1. 上次加入记录 2. 目标会话
         assert db.commit_count == 1  # 会话和成员关系只提交一次
         assert len(db.added) == 2  # Session + Member
+        new_member = next(obj for obj in db.added if isinstance(obj, GroupDiscussionMember))
+        assert new_member.joined_at == _FIXED_UTC_NOW
+        assert isinstance(clock.calls[0], ZoneInfo)
+        assert clock.calls[0].key == "Asia/Shanghai"
+        assert clock.calls[1] is timezone.utc
 
     def test_join_existing_session(self, monkeypatch):
         """测试加入已存在的会话"""
@@ -315,12 +409,14 @@ class TestGetOrCreateTodaySession:
     def test_student_switch_group_too_soon_raises_429(self, monkeypatch):
         """测试学生切换组太快，触发冷却限制"""
         _patch_settings(monkeypatch, join_lock_seconds=300)
+        monkeypatch.setattr(settings, "TIMEZONE", "Asia/Shanghai", raising=False)
+        clock = _install_strict_clock(monkeypatch)
 
         # 上次加入时间很近（10秒前）
         last_member = _create_member(
             session_id=5,
             user_id=1,
-            joined_at=datetime.now(timezone.utc) - timedelta(seconds=10)
+            joined_at=_FIXED_UTC_NOW - timedelta(seconds=10),
         )
 
         db = _FakeDB([
@@ -343,6 +439,9 @@ class TestGetOrCreateTodaySession:
         assert "切换小组需等待" in str(exc_info.value.detail)
         assert db.execute_count == 2
         assert db.commit_count == 0  # 没有提交
+        assert isinstance(clock.calls[0], ZoneInfo)
+        assert clock.calls[0].key == "Asia/Shanghai"
+        assert clock.calls[1] is timezone.utc
 
     def test_admin_bypasses_cooling_check(self, monkeypatch):
         """测试管理员跳过冷却检查"""
@@ -585,25 +684,12 @@ class TestGetOrCreateTodaySession:
 class TestListTodayGroups:
     """测试 list_today_groups 函数"""
 
-    def test_list_groups_uses_utc_date_consistently(self, monkeypatch):
-        """默认列表使用 UTC 日期，避免跨时区的"今日"判断不一致。
-
-        修复前的行为：使用本地时间 datetime.now().date()
-        修复后的行为：使用 UTC 时间 datetime.now(timezone.utc).date()
-        """
+    def test_list_groups_uses_business_local_date_consistently(self, monkeypatch):
+        """默认列表与创建会话使用同一业务本地日期。"""
         _patch_settings(monkeypatch)
-        monkeypatch.setattr(settings, "GROUP_DISCUSSION_LIST_RECENT_HOURS", 0, raising=False)
-
-        class UtcDateTime(datetime):
-            @classmethod
-            def now(cls, tz=None):
-                # 北京时间 2026-07-12 00:30，对应 UTC 2026-07-11 16:30
-                if tz == timezone.utc:
-                    return cls(2026, 7, 11, 16, 30, tzinfo=timezone.utc)
-                # 如果没有 tz 参数，返回本地时间（不应该被使用）
-                return cls(2026, 7, 12, 0, 30)
-
-        monkeypatch.setattr(session_service, "datetime", UtcDateTime)
+        monkeypatch.setattr(settings, "TIMEZONE", "Asia/Shanghai", raising=False)
+        monkeypatch.setattr(settings, "GROUP_DISCUSSION_LIST_RECENT_HOURS", 24, raising=False)
+        clock = _install_strict_clock(monkeypatch)
         db = _FakeDB([[]])
 
         asyncio.run(
@@ -618,8 +704,11 @@ class TestListTodayGroups:
         )
 
         params = db.statements[0].compile().params
-        # 应该使用 UTC 日期 2026-07-11，而不是本地日期 2026-07-12
-        assert date(2026, 7, 11) in params.values()
+        assert date(2026, 7, 12) in params.values()
+        assert _FIXED_UTC_NOW - timedelta(hours=24) in params.values()
+        assert isinstance(clock.calls[0], ZoneInfo)
+        assert clock.calls[0].key == "Asia/Shanghai"
+        assert clock.calls[1] is timezone.utc
 
     def test_list_groups_basic(self, monkeypatch):
         """测试基础列表查询"""

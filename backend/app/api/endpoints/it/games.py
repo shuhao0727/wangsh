@@ -15,7 +15,8 @@
   GET    /admin/it/games/{id}/logs    — 下载记录
 """
 
-from typing import Any, Dict, Optional
+import os
+from typing import Any, BinaryIO, Dict, Optional
 
 from fastapi import (
     APIRouter,
@@ -30,8 +31,10 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.core.deps import get_current_user, require_admin
+from app.core.session_guard import extract_client_ip
 from app.db.database import get_db
 from app.schemas.it.game import (
     GameResourceUpdate,
@@ -43,6 +46,14 @@ from app.services.it import games as game_service
 router = APIRouter(prefix="/it/games", tags=["it-games"])
 
 admin_router = APIRouter(prefix="/admin/it/games", tags=["admin-it-games"])
+
+
+def _open_descriptor_path(file_descriptor: int) -> str:
+    """Return a stable path for an already-open file on supported Unix hosts."""
+    for root in ("/proc/self/fd", "/dev/fd"):
+        if os.path.isdir(root):
+            return f"{root}/{file_descriptor}"
+    raise RuntimeError("当前运行环境不支持安全的文件描述符下载")
 
 
 # ── 公开端点 ──────────────────────────────────────────
@@ -101,26 +112,43 @@ async def download_game(
     if file_path is None:
         raise HTTPException(status_code=404, detail="游戏文件不存在或路径非法")
 
+    file_handle: Optional[BinaryIO] = None
     try:
-        user_id = int(user.get("id"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录信息无效")
-    if user_id <= 0:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录信息无效")
+        try:
+            file_handle = file_path.open("rb")
+        except OSError:
+            raise HTTPException(status_code=404, detail="游戏文件不存在或无法读取")
 
-    ip = request.client.host if request.client else "unknown"
-    ua = request.headers.get("user-agent", "")
-    logged_game = await game_service.record_download(
-        db, game_id=game_id, user_id=user_id, ip_address=ip, user_agent=ua,
-    )
-    if not logged_game:
-        raise HTTPException(status_code=404, detail="游戏不存在或已下架")
+        try:
+            user_id = int(user.get("id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录信息无效")
+        if user_id <= 0:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录信息无效")
 
-    return FileResponse(
-        path=str(file_path),
-        filename=logged_game.filename,
-        media_type=logged_game.file_mime or "application/octet-stream",
-    )
+        logged_game = await game_service.record_download(
+            db,
+            game_id=game_id,
+            user_id=user_id,
+            ip_address=extract_client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+        )
+        if not logged_game:
+            raise HTTPException(status_code=404, detail="游戏不存在或已下架")
+
+        file_descriptor = file_handle.fileno()
+        response = FileResponse(
+            path=_open_descriptor_path(file_descriptor),
+            filename=logged_game.filename,
+            media_type=logged_game.file_mime or "application/octet-stream",
+            stat_result=os.fstat(file_descriptor),
+            background=BackgroundTask(file_handle.close),
+        )
+        file_handle = None
+        return response
+    finally:
+        if file_handle is not None:
+            file_handle.close()
 
 
 # ── 管理员端点 ────────────────────────────────────────

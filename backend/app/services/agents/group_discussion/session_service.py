@@ -6,6 +6,7 @@ Group Discussion 会话服务模块
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import exists, func, select
@@ -25,6 +26,11 @@ from .session_creation import (
     flush_session_or_get_existing,
     remove_previous_membership,
 )
+
+
+def _business_today() -> date:
+    return datetime.now(ZoneInfo(settings.TIMEZONE)).date()
+
 
 async def get_or_create_today_session(
     db: AsyncSession,
@@ -50,7 +56,7 @@ async def get_or_create_today_session(
     # 验证组名
     group_name_norm = _normalize_group_name(group_name)
 
-    today = date.today()
+    today = _business_today()
 
     # 管理员跨组发言不依赖成员身份，因此 join 只负责定位/创建目标会话，
     # 不为管理员写入 GroupDiscussionMember，也不读取/切换其成员关系。
@@ -206,7 +212,7 @@ async def list_today_groups(
     ignore_time_limit: bool = False,
 ) -> List[Tuple[GroupDiscussionSession, int]]:
     """列出今日小组"""
-    target_date = date or datetime.now(timezone.utc).date()
+    target_date = date or _business_today()
     class_raw = (class_name or "").strip()
 
     stmt = (

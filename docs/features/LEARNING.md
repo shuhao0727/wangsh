@@ -1,6 +1,6 @@
 # 学习平台
 
-> 最后更新：2026-07-18
+> 最后更新：2026-07-23
 
 ## 概述
 
@@ -27,8 +27,14 @@
   一次 API 失败让正式课程整体不可用。
 - 后续若把内置内容完全迁到数据库，必须先建立版本化资源、幂等 seed 和内容完整性校验，
   证明空库可恢复全部内容后，才能删除前端或归档中的重复来源。
-- `frontend/public/mindmap-demo/` 是思维导图编辑器所需的版本化静态运行时，必须随源码
-  保留；`frontend/public/pyodide/` 则由 `predev` / `prebuild` 从依赖生成，不提交仓库。
+- `frontend/public/mindmap-demo/` 是当前开发机保留的第三方静态运行时，字体、SVG、图片
+  和打包 JS 不进入 Git 或生产 Docker 构建上下文；本地目录存在时仍可用于开发验证。
+  全新 checkout 和当前生产镜像不提供该旧编辑器，后续恢复生产能力前必须建立可复现的
+  资源生成、下载或独立镜像流程。`frontend/public/pyodide/` 则由 `predev` /
+  `prebuild` 从依赖生成，同样不提交仓库。
+- 生产环境的用户端广场和管理端都不会创建或打开依赖旧运行时的编辑会话；新建/编辑操作
+  显示明确提示，已有导图通过内置 `MindMapViewer` 和 `/mindmap-preview` 只读查看。
+  开发环境在本机运行时存在时继续保留创建和编辑能力。
 
 ### 数据模型
 
@@ -132,12 +138,20 @@
 5 个端点。按用户+模块存储进度数据，支持 `extra="allow"` 的自定义字段扩展。
 
 - `GET /learning/progress` — 列出当前用户所有模块的进度
-- `GET /learning/progress/{module_key}` — 获取指定模块进度（404 如果没有记录）
+- `GET /learning/progress/{module_key}` — 获取指定模块进度；首次无记录时返回 `200` 和同构默认 payload，不创建数据库记录
 - `PUT /learning/progress/{module_key}` — 创建或更新进度（upsert），使用 `SELECT ... FOR UPDATE` 行锁防止并发竞态
 - `POST /learning/progress/{module_key}` — 兼容前端保存按钮，行为与 PUT 一致
 - `DELETE /learning/progress/{module_key}` — 删除进度记录
 
-**并发安全**：PUT upsert 流程中先以 `with_for_update()` 锁定查询，若不存在则创建；若遇到 `IntegrityError`（竞态条件下另一请求已插入），则回滚后重新锁定并更新，确保不会丢失数据。
+**并发安全**：PUT upsert 流程中先以 `with_for_update()` 锁定查询，若不存在则创建；若遇到 `IntegrityError`（竞态条件下另一请求已插入），则回滚后重新锁定，并使用已验证的进度字典更新该记录，确保不会丢失数据。
+
+### 2026-07-23 续验记录
+
+- 首次读取不存在的 progress 记录现在返回 `200` 的同构默认 payload，且不会创建空
+  数据库记录；并发 upsert 的 `IntegrityError` 回退路径已在真实接口合同和定向测试中
+  复验。
+- Docker API 复验同时覆盖 Chapters、Content、Mindmaps 和 ML Book，页面请求未出现
+  `404`、`422`、`500` 或未处理的前端异常。
 
 ---
 
@@ -179,7 +193,7 @@
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
 | `GET` | `/learning/progress` | 登录 | 获取当前用户所有模块进度 |
-| `GET` | `/learning/progress/{module_key}` | 登录 | 获取指定模块进度 |
+| `GET` | `/learning/progress/{module_key}` | 登录 | 获取指定模块进度；无记录时返回默认 payload |
 | `PUT` | `/learning/progress/{module_key}` | 登录 | 创建或更新进度（upsert，行锁） |
 | `POST` | `/learning/progress/{module_key}` | 登录 | 兼容前端保存，行为同 PUT |
 | `DELETE` | `/learning/progress/{module_key}` | 登录 | 删除指定模块进度 |

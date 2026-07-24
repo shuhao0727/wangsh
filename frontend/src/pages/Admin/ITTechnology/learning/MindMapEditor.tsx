@@ -37,14 +37,12 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
       return;
     }
     const mk = moduleKey ?? "ml";
-    const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
     setLoadError("");
     void (async () => {
       try {
         const res = await fetch(`/api/v1/learning/content/${mk}`, {
-          signal: controller.signal,
         });
         if (!res.ok) {
           throw new Error(`加载失败: ${res.status}`);
@@ -67,7 +65,6 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
     })();
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [moduleKey, isPersonal]);
 

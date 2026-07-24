@@ -53,7 +53,7 @@ type FormValues = z.infer<typeof formSchema>;
 const EditorPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const isNew = id === "new";
+  const isNew = id === undefined || id === "new";
   const [saving, setSaving] = useState(false);
   const [agents, setAgents] = useState<AIAgent[]>([]);
 

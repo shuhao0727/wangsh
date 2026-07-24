@@ -4,6 +4,7 @@ x-common-env: &common-env
   DEBUG: "False"
   AUTO_CREATE_TABLES: "false"
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  TIMEZONE: ${TIMEZONE:-Asia/Shanghai}
   TZ: ${TIMEZONE:-Asia/Shanghai}
   APP_VERSION: ${APP_VERSION:-}
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
@@ -151,7 +152,7 @@ services:
     depends_on:
       <<: *depends-infra
     healthcheck:
-      test: [ "CMD-SHELL", "for i in $(seq 1 30); do python -c \"import http.client; c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); c.request('GET','/health'); r=c.getresponse(); r.read(); print('ok')\" && exit 0; sleep 1; done; exit 1" ]
+      test: [ "CMD-SHELL", "for i in $(seq 1 30); do python -c \"import atexit,http.client,json,sys; JSONObject=type('JSONObject',(list,),{}); c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); atexit.register(c.close); c.request('GET','/health'); r=c.getresponse(); payload=json.loads(r.read(),object_pairs_hook=JSONObject); statuses=[value for key,value in payload if key == 'status'] if isinstance(payload,JSONObject) else []; sys.exit(0 if 200 <= r.status < 300 and len(statuses) == 1 and statuses[0] == 'healthy' else 1)\" && exit 0; sleep 1; done; exit 1" ]
       interval: 10s
       timeout: 25s
       retries: 20

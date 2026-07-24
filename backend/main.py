@@ -3,7 +3,6 @@ WangSh 后端应用主入口
 FastAPI 应用配置和启动
 """
 
-import logging
 import time
 import uuid
 from datetime import datetime
@@ -29,7 +28,7 @@ from app.db.database import AsyncSessionLocal
 from app.api import api_router
 from app.api.v2.pythonlab import router as v2_pythonlab_router
 from app.core.celery_app import celery_app
-from app.core.log_sanitizer import redact_log_exception, redact_log_message
+from app.core.log_sanitizer import install_log_sanitization
 from app.utils.cache import cache
 from app.core.startup import (
     init_database,
@@ -41,29 +40,8 @@ from app.core.startup import (
 )
 
 
-# 配置 loguru 拦截标准 logging，统一日志格式
-class _InterceptHandler(logging.Handler):
-    def emit(self, record: logging.LogRecord) -> None:
-        level = logger.level(record.levelname).name if logger.level(record.levelname) else record.levelno
-        frame = logging.currentframe()
-        depth = 2
-        while frame and frame.f_code.co_filename == logging.__file__:
-            frame = frame.f_back
-            depth += 1
-        message = redact_log_message(record.getMessage())
-        if record.exc_info:
-            exception_text = redact_log_exception(record.exc_info).rstrip()
-            if exception_text:
-                message = f"{message}\n{exception_text}"
-        logger.opt(depth=depth).log(level, message)
-
-
-logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
-# 拦截常用库的 logger
-for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "sqlalchemy", "celery", "passlib"):
-    _lg = logging.getLogger(_name)
-    _lg.handlers = [_InterceptHandler()]
-    _lg.propagate = False
+# Application entry point: install once before FastAPI starts emitting logs.
+install_log_sanitization()
 
 
 @asynccontextmanager
@@ -306,7 +284,7 @@ celery = celery_app
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

@@ -37,3 +37,7 @@ def test_student_only_classroom_reads_do_not_hide_server_errors():
 
     assert should_skip is False
     assert reason == ""
+
+
+def test_stateful_download_gets_are_excluded_from_readonly_sweep():
+    assert smoke_openapi_sweep._should_skip_path("/api/v1/it/games/1/download") is True

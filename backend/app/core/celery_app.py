@@ -2,9 +2,33 @@
 Celery 异步任务简化配置
 """
 
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import after_setup_logger, after_setup_task_logger
+
 from app.core.config import settings
+from app.core.log_sanitizer import (
+    add_sanitizing_filter,
+    install_loguru_sanitization,
+)
+
+
+install_loguru_sanitization()
+
+
+def _configure_worker_logging(
+    logger: logging.Logger,
+    **_: object,
+) -> None:
+    """Augment Celery's configured handlers without replacing their routing."""
+    add_sanitizing_filter(logger)
+
+
+after_setup_logger.connect(_configure_worker_logging, weak=False)
+after_setup_task_logger.connect(_configure_worker_logging, weak=False)
+
 
 # 创建 Celery 应用实例
 celery_app = Celery(

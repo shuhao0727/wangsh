@@ -8,6 +8,8 @@ cmd="${1:-}"
 env_file="${ENV_FILE:-.env}"
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+application_write_services=(backend typst-worker pythonlab-worker)
+original_running_write_services=()
 
 compose() {
   docker compose --env-file "$env_file" -f "$compose_file" "$@"
@@ -26,26 +28,93 @@ confirm_rollback() {
 }
 
 backup_db() {
-  echo "Creating backup before rollback..."
+  echo "Creating backup inside the no-write window..."
   ENV_FILE="$env_file" COMPOSE_FILE="$compose_file" \
     bash "${repo_root}/scripts/deploy.sh" backup-db
 }
 
-stop_application_services() {
-  echo "Stopping application services before database rollback..."
-  compose stop gateway frontend backend typst-worker pythonlab-worker
+capture_running_application_write_services() {
+  local running_services=""
+  local service=""
+
+  if running_services="$(
+    compose ps --status running --services "${application_write_services[@]}"
+  )"; then
+    :
+  else
+    local status=$?
+    echo "Error: failed to determine running application write services" >&2
+    return "$status"
+  fi
+
+  original_running_write_services=()
+  for service in "${application_write_services[@]}"; do
+    if printf '%s\n' "$running_services" | grep -Fxq "$service"; then
+      original_running_write_services+=("$service")
+    fi
+  done
+}
+
+stop_application_write_services() {
+  echo "Stopping application write services to establish a no-write window..."
+  compose stop "${application_write_services[@]}"
+}
+
+handle_pre_downgrade_failure() {
+  local operation="$1"
+  local operation_status="$2"
+
+  echo "Error: ${operation} failed with status ${operation_status}; no database downgrade was attempted." >&2
+  if restart_original_application_write_services; then
+    return "$operation_status"
+  else
+    local restart_status=$?
+    echo "Error: ${operation} failed with status ${operation_status} and failed to restart original application write services (status ${restart_status}); manual recovery required. No database downgrade was attempted." >&2
+    return "$restart_status"
+  fi
+}
+
+restart_original_application_write_services() {
+  if [[ "${#original_running_write_services[@]}" -eq 0 ]]; then
+    echo "No originally running application write services need to be restarted."
+    return 0
+  fi
+
+  echo "Restarting originally running application write services..."
+  if compose start "${original_running_write_services[@]}"; then
+    echo "Application write services restored."
+    return 0
+  else
+    local status=$?
+    return "$status"
+  fi
 }
 
 case "$cmd" in
   rollback)
     # Parse arguments: skip flags to find the revision
     do_backup=true
+    backup_mode=""
     revision=""
     shift  # consume "rollback"
     for arg in "$@"; do
       case "$arg" in
-        --backup) do_backup=true ;;
-        --no-backup) do_backup=false ;;
+        --backup)
+          if [[ "$backup_mode" == "no-backup" ]]; then
+            echo "rollback options --backup and --no-backup cannot be used together" >&2
+            exit 2
+          fi
+          backup_mode="backup"
+          do_backup=true
+          ;;
+        --no-backup)
+          if [[ "$backup_mode" == "backup" ]]; then
+            echo "rollback options --backup and --no-backup cannot be used together" >&2
+            exit 2
+          fi
+          backup_mode="no-backup"
+          do_backup=false
+          ;;
         --*)
           echo "unknown rollback option: $arg" >&2
           exit 2
@@ -67,16 +136,31 @@ case "$cmd" in
       exit 0
     fi
 
-    stop_application_services
+    capture_running_application_write_services
+    if stop_application_write_services; then
+      :
+    else
+      stop_status=$?
+      handle_pre_downgrade_failure "stopping application write services" "$stop_status"
+      exit $?
+    fi
 
     if $do_backup; then
-      backup_db
+      if backup_db; then
+        :
+      else
+        backup_status=$?
+        handle_pre_downgrade_failure "backup" "$backup_status"
+        exit $?
+      fi
+    else
+      echo "DANGER: --no-backup skips the rollback backup by explicit operator request."
     fi
 
     echo "Rolling back to: $revision"
     compose run --rm --no-deps backend alembic downgrade "$revision"
     echo "✓ Rollback completed"
-    echo "Application services remain stopped. Deploy the verified previous release-set before reopening traffic."
+    echo "Application write services remain stopped. Deploy the verified previous release-set before reopening traffic."
     ;;
 
   *)
@@ -84,14 +168,15 @@ case "$cmd" in
 Usage: $0 rollback [revision] [--backup|--no-backup]
 
 Commands:
-  rollback [-1]       Backup, then rollback one version
-  rollback <rev>      Rollback to specific revision
-  rollback --no-backup  Skip the backup only when it is intentionally unnecessary
+  rollback [-1]         Stop writes, backup, then rollback one version
+  rollback <rev>        Stop writes, backup, then rollback to a specific revision
+  rollback --no-backup  DANGEROUS: stop writes and rollback without creating a backup
 
 Examples:
   $0 rollback -1              # Rollback one version
   $0 rollback abc123          # Rollback to specific revision
   $0 rollback -1 --backup     # Backup then rollback
+  $0 rollback -1 --no-backup  # Explicitly skip backup, then stop and rollback
 
 Environment:
   ENV_FILE            Path to .env file (default: .env)

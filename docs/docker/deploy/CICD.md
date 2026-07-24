@@ -1,6 +1,6 @@
 # CI/CD 工作流说明
 
-> 最后更新：2026-07-18
+> 最后更新：2026-07-22
 
 ## 一、概览
 
@@ -119,8 +119,9 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
   - 后端：安装 `backend/requirements-dev.txt`，执行 Python 文件规模/复杂度
     ratchet 和 `pytest -q`；PR、main push 与镜像发布调用都会对旧 baseline
     做防放宽比较
-  - 前端：脚本测试、CSS token 完整性、组件测试、type-check、lint、UI audit、
-    生产构建和 bundle budget
+  - 前端：脚本测试、CSS token 完整性、Vitest 默认范围（components、AIAgents、
+    PythonLab、queries、lib、services）、type-check、lint、UI audit、生产构建和
+    bundle budget
 - **测试环境合同**：
   - PostgreSQL 连接和四项测试专用安全配置统一声明在 `backend-pytest` job 的
     `env`，迁移、bootstrap 和 pytest 使用同一套配置。
