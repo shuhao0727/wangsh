@@ -76,7 +76,11 @@ async def api_seed_style_from_resource(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_staff),
 ):
-    content = read_resource_style(key=key)
+    try:
+        content = read_resource_style(key=key)
+    except ValueError as e:
+        # key 含 / \ .. 等非法字符（路径穿越防护）→ 400；此前未捕获会 500
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not content:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="资源样式不存在")
     s = await upsert_style(db=db, key=key, title=key, content=content, sort_order=0)

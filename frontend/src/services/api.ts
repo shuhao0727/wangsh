@@ -10,7 +10,6 @@ import { logger } from "./logger";
 
 let refreshPromise: Promise<void> | null = null;
 const ACCESS_TOKEN_KEY = "ws_access_token";
-const REFRESH_TOKEN_KEY = "ws_refresh_token";
 const REFRESH_ATTEMPT_AT_KEY = "ws_refresh_attempt_at";
 const AUTH_EXPIRED_DETAIL_KEY = "ws_auth_expired_detail";
 const REFRESH_COOLDOWN_MS = 5200;
@@ -148,13 +147,10 @@ export const getStoredAccessToken = () => {
 };
 
 export const getStoredRefreshToken = () => {
-  if (typeof window === "undefined") return null;
-  try {
-    // 跨 tab 刷新 token 以 localStorage 为准，避免旧 sessionStorage 覆盖新令牌
-    return localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  // 安全迁移：refresh token 不再由 JS 持有，改由后端 HttpOnly cookie 管理。
+  // 返回 null → 刷新请求不带 body token，后端自动用 cookie 续期。
+  // （遗留的 local/sessionStorage 旧值忽略，避免陈旧 token 绕过 cookie）
+  return null;
 };
 
 const parseBearerToken = (value: unknown): string | null => {
@@ -242,10 +238,8 @@ export const authTokenStorage = {
         // localStorage 用于跨 tab 共享登录状态（实际认证靠 HttpOnly cookie）
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
       }
-      if (refreshToken) {
-        sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-      }
+      // 安全：refresh token 不写入 JS 可读的 storage，交由后端 HttpOnly cookie 管理
+      // （cookie 已 httponly=true，XSS 无法读取；避免 refresh token 明文暴露面）
     } catch {
     }
   },
@@ -253,9 +247,7 @@ export const authTokenStorage = {
     if (typeof window === "undefined") return;
     try {
       sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-      sessionStorage.removeItem(REFRESH_TOKEN_KEY);
       localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
     } catch {
     }
   },
@@ -435,7 +427,7 @@ const createApiClient = (): AxiosInstance => {
           }
         }
 
-        const hadAuthContext = Boolean(getStoredAccessToken() || getStoredRefreshToken() || getCookieToken());
+        const hadAuthContext = Boolean(getStoredAccessToken() || getCookieToken());
         const originalDetail = extractErrorDetail(error as ApiError);
         originalRequest._retry = true;
 
@@ -454,7 +446,6 @@ const createApiClient = (): AxiosInstance => {
           }
 
           if (!refreshPromise) {
-            const storedRefreshToken = getStoredRefreshToken();
             refreshPromise = (async () => {
               const applyTokens = (resp: AxiosResponse) => {
                 const raw = resp?.data as Record<string, unknown> | null;
@@ -465,20 +456,15 @@ const createApiClient = (): AxiosInstance => {
               };
 
               try {
-                const resp = await postRefreshRequest(instance, storedRefreshToken, { silent: true });
+                // refresh 续期走 HttpOnly cookie：请求不带 body token（getStoredRefreshToken 恒为 null）
+                const resp = await postRefreshRequest(instance, null, { silent: true });
                 applyTokens(resp);
                 return;
               } catch (e: unknown) {
                 const status = (e as ApiError)?.response?.status;
-                if (status === 401 && storedRefreshToken) {
-                  const resp2 = await postRefreshRequest(instance, null, { silent: true });
-                  applyTokens(resp2);
-                  return;
-                }
                 // refresh 接口存在 5s 速率限制，跨 tab 并发时先等待再补一次
                 if (status === 429) {
-                  const latestRefreshToken = getStoredRefreshToken();
-                  const resp3 = await postRefreshRequest(instance, latestRefreshToken, { silent: true });
+                  const resp3 = await postRefreshRequest(instance, null, { silent: true });
                   applyTokens(resp3);
                   return;
                 }
@@ -674,10 +660,8 @@ export const authApi = {
     }),
 
   // 刷新令牌
-  refreshToken: (refreshToken?: string, requestConfig?: SilentAxiosRequestConfig) => {
-    const token = refreshToken || getStoredRefreshToken();
-    return postRefreshRequest(api.client, token, requestConfig);
-  },
+  refreshToken: (refreshToken?: string, requestConfig?: SilentAxiosRequestConfig) =>
+    postRefreshRequest(api.client, refreshToken, requestConfig),
 };
 
 export default api;

@@ -57,6 +57,9 @@ async def delete_style(db: AsyncSession, key: str) -> None:
 
 
 def read_resource_style(key: str) -> str:
+    # 路径穿越防护：只允许安全的样式 key（字母/数字/_-），拒绝任何路径分隔符或 ..
+    if not key or "/" in key or "\\" in key or ".." in key:
+        raise ValueError("非法的样式 key")
     base = Path(__file__).resolve().parents[2] / "resources" / "typst"
     path = base / f"{key}.typ"
     if not path.exists():

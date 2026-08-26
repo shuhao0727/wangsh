@@ -167,3 +167,27 @@ async def get_config_session_count(db: AsyncSession, config_id: int) -> int:
         select(func.count(AssessmentSession.id)).where(AssessmentSession.config_id == config_id)
     )
     return result.scalar() or 0
+
+
+async def get_config_question_counts(db: AsyncSession, config_ids: List[int]) -> dict[int, int]:
+    """批量获取多个测评配置的题目数（一次 GROUP BY，替代逐条 count 的 N+1）"""
+    if not config_ids:
+        return {}
+    rows = await db.execute(
+        select(AssessmentQuestion.config_id, func.count(AssessmentQuestion.id))
+        .where(AssessmentQuestion.config_id.in_(config_ids))
+        .group_by(AssessmentQuestion.config_id)
+    )
+    return {cid: cnt for cid, cnt in rows.all()}
+
+
+async def get_config_session_counts(db: AsyncSession, config_ids: List[int]) -> dict[int, int]:
+    """批量获取多个测评配置的答题人数（一次 GROUP BY，替代逐条 count 的 N+1）"""
+    if not config_ids:
+        return {}
+    rows = await db.execute(
+        select(AssessmentSession.config_id, func.count(AssessmentSession.id))
+        .where(AssessmentSession.config_id.in_(config_ids))
+        .group_by(AssessmentSession.config_id)
+    )
+    return {cid: cnt for cid, cnt in rows.all()}

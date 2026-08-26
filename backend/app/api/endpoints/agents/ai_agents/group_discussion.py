@@ -11,7 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.deps import get_db, require_admin, require_user
+from app.core.deps import get_db, require_admin, require_user, require_user_sse
 from app.core.config import settings
 from app.services import classroom as svc
 from app.schemas.agents import (
@@ -325,7 +325,7 @@ async def stream_group_discussion_messages(
     session_id: int = Query(..., ge=1),
     after_id: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_user_sse),
 ):
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)

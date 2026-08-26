@@ -10,6 +10,8 @@
 - `xbk/` - XBK 重建、导入样例、冒烟脚本
 - `deploy.sh` - 部署入口
 - `rollback.sh` - 回滚入口
+- `backup.sh` - 数据库备份（full/schema/data，时间戳命名 + 按天轮转）
+- `restore-drill.sh` - 备份恢复演练（独立演练库 + 断言 + 演练记录）
 - `migrate-db.sh` - 数据库迁移
 - `health-check-detailed.sh` - 细粒度健康检查
 - `check-version-consistency.mjs` - CI 版本一致性检查
@@ -58,6 +60,14 @@ bash scripts/rollback.sh rollback -1
 
 # 恢复数据库必须显式确认目标库
 bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
+
+# 数据库备份（宿主机直连 pg_dump；full/schema/data，按 BACKUP_KEEP_DAYS 默认 14 天轮转）
+bash scripts/backup.sh full
+bash scripts/backup.sh schema
+
+# 备份恢复演练：取最新 dump 恢复到独立 <db>_drill 库，断言后写演练记录并清理
+bash scripts/restore-drill.sh
+bash scripts/restore-drill.sh --dry-run   # 只打印命令，不执行
 
 # 使用当前 .env 版本镜像做本地生产模拟（端口 16608）
 bash scripts/deploy.sh simulate

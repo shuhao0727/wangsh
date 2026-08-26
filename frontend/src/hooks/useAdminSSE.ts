@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { config } from '@services';
-import { getStoredAccessToken } from '@services/api';
 
 export function useAdminSSE(
   eventType: string,
@@ -22,9 +21,7 @@ export function useAdminSSE(
     const connect = () => {
       if (stopped) return;
 
-      const token = getStoredAccessToken();
-      const query = token ? `?token=${encodeURIComponent(token)}` : "";
-      const streamUrl = `${config.apiUrl}/admin/stream${query}`;
+      const streamUrl = `${config.apiUrl}/admin/stream`;
 
       try {
         stream = new EventSource(streamUrl, { withCredentials: true });

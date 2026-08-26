@@ -4,13 +4,11 @@
 支持自动检测服务商类型和获取实时模型列表
 """
 
-import asyncio
-import time
 import re
-from typing import Optional, List, Dict, Any, Tuple
+import time
+from typing import Optional, List
 from urllib.parse import urlparse, urlunparse
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.agents import (
@@ -22,11 +20,37 @@ from app.schemas.agents import (
     ProviderDetectionResult,
     COMMON_MODEL_PRESETS,
 )
+from app.services.agents.endpoint_security import (
+    EndpointNotAllowedError,
+    _assert_safe_endpoint,
+    _assert_safe_endpoint_async,
+)
+from app.services.agents.provider_clients import (
+    discover_models_openai as _discover_models_openai,
+    discover_models_deepseek as _discover_models_deepseek,
+    discover_models_anthropic as _discover_models_anthropic,
+    discover_models_openrouter as _discover_models_openrouter,
+    discover_models_siliconflow as _discover_models_siliconflow,
+    discover_models_volcengine as _discover_models_volcengine,
+    discover_models_aliyun as _discover_models_aliyun,
+    discover_models_ollama as _discover_models_ollama,
+)
+
+
+# 各服务商 API 端点的默认路径前缀：仅当路径为空或 "/" 时补全，其余路径保持原样
+_DEFAULT_PATH_PREFIXES = {
+    AIServiceProvider.OPENAI: "/v1",
+    AIServiceProvider.DEEPSEEK: "/v1",
+    AIServiceProvider.SILICONFLOW: "/v1",
+    AIServiceProvider.ALIYUN: "/v1",
+    AIServiceProvider.OPENROUTER: "/api/v1",
+    AIServiceProvider.VOLCENGINE: "/api/v3",
+}
 
 
 class ModelDiscoveryService:
     """模型发现服务类"""
-    
+
     def __init__(self):
         # 服务商检测规则：URL模式 -> 服务商类型
         self.provider_detection_rules = [
@@ -146,7 +170,7 @@ class ModelDiscoveryService:
                 "method": "url_pattern"
             },
         ]
-        
+
         # 各服务商的模型列表API端点
         self.model_list_endpoints = {
             AIServiceProvider.OPENAI: "/v1/models",
@@ -160,15 +184,12 @@ class ModelDiscoveryService:
             AIServiceProvider.VOLCENGINE: "/api/v3/models",
             AIServiceProvider.ALIYUN: "/v1/models",
         }
-    
-    def detect_provider_from_url(self, api_endpoint: str) -> ProviderDetectionResult:
-        """
-        根据API端点URL检测服务商类型
-        """
-        # 标准化URL
+
+    def _match_provider(self, api_endpoint: str) -> ProviderDetectionResult:
+        """纯本地 URL 模式匹配服务商（不发起任何网络请求）。"""
         parsed = urlparse(api_endpoint)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
-        
+
         # 检查URL模式匹配
         for rule in self.provider_detection_rules:
             for pattern in rule["patterns"]:
@@ -179,7 +200,7 @@ class ModelDiscoveryService:
                         detection_method=rule["method"],
                         base_url=base_url
                     )
-        
+
         # 检查常见服务商子路径
         path = parsed.path.lower()
         if "/openai/" in path or "openai" in api_endpoint.lower():
@@ -203,7 +224,7 @@ class ModelDiscoveryService:
                 detection_method="path_pattern",
                 base_url=base_url
             )
-        
+
         # 默认返回自定义类型
         return ProviderDetectionResult(
             provider=AIServiceProvider.CUSTOM,
@@ -211,336 +232,96 @@ class ModelDiscoveryService:
             detection_method="default",
             base_url=base_url
         )
-    
-    def normalize_api_endpoint(self, api_endpoint: str, provider: AIServiceProvider) -> str:
+
+    def detect_provider_from_url(self, api_endpoint: str) -> ProviderDetectionResult:
         """
-        规范化API端点URL
+        根据API端点URL检测服务商类型（同步版，供同步调用方/测试使用）
+
+        先做纯本地模式匹配拿到服务商，再执行 SSRF 防护：仅 OLLAMA 服务商
+        显式放行本机 11434 端点，其余 provider 一律拦截内网/环回/元数据地址。
         """
+        result = self._match_provider(api_endpoint)
+        _assert_safe_endpoint(
+            api_endpoint,
+            allow_local_ollama=result.provider == AIServiceProvider.OLLAMA,
+        )
+        return result
+
+    async def detect_provider_from_url_async(self, api_endpoint: str) -> ProviderDetectionResult:
+        """
+        根据API端点URL检测服务商类型（异步版）
+
+        语义与同步版一致；SSRF 防护用 loop.getaddrinfo 解析，不阻塞事件循环。
+        """
+        result = self._match_provider(api_endpoint)
+        await _assert_safe_endpoint_async(
+            api_endpoint,
+            allow_local_ollama=result.provider == AIServiceProvider.OLLAMA,
+        )
+        return result
+
+    def _normalize_api_endpoint_body(self, api_endpoint: str, provider: AIServiceProvider) -> str:
+        """URL 规范化（不含 SSRF 防护，供同步/异步入口复用）。"""
         parsed = urlparse(api_endpoint)
-        
-        # 确保有正确的路径
-        if provider in [AIServiceProvider.OPENAI, AIServiceProvider.DEEPSEEK, AIServiceProvider.SILICONFLOW, AIServiceProvider.ALIYUN]:
-            # 如果路径为空或为根路径，添加/v1
-            if not parsed.path or parsed.path == "/":
-                parsed = parsed._replace(path="/v1")
-            # 如果路径已经是/v1开头，不再重复添加
-            elif parsed.path == "/v1" or parsed.path.startswith("/v1/"):
-                # 路径已经是/v1或/v1/xxx，保持不变
-                pass
-        elif provider == AIServiceProvider.OPENROUTER:
-            # OpenRouter 使用 /api/v1
-            if not parsed.path or parsed.path == "/":
-                parsed = parsed._replace(path="/api/v1")
-            elif parsed.path == "/api/v1" or parsed.path.startswith("/api/v1/"):
-                pass
-        elif provider == AIServiceProvider.VOLCENGINE:
-            # Volcengine Ark 使用 /api/v3
-            if not parsed.path or parsed.path == "/":
-                parsed = parsed._replace(path="/api/v3")
-            elif parsed.path == "/api/v3" or parsed.path.startswith("/api/v3/"):
-                pass
-        
+        default_path = _DEFAULT_PATH_PREFIXES.get(provider)
+        if default_path and (not parsed.path or parsed.path == "/"):
+            parsed = parsed._replace(path=default_path)
         # 重新构建URL
         return urlunparse(parsed)
-    
+
+    def normalize_api_endpoint(self, api_endpoint: str, provider: AIServiceProvider) -> str:
+        """
+        规范化API端点URL（同步版）
+
+        SSRF 防护：拒绝内网/环回/元数据端点；OLLAMA 服务商显式放行本机 11434。
+        """
+        _assert_safe_endpoint(
+            api_endpoint,
+            allow_local_ollama=provider == AIServiceProvider.OLLAMA,
+        )
+        return self._normalize_api_endpoint_body(api_endpoint, provider)
+
+    async def normalize_api_endpoint_async(self, api_endpoint: str, provider: AIServiceProvider) -> str:
+        """规范化API端点URL（异步版，SSRF 防护不阻塞事件循环）。"""
+        await _assert_safe_endpoint_async(
+            api_endpoint,
+            allow_local_ollama=provider == AIServiceProvider.OLLAMA,
+        )
+        return self._normalize_api_endpoint_body(api_endpoint, provider)
+
     async def discover_models_openai(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现OpenAI模型"""
-        models = []
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/wangsh",
-                "X-Title": "WangSh AI",
-            }
-            
-            if config.organization:
-                headers["OpenAI-Organization"] = config.organization
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{config.base_url}/models",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    raw_models = data.get("data", [])
-                    if not isinstance(raw_models, list):
-                        raise ValueError(f"模型列表格式异常: {type(raw_models).__name__}")
-                    for model_data in raw_models:
-                        model_id = model_data.get("id", "")
-                        if not model_id:
-                            continue
-                        # 跳过旧模型
-                        if model_id.startswith("babbage") or model_id.startswith("davinci"):
-                            continue
-                        model_info = AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.OPENAI,
-                            description=f"OpenAI-compatible {model_id}",
-                            is_chat="chat" in model_id.lower() or "gpt" in model_id.lower(),
-                            is_vision="vision" in model_id.lower() or "4o" in model_id.lower(),
-                        )
-                        models.append(model_info)
-                elif response.status_code == 401 or response.status_code == 403:
-                    raise PermissionError(f"API 密钥无效 (HTTP {response.status_code})")
-                else:
-                    raise ConnectionError(
-                        f"模型接口返回 HTTP {response.status_code}: {response.text[:300]}"
-                    )
-
-        except (PermissionError, ConnectionError, ValueError):
-            raise
-        except Exception:
-            # 不静默回退预设模型，由上层决定
-            raise
-
-        return models
+        """发现 OpenAI 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_openai(config)
 
     async def discover_models_deepseek(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现DeepSeek模型"""
-        models = []
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{config.base_url}/models",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    for model_data in data.get("data", []):
-                        model_id = model_data.get("id", "")
-                        
-                        model_info = AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.DEEPSEEK,
-                            description=f"DeepSeek {model_id}",
-                            is_chat="chat" in model_id.lower(),
-                            is_reasoning="reasoner" in model_id.lower(),
-                        )
-                        models.append(model_info)
-        
-        except Exception as e:
-            # 如果API调用失败，返回预设模型
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.DEEPSEEK, [])
-        
-        return models
-    
+        """发现 DeepSeek 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_deepseek(config)
+
     async def discover_models_anthropic(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现Anthropic模型"""
-        models = []
-        
-        try:
-            headers = {
-                "x-api-key": config.api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{config.base_url}/models",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    for model_data in data.get("data", []):
-                        model_id = model_data.get("id", "")
-                        
-                        model_info = AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.ANTHROPIC,
-                            description=f"Anthropic {model_id}",
-                            is_chat=True,  # Claude都是聊天模型
-                            is_vision="opus" in model_id.lower() or "sonnet" in model_id.lower(),
-                        )
-                        models.append(model_info)
-        
-        except Exception as e:
-            # 如果API调用失败，返回预设模型
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.ANTHROPIC, [])
-        
-        return models
-    
+        """发现 Anthropic 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_anthropic(config)
+
     async def discover_models_openrouter(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现 OpenRouter 模型"""
-        models = []
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(f"{config.base_url}/models", headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("data") or data.get("models") or []
-                    for model in items:
-                        model_id = model.get("id") or model.get("name") or ""
-                        if not model_id:
-                            continue
-                        models.append(AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.OPENROUTER,
-                            description=f"OpenRouter {model_id}",
-                            is_chat=True,
-                            is_vision="vision" in model_id.lower() or "4o" in model_id.lower(),
-                            is_audio=False,
-                            is_reasoning="reason" in model_id.lower(),
-                        ))
-        except Exception:
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.OPENROUTER, [])
-        return models
-    
+        """发现 OpenRouter 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_openrouter(config)
+
     async def discover_models_siliconflow(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现 SiliconFlow（硅基流动）模型"""
-        models = []
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(f"{config.base_url}/models", headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("data") or data.get("models") or []
-                    for model in items:
-                        model_id = model.get("id") or model.get("name") or ""
-                        if not model_id:
-                            continue
-                        models.append(AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.SILICONFLOW,
-                            description=f"SiliconFlow {model_id}",
-                            is_chat=True,
-                            is_vision=False,
-                            is_audio=False,
-                            is_reasoning="reason" in model_id.lower(),
-                        ))
-        except Exception:
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.SILICONFLOW, [])
-        return models
-    
+        """发现 SiliconFlow 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_siliconflow(config)
+
     async def discover_models_volcengine(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现 Volcengine Ark（火山方舟）模型"""
-        models = []
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(f"{config.base_url}/models", headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("data") or data.get("models") or []
-                    for model in items:
-                        model_id = model.get("id") or model.get("name") or ""
-                        if not model_id:
-                            continue
-                        models.append(AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.VOLCENGINE,
-                            description=f"Volcengine {model_id}",
-                            is_chat=True,
-                            is_vision=False,
-                            is_audio=False,
-                            is_reasoning="reason" in model_id.lower(),
-                        ))
-        except Exception:
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.VOLCENGINE, [])
-        return models
-    
+        """发现 Volcengine 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_volcengine(config)
+
     async def discover_models_aliyun(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现 Aliyun Bailian / DashScope（阿里百炼/通义千问）模型"""
-        models = []
-        try:
-            headers = {
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # DashScope 典型模型列表端点
-                response = await client.get(f"{config.base_url}/models", headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("data") or data.get("models") or []
-                    for model in items:
-                        model_id = model.get("id") or model.get("model") or model.get("name") or ""
-                        if not model_id:
-                            continue
-                        models.append(AIModelInfo(
-                            id=model_id,
-                            name=self._format_model_name(model_id),
-                            provider=AIServiceProvider.ALIYUN,
-                            description=f"Aliyun {model_id}",
-                            is_chat=True,
-                            is_vision="qwen" in model_id.lower(),
-                            is_audio=False,
-                            is_reasoning="reason" in model_id.lower(),
-                        ))
-        except Exception:
-            models = COMMON_MODEL_PRESETS.get(AIServiceProvider.ALIYUN, [])
-        return models
-    
+        """发现 Aliyun 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_aliyun(config)
+
     async def discover_models_ollama(self, config: ServiceProviderConfig) -> List[AIModelInfo]:
-        """发现Ollama模型"""
-        models = []
-        
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(f"{config.base_url}/api/tags")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    for model_data in data.get("models", []):
-                        model_name = model_data.get("name", "")
-                        
-                        model_info = AIModelInfo(
-                            id=model_name,
-                            name=self._format_model_name(model_name),
-                            provider=AIServiceProvider.OLLAMA,
-                            description=f"Ollama {model_name}",
-                            is_chat=True,  # 大多数Ollama模型都支持聊天
-                        )
-                        models.append(model_info)
-        
-        except Exception as e:
-            # Ollama默认没有预设模型
-            models = []
-        
-        return models
-    
-    def _format_model_name(self, model_id: str) -> str:
-        """格式化模型显示名称"""
-        # 移除版本号和后缀
-        name = model_id.replace("-", " ").replace("_", " ").title()
-        
-        # 特殊处理
-        if "gpt" in model_id.lower():
-            name = name.replace("Gpt", "GPT")
-        if "claude" in model_id.lower():
-            name = name.replace("Claude", "Claude")
-        
-        return name
-    
+        """发现 Ollama 模型（委托 provider_clients 模块级实现）。"""
+        return await _discover_models_ollama(config)
+
+
     async def discover_models(
         self,
         request: ModelDiscoveryRequest
@@ -550,7 +331,7 @@ class ModelDiscoveryService:
         根据API端点和密钥自动检测服务商并获取模型列表
         """
         start_time = time.time()
-        
+
         try:
             # 1. 检测服务商类型
             if request.provider:
@@ -563,18 +344,23 @@ class ModelDiscoveryService:
                 )
             else:
                 # 自动检测服务商
-                detection_result = self.detect_provider_from_url(request.api_endpoint)
-            
+                detection_result = await self.detect_provider_from_url_async(request.api_endpoint)
+
             # 2. 规范化配置
             config = ServiceProviderConfig(
                 provider=detection_result.provider,
-                base_url=self.normalize_api_endpoint(request.api_endpoint, detection_result.provider),
+                # 说明：detect 与 normalize 各自会跑一次 SSRF 防护，同一请求对同一
+                # host 会重复解析一次 DNS。刻意不缓存解析结果——DNS 记录可能随时
+                # 变化，缓存会引入陈旧风险，而重复解析的开销可忽略（本地缓存解析器）。
+                base_url=await self.normalize_api_endpoint_async(request.api_endpoint, detection_result.provider),
                 api_key=request.api_key,
             )
-            
+
             # 3. 根据服务商类型调用相应的发现方法
             models = []
-            if detection_result.provider == AIServiceProvider.OPENAI:
+            if detection_result.provider in (AIServiceProvider.OPENAI, AIServiceProvider.AZURE):
+                # Azure OpenAI 使用类似 OpenAI 的接口（OPENAI 路径 provider 本就一致）
+                config.provider = AIServiceProvider.OPENAI
                 models = await self.discover_models_openai(config)
             elif detection_result.provider == AIServiceProvider.DEEPSEEK:
                 models = await self.discover_models_deepseek(config)
@@ -590,10 +376,6 @@ class ModelDiscoveryService:
                 models = await self.discover_models_volcengine(config)
             elif detection_result.provider == AIServiceProvider.ALIYUN:
                 models = await self.discover_models_aliyun(config)
-            elif detection_result.provider == AIServiceProvider.AZURE:
-                # Azure OpenAI使用类似OpenAI的接口
-                config.provider = AIServiceProvider.OPENAI
-                models = await self.discover_models_openai(config)
             elif detection_result.provider == AIServiceProvider.DIFY:
                 # Dify智能体：返回预设模型或尝试使用OpenAI兼容接口
                 try:
@@ -617,10 +399,10 @@ class ModelDiscoveryService:
                         request_url=f"{config.base_url}/models",
                         response_time_ms=response_time_ms,
                     )
-            
+
             # 4. 计算响应时间
             response_time_ms = (time.time() - start_time) * 1000
-            
+
             return ModelDiscoveryResponse(
                 success=True,
                 provider=detection_result.provider,
@@ -630,10 +412,14 @@ class ModelDiscoveryService:
                 request_url=f"{config.base_url}/models",
                 response_time_ms=response_time_ms
             )
-        
+
+        except EndpointNotAllowedError:
+            # SSRF 防护拒绝的端点：单独 re-raise（不吞成 success=False），
+            # 让 API 层的 except ValueError -> 400 生效，与 /detect-provider 一致
+            raise
         except Exception as e:
             response_time_ms = (time.time() - start_time) * 1000
-            
+
             return ModelDiscoveryResponse(
                 success=False,
                 provider=getattr(detection_result, 'provider', AIServiceProvider.CUSTOM),
@@ -643,7 +429,7 @@ class ModelDiscoveryService:
                 detection_method=getattr(detection_result, 'detection_method', 'error'),
                 response_time_ms=response_time_ms
             )
-    
+
     async def get_preset_models(self, provider: Optional[AIServiceProvider] = None) -> List[AIModelInfo]:
         """
         获取预设模型列表

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
+from app.schemas.user_info import UserInfo
 from app.utils.errors import safe_error_detail
 from app.schemas.agents import (
     AIServiceProvider,
@@ -37,6 +38,12 @@ async def discover_models(
     try:
         return await discover_models_service(request)
         
+    except ValueError as e:
+        # 端点不安全/非法（SSRF 防护生效），属客户端输入问题 → 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "非法的 API 端点",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -81,6 +88,12 @@ async def discover_models_by_agent(
 
     try:
         return await discover_models_service(request)
+    except ValueError as e:
+        # 端点不安全/非法（SSRF 防护生效），属客户端输入问题 → 400（与 /discover 一致）
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "非法的 API 端点",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,6 +105,7 @@ async def discover_models_by_agent(
 @router.get("/preset-models", response_model=List[AIModelInfo])
 async def get_preset_models(
     provider: Optional[AIServiceProvider] = Query(None, description="服务商类型过滤（可选）"),
+    _user: UserInfo = Depends(require_admin),
 ):
     """
     获取预设模型列表
@@ -124,6 +138,7 @@ async def get_preset_models(
 @router.get("/detect-provider")
 async def detect_provider_from_endpoint(
     api_endpoint: str = Query(..., description="API端点URL"),
+    _user: UserInfo = Depends(require_admin),
 ):
     """
     根据API端点URL检测服务商类型
@@ -151,10 +166,10 @@ async def detect_provider_from_endpoint(
     try:
         from app.services.agents.model_discovery import model_discovery_service
         
-        detection_result = model_discovery_service.detect_provider_from_url(api_endpoint)
+        detection_result = await model_discovery_service.detect_provider_from_url_async(api_endpoint)
         
         # 规范化API端点
-        normalized_endpoint = model_discovery_service.normalize_api_endpoint(
+        normalized_endpoint = await model_discovery_service.normalize_api_endpoint_async(
             api_endpoint, detection_result.provider
         )
         
@@ -167,6 +182,12 @@ async def detect_provider_from_endpoint(
             "original_endpoint": api_endpoint,
         }
         
+    except ValueError as e:
+        # 端点不安全/非法（SSRF 防护生效）→ 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "非法的 API 端点",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -175,7 +196,9 @@ async def detect_provider_from_endpoint(
 
 
 @router.get("/supported-providers")
-async def get_supported_providers():
+async def get_supported_providers(
+    _user: UserInfo = Depends(require_admin),
+):
     """
     获取支持的服务商列表
     

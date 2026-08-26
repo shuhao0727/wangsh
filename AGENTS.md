@@ -89,7 +89,8 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 | Token | 值 | 用途 |
 |-------|-----|------|
 | `--ws-color-primary` | `#0D9488` (Teal) | 按钮、链接、主色 |
-| `--ws-color-accent` | `#7C3AED` (Violet) | 强调、焦点环 |
+| `--ws-color-accent` | `#0D9488` (Teal) | 强调、焦点环、选中左条（与 primary 一致） |
+| `--ws-color-secondary` | `#7C3AED` (Violet) | 仅品牌装饰/插画，不参与主交互 |
 | `--ws-color-bg` | `#F0FDFA` (Mint) | 页面背景 |
 | `--ws-color-primary-muted` | `#CCFBF1` | 柔色背景 |
 
@@ -106,15 +107,14 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 - TanStack Query 必须使用 `queryKeys`，不要新增散落的字符串 query key。
 - Toast 优先使用 `showMessage`。
 - 表格列宽、分页、空状态优先复用 `frontend/src/components/ui/data-table.tsx` 和 `frontend/src/constants/tableDefaults.ts`。
-- 当前运行时只启用浅色主题；样式仍必须使用 Tailwind token（映射到 `--ws-*` 变量），
-  避免阻碍未来启用深色主题：
+- 项目为**永久浅色主题**，不做深色/暗色模式。样式仍必须使用 Tailwind token（映射到
+  `--ws-*` 变量），保证单一配色源与全局一致性：
   - `text-primary` / `bg-primary` / `bg-primary-soft`
   - `text-text-base` / `text-text-secondary` / `text-text-tertiary`
   - `bg-surface` / `bg-surface-2`
   - `border-border` / `border-border-secondary`
   - `text-accent` / `bg-[var(--ws-color-primary-muted)]`
-- ECharts/SVG/Canvas 使用 `var(--ws-color-*)` 变量，确保当前浅色主题可读并保留未来
-  深色主题的切换能力。
+- ECharts/SVG/Canvas 使用 `var(--ws-color-*)` 变量，确保当前浅色主题可读且一致。
 - 不要随意新增 CSS 文件。确有必要时，优先确认现有 Tailwind token 和全局样式无法满足。
 - 避免破坏懒加载和重型模块拆分，尤其是 Monaco、Graphviz、Typst、PDF、Xterm、PythonLab 相关模块。
 - `body` 可能由全局布局控制滚动，页面滚动应按现有 Admin/Layout 模式处理。
@@ -186,7 +186,7 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 - 不要在 PythonLab 调试控制按钮上引入 Radix Tooltip 或同类依赖 portal、hover 状态机、pointer outside、focus restore 的复杂弹层，除非完成真实 Chrome channel 和 WebKit 验证。
 - 涉及 PythonLab tooltip、hover、pointer、focus、Radix 弹层或调试状态切换时，必须覆盖多断点连续 `Continue`、hover 状态真实 pointer click，不要只依赖 JS `button.click()` 或默认 Chromium smoke。
 - Docker Compose 开发和生产模式不同，不要混用配置或同时启动混淆的栈。
-- 当前 UI 运行时为浅色主题；改动必须使用语义 token，避免硬编码黑色、白色或不存在
-  的 CSS 变量，为未来深色主题保留兼容空间。
+- 当前 UI 为**永久浅色主题**；改动必须使用语义 token，避免硬编码黑色、白色或不存在
+  的 CSS 变量。不做深色/暗色模式，无需为未来换肤预留兼容空间。
 - ECharts、SVG、Canvas 等场景使用 CSS 变量时要确认变量存在且在当前浅色主题可读。
 - 大仓库中避免无目标搜索、全量格式化或批量重命名。

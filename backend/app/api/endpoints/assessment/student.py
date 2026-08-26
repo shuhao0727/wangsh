@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
 from app.db.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import require_student_or_staff
 from app.schemas.user_info import UserInfo
 from app.schemas.assessment import (
     SessionStartRequest,
@@ -35,7 +35,7 @@ router = APIRouter()
 @router.get("/available")
 async def api_available(
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """获取学生可用的测评列表"""
     try:
@@ -49,7 +49,7 @@ async def api_available(
 async def api_start_session(
     req: SessionStartRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """开始检测"""
     try:
@@ -65,7 +65,7 @@ async def api_start_session(
 async def api_get_questions(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """获取本次检测的题目列表（不含答案）"""
     try:
@@ -82,7 +82,7 @@ async def api_submit_answer(
     session_id: int,
     req: AnswerSubmitRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """提交单题答案"""
     try:
@@ -102,7 +102,7 @@ async def api_submit_session(
     session_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """提交整卷"""
     try:
@@ -135,7 +135,7 @@ async def api_submit_session(
 async def api_get_result(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """查看检测结果"""
     try:
@@ -151,7 +151,7 @@ async def api_get_result(
 async def api_get_basic_profile(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """查看初级画像"""
     try:
@@ -188,7 +188,7 @@ async def api_get_basic_profile(
 async def api_profile_status(
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """查询画像生成进度（轮询用）"""
     from sqlalchemy import select
@@ -255,7 +255,7 @@ def _format_student_profile(profile) -> dict:
 @router.get("/my-profiles", response_model=ProfileListResponse)
 async def api_my_profiles(
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -276,7 +276,7 @@ async def api_my_profiles(
 async def api_my_profile_detail(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user),
+    current_user: UserInfo = Depends(require_student_or_staff),
 ):
     """学生查看自己的三维画像详情"""
     profile = await get_profile(db, profile_id)

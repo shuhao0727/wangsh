@@ -34,6 +34,28 @@
 已完成的学习平台实施步骤和 Markdown 书籍长计划已于 2026-07-18 从工作区移除；
 完整过程保留在 Git 历史中，不再作为当前开发入口。
 
+### 2026-08 全方位多 Agent 诊断
+
+- [2026-08-10-ui-branch-layout-review.md](2026-08-10-ui-branch-layout-review.md)
+  UI 分支**布局与内容结构化审核**（DOM/几何 交叉预期布局）：结论 A- 结构健康
+  （无错位/缺元素/重叠/响应式溢出）；逐页核对 hero/统计卡/表格/工作台/编辑器/独立页，
+  记录 3 处需复核(PythonLab 运行按钮、Users 分页、数据态近空页)。截图 `screens/visual-review/`。
+
+- [2026-08-10-ui-branch-visual-review.md](2026-08-10-ui-branch-visual-review.md)
+  UI 分支(`feature/ui-optimization-design`)**视觉审核**：浏览器实跑 41 页截图 +
+  计算样式数值探针 + 全站门禁。结论 B+ 良好（无横滚/Violet 泄漏/空态得当）；
+  记录 2 处需数据预置页(task-compare/mindmap-preview)与可复核索引。截图在
+  `screens/visual-review/`。工程/代码层问题归并到 2026-08-06 报告 §B/§F。
+
+- [2026-08-06-multi-agent-diagnosis-report.md](2026-08-06-multi-agent-diagnosis-report.md)
+  **存活追踪文档**（工程健康 8 维 + UI 视觉 6 维合并）。当前状态：批次 1-2 已完成
+  （accent 统一、V2 定一色，用户验收通过）、批次 3 进行中（token 映射地基 + 结果页壳整改）；
+  待办 DEFECT-1（后台刷新弹回 /home，前端 token 续期）、DEFER-beam（光束图渲染暂缓）。
+  报告按 Decision Log + 状态字段持续更新，不删历史。**含 §F 全仓库全方位深度分析**（8 维度：
+  架构/DB/安全/性能/前端/部署/测试/文档），含综合评级与全项目 TOP 问题（P0 假数据/mock 边界、
+  task_analyses 缺索引、安全 SSRF/路径穿越、性能双跑 SSE+轮询等）。
+  当前事实以代码、门禁结果和 owner 文档为准。
+
 ### 2026-07 项目整理与发布收口
 
 - [plans/2026-07-project-consolidation-history.md](plans/2026-07-project-consolidation-history.md)

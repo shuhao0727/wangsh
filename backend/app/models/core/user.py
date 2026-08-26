@@ -26,7 +26,7 @@ class User(Base):
     
     # 学生专用字段（仅学生用户使用）
     student_id = Column(String(50), unique=True, index=True, nullable=True, comment="学号（学生使用）")
-    class_name = Column(String(50), nullable=True, comment="班级名称")
+    class_name = Column(String(50), nullable=True, index=True, comment="班级名称")
     study_year = Column(String(10), nullable=True, comment="学年（如'2025'）")
     
     # 角色标识

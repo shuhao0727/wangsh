@@ -31,6 +31,18 @@ def test_model_discovery_discover_routes_require_admin():
     _assert_depends_on(model_discovery_api.discover_models_by_agent, "_", deps.require_admin)
 
 
+def test_model_discovery_preset_models_requires_admin():
+    _assert_depends_on(model_discovery_api.get_preset_models, "_user", deps.require_admin)
+
+
+def test_model_discovery_detect_provider_requires_admin():
+    _assert_depends_on(model_discovery_api.detect_provider_from_endpoint, "_user", deps.require_admin)
+
+
+def test_model_discovery_supported_providers_requires_admin():
+    _assert_depends_on(model_discovery_api.get_supported_providers, "_user", deps.require_admin)
+
+
 def test_ai_agents_crud_routes_require_admin():
     _assert_depends_on(crud_api.read_agents, "_", deps.require_admin)
     _assert_depends_on(crud_api.get_agents_statistics, "_", deps.require_admin)

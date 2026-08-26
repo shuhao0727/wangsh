@@ -26,6 +26,9 @@ async def list_styles(db: AsyncSession = Depends(get_db)) -> list[str]:
 
 @router.get("/{style_key}.typ")
 async def get_style(style_key: str, db: AsyncSession = Depends(get_db)) -> Response:
+    # 路径穿越防护：只允许安全 key，拒绝路径分隔符/..
+    if not style_key or "/" in style_key or "\\" in style_key or ".." in style_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="非法的样式 key")
     res = await db.execute(select(TypstStyle).where(TypstStyle.key == style_key))
     s = res.scalar_one_or_none()
     if s and (s.content or "").strip():

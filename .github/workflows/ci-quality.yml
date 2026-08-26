@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: diff whitespace check
+        run: git diff --check origin/main...HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -195,8 +197,74 @@ jobs:
 
           asyncio.run(main())
           PY
+      # changed-lines coverage gate (审计 T-2 / 治理 §4.3): 单一 pytest 运行同时
+      # 产出 coverage.json，避免对已被本 job 改写的 CI 数据库再跑一遍测试。
       - name: pytest
-        run: pytest -q
+        run: pytest -q --cov=app --cov-report=json --cov-report=term-missing:skip-covered
+      # changed-lines 覆盖率门禁 —— 本阶段非阻断（continue-on-error）只出报告；
+      # 下一阶段按治理 §4.3 收紧为阻断（去掉 continue-on-error 并校准阈值）。
+      - name: changed-lines coverage gate
+        continue-on-error: true
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_REF="$PR_BASE_SHA"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            BASE_REF="$PUSH_BEFORE_SHA"
+          else
+            git fetch --no-tags origin main
+            BASE_REF="origin/main"
+          fi
+          python scripts/check_changed_lines_coverage.py \
+            --coverage coverage.json --base-ref "$BASE_REF"
+
+      # ── 核心业务 smoke 入 CI（评估落地，起步阶段）────────────────────
+      # 10 个核心 smoke 全部是「需完整栈」型（真实 HTTP 打后端/前端），
+      # 无纯静态或契约型可直接挂接；此处先挂最小「import 级契约门禁」：
+      # 只校验脚本可导入（捕获语法/导入路径破坏），不启动任何服务，
+      # 用 continue-on-error 起步，跑绿后再考虑收紧。
+      # 全栈运行评估（需栈，暂缓 → TODO）：
+      #   - smoke_openapi_sweep / smoke_feature_suite / smoke_assessment_flow
+      #     / smoke_xxjs_dianming / smoke_full_deploy / smoke_group_discussion
+      #     / smoke_typst_pipeline：需完整后端栈（DB+Redis，部分还依赖
+      #     Celery/agent 与 typst 编译），落地参照 pythonlab-pr-runtime.yml
+      #     的全栈模式（postgres/redis service + uvicorn + worker）。
+      #   - smoke_pythonlab_dap_step_watch_soak：需 pythonlab 沙箱 docker
+      #     镜像 + 长时 soak；aiohttp 不在 requirements-dev（pythonlab CI
+      #     额外安装），归入 pythonlab 专项 workflow 系列，暂缓。
+      #   - frontend auth-replaced-login-smoke / prod-smoke-ui：Playwright +
+      #     前端+后端栈；其纯函数库 prod-smoke-ui-lib.test.mjs 已随
+      #     frontend-quality 的 test:scripts 覆盖，浏览器全流程暂缓。
+      - name: core smoke import gate (best-effort, no-stack)
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import importlib
+          core = [
+              "smoke_openapi_sweep",
+              "smoke_feature_suite",
+              "smoke_assessment_flow",
+              "smoke_xxjs_dianming",
+              "smoke_full_deploy",
+              "smoke_group_discussion",
+              "smoke_typst_pipeline",
+          ]
+          failed = []
+          for name in core:
+              try:
+                  importlib.import_module(f"scripts.{name}")
+                  print(f"[OK] {name} importable")
+              except Exception as exc:
+                  failed.append(f"{name}: {type(exc).__name__}: {exc}")
+                  print(f"[FAIL] {name}")
+          if failed:
+              print("import gate failures (best-effort, not blocking):")
+              for item in failed:
+                  print("  -", item)
+          PY
 
   frontend-quality:
     runs-on: ubuntu-latest
@@ -226,3 +294,12 @@ jobs:
         run: npm run -s ui:audit:ci
       - name: production build
         run: npm run build:check
+      # 浏览器 smoke（auth-replaced-login-smoke / prod-smoke-ui）需完整
+      # 前端+后端栈才能运行，入 CI 暂缓（见 backend-pytest job 的 TODO
+      # 注释块）；这里先做无栈的语法契约校验，continue-on-error 起步。
+      - name: browser smoke syntax check (best-effort, no-stack)
+        continue-on-error: true
+        run: |
+          node --check scripts/auth-replaced-login-smoke.mjs
+          node --check scripts/prod-smoke-ui.mjs
+          node --check scripts/prod-smoke-ui-lib.mjs

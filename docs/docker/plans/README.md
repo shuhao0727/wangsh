@@ -14,6 +14,7 @@
 | [ui-single-page-governance.md](ui-single-page-governance.md) | `reference` | UI 样式、单页体检和最终回归唯一参考 |
 | [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) | `active` | 30/60/90 天详细任务、依赖、验证命令和退出标准 |
 | [2026-07-14-project-file-consolidation-plan.md](2026-07-14-project-file-consolidation-plan.md) | `active` | 当前文档、测试和脚本整理执行入口 |
+| [2026-08-16-full-project-audit-plan.md](2026-08-16-full-project-audit-plan.md) | `active` | 全项目审核与整体提升唯一执行入口（方法/清单/批次/度量/决策点） |
 
 ## 已完成/已归档
 

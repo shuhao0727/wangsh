@@ -46,20 +46,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def needs_rehash(hashed_password: str) -> bool:
-    """
-    检查密码是否需要重新哈希
-    bcrypt 默认不需要重新哈希
-    """
-    try:
-        # 检查 bcrypt 哈希的轮数（cost factor）
-        # 如果哈希使用旧的/较低的轮数，可能需要重新哈希
-        # 这里简单返回 False，实际项目中可以检查轮数
-        return False
-    except Exception:
-        return False
-
-
 def hash_super_admin_password() -> str:
     """
     专门用于哈希超级管理员密码的函数

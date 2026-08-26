@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, Index, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -11,7 +11,11 @@ from app.db.database import Base
 
 class ClassroomActivity(Base):
     __tablename__ = "znt_classroom_activities"
-    __table_args__ = {"comment": "课堂互动活动表"}
+    __table_args__ = (
+        # 低基数状态列 + 创建时间复合：支持按 status 过滤 + created_at 排序
+        Index("ix_znt_classroom_activities_status_created", "status", "created_at"),
+        {"comment": "课堂互动活动表"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     activity_type: Mapped[str] = mapped_column(String(20), nullable=False, comment="活动类型: vote/fill_blank")

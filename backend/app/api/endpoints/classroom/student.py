@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.core.deps import require_student
+from app.core.deps import require_student, require_student_sse
 from app.schemas.user_info import UserInfo
 from app.schemas.classroom import ResponseSubmit
 from app.services import classroom as svc
@@ -60,7 +60,7 @@ async def get_active_activities(
 
 @router.get("/stream")
 async def student_stream(
-    current_user: UserInfo = Depends(require_student),
+    current_user: UserInfo = Depends(require_student_sse),
 ):
     sub_id = str(uuid.uuid4())
     channel = _student_stream_channel(current_user)

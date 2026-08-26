@@ -3,7 +3,7 @@ AI智能体模型定义 - 对应数据库表 znt_agents
 与数据库设计文档v3.0保持一致
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, ForeignKey, JSON, Index
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
 
@@ -73,7 +73,12 @@ class ZntConversation(Base):
 class TaskAnalysis(Base):
     """任务分析记录表 — 保存教师的任务分析结果"""
     __tablename__ = "task_analyses"
-    __table_args__ = {"comment": "任务分析记录表"}
+    __table_args__ = (
+        # 索引与 20260807_0001_task_analyses_idxs 一致（DB 已有，模型补登记）
+        Index("ix_task_analyses_agent_id", "agent_id"),
+        Index("ix_task_analyses_agent_created", "agent_id", "created_at"),
+        {"comment": "任务分析记录表"},
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String(200), nullable=False, default="未命名分析")

@@ -17,6 +17,14 @@ def ensure_alembic_version_capacity(connection: Connection) -> None:
                 IF to_regclass('public.alembic_version') IS NOT NULL THEN
                     ALTER TABLE alembic_version
                     ALTER COLUMN version_num TYPE VARCHAR(64);
+                ELSE
+                    -- 裸空库路径：Alembic 默认用 VARCHAR(32) 建版本表，
+                    -- 无法容纳 20260529_0001_agent_analysis_prompt_templates 等
+                    -- 长 revision id。与 bootstrap_db.py 一致，预建 VARCHAR(64) 版本表，
+                    -- Alembic 检测到已存在便会复用而不重建。
+                    CREATE TABLE alembic_version (
+                        version_num VARCHAR(64) NOT NULL
+                    );
                 END IF;
             END
             $$;

@@ -1,0 +1,14 @@
+# changed-lines 覆盖率门禁（审计 T-2 / 治理 §4.3）的 coverage 配置。
+# 只统计 backend/app 源码；venv/tests/alembic 版本文件不纳入测量。
+[run]
+source = app
+omit =
+    venv/*
+    tests/*
+    alembic/*
+    __pycache__/*
+    */site-packages/*
+
+[report]
+show_missing = true
+skip_covered = true

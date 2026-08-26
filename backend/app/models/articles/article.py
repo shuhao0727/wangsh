@@ -2,7 +2,7 @@
 文章模型定义 - 使用 wz_ 前缀
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func, expression
 from app.db.database import Base
@@ -11,6 +11,25 @@ from app.db.database import Base
 class Article(Base):
     """文章表模型 - wz_articles"""
     __tablename__ = "wz_articles"
+
+    # 索引登记（与 DB 现状一致，补模型声明，不产生新迁移）：
+    # - ix_wz_articles_title_trgm / ix_wz_articles_content_trgm：20260726_0001 建的 GIN trgm
+    # - ix_wz_articles_style_key：20260210_0000 / 20260225_0009 / 20260711_0002 建的普通 btree
+    __table_args__ = (
+        Index(
+            "ix_wz_articles_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_wz_articles_content_trgm",
+            "content",
+            postgresql_using="gin",
+            postgresql_ops={"content": "gin_trgm_ops"},
+        ),
+        Index("ix_wz_articles_style_key", "style_key"),
+    )
 
     # 主键
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -24,11 +43,11 @@ class Article(Base):
     style_key = Column(String(100), ForeignKey("wz_markdown_styles.key", ondelete="SET NULL"), nullable=True, comment="Markdown样式方案Key (可选)")
 
     # 外键关联 - 注意：用户表已改为 sys_users
-    author_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), nullable=False, comment="作者ID")
-    category_id = Column(Integer, ForeignKey("wz_categories.id", ondelete="SET NULL"), nullable=True, comment="分类ID (可选)")
+    author_id = Column(Integer, ForeignKey("sys_users.id", ondelete="CASCADE"), nullable=False, index=True, comment="作者ID")
+    category_id = Column(Integer, ForeignKey("wz_categories.id", ondelete="SET NULL"), nullable=True, index=True, comment="分类ID (可选)")
     
     # 状态字段
-    published = Column(Boolean, default=False, server_default=expression.false(), comment="是否发布")
+    published = Column(Boolean, default=False, server_default=expression.false(), index=True, comment="是否发布")
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment="创建时间")

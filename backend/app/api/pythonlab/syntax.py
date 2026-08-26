@@ -3,8 +3,11 @@ import ast
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
+
+from app.core.session_guard import extract_client_ip
+from app.utils.rate_limit import rate_limiter
 
 try:
     from pyflakes import api as pyflakes_api
@@ -56,7 +59,13 @@ if HAS_PYFLAKES:
             ))
 
 @router.post("/syntax/check", response_model=SyntaxCheckResponse)
-async def check_syntax(payload: SyntaxCheckRequest):
+async def check_syntax(payload: SyntaxCheckRequest, request: Request = None):
+    # 公开端点的 CPU 密集检查：按 IP 限流，防止被当作免费计算/DoS 面。
+    # request 为 None 表示进程内直接调用（单元测试），跳过限流。
+    if request is not None:
+        client_ip = extract_client_ip(request)
+        await rate_limiter.check(f"pythonlab-syntax:{client_ip}", interval_seconds=1)
+
     code = payload.code
     errors: List[SyntaxErrorDetail] = []
 

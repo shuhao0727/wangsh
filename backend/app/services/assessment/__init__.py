@@ -11,6 +11,8 @@ from .config_service import (
     toggle_config,
     get_config_question_count,
     get_config_session_count,
+    get_config_question_counts,
+    get_config_session_counts,
 )
 from .question_service import (
     create_question,
@@ -54,6 +56,8 @@ __all__ = [
     "toggle_config",
     "get_config_question_count",
     "get_config_session_count",
+    "get_config_question_counts",
+    "get_config_session_counts",
     "create_question",
     "get_questions",
     "get_question",

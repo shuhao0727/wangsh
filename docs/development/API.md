@@ -34,20 +34,23 @@
 - 同账号重新登录时，后端会撤销此前该用户尚未过期的 refresh token，避免旧设备通过 `/auth/refresh` 自动恢复登录态。
 - `/auth/me` 与其他受保护接口一样受单会话策略约束；旧设备在同账号其他地方重新登录后再次访问 `/auth/me` 时，也会收到 `401`。
 - SSE 鉴权支持 query token 与 Cookie 双通道；当 query token 无效但 Cookie 中会话有效时，可继续完成握手（例如 `/classroom/stream`）。
+- 安全审计 S-3（2026-08）：`?token=` query 鉴权仅限 SSE 端点（`/admin/stream`、`/classroom/stream`、`/ai-agents/group-discussion/stream`）；普通 HTTP 端点只接受 Authorization header 或 Cookie 中的 token，带 `?token=` 的普通请求将返回 401。
 
 ## 三、系统管理（/system）
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/system/feature-flags` | 列出所有功能开关 | 管理员 |
-| GET | `/system/feature-flags/{key}` | 获取指定功能开关 | 管理员 |
-| POST | `/system/feature-flags` | 创建/更新功能开关 | 管理员 |
+| GET | `/system/feature-flags` | 列出所有功能开关 | 超级管理员 |
+| GET | `/system/feature-flags/{key}` | 获取指定功能开关 | 超级管理员 |
+| POST | `/system/feature-flags` | 创建/更新功能开关 | 超级管理员 |
 | GET | `/system/public/feature-flags/{key}` | 公开获取功能开关 | 否 |
-| GET | `/system/overview` | 系统概览 | 管理员 |
-| GET | `/system/settings` | 获取系统设置 | 管理员 |
-| GET | `/system/typst-metrics` | Typst 编译指标 | 管理员 |
-| POST | `/system/typst-pdf-cleanup` | 清理 Typst PDF | 管理员 |
-| GET | `/system/metrics` | 系统指标 | 管理员 |
+| GET | `/system/overview` | 系统概览 | 超级管理员 |
+| GET | `/system/settings` | 获取系统设置 | 超级管理员 |
+| GET | `/system/typst-metrics` | Typst 编译指标 | 超级管理员 |
+| POST | `/system/typst-pdf-cleanup` | 清理 Typst PDF | 超级管理员 |
+| GET | `/system/metrics` | 系统指标 | 超级管理员 |
+
+> 注：本节认证列已按代码实际守卫修正（`require_super_admin`），除公开接口外仅超级管理员可访问。
 
 <!-- APPEND_MARKER_1 -->
 
@@ -75,16 +78,18 @@
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/articles` | 获取文章列表 | 是 |
-| POST | `/articles` | 创建文章 | 管理员 |
+| GET | `/articles` | 获取文章列表 | 超级管理员 |
+| POST | `/articles` | 创建文章 | 超级管理员 |
 | GET | `/articles/{article_id}` | 获取文章详情 | 是 |
 | GET | `/articles/slug/{slug}` | 按 slug 获取文章 | 是 |
-| PUT | `/articles/{article_id}` | 更新文章 | 管理员 |
-| DELETE | `/articles/{article_id}` | 删除文章 | 管理员 |
-| POST | `/articles/{article_id}/publish` | 发布/取消发布 | 管理员 |
+| PUT | `/articles/{article_id}` | 更新文章 | 超级管理员 |
+| DELETE | `/articles/{article_id}` | 删除文章 | 超级管理员 |
+| POST | `/articles/{article_id}/publish` | 发布/取消发布 | 超级管理员 |
 | GET | `/articles/{article_id}/tags` | 获取文章标签 | 是 |
 | GET | `/articles/public/list` | 公开文章列表；支持 `page`、`size`、`category_id`、`q`，缓存按搜索词隔离 | 否 |
 | GET | `/articles/public/{slug}` | 公开文章详情 | 否 |
+
+> 注：本节认证列已按代码实际守卫修正（`require_super_admin`），文章列表与增删改/发布操作均仅超级管理员可访问，公开接口除外。
 
 ### 文章样式（/articles/markdown-styles）
 
@@ -101,17 +106,19 @@
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
 | GET | `/categories` | 获取分类列表 | 是 |
-| POST | `/categories` | 创建分类 | 管理员 |
+| POST | `/categories` | 创建分类 | 超级管理员 |
 | GET | `/categories/{category_id}` | 获取分类详情 | 是 |
 | GET | `/categories/slug/{slug}` | 按 slug 获取分类 | 是 |
-| PUT | `/categories/{category_id}` | 更新分类 | 管理员 |
-| DELETE | `/categories/{category_id}` | 删除分类 | 管理员 |
+| PUT | `/categories/{category_id}` | 更新分类 | 超级管理员 |
+| DELETE | `/categories/{category_id}` | 删除分类 | 超级管理员 |
 | GET | `/categories/search` | 搜索分类 | 是 |
 | GET | `/categories/popular` | 热门分类 | 是 |
-| POST | `/categories/get-or-create` | 获取或创建分类 | 管理员 |
+| POST | `/categories/get-or-create` | 获取或创建分类 | 超级管理员 |
 | GET | `/categories/{category_id}/stats` | 分类统计 | 是 |
 | GET | `/categories/{category_id}/articles` | 分类下的文章 | 是 |
 | GET | `/categories/public/list` | 公开分类列表 | 否 |
+
+> 注：本节认证列已按代码实际守卫修正（`require_super_admin`），分类创建/更新/删除/获取或创建均仅超级管理员可访问。
 
 <!-- APPEND_MARKER_2 -->
 
@@ -232,9 +239,9 @@
 |------|------|------|------|
 | POST | `/model-discovery/discover` | 发现可用模型 | 管理员 |
 | POST | `/model-discovery/discover/{agent_id}` | 为指定智能体发现模型 | 管理员 |
-| GET | `/model-discovery/preset-models` | 获取预设模型列表 | 否 |
-| GET | `/model-discovery/detect-provider` | 检测 API 提供商 | 否 |
-| GET | `/model-discovery/supported-providers` | 获取支持的提供商 | 否 |
+| GET | `/model-discovery/preset-models` | 获取预设模型列表 | 管理员 |
+| GET | `/model-discovery/detect-provider` | 检测 API 提供商 | 管理员 |
+| GET | `/model-discovery/supported-providers` | 获取支持的提供商 | 管理员 |
 
 ## 九、信息学笔记
 

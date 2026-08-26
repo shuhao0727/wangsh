@@ -18,21 +18,40 @@ from app.schemas.user_info import UserInfo
 # OAuth2 配置
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
-async def get_access_token(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-) -> Optional[str]:
-    if token:
-        return token
-    # SSE (EventSource) 不支持自定义 header，允许从 query param 读取 token
-    qt = request.query_params.get("token")
-    if qt:
-        return qt
+def _token_from_request(request: Request) -> Optional[str]:
+    """从 request 中读取 cookie 中的 access token。"""
     return (
         request.cookies.get(settings.ACCESS_TOKEN_COOKIE_NAME)
         or request.cookies.get("access_token")
         or request.cookies.get("ws_access_token")
     )
+
+
+async def get_access_token(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+) -> Optional[str]:
+    # 安全审计 S-3：通用路径不再接受 query token（token 会进入 URL/日志），
+    # 仅限 SSE 场景使用 get_access_token_sse 放行 query token。
+    if token:
+        return token
+    return _token_from_request(request)
+
+
+async def get_access_token_sse(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+) -> Optional[str]:
+    """SSE (EventSource) 专用 token 解析：不支持自定义 header，允许从 query param 读取 token。
+
+    仅限 SSE 端点使用（见 get_current_user_sse）；普通 HTTP 端点应使用 get_access_token。
+    """
+    if token:
+        return token
+    qt = request.query_params.get("token")
+    if qt:
+        return qt
+    return _token_from_request(request)
 
 
 async def get_current_user(
@@ -98,6 +117,20 @@ async def get_current_user(
     return cast(UserInfo, user)
 
 
+async def get_current_user_sse(
+    token: Optional[str] = Depends(get_access_token_sse),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None  # type: ignore[assignment]
+) -> UserInfo:
+    """
+    获取当前认证用户（SSE 端点专用）
+
+    仅对 SSE (EventSource) 场景放行 query token；鉴权逻辑与 get_current_user 完全一致，
+    返回类型同为 UserInfo。非 SSE 请求携带 query token 会被拒绝（见 get_access_token）。
+    """
+    return await get_current_user(token=token, db=db, request=request)
+
+
 async def get_current_user_or_none(
     token: Optional[str] = Depends(get_access_token),
     db: AsyncSession = Depends(get_db)
@@ -155,6 +188,20 @@ async def require_admin(
     return current_user
 
 
+async def require_admin_sse(
+    current_user: UserInfo = Depends(get_current_user_sse)
+) -> UserInfo:
+    """
+    SSE 版 require_admin：放行 query token（EventSource 无法自定义 header）
+    """
+    if current_user.get("role_code") not in ["admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要管理员权限",
+        )
+    return current_user
+
+
 async def require_student(
     current_user: UserInfo = Depends(get_current_user)
 ) -> UserInfo:
@@ -166,6 +213,20 @@ async def require_student(
         
     异常:
         403: 权限不足
+    """
+    if current_user.get("role_code") != "student":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要学生权限",
+        )
+    return current_user
+
+
+async def require_student_sse(
+    current_user: UserInfo = Depends(get_current_user_sse)
+) -> UserInfo:
+    """
+    SSE 版 require_student：放行 query token（EventSource 无法自定义 header）
     """
     if current_user.get("role_code") != "student":
         raise HTTPException(
@@ -190,6 +251,21 @@ async def require_staff(
     return current_user
 
 
+async def require_student_or_staff(
+    current_user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """
+    要求用户必须是学生或教职工（student/teacher/admin/super_admin 均可）
+    用于学生自主测评等以学生为主、但允许教师/管理员访问的模块
+    """
+    if current_user.get("role_code") not in ["student", "teacher", "admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要学生或教职工权限",
+        )
+    return current_user
+
+
 async def require_user(
     current_user: UserInfo = Depends(get_current_user)
 ) -> UserInfo:
@@ -198,6 +274,15 @@ async def require_user(
 
     返回:
         用户信息字典
+    """
+    return current_user
+
+
+async def require_user_sse(
+    current_user: UserInfo = Depends(get_current_user_sse)
+) -> UserInfo:
+    """
+    SSE 版 require_user：放行 query token（EventSource 无法自定义 header）
     """
     return current_user
 

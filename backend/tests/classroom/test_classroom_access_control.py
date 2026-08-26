@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from app.api.endpoints.classroom import admin as admin_api
 from app.api.endpoints.classroom import plan as plan_api
 from app.api.endpoints.classroom import student as student_api
-from app.core.deps import require_student
+from app.core.deps import require_student, require_student_sse
 from app.schemas.classroom import ResponseSubmit
 from app.services import classroom_plan as plan_svc
 
@@ -82,7 +82,6 @@ def _depends_on(endpoint, dependency):
     "endpoint",
     [
         student_api.get_active_activities,
-        student_api.student_stream,
         student_api.get_activity,
         student_api.submit_response,
         student_api.get_result,
@@ -91,6 +90,12 @@ def _depends_on(endpoint, dependency):
 )
 def test_student_classroom_endpoints_require_student(endpoint):
     assert _depends_on(endpoint, require_student)
+
+
+def test_student_stream_uses_sse_student_dependency():
+    # 安全审计 S-3：SSE 端点使用 require_student_sse（仅 SSE 放行 query token，
+    # 角色语义与 require_student 完全一致）
+    assert _depends_on(student_api.student_stream, require_student_sse)
 
 
 @pytest.mark.parametrize(

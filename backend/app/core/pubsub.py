@@ -170,6 +170,21 @@ def _local_publish(channel: str, event: dict) -> None:
             pass  # SSE 队列满时丢弃事件，避免阻塞
 
 
+async def _dispatch_redis_message(ps: object, channel: str) -> None:
+    """读取一条 Redis 消息并分发到本地 Queue（解析失败只告警，不中断监听）。"""
+    msg = await ps.get_message(  # type: ignore[union-attr]
+        ignore_subscribe_messages=True, timeout=1.0
+    )
+    if msg and msg.get("type") == "message":
+        try:
+            data = msg["data"]
+            # redis.asyncio decode_responses=True 时 data 已是 str
+            event = json.loads(data) if isinstance(data, str) else json.loads(data.decode())
+            _local_publish(channel, event)
+        except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
+            logger.warning("Redis listener 收到无法解析的消息: %s", msg)
+
+
 async def _redis_listener(channel: str) -> None:
     """后台协程：监听 Redis 频道，将消息分发到本地 Queue"""
     global _redis_available, _redis_checked_at
@@ -190,17 +205,7 @@ async def _redis_listener(channel: str) -> None:
 
         while True:
             try:
-                msg = await ps.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
-                if msg and msg.get("type") == "message":
-                    try:
-                        data = msg["data"]
-                        # redis.asyncio decode_responses=True 时 data 已是 str
-                        event = json.loads(data) if isinstance(data, str) else json.loads(data.decode())
-                        _local_publish(channel, event)
-                    except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
-                        logger.warning("Redis listener 收到无法解析的消息: %s", msg)
+                await _dispatch_redis_message(ps, channel)
             except asyncio.CancelledError:
                 raise
             except Exception:

@@ -34,7 +34,6 @@ from app.models.informatics.typst_style import TypstStyle
 
 _compile_locks: dict[int, asyncio.Lock] = {}
 _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPILE_MAX_CONCURRENCY", 2))))
-
 # 单次 typst 编译超时秒数：防止恶意/超大 .typ 文件无限阻塞编译并发槽（仅 2 并发）
 TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
 
@@ -66,7 +65,11 @@ async def _load_note_compile_inputs(
         style = res.scalar_one_or_none()
         style_text = (style.content if style else "") or ""
         if not style_text.strip():
-            style_text = read_resource_style(key=style_key)
+            # 防御性兜底：style_key 来自 DB，历史数据可能含非法字符，回退为空样式文本
+            try:
+                style_text = read_resource_style(key=style_key)
+            except ValueError:
+                style_text = ""
 
     return canonical_compile_assets(assets), files, entry_path, style_key, style_text
 
@@ -266,34 +269,6 @@ async def delete_note(db: AsyncSession, note: TypstNote) -> None:
                 old_rel,
                 str(exc),
             )
-
-
-def _compile_typst_to_pdf_bytes(content_typst: str) -> bytes:
-    if not shutil.which("typst"):
-        raise RuntimeError("服务器未安装 typst 编译器")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = os.path.join(tmpdir, "main.typ")
-        output_path = os.path.join(tmpdir, "main.pdf")
-        with open(input_path, "w", encoding="utf-8") as f:
-            f.write(content_typst or "")
-
-        cmd = ["typst", "compile", input_path, output_path, "--root", tmpdir]
-        # 加 timeout 防止恶意/超大 typst 文件无限阻塞；超时抛 RuntimeError 由调用方转 HTTP 504
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=TYPST_COMPILE_TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Typst 编译超时（{TYPST_COMPILE_TIMEOUT_SECONDS}s）")
-        if proc.returncode != 0:
-            msg = (proc.stderr or proc.stdout or "").strip()
-            raise RuntimeError(msg or "typst 编译失败")
-        with open(output_path, "rb") as f:
-            return f.read()
 
 
 def _compile_typst_project_to_pdf_bytes(entry_path: str, files: dict, assets: List[TypstAsset], style_text: str) -> bytes:

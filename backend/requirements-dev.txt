@@ -10,5 +10,9 @@
 pytest==9.0.2
 requests==2.32.3
 
+# 覆盖率（changed-lines 门禁，审计 T-2 / 治理 §4.3）
+pytest-cov==7.1.0
+coverage==7.15.4
+
 # Kubernetes（沙箱扩展，开发预留）
 kubernetes==32.0.0

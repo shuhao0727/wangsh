@@ -2,11 +2,17 @@
 用户管理 API 端点
 与 sys_users 表交互，提供用户数据的 CRUD 操作
 普通管理员仅管理学生和教师，超级管理员可管理全部角色
+
+拆分自原单文件 users.py（913 行时代基线 → 本文件 <501 行）：
+- users_import.py：导入模板下载与批量导入端点
+- users_helpers.py：统计与批量删除辅助端点
+- import_service.py / policy.py / schemas.py：既有辅助与校验模块
+本文件保留 router 组合与对外 re-export，外部导入路径
+（users.router、users.create_user、users.UserCreate 等）不变。
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -31,7 +37,6 @@ from .policy import (
     PRIVILEGED_ROLES,
     assert_role_assignment_allowed as _assert_role_assignment_allowed,
     assert_users_deletable as _assert_users_deletable,
-    assert_users_mutable as _assert_users_mutable,
     is_plain_admin as _is_plain_admin,
 )
 from .schemas import (
@@ -41,42 +46,22 @@ from .schemas import (
     UserImportResult,
     UserListResponse,
     UserResponse,
-    UserStatsResponse,
     UserUpdate,
+)
+from .users_import import (
+    router as users_import_router,
+    download_user_import_template,
+    import_users,
+)
+from .users_helpers import (
+    router as users_helpers_router,
+    get_user_stats,
+    batch_delete_users,
 )
 
 router = APIRouter()
-
-
-@router.get("/stats", response_model=UserStatsResponse)
-async def get_user_stats(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """获取用户统计数据（总数、激活数、角色分布）"""
-    conditions = [User.is_deleted == False]
-    if _is_plain_admin(current_user):
-        conditions.append(User.role_code.in_(ADMIN_MANAGEABLE_ROLES))
-
-    base = select(func.count(User.id)).where(*conditions)
-    total_query = select(func.count(User.id)).where(*conditions)
-    total = (await db.execute(total_query)).scalar() or 0
-    active = (await db.execute(
-        base.where(User.is_active == True)
-    )).scalar() or 0
-    inactive = (await db.execute(
-        base.where(User.is_active == False)
-    )).scalar() or 0
-
-    role_query = (
-        select(User.role_code, func.count(User.id))
-        .where(*conditions)
-        .group_by(User.role_code)
-    )
-    role_rows = (await db.execute(role_query)).all()
-    by_role = {row.role_code: row.count for row in role_rows if row.role_code}
-
-    return UserStatsResponse(total=total, active=active, inactive=inactive, by_role=by_role)
+router.include_router(users_import_router)
+router.include_router(users_helpers_router)
 
 
 @router.get("/", response_model=UserListResponse)
@@ -469,93 +454,3 @@ async def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail("删除用户失败", e)
         )
-
-
-@router.post("/batch-delete")
-async def batch_delete_users(
-    request: BatchDeleteRequest,
-    current_user = Depends(require_admin),
-    db: AsyncSession = Depends(get_db)
-) -> dict:
-    """
-    批量删除用户（软删除，需要管理员权限）
-    """
-    try:
-        normalized_ids = list(dict.fromkeys(request.user_ids))
-        if not normalized_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="请选择要删除的用户",
-            )
-
-        # 获取符合条件的用户 - 使用SQLAlchemy正确的语法
-        query = select(User).where(
-            User.id.in_(normalized_ids),
-            User.is_deleted == False
-        ).with_for_update()
-        result = await db.execute(query)
-        users = result.scalars().all()
-
-        found_ids = {user.id for user in users}
-        missing_ids = [user_id for user_id in normalized_ids if user_id not in found_ids]
-        if missing_ids:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"以下用户不存在或已删除: {missing_ids}",
-            )
-
-        _assert_users_deletable(current_user, list(users))
-        
-        # 批量软删除
-        deleted_ids = []
-        for user in users:
-            # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
-            user.is_deleted = True  # type: ignore
-            deleted_ids.append(user.id)
-        
-        await db.commit()
-
-        await publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
-
-        return {
-            "success": True,
-            "message": f"成功删除 {len(deleted_ids)} 个用户",
-            "deleted_ids": deleted_ids
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_detail("批量删除用户失败", e)
-        )
-
-
-@router.get("/import/template")
-async def download_user_import_template(
-    format: str = Query("xlsx", pattern="^(xlsx|csv)$"),
-    current_user = Depends(require_admin),
-) -> StreamingResponse:
-    """
-    下载用户导入模板，支持 xlsx / csv。
-    """
-    return import_service.build_user_import_template(format)
-
-
-@router.post("/import", response_model=UserImportResult)
-async def import_users(
-    file: UploadFile,
-    current_user = Depends(require_admin),
-    db: AsyncSession = Depends(get_db)
-) -> UserImportResult:
-    """
-    批量导入用户（CSV / XLSX 格式，需要管理员权限）
-    导入规则：
-    - 普通 admin 只能导入 student（学生）或 teacher（教师），不能创建或更新 admin / super_admin。
-    - 高权限角色行不会自动降级；该行会失败，并在 UserImportResult.errors 中逐行返回。
-    - super_admin 可导入全部角色。
-    模板角色列仍使用统一格式，本轮不按当前角色动态生成模板。
-    """
-    return await import_service.import_users(file, current_user, db)

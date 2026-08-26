@@ -2,7 +2,7 @@
 测评会话模型 - 对应数据库表 znt_assessment_sessions
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, func
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -11,7 +11,11 @@ from app.db.database import Base
 class AssessmentSession(Base):
     """测评会话表 - 学生每次参加测评的记录"""
     __tablename__ = "znt_assessment_sessions"
-    __table_args__ = {"comment": "测评会话表"}
+    __table_args__ = (
+        # 低基数状态列 + 创建时间复合：支持按 status 过滤 + created_at 排序
+        Index("ix_znt_assessment_sessions_status_created", "status", "created_at"),
+        {"comment": "测评会话表"},
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     config_id = Column(Integer, ForeignKey("znt_assessment_configs.id", ondelete="CASCADE"), nullable=False, index=True, comment="所属测评配置")

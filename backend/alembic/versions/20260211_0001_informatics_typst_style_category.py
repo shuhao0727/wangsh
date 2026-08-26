@@ -1,8 +1,18 @@
+"""informatics typst styles/categories
+
+Revision ID: 20260211_0001
+Revises: 20260210_0000_legacy_baseline_tables
+Create Date: 2026-02-11
+
+根迁移改为 20260210_0000_legacy_baseline_tables（18 张 legacy 基线表），
+本迁移在其之上补充 inf_typst_styles / inf_typst_categories 及 notes 列。
+"""
+
 from alembic import op
 
 
 revision = "20260211_0001"
-down_revision = None
+down_revision = "20260210_0000_legacy_baseline_tables"
 branch_labels = None
 depends_on = None
 

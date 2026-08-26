@@ -65,7 +65,7 @@ AI Prompt 和验证入口；历史阶段计划不再作为当前行为依据。
   migration，补齐 `available_start`、`available_end`、`mode`、`adaptive_config`、
   `knowledge_point`、`attempt_seq`、`is_adaptive` 7 个字段；其 `downgrade()` 为保护
   既有数据而不删除字段。
-- 当前 head 为 `20260711_0002_restore_legacy_baseline_indexes`。
+- 当前 head 为 `20260807_0001_task_analyses_idxs`。
 - 已存在数据库必须执行 `alembic upgrade head`，不依赖 ORM `create_all` 补齐结构。
 
 各表没有统一的时间列模板：只有配置表有 `updated_at`，答题表使用 `answered_at`，

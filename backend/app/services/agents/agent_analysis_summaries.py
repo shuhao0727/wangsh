@@ -15,6 +15,11 @@ def _int_or_fallback(value: Any, fallback: int = 0) -> int:
         return fallback
 
 
+def _sum_field_counts(items: list, field: str) -> int:
+    """Sum ``int(item[field] or 0)`` across dict entries (non-dicts are skipped)."""
+    return sum(int(item.get(field) or 0) for item in items if isinstance(item, dict))
+
+
 def summarize_hot_list_item(result: Optional[Dict[str, Any]]) -> Dict[str, int]:
     data = result or {}
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
@@ -29,13 +34,13 @@ def summarize_hot_list_item(result: Optional[Dict[str, Any]]) -> Dict[str, int]:
         events = data.get("student_question_events")
         if isinstance(events, list) and events:
             return len(events)
-        from_buckets = sum(int(bucket.get("question_count") or 0) for bucket in timeline_buckets if isinstance(bucket, dict))
+        from_buckets = _sum_field_counts(timeline_buckets, "question_count")
         if from_buckets > 0:
             return from_buckets
-        from_themes = sum(int(item.get("count") or 0) for item in themes if isinstance(item, dict))
+        from_themes = _sum_field_counts(themes, "count")
         if from_themes > 0:
             return from_themes
-        return sum(int(item.get("count") or 0) for item in uncovered if isinstance(item, dict))
+        return _sum_field_counts(uncovered, "count")
 
     def _burst() -> int:
         if "burst_count" in summary and summary["burst_count"] is not None:

@@ -3,7 +3,7 @@
 > 状态：active
 > Owner：testing
 > 当前版本：1.6.0
-> 最近更新：2026-07-24
+> 最近更新：2026-08-17
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
 ## 一、当前未提交整理批次
@@ -14,20 +14,15 @@ Docker Hub 发布仍对应 `origin/main`；文档或代码继续变更后，必�
 
 | 类别 | 当前结果 | 覆盖内容 |
 |---|---|---|
-| 后端全量 | `718 passed, 1 skipped, 9 warnings` | API、服务、迁移、脚本与核心业务回归；唯一 skip 是专用测试库保护 |
-| 前端全量 | `76 files / 371 passed` | 组件、页面、状态与工具函数回归，包含 `src/lib` 运行时边界和 Assessment 静态新建路由 |
-| Assessment | `38 passed, 6 warnings` | 画像班级隔离、会话、配置和课堂联动 |
-| GroupDiscussion | `53 passed, 8 warnings` | 会话、成员、消息、权限、业务时区、并发冲突回退和原子切组 |
-| IT 游戏 | `40 passed, 8 warnings` | 上传事务边界、更新校验、路径安全、并发删除下载、Range、客户端 IP、日志和路由契约 |
-| prod-smoke 系统测试 | `11 passed` | Compose 上下文、脱敏、私有权限和缺失 UI 报告失败传播 |
-| 前端脚本 | `29 passed` | UI smoke 页面/总控状态、前后端构建上下文、token、Pyodide、Git 白名单和最终产物合同 |
-| 前端 clean install | 通过，`779 packages` | `npm ci --ignore-scripts` 使用当前 lockfile 完成真实干净安装 |
-| Workflow contracts | `54 passed` | 发布、CI、Compose 时区、开发启动、破坏性命令保护、回滚、健康状态、release-set 和 XBK seed 合同 |
+| 后端全量 | `906 passed, 1 skipped, 9 warnings` | 新增行为级越权矩阵 159 用例（assessment 10 端点 4 角色、typst 15 端点 staff、student→admin 403）、SSRF 17、query-token 收窄 5 |
+| 前端全量 | `77 files / 374 passed` | 组件、页面、状态与工具函数回归，包含 `src/lib` 运行时边界和 Assessment 静态新建路由 |
+| 迁移链 | 单 head `20260817_0001_query_filter_indexes` | 根迁移 `20260210_0000`（18 表入链）后裸空库 upgrade 实测成功；两库（Homebrew/docker）均升至 head；alembic check 漂移 14→9（存量登记中） |
 | TypeScript | 通过 | `tsc --noEmit` |
-| ESLint | `0 errors / 480 warnings` | 现有 warning 基线，无阻断错误 |
-| UI audit | 通过，`805 hits` | 当前审计基线未回退 |
-| 生产构建与 bundle | 构建通过；`282 files / 29 MB` | Mindmap 本地运行时已从输出移除，正式字体与 favicon 保留 |
-| Python governance | `5 errors / 5 warnings` | 当前 AI 长回答功能改动存在复杂度回退；本轮非功能整理未修改相关实现 |
+| CSS token | 通过，`0 undefined / 1821 references` | `token:check:ci` |
+| ESLint | `0 errors / 435 warnings` | no-explicit-any 本轮净减 47（TOP4 文件清零，长尾仍存 122 文件） |
+| Python governance | `0 errors / 10 warnings` | `check` 与 `check --base-ref HEAD` 均为 0 ERROR |
+| 变更行覆盖率门禁 | 已接入（非阻断起步） | 后端 32.7% / 前端 20.1%（分支重构导致基数大）；关键路径（auth/deps/security/alembic）95% 阈值脚本就绪 |
+| UI audit / bundle / prod-smoke 等 | 见 2026-07-24 快照 | 本轮未重跑；合入前需按 §4.1 全量重跑 |
 | Markdown 链接 | `104 files / 256 links / 0 missing` | owner、索引、归档和相对链接 |
 | Markdown contracts | `10 passed` | 链接、生命周期、Assessment owner 和 workflow 触发 |
 

@@ -10,7 +10,8 @@ services:
     container_name: wangsh-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # 宿主机 5432 已被本机 Homebrew PostgreSQL 占用，Docker 发布端口改为 5433
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

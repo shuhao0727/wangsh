@@ -9,20 +9,40 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT;")
-    op.execute("ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_last4 VARCHAR(8);")
-    op.execute("ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS has_api_key BOOLEAN NOT NULL DEFAULT FALSE;")
-
     op.execute(
         """
-        UPDATE znt_agents
-        SET has_api_key = TRUE
-        WHERE api_key IS NOT NULL AND api_key <> '';
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'znt_agents'
+            ) THEN
+                ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT;
+                ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_last4 VARCHAR(8);
+                ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS has_api_key BOOLEAN NOT NULL DEFAULT FALSE;
+
+                UPDATE znt_agents
+                SET has_api_key = TRUE
+                WHERE api_key IS NOT NULL AND api_key <> '';
+            END IF;
+        END $$;
         """
     )
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE znt_agents DROP COLUMN IF EXISTS has_api_key;")
-    op.execute("ALTER TABLE znt_agents DROP COLUMN IF EXISTS api_key_last4;")
-    op.execute("ALTER TABLE znt_agents DROP COLUMN IF EXISTS api_key_encrypted;")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'znt_agents'
+            ) THEN
+                ALTER TABLE znt_agents DROP COLUMN IF EXISTS has_api_key;
+                ALTER TABLE znt_agents DROP COLUMN IF EXISTS api_key_last4;
+                ALTER TABLE znt_agents DROP COLUMN IF EXISTS api_key_encrypted;
+            END IF;
+        END $$;
+        """
+    )

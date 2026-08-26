@@ -28,6 +28,58 @@ def _teacher_anchor_for_event(event: ConversationEvent, teacher_questions: Seque
     }
 
 
+def _student_chain_node(
+    idx: int,
+    event: ConversationEvent,
+    sorted_items: Sequence[ConversationEvent],
+    teacher_questions: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build one student-question node, keeping the follow-up relation logic together."""
+    anchor = _teacher_anchor_for_event(event, teacher_questions)
+    previous = sorted_items[idx - 1] if idx > 0 else None
+    relation = event.question_type
+    if previous and _term_similarity(previous.terms, event.terms) >= 0.45 and relation == "follow_up":
+        relation = "follow_up"
+    return {
+        "node_id": f"student-{event.message_id}",
+        "message_id": event.message_id,
+        "time": event.created_at.isoformat(),
+        "question": event.content,
+        "student_name": event.user_name,
+        "student_id": event.student_id,
+        "class_name": event.class_name,
+        "question_type": relation,
+        "question_type_label": QUESTION_TYPE_LABELS.get(relation, relation),
+        "bloom_level": event.bloom_level,
+        "teacher_anchor_id": anchor.get("id"),
+        "teacher_anchor_question": anchor.get("question"),
+        "delay_seconds": anchor.get("delay_seconds"),
+        "terms": list(event.terms),
+        "evidence_ids": [event.message_id],
+    }
+
+
+def _student_session_summary(
+    session_id: str,
+    sorted_items: Sequence[ConversationEvent],
+    nodes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build the per-session chain summary from the first/last events and built nodes."""
+    return {
+        "session_id": session_id,
+        "student_name": sorted_items[0].user_name,
+        "student_id": sorted_items[0].student_id,
+        "class_name": sorted_items[0].class_name,
+        "question_count": len(nodes),
+        "start_at": sorted_items[0].created_at.isoformat(),
+        "end_at": sorted_items[-1].created_at.isoformat(),
+        "dominant_question_type": _dominant([node["question_type"] for node in nodes]),
+        "summary": _summarize_student_chain(nodes),
+        "nodes": nodes,
+        "evidence_ids": [event.message_id for event in sorted_items],
+    }
+
+
 def _build_student_question_chains(
     student_questions: Sequence[ConversationEvent],
     teacher_questions: Sequence[Dict[str, Any]],
@@ -42,47 +94,11 @@ def _build_student_question_chains(
         sorted_items = sorted(items, key=lambda item: (item.created_at, item.message_id))
         if not sorted_items:
             continue
-        nodes = []
-        for idx, event in enumerate(sorted_items):
-            anchor = _teacher_anchor_for_event(event, teacher_questions)
-            previous = sorted_items[idx - 1] if idx > 0 else None
-            relation = event.question_type
-            if previous and _term_similarity(previous.terms, event.terms) >= 0.45 and relation == "follow_up":
-                relation = "follow_up"
-            nodes.append(
-                {
-                    "node_id": f"student-{event.message_id}",
-                    "message_id": event.message_id,
-                    "time": event.created_at.isoformat(),
-                    "question": event.content,
-                    "student_name": event.user_name,
-                    "student_id": event.student_id,
-                    "class_name": event.class_name,
-                    "question_type": relation,
-                    "question_type_label": QUESTION_TYPE_LABELS.get(relation, relation),
-                    "bloom_level": event.bloom_level,
-                    "teacher_anchor_id": anchor.get("id"),
-                    "teacher_anchor_question": anchor.get("question"),
-                    "delay_seconds": anchor.get("delay_seconds"),
-                    "terms": list(event.terms),
-                    "evidence_ids": [event.message_id],
-                }
-            )
-        chains.append(
-            {
-                "session_id": session_id,
-                "student_name": sorted_items[0].user_name,
-                "student_id": sorted_items[0].student_id,
-                "class_name": sorted_items[0].class_name,
-                "question_count": len(nodes),
-                "start_at": sorted_items[0].created_at.isoformat(),
-                "end_at": sorted_items[-1].created_at.isoformat(),
-                "dominant_question_type": _dominant([node["question_type"] for node in nodes]),
-                "summary": _summarize_student_chain(nodes),
-                "nodes": nodes,
-                "evidence_ids": [event.message_id for event in sorted_items],
-            }
-        )
+        nodes = [
+            _student_chain_node(idx, event, sorted_items, teacher_questions)
+            for idx, event in enumerate(sorted_items)
+        ]
+        chains.append(_student_session_summary(session_id, sorted_items, nodes))
     chains.sort(key=lambda item: item["question_count"], reverse=True)
     return chains
 
@@ -105,6 +121,50 @@ def _summarize_student_chain(nodes: Sequence[Dict[str, Any]]) -> str:
     return f"学生从「{start[:28]}」出发，经过 {len(nodes)} 次{dominant}式追问，推进到「{end[:28]}」。"
 
 
+def _related_chain_nodes(
+    student_chains: Sequence[Dict[str, Any]],
+    teacher: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Collect student nodes anchored to the given teacher question."""
+    return [
+        node
+        for student_chain in student_chains
+        for node in student_chain.get("nodes", [])
+        if node.get("teacher_anchor_id") == teacher.get("id")
+    ]
+
+
+def _teacher_stage_node(
+    idx: int,
+    teacher: Dict[str, Any],
+    related_nodes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build one teacher-mainline stage node from its anchored student nodes."""
+    representative = related_nodes[0]
+    return {
+        "stage": f"教师主线 {idx + 1}",
+        "question": teacher.get("question") or "教师提问",
+        "student_response_summary": f"{len(related_nodes)} 个学生问题围绕该提问展开",
+        "next_ai_question": representative.get("question"),
+        "reason": "教师提问后学生产生的集中追问节点",
+        "evidence": [node.get("question") for node in related_nodes[:3] if node.get("question")],
+        "evidence_ids": [eid for node in related_nodes[:8] for eid in node.get("evidence_ids", [])],
+    }
+
+
+def _theme_stage_node(idx: int, theme: Dict[str, Any]) -> Dict[str, Any]:
+    """Build one theme-driven stage node when no teacher anchor is available."""
+    return {
+        "stage": f"问题阶段 {idx + 1}",
+        "question": theme.get("topic"),
+        "student_response_summary": f"{theme.get('count', 0)} 个问题聚合到该主题",
+        "next_ai_question": (theme.get("questions") or [""])[0],
+        "reason": "由学生问题聚类生成的课堂主问题链节点",
+        "evidence": (theme.get("questions") or [])[:3],
+        "evidence_ids": theme.get("evidence_ids", [])[:8],
+    }
+
+
 def _build_ai_main_question_chain(
     themes: Sequence[Dict[str, Any]],
     teacher_questions: Sequence[Dict[str, Any]],
@@ -112,39 +172,13 @@ def _build_ai_main_question_chain(
 ) -> List[Dict[str, Any]]:
     chain: List[Dict[str, Any]] = []
     for idx, teacher in enumerate(teacher_questions[:6]):
-        related_nodes = [
-            node
-            for student_chain in student_chains
-            for node in student_chain.get("nodes", [])
-            if node.get("teacher_anchor_id") == teacher.get("id")
-        ]
+        related_nodes = _related_chain_nodes(student_chains, teacher)
         if related_nodes:
-            representative = related_nodes[0]
-            chain.append(
-                {
-                    "stage": f"教师主线 {idx + 1}",
-                    "question": teacher.get("question") or "教师提问",
-                    "student_response_summary": f"{len(related_nodes)} 个学生问题围绕该提问展开",
-                    "next_ai_question": representative.get("question"),
-                    "reason": "教师提问后学生产生的集中追问节点",
-                    "evidence": [node.get("question") for node in related_nodes[:3] if node.get("question")],
-                    "evidence_ids": [eid for node in related_nodes[:8] for eid in node.get("evidence_ids", [])],
-                }
-            )
+            chain.append(_teacher_stage_node(idx, teacher, related_nodes))
     if chain:
         return chain
     for idx, theme in enumerate(themes[:6]):
-        chain.append(
-            {
-                "stage": f"问题阶段 {idx + 1}",
-                "question": theme.get("topic"),
-                "student_response_summary": f"{theme.get('count', 0)} 个问题聚合到该主题",
-                "next_ai_question": (theme.get("questions") or [""])[0],
-                "reason": "由学生问题聚类生成的课堂主问题链节点",
-                "evidence": (theme.get("questions") or [])[:3],
-                "evidence_ids": theme.get("evidence_ids", [])[:8],
-            }
-        )
+        chain.append(_theme_stage_node(idx, theme))
     return chain
 
 

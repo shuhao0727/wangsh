@@ -21,6 +21,25 @@ from app.core.config import settings
 import httpx
 
 
+async def _post_with_retry(
+    client: httpx.AsyncClient,
+    chat_url: str,
+    headers: dict,
+    payload: dict,
+) -> Optional[httpx.Response]:
+    """POST 重试：200 直接返回；429/502/503/504 指数退避重试，最多 3 次。"""
+    resp = None
+    for attempt in range(3):
+        resp = await client.post(chat_url, headers=headers, json=payload)
+        if resp.status_code == 200:
+            break
+        if resp.status_code in (429, 502, 503, 504) and attempt < 2:
+            await asyncio.sleep(1.5 * (2 ** attempt))
+            continue
+        break
+    return resp
+
+
 async def run_agent_chat_blocking(
     db,
     *,
@@ -85,15 +104,7 @@ async def run_agent_chat_blocking(
         last_error: Optional[str] = None
         for idx, candidate_model in enumerate(candidate_models):
             payload = provider.build_blocking_payload(chat_messages, candidate_model)
-            resp = None
-            for attempt in range(3):
-                resp = await client.post(chat_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    break
-                if resp.status_code in (429, 502, 503, 504) and attempt < 2:
-                    await asyncio.sleep(1.5 * (2 ** attempt))
-                    continue
-                break
+            resp = await _post_with_retry(client, chat_url, headers, payload)
 
             if resp and resp.status_code == 200:
                 breaker.record_success(circuit_key)

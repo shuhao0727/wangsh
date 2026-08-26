@@ -154,23 +154,6 @@ async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
     }
 
 
-async def get_current_user_or_student(
-    token: Optional[str] = None,
-    db=None,
-) -> Optional[Dict[str, Any]]:
-    """
-    获取当前用户或学生
-
-    安全加固：仅在提供有效token且验证成功时返回用户
-    """
-    if not token:
-        return None
-    
-    # 尝试获取用户
-    user = await get_current_user(token, db)
-    return user
-
-
 # ==================== 刷新令牌功能 ====================
 
 async def create_refresh_token(db, user_id: int) -> str:
@@ -407,35 +390,6 @@ async def rotate_refresh_token(
         raise
 
 
-async def revoke_refresh_token(db, token: str) -> bool:
-    """
-    撤销刷新令牌
-    
-    Args:
-        db: 数据库会话
-        token: 刷新令牌
-    
-    Returns:
-        是否成功撤销
-    """
-    from sqlalchemy import select, update
-    from app.models import RefreshToken
-    
-    # 查找令牌
-    query = select(RefreshToken).where(RefreshToken.token == token)
-    result = await db.execute(query)
-    refresh_token = result.scalar_one_or_none()
-    
-    if not refresh_token:
-        return False
-    
-    # 标记为已撤销
-    refresh_token.is_revoked = True
-    await db.commit()
-    
-    return True
-
-
 async def revoke_all_user_refresh_tokens(
     db,
     user_id: int,
@@ -465,28 +419,3 @@ async def revoke_all_user_refresh_tokens(
         await db.commit()
     
     return True
-
-
-async def cleanup_expired_refresh_tokens(db) -> int:
-    """
-    清理过期的刷新令牌
-    
-    Args:
-        db: 数据库会话
-    
-    Returns:
-        删除的令牌数量
-    """
-    from sqlalchemy import delete
-    from app.models import RefreshToken
-    
-    # 删除已过期或已撤销的令牌
-    stmt = delete(RefreshToken).where(
-        (RefreshToken.expires_at <= datetime.now(timezone.utc)) |
-        (RefreshToken.is_revoked == True)
-    )
-    
-    result = await db.execute(stmt)
-    await db.commit()
-    
-    return result.rowcount

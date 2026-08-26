@@ -1,6 +1,4 @@
-"""
-自主检测 - 管理端 API
-"""
+"""自主检测 - 管理端 API"""
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -25,10 +23,8 @@ from app.schemas.assessment import (
     QuestionUpdate,
     QuestionResponse,
     QuestionListResponse,
-    GenerateQuestionsRequest,
     SessionListResponse,
     StatisticsResponse,
-    BasicProfileResponse,
     ProfileGenerateRequest,
     ProfileBatchGenerateRequest,
     ProfileResponse,
@@ -43,15 +39,15 @@ from app.services.assessment import (
     toggle_config,
     get_config_question_count,
     get_config_session_count,
+    get_config_question_counts,
+    get_config_session_counts,
     create_question,
     get_questions,
-    get_question,
     update_question,
     delete_question,
     generate_questions,
     get_config_sessions,
     get_config_statistics,
-    get_session_result,
     get_basic_profile,
     generate_profile,
     batch_generate_profiles,
@@ -157,9 +153,13 @@ async def api_list_configs(
         items, total = await get_configs(db, skip=skip, limit=limit, grade=grade, enabled=enabled, search=search)
 
         result_items = []
+        # 批量统计，替代逐条 count（N+1）：每列表页只多 2 条 GROUP BY 查询
+        config_ids = [c.id for c in items]
+        qcounts = await get_config_question_counts(db, config_ids)
+        scounts = await get_config_session_counts(db, config_ids)
         for config in items:
-            qcount = await get_config_question_count(db, config.id)  # type: ignore[arg-type]
-            scount = await get_config_session_count(db, config.id)  # type: ignore[arg-type]
+            qcount = qcounts.get(config.id, 0)
+            scount = scounts.get(config.id, 0)
             result_items.append(_format_config_response(config, qcount, scount))
 
         page = (skip // limit) + 1 if limit > 0 else 1
@@ -582,7 +582,6 @@ async def api_get_statistics(
 
 
 # ─── 三维融合画像 ───
-
 
 def _format_profile_response(profile) -> dict:
     """格式化画像响应"""

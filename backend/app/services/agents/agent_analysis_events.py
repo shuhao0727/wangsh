@@ -72,6 +72,44 @@ def _normalize_text(value: str) -> str:
     return text_value.lower()
 
 
+def _jieba_terms(chinese_text: str) -> List[str]:
+    """用 jieba 对中文片段分词（lexical fallback 之外的首选路径）。"""
+    import jieba  # type: ignore
+
+    terms: List[str] = []
+    for word in jieba.lcut(chinese_text):
+        w = word.strip().lower()
+        if len(w) >= 2 and w not in STOP_WORDS:
+            terms.append(w)
+    return terms
+
+
+def _fallback_terms(chinese_text: str) -> List[str]:
+    """jieba 不可用时退化为定长滑动窗口切词。"""
+    terms: List[str] = []
+    compact = re.sub(r"\s+", "", chinese_text)
+    for size in (4, 3, 2):
+        for i in range(0, max(len(compact) - size + 1, 0)):
+            w = compact[i : i + size]
+            if w and w not in STOP_WORDS:
+                terms.append(w)
+    return terms
+
+
+def _dedupe_terms(terms: Iterable[str], limit: int) -> Tuple[str, ...]:
+    """去重并截断到 limit 个词，保持首次出现顺序。"""
+    seen: Set[str] = set()
+    result: List[str] = []
+    for term in terms:
+        if term in seen:
+            continue
+        seen.add(term)
+        result.append(term)
+        if len(result) >= limit:
+            break
+    return tuple(result)
+
+
 def _extract_terms(text_value: str, *, limit: int = 12) -> Tuple[str, ...]:
     normalized = _normalize_text(text_value)
     latin = re.findall(r"[a-zA-Z][a-zA-Z0-9_+#-]{1,}", normalized)
@@ -84,30 +122,11 @@ def _extract_terms(text_value: str, *, limit: int = 12) -> Tuple[str, ...]:
             terms.append(word_l)
 
     try:
-        import jieba  # type: ignore
-
-        for word in jieba.lcut(chinese_text):
-            w = word.strip().lower()
-            if len(w) >= 2 and w not in STOP_WORDS:
-                terms.append(w)
+        terms.extend(_jieba_terms(chinese_text))
     except Exception:
-        compact = re.sub(r"\s+", "", chinese_text)
-        for size in (4, 3, 2):
-            for i in range(0, max(len(compact) - size + 1, 0)):
-                w = compact[i : i + size]
-                if w and w not in STOP_WORDS:
-                    terms.append(w)
+        terms.extend(_fallback_terms(chinese_text))
 
-    seen: Set[str] = set()
-    result: List[str] = []
-    for term in terms:
-        if term in seen:
-            continue
-        seen.add(term)
-        result.append(term)
-        if len(result) >= limit:
-            break
-    return tuple(result)
+    return _dedupe_terms(terms, limit)
 
 
 def _term_similarity(left: Iterable[str], right: Iterable[str]) -> float:

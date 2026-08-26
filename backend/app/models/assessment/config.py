@@ -16,7 +16,7 @@ class AssessmentConfig(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String(200), nullable=False, comment="测评标题")
-    grade = Column(String(20), nullable=True, comment="年级")
+    grade = Column(String(20), nullable=True, index=True, comment="年级")
     teaching_objectives = Column(Text, nullable=True, comment="教学目标（Markdown）")
     knowledge_points = Column(Text, nullable=True, comment="知识点列表 JSON 数组")
     total_score = Column(Integer, default=100, nullable=False, comment="总分")

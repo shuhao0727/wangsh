@@ -73,6 +73,22 @@ docker compose -f docker-compose.dev.yml up -d
 - `start-dev.sh`：自动检测端口冲突、支持混合模式、日志管理
 - `docker compose`：简单直接、全部容器化
 
+**本地开发数据库**：
+
+- 本机 Homebrew PostgreSQL（`127.0.0.1:5432`）是标准开发库，日常开发直接连接它。
+- Docker dev 栈内的数据库通过 Compose 服务名 `postgres:5432` 访问（容器内）；
+  宿主机访问 Docker 栈数据库使用 `127.0.0.1:5433`（dev 栈已把 5432 让给本机 PG，
+  避免端口冲突）。
+- 两个库数据不互通，迁移需各自验证：
+
+```bash
+# 本机 Homebrew PG（标准开发库）
+psql -h 127.0.0.1 -p 5432 -U admin -d wangsh_db
+
+# Docker dev 栈 PG（宿主机入口）
+psql -h 127.0.0.1 -p 5433 -U admin -d wangsh_db
+```
+
 ### 生产环境
 
 ```bash
@@ -570,12 +586,13 @@ docker compose exec -T postgres sh -c \
 
 ```bash
 # 1. 使用统一回滚入口；要求输入 yes；
-#    默认先停止数据库写服务建立无写入窗口，再备份并回退一个 Alembic revision
-bash scripts/rollback.sh rollback -1
+#    默认先停止数据库写服务建立无写入窗口，再备份并回退一个 Alembic revision；
+#    --image-tag 指定旧版本镜像执行 downgrade，脚本会先断言旧镜像包含目标 revision
+OLD_VERSION=1.5.10
+bash scripts/rollback.sh rollback -1 --image-tag "${OLD_VERSION}"
 
 # 2. 回滚完成后 backend 和两个 worker 保持停止；
 #    取出发布时归档的旧版本 release-set，并先独立验证
-OLD_VERSION=1.5.10
 OLD_RELEASE_SET=/secure/releases/release-set-${OLD_VERSION}.txt
 IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERSION} \
   PYTHONLAB_SANDBOX_IMAGE=shuhao07/pythonlab-sandbox:${OLD_VERSION} \
@@ -602,6 +619,16 @@ IMAGE_TAG=${OLD_VERSION} APP_VERSION=${OLD_VERSION} REACT_APP_VERSION=${OLD_VERS
 失败状态，恢复失败时返回恢复失败状态并明确提示人工处理。downgrade 成功或失败后
 写服务都保持停止，应先排查数据库状态或部署旧 release-set，并通过详细健康检查后
 再开放流量。
+
+downgrade 必须使用**旧版本镜像**执行：通过 `--image-tag <旧版本>` 指定（默认沿用
+compose/`IMAGE_TAG` 解析出的镜像）。执行前脚本会先断言旧镜像包含目标 revision
+（`docker run --rm <旧镜像> alembic history`），缺失即报错并提示用
+`scripts/deploy.sh restore-db` 从备份恢复，绝不继续 downgrade；相对值 `-1`/`-N` 会
+结合数据库当前 revision 从旧镜像 history 推导为具体 revision 后再校验与执行。
+
+> ⚠️ 回滚完成后、旧版本部署完成前，**禁止执行 `docker compose up/restart`**：
+> backend 启动命令会自动执行 `alembic upgrade head`，会立刻把刚回退的迁移重新应用，
+> 导致回滚失效。此窗口内只允许按上述步骤部署旧 release-set。
 
 `--no-backup` 是显式危险选项，只能在已经明确确认不需要新备份时使用：
 `bash scripts/rollback.sh rollback -1 --no-backup`。
@@ -641,6 +668,35 @@ bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
 --if-exists` 恢复；也兼容已有 `.sql` 文件。不要依赖 Compose 自动生成的容器名，也不要
 在未确认目标环境前手工删除生产数据库。`restore-db` 必须显式传入 `--yes`；
 `down-v` 必须设置 `ALLOW_VOLUME_DELETION=true`，隔离 `wangsh_sim` 模拟栈清理除外。
+
+### 备份计划
+
+定时任务建议使用宿主机直连的 `scripts/backup.sh`（不依赖 Compose 栈），输出命名与
+`deploy.sh backup-db` 一致，可被 `restore-db` / `restore-drill.sh` 直接消费。
+
+- **每日自动备份 + 轮转**：`scripts/backup.sh full` 生成时间戳 dump，并删除超过
+  `BACKUP_KEEP_DAYS`（默认 14）天的该库备份。
+- **异地同步**：备份后把 `BACKUP_DIR` 增量同步到异地（rclone/rsync 一行示例见
+  `scripts/backup.sh` 注释）。
+- **季度演练**：每季度执行一次 `scripts/restore-drill.sh`：取最新 dump 恢复到独立
+  演练库 `<db>_drill`，断言恢复成功（表存在、含数据的 dump 行数>0、读取
+  `alembic_version`），写演练记录 `BACKUP_DIR/drill-<ts>.log` 后自动清理演练库；
+  可用 `--dry-run` 先预览命令。演练确认备份真实可恢复，避免"有备份但恢复不了"。
+
+cron 示例（每天 02:00 备份，03:30 同步异地；cron 环境需能读到 `POSTGRES_*` 凭据，
+建议在命令中 dot-source 环境文件或使用 systemd service 注入）：
+
+```cron
+0 2 * * * cd /srv/wangsh && . ./.env && ./scripts/backup.sh full >> /var/log/wangsh-backup.log 2>&1
+30 3 * * * rclone copy /srv/wangsh/backups remote:wangsh-backups --include 'wangsh_db_*.dump' --max-age 14d
+```
+
+季度演练示例：
+
+```bash
+bash scripts/restore-drill.sh            # 自动取最新 dump 演练
+bash scripts/restore-drill.sh --dry-run  # 演练前预览
+```
 
 ---
 

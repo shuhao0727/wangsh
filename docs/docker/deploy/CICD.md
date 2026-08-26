@@ -117,8 +117,12 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
     Bash 语法检查
   - 数据库：动态解析 Alembic heads，强制单 head；空库创建 legacy baseline 后执行完整 `alembic upgrade head`
   - 后端：安装 `backend/requirements-dev.txt`，执行 Python 文件规模/复杂度
-    ratchet 和 `pytest -q`；PR、main push 与镜像发布调用都会对旧 baseline
-    做防放宽比较
+    ratchet 和 `pytest -q --cov=app --cov-report=json`；PR、main push 与镜像发布
+    调用都会对旧 baseline 做防放宽比较；`pytest` 单次运行同时产出
+    `backend/coverage.json`，随后由 `check_changed_lines_coverage.py` 计算
+    changed-lines 覆盖率（变更行 ≥85%，认证/权限/迁移关键路径 ≥95%，审计
+    T-2 / 治理 §4.3）。该门禁本阶段 `continue-on-error: true` 只出报告，
+    下一阶段按治理收紧为阻断。
   - 前端：脚本测试、CSS token 完整性、Vitest 默认范围（components、AIAgents、
     PythonLab、queries、lib、services）、type-check、lint、UI audit、生产构建和
     bundle budget
@@ -129,6 +133,15 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
     `SECRET_KEY` 不少于 32 字符，加密键使用合法 Fernet 格式。
   - 前端必须通过干净 `npm ci`；ECharts 与词云插件的 peer major、manifest 和
     lockfile 版本由 workflow contracts 保持一致。
+  - 核心业务 smoke 入 CI（评估落地，起步阶段）：10 个核心 smoke
+    （`smoke_openapi_sweep` / `smoke_feature_suite` / `smoke_assessment_flow` /
+    `smoke_xxjs_dianming` / `smoke_full_deploy` / `smoke_group_discussion` /
+    `smoke_typst_pipeline` / `smoke_pythonlab_dap_step_watch_soak` /
+    前端 `auth-replaced-login-smoke` / `prod-smoke-ui`）均为「需完整栈」型，
+    暂不跑全流程；当前先挂无栈契约门禁（后端 smoke 的 import 级校验、
+    前端浏览器 smoke 的 `node --check`），`continue-on-error: true` 起步。
+    全栈运行待后续参照 `pythonlab-pr-runtime.yml` 模式接入（见
+    `ci-quality.yml` 内 TODO 注释块）。
 - **目的**：覆盖全仓基础质量，不仅限于 PythonLab 路径
 
 ---

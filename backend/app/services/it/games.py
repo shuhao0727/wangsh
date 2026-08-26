@@ -93,6 +93,28 @@ def _is_valid_pe(path: Path) -> bool:
         return False
 
 
+def _check_binary_signature(ext: str, source, path: Path) -> bool:
+    """Match container magic bytes for binary formats (MSI/7z/RAR/ISO/DMG/PKG)."""
+    if ext == ".msi":
+        return source.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    if ext == ".7z":
+        return source.read(6) == b"7z\xbc\xaf'\x1c"
+    if ext == ".rar":
+        prefix = source.read(8)
+        return prefix.startswith(b"Rar!\x1a\x07\x00") or prefix == b"Rar!\x1a\x07\x01\x00"
+    if ext == ".iso":
+        source.seek(0x8001)
+        return source.read(5) == b"CD001"
+    if ext == ".dmg":
+        if path.stat().st_size < 512:
+            return False
+        source.seek(-512, os.SEEK_END)
+        return source.read(4) == b"koly"
+    if ext == ".pkg":
+        return source.read(4) == b"xar!"
+    return False
+
+
 def _check_file_signature(ext: str, path: Path) -> bool:
     """Validate a completed temp file without loading it into memory."""
     try:
@@ -104,23 +126,7 @@ def _check_file_signature(ext: str, path: Path) -> bool:
             return _is_valid_pe(path)
 
         with path.open("rb") as source:
-            if ext == ".msi":
-                return source.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
-            if ext == ".7z":
-                return source.read(6) == b"7z\xbc\xaf'\x1c"
-            if ext == ".rar":
-                prefix = source.read(8)
-                return prefix.startswith(b"Rar!\x1a\x07\x00") or prefix == b"Rar!\x1a\x07\x01\x00"
-            if ext == ".iso":
-                source.seek(0x8001)
-                return source.read(5) == b"CD001"
-            if ext == ".dmg":
-                if path.stat().st_size < 512:
-                    return False
-                source.seek(-512, os.SEEK_END)
-                return source.read(4) == b"koly"
-            if ext == ".pkg":
-                return source.read(4) == b"xar!"
+            return _check_binary_signature(ext, source, path)
     except OSError:
         return False
     return False

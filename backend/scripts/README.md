@@ -13,6 +13,7 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 - `bootstrap_db.py` - 本地/部署场景数据库初始化；`--initial-only` 仅允许空库创建迁移链之前的 legacy baseline，不执行 stamp，随后必须完整运行 `alembic upgrade head`
 - `check_migration_state.py` - 生产迁移前只读检查，阻断 `alembic_version` 与真实 schema 漂移
 - `check_python_governance.py` - Python 文件物理行数与 AST 圈复杂度 ratchet 检查
+- `check_changed_lines_coverage.py` - changed-lines 覆盖率门禁（审计 T-2 / 治理 §4.3）
 - `smoke_openapi_sweep.py` - 只读 GET 广覆盖扫雷
 - `smoke_feature_suite.py` - users/articles/xbk/classroom 等核心 CRUD 烟测
 - `smoke_assessment_flow.py` - 测评主链路烟测
@@ -24,6 +25,32 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 - `smoke_pythonlab_dap_step_watch_soak.py` - PythonLab DAP 步进 soak
 - `smoke_pythonlab_print_visibility_probe.py` - PythonLab print 可见性探针
 - `soak_pythonlab_phasec.py` - PythonLab Phase C 专项门禁
+
+## changed-lines 覆盖率门禁
+
+读取 pytest-cov 的 JSON 报告（`--cov-report=json`，默认
+`backend/coverage.json`）与 Git diff 变更集，计算“被测试执行的变更行占比”：
+普通文件 ≥85%，关键路径 ≥95%。关键路径 = `backend/app/core/deps.py`、
+`backend/app/api/endpoints/auth`、`backend/app/core/security*`、
+`backend/alembic/versions/`（alembic 版本文件被 `.coveragerc` 故意 omit，
+无数据时报告 `NO DATA` 并告警，不参与数值门禁）。
+
+```bash
+# 先产 coverage（backend/ 下）
+venv/bin/python -m pytest -q --cov=app --cov-report=json -m "not slow"
+
+# 本地：未提交改动（含 staged + unstaged）vs HEAD
+venv/bin/python scripts/check_changed_lines_coverage.py --worktree
+
+# 本地：只查已 staged 改动
+venv/bin/python scripts/check_changed_lines_coverage.py --cached
+
+# CI/PR 场景：提交 diff 对比 base（默认 origin/main；CI 传 PR base SHA / push before SHA）
+venv/bin/python scripts/check_changed_lines_coverage.py --base-ref origin/main
+```
+
+退出码：0 通过，1 门禁失败，2 配置错误。`.coveragerc` 固定
+`source=app`，omit `venv/`、`tests/`、`alembic/`。
 
 ## 归档目录
 
