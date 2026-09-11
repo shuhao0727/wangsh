@@ -2,6 +2,7 @@
 安全配置：密钥、JWT、CORS、Cookie、超级管理员、会话/IP 控制
 """
 
+import ipaddress
 import json
 from typing import List, Optional, Union
 from pydantic import Field, field_validator
@@ -33,11 +34,28 @@ class SecuritySettingsMixin:
     # ==================== 会话/IP 唯一性控制 ====================
     AUTH_TRUST_X_FORWARDED_FOR: bool = Field(default=True)
     AUTH_IP_HEADER_ORDER: str = Field(default="X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr")
+    # 可信反向代理网段（逗号分隔 CIDR）。S7 治理：仅当 socket peer 属于这些
+    # 网段时才采纳转发头；为空时忽略所有转发头（fail-closed）。
+    AUTH_TRUSTED_PROXY_CIDRS: str = Field(default="")
     AUTH_USER_UNIQUE_PER_IP: bool = Field(default=True)
     AUTH_IP_UNIQUE_PER_USER: bool = Field(default=True)
     AUTH_ENFORCE_SAME_IP_PER_REQUEST: bool = Field(default=False)
     # 0 表示自动取 ACCESS_TOKEN_EXPIRE_MINUTES*60 或 STUDENT_SESSION_TTL
     AUTH_SESSION_TTL_SECONDS: int = Field(default=0)
+
+    @field_validator("AUTH_TRUSTED_PROXY_CIDRS")
+    @classmethod
+    def validate_proxy_cidrs(cls, v: str) -> str:
+        """每个网段必须是合法 CIDR，配置错误在启动时显式失败。"""
+        for item in (v or "").split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                ipaddress.ip_network(item, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"AUTH_TRUSTED_PROXY_CIDRS 含非法网段: {item!r}") from exc
+        return v
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

@@ -61,9 +61,17 @@ x-depends-infra: &depends-infra
   redis:
     condition: service_healthy
 
+x-wangsh-labels: &wangsh-labels
+  wangsh.project: "wangsh"
+  wangsh.env: "production"
+
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: wangsh-postgres
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "postgres"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -92,6 +100,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: wangsh-redis
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "redis"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -126,6 +138,10 @@ services:
         DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
         DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-backend:${IMAGE_TAG:-1.6.0}
+    container_name: wangsh-backend
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "backend"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -140,11 +156,13 @@ services:
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
       AUTH_TRUST_X_FORWARDED_FOR: ${AUTH_TRUST_X_FORWARDED_FOR:-true}
+      AUTH_TRUSTED_PROXY_CIDRS: ${AUTH_TRUSTED_PROXY_CIDRS:-}
       AUTH_IP_HEADER_ORDER: ${AUTH_IP_HEADER_ORDER:-X-Forwarded-For,X-Real-IP,Forwarded,Remote-Addr}
       AUTH_USER_UNIQUE_PER_IP: ${AUTH_USER_UNIQUE_PER_IP:-false}
       AUTH_IP_UNIQUE_PER_USER: ${AUTH_IP_UNIQUE_PER_USER:-false}
       AUTH_ENFORCE_SAME_IP_PER_REQUEST: ${AUTH_ENFORCE_SAME_IP_PER_REQUEST:-false}
       AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-0}
+      XBK_EXPORT_SHEET_PASSWORD: ${XBK_EXPORT_SHEET_PASSWORD:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TYPST_COMPILE_MAX_CONCURRENCY: ${TYPST_COMPILE_MAX_CONCURRENCY:-2}
       TYPST_COMPILE_USE_CELERY: "true"
@@ -203,6 +221,10 @@ services:
         DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
         DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-typst-worker:${IMAGE_TAG:-1.6.0}
+    container_name: wangsh-typst-worker
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "typst-worker"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -249,6 +271,10 @@ services:
         DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}
         DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.aliyun.com/debian-security}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-pythonlab-worker:${IMAGE_TAG:-1.6.0}
+    container_name: wangsh-pythonlab-worker
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "pythonlab-worker"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -288,6 +314,10 @@ services:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     image: ${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:${IMAGE_TAG:-1.6.0}}
+    container_name: wangsh-pythonlab-sandbox
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "pythonlab-sandbox"
     restart: unless-stopped
     command: [ "sh", "-lc", "sleep infinity" ]
     networks:
@@ -308,6 +338,10 @@ services:
         NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}
         CADDY_IMAGE: ${CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2-alpine}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-frontend:${IMAGE_TAG:-1.6.0}
+    container_name: wangsh-frontend
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "frontend"
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -342,6 +376,10 @@ services:
       args:
         CADDY_IMAGE: ${GATEWAY_CADDY_IMAGE:-public.ecr.aws/docker/library/caddy:2.8.4}
     image: ${IMAGE_REPOSITORY_PREFIX:-shuhao07}/wangsh-gateway:${IMAGE_TAG:-1.6.0}
+    container_name: wangsh-gateway
+    labels:
+      <<: *wangsh-labels
+      wangsh.service: "gateway"
     restart: unless-stopped
     logging:
       driver: "json-file"

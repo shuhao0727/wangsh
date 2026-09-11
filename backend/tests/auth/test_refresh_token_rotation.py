@@ -1,13 +1,50 @@
 import asyncio
+import os
+import re
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import delete, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models import RefreshToken, User
+from app.models import AuthAuthority, AuthSessionState, RefreshToken, User
 from app.services import auth
+
+
+def dedicated_url():
+    """并发用例只允许专用 PostgreSQL 测试库；缺失时跳过而不是直连正常库。"""
+    value = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if not value:
+        pytest.skip("Set TEST_DATABASE_URL to a dedicated PostgreSQL test database")
+    parsed = make_url(value)
+    if parsed.drivername != "postgresql+asyncpg" or not re.search(
+        r"(?:^|[_-])(?:test|testing|ci)(?:$|[_-])", parsed.database or "", re.I
+    ):
+        pytest.fail("Refusing non-asyncpg or non-test database before connecting")
+    return value
+
+
+def _legacy_seed_token():
+    # 无 ws1. 前缀的 legacy refresh，family 为 None，绕过 family nonce 校验。
+    return f"seed-{datetime.now(timezone.utc).timestamp()}"
+
+
+async def _seed_durable_state(db, user_id: int, *, active: bool = True) -> None:
+    """并发用例的合成持久权威：gate 就绪 + 用户行 state，不改变锁序语义。"""
+    gate = await db.get(AuthAuthority, 1)
+    if gate is None:
+        db.add(AuthAuthority(id=1, ready=True))
+    else:
+        gate.ready = True
+    state = await db.get(AuthSessionState, user_id)
+    if state is None:
+        db.add(AuthSessionState(user_id=user_id, nonce="", ip="127.0.0.1", active=active))
+    else:
+        state.active = active
+    await db.flush()
 
 
 class _ScalarResult:
@@ -19,9 +56,18 @@ class _ScalarResult:
 
 
 class _FakeDB:
+    """合成会话：顺序回答 rotate_refresh_token 的查询链。
+
+    顺序：owner(user_id) → user → 持久 state → token；另支持 advisory-lock 分支。
+    """
+
     def __init__(self, token_record, user, *, rotate_user_id=None):
+        state = SimpleNamespace(
+            user_id=user.id, active=True, nonce="", ip="127.0.0.1",
+            ip_expires_at=None,
+        )
         values = (
-            [rotate_user_id, user, token_record]
+            [rotate_user_id, user, state, token_record]
             if rotate_user_id is not None
             else [token_record, user]
         )
@@ -41,6 +87,15 @@ class _FakeDB:
 
     async def rollback(self):
         self.rollback_count += 1
+
+    async def flush(self):
+        pass
+
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+    async def scalar(self, _query):
+        return True  # auth_authority.ready
 
 
 def test_rotate_refresh_token_revokes_and_issues_in_one_commit():
@@ -123,7 +178,7 @@ def test_verify_and_rotate_refresh_token_reject_deleted_user():
 
 def test_concurrent_refresh_rotation_allows_only_one_consumer():
     async def run():
-        engine = create_async_engine(settings.DATABASE_URL)
+        engine = create_async_engine(dedicated_url())
         Session = async_sessionmaker(engine, expire_on_commit=False)
         seed_token = f"concurrency-{datetime.now(timezone.utc).timestamp()}"
         suffix = str(datetime.now(timezone.utc).timestamp()).replace(".", "")
@@ -149,6 +204,7 @@ def test_concurrent_refresh_rotation_allows_only_one_consumer():
                     is_revoked=False,
                 )
             )
+            await _seed_durable_state(db, user_id)
             await db.commit()
 
         async def consume():
@@ -186,7 +242,7 @@ def test_concurrent_login_refresh_issue_leaves_only_one_active_token():
     )
 
     async def run():
-        engine = create_async_engine(settings.DATABASE_URL)
+        engine = create_async_engine(dedicated_url())
         Session = async_sessionmaker(engine, expire_on_commit=False)
         suffix = str(datetime.now(timezone.utc).timestamp()).replace(".", "")
         username = f"login-race-{suffix}"
@@ -203,6 +259,8 @@ def test_concurrent_login_refresh_issue_leaves_only_one_active_token():
             await db.commit()
             await db.refresh(user)
             user_id = user.id
+            await _seed_durable_state(db, user_id)
+            await db.commit()
 
         async def issue():
             async with Session() as db:
@@ -233,7 +291,7 @@ def test_concurrent_login_refresh_issue_leaves_only_one_active_token():
 
 def test_refresh_waits_for_login_user_lock_and_rechecks_revocation():
     async def run():
-        engine = create_async_engine(settings.DATABASE_URL)
+        engine = create_async_engine(dedicated_url())
         Session = async_sessionmaker(engine, expire_on_commit=False)
         suffix = str(datetime.now(timezone.utc).timestamp()).replace(".", "")
         username = f"login-refresh-race-{suffix}"
@@ -258,6 +316,7 @@ def test_refresh_waits_for_login_user_lock_and_rechecks_revocation():
                     is_revoked=False,
                 )
             )
+            await _seed_durable_state(db, user_id)
             await db.commit()
 
         login_db = Session()
@@ -303,7 +362,7 @@ def test_refresh_waits_for_login_user_lock_and_rechecks_revocation():
 
 def test_refresh_waits_for_logout_user_lock_and_rechecks_revocation():
     async def run():
-        engine = create_async_engine(settings.DATABASE_URL)
+        engine = create_async_engine(dedicated_url())
         Session = async_sessionmaker(engine, expire_on_commit=False)
         suffix = str(datetime.now(timezone.utc).timestamp()).replace(".", "")
         username = f"logout-refresh-race-{suffix}"
@@ -328,6 +387,7 @@ def test_refresh_waits_for_logout_user_lock_and_rechecks_revocation():
                     is_revoked=False,
                 )
             )
+            await _seed_durable_state(db, user_id)
             await db.commit()
 
         logout_db = Session()

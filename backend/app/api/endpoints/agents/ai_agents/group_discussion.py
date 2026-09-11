@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -70,6 +70,7 @@ from app.services.agents.group_discussion import (
 )
 from app.services.agents.group_discussion_public_config import GroupDiscussionPublicConfigService
 from app.utils.cache import cache
+from app.core.stream_session import session_checked_stream
 
 
 router = APIRouter(prefix="/group-discussion")
@@ -322,6 +323,7 @@ async def get_group_discussion_messages(
 
 @router.get("/stream")
 async def stream_group_discussion_messages(
+    request: Request = None,
     session_id: int = Query(..., ge=1),
     after_id: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -389,7 +391,7 @@ async def stream_group_discussion_messages(
                     pass
 
     return StreamingResponse(
-        gen(),
+        session_checked_stream(gen(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

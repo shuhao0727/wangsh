@@ -2,14 +2,20 @@
 FastAPI 依赖注入工具 - 权限控制和用户认证
 """
 
+import errno
+import socket
+
+import asyncpg
 from typing import Optional, Dict, Any, cast
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import exc as sa_exc
 from loguru import logger
 
 from app.db.database import get_db
 from app.core.config import settings
+from app.core.session_family import FamilyStoreUnavailable
 from app.services.auth import get_current_user as auth_get_current_user
 from app.services.auth import verify_token
 from app.core.session_guard import verify_request_session, verify_request_session_detail
@@ -54,6 +60,54 @@ async def get_access_token_sse(
     return _token_from_request(request)
 
 
+def _remember_stream_session(request, user, effective_token) -> None:
+    if isinstance(request, Request):
+        # Preserve the effective credential (including existing Cookie fallback).
+        request.state.accepted_stream_session = (int(user.get("id") or 0), effective_token)
+
+
+def _identity_store_unavailable(exc: BaseException) -> bool:
+    """Recognize transport/admission failures, not arbitrary DB or code errors."""
+    if isinstance(exc, sa_exc.DBAPIError):
+        if isinstance(exc, (sa_exc.ProgrammingError, sa_exc.IntegrityError, sa_exc.DataError)):
+            return False
+        if exc.connection_invalidated:
+            return True
+        exc = exc.orig
+        # SQLAlchemy's asyncpg adapter wraps the driver's error once more.
+        cause = getattr(exc, "__cause__", None)
+        if not isinstance(exc, asyncpg.PostgresError) and isinstance(cause, asyncpg.PostgresError):
+            exc = cause
+    if isinstance(exc, asyncpg.PostgresError):
+        if exc.sqlstate in {"08000", "08001", "08003", "08006", "08007", "53300", "57P01", "57P02", "57P03"}:
+            return True
+        # ALLOW_CONNECTIONS=false is 55000/FATAL at connection admission.
+        # A statement-level 55000/ERROR must remain an error, not become 503.
+        severity = getattr(exc, "severity_en", None) or getattr(exc, "severity", None)
+        return exc.sqlstate == "55000" and severity == "FATAL"
+    if isinstance(exc, (sa_exc.TimeoutError, TimeoutError)):
+        return True
+    if isinstance(exc, socket.gaierror):
+        # Resolver error codes are not POSIX errno; only temporary DNS failure
+        # is retryable. Permanent name/configuration failures remain visible.
+        return exc.errno == socket.EAI_AGAIN
+    return isinstance(exc, OSError) and exc.errno in {
+        errno.ECONNREFUSED, errno.ECONNRESET, errno.ECONNABORTED,
+        errno.ETIMEDOUT, errno.EHOSTUNREACH, errno.ENETUNREACH,
+        errno.ENETDOWN, errno.EPIPE,
+    }
+
+
+async def _lookup_identity(token: str, db: AsyncSession) -> Optional[Dict[str, Any]]:
+    try:
+        return await auth_get_current_user(token, db)
+    except (asyncpg.PostgresError, sa_exc.DBAPIError, sa_exc.TimeoutError, OSError) as exc:
+        if not _identity_store_unavailable(exc):
+            raise
+        # Do not leak driver diagnostics, credentials or query parameters.
+        raise HTTPException(status_code=503, detail="无法核验身份，请稍后重试") from exc
+
+
 async def get_current_user(
     token: Optional[str] = Depends(get_access_token),
     db: AsyncSession = Depends(get_db),
@@ -74,7 +128,7 @@ async def get_current_user(
             detail="未提供认证令牌",
         )
     
-    user = await auth_get_current_user(token, db)
+    user = await _lookup_identity(token, db)
     effective_token = token
     if not user and request is not None:
         cookie_token = (
@@ -83,7 +137,7 @@ async def get_current_user(
             or request.cookies.get("ws_access_token")
         )
         if cookie_token and cookie_token != token:
-            user = await auth_get_current_user(cookie_token, db)
+            user = await _lookup_identity(cookie_token, db)
             if user:
                 effective_token = cookie_token
     if not user:
@@ -94,7 +148,10 @@ async def get_current_user(
     # 会话有效性校验（基于nonce，必要时校验IP）
     try:
         payload = verify_token(effective_token) or {}
-        result = await verify_request_session_detail(int(user.get("id") or 0), payload, request)
+        result = await verify_request_session_detail(
+            int(user.get("id") or 0), payload, request,
+            db=db,
+        )
         if not result.get("ok"):
             reason = str(result.get("reason") or "")
             detail = "会话已失效，请重新登录"
@@ -108,12 +165,15 @@ async def get_current_user(
             )
     except HTTPException:
         raise
+    except FamilyStoreUnavailable as e:
+        raise HTTPException(status_code=503, detail="无法核验会话，请稍后重试") from e
     except Exception as e:
         logger.error("会话验证异常: {}", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话验证失败，请重新登录",
         )
+    _remember_stream_session(request, user, effective_token)
     return cast(UserInfo, user)
 
 
@@ -133,19 +193,22 @@ async def get_current_user_sse(
 
 async def get_current_user_or_none(
     token: Optional[str] = Depends(get_access_token),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,  # type: ignore[assignment]
 ) -> Optional[UserInfo]:
-    """
-    获取当前认证用户（如果存在）
-    
-    返回:
-        用户信息字典或None（如果未认证）
+    """Return a fully verified session identity, or None for anonymous requests.
+
+    Reuse mandatory authentication, including its independent Cookie fallback
+    and nonce/IP checks. A legacy subject lookup alone is not authentication.
     """
     if not token:
         return None
-    
-    user = await auth_get_current_user(token, db)
-    return cast(UserInfo, user) if user else None
+    try:
+        return await get_current_user(token=token, db=db, request=request)
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_401_UNAUTHORIZED:
+            raise
+        return None
 
 
 async def require_super_admin(

@@ -10,12 +10,13 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
+from app.core.stream_session import session_checked_stream
 from app.utils.errors import safe_error_detail
 from app.models.agents import AIAgent, HotQuestionAnalysis, StudentChainAnalysis
 from app.models.agents import TaskAnalysis as TaskAnalysisModel
@@ -51,6 +52,7 @@ router = APIRouter()
 @router.post("/analysis/hot-questions/stream")
 async def save_hot_question_analysis_stream(
     body: HotQuestionAnalysisSaveRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -188,7 +190,7 @@ async def save_hot_question_analysis_stream(
             yield _sse("error", {"message": safe_error_detail("热点问题分析失败", exc), "progress": 100})
 
     return StreamingResponse(
-        event_generator(),
+        session_checked_stream(event_generator(), request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
@@ -197,6 +199,7 @@ async def save_hot_question_analysis_stream(
 @router.post("/analysis/student-chains/stream")
 async def save_student_chain_analysis_stream(
     body: StudentChainAnalysisSaveRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -332,7 +335,7 @@ async def save_student_chain_analysis_stream(
             yield _sse("error", {"message": safe_error_detail("学生问题链分析失败", exc), "progress": 100})
 
     return StreamingResponse(
-        event_generator(),
+        session_checked_stream(event_generator(), request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
@@ -341,6 +344,7 @@ async def save_student_chain_analysis_stream(
 @router.post("/analysis/task-analyses/stream")
 async def save_task_analysis_stream(
     body: TaskAnalysisSaveRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -449,7 +453,7 @@ async def save_task_analysis_stream(
             yield _sse("error", {"message": safe_error_detail("任务分析失败", exc), "progress": 100})
 
     return StreamingResponse(
-        event_generator(),
+        session_checked_stream(event_generator(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

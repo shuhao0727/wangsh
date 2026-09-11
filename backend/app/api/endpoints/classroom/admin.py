@@ -4,8 +4,9 @@ import asyncio
 import json
 import uuid
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import Request, APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
+from app.core.stream_session import session_checked_stream
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -42,6 +43,7 @@ async def _assert_can_manage_activity(
 
 @router.get("/stream")
 async def admin_stream(
+    request: Request,
     current_user: UserInfo = Depends(require_staff),
 ):
     channel = _admin_stream_channel(current_user)
@@ -63,7 +65,7 @@ async def admin_stream(
             await svc.unsubscribe(channel, sub_id)
 
     return StreamingResponse(
-        gen(),
+        session_checked_stream(gen(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

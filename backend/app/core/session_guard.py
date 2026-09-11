@@ -1,10 +1,13 @@
 import ipaddress
+import json
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple, Literal
 from fastapi import Request
+from redis.exceptions import WatchError
 
 from app.core.config import settings
+from app.core.session_family import verify_access_family
 from app.utils.cache import cache
 
 _PREFIX = "auth:session"
@@ -26,15 +29,44 @@ def _split_header(v: str) -> list[str]:
     return [p.strip() for p in str(v or "").split(",") if p.strip()]
 
 
+def _peer_trusted(request: Optional[Request]) -> bool:
+    """转发头只有在连接来源属于可信代理网段时才可被采纳。
+
+    S7 治理：此前 AUTH_TRUST_X_FORWARDED_FOR 对任何直连来源都信任，网络内
+    客户端可直连后端并伪造 X-Forwarded-For 篡改 IP 绑定。现改为 fail-closed：
+    AUTH_TRUSTED_PROXY_CIDRS 为空时不信任任何转发头（等同关闭信任）。
+    """
+    raw = getattr(settings, "AUTH_TRUSTED_PROXY_CIDRS", "") or ""
+    cidrs = [c.strip() for c in raw.split(",") if c.strip()]
+    if not cidrs:
+        return False
+    host = request.client.host if request and request.client else ""
+    if not host:
+        return False
+    try:
+        peer = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    for cidr in cidrs:
+        try:
+            if peer in ipaddress.ip_network(cidr, strict=False):
+                return True
+        except ValueError:
+            # 配置错误由 settings 校验拦截；此处保守忽略坏网段
+            continue
+    return False
+
+
 def extract_client_ip(request: Request) -> str:
     """
     提取客户端IP：
-    - 优先按 AUTH_TRUST_X_FORWARDED_FOR 和 AUTH_IP_HEADER_ORDER
-    - 取 X-Forwarded-For 第一个合法IP
-    - 否则取 client.host
+    - 仅当连接来源（socket peer）属于可信代理网段时才按
+      AUTH_IP_HEADER_ORDER 采用转发头；
+    - 取 X-Forwarded-For 第一个合法IP；
+    - 否则回退真实 peer IP（client.host）。
     """
     header_order = _split_header(settings.AUTH_IP_HEADER_ORDER)
-    if settings.AUTH_TRUST_X_FORWARDED_FOR:
+    if settings.AUTH_TRUST_X_FORWARDED_FOR and _peer_trusted(request):
         for h in header_order:
             hv = request.headers.get(h) or request.headers.get(h.lower())
             if not hv:
@@ -81,12 +113,63 @@ async def get_user_session(user_id: int) -> Optional[Dict[str, Any]]:
     return v if isinstance(v, dict) else None
 
 
+async def get_user_session_strict(user_id: int) -> Optional[Dict[str, Any]]:
+    """Strict auth read: distinguish missing nonce from unavailable/corrupt Redis.
+
+    Ordinary cache reads intentionally degrade to None; that is unsuitable for
+    reporting a revocation as completed. Do not change the global cache policy.
+    """
+    client = await cache.get_client()
+    raw = await client.get(_key_user(user_id))
+    if raw is None:
+        return None
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise RuntimeError("服务端会话记录格式无效")
+    return value
+
+
+async def get_ip_binding_strict(ip: str) -> Optional[Dict[str, Any]]:
+    """Do not silently lose the last pre-migration IP eviction witness."""
+    client = await cache.get_client()
+    raw = await client.get(_key_ip(ip))
+    if raw is None:
+        return None
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise RuntimeError("服务端IP绑定格式无效")
+    return value
+
+
 async def set_user_session(user_id: int, data: Dict[str, Any]) -> bool:
     return await cache.set(_key_user(user_id), data, expire_seconds=_session_ttl())
 
 
-async def set_ip_binding(ip: str, data: Dict[str, Any]) -> bool:
-    return await cache.set(_key_ip(ip), data, expire_seconds=_session_ttl())
+async def set_ip_binding(ip: str, data: Dict[str, Any], *, ttl: Optional[int] = None) -> bool:
+    return await cache.set(_key_ip(ip), data, expire_seconds=_session_ttl() if ttl is None else ttl)
+
+
+async def get_auth_snapshot_strict(keys: list[str]) -> dict[str, tuple[Any, Optional[datetime]]]:
+    """Read values and remaining TTL in one Redis transaction during cutover.
+
+    All legacy writers must be stopped. Local time captured BEFORE dispatch
+    makes the retained deadline conservative even when command delivery is slow.
+    No-expiry/malformed evidence is not converted into a fresh full lease.
+    """
+    client = await cache.get_client()
+    started = datetime.now(timezone.utc)
+    async with client.pipeline(transaction=True) as pipe:
+        for key in keys:
+            pipe.get(key)
+            pipe.pttl(key)
+        values = await pipe.execute()
+    result = {}
+    for i, key in enumerate(keys):
+        raw, ttl = values[2*i:2*i+2]
+        value = json.loads(raw) if raw is not None else None
+        deadline = started + timedelta(milliseconds=ttl) if type(ttl) is int and ttl > 0 else None
+        result[key] = (value, deadline)
+    return result
 
 
 async def get_ip_binding(ip: str) -> Optional[Dict[str, Any]]:
@@ -94,16 +177,61 @@ async def get_ip_binding(ip: str) -> Optional[Dict[str, Any]]:
     return v if isinstance(v, dict) else None
 
 
-async def rotate_user_session(user_id: int, keep_ip: Optional[str] = None) -> Dict[str, Any]:
+async def rotate_user_session(
+    user_id: int, keep_ip: Optional[str] = None, *, nonce: Optional[str] = None,
+) -> Dict[str, Any]:
     """旋转用户会话nonce，踢出旧会话。"""
-    nonce = secrets.token_urlsafe(16)
+    nonce = nonce or secrets.token_urlsafe(16)
     data = {"nonce": nonce, "ip": keep_ip or "", "updated_at": _now_iso()}
     if not await set_user_session(user_id, data):
         raise RuntimeError("无法写入服务端会话")
     return data
 
 
-async def on_successful_login(user_id: int, request: Request) -> Tuple[str, str]:
+async def _rotate_current_ip_owner(ip: str, binding: Dict[str, Any]) -> None:
+    """Only evict the session still identified by this IP binding, atomically.
+
+    WATCH covers both keys: a moved/replaced session or binding must not be
+    invalidated by an earlier login observation. No non-atomic cache fallback.
+    """
+    old_uid = int(binding.get("user_id", 0))
+    expected_nonce = binding.get("nonce")
+    if old_uid <= 0 or not expected_nonce:
+        return  # Incomplete/stale bindings do not identify a live session.
+    get_client = getattr(cache, "get_client", None)
+    if get_client is None:
+        raise RuntimeError("缓存不支持原子会话更新")
+    client = await get_client()
+    ip_key, user_key = _key_ip(ip), _key_user(old_uid)
+    for _ in range(3):
+        try:
+            async with client.pipeline(transaction=True) as pipe:
+                await pipe.watch(ip_key, user_key)
+                raw_binding, raw_session = await pipe.mget(ip_key, user_key)
+                current_binding = json.loads(raw_binding) if raw_binding else None
+                current_session = json.loads(raw_session) if raw_session else None
+                if not isinstance(current_binding, dict) or not isinstance(current_session, dict):
+                    return
+                if (current_binding.get("user_id") != old_uid
+                        or current_binding.get("nonce") != expected_nonce
+                        or current_session.get("nonce") != expected_nonce
+                        or current_session.get("ip") != ip):
+                    return
+                data = {"nonce": secrets.token_urlsafe(16), "ip": "", "updated_at": _now_iso()}
+                pipe.multi()
+                pipe.set(user_key, json.dumps(data, ensure_ascii=False), ex=_session_ttl())
+                written = await pipe.execute()
+                if written != [True]:
+                    raise RuntimeError("无法写入服务端会话")
+                return
+        except WatchError:
+            continue
+    raise RuntimeError("会话并发更新，请重试登录")
+
+
+async def on_successful_login(
+    user_id: int, request: Request, *, nonce: Optional[str] = None,
+) -> Tuple[str, str]:
     """
     登录成功时：
     - 解析客户端IP
@@ -116,11 +244,11 @@ async def on_successful_login(user_id: int, request: Request) -> Tuple[str, str]
     if settings.AUTH_USER_UNIQUE_PER_IP:
         existing = await get_ip_binding(ip)
         if existing and int(existing.get("user_id", 0)) != int(user_id):
-            # 踢掉该IP上的旧用户
-            old_uid = int(existing.get("user_id", 0))
-            await rotate_user_session(old_uid)  # 旧用户下次请求即失效
-    nonce_data = await rotate_user_session(user_id, keep_ip=ip)
-    await set_ip_binding(ip, {"user_id": int(user_id), "nonce": nonce_data["nonce"], "updated_at": _now_iso()})
+            # 只有 binding 仍指向旧用户当前会话时才踢出，避免陈旧 IP 记录误踢。
+            await _rotate_current_ip_owner(ip, existing)
+    nonce_data = await rotate_user_session(user_id, keep_ip=ip, **({"nonce": nonce} if nonce else {}))
+    if not await set_ip_binding(ip, {"user_id": int(user_id), "nonce": nonce_data["nonce"], "updated_at": _now_iso()}):
+        raise RuntimeError("无法写入服务端IP绑定")
     return nonce_data["nonce"], ip
 
 
@@ -128,8 +256,11 @@ async def verify_request_session_detail(
     user_id: int,
     token_payload: Dict[str, Any],
     request: Optional[Request] = None,
+    *, db=None,
 ) -> Dict[str, Literal[True] | Literal[False] | str]:
     """验证请求中的令牌是否与当前有效会话匹配，并返回失败原因。"""
+    if not await verify_access_family(user_id, token_payload, db):
+        return {"ok": False, "reason": "family_revoked"}
     token_nonce = str(token_payload.get("sn", ""))
     stored = await get_user_session(user_id)
     if not stored:

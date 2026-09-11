@@ -4,6 +4,7 @@ auth /login 端点测试
 """
 import asyncio
 
+from types import SimpleNamespace
 from starlette.requests import Request
 from starlette.responses import Response
 from fastapi import HTTPException
@@ -58,9 +59,29 @@ def _patch_login_deps(monkeypatch, user=None, nonce="test-nonce", client_ip="127
         assert commit is False
         return "mock-refresh-token"
 
+    async def fake_verify_refresh_token(db, token):
+        assert db.commit_count == 1
+        assert token == "mock-refresh-token"
+        return {"user_id": user["id"]}
+
+    async def fake_claim_durable_session(db, user_id, nonce, ip):
+        pass
+
+    async def fake_session_state(db, user_id):
+        return SimpleNamespace(
+            active=True, nonce=nonce, ip=client_ip, ip_expires_at=None,
+        )
+
+    async def fake_rotate_user_session(user_id, keep_ip=None, nonce=None):
+        return {"nonce": nonce or "test-nonce"}
+
     async def fake_rate_limiter_check(key, interval_seconds):
         pass  # 默认不限流
 
+    monkeypatch.setattr(auth_api, "verify_refresh_token", fake_verify_refresh_token)
+    monkeypatch.setattr(auth_api, "claim_durable_session", fake_claim_durable_session)
+    monkeypatch.setattr(auth_api, "session_state", fake_session_state)
+    monkeypatch.setattr(auth_api, "rotate_user_session", fake_rotate_user_session)
     monkeypatch.setattr(auth_api, "authenticate_user_auto", fake_authenticate)
     monkeypatch.setattr(auth_api, "on_successful_login", fake_on_successful_login)
     monkeypatch.setattr(auth_api, "create_access_token", fake_create_access_token)

@@ -5,6 +5,15 @@ from starlette.requests import Request
 import app.core.session_guard as session_guard
 
 
+def _patch_durable_family(monkeypatch, *, active=True):
+    """持久权威链路替身：默认会话有效；单测只关注 Redis nonce 部分。"""
+
+    async def fake_verify_access_family(_user_id, _payload, db=None):
+        return active
+
+    monkeypatch.setattr(session_guard, "verify_access_family", fake_verify_access_family)
+
+
 def test_verify_request_session_rejects_missing_server_session(monkeypatch):
     writes = []
 
@@ -17,6 +26,7 @@ def test_verify_request_session_rejects_missing_server_session(monkeypatch):
 
     monkeypatch.setattr(session_guard, "get_user_session", fake_get_user_session)
     monkeypatch.setattr(session_guard, "set_user_session", fake_set_user_session)
+    _patch_durable_family(monkeypatch)
 
     request = Request(
         {
@@ -83,6 +93,7 @@ def test_verify_request_session_detail_reports_replaced_login(monkeypatch):
         return {"nonce": "fresh-nonce", "ip": "127.0.0.1"}
 
     monkeypatch.setattr(session_guard, "get_user_session", fake_get_user_session)
+    _patch_durable_family(monkeypatch)
 
     detail = asyncio.run(session_guard.verify_request_session_detail(7, {"sn": "old-nonce"}, None))
 

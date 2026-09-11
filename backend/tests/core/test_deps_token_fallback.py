@@ -14,7 +14,7 @@ def test_get_current_user_fallback_to_cookie_token(monkeypatch):
             return {"id": 1, "role_code": "super_admin"}
         return None
 
-    async def fake_verify_request_session_detail(_user_id, _payload, _request):
+    async def fake_verify_request_session_detail(_user_id, _payload, _request, db=None):
         return {"ok": True, "reason": "ok"}
 
     def fake_verify_token(_token):
@@ -44,7 +44,7 @@ def test_get_current_user_reports_replaced_login(monkeypatch):
     async def fake_auth_get_current_user(_token, _db):
         return {"id": 1, "role_code": "student"}
 
-    async def fake_verify_request_session_detail(_user_id, _payload, _request):
+    async def fake_verify_request_session_detail(_user_id, _payload, _request, db=None):
         return {"ok": False, "reason": "replaced_by_new_login"}
 
     def fake_verify_token(_token):

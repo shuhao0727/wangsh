@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get("/conversations", response_model=List[ConversationSummary])
 async def list_conversations(
-    agent_id: Optional[int] = Query(None, description="智能体ID过滤"),
+    agent_id: Optional[int] = Query(None, description="智能体ID过滤；省略时返回本人全部智能体会话"),
     limit: int = Query(20, ge=1, le=100, description="每页会话数"),
     current_user: Dict[str, Any] = Depends(require_user),
     db: AsyncSession = Depends(get_db),

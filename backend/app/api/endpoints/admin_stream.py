@@ -2,8 +2,9 @@
 import asyncio
 import json
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import Request, APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from app.core.stream_session import session_checked_stream
 
 from app.core.deps import require_admin_sse
 from app.schemas.user_info import UserInfo
@@ -14,6 +15,7 @@ router = APIRouter()
 
 @router.get("/stream")
 async def admin_stream(
+    request: Request,
     current_user: UserInfo = Depends(require_admin_sse),
 ):
     """管理端 SSE 流 - 推送所有管理相关事件"""
@@ -36,7 +38,7 @@ async def admin_stream(
             await unsubscribe(channel, sub_id)
 
     return StreamingResponse(
-        gen(),
+        session_checked_stream(gen(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

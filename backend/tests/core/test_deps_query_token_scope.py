@@ -61,7 +61,7 @@ def test_get_current_user_sse_authenticates_via_query_token(monkeypatch):
             return {"id": 7, "role_code": "student"}
         return None
 
-    async def fake_verify_request_session_detail(_user_id, _payload, _request):
+    async def fake_verify_request_session_detail(_user_id, _payload, _request, db=None):
         return {"ok": True, "reason": "ok"}
 
     def fake_verify_token(_token):
@@ -95,7 +95,7 @@ def test_generic_http_endpoint_rejects_query_token(monkeypatch):
             return {"id": 3, "role_code": "student"}
         return None
 
-    async def fake_verify_request_session_detail(_user_id, _payload, _request):
+    async def fake_verify_request_session_detail(_user_id, _payload, _request, db=None):
         return {"ok": True, "reason": "ok"}
 
     def fake_verify_token(_token):

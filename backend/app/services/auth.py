@@ -7,8 +7,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import jwt
 from jwt.exceptions import PyJWTError
+from sqlalchemy.exc import MultipleResultsFound
 
 from app.core.config import settings
+from app.core.session_family import (
+    new_family_refresh, refresh_family, lock_auth_mutation, session_state,
+)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -99,14 +103,35 @@ async def authenticate_user_auto(
     return await authenticate_user(db, identifier, credential)
 
 
-async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
-    """
-    获取当前用户 - 支持统一用户系统
-    根据令牌中的type字段区分管理员和学生
+async def resolve_legacy_subject(db, subject):
+    """Resolve only one live legacy identity; ambiguity is not proof of ownership.
+
+    This does not bind mutable subjects to their original token owner. ID/token
+    migration is a separate contract; never choose a first or preferred match.
     """
     from sqlalchemy import select, or_
     from app.models import User
-    
+
+    if not isinstance(subject, str) or not subject:
+        return None
+    result = await db.execute(select(User).where(
+        or_(User.username == subject, User.full_name == subject, User.student_id == subject),
+        User.is_deleted.is_(False),
+        User.is_active.is_(True),
+    ))
+    try:
+        return result.scalar_one_or_none()
+    except MultipleResultsFound:
+        return None
+
+
+async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
+    """
+    Internal legacy identity lookup after JWT verification, not session authentication.
+
+    Does not validate nonce/IP or bind a mutable subject to its original owner.
+    Request authentication must use core.deps session-verifying dependencies.
+    """
     payload = verify_token(token)
     if payload is None:
         return None
@@ -114,19 +139,12 @@ async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
     subject = payload.get("sub")  # JWT中的subject
     role_code = payload.get("role_code")  # 从令牌中获取角色代码
     
-    if subject is None:
+    if not isinstance(subject, str) or not subject:
         return None
     
-    # 如果有数据库连接，从数据库获取用户
-    if db:
-        query = select(User).where(
-            or_(User.username == subject, User.full_name == subject, User.student_id == subject),
-            User.is_deleted.is_(False),
-            User.is_active.is_(True)
-        )
-
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
+    # A supplied DB is authoritative; missing/ambiguous users are not claims-only identities.
+    if db is not None:
+        user = await resolve_legacy_subject(db, subject)
         
         if user:
             return {
@@ -141,6 +159,7 @@ async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
                 "created_at": user.created_at,
                 "updated_at": user.updated_at
             }
+        return None
     
     # 没有数据库连接时，返回令牌中的基本用户信息
     return {
@@ -195,6 +214,7 @@ async def lock_user_for_login(db, user_id: int) -> bool:
     from sqlalchemy import select
     from app.models import User
 
+    await lock_auth_mutation(db)
     result = await db.execute(
         select(User.id)
         .where(
@@ -229,7 +249,7 @@ async def issue_login_refresh_token(
             .values(is_revoked=True)
         )
 
-        token = secrets.token_urlsafe(64)
+        token = new_family_refresh()
         db.add(
             RefreshToken(
                 user_id=user_id,
@@ -311,6 +331,8 @@ async def rotate_refresh_token(
     import secrets
 
     try:
+        await lock_auth_mutation(db)
+        family = refresh_family(token)
         # 先只读取 user_id，再按与登录一致的顺序获取“用户行 -> token 行”锁。
         # 锁后必须重新校验 token，避免登录在等待期间已经将其撤销。
         owner_query = select(RefreshToken.user_id).where(
@@ -341,6 +363,11 @@ async def rotate_refresh_token(
             await db.rollback()
             return None
 
+        state = await session_state(db, user_id)
+        if state is None or not state.active or (family and state.nonce != family):
+            await db.rollback()
+            return None
+
         token_query = (
             select(RefreshToken)
             .where(
@@ -359,7 +386,7 @@ async def rotate_refresh_token(
             await db.rollback()
             return None
 
-        new_token = secrets.token_urlsafe(64)
+        new_token = new_family_refresh(family) if family else secrets.token_urlsafe(64)
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
@@ -384,10 +411,42 @@ async def rotate_refresh_token(
             "class_name": user.class_name,
             "study_year": user.study_year,
             "refresh_token": new_token,
+            "session_family": family,
         }
     except Exception:
         await db.rollback()
         raise
+
+
+async def lock_refresh_token_owner_for_logout(db, token: str) -> Optional[int]:
+    """仅以仍有效的 refresh 授权退出；返回时持有用户行和 token 行锁。"""
+    from sqlalchemy import select
+    from app.models import RefreshToken
+
+    def valid_token_query():
+        return select(RefreshToken.user_id).where(
+            RefreshToken.token == token,
+            RefreshToken.expires_at > datetime.now(timezone.utc),
+            RefreshToken.is_revoked.is_(False),
+        )
+
+    # 与 login/refresh 一致：先只读归属，再锁用户，最后锁 token 并重验。
+    # 不能仅凭第一次查询得到的 user_id 撤销：等待用户锁时可能已经重登。
+    owner_result = await db.execute(valid_token_query())
+    user_id = owner_result.scalar_one_or_none()
+    if user_id is None or not await lock_user_for_login(db, user_id):
+        await db.rollback()
+        return None
+
+    token_result = await db.execute(
+        valid_token_query()
+        .where(RefreshToken.user_id == user_id)
+        .with_for_update()
+    )
+    if token_result.scalar_one_or_none() is None:
+        await db.rollback()
+        return None
+    return user_id
 
 
 async def revoke_all_user_refresh_tokens(
@@ -419,3 +478,130 @@ async def revoke_all_user_refresh_tokens(
         await db.commit()
     
     return True
+
+
+class AuthCutoverEvidenceError(ValueError):
+    """Safe operator diagnostic: only unproven integer user ids, never tokens."""
+    def __init__(self, user_ids):
+        self.user_ids = sorted(user_ids)
+        super().__init__("Unproven legacy users require explicit reauthentication approval: "
+                         + ",".join(map(str, self.user_ids)))
+
+
+async def bootstrap_durable_auth_authority(
+    db, *, legacy_writers_stopped: bool = False,
+    reauthenticate_user_ids: frozenset[int] = frozenset(),
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Explicit one-time cutover; NEVER call from requests or application startup.
+
+    Stop old authentication writers and drain in-flight requests first. Preserve
+    legacy credentials only where the per-user cache proves the current nonce/IP.
+    Missing/conflicting evidence with live refresh requires explicit per-user
+    reauthentication approval; no implicit bulk logout. The whole baseline and
+    ready gate commit together. Caller must not mix unrelated pending DB writes.
+    """
+    import secrets
+    from sqlalchemy import select, text
+    from app.models import AuthAuthority, AuthSessionState, RefreshToken, User
+    from app.core.session_guard import get_auth_snapshot_strict, _key_user, _key_ip
+    from app.core.session_family import valid_family_nonce
+
+    if not legacy_writers_stopped:
+        raise ValueError("Stop and drain all legacy authentication writers before cutover")
+    if any(type(uid) is not int or uid <= 0 for uid in reauthenticate_user_ids):
+        raise ValueError("Reauthentication approval requires exact positive integer user ids")
+    if db.in_transaction():
+        raise ValueError("Cutover requires a fresh dedicated transaction")
+    try:
+        await lock_auth_mutation(db, require_ready=False)
+        gate = await db.scalar(select(AuthAuthority).where(AuthAuthority.id == 1).with_for_update())
+        if gate is None:
+            raise RuntimeError("Apply the AUTH authority migration first")
+        if gate.ready:
+            await db.rollback()
+            return {"already_ready": 1, "preserved": 0, "reauthenticate": 0}
+        if await db.scalar(select(AuthSessionState.user_id).limit(1)) is not None:
+            raise RuntimeError("Closed authority has existing evidence; refusing to overwrite it")
+        if db.get_bind().dialect.name == "postgresql":
+            # Unlike the advisory lock, these also fence non-AUTH account/token
+            # writers while reading the baseline. Operational Redis freeze and
+            # draining OLD replicas are still mandatory, not inferred here.
+            quote = db.get_bind().dialect.identifier_preparer.quote
+            names = ", ".join(quote(m.__table__.name) for m in (User, RefreshToken))
+            await db.execute(text(f"LOCK TABLE {names} IN SHARE ROW EXCLUSIVE MODE"))
+        users = (await db.execute(select(User).order_by(User.id))).scalars().all()
+        if not reauthenticate_user_ids <= {user.id for user in users}:
+            raise ValueError("Reauthentication approval contains unknown user ids")
+        live = (await db.execute(select(RefreshToken).where(
+            RefreshToken.is_revoked.is_(False),
+            RefreshToken.expires_at > datetime.now(timezone.utc),
+        ))).scalars().all()
+        live_uids = {token.user_id for token in live}
+        sessions = {}
+        deadlines = {}
+        uncertain = set()
+        snapshot = await get_auth_snapshot_strict([_key_user(user.id) for user in users]) if users else {}
+        for user in users:
+            if not user.is_active or user.is_deleted or user.id in reauthenticate_user_ids:
+                continue
+            cached, deadline = snapshot[_key_user(user.id)]
+            if (isinstance(cached, dict) and valid_family_nonce(cached.get("nonce"))
+                    and isinstance(cached.get("ip"), str) and 0 < len(cached["ip"]) <= 64
+                    and deadline is not None):
+                sessions[user.id] = cached
+                deadlines[user.id] = deadline
+            elif user.id in live_uids or cached is not None:
+                uncertain.add(user.id)
+        if settings.AUTH_USER_UNIQUE_PER_IP:
+            groups = {}
+            for uid, cached in sessions.items():
+                groups.setdefault(cached["ip"], []).append(uid)
+            bindings = await get_auth_snapshot_strict([_key_ip(ip) for ip in groups]) if groups else {}
+            for ip, uids in groups.items():
+                binding, deadline = bindings[_key_ip(ip)]
+                if binding is None and len(uids) == 1:
+                    # User snapshot proves sole owner even if IP key was lost.
+                    # Retain only that existing remaining lease, never reset TTL.
+                    continue
+                winner = binding.get("user_id") if isinstance(binding, dict) else None
+                if (type(winner) is int and winner > 0 and winner in uids
+                        and valid_family_nonce(binding.get("nonce"))
+                        and binding["nonce"] == sessions[winner]["nonce"]
+                        and deadline is not None):
+                    deadlines[winner] = min(deadlines[winner], deadline)
+                    for uid in uids:
+                        if uid != winner:
+                            sessions.pop(uid)
+                else:
+                    uncertain.update(uids)
+        if uncertain:
+            raise AuthCutoverEvidenceError(uncertain)
+        for user in users:
+            cached = sessions.get(user.id)
+            db.add(AuthSessionState(
+                user_id=user.id,
+                nonce=cached["nonce"] if cached else secrets.token_urlsafe(16),
+                ip=cached["ip"] if cached else "", active=cached is not None,
+                ip_expires_at=deadlines[user.id] if cached else None,
+            ))
+        for token in live:
+            cached = sessions.get(token.user_id)
+            try:
+                family = refresh_family(token.token)
+            except ValueError:
+                family = "invalid"
+            if not cached or (family and family != cached["nonce"]):
+                token.is_revoked = True
+        gate.ready = True
+        result = {"already_ready": 0, "preserved": len(sessions),
+                  "reauthenticate": len(live_uids - sessions.keys())}
+        await db.flush()
+        if dry_run:
+            await db.rollback()
+        else:
+            await db.commit()
+        return result
+    except BaseException:
+        await db.rollback()
+        raise

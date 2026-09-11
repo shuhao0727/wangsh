@@ -3,8 +3,9 @@
 import asyncio
 import json
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Request, APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from app.core.stream_session import session_checked_stream
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -60,6 +61,7 @@ async def get_active_activities(
 
 @router.get("/stream")
 async def student_stream(
+    request: Request,
     current_user: UserInfo = Depends(require_student_sse),
 ):
     sub_id = str(uuid.uuid4())
@@ -81,7 +83,7 @@ async def student_stream(
             await svc.unsubscribe(channel, sub_id)
 
     return StreamingResponse(
-        gen(),
+        session_checked_stream(gen(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

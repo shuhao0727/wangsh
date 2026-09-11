@@ -18,6 +18,8 @@ from app.core.config import settings
 from app.core.celery_app import celery_app
 from app.db.database import get_db
 from app.services.auth import get_current_user as auth_get_current_user
+from app.api.pythonlab.ws.connection_auth import authenticated_ws, cancel_and_join, read_pty
+from app.api.pythonlab.ws.cleanup_state import cleanup_dap_connection
 from app.utils.cache import cache
 from app.api.pythonlab.constants import (
     CACHE_KEY_SESSION_PREFIX,
@@ -37,7 +39,7 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_TERMINATING,
 )
 from app.api.pythonlab.utils import now_iso
-from app.api.pythonlab.ws.validation import _extract_ws_token, _normalize_client_conn_id, _parse_last_seq, _build_dap_host_candidates
+from app.api.pythonlab.ws.validation import _normalize_client_conn_id, _parse_last_seq, _build_dap_host_candidates
 from app.api.pythonlab.ws.bridge import _get_or_create_dap_bridge, _DAP_BRIDGES
 
 
@@ -73,11 +75,6 @@ def _compat_cache_backend():
 
 def _compat_celery_backend():
     return _resolve_handler_runtime("celery_app", _HANDLER_DEFAULT_CELERY_APP)
-
-
-async def _compat_auth_get_current_user(token: str, db: AsyncSession):
-    fn = _resolve_handler_runtime("auth_get_current_user", _HANDLER_DEFAULT_AUTH_GET_CURRENT_USER)
-    return await fn(token, db)
 
 
 def _compat_get_or_create_dap_bridge():
@@ -124,23 +121,11 @@ router = APIRouter()
 
 
 @router.websocket("/sessions/{session_id}/terminal")
+@authenticated_ws(lambda: _resolve_handler_runtime("auth_get_current_user", _HANDLER_DEFAULT_AUTH_GET_CURRENT_USER))
 async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depends(get_db)):
-    """终端 WebSocket 端点"""
-    await websocket.accept()
-    logger.info("terminal ws accepted: session_id={}", session_id)
+    user = websocket.user
     cache_backend = _compat_cache_backend()
     celery_backend = _compat_celery_backend()
-
-    token = _extract_ws_token(websocket)
-    if not token:
-        logger.warning("terminal ws no token: session_id={}", session_id)
-        await websocket.close(code=4401)
-        return
-    user = await _compat_auth_get_current_user(token, db)
-    if not user:
-        logger.warning("terminal ws auth failed: session_id={}", session_id)
-        await websocket.close(code=4401)
-        return
 
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     meta = await cache_backend.get(session_key)
@@ -159,6 +144,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
         await websocket.close(code=4403)
         return
 
+    await websocket.check_session()
     from app.core.sandbox.docker import DockerProvider
     provider = DockerProvider()
 
@@ -174,6 +160,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             meta["last_heartbeat_at"] = _compat_now_iso()
             ttl = int(meta.get("ttl_seconds") or 300)
             await cache_backend.set(session_key, meta, expire_seconds=ttl)
+            await websocket.check_session()
             process, pty_fd = await provider.exec_tty(
                 session_id,
                 meta,
@@ -181,6 +168,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             )
             logger.info("terminal ws exec tty started: session_id={}", session_id)
         else:
+            await websocket.check_session()
             process, pty_fd = await provider.attach_tty(session_id, meta)
             logger.info("terminal ws attached tty: session_id={}", session_id)
     except Exception as e:
@@ -231,12 +219,11 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
     async def pump_tty_to_ws():
         """将 TTY 数据泵送到 WebSocket"""
         try:
-            loop = asyncio.get_running_loop()
             while True:
                 if pty_fd is None:
                     break
                 try:
-                    data = await loop.run_in_executor(None, os.read, pty_fd, 4096)
+                    data = await read_pty(pty_fd, 4096)
                 except OSError as e:
                     if getattr(e, "errno", None) == 5:
                         break
@@ -275,11 +262,15 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             except Exception:
                 pass
 
+    pumps = []
     try:
-        await asyncio.gather(pump_ws_to_tty(), pump_tty_to_ws())
+        await websocket.check_session()
+        pumps = [asyncio.create_task(pump_ws_to_tty()), asyncio.create_task(pump_tty_to_ws())]
+        await asyncio.wait(pumps, return_when=asyncio.FIRST_COMPLETED)
     except Exception as e:
         logger.error(f"Terminal WS loop error: {e}")
     finally:
+        await cancel_and_join(*pumps)
         # 首先关闭 PTY 文件描述符以解除任何挂起的 os.read() 阻塞，然后终止附加子进程
         if pty_fd is not None:
             try:
@@ -291,6 +282,7 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             try:
                 if process.returncode is None:
                     process.kill()  # 使用 kill() 而不是 terminate() 进行立即清理
+                await asyncio.wait_for(process.wait(), timeout=1.0)
             except ProcessLookupError:
                 pass
             except Exception:
@@ -299,9 +291,10 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
 
 
 @router.websocket("/sessions/{session_id}/ws")
+@authenticated_ws(lambda: _resolve_handler_runtime("auth_get_current_user", _HANDLER_DEFAULT_AUTH_GET_CURRENT_USER))
 async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depends(get_db)):
     """DAP WebSocket 端点"""
-    await websocket.accept()
+    user = websocket.user
     conn_started_at = _compat_now_iso()
     conn_id = uuid.uuid4().hex[:12]
     client_conn_id = _normalize_client_conn_id(websocket.query_params.get("client_conn_id"))
@@ -326,18 +319,9 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         except Exception:
             pass
 
-    token = _extract_ws_token(websocket)
-    if not token:
-        _ws_log("ws_auth_missing_token")
-        await websocket.close(code=4401)
-        return
-    user = await _compat_auth_get_current_user(token, db)
-    if not user:
-        _ws_log("ws_auth_invalid_token")
-        await websocket.close(code=4401)
-        return
     user_id = int(user.get("id") or 0)
     _ws_log("ws_auth_ok")
+
 
     session_key = f"{CACHE_KEY_SESSION_PREFIX}:{session_id}"
     meta = await cache_backend.get(session_key)
@@ -401,49 +385,6 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         last_seq=last_seq,
     )
 
-    acquired_owner = await redis_client.set(ws_owner_key, ws_owner_value, nx=True, px=ws_owner_ttl * 1000)
-    if not acquired_owner:
-        if ws_owner_mode == "steal":
-            _ws_log("ws_owner_steal", ws_epoch=ws_epoch)
-            await redis_client.set(ws_owner_key, ws_owner_value, px=ws_owner_ttl * 1000)
-            acquired_owner = True
-            try:
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "event",
-                            "event": "output",
-                            "body": {
-                                "category": "stderr",
-                                "output": "检测到并发调试连接，已接管当前会话。\n",
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                )
-            except Exception:
-                pass
-        else:
-            _ws_log("ws_owner_deny", ws_epoch=ws_epoch)
-            try:
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "event",
-                            "event": "output",
-                            "body": {
-                                "category": "stderr",
-                                "output": "该会话正在其他窗口调试，请先停止原会话或稍后重试。\n",
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                )
-            except Exception:
-                pass
-            await websocket.close(code=4429, reason="deny_in_use")
-            return
-
     async def _owner_keepalive() -> None:
         """保持所有者状态活跃"""
         while True:
@@ -461,7 +402,6 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
             except Exception:
                 return
 
-    owner_keepalive_task = asyncio.create_task(_owner_keepalive())
 
     async def _save_meta() -> None:
         """保存元数据到缓存"""
@@ -483,18 +423,6 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
         }
         await _save_meta()
 
-    async def _clear_debug_owner() -> None:
-        """清除调试所有者信息"""
-        owner = meta.get("debug_owner") if isinstance(meta.get("debug_owner"), dict) else None
-        if not owner:
-            return
-        if str(owner.get("conn_id") or "") != conn_id:
-            return
-        meta.pop("debug_owner", None)
-        await _save_meta()
-
-    await _set_debug_owner("active")
-
     async def _touch() -> None:
         """更新最后心跳时间"""
         meta["last_heartbeat_at"] = _compat_now_iso()
@@ -515,7 +443,54 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
             pass
 
     bridge = None
+    receive_task = None
     try:
+        acquired_owner = await redis_client.set(ws_owner_key, ws_owner_value, nx=True, px=ws_owner_ttl * 1000)
+        if not acquired_owner:
+            if ws_owner_mode == "steal":
+                _ws_log("ws_owner_steal", ws_epoch=ws_epoch)
+                await redis_client.set(ws_owner_key, ws_owner_value, px=ws_owner_ttl * 1000)
+                acquired_owner = True
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "event",
+                                "event": "output",
+                                "body": {
+                                    "category": "stderr",
+                                    "output": "检测到并发调试连接，已接管当前会话。\n",
+                                },
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                except Exception:
+                    pass
+            else:
+                _ws_log("ws_owner_deny", ws_epoch=ws_epoch)
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "event",
+                                "event": "output",
+                                "body": {
+                                    "category": "stderr",
+                                    "output": "该会话正在其他窗口调试，请先停止原会话或稍后重试。\n",
+                                },
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                except Exception:
+                    pass
+                await websocket.close(code=4429, reason="deny_in_use")
+                return
+
+        owner_keepalive_task = asyncio.create_task(_owner_keepalive())
+        await _set_debug_owner("active")
+        await websocket.check_session()
         bridge_factory = _compat_get_or_create_dap_bridge()
         bridge = await bridge_factory(
             session_id=session_id,
@@ -529,6 +504,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
             cache_backend=cache_backend,
             celery_backend=celery_backend,
         )
+        await websocket.check_session()
         await bridge.attach_client(
             websocket,
             conn_id,
@@ -537,6 +513,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
             conn_id=conn_id,
             client_conn_id=client_conn_id,
         )
+        await websocket.check_session()
         await _set_debug_owner("active")
         while True:
             receive_baseline_seq = bridge.gateway_seq
@@ -579,6 +556,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                     raise background_exc
                 break
             await _touch()
+            await websocket.check_session()
             await bridge.handle_client_text(data)
     except WebSocketDisconnect:
         _ws_log("ws_disconnected", ws_epoch=ws_epoch)
@@ -598,6 +576,7 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                 pass
         return
     finally:
+        await cancel_and_join(receive_task)
         _ws_log("ws_finalizing", ws_epoch=ws_epoch)
         try:
             if owner_keepalive_task is not None:
@@ -605,47 +584,10 @@ async def dap_ws(websocket: WebSocket, session_id: str, db: AsyncSession = Depen
                 await owner_keepalive_task
         except BaseException:
             pass
-        try:
-            script = """
-            if redis.call('get', KEYS[1]) == ARGV[1] then
-                return redis.call('del', KEYS[1])
-            else
-                return 0
-            end
-            """
-            await redis_client.eval(script, 1, ws_owner_key, ws_owner_value)  # type: ignore[misc]
-        except Exception:
-            pass
-        try:
-            if bridge is not None:
-                await bridge.detach_client(conn_id)
-        except Exception:
-            pass
-        try:
-            preserve_runtime = bridge.should_preserve_runtime() if bridge is not None else False
-            if preserve_runtime:
-                await _set_debug_owner("detached")
-            else:
-                await _clear_debug_owner()
-        except Exception:
-            pass
-        try:
-            preserve_runtime = bridge.should_preserve_runtime() if bridge is not None else False
-            if not preserve_runtime:
-                latest_meta = await cache_backend.get(session_key) or meta
-                latest_owner = latest_meta.get("debug_owner") if isinstance(latest_meta.get("debug_owner"), dict) else None
-                if latest_owner and str(latest_owner.get("conn_id") or "") != conn_id:
-                    _ws_log("ws_finalize_skip_ready_restore_owner_mismatch", ws_epoch=ws_epoch)
-                    latest_meta = meta
-                current_status = str(latest_meta.get("status") or "")
-                attached_marked = bool(bridge.attached_marked) if bridge is not None else False
-                if current_status not in {SESSION_STATUS_TERMINATED, SESSION_STATUS_FAILED, SESSION_STATUS_TERMINATING} and attached_marked:
-                    latest_meta["status"] = SESSION_STATUS_READY
-                    latest_meta["last_heartbeat_at"] = _compat_now_iso()
-                    ttl = int(latest_meta.get("ttl_seconds") or attached_ttl)
-                    await cache_backend.set(session_key, latest_meta, expire_seconds=ttl)
-        except Exception:
-            pass
+        await cleanup_dap_connection(
+            redis_client, session_key, ws_owner_key, ws_owner_value,
+            conn_id, bridge, _compat_now_iso,
+        )
         try:
             await websocket.close()
         except Exception:

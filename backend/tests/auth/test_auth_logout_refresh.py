@@ -2,18 +2,57 @@
 auth /logout 和 /refresh 端点测试
 """
 import asyncio
+import json
+from types import SimpleNamespace
 from fastapi import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
 import app.api.endpoints.auth.auth as auth_api
 from app.core.config import settings
+from app.core import session_guard
+from app.services import auth as auth_service
+
+# 新持久权威合同中的有效 nonce（22 位 [A-Za-z0-9_-]）。
+NONCE_22 = "abcdefghijklmnopqrstuv"
+
+
+class _SmartResult:
+    """回答新持久权威链路的合成查询：ready gate、会话状态与 legacy subject。"""
+
+    def __init__(self, user_id=7, nonce="current-nonce"):
+        self._user_id = user_id
+        self._nonce = nonce
+
+    def scalar(self):
+        return True  # auth_authority.ready
+
+    def scalar_one_or_none(self):
+        # 同一合成行同时回答 User / RefreshToken / AuthSessionState 查询。
+        return SimpleNamespace(
+            id=self._user_id, user_id=self._user_id,
+            is_active=True, is_deleted=False,
+            role_code="admin", username="admin", full_name="Admin",
+            student_id=None, class_name=None, study_year=None,
+            active=True, nonce=self._nonce, ip="127.0.0.1",
+            ip_expires_at=None, is_revoked=False,
+            expires_at=None,
+        )
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
 
 
 class _EndpointDB:
-    def __init__(self):
+    def __init__(self, user_id=7, nonce="current-nonce"):
+        self._user_id = user_id
+        self._nonce = nonce
         self.commit_count = 0
         self.rollback_count = 0
+        self.updates = 0
 
     async def commit(self):
         self.commit_count += 1
@@ -21,6 +60,54 @@ class _EndpointDB:
     async def rollback(self):
         self.rollback_count += 1
 
+    async def flush(self):
+        pass
+
+    def add(self, value):
+        pass
+
+    def get_bind(self):
+        # 合成替身按 SQLite 方言处理，跳过 PostgreSQL 专属 advisory lock。
+        return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+    async def scalar(self, _query):
+        return True  # auth_authority.ready
+
+    async def execute(self, query):
+        if "UPDATE" in str(query):
+            self.updates += 1
+        return _SmartResult(self._user_id, self._nonce)
+
+
+def _patch_strict_session(monkeypatch, get_session):
+    """注入合成缓存：内存会话 + 与真实一致的 strict JSON 读取。"""
+
+    class RawSessionClient:
+        async def get(self, key):
+            assert key.startswith("auth:session:uid:")
+            value = await get_session(int(key.rsplit(":", 1)[1]))
+            return None if value is None else json.dumps(value).encode()
+
+    class _MemoryCache:
+        def __init__(self):
+            self.data = {}
+            self._get_session = get_session
+
+        async def get_client(self):
+            return RawSessionClient()
+
+        async def set(self, key, value, *, expire_seconds=None):
+            self.data[key] = value
+            return True
+
+        async def get(self, key):
+            value = await self._get_session(int(key.rsplit(":", 1)[1]))
+            return None if value is None else json.dumps(value).encode()
+
+    cache_obj = _MemoryCache()
+    monkeypatch.setattr(session_guard, "cache", cache_obj)
+    # Exercise the actual strict reader, including JSON decoding.
+    return cache_obj
 
 def _make_request(cookies=None, ip="127.0.0.1"):
     headers = []
@@ -55,13 +142,9 @@ def test_logout_locks_user_and_revokes_refresh_tokens_in_one_transaction(monkeyp
     captured = {}
     events = []
 
-    class _Result:
-        def scalar_one_or_none(self):
-            return 7
-
     class _DB(_EndpointDB):
         async def execute(self, _query):
-            return _Result()
+            return _SmartResult()
 
         async def commit(self):
             events.append("commit")
@@ -81,15 +164,10 @@ def test_logout_locks_user_and_revokes_refresh_tokens_in_one_transaction(monkeyp
         captured["revoke_commit"] = commit
         return True
 
-    async def fake_rotate(user_id):
-        events.append("rotate-nonce")
-        captured["rotated_user_id"] = user_id
-        return {"nonce": "rotated"}
-
     monkeypatch.setattr(auth_api, "lock_user_for_login", fake_lock_user_for_login)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
-    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all)
-    monkeypatch.setattr(auth_api, "rotate_user_session", fake_rotate)
+    _patch_strict_session(monkeypatch, fake_get_session)
+    # revoke_durable_session 在函数内部从 app.services.auth 导入，需在该模块 patch。
+    monkeypatch.setattr(auth_service, "revoke_all_user_refresh_tokens", fake_revoke_all)
 
     db = _DB()
     result = asyncio.run(
@@ -102,18 +180,18 @@ def test_logout_locks_user_and_revokes_refresh_tokens_in_one_transaction(monkeyp
         )
     )
 
+    # 新持久权威合同：登出在单一事务内撤销持久会话与全部 refresh，
+    # 不再有独立的 Redis nonce 轮换步骤。
     assert result["message"] == "登出成功"
     assert captured == {
         "locked_user_id": 7,
         "revoked_user_id": 7,
         "revoke_commit": False,
-        "rotated_user_id": 7,
     }
     assert db.commit_count == 1
     assert events == [
         "lock-user",
         "revoke-refresh",
-        "rotate-nonce",
         "commit",
     ]
 
@@ -152,6 +230,11 @@ def test_login_uses_atomic_refresh_token_issue(monkeypatch):
             "student_id": "T007",
         }
 
+    async def fake_verify_refresh_token(db, token):
+        assert db.commit_count == 1
+        assert token == "atomic-refresh-token"
+        return {"user_id": 7}
+
     async def fake_on_successful_login(user_id, request):
         return "login-nonce", "127.0.0.1"
 
@@ -178,6 +261,7 @@ def test_login_uses_atomic_refresh_token_issue(monkeypatch):
         raise AssertionError("login must not create refresh tokens in a separate transaction")
 
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
+    monkeypatch.setattr(auth_api, "verify_refresh_token", fake_verify_refresh_token)
     monkeypatch.setattr(auth_api, "authenticate_user_auto", fake_authenticate)
     monkeypatch.setattr(auth_api, "on_successful_login", fake_on_successful_login)
     monkeypatch.setattr(
@@ -267,15 +351,16 @@ def test_refresh_success(monkeypatch):
         return "new-access-token"
 
     async def fake_get_session(user_id):
-        return {"nonce": "existing-nonce"}
+        # 新契约：缓存中的 nonce 必须符合 family 格式（22 位）。
+        return {"nonce": NONCE_22}
 
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
     monkeypatch.setattr(auth_api, "rotate_refresh_token", fake_rotate, raising=False)
 
     monkeypatch.setattr(auth_api, "create_access_token", fake_create_access)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
+    _patch_strict_session(monkeypatch, fake_get_session)
 
-    db = _EndpointDB()
+    db = _EndpointDB(user_id=1, nonce=NONCE_22)
     result = asyncio.run(auth_api.refresh_access_token(
         request=_make_request(),
         response=Response(),
@@ -316,14 +401,14 @@ def test_refresh_rotation_rejects_old_token(monkeypatch):
         return "rotated-access-token"
 
     async def fake_get_session(user_id):
-        return {"nonce": "nonce-9"}
+        return {"nonce": NONCE_22}
 
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
     monkeypatch.setattr(auth_api, "rotate_refresh_token", fake_rotate)
     monkeypatch.setattr(auth_api, "create_access_token", fake_create_access)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
+    _patch_strict_session(monkeypatch, fake_get_session)
 
-    first_db = _EndpointDB()
+    first_db = _EndpointDB(user_id=9, nonce=NONCE_22)
     first = asyncio.run(auth_api.refresh_access_token(
         request=_make_request(),
         response=Response(),
@@ -338,13 +423,13 @@ def test_refresh_rotation_rejects_old_token(monkeypatch):
             request=_make_request(),
             response=Response(),
             refresh_token="rt-1",
-            db=_EndpointDB(),
+            db=_EndpointDB(user_id=9, nonce=NONCE_22),
         ))
         assert False, "旧 refresh token 应该失效"
     except HTTPException as e:
         assert e.status_code == 401
 
-    second_db = _EndpointDB()
+    second_db = _EndpointDB(user_id=9, nonce=NONCE_22)
     second = asyncio.run(auth_api.refresh_access_token(
         request=_make_request(),
         response=Response(),
@@ -404,13 +489,8 @@ def test_logout_revokes_tokens_rotates_session_and_deletes_cookies(monkeypatch):
     captured = {}
     token = auth_api.create_access_token({"sub": "admin", "sn": "current-nonce"})
 
-    class _Result:
-        def scalar_one_or_none(self):
-            return 7
-
     class _DB(_EndpointDB):
-        async def execute(self, _query):
-            return _Result()
+        pass
 
     async def fake_lock_user_for_login(_db, user_id):
         assert user_id == 7
@@ -425,14 +505,9 @@ def test_logout_revokes_tokens_rotates_session_and_deletes_cookies(monkeypatch):
         assert user_id == 7
         return {"nonce": "current-nonce"}
 
-    async def fake_rotate(user_id):
-        captured["rotated_user_id"] = user_id
-        return {"nonce": "new"}
-
     monkeypatch.setattr(auth_api, "lock_user_for_login", fake_lock_user_for_login)
-    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
-    monkeypatch.setattr(auth_api, "rotate_user_session", fake_rotate)
+    monkeypatch.setattr(auth_service, "revoke_all_user_refresh_tokens", fake_revoke_all)
+    _patch_strict_session(monkeypatch, fake_get_session)
 
     response = Response()
     asyncio.run(
@@ -445,7 +520,8 @@ def test_logout_revokes_tokens_rotates_session_and_deletes_cookies(monkeypatch):
         )
     )
 
-    assert captured == {"revoked_user_id": 7, "rotated_user_id": 7}
+    # 新持久权威合同：撤销在单一 DB 事务内完成，没有独立的 Redis 轮换。
+    assert captured == {"revoked_user_id": 7}
     set_cookie_headers = response.headers.getlist("set-cookie")
     assert any(settings.ACCESS_TOKEN_COOKIE_NAME in value for value in set_cookie_headers)
     assert any(settings.REFRESH_TOKEN_COOKIE_NAME in value for value in set_cookie_headers)
@@ -455,13 +531,8 @@ def test_logout_with_replaced_session_only_clears_current_client_cookies(monkeyp
     captured = {}
     token = auth_api.create_access_token({"sub": "admin", "sn": "stale-nonce"})
 
-    class _Result:
-        def scalar_one_or_none(self):
-            return 7
-
     class _DB(_EndpointDB):
-        async def execute(self, _query):
-            return _Result()
+        pass
 
     async def fake_lock_user_for_login(_db, user_id):
         assert user_id == 7
@@ -475,14 +546,9 @@ def test_logout_with_replaced_session_only_clears_current_client_cookies(monkeyp
         captured["revoked_user_id"] = user_id
         return True
 
-    async def fake_rotate(user_id):
-        captured["rotated_user_id"] = user_id
-        return {"nonce": "new"}
-
     monkeypatch.setattr(auth_api, "lock_user_for_login", fake_lock_user_for_login)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
-    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all)
-    monkeypatch.setattr(auth_api, "rotate_user_session", fake_rotate)
+    _patch_strict_session(monkeypatch, fake_get_session)
+    monkeypatch.setattr(auth_service, "revoke_all_user_refresh_tokens", fake_revoke_all)
 
     response = Response()
     result = asyncio.run(
@@ -507,7 +573,7 @@ def test_logout_still_clears_cookies_when_session_rotation_fails(monkeypatch):
 
     class _Result:
         def scalar_one_or_none(self):
-            return 7
+            return SimpleNamespace(id=7)
 
     class _DB(_EndpointDB):
         async def execute(self, _query):
@@ -524,13 +590,9 @@ def test_logout_still_clears_cookies_when_session_rotation_fails(monkeypatch):
     async def fake_get_session(_user_id):
         return {"nonce": "current-nonce"}
 
-    async def fake_rotate(_user_id):
-        raise RuntimeError("redis unavailable")
-
     monkeypatch.setattr(auth_api, "lock_user_for_login", fake_lock_user_for_login)
-    monkeypatch.setattr(auth_api, "revoke_all_user_refresh_tokens", fake_revoke_all)
-    monkeypatch.setattr(auth_api, "get_user_session", fake_get_session)
-    monkeypatch.setattr(auth_api, "rotate_user_session", fake_rotate)
+    monkeypatch.setattr(auth_service, "revoke_all_user_refresh_tokens", fake_revoke_all)
+    _patch_strict_session(monkeypatch, fake_get_session)
 
     response = Response()
     result = asyncio.run(
@@ -543,7 +605,9 @@ def test_logout_still_clears_cookies_when_session_rotation_fails(monkeypatch):
         )
     )
 
-    assert result["message"] == "登出成功"
+    assert response.status_code == 503
+    assert result["revocation_status"] == "incomplete"
+    assert result["message"] == "服务端会话撤销未完成，客户端 Cookie 已清理，请稍后重试"
     set_cookie_headers = response.headers.getlist("set-cookie")
     assert any(settings.ACCESS_TOKEN_COOKIE_NAME in value for value in set_cookie_headers)
     assert any(settings.REFRESH_TOKEN_COOKIE_NAME in value for value in set_cookie_headers)
@@ -573,7 +637,9 @@ def test_logout_returns_success_and_clears_cookies_when_database_fails():
         )
     )
 
-    assert result["message"] == "登出成功"
+    assert response.status_code == 503
+    assert result["revocation_status"] == "incomplete"
+    assert result["message"] == "服务端会话撤销未完成，客户端 Cookie 已清理，请稍后重试"
     assert db.rollback_count == 1
     set_cookie_headers = response.headers.getlist("set-cookie")
     assert any(settings.ACCESS_TOKEN_COOKIE_NAME in value for value in set_cookie_headers)
