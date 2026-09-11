@@ -6,16 +6,18 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import BigInteger, and_, cast, func, select
+from sqlalchemy import Numeric, and_, cast, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
+from app.schemas.xbk.academic_year import AcademicYear
+from app.services.xbk.locking import lock_rows
 from app.schemas.xbk import XbkListResponse, XbkSelectionOut, XbkSelectionUpsert
 
-from ._common import apply_common_filters, require_xbk_access
+from ._common import apply_common_filters, require_xbk_access, selection_reference_errors
 
 router = APIRouter()
 
@@ -27,37 +29,16 @@ router = APIRouter()
 async def _validate_student_and_course(
     db: AsyncSession,
     *,
-    year: int,
+    year: AcademicYear,
     term: str,
     student_no: str,
     course_code: str,
 ) -> None:
-    """校验学生和课程是否存在"""
-    student = (
-        await db.execute(
-            select(XbkStudent).where(
-                XbkStudent.is_deleted.is_(False),
-                XbkStudent.year == year,
-                XbkStudent.term == term,
-                XbkStudent.student_no == student_no,
-            )
-        )
-    ).scalar_one_or_none()
-    if not student:
-        raise HTTPException(status_code=404, detail="学生不存在（请先维护学生名单）")
-
-    course = (
-        await db.execute(
-            select(XbkCourse).where(
-                XbkCourse.is_deleted.is_(False),
-                XbkCourse.year == year,
-                XbkCourse.term == term,
-                XbkCourse.course_code == course_code,
-            )
-        )
-    ).scalar_one_or_none()
-    if not course:
-        raise HTTPException(status_code=404, detail="课程不存在（请先维护选课目录）")
+    errors = await selection_reference_errors(db, [{
+        "year": year, "term": term, "student_no": student_no, "course_code": course_code,
+    }], lock=True)
+    if errors[0]:
+        raise HTTPException(status_code=404, detail=errors[0][0])
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +65,7 @@ async def create_selection(
                 XbkSelection.term == payload.term,
                 XbkSelection.student_no == payload.student_no,
                 XbkSelection.course_code == payload.course_code,
-            )
+            ).with_for_update().execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if existing and not existing.is_deleted:  # type: ignore[truthy-bool]
@@ -124,11 +105,18 @@ async def update_selection(
         student_no=payload.student_no,
         course_code=payload.course_code,
     )
+    rows = await lock_rows(db, XbkSelection, XbkSelection.id == selection_id)
+    row = rows[0] if rows else None
+    if not row or row.is_deleted:
+        raise HTTPException(status_code=404, detail="选课记录不存在")
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
     row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:
         await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="选课记录已存在")
     except Exception:
         await db.rollback()
         raise
@@ -142,7 +130,8 @@ async def delete_selection(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ):
-    row = (await db.execute(select(XbkSelection).where(XbkSelection.id == selection_id))).scalar_one_or_none()
+    rows = await lock_rows(db, XbkSelection, XbkSelection.id == selection_id)
+    row = rows[0] if rows else None
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="选课记录不存在")
     row.is_deleted = True  # type: ignore[assignment]
@@ -157,7 +146,7 @@ async def delete_selection(
 
 @router.get("/selections", response_model=XbkListResponse)
 async def list_selections(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -223,7 +212,7 @@ async def list_selections(
 
 @router.get("/course-results", response_model=XbkListResponse)
 async def list_course_results(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -279,7 +268,7 @@ async def list_course_results(
 
     numeric_student_no = cast(
         func.nullif(func.regexp_replace(XbkStudent.student_no, r"\D", "", "g"), ""),
-        BigInteger,
+        Numeric(50, 0),
     )
 
     rows = (
@@ -298,7 +287,7 @@ async def list_course_results(
     items = [
         {
             "id": int(r.id) if r.id else 0,
-            "year": int(r.year),
+            "year": str(r.year),
             "term": str(r.term),
             "grade": str(r.grade) if r.grade else None,
             "student_no": str(r.student_no),

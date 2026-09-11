@@ -4,7 +4,7 @@
 
 export interface XbkStudent {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string;
   class_name: string;
@@ -18,7 +18,7 @@ export interface XbkStudent {
 
 export interface XbkCourse {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string;
   course_code: string;
@@ -33,7 +33,7 @@ export interface XbkCourse {
 
 export interface XbkSelection {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string;
   student_no: string;

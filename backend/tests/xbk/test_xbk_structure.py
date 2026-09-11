@@ -1,5 +1,7 @@
 """XBK 模块结构与路由完整性测试"""
 import asyncio
+
+import pytest
 from types import SimpleNamespace
 
 from pydantic import ValidationError
@@ -47,8 +49,21 @@ def test_student_upsert_schema():
         year=2025, term="上", class_name="1班",
         student_no="2025001", name="张三",
     )
-    assert data.year == 2025
+    assert data.year == "2025-2026"
     assert data.grade is None
+
+
+def test_student_upsert_academic_year_normalization_and_validation():
+    assert XbkStudentUpsert(
+        year="2026", term="上", class_name="1班", student_no="1", name="甲"
+    ).year == "2026-2027"
+    assert XbkStudentUpsert(
+        year="2026-2027", term="上", class_name="1班", student_no="1", name="甲"
+    ).year == "2026-2027"
+    with pytest.raises(ValidationError):
+        XbkStudentUpsert(
+            year="2026-2028", term="上", class_name="1班", student_no="1", name="甲"
+        )
 
 
 def test_student_upsert_missing_required():

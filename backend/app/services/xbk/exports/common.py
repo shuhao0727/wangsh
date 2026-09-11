@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+from functools import partial
+from io import BytesIO
+from zipfile import ZipFile
 from typing import Iterable, Optional, Sequence, Tuple
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -9,6 +12,59 @@ from openpyxl.utils import get_column_letter
 
 THIN_SIDE = Side(style="thin", color="D9D9D9")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
+
+
+def _save_preserving_carriage_returns(original_save, target) -> None:
+    """Adapt only an XBK workbook's save, never openpyxl's global writer.
+
+    The stdlib XML writer emits literal CR in element text. XML readers then
+    normalize CR/CRLF to LF. Rewrite raw CR as a character reference *before*
+    any XML parsing; escaping the cell value itself would double-escape it.
+    Input is a newly generated openpyxl archive, not an uploaded XLSX. Leave
+    other ZIP members, text types, numeric cells and workbook values unchanged.
+    """
+    with BytesIO() as raw:
+        original_save(raw)
+        with ZipFile(raw) as source, ZipFile(target, "w") as destination:
+            destination.comment = source.comment
+            for member in source.infolist():
+                data = source.read(member)
+                if member.filename.startswith("xl/worksheets/") and member.filename.endswith(".xml"):
+                    data = data.replace(b"\r", b"&#13;")
+                destination.writestr(member, data)
+
+
+def force_text_cells(ws) -> None:
+    """Finalize an XBK sheet's literal text before saving it as XLSX.
+
+    openpyxl infers formulas (and Excel errors) from some string values. An
+    explicit string type, not just a text number format or prefix blacklist,
+    prevents those values from becoming executable worksheet cells. Keep the
+    original value, including whitespace and leading zeros; numeric counts,
+    blank cells, styles and application-owned data validations are untouched.
+    XBK exports do not intentionally contain cell formulas.
+    """
+    has_carriage_return = False
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str):
+                cell.data_type = "s"
+                cell.number_format = "@"
+                has_carriage_return |= "\r" in cell.value
+
+    # All XBK builders (including pandas ExcelWriter) call this instance's
+    # Workbook.save. Attach once and only for workbooks containing CR. Do not
+    # patch Workbook.save, XML functions or dependency modules process-wide.
+    wb = ws.parent
+    if has_carriage_return and not getattr(wb, "_xbk_cr_safe_save", False):
+        wb.save = partial(_save_preserving_carriage_returns, wb.save)
+        wb._xbk_cr_safe_save = True
+
+
+def force_text_workbook(wb) -> None:
+    """Finalize all sheets after an XBK workbook has been populated."""
+    for ws in wb.worksheets:
+        force_text_cells(ws)
 
 
 def cn_len(value: object) -> int:

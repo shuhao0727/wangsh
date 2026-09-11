@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import io
+from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
@@ -20,6 +22,24 @@ from app.api.endpoints.xbk.import_export import (
     _validate_required_columns,
     preview_import,
 )
+
+
+class _SelectionParentsDb:
+    """Read-only fake parent projection; no schema/endpoint validation is mocked."""
+
+    def __init__(self, students=()):
+        # Synthetic (year, term, student_no, is_deleted) parent records.
+        self.students = students
+        self.queries = []
+
+    async def execute(self, statement):
+        assert statement.get_final_froms()[0].name == "xbk_students"
+        assert tuple(column.key for column in statement.selected_columns) == ("year", "term", "student_no")
+        assert "xbk_students.is_deleted IS false" in str(statement)
+        keys = next(iter(statement.compile().params.values()))
+        self.queries.append(keys)
+        rows = [row[:3] for row in self.students if row[3] is False and row[:3] in keys]
+        return SimpleNamespace(all=lambda: rows)
 
 
 def _make_upload_file(rows: list[dict], filename: str = "sample.xlsx") -> UploadFile:
@@ -55,8 +75,14 @@ def test_remap_students_alias_columns() -> None:
     )
     remapped = _remap_columns(df, _students_mapping())
 
-    for col in ["年份", "学期", "班级", "学号", "姓名", "性别"]:
+    for col in ["学年", "学期", "班级", "学号", "姓名", "性别"]:
         assert col in remapped.columns
+
+
+def test_legacy_chinese_year_header_remaps_to_academic_year() -> None:
+    remapped = _remap_columns(pd.DataFrame([{"年份": "2026"}]), _students_mapping())
+    assert list(remapped.columns) == ["学年"]
+    assert remapped.iloc[0]["学年"] == "2026"
 
 
 def test_validate_required_columns_raises_422() -> None:
@@ -79,24 +105,24 @@ def test_parse_quota_int_cases() -> None:
 
 
 def test_get_year_term_parse_and_invalid() -> None:
-    row_ok = pd.Series({"年份": "2026", "学期": "上学期"})
+    row_ok = pd.Series({"学年": "2026", "学期": "上学期"})
     year, term = _get_year_term(row_ok)
-    assert year == 2026
+    assert year == "2026-2027"
     assert term == "上学期"
 
-    row_default = pd.Series({"年份": "", "学期": ""})
+    row_default = pd.Series({"学年": "", "学期": ""})
     year_default, term_default = _get_year_term(row_default, default_year=2026, default_term="下学期")
-    assert year_default == 2026
+    assert year_default == "2026-2027"
     assert term_default == "下学期"
 
     try:
-        _get_year_term(pd.Series({"年份": "", "学期": "上学期"}))
+        _get_year_term(pd.Series({"学年": "", "学期": "上学期"}))
         assert False, "Should raise HTTPException for missing year"
     except HTTPException as exc:
         assert exc.status_code == 422
 
     try:
-        _get_year_term(pd.Series({"年份": "20xx", "学期": "上学期"}))
+        _get_year_term(pd.Series({"学年": "20xx", "学期": "上学期"}))
         assert False, "Should raise HTTPException for invalid year"
     except HTTPException as exc:
         assert exc.status_code == 422
@@ -154,11 +180,14 @@ def test_preview_import_selections_blank_course_code_maps_to_unselected() -> Non
         ]
     )
 
-    result = asyncio.run(preview_import(scope="selections", file=upload, db=None, _={}))
+    db = _SelectionParentsDb([("2026-2027", "上学期", "20260021", False)])
+    result = asyncio.run(preview_import(scope="selections", file=upload, db=db, _={}))
     assert result["total_rows"] == 1
     assert result["valid_rows"] == 1
     assert result["invalid_rows"] == 0
     assert result["preview"][0]["课程代码"] == "未选"
+    assert result["errors"] == []
+    assert db.queries == [[("2026-2027", "上学期", "20260021")]]
 
 
 def test_remap_courses_alias_columns() -> None:
@@ -176,18 +205,18 @@ def test_remap_courses_alias_columns() -> None:
         ]
     )
     remapped = _remap_columns(df, _courses_mapping())
-    for col in ["年份", "学期", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]:
+    for col in ["学年", "学期", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]:
         assert col in remapped.columns
 
 
 def test_template_columns_contract() -> None:
-    assert _template_columns("students") == ["年份", "学期", "年级", "班级", "学号", "姓名", "性别"]
-    assert _template_columns("courses") == ["年份", "学期", "年级", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]
-    assert _template_columns("selections") == ["年份", "学期", "年级", "学号", "姓名", "课程代码"]
+    assert _template_columns("students") == ["学年", "学期", "年级", "班级", "学号", "姓名", "性别"]
+    assert _template_columns("courses") == ["学年", "学期", "年级", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]
+    assert _template_columns("selections") == ["学年", "学期", "年级", "学号", "姓名", "课程代码"]
 
 
 def test_preview_import_students_header_only_returns_zero() -> None:
-    upload = _make_upload_file_with_columns(["年份", "学期", "年级", "班级", "学号", "姓名", "性别"])
+    upload = _make_upload_file_with_columns(["学年", "学期", "年级", "班级", "学号", "姓名", "性别"])
     result = asyncio.run(preview_import(scope="students", file=upload, db=None, _={}))
     assert result["total_rows"] == 0
     assert result["valid_rows"] == 0
@@ -204,3 +233,28 @@ def test_drop_empty_rows_removes_blank_lines() -> None:
     )
     cleaned = _drop_empty_rows(df)
     assert cleaned.shape[0] == 1
+
+
+@pytest.mark.parametrize("students", [
+    [],
+    [("2026-2027", "上学期", "20260021", True)],
+    [("2025-2026", "上学期", "20260021", False)],
+    [("2026-2027", "下学期", "20260021", False)],
+])
+def test_preview_unselected_rejects_missing_or_inactive_period_student(students):
+    upload = _make_upload_file([
+        {"年份": 2026, "学期": "上学期", "学号": "20260021", "姓名": "赵七", "课程代码": ""},
+    ])
+    db = _SelectionParentsDb(students)
+
+    result = asyncio.run(preview_import(scope="selections", file=upload, db=db, _={}))
+
+    assert result["total_rows"] == 1
+    assert result["valid_rows"] == 0
+    assert result["invalid_rows"] == 1
+    assert result["preview"] == []
+    assert result["errors"] == [{
+        "row": 2,
+        "errors": ["学生不存在（请先维护学生名单；须为同学年、同学期且未删除）"],
+    }]
+    assert db.queries == [[("2026-2027", "上学期", "20260021")]]

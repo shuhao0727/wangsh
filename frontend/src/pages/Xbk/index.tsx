@@ -64,9 +64,11 @@ import { calcColumnWidth } from "../../utils/table";
 import "./Xbk.css";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { formatXbkClassName, sortXbkClassNames } from "./className";
+import { formatAcademicYear, getCurrentAcademicYear } from "./academicYear";
 
 const FILTER_ALL = "__all__";
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
+const CURRENT_ACADEMIC_START = Number(CURRENT_ACADEMIC_YEAR.slice(0, 4));
 
 const calcAutoColWidth = <T,>(
   rows: T[],
@@ -238,7 +240,15 @@ const XbkPage: React.FC = () => {
   const [meta, setMeta] = useState<XbkMeta>({ years: [], terms: [], classes: [] });
   const [summary, setSummary] = useState<XbkSummary | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const [metaError, setMetaError] = useState(false);
+  const [summaryError, setSummaryError] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [dataErrors, setDataErrors] = useState<Partial<Record<DataTabKey, string>>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const metaRequestSeqRef = useRef(0);
+  const summaryRequestSeqRef = useRef(0);
   const dataRequestSeqRef = useRef(0);
+  const activeDataError = dataErrors[activeTab];
 
   const [students, setStudents] = useState<XbkStudentRow[]>([]);
   const [courses, setCourses] = useState<XbkCourseRow[]>([]);
@@ -265,33 +275,50 @@ const XbkPage: React.FC = () => {
     XbkStudentRow | XbkCourseRow | XbkSelectionRow | null
   >(null);
 
-  const resetFilters = () => setFilters({ year: CURRENT_YEAR, term: "上学期" });
+  const resetFilters = () => setFilters({ year: CURRENT_ACADEMIC_YEAR, term: "上学期" });
 
   const loadMeta = useCallback(async () => {
+    const requestSeq = ++metaRequestSeqRef.current;
     try {
       const nextMeta = await xbkDataApi.getMeta({
         year: filters.year,
         term: filters.term,
         grade: filters.grade,
       });
+      if (requestSeq !== metaRequestSeqRef.current) return false;
       setMeta(nextMeta);
+      setMetaError(false);
+      return true;
     } catch {
-      setMeta({ years: [], terms: [], classes: [] });
+      if (requestSeq !== metaRequestSeqRef.current) return false;
+      setMetaError(true);
+      return false;
     }
   }, [filters.grade, filters.term, filters.year]);
 
   const loadSummary = useCallback(async () => {
+    const requestSeq = ++summaryRequestSeqRef.current;
+    setSummaryLoading(true);
     try {
       const nextSummary = await xbkDataApi.getSummary({
         year: filters.year,
         term: filters.term,
+        grade: filters.grade,
         class_name: filters.class_name,
       });
+      if (requestSeq !== summaryRequestSeqRef.current) return false;
       setSummary(nextSummary);
+      setSummaryError(false);
+      return true;
     } catch {
+      if (requestSeq !== summaryRequestSeqRef.current) return false;
       setSummary(null);
+      setSummaryError(true);
+      return false;
+    } finally {
+      if (requestSeq === summaryRequestSeqRef.current) setSummaryLoading(false);
     }
-  }, [filters.class_name, filters.term, filters.year]);
+  }, [filters.class_name, filters.grade, filters.term, filters.year]);
 
   const loadData = useCallback(async (tab: DataTabKey, page: number, size: number) => {
     const requestSeq = dataRequestSeqRef.current + 1;
@@ -368,9 +395,13 @@ const XbkPage: React.FC = () => {
         setSelections(res.items);
         updatePg("selections", { total: res.total });
       }
+      setDataErrors((prev) => ({ ...prev, [tab]: undefined }));
+      return true;
     } catch (e) {
-      if (!isLatestRequest()) return;
+      if (!isLatestRequest()) return false;
+      setDataErrors((prev) => ({ ...prev, [tab]: `${tabLabels[tab]}加载失败` }));
       showMessage.error(getErrorMsg(e, "加载数据失败"));
+      return false;
     } finally {
       if (isLatestRequest()) {
         setDataLoading(false);
@@ -459,7 +490,7 @@ const XbkPage: React.FC = () => {
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(url);
-      showMessage.success("导出成功");
+      showMessage.success("已导出当前筛选的全部结果");
     } catch (e) {
       showMessage.error(getErrorMsg(e, "导出失败"));
     } finally {
@@ -468,8 +499,13 @@ const XbkPage: React.FC = () => {
   }, [activeTab, filters]);
 
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadMeta(), loadSummary(), reloadCurrentData()]);
-    showMessage.success("已刷新");
+    setRefreshing(true);
+    try {
+      const results = await Promise.all([loadMeta(), loadSummary(), reloadCurrentData()]);
+      if (results.every(Boolean)) showMessage.success("已刷新");
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadMeta, loadSummary, reloadCurrentData]);
 
   useEffect(() => {
@@ -578,7 +614,7 @@ const XbkPage: React.FC = () => {
   );
 
   const courseResultColumns = useMemo<ColumnDef<XbkCourseResultRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(courseResults, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(courseResults, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(courseResults, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(courseResults, "grade", "年级", 88, 150);
     const classWidth = calcClassColWidth(courseResults, 120, 280);
@@ -590,7 +626,7 @@ const XbkPage: React.FC = () => {
     const locationWidth = calcAutoColWidth(courseResults, "location", "地点", 120, 360);
 
     return [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -644,7 +680,7 @@ const XbkPage: React.FC = () => {
   }, [courseResults]);
 
   const studentColumns = useMemo<ColumnDef<XbkStudentRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(students, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(students, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(students, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(students, "grade", "年级", 88, 150);
     const classWidth = calcClassColWidth(students, 120, 280);
@@ -653,7 +689,7 @@ const XbkPage: React.FC = () => {
     const genderWidth = calcAutoColWidth(students, "gender", "性别", 80, 140);
 
     const cols: ColumnDef<XbkStudentRow>[] = [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -682,7 +718,7 @@ const XbkPage: React.FC = () => {
   }, [canEdit, makeActionCol, students]);
 
   const courseColumns = useMemo<ColumnDef<XbkCourseRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(courses, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(courses, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(courses, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(courses, "grade", "年级", 88, 150);
     const courseCodeWidth = calcAutoColWidth(courses, "course_code", "代码", 110, 260);
@@ -692,7 +728,7 @@ const XbkPage: React.FC = () => {
     const locationWidth = calcAutoColWidth(courses, "location", "地点", 120, 360);
 
     const cols: ColumnDef<XbkCourseRow>[] = [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -745,7 +781,7 @@ const XbkPage: React.FC = () => {
   }, [canEdit, courses, makeActionCol]);
 
   const selectionColumns = useMemo<ColumnDef<XbkSelectionRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(selections, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(selections, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(selections, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(selections, "grade", "年级", 88, 150);
     const studentNoWidth = calcAutoColWidth(selections, "student_no", "学号", 110, 240);
@@ -753,7 +789,7 @@ const XbkPage: React.FC = () => {
     const courseCodeWidth = calcAutoColWidth(selections, "course_code", "课程代码", 110, 260);
 
     const cols: ColumnDef<XbkSelectionRow>[] = [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -781,7 +817,7 @@ const XbkPage: React.FC = () => {
   }, [canEdit, makeActionCol, selections]);
 
   const unselectedColumns = useMemo<ColumnDef<XbkStudentRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(unselectedAll, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(unselectedAll, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(unselectedAll, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(unselectedAll, "grade", "年级", 88, 150);
     const classWidth = calcClassColWidth(unselectedAll, 120, 280);
@@ -790,7 +826,7 @@ const XbkPage: React.FC = () => {
     const genderWidth = calcAutoColWidth(unselectedAll, "gender", "性别", 80, 140);
 
     return [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -817,7 +853,7 @@ const XbkPage: React.FC = () => {
   }, [unselectedAll]);
 
   const suspendedColumns = useMemo<ColumnDef<XbkStudentRow>[]>(() => {
-    const yearWidth = calcAutoColWidth(suspendedAll, "year", "年份", 80, 140);
+    const yearWidth = calcAutoColWidth(suspendedAll, "year", "学年", 110, 150);
     const termWidth = calcAutoColWidth(suspendedAll, "term", "学期", 88, 180);
     const gradeWidth = calcAutoColWidth(suspendedAll, "grade", "年级", 88, 150);
     const classWidth = calcClassColWidth(suspendedAll, 120, 280);
@@ -826,7 +862,7 @@ const XbkPage: React.FC = () => {
     const genderWidth = calcAutoColWidth(suspendedAll, "gender", "性别", 80, 140);
 
     return [
-      { title: "年份", dataIndex: "year", width: yearWidth },
+      { title: "学年", dataIndex: "year", width: yearWidth },
       { title: "学期", dataIndex: "term", width: termWidth },
       { title: "年级", dataIndex: "grade", width: gradeWidth, render: (v) => toText(v) },
       {
@@ -854,7 +890,7 @@ const XbkPage: React.FC = () => {
 
   const years = meta.years.length > 0
     ? meta.years
-    : [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+    : [0, 1, 2].map((offset) => formatAcademicYear(CURRENT_ACADEMIC_START - offset));
   const allClasses = useMemo(() => {
     const source = meta.classes.length > 0
       ? meta.classes
@@ -880,10 +916,10 @@ const XbkPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!filters.class_name) return;
+    if (metaError || !filters.class_name) return;
     if (allClasses.includes(filters.class_name)) return;
     setFilters((prev) => (prev.class_name ? { ...prev, class_name: undefined } : prev));
-  }, [allClasses, filters.class_name, setFilters]);
+  }, [allClasses, filters.class_name, metaError, setFilters]);
 
   const kpiStudents = summary?.students ?? 0;
   const kpiCourses = summary?.courses ?? 0;
@@ -892,6 +928,13 @@ const XbkPage: React.FC = () => {
   const kpiSuspended = summary?.suspended_count ?? 0;
 
   const renderTable = (tab: DataTabKey) => {
+    if (dataErrors[tab]) {
+      return (
+        <div className="px-4 py-10 text-center text-sm text-text-secondary">
+          {dataLoading ? "正在重新加载..." : "列表加载失败，暂不显示数据。"}
+        </div>
+      );
+    }
     const map: Record<DataTabKey, TableConfig<any>> = {
       course_results: { columns: courseResultColumns, data: courseResults, rowKey: getCourseResultRowKey },
       students: { columns: studentColumns, data: students, rowKey: "id" },
@@ -975,21 +1018,21 @@ const XbkPage: React.FC = () => {
             <h3 className="mb-[var(--ws-space-3)] text-sm font-semibold">筛选条件</h3>
 
             <div className="xbk-filter-field">
-              <label htmlFor="xbk-filter-year">年份</label>
+              <label htmlFor="xbk-filter-year">学年</label>
               <Select
                 value={filters.year ? String(filters.year) : FILTER_ALL}
                 onValueChange={(value) =>
                   setFilters((prev) => ({
                     ...prev,
-                    year: value === FILTER_ALL ? undefined : Number(value),
+                    year: value === FILTER_ALL ? undefined : value,
                   }))
                 }
               >
-                <SelectTrigger id="xbk-filter-year" className="h-8 text-xs" aria-label="年份">
-                  <SelectValue placeholder="选择年份" />
+                <SelectTrigger id="xbk-filter-year" className="h-8 text-xs" aria-label="学年">
+                  <SelectValue placeholder="选择学年" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={FILTER_ALL}>全部年份</SelectItem>
+                  <SelectItem value={FILTER_ALL}>全部学年</SelectItem>
                   {years.map((year) => (
                     <SelectItem key={year} value={String(year)}>
                       {year}
@@ -1096,29 +1139,41 @@ const XbkPage: React.FC = () => {
       </div>
 
       <div className="xbk-main">
-          <h1 className="text-lg font-semibold text-text">校本课管理</h1>
+        {(metaError || summaryError || activeDataError) && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-error bg-error-soft p-4 text-sm text-text-base">
+            <div>
+              <p className="font-medium">
+                {[metaError && "筛选选项加载失败", summaryError && "统计数据加载失败", activeDataError].filter(Boolean).join("；")}
+              </p>
+              <p className="mt-1 text-text-secondary">加载失败不代表没有数据，请重试。</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing || dataLoading}>
+              {refreshing ? "正在重试..." : "重试加载"}
+            </Button>
+          </div>
+        )}
         <div className="xbk-header-bar">
           <div className="xbk-header-row">
             <div className="xbk-kpis">
               <div className="xbk-kpi-item">
                 <span className="label">学生</span>
-                <span className="value">{kpiStudents}</span>
+                <span className="value">{summaryLoading || !summary ? "—" : kpiStudents}</span>
               </div>
               <div className="xbk-kpi-item">
                 <span className="label">课程</span>
-                <span className="value">{kpiCourses}</span>
+                <span className="value">{summaryLoading || !summary ? "—" : kpiCourses}</span>
               </div>
               <div className="xbk-kpi-item">
                 <span className="label">选课</span>
-                <span className="value">{kpiSelections}</span>
+                <span className="value">{summaryLoading || !summary ? "—" : kpiSelections}</span>
               </div>
               <div className={`xbk-kpi-item ${kpiUnselected > 0 ? "warn" : ""}`}>
                 <span className="label">未选</span>
-                <span className="value">{kpiUnselected}</span>
+                <span className="value">{summaryLoading || !summary ? "—" : kpiUnselected}</span>
               </div>
               <div className="xbk-kpi-item">
                 <span className="label">休学</span>
-                <span className="value">{kpiSuspended}</span>
+                <span className="value">{summaryLoading || !summary ? "—" : kpiSuspended}</span>
               </div>
             </div>
 
@@ -1136,7 +1191,7 @@ const XbkPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
-                title="导出当前表格页面的内容"
+                title="导出当前表格中符合筛选条件的全部结果（不限当前分页）"
                 onClick={() => void handleExportCurrentTable()}
                 disabled={exportingCurrent}
               >
@@ -1145,7 +1200,7 @@ const XbkPage: React.FC = () => {
                 ) : (
                   <Download className="h-4 w-4" />
                 )}
-                当前页
+                导出筛选结果
               </Button>
               {canEdit &&
               (activeTab === "students" ||
@@ -1174,7 +1229,7 @@ const XbkPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => void handleRefresh()}
-                disabled={dataLoading}
+                disabled={dataLoading || refreshing}
               >
                 {dataLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1212,7 +1267,7 @@ const XbkPage: React.FC = () => {
             ))}
           </Tabs>
 
-          <div className="xbk-table-pagination">
+          {!activeDataError && <div className="xbk-table-pagination">
             <DataTablePagination
               currentPage={pg[activeTab].page}
               totalPages={Math.max(1, Math.ceil(pg[activeTab].total / pg[activeTab].size))}
@@ -1226,7 +1281,7 @@ const XbkPage: React.FC = () => {
                 })
               }
             />
-          </div>
+          </div>}
         </div>
 
         {canEdit ? <XbkImportModal

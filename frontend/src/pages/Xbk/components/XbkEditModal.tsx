@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { xbkDataApi } from "@services";
 import type { XbkMeta } from "@services";
+import { isValidAcademicYear } from "../academicYear";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,14 +43,14 @@ interface XbkEditModalProps {
   initialValues?: any;
   meta: XbkMeta;
   filters: {
-    year?: number;
+    year?: string;
     term?: "上学期" | "下学期";
     grade?: "高一" | "高二";
   };
 }
 
 type FormValues = {
-  year: number | "";
+  year: string;
   term: string;
   grade: "高一" | "高二" | "";
   class_name: string;
@@ -79,7 +80,7 @@ const EMPTY_FORM: FormValues = {
 };
 
 const baseFormSchema = z.object({
-  year: z.union([z.number(), z.literal("")]),
+  year: z.string(),
   term: z.string(),
   grade: z.union([z.literal("高一"), z.literal("高二"), z.literal("")]),
   class_name: z.string(),
@@ -108,11 +109,17 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
   const formSchema = useMemo(
     () =>
       baseFormSchema.superRefine((values, ctx) => {
-        if (!values.year) {
+        if (!values.year.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["year"],
-            message: "请输入年份",
+            message: "请输入学年",
+          });
+        } else if (!isValidAcademicYear(values.year)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["year"],
+            message: "学年格式应为 YYYY-YYYY，例如 2026-2027",
           });
         }
         if (!values.term) {
@@ -205,7 +212,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
     const base = initialValues || {};
     reset({
       ...EMPTY_FORM,
-      year: typeof base.year === "number" ? base.year : filters.year || "",
+      year: String(base.year || filters.year || ""),
       term: String(base.term || filters.term || ""),
       grade: (base.grade || filters.grade || "") as "高一" | "高二" | "",
       class_name: String(base.class_name || ""),
@@ -229,7 +236,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
 
   const handleSave = async (values: FormValues) => {
     const common = {
-      year: Number(values.year),
+      year: values.year.trim(),
       term: values.term,
       grade: values.grade || undefined,
     };
@@ -311,17 +318,13 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                 name="year"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>年份</FormLabel>
+                    <FormLabel>学年</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        value={field.value === "" ? "" : field.value}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          field.onChange(v ? Number(v) : "");
-                        }}
+                        inputMode="numeric"
+                        placeholder="例如 2026-2027"
+                        maxLength={9}
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />

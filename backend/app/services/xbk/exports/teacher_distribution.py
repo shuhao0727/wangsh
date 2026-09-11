@@ -7,16 +7,18 @@ from typing import Dict, List, Optional, Tuple
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import Integer, and_, case, cast, func, select
+from sqlalchemy import Numeric, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.academic_year import split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
-from app.services.xbk.exports.common import THIN_BORDER, class_sort_key, safe_sheet_name
+from app.services.xbk.exports.common import THIN_BORDER, class_sort_key, safe_sheet_name, force_text_workbook
 
 
-def _title_year_range(year: int, year_start: Optional[int], year_end: Optional[int]) -> Tuple[int, int]:
-    ys = year_start if year_start is not None else year
-    ye = year_end if year_end is not None else year + 1
+def _title_year_range(year: str, year_start: Optional[int], year_end: Optional[int]) -> Tuple[int, int]:
+    academic_start, academic_end = split_academic_year(year)
+    ys = year_start if year_start is not None else academic_start
+    ye = year_end if year_end is not None else academic_end
     return ys, ye
 
 
@@ -227,18 +229,112 @@ def _set_page_settings(ws) -> None:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
+async def _load_course_students(db, year, term, grade, class_name, course_code):
+    """Fetch the active same-period roster for one course, with roster filters."""
+    stmt = (
+        select(
+            XbkStudent.grade.label("grade"),
+            XbkStudent.class_name.label("class_name"),
+            func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
+        )
+        .select_from(XbkSelection)
+        .join(
+            XbkStudent,
+            and_(
+                XbkStudent.is_deleted.is_(False),
+                XbkStudent.year == XbkSelection.year,
+                XbkStudent.term == XbkSelection.term,
+                XbkStudent.student_no == XbkSelection.student_no,
+            ),
+        )
+        .where(
+            XbkSelection.is_deleted.is_(False),
+            XbkSelection.year == year,
+            XbkSelection.term == term,
+            XbkSelection.course_code == course_code,
+        )
+        .order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc())
+    )
+    if grade:
+        stmt = stmt.where(XbkStudent.grade == grade)
+    if class_name:
+        stmt = stmt.where(XbkStudent.class_name == class_name)
+    rows = (await db.execute(stmt)).all()
+    return rows
+
+
+def _build_teacher_sheet(wb, c, rows, ys, ye, term, grade):
+    """Render one populated course; workbook-level text sealing happens after all sheets."""
+    sheet_name = safe_sheet_name(str(c.course_code))
+    ws = wb.create_sheet(sheet_name)
+
+    ws.merge_cells("A1:I1")
+    ws["A1"] = f"{ys}-{ye}学年{term}江苏省昆山中学校本课程学生签到表"
+    ws["A1"].font = Font(size=14, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 35
+
+    ws.merge_cells("A2:I2")
+    ws["A2"] = (
+        f"课程代码: {c.course_code}  课程名称: {c.course_name or ''}  "
+        f"课程负责人: {c.teacher or ''}  上课地点: {c.location or ''}  人数: {len(rows)}"
+    )
+    ws["A2"].font = Font(size=12, bold=True)
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[2].height = 25
+
+    ws.merge_cells("A3:B4")
+    ws["A3"] = "任课教师签名"
+    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["A3"].font = Font(bold=True)
+
+    for idx, text in enumerate(["一", "二", "三", "四", "五", "六", "七"], start=3):
+        cell = ws.cell(row=3, column=idx)
+        cell.value = f"第{text}次"
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.font = Font(bold=True)
+
+    ws.cell(row=5, column=1).value = "班级"
+    ws.cell(row=5, column=2).value = "姓名"
+    ws.cell(row=5, column=1).font = Font(bold=True)
+    ws.cell(row=5, column=2).font = Font(bold=True)
+    ws.cell(row=5, column=1).alignment = Alignment(horizontal="center", vertical="center")
+    ws.cell(row=5, column=2).alignment = Alignment(horizontal="center", vertical="center")
+    for col in range(3, 10):
+        ws.cell(row=5, column=col).value = None
+
+    start_row = 6
+    for idx, r in enumerate(rows):
+        row_no = start_row + idx
+        ws.cell(row=row_no, column=1).value = r.class_name if grade else f"{r.grade or '未知年级'}{r.class_name or '未知班级'}"
+        ws.cell(row=row_no, column=2).value = r.student_name
+
+    _apply_excel_style(ws)
+    ws.cell(row=1, column=1).fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+    ws.cell(row=2, column=1).fill = PatternFill(start_color="F0F8FF", end_color="F0F8FF", fill_type="solid")
+    ws.cell(row=3, column=1).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+    for col in range(3, 10):
+        ws.cell(row=3, column=col).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+    _apply_merged_cell_borders(ws)
+    _adjust_column_widths(ws)
+    _adjust_row_heights(ws)
+    ws.cell(row=2, column=1).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    _set_page_settings(ws)
+
+
 async def build_teacher_distribution_xlsx(
     db: AsyncSession,
-    year: int,
+    year: str,
     term: str,
     class_name: Optional[str],
     year_start: Optional[int],
     year_end: Optional[int],
+    grade: Optional[str] = None,
 ) -> BytesIO:
     ys, ye = _title_year_range(year, year_start, year_end)
 
     numeric_course_code = case(
-        (XbkCourse.course_code.op("~")("^[0-9]+$"), cast(XbkCourse.course_code, Integer)),
+        (XbkCourse.course_code.op("~")("^[0-9]+$"), cast(XbkCourse.course_code, Numeric(50, 0))),
         else_=None,
     )
     course_stmt = (
@@ -246,99 +342,30 @@ async def build_teacher_distribution_xlsx(
         .where(XbkCourse.is_deleted.is_(False), XbkCourse.year == year, XbkCourse.term == term)
         .order_by(numeric_course_code.asc().nulls_last(), XbkCourse.course_code.asc())
     )
+    if grade:
+        course_stmt = course_stmt.where(XbkCourse.grade == grade)
     courses = (await db.execute(course_stmt)).scalars().all()
 
     wb = Workbook()
     wb.remove(wb.active)
 
     for c in courses:
-        stmt = (
-            select(
-                XbkStudent.class_name.label("class_name"),
-                func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
-            )
-            .select_from(XbkSelection)
-            .outerjoin(
-                XbkStudent,
-                and_(
-                    XbkStudent.is_deleted.is_(False),
-                    XbkStudent.year == XbkSelection.year,
-                    XbkStudent.term == XbkSelection.term,
-                    XbkStudent.student_no == XbkSelection.student_no,
-                ),
-            )
-            .where(
-                XbkSelection.is_deleted.is_(False),
-                XbkSelection.year == year,
-                XbkSelection.term == term,
-                XbkSelection.course_code == c.course_code,
-            )
-            .order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc())
-        )
-        if class_name:
-            stmt = stmt.where(XbkStudent.class_name == class_name)
-        rows = (await db.execute(stmt)).all()
+        rows = await _load_course_students(db, year, term, grade, class_name, c.course_code)
         if not rows:
             continue
-        rows = sorted(rows, key=lambda r: (class_sort_key(str(r.class_name or "")), str(r.student_name or "")))
-
-        grade = _guess_grade(str(rows[0].class_name)) if rows and rows[0].class_name else ""
-        grade = grade or "年级"
-        sheet_name = safe_sheet_name(str(c.course_code))
-        ws = wb.create_sheet(sheet_name)
-
-        ws.merge_cells("A1:I1")
-        ws["A1"] = f"{ys}-{ye}学年{term}江苏省昆山中学校本课程学生签到表"
-        ws["A1"].font = Font(size=14, bold=True)
-        ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[1].height = 35
-
-        ws.merge_cells("A2:I2")
-        ws["A2"] = (
-            f"课程代码: {c.course_code}  课程名称: {c.course_name or ''}  "
-            f"课程负责人: {c.teacher or ''}  上课地点: {c.location or ''}  人数: {len(rows)}"
+        rows = sorted(
+            rows,
+            key=lambda r: (str(r.grade or ""), class_sort_key(str(r.class_name or "")), str(r.student_name or "")),
         )
-        ws["A2"].font = Font(size=12, bold=True)
-        ws["A2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[2].height = 25
 
-        ws.merge_cells("A3:B4")
-        ws["A3"] = "任课教师签名"
-        ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
-        ws["A3"].font = Font(bold=True)
+        _build_teacher_sheet(wb, c, rows, ys, ye, term, grade)
 
-        for idx, text in enumerate(["一", "二", "三", "四", "五", "六", "七"], start=3):
-            cell = ws.cell(row=3, column=idx)
-            cell.value = f"第{text}次"
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.font = Font(bold=True)
+    if not wb.sheetnames:
+        ws = wb.create_sheet("暂无数据")
+        ws.append(["当前筛选条件下暂无数据"])
+        ws.column_dimensions["A"].width = 40
 
-        ws.cell(row=5, column=1).value = "班级"
-        ws.cell(row=5, column=2).value = "姓名"
-        ws.cell(row=5, column=1).font = Font(bold=True)
-        ws.cell(row=5, column=2).font = Font(bold=True)
-        ws.cell(row=5, column=1).alignment = Alignment(horizontal="center", vertical="center")
-        ws.cell(row=5, column=2).alignment = Alignment(horizontal="center", vertical="center")
-        for col in range(3, 10):
-            ws.cell(row=5, column=col).value = None
-
-        start_row = 6
-        for idx, r in enumerate(rows):
-            row_no = start_row + idx
-            ws.cell(row=row_no, column=1).value = r.class_name
-            ws.cell(row=row_no, column=2).value = r.student_name
-
-        _apply_excel_style(ws)
-        ws.cell(row=1, column=1).fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
-        ws.cell(row=2, column=1).fill = PatternFill(start_color="F0F8FF", end_color="F0F8FF", fill_type="solid")
-        ws.cell(row=3, column=1).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
-        for col in range(3, 10):
-            ws.cell(row=3, column=col).fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
-        _apply_merged_cell_borders(ws)
-        _adjust_column_widths(ws)
-        _adjust_row_heights(ws)
-        ws.cell(row=2, column=1).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        _set_page_settings(ws)
+    force_text_workbook(wb)
 
     output = BytesIO()
     wb.save(output)

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, select
@@ -6,41 +6,86 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
-from app.api.endpoints.xbk._common import require_xbk_access
+from app.api.endpoints.xbk._common import UNSELECTED_COURSE_CODES, require_xbk_access
+from app.schemas.xbk.academic_year import AcademicYear
 from app.schemas.xbk.data import XbkStudentOut
 
 router = APIRouter()
 
 
+def _has_selection():
+    """Match the roster identity, not just a student number shared by other terms."""
+    return select(XbkSelection.id).where(
+        XbkSelection.is_deleted.is_(False),
+        XbkSelection.year == XbkStudent.year,
+        XbkSelection.term == XbkStudent.term,
+        XbkSelection.student_no == XbkStudent.student_no,
+    ).exists()
+
+
+def _student_scope_filters(
+    year: Optional[AcademicYear],
+    term: Optional[str],
+    grade: Optional[str],
+    class_name: Optional[str],
+) -> list:
+    filters: list = [XbkStudent.is_deleted.is_(False)]
+    if year is not None:
+        filters.append(XbkStudent.year == year)
+    if term:
+        filters.append(XbkStudent.term == term)
+    if grade:
+        filters.append(XbkStudent.grade == grade)
+    if class_name:
+        filters.append(XbkStudent.class_name == class_name)
+    return filters
+
+
+def _course_scope_filters(
+    year: Optional[AcademicYear],
+    term: Optional[str],
+    grade: Optional[str],
+    class_name: Optional[str],
+    student_filters: list,
+) -> list:
+    filters: list = [
+        XbkCourse.is_deleted.is_(False),
+        XbkCourse.course_code.notin_(UNSELECTED_COURSE_CODES),
+    ]
+    if year is not None:
+        filters.append(XbkCourse.year == year)
+    if term:
+        filters.append(XbkCourse.term == term)
+    if grade:
+        filters.append(XbkCourse.grade == grade)
+    if class_name:
+        # A class name is only meaningful inside a grade. Resolve its actual
+        # grade scope from the live roster so same-named classes stay separate.
+        scoped_grades = (
+            select(XbkStudent.grade)
+            .where(*student_filters, XbkStudent.grade.is_not(None))
+            .distinct()
+        )
+        filters.append(XbkCourse.grade.in_(scoped_grades))
+    return filters
+
+
+
 @router.get("/summary")
 async def get_summary(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
-    student_filters: list = [XbkStudent.is_deleted.is_(False)]
-    if year is not None:
-        student_filters.append(XbkStudent.year == year)  # type: ignore[arg-type]
-    if term:
-        student_filters.append(XbkStudent.term == term)  # type: ignore[arg-type]
-    if grade:
-        student_filters.append(XbkStudent.grade == grade)  # type: ignore[arg-type]
-    if class_name:
-        student_filters.append(XbkStudent.class_name == class_name)  # type: ignore[arg-type]
+    student_filters = _student_scope_filters(year, term, grade, class_name)
 
     students_stmt = select(func.count()).select_from(XbkStudent).where(*student_filters)
     students = (await db.execute(students_stmt)).scalar_one() or 0
 
-    course_filters: list = [XbkCourse.is_deleted.is_(False)]
-    if year is not None:
-        course_filters.append(XbkCourse.year == year)  # type: ignore[arg-type]
-    if term:
-        course_filters.append(XbkCourse.term == term)  # type: ignore[arg-type]
-    if grade:
-        course_filters.append(XbkCourse.grade == grade)  # type: ignore[arg-type]
+    course_filters = _course_scope_filters(year, term, grade, class_name, student_filters)
     courses_stmt = select(func.count()).select_from(XbkCourse).where(*course_filters)
     courses = (await db.execute(courses_stmt)).scalar_one() or 0
 
@@ -66,27 +111,14 @@ async def get_summary(
         )
         .where(XbkSelection.is_deleted.is_(False))
     )
-    selections_stmt = selection_scope.where(XbkSelection.course_code != "")
-    unselected_stmt = selection_scope.where(XbkSelection.course_code == "")
+    selections_stmt = selection_scope.where(XbkSelection.course_code.notin_(UNSELECTED_COURSE_CODES))
+    unselected_stmt = selection_scope.where(XbkSelection.course_code.in_(UNSELECTED_COURSE_CODES))
     selections = (await db.execute(selections_stmt)).scalar_one() or 0
     unselected_count = (await db.execute(unselected_stmt)).scalar_one() or 0
 
-    selected_student_sub = select(XbkSelection.student_no).where(XbkSelection.is_deleted.is_(False))
-    if year is not None:
-        selected_student_sub = selected_student_sub.where(XbkSelection.year == year)
-    if term:
-        selected_student_sub = selected_student_sub.where(XbkSelection.term == term)
-    if grade:
-        selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
-    if class_name:
-        selected_student_sub = selected_student_sub.where(
-            XbkSelection.student_no.in_(select(XbkStudent.student_no).where(*student_filters))
-        )
-    selected_student_sub = selected_student_sub.group_by(XbkSelection.student_no)
-
     suspended_stmt = select(func.count()).select_from(XbkStudent).where(
         *student_filters,
-        XbkStudent.student_no.not_in(selected_student_sub),
+        ~_has_selection(),
     )
     suspended_count = (await db.execute(suspended_stmt)).scalar_one() or 0
 
@@ -101,107 +133,127 @@ async def get_summary(
 
 @router.get("/course-stats")
 async def course_stats(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
-    class_count_stmt = select(func.count(func.distinct(XbkStudent.class_name))).where(XbkStudent.is_deleted.is_(False))
-    if year is not None:
-        class_count_stmt = class_count_stmt.where(XbkStudent.year == year)
-    if term:
-        class_count_stmt = class_count_stmt.where(XbkStudent.term == term)
-    if grade:
-        class_count_stmt = class_count_stmt.where(XbkStudent.grade == grade)
-    if class_name:
-        class_count_stmt = class_count_stmt.where(XbkStudent.class_name == class_name)
-    class_count = int((await db.execute(class_count_stmt)).scalar_one() or 0)
+    student_filters = _student_scope_filters(year, term, grade, class_name)
+    course_filters = _course_scope_filters(year, term, grade, class_name, student_filters)
 
-    # 使用JOIN一次性获取课程统计，避免N+1查询
-    selection_stmt = (
+    # 班级身份必须包含年级；同名班级不能跨年级合并。课程容量按课程所属年级计算。
+    class_count_stmt = (
+        select(XbkStudent.grade, func.count(func.distinct(XbkStudent.class_name)).label("count"))
+        .where(*student_filters)
+        .group_by(XbkStudent.grade)
+    )
+    class_counts = {
+        str(row_grade) if row_grade is not None else "": int(count or 0)
+        for row_grade, count in (await db.execute(class_count_stmt)).all()
+    }
+    scoped_class_count = sum(class_counts.values())
+
+    student_scope_sub = (
         select(
-            XbkSelection.course_code,
-            func.count(XbkSelection.id).label("count"),
-            XbkCourse.course_name,
-            XbkCourse.quota
+            XbkStudent.student_no.label("student_no"),
+            XbkStudent.year.label("year"),
+            XbkStudent.term.label("term"),
         )
-        .join(XbkCourse,
-              (XbkSelection.course_code == XbkCourse.course_code) &
-              (XbkSelection.year == XbkCourse.year) &
-              (XbkSelection.term == XbkCourse.term))
+        .where(*student_filters)
+        .subquery()
+    )
+    selection_counts = (
+        select(
+            XbkSelection.year.label("year"),
+            XbkSelection.term.label("term"),
+            XbkSelection.course_code.label("course_code"),
+            func.count(XbkSelection.id).label("count"),
+        )
+        .join(
+            student_scope_sub,
+            and_(
+                XbkSelection.year == student_scope_sub.c.year,
+                XbkSelection.term == student_scope_sub.c.term,
+                XbkSelection.student_no == student_scope_sub.c.student_no,
+            ),
+        )
         .where(
             XbkSelection.is_deleted.is_(False),
-            XbkCourse.is_deleted.is_(False)
+            XbkSelection.course_code.notin_(UNSELECTED_COURSE_CODES),
         )
-        .group_by(XbkSelection.course_code, XbkCourse.course_name, XbkCourse.quota)
+        .group_by(XbkSelection.year, XbkSelection.term, XbkSelection.course_code)
+        .subquery()
     )
-    if year is not None:
-        selection_stmt = selection_stmt.where(XbkSelection.year == year)
-    if term:
-        selection_stmt = selection_stmt.where(XbkSelection.term == term)
-    if grade:
-        selection_stmt = selection_stmt.where(XbkSelection.grade == grade)
-    if class_name:
-        sub = select(XbkStudent.student_no).where(
-            XbkStudent.is_deleted.is_(False),
-            XbkStudent.class_name == class_name,
-            *( [XbkStudent.year == year] if year is not None else [] ),
-            *( [XbkStudent.term == term] if term else [] ),
-            *( [XbkStudent.grade == grade] if grade else [] ),
+
+    # The course catalog is the source of truth. This keeps zero-enrollment
+    # courses visible and excludes deleted courses and orphan course codes.
+    course_stmt = (
+        select(
+            XbkCourse.course_code,
+            XbkCourse.course_name,
+            XbkCourse.quota,
+            XbkCourse.grade.label("course_grade"),
+            func.coalesce(selection_counts.c.count, 0).label("count"),
         )
-        selection_stmt = selection_stmt.where(XbkSelection.student_no.in_(sub))
+        .outerjoin(
+            selection_counts,
+            and_(
+                XbkCourse.year == selection_counts.c.year,
+                XbkCourse.term == selection_counts.c.term,
+                XbkCourse.course_code == selection_counts.c.course_code,
+            ),
+        )
+        .where(*course_filters)
+    )
+    rows = (await db.execute(course_stmt)).all()
 
-    rows = (await db.execute(selection_stmt)).all()
-
-    items = [
-        {
+    items = []
+    for code, name, quota, course_grade, count in rows:
+        course_class_count = (
+            class_counts.get(str(course_grade), 0)
+            if course_grade
+            else scoped_class_count
+        )
+        items.append({
             "course_code": str(code),
-            "course_name": str(name) if name else None,
+            "course_name": str(name),
             "count": int(count),
             "quota": int(quota or 0),
-            "class_count": class_count,
-            "allowed_total": int(quota or 0) * class_count,
-        }
-        for code, count, name, quota in rows
-    ]
+            "grade": str(course_grade) if course_grade else None,
+            "class_count": course_class_count,
+            "allowed_total": int(quota or 0) * course_class_count,
+        })
     
-    # Calculate unselected students (Actually Suspended/Other in new logic)
-    suspended_stmt = select(func.count()).select_from(XbkStudent).where(XbkStudent.is_deleted.is_(False))
-    if year is not None:
-        suspended_stmt = suspended_stmt.where(XbkStudent.year == year)
-    if term:
-        suspended_stmt = suspended_stmt.where(XbkStudent.term == term)
-    if grade:
-        suspended_stmt = suspended_stmt.where(XbkStudent.grade == grade)
-    if class_name:
-        suspended_stmt = suspended_stmt.where(XbkStudent.class_name == class_name)
-    
-    # Reuse the subquery logic from get_summary
-    selected_student_sub = (
-        select(XbkSelection.student_no)
-        .where(XbkSelection.is_deleted.is_(False))
-        .group_by(XbkSelection.student_no)
-    )
-    if year is not None:
-        selected_student_sub = selected_student_sub.where(XbkSelection.year == year)
-    if term:
-        selected_student_sub = selected_student_sub.where(XbkSelection.term == term)
-    if grade:
-        selected_student_sub = selected_student_sub.where(XbkSelection.grade == grade)
-    if class_name:
-        # 构建班级学生子查询，限制选课记录范围
-        class_student_sub = select(XbkStudent.student_no).where(
-            XbkStudent.is_deleted.is_(False),
-            XbkStudent.class_name == class_name,
-            *([XbkStudent.year == year] if year is not None else []),
-            *([XbkStudent.term == term] if term else []),
-            *([XbkStudent.grade == grade] if grade else []),
+    unselected_stmt = (
+        select(func.count())
+        .select_from(XbkSelection)
+        .join(
+            student_scope_sub,
+            and_(
+                XbkSelection.year == student_scope_sub.c.year,
+                XbkSelection.term == student_scope_sub.c.term,
+                XbkSelection.student_no == student_scope_sub.c.student_no,
+            ),
         )
-        selected_student_sub = selected_student_sub.where(XbkSelection.student_no.in_(class_student_sub))
-        
-    suspended_stmt = suspended_stmt.where(XbkStudent.student_no.not_in(selected_student_sub))
+        .where(
+            XbkSelection.is_deleted.is_(False),
+            XbkSelection.course_code.in_(UNSELECTED_COURSE_CODES),
+        )
+    )
+    unselected_count = int((await db.execute(unselected_stmt)).scalar_one() or 0)
+    if unselected_count:
+        items.append({
+            "course_code": "未选", "course_name": "未选", "count": unselected_count,
+            "quota": 0, "grade": grade, "class_count": scoped_class_count, "allowed_total": 0,
+        })
+
+    # Calculate unselected students (Actually Suspended/Other in new logic)
+    suspended_stmt = select(func.count()).select_from(XbkStudent).where(
+        *student_filters,
+        ~_has_selection(),
+    )
     suspended_count = (await db.execute(suspended_stmt)).scalar_one() or 0
     
     # Add virtual row for "休学或其他"
@@ -211,6 +263,7 @@ async def course_stats(
             "course_name": "休学或其他",
             "count": suspended_count,
             "quota": 0,
+            "grade": grade,
             "class_count": 0,
             "allowed_total": 0,
         })
@@ -236,7 +289,7 @@ async def course_stats(
 
 @router.get("/class-stats")
 async def class_stats(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -244,9 +297,9 @@ async def class_stats(
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
     stmt = (
-        select(XbkStudent.class_name, func.count().label("count"))
+        select(XbkStudent.grade, XbkStudent.class_name, func.count().label("count"))
         .where(XbkStudent.is_deleted.is_(False))
-        .group_by(XbkStudent.class_name)
+        .group_by(XbkStudent.grade, XbkStudent.class_name)
     )
     if year is not None:
         stmt = stmt.where(XbkStudent.year == year)
@@ -257,7 +310,10 @@ async def class_stats(
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
     rows = (await db.execute(stmt)).all()
-    items = [{"class_name": str(cls), "count": int(count)} for cls, count in rows]
+    items = [
+        {"grade": str(row_grade) if row_grade else None, "class_name": str(cls), "count": int(count)}
+        for row_grade, cls, count in rows
+    ]
     
     # 按照班级名称排序
     def _sort_key(item):
@@ -266,8 +322,8 @@ async def class_stats(
         import re
         match = re.search(r'\((\d+)\)', name) or re.search(r'（(\d+)）', name) or re.search(r'(\d+)', name)
         if match:
-             return (0, int(match.group(1)), name)
-        return (1, 0, name)
+             return (str(item.get("grade") or ""), 0, int(match.group(1)), name)
+        return (str(item.get("grade") or ""), 1, 0, name)
         
     items.sort(key=_sort_key)
     return {"items": items}
@@ -275,7 +331,7 @@ async def class_stats(
 
 @router.get("/students-with-empty-selection")
 async def students_with_empty_selection(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -296,7 +352,7 @@ async def students_with_empty_selection(
         )
         .where(
             XbkSelection.is_deleted.is_(False),
-            XbkSelection.course_code == ""
+            XbkSelection.course_code.in_(UNSELECTED_COURSE_CODES)
         )
     )
 
@@ -305,7 +361,7 @@ async def students_with_empty_selection(
     if term:
         stmt = stmt.where(XbkSelection.term == term)
     if grade:
-        stmt = stmt.where(XbkSelection.grade == grade)
+        stmt = stmt.where(XbkStudent.grade == grade)
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
 
@@ -316,48 +372,27 @@ async def students_with_empty_selection(
 
 @router.get("/students-without-selection")
 async def students_without_selection(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: Optional[Dict[str, Any]] = Depends(require_xbk_access),
 ) -> Dict[str, Any]:
-    students_stmt = select(XbkStudent).where(XbkStudent.is_deleted.is_(False))
-    selections_stmt = select(XbkSelection.student_no).where(XbkSelection.is_deleted.is_(False)).group_by(XbkSelection.student_no)
-
+    students_stmt = select(XbkStudent).where(
+        XbkStudent.is_deleted.is_(False),
+        ~_has_selection(),
+    )
     if year is not None:
         students_stmt = students_stmt.where(XbkStudent.year == year)
-        selections_stmt = selections_stmt.where(XbkSelection.year == year)
     if term:
         students_stmt = students_stmt.where(XbkStudent.term == term)
-        selections_stmt = selections_stmt.where(XbkSelection.term == term)
     if grade:
         students_stmt = students_stmt.where(XbkStudent.grade == grade)
-        selections_stmt = selections_stmt.where(XbkSelection.grade == grade)
     if class_name:
         students_stmt = students_stmt.where(XbkStudent.class_name == class_name)
 
-    selection_rows = (await db.execute(selections_stmt)).all()
-    if not selection_rows:
-        selected_student_nos = set()
-    else:
-        selected_student_nos = {row[0] for row in selection_rows}
-    
-    students = (await db.execute(students_stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
-    items: List[Dict[str, Any]] = []
-    for s in students:
-        if s.student_no not in selected_student_nos:
-            items.append(
-                {
-                    "id": s.id,
-                    "year": s.year,
-                    "term": s.term,
-                    "grade": s.grade,
-                    "class_name": s.class_name,
-                    "student_no": s.student_no,
-                    "name": s.name,
-                    "gender": s.gender,
-                }
-            )
-    return {"items": items}
+    rows = (await db.execute(
+        students_stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc())
+    )).scalars().all()
+    return {"items": [XbkStudentOut.model_validate(row).model_dump() for row in rows]}

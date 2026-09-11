@@ -6,13 +6,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_admin
 from app.db.database import get_db
-from app.models import XbkStudent
+from app.models import XbkStudent, XbkSelection
+from app.schemas.xbk.academic_year import AcademicYear
+from app.services.xbk.locking import lock_rows
 from app.schemas.xbk import XbkListResponse, XbkStudentOut, XbkStudentUpsert
 
 from ._common import apply_common_filters, require_xbk_access
@@ -22,7 +24,7 @@ router = APIRouter()
 
 @router.get("/students", response_model=XbkListResponse)
 async def list_students(
-    year: Optional[int] = Query(None),
+    year: Optional[AcademicYear] = Query(None),
     term: Optional[str] = Query(None),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -64,7 +66,7 @@ async def create_student(
                 XbkStudent.year == payload.year,
                 XbkStudent.term == payload.term,
                 XbkStudent.student_no == payload.student_no,
-            )
+            ).with_for_update().execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if existing and not existing.is_deleted:  # type: ignore[truthy-bool]
@@ -94,7 +96,8 @@ async def update_student(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    row = (await db.execute(select(XbkStudent).where(XbkStudent.id == student_id))).scalar_one_or_none()
+    rows = await lock_rows(db, XbkStudent, XbkStudent.id == student_id)
+    row = rows[0] if rows else None
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="学生不存在")
     for k, v in payload.model_dump().items():
@@ -102,6 +105,9 @@ async def update_student(
     row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:
         await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="学生已存在")
     except Exception:
         await db.rollback()
         raise
@@ -115,10 +121,28 @@ async def delete_student(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ):
-    row = (await db.execute(select(XbkStudent).where(XbkStudent.id == student_id))).scalar_one_or_none()
+    rows = await lock_rows(db, XbkStudent, XbkStudent.id == student_id)
+    row = rows[0] if rows else None
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="学生不存在")
     row.is_deleted = True  # type: ignore[assignment]
     row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
-    await db.commit()
+    try:
+        await lock_rows(
+            db, XbkSelection,
+            XbkSelection.is_deleted.is_(False), XbkSelection.year == row.year,
+            XbkSelection.term == row.term, XbkSelection.student_no == row.student_no,
+        )
+        await db.execute(
+            update(XbkSelection).where(
+                XbkSelection.is_deleted.is_(False),
+                XbkSelection.year == row.year,
+                XbkSelection.term == row.term,
+                XbkSelection.student_no == row.student_no,
+            ).values(is_deleted=True, updated_at=row.updated_at)
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return None

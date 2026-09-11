@@ -2,10 +2,16 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from .academic_year import AcademicYear
+from .validation import (
+    OptionalText10, OptionalText20, OptionalText50, OptionalText100,
+    OptionalText200, Quota, SelectionCode, Text20, Text50, Text200,
+)
+
 
 class XbkStudentOut(BaseModel):
     id: int
-    year: int
+    year: AcademicYear
     term: str
     grade: Optional[str] = None
     class_name: str
@@ -18,7 +24,7 @@ class XbkStudentOut(BaseModel):
 
 class XbkCourseOut(BaseModel):
     id: int
-    year: int
+    year: AcademicYear
     term: str
     grade: Optional[str] = None
     course_code: str
@@ -32,7 +38,7 @@ class XbkCourseOut(BaseModel):
 
 class XbkSelectionOut(BaseModel):
     id: int
-    year: int
+    year: AcademicYear
     term: str
     grade: Optional[str] = None
     student_no: str
@@ -48,30 +54,30 @@ class XbkListResponse(BaseModel):
 
 
 class XbkStudentUpsert(BaseModel):
-    year: int
-    term: str
-    grade: Optional[str] = None
-    class_name: str
-    student_no: str
-    name: str
-    gender: Optional[str] = None
+    year: AcademicYear
+    term: Text20
+    grade: OptionalText20 = None
+    class_name: Text50
+    student_no: Text50
+    name: Text50
+    gender: OptionalText10 = None
 
 
 class XbkCourseUpsert(BaseModel):
-    year: int
-    term: str
-    grade: Optional[str] = None
-    course_code: str
-    course_name: str
-    teacher: Optional[str] = None
-    quota: int = 0
-    location: Optional[str] = None
+    year: AcademicYear
+    term: Text20
+    grade: OptionalText20 = None
+    course_code: Text50
+    course_name: Text200
+    teacher: OptionalText100 = None
+    quota: Quota = 0
+    location: OptionalText200 = None
 
 
 class XbkSelectionUpsert(BaseModel):
-    year: int
-    term: str
-    grade: Optional[str] = None
-    student_no: str
-    name: Optional[str] = None
-    course_code: str
+    year: AcademicYear
+    term: Text20
+    grade: OptionalText20 = None
+    student_no: Text50
+    name: OptionalText50 = None
+    course_code: SelectionCode

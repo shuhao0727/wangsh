@@ -3,9 +3,13 @@
 import asyncio
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 
-from app.api.endpoints.xbk.courses import create_course, update_course
+from app.api.endpoints.xbk.courses import create_course, router, update_course
+from app.core.deps import require_admin
+from app.db.database import get_db
 from app.models import XbkCourse
 from app.schemas.xbk import XbkCourseUpsert
 
@@ -16,6 +20,12 @@ class _ScalarResult:
 
     def scalar_one_or_none(self):
         return self._value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value if isinstance(self._value, list) else ([] if self._value is None else [self._value])
 
 
 class _CrudDb:
@@ -69,10 +79,29 @@ def test_create_course_persists_payload():
 
 
 def test_create_course_rejects_negative_quota():
-    with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(create_course(_payload(-1), _CrudDb([]), {"role_code": "admin"}))
+    # Schema validation now rejects the value before the endpoint can run.
+    with pytest.raises(ValidationError) as exc_info:
+        _payload(-1)
+    assert exc_info.value.errors()[0]["loc"] == ("quota",)
 
-    assert exc_info.value.status_code == 422
+    # Retain the original HTTP 422 contract using the real router and schema,
+    # without model_construct() bypasses or a mocked validation function.
+    db = _CrudDb([])
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_admin] = lambda: {"role_code": "admin"}
+
+    async def request():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://synthetic") as client:
+            return await client.post("/courses", json={**_payload().model_dump(), "quota": -1})
+
+    response = asyncio.run(request())
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "quota"]
+    assert db.added == []
+    assert db.commit_count == 0
+    assert db.refresh_count == 0
 
 
 def test_update_course_changes_existing_row():

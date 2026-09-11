@@ -7,16 +7,18 @@ from typing import Dict, List, Optional, Tuple
 from openpyxl import Workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from sqlalchemy import Integer, and_, case, cast, func, select
+from sqlalchemy import Numeric, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.academic_year import split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
-from app.services.xbk.exports.common import class_sort_key, cn_len, safe_sheet_name
+from app.services.xbk.exports.common import class_sort_key, cn_len, safe_sheet_name, force_text_cells
 
 
-def _title_year_range(year: int, year_start: Optional[int], year_end: Optional[int]) -> Tuple[int, int]:
-    ys = year_start if year_start is not None else year
-    ye = year_end if year_end is not None else year + 1
+def _title_year_range(year: str, year_start: Optional[int], year_end: Optional[int]) -> Tuple[int, int]:
+    academic_start, academic_end = split_academic_year(year)
+    ys = year_start if year_start is not None else academic_start
+    ye = year_end if year_end is not None else academic_end
     return ys, ye
 
 
@@ -156,7 +158,7 @@ def _set_page_settings(ws) -> None:
 
 async def build_class_distribution_xlsx(
     db: AsyncSession,
-    year: int,
+    year: str,
     term: str,
     grade: Optional[str],
     class_name: Optional[str],
@@ -166,11 +168,12 @@ async def build_class_distribution_xlsx(
     ys, ye = _title_year_range(year, year_start, year_end)
 
     numeric_course_code = case(
-        (XbkSelection.course_code.op("~")("^[0-9]+$"), cast(XbkSelection.course_code, Integer)),
+        (XbkSelection.course_code.op("~")("^[0-9]+$"), cast(XbkSelection.course_code, Numeric(50, 0))),
         else_=None,
     )
     stmt = (
         select(
+            XbkStudent.grade.label("grade"),
             XbkStudent.class_name.label("class_name"),
             XbkStudent.student_no.label("student_no"),
             func.coalesce(XbkSelection.name, XbkStudent.name).label("student_name"),
@@ -180,7 +183,7 @@ async def build_class_distribution_xlsx(
             XbkCourse.location.label("location"),
         )
         .select_from(XbkSelection)
-        .outerjoin(
+        .join(
             XbkStudent,
             and_(
                 XbkStudent.is_deleted.is_(False),
@@ -207,14 +210,15 @@ async def build_class_distribution_xlsx(
         )
     )
     if grade:
-        stmt = stmt.where(XbkSelection.grade == grade)
+        stmt = stmt.where(XbkStudent.grade == grade)
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
     rows = (await db.execute(stmt)).all()
 
-    grouped: Dict[str, List[dict]] = {}
+    grouped: Dict[tuple[str, str], List[dict]] = {}
     for r in rows:
-        grouped.setdefault(str(r.class_name or "未知班级"), []).append(
+        key = (str(r.grade or "未知年级"), str(r.class_name or "未知班级"))
+        grouped.setdefault(key, []).append(
             {
                 "course_code": r.course_code,
                 "course_name": r.course_name,
@@ -233,10 +237,15 @@ async def build_class_distribution_xlsx(
     wb = Workbook()
     wb.remove(wb.active)
 
-    for cls in sorted(grouped.keys(), key=class_sort_key):
-        items = grouped[cls]
-        grade_class = _format_grade_class(grade, cls)
-        ws = wb.create_sheet(safe_sheet_name(cls))
+    grade_order = {"高一": 0, "高二": 1, "高三": 2}
+    for row_grade, cls in sorted(
+        grouped,
+        key=lambda key: (grade_order.get(key[0], 99), key[0], class_sort_key(key[1])),
+    ):
+        items = grouped[(row_grade, cls)]
+        grade_class = _format_grade_class(row_grade, cls)
+        sheet_label = cls if grade else f"{row_grade}{cls}"
+        ws = wb.create_sheet(safe_sheet_name(sheet_label))
         ws.merge_cells("A1:E1")
         ws["A1"] = f"{ys}-{ye}学年{term}江苏省昆山中学{grade_class}校本课程分发表"
         ws["A1"].font = Font(size=14, bold=True)
@@ -256,6 +265,14 @@ async def build_class_distribution_xlsx(
         _set_page_settings(ws)
         ws.freeze_panes = "A3"
         ws.auto_filter.ref = None
+
+    if not wb.sheetnames:
+        ws = wb.create_sheet("暂无数据")
+        ws.append(["当前筛选条件下暂无数据"])
+        ws.column_dimensions["A"].width = 40
+
+    for ws in wb.worksheets:
+        force_text_cells(ws)
 
     output = BytesIO()
     wb.save(output)

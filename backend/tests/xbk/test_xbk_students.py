@@ -18,6 +18,12 @@ class _ScalarResult:
     def scalar_one_or_none(self):
         return self._value
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value if isinstance(self._value, list) else ([] if self._value is None else [self._value])
+
 
 class _CrudDb:
     def __init__(self, execute_values, commit_error=None):
@@ -93,7 +99,7 @@ def test_delete_student_soft_deletes_existing_row():
         name="张三",
         is_deleted=False,
     )
-    db = _CrudDb([row])
+    db = _CrudDb([row, None, None])
 
     result = asyncio.run(delete_student(8, db, {"role_code": "admin"}))
 

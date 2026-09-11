@@ -17,7 +17,7 @@ export interface XbkListResponse<T> {
 
 export interface XbkStudentRow {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string | null;
   class_name: string;
@@ -28,7 +28,7 @@ export interface XbkStudentRow {
 
 export interface XbkCourseRow {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string | null;
   course_code: string;
@@ -40,7 +40,7 @@ export interface XbkCourseRow {
 
 export interface XbkSelectionRow {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string | null;
   student_no: string;
@@ -50,7 +50,7 @@ export interface XbkSelectionRow {
 
 export interface XbkCourseResultRow {
   id: number;
-  year: number;
+  year: string;
   term: string;
   grade?: string | null;
   class_name?: string | null;
@@ -81,12 +81,13 @@ export interface XbkCourseStatItem {
 }
 
 export interface XbkClassStatItem {
+  grade?: string | null;
   class_name: string;
   count: number;
 }
 
 export interface XbkMeta {
-  years: number[];
+  years: string[];
   terms: string[];
   classes: string[];
 }
@@ -111,7 +112,7 @@ export interface XbkImportResult {
 }
 
 export const xbkDataApi = {
-  getMeta: async (params: { year?: number; term?: string; grade?: string } = {}): Promise<XbkMeta> => {
+  getMeta: async (params: { year?: string; term?: string; grade?: string } = {}): Promise<XbkMeta> => {
     const res = await api.client.get("/xbk/data/meta", { params });
     return res.data as XbkMeta;
   },
@@ -126,7 +127,7 @@ export const xbkDataApi = {
 
   previewImport: async (params: {
     scope: XbkScope;
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     file: File;
@@ -134,13 +135,13 @@ export const xbkDataApi = {
     const form = new FormData();
     form.append("file", params.file);
     const res = await api.client.post("/xbk/import/preview", form, {
-      params: { scope: params.scope, grade: params.grade },
+      params: { scope: params.scope, year: params.year, term: params.term, grade: params.grade },
     });
     return res.data as XbkImportPreview;
   },
 
   listStudents: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -153,7 +154,7 @@ export const xbkDataApi = {
   },
 
   listCourses: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     search_text?: string;
@@ -201,7 +202,7 @@ export const xbkDataApi = {
   },
 
   listSelections: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -214,7 +215,7 @@ export const xbkDataApi = {
   },
 
   listCourseResults: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -228,7 +229,7 @@ export const xbkDataApi = {
 
   deleteData: async (params: {
     scope: "all" | XbkScope;
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -239,7 +240,7 @@ export const xbkDataApi = {
 
   importData: async (params: {
     scope: XbkScope;
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     skip_invalid?: boolean;
@@ -250,6 +251,8 @@ export const xbkDataApi = {
     const res = await api.client.post("/xbk/import", form, {
       params: {
         scope: params.scope,
+        year: params.year,
+        term: params.term,
         grade: params.grade,
         skip_invalid: params.skip_invalid ?? true,
       },
@@ -259,7 +262,7 @@ export const xbkDataApi = {
 
   exportData: async (params: {
     scope: XbkExportScope;
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -275,7 +278,7 @@ export const xbkDataApi = {
 
   exportCurrentTable: async (params: {
     scope: XbkExportScope;
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -291,12 +294,10 @@ export const xbkDataApi = {
 
   exportTables: async (params: {
     export_type: XbkExportType;
-    year: number;
+    year: string;
     term: string;
     grade?: string;
     class_name?: string;
-    yearStart?: number;
-    yearEnd?: number;
   }): Promise<Blob> => {
     const res = await api.client.get(`/xbk/export/${params.export_type}`, {
       params: {
@@ -304,8 +305,6 @@ export const xbkDataApi = {
         term: params.term,
         grade: params.grade,
         class_name: params.class_name,
-        yearStart: params.yearStart,
-        yearEnd: params.yearEnd,
       },
       responseType: "blob",
     });
@@ -313,8 +312,9 @@ export const xbkDataApi = {
   },
 
   getSummary: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
+    grade?: string;
     class_name?: string;
   }): Promise<XbkSummary> => {
     const res = await api.client.get("/xbk/analysis/summary", { params });
@@ -322,7 +322,7 @@ export const xbkDataApi = {
   },
 
   getCourseStats: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -332,7 +332,7 @@ export const xbkDataApi = {
   },
 
   getClassStats: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -342,7 +342,7 @@ export const xbkDataApi = {
   },
 
   getStudentsWithoutSelection: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;
@@ -354,7 +354,7 @@ export const xbkDataApi = {
   },
 
   getStudentsWithEmptySelection: async (params: {
-    year?: number;
+    year?: string;
     term?: string;
     grade?: string;
     class_name?: string;

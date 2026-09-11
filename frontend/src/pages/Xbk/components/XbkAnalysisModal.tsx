@@ -33,7 +33,7 @@ interface XbkAnalysisModalProps {
   open: boolean;
   onCancel: () => void;
   filters: {
-    year?: number;
+    year?: string;
     term?: "上学期" | "下学期";
     grade?: "高一" | "高二";
     class_name?: string;
@@ -125,15 +125,14 @@ const CourseTable: React.FC<{ data: XbkCourseStatItem[]; className?: string }> =
   );
 };
 
-const ClassTable: React.FC<{ data: XbkClassStatItem[]; className?: string; grade?: string }> = ({
+const ClassTable: React.FC<{ data: XbkClassStatItem[]; className?: string }> = ({
   data,
   className,
-  grade,
 }) => {
   const columns = useMemo<ColumnDef<XbkClassStatItem>[]>(
     () => [
       {
-        accessorFn: (row) => formatXbkClassName(grade, row.class_name),
+        accessorFn: (row) => formatXbkClassName(row.grade, row.class_name),
         id: "class_name",
         header: "班级",
       },
@@ -148,7 +147,7 @@ const ClassTable: React.FC<{ data: XbkClassStatItem[]; className?: string; grade
         ),
       },
     ],
-    [grade],
+    [],
   );
 
   return (
@@ -156,7 +155,7 @@ const ClassTable: React.FC<{ data: XbkClassStatItem[]; className?: string; grade
       data={data}
       columns={columns}
       className={className}
-      getRowId={(row, index) => `${row.class_name || "class"}-${index}`}
+      getRowId={(row, index) => `${row.grade || "grade"}-${row.class_name || "class"}-${index}`}
     />
   );
 };
@@ -204,6 +203,7 @@ const NoSelectionTable: React.FC<{ data: XbkStudentRow[]; className?: string }> 
 
 export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCancel, filters }) => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<XbkSummary | null>(null);
   const [courseStats, setCourseStats] = useState<XbkCourseStatItem[]>([]);
   const [classStats, setClassStats] = useState<XbkClassStatItem[]>([]);
@@ -214,8 +214,10 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
 
   useEffect(() => {
     if (!open) return;
+    let active = true;
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       setActiveTab("overview");
       setCourseQuery("");
       setStudentQuery("");
@@ -230,20 +232,24 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
           xbkDataApi.getSummary(params),
           xbkDataApi.getCourseStats(params),
           xbkDataApi.getClassStats(params),
-          xbkDataApi.getStudentsWithoutSelection(params),
+          xbkDataApi.getStudentsWithEmptySelection(params),
         ]);
+        if (!active) return;
         setSummary(sum);
         setCourseStats(courses.items || []);
         setClassStats(classes.items || []);
         setNoSelection(noSel.items || []);
-      } catch (_e: any) {
+      } catch {
+        if (!active) return;
+        setError("加载分析数据失败，请关闭后重试");
         showMessage.error("加载分析数据失败");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     void fetchData();
-  }, [open, filters]);
+    return () => { active = false; };
+  }, [open, filters.year, filters.term, filters.grade, filters.class_name]);
 
   const filteredCourseStats = useMemo(() => {
     const q = courseQuery.trim().toLowerCase();
@@ -280,10 +286,12 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
           <div className="flex min-h-0 flex-1 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
           </div>
+        ) : error ? (
+          <div role="alert" className="text-sm text-text-secondary">{error}</div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             <div className="ws-modal-filter-info flex flex-wrap items-center gap-x-2 gap-y-1">
-              当前筛选：{filters.year || "全部年份"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
+              当前筛选：{filters.year || "全部学年"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
               {filters.class_name ? ` · ${formatXbkClassName(filters.grade, filters.class_name)}` : ""}
               <span>·</span>
               <span className="font-medium text-text">学生数：{summary?.students ?? 0}</span>
@@ -334,7 +342,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
                     <div className="ws-section-title flex-shrink-0 font-semibold">班级统计</div>
-                    <ClassTable data={classStats} className="min-h-0 flex-1" grade={filters.grade} />
+                    <ClassTable data={classStats} className="min-h-0 flex-1" />
                   </div>
                 </div>
               </TabsContent>
@@ -359,7 +367,7 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <ClassTable data={classStats} className="min-h-0 flex-1" grade={filters.grade} />
+                  <ClassTable data={classStats} className="min-h-0 flex-1" />
                 </div>
               </TabsContent>
 

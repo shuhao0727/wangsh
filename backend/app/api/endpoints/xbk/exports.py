@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from app.core.deps import require_admin
 from app.db.database import get_db
+from app.schemas.xbk.academic_year import AcademicYear, split_academic_year
 from app.services.xbk.exports.course_selection import build_student_course_selection_xlsx
 from app.services.xbk.exports.class_distribution import build_class_distribution_xlsx
 from app.services.xbk.exports.teacher_distribution import build_teacher_distribution_xlsx
@@ -19,7 +20,7 @@ router = APIRouter()
 @router.get("/export/{export_type}")
 async def export_tables(
     export_type: str,
-    year: int = Query(...),
+    year: AcademicYear = Query(...),
     term: str = Query(...),
     grade: Optional[str] = Query(None),
     class_name: Optional[str] = Query(None),
@@ -32,18 +33,19 @@ async def export_tables(
         raise HTTPException(status_code=400, detail="不支持的导出类型")
 
     if export_type == "course-selection":
-        output = await build_student_course_selection_xlsx(db, year, term, class_name, year_start, year_end)
+        output = await build_student_course_selection_xlsx(db, year, term, class_name, year_start, year_end, grade=grade)
         prefix = "学生选课表"
     elif export_type == "distribution":
         output = await build_class_distribution_xlsx(db, year, term, grade, class_name, year_start, year_end)
         prefix = "各班分发表"
     else:
-        output = await build_teacher_distribution_xlsx(db, year, term, class_name, year_start, year_end)
+        output = await build_teacher_distribution_xlsx(db, year, term, class_name, year_start, year_end, grade=grade)
         prefix = "教师分发表"
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ys = year_start if year_start is not None else year
-    ye = year_end if year_end is not None else year + 1
+    start_year, end_year = split_academic_year(year)
+    ys = year_start if year_start is not None else start_year
+    ye = year_end if year_end is not None else end_year
     parts = [prefix, f"{ys}-{ye}", term, timestamp]
     if class_name:
         parts.insert(2, class_name)
