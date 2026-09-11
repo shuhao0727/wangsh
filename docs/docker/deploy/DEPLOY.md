@@ -4,6 +4,38 @@
 
 ---
 
+## 隔离生产镜像模拟的安全边界
+
+本地模拟使用独立 project/标签、回环监听端口、专用空库/Redis/命名卷与合成账号，不复用开发栈或生产凭据。需要复现实测时，先按当前源码构建并保存 Dockerfile/context SHA、构建日志及镜像 ID，再核对运行容器的实际 image ID；基础层缓存命中可以接受，旧业务镜像改标签不算新源码构建。基础镜像网络失败保留原始日志，仅有限重试。
+
+空库按本文既有 bootstrap legacy baseline → Alembic → compatibility bootstrap 流程执行，不称为纯 Alembic 从零建库。模拟前后保存资源清单，以本批 exact ID 清理，不运行针对其他批次的清理脚本或全局 prune。Docker socket、正常业务卷和真实名册不挂载到此类最小应用模拟中；因此它不能替代 PythonLab worker/沙箱压力或生产数据恢复验收。动态构建与运行结果只见 [TEST_STATUS](../testing/TEST_STATUS.md)。
+
+认证上线还须考虑 `logout` 撤销失败的 `503` 响应与客户端提示、登录 issuance 被并发替换的 `409`，不能让网关把失败转换成成功。数据库提交后的 Redis 发布错误不具备跨存储回滚能力；旧 refresh/TTL/代理和迁移策略未因本地镜像构建自动验收。
+
+## 未发布 AUTH 持久权威的受控切换前提（2026-09-10）
+
+本节是 R5 新 AUTH 变更的部署前置约束，覆盖下方历史“本批无 migration”对 AUTH 的描述；**不是生产执行授权或发布验收结论**。本轮只允许合成专库演练，正常业务库与开发入口没有执行这项切换。
+
+- 新增 revision `20260910_0001_auth_authority`，父 revision 为 `20260908_0001_xbk_academic_year`。升级前先核对实际 Alembic head、已有 schema 和父迁移影响；不能为了启用 AUTH 对正常库直接运行 `upgrade head`，也不能用 `create_all` 代替正式迁移。新增 `auth_authority` 与 `auth_session_states`，具体字段以 migration/模型和 [AUTH](../../features/AUTH.md) 为准。
+- migration 将权威 gate 初始化为 `ready=False`。表存在不代表切换完成；新认证受保护路径与变更入口在未 ready 时拒绝服务，不允许启动时自动置 ready、逐请求懒接管或因缓存缺失放行。
+- 切换必须先停止并排空旧认证 writer 和可能改变身份/会话证据的在途请求，冻结用户写入与对应 Redis 会话证据，确认所有合作 writer 将统一升级。计划中的布尔声明不是实际停流证明，必须保存停止、排空与成对快照记录。受控维护文件为 `backend/app/api/endpoints/auth/cutover.py`，直接运行文件而不是 `python -m`，不是公开 HTTP 接口或启动钩子；内部调用 `bootstrap_durable_auth_authority`。默认 dry-run 回滚，显式受保护 JSON 计划与 `--confirm-database` 精确确认；只有审阅后另加 `--apply` 才提交。完整计划及命令模板以 AUTH owner 为准。
+- enrollment 在单个数据库事务内建立存量会话/撤销依据并提交 ready gate。可信证据可保留既有 nonce/legacy refresh；缺失或冲突的仍有效旧凭据证据必须中止，不得通过全量撤销或无条件 ready 刷过迁移。明确需要重新认证的用户必须另行确认范围，不擅改 legacy、TTL 或同 IP 政策。
+- enrollment 在锁定的数据库事务中读取 Redis 会话与 IP binding 的值/PTTL；跨快照稳定性依赖实际停写。持久 `ip_expires_at` 只保存现有同 IP 租约剩余期限，不延长 TTL；过期租约不再占用 IP，inactive tombstone 不能随租约清理。维护输出计数并不替代逐用户 preserved/revoked 审计，应在受控环境记录切换前后用户明细，避免输出凭据。
+- DB 提交与 Redis 发布仍非分布式原子事务。新合同以持久权威拒绝已撤销身份，发布失败返回失败但不承诺回滚已提交的撤销；提交 ACK 丢失也不能解释为数据库未写入。监控和重试应先核对权威状态，不能恢复旧缓存就恢复旧权限。
+- 禁止混跑旧 writer 或直接降版：旧版本不认识持久 tombstone，可能重新放行旧凭据。downgrade 会删除安全证据，必须先停认证流量、处理全部未到期凭据并完成另行批准的回退方案和备份验证。不要定时清理 tombstone 来模拟 Redis TTL。
+- 仍需新镜像/受控切换演练与真实调用方整合；PythonLab 本轮冻结后端不自动继承新 AUTH。发布状态和失败历史仅见 [TEST_STATUS](../testing/TEST_STATUS.md)，不以单项 PG 通过代替正常环境切换或生产验收。
+
+## 未发布并发修复的部署前提（2026-09-09）
+
+- 本批测评/XBK锁与认证、PythonLab代码修复没有新增数据库 migration，也没有执行生产部署。此前获授权的本地 XBK 指定学年迁移不能据此重跑或扩为 upgrade head。
+- 测评按配置/用户事务互斥、XBK父子锁协议要求合作入口统一升级；默认 READ COMMITTED 已在专用 PostgreSQL 验证，其他隔离级别、混版本 worker 或直写 SQL 不属于保证。上线前评估 AI 长事务和导入持锁的连接池/等待影响。
+- PythonLab 所有资源 writer 必须访问同一可信 ownership 目录及相同锁 inode，且底层共享文件系统真实支持 flock。仅“挂载路径同名”不足。journal 不得进入学生 `/workspace` 挂载，不得清理 lock inode 来解锁；跨主机、不同卷和旧版 writer 尚未验收。
+- 升降版本须先停止接受新沙箱创建，等待或安全处理在途任务，盘点旧无 token 容器及 creating/live/deleting/removed journal。未知归属保守保留，不能按同名批量删容器；回滚旧版会失去 generation/fence 保护，不允许直接混跑后声称兼容。
+- 启动 writer 已采用 Redis 原值 Lua CAS，READY 发布不确定时先核对世代再补偿；无可信 live journal 的 legacy 容器不再自动接管。Redis 无法核对、FAILED 提交 ACK 丢失、删除失败或其他旧 writer 盲写仍有保守保留/状态风险。发布前必须做真实 worker 崩溃恢复、共享 inode 和混版本演练，不能把专用 Redis/Docker 定向实例当作这些门禁已通过。
+- 沙箱 CAS 要求 Redis 支持并授权 `EVAL` 及脚本内 GET/SET；DAP 断连清理还需脚本内 DEL 与 SET KEEPTTL（Redis 6.0+），在同一原子上下文中比较元信息和连接租约，缺失能力时保守失败而不盲写；认证旧 IP owner 条件旋转要求同一 Redis 原子上下文中的 `WATCH`、`MGET`、`MULTI`、`SET`、`EXEC` 及清理事务权限。应用账号 ACL 必须受控验证，不能通过扩大到全权限来规避失败。多 key 的 Redis Cluster slot、Sentinel 故障切换及 TLS/代理部署未由本批证明。
+- 存量 terminal/DAP WS 和管理/课堂 SSE 增加周期/逐帧会话检查，部署时评估 Redis 请求量、连接数与背压；不是每秒必定断开的网络 SLA，也不补足 AUTH-01 双存储原子撤销。DB 提交失败仍可留下有效 refresh；Redis 写失败仍可留下旧 access，禁止据此宣布安全发布完成。
+
+
 ## 📑 目录
 
 - [服务器信息](#服务器信息)
@@ -125,6 +157,12 @@ IMAGE_REPOSITORY_PREFIX=shuhao07
 
 当前版本更新仍是显式同步，不会自动改写其他文件。至少需要同步
 `.env.example`、`frontend/package.json` 和 `frontend/package-lock.json`。
+
+首页和后台布局的版本/环境标签由前端构建时的 `REACT_APP_VERSION` /
+`REACT_APP_ENV` 提供，不通过 `/system/overview` 或 `/system/settings` 查询。
+版本未注入、为空或为 `unknown` 时显示 `–`，不回退读取服务器设置。
+因此只修改后端版本或容器运行时环境不会更新已生成的静态页面，需重新构建前端镜像；
+验收时应核对镜像来源、实际页面版本与构建注入值。系统接口的超级管理员权限不变。
 
 ---
 
@@ -351,6 +389,8 @@ SUPER_ADMIN_PASSWORD=...              # 管理员密码
 POSTGRES_PASSWORD=...                 # 数据库密码
 AGENT_API_KEY_ENCRYPTION_KEY=...     # 智能体 API 密钥加密
 AI_AGENT_MAX_OUTPUT_TOKENS=8192      # Anthropic 兼容接口单次回答上限
+AUTH_TRUSTED_PROXY_CIDRS=...         # 可信反代网段（CIDR 逗号分隔）；为空=不信任任何转发头
+                                      # 生产必须按网关容器/主机网段配置，禁止 0.0.0.0/0
 ```
 
 ### 功能开关
@@ -525,6 +565,35 @@ docker compose exec -T postgres sh -c \
 
 该迁移会先以 `SHARE ROW EXCLUSIVE` 模式锁定课堂活动表，再检查 active 活动并执行 DDL，从而消除“检查通过后旧版本又写入”的竞态。锁表会阻塞课堂活动表上的并发写入，因此生产发布仍应安排维护窗口：先停止旧后端或关闭课堂写入口，等待在途课堂事务结束，再执行 `alembic upgrade head`。不要依赖锁等待代替停写流程。
 
+### XBK 整数学年库与热加载代码不匹配
+
+`20260908_0001_xbk_academic_year` 的父版本为
+`20260817_0001_query_filter_indexes`。前端/API 采用规范字符串学年后，旧库三个
+XBK 表的整数 `year` 会导致查询失败；开发栈的 `uvicorn --reload` 不会代替 Alembic
+执行此迁移。不能因其他隔离测试通过就认定正在使用的本地库已升级。
+
+处理顺序：确认连接的是目标本地/生产栈，运行只读迁移预检，检查三个表的列类型、
+待迁移年份范围及依赖对象；经授权建立停写窗口并完成可恢复备份后，只升级到审核过的
+目标 revision。此迁移改变三表列类型并可能等待表锁，不应在未确认的数据操作窗口
+直接运行 `upgrade head` 或裸 SQL。先在隔离库预演升级和降级；降级只保留起始年份，
+不能与仍使用字符串学年的新版应用配套运行，回退时需同步恢复兼容应用版本。
+
+该迁移不会把 `term="1"` 改成 `上学期`，也不会恢复、重导或合并名册。升级后应使用
+同一学年/学期检查 `analysis/summary`、`data/meta`、`data/course-results` 的 HTTP
+响应及真实页面，而不只查看 `/health`。实际执行与未执行边界只维护于
+[TEST_STATUS](../testing/TEST_STATUS.md)。
+
+备份验收须在隔离 PostgreSQL 实际恢复，比较完整 schema、逐表内容摘要、序列与关联，
+不能以目录清单替代恢复。跨实例计算 timestamptz 内容摘要时，在各校验连接显式设置
+相同会话时区；仅传 PGOPTIONS 可能仍被客户端 PGTZ 覆盖，应读取当前时区核实。
+备份应保留在受限权限的仓库外目录，日志只保留聚合与摘要，不输出凭据或名册明细。
+
+当前 Alembic env 会先独立提交版本表容量兼容 DDL，再进入目标迁移事务；失败时不能
+声称所有 DDL 一起回滚。超时须显式传入其新建 asyncpg 连接并读取实际设置，不能把
+应用连接或另一 psql 会话的超时当作迁移超时；前置探针不得留下隐式事务。最后须以
+独立连接确认目标 revision 与三表结构同时持久化。整库备份不涵盖 Redis、上传文件，
+迁移后的新写入仍需要单独的恢复边界和配套代码回退方案。
+
 ### 执行迁移
 
 ```bash
@@ -544,7 +613,13 @@ alembic -c /app/alembic.ini upgrade head
 python /app/scripts/bootstrap_db.py
 ```
 
-`check_migration_state.py` 是只读检查，不会修改数据库。它用于阻断以下危险状态：
+`check_migration_state.py` 是只读检查，不会修改数据库。revision 图由 AST 静态读取，不执行迁移模块；缺失父节点、重复与循环会拒绝。目录读取使用只读 REPEATABLE READ 快照，不替代随后升级的并发 DDL 控制。
+
+对 `20260430_migrate_dev_schema` 中已审核的索引存在性 guard，仅完整 migration AST 指纹及 `pg_get_indexdef` 等目录证据均匹配时允许跳过已有等价索引；要求 public 中唯一同名、目标表及完整定义一致、普通索引且 valid/ready/live。跨 schema 同名、异结构、缺少证据或未知动态 guard 保守阻断。代码改变须重新人工审核，不通过自动重算指纹放行。其他未审核历史 guard 仍可能阻断中间版本；这不是全部版本可升级的保证，也没有执行完整目标库升级。实际证据范围见 [TEST_STATUS](../testing/TEST_STATUS.md)。
+
+PythonLab 更新后，旧运行容器若缺少模式标签或资源/镜像/网络配置不兼容，将拒绝复用而不是自动强拆。请在专用环境完成终止、资源归属与 DAP 路径验收后再安排切换；启动 CAS 的覆盖范围和可能孤儿资源的边界见 [PYTHONLAB](../../features/PYTHONLAB.md#沙箱启动恢复与资源归属边界2026-09-09)。
+
+它用于阻断以下危险状态：
 
 - `alembic_version` 缺失或为空，但 public schema 已经有业务表。
 - 当前 Alembic 版本不是代码中 head 的祖先。
@@ -552,7 +627,7 @@ python /app/scripts/bootstrap_db.py
 
 如果检查失败，不要删除已有表，也不要直接重跑迁移。先备份数据库，再对照待执行迁移确认真实表、列、索引、约束是否完整；只有在确认真实 schema 已等价于目标迁移后，才允许手动补齐缺失索引/约束并 `alembic stamp <verified_revision>`。
 
-`bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。不要在全新空库上绕过 bootstrap 直接执行 Alembic；历史 revision 中存在超过 32 字符的标识。对于已有标准 `VARCHAR(32)` 版本表的历史库，Alembic online 环境会在迁移事务前幂等扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
+`bootstrap_db.py --initial-only` 只用于真正空库的首次初始化：它仅创建受维护迁移链之前的 legacy baseline，并以 `VARCHAR(64)` 创建空的 `alembic_version`，不会 stamp。创建前会从独立 metadata 副本排除迁移管理的索引（包括迁移原生 SQL 定义），由所属 migration 按依赖顺序创建扩展和索引；不得在 bootstrap 中临时建扩展或先建再删这些索引。 XBK baseline 副本使用迁移前的整数年份，并排除后续学年检查约束；原 migration 负责转换到 `VARCHAR(9)` 并建立约束，不能把当前 ORM 字段形态提前当作旧基线。失败后已提交 baseline 的专用模拟库不能再次当成空库；保留诊断并使用新的专用空库重验，不绕过非空保护。随后必须执行完整 `alembic upgrade head`，再由普通 `bootstrap_db.py` 补兼容字段和视图。不要在全新空库上绕过 bootstrap 直接执行 Alembic；历史 revision 中存在超过 32 字符的标识。对于已有标准 `VARCHAR(32)` 版本表的历史库，Alembic online 环境会在迁移事务前幂等扩容为 `VARCHAR(64)`。已有业务表但缺失 `alembic_version` 的数据库仍会被拒绝，避免把历史库误标记为最新。
 
 当前 head `20260711_0002_restore_legacy_baseline_indexes` 会幂等恢复 legacy baseline
 路径可能跳过的 3 个 XBK `grade` 索引和 2 个文章样式索引。空库升级验收必须查询
@@ -671,32 +746,21 @@ bash scripts/deploy.sh restore-db ./backups/your-backup.dump --yes
 
 ### 备份计划
 
-定时任务建议使用宿主机直连的 `scripts/backup.sh`（不依赖 Compose 栈），输出命名与
-`deploy.sh backup-db` 一致，可被 `restore-db` / `restore-drill.sh` 直接消费。
+当前仓库提供 `bash scripts/deploy.sh backup-db [full|schema|data]`，通过已配置的 Compose
+`postgres` 服务生成时间戳备份；输出目录由 `BACKUP_DIR` 指定，默认 `./backups`。
+该入口依赖 Docker、环境配置和运行中的数据库服务，不包含自动调度、按天轮转或异地同步。
+执行前必须确认所选配置、数据库和输出目录，不将“命令存在”当作备份可恢复证明。
 
-- **每日自动备份 + 轮转**：`scripts/backup.sh full` 生成时间戳 dump，并删除超过
-  `BACKUP_KEEP_DAYS`（默认 14）天的该库备份。
-- **异地同步**：备份后把 `BACKUP_DIR` 增量同步到异地（rclone/rsync 一行示例见
-  `scripts/backup.sh` 注释）。
-- **季度演练**：每季度执行一次 `scripts/restore-drill.sh`：取最新 dump 恢复到独立
-  演练库 `<db>_drill`，断言恢复成功（表存在、含数据的 dump 行数>0、读取
-  `alembic_version`），写演练记录 `BACKUP_DIR/drill-<ts>.log` 后自动清理演练库；
-  可用 `--dry-run` 先预览命令。演练确认备份真实可恢复，避免"有备份但恢复不了"。
+仍需安排每日备份、按运维保留策略轮转、异地保存和季度恢复演练；这些属于部署侧待配置并
+验收的运维措施，不是本仓库当前已实现的自动化能力。本页不提供依赖缺失脚本的 cron
+或演练命令，也未核查仓库外的调度系统。
 
-cron 示例（每天 02:00 备份，03:30 同步异地；cron 环境需能读到 `POSTGRES_*` 凭据，
-建议在命令中 dot-source 环境文件或使用 systemd service 注入）：
+当前源码没有可直接执行的独立恢复演练入口。`restore-db` 会恢复到配置选中的现有目标库，
+并可能清理其中对象，**不能当作演练命令**。演练必须另行确认隔离数据库/实例、目标保护、
+恢复后数据与迁移版本检查、记录留存和清理方案，再授权执行。
 
-```cron
-0 2 * * * cd /srv/wangsh && . ./.env && ./scripts/backup.sh full >> /var/log/wangsh-backup.log 2>&1
-30 3 * * * rclone copy /srv/wangsh/backups remote:wangsh-backups --include 'wangsh_db_*.dump' --max-age 14d
-```
-
-季度演练示例：
-
-```bash
-bash scripts/restore-drill.sh            # 自动取最新 dump 演练
-bash scripts/restore-drill.sh --dry-run  # 演练前预览
-```
+历史 `85ceba53` 快照含独立备份与演练脚本，但不在当前源码中；恢复历史实现须单独审查与
+验证，尤其不能直接复用删除固定演练库的行为。本轮只校正文档，未执行数据库备份或恢复。
 
 ---
 

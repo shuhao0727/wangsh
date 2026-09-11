@@ -2,7 +2,55 @@
 
 > 状态：active
 > Owner：pythonlab
-> 最近复核：2026-07-18
+> 最近复核：2026-09-10
+
+## 沙箱启动恢复与资源归属边界（2026-09-09）
+
+- 复用容器前检查 inspect 配置、模式、资源限制、镜像、用户与工作区；plain 必须 network none。不兼容则拒绝，不拆除正在运行的 debug 容器。同一 session 重投不写工作区；跨 plain session 仅在缓存明确前者 TERMINATED 后允许复用。
+- 创建、复用、停止及终止使用同一 workspace 持久文件锁；可信 journal 位于工作区根外的 `.pythonlab-ownership/`，不进入学生挂载。每次 claim 使用新的 generation token，记录精确容器 ID；旧 stop/补偿必须同时匹配 session、token 与 ID，不能删除已被新 generation 接管的同一容器。不得删除 lock inode。
+- 互斥依赖**全部 writer 使用同一协议和同一支持 flock 的共享文件系统**；相同路径但不同 inode、旧版本或外部 Docker 操作不受保证。Redis lease 没有续租，不能把它单独视为持续互斥。部署及回滚前提见 [DEPLOY](../docker/deploy/DEPLOY.md)。
+- provider 成功后 marker 缺失、已终止或被其他任务接管，结果发布返回 false 时按 generation 条件补偿；补偿不确定不会伪装成功。CLI 超时/取消 kill 并回收子进程；创建失败只按本次返回/cidfile ID 清理，不按名称猜删。
+- STARTING 认领和启动结果发布使用 Redis 原值比较的 Lua CAS；已提交的 TERMINATED 或其他任务认领不会被本启动 writer 覆盖。JSON 在 Python 合并，保留大整数、空对象及未知字段；按原规则续 session TTL。此保证不约束其他旧/API writer 在 CAS 之后盲写。
+- READY 写入抛异常或 CAS 拒绝后先核对 task、generation token 和 exact container ID。同世代 READY/ATTACHED/RUNNING/STOPPED 已发布则保留；确认仍属本启动且未发布时，先 CAS 成 FAILED 再按 generation 补偿。补偿完成后任务明确失败，不盲目重建。Redis 无法核对、持续竞争或补偿失败时保留可信 journal 并报错，不能承诺任意故障均零资源残留。
+- 已存在容器的复用和退役均要求可信 live journal 且 exact ID 一致；缺失或 removed journal 不再依据学生可写 meta 接管同名容器。拒绝发生在工作区改写、认领或删除前。旧无 token/未知归属容器保守保留，需受控盘点迁移，不能自动接管或按名称批量清除。
+- **OPS-01 未关闭**：debug 网络与 DAP 暴露策略未改变。已有真实 worker 崩溃与 Redis/Docker 恢复证据，不能重新归类为从未执行，也不能扩展为压力、任意断网恢复、混版本和发布网络策略均通过；浏览器调试与资源回收按对应源码/镜像批次单独绑定。不要在正常栈试改网络或清理未知资源。
+- 原严格预期失败的归属调度反例已改为安全断言通过；仍存限制另有独立反例。测试结果与证据统一见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)，不得以测试零退出码关闭整个沙箱模块。
+
+## 调试终端切页与输出归属
+
+- 后端终端在切换到调试器/参考页时保持挂载与 TTY 连接，避免 Docker attach 的实时输出因组件卸载丢失，尤其是到达 `input()` 后才打开终端的提示。非活动页保留可测量尺寸，但使用 `visibility`、`inert` 与 `aria-hidden` 隔离显示、焦点和辅助技术；后台 WS 建连不得抢走调试器焦点。本地 Pyodide 终端沿用原有按页挂载生命周期。
+- Python 调试 attach 关闭 `redirectOutput`，程序 stdout/stderr 由 TTY 单路显示，避免 DAP 与 TTY 双路写入导致重复行或提示被插入其他输出；DAP 的协议诊断输出仍按既有通道保留。终端生命周期结束时仍须释放 WS 与 Xterm，不能为了保留输出而跨 session 保留旧连接。
+- Run/Debug/Pause/Continue/Step/Reset 控制按钮继续使用原生 `title` 与 `aria-label`，不引入复杂 tooltip。验收必须包含真实 Chrome channel 与 WebKit 的 hover 后 pointer 点击、多断点连续 Continue、Step/Watch、晚切终端输入及 Reset 后 exact 资源核对，不能以 JS click、默认 Chromium 或单元测试替代。
+- 这不是历史日志回放机制：页面刷新/关闭或真实 TTY 中断期间的输出保全、连续重试耗尽、跨主机和混版本恢复仍须单独验证。专项采用冻结输入时必须同时记录源码与运行镜像；AUTH schema/ready gate/enrollment 变更后的集成验收须另行停流、迁移和重测，不能沿用 AUTH 前冻结后端的通过结论。
+
+## DAP 断连清理的状态保护
+
+断连时先读取元信息原始字节，再执行 detach；随后用同一 Redis Lua 脚本检查连接租约、只释放本连接的租约，并对元信息作原值 CAS。detach 等待期间若其他请求写入 TERMINATED、更新 revision/owner 或换入新租约，旧清理不得覆盖新值；仅允许更新仍属于本 conn_id 的活动状态。元信息缺失/过期不复活，不延长其 TTL；Redis 原子能力缺失或错误时不退回盲写。detach 失败时跳过元信息更新，无法释放的租约留待 TTL。
+
+这是 DAP 清理 writer 的保护，不是所有 PythonLab writer 的统一事务；后续旧 writer、混版本、transport 已在途数据及无法协作取消的清理仍需单独验收。Redis 命令与部署前提见 [DEPLOY](../docker/deploy/DEPLOY.md)，实例及反例证据见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+
+## WebSocket 建连认证边界（2026-09-09）
+
+- terminal 与 DAP 在连接接入时，先校验 JWT、唯一有效用户及当前会话 nonce；按现有配置执行 IP 一致性检查，然后才读取业务 session 元信息、派发 terminal 任务或创建 DAP bridge。
+- token 缺失/无效、nonce 撤销或缺失、用户停用/删除、校验依赖异常关闭 `4401`；认证有效但业务 session 不存在仍为 `4404`，owner 不符仍为 `4403`。沿用当前先 accept 后 close 的协议，不改成 HTTP 拒绝握手。
+- token 来源及优先级沿用现有提取器，不新增 Cookie 回退。IP 校验复用现有代理信任配置，不代表真实代理已可信。
+- 已接入连接固定入场 token 与用户，逐条输入/输出及 attach 边界检查 JWT/nonce/IP；空闲每秒复查，单次认证等待最多两秒。失效关闭 `4401` 并取消、等待 watcher/handler/receive/pump；POSIX PTY 采用可取消读，避免遗留线程读取。
+- 撤销检查和 transport IO 不构成原子事务；已在途数据或已送出的 Continue 不能撤回，时间界限依赖事件循环和依赖可协作取消。DB 用户有效性只在接入时检查，后续不周期刷新角色、停用状态或班级。真实 Chrome/WebKit/DAP/TTY 与网关验收仍开放，不据此关闭 AUTH-02 迁移。管理与课堂 SSE 另见 [AUTH](AUTH.md#管理与课堂-sse-会话持续校验)。
+
+## 会话停止与共享容器回收收口（2026-09-11）
+
+- 前端「重置/停止 (Reset)」此前只重置前端状态，不通知后端：会话停在 `STOPPED` 后仍留在
+  `debug:user:{owner}:sessions`，共享容器因此被保留到 `PYTHONLAB_IDLE_TIMEOUT_SECONDS`（默认 3600s），
+  同一用户在这一小时内再次「调试」会被模式检查拒绝（`运行环境模式不兼容，请先停止旧会话`），
+  而提示所要求的「停止旧会话」在 UI 上无法执行。现在 Reset 显式调用
+  `POST /api/v2/pythonlab/sessions/{session_id}/stop`，「调试」启动前也会先停掉旧会话。
+- `cleanup_stale_sessions` 的 `STOPPED` 分支改用 `PYTHONLAB_UNATTACHED_TTL_SECONDS`（默认 600s），
+  使「关闭页面后不再回来」的会话在合理时间内由 `stop_session(force=True)` 以真实 session 身份回收；
+  `ATTACHED` 仍沿用 `PYTHONLAB_IDLE_TIMEOUT_SECONDS`。
+- `cleanup_orphans` 保持保守语义不变：它只有 owner 级探测能力，缺少 ownership 记录时拒绝删除，
+  因此**不能**用它来回收容器，也不能把调度成功当作资源已回收。详见会话管理一节的自动清理。
+- 实例验证边界：以上结论由本地生产模拟栈（真实浏览器 + 真实 PG/Redis + 真实沙箱容器）验证；
+  多 worker、真实 broker、跨版本混部与生产网关仍未覆盖，仍需按 [TEST_STATUS](../docker/testing/TEST_STATUS.md) 的分层证据推进。
 
 ## 概述
 
@@ -187,10 +235,31 @@ debugpy.wait_for_client()
 
 ### 自动清理
 
-**孤儿容器清理**：
-- 定期扫描无对应会话的容器
-- 自动停止并删除
-- 配置：`PYTHONLAB_ORPHAN_CLEANUP_ENABLED=true`
+**会话回收（有权删除的路径）**：
+
+`cleanup_stale_sessions` 按状态区分回收窗口：
+
+- `PENDING` / `READY`：`PYTHONLAB_UNATTACHED_TTL_SECONDS`（默认 600s）
+- `STOPPED`：同样使用未连接窗口。已停止的会话不再附着，不得以 `PYTHONLAB_IDLE_TIMEOUT_SECONDS`（默认 3600s）
+  占住按 owner 复用的共享容器，否则同一用户再次「调试」会被模式检查拒绝
+  （`运行环境模式不兼容，请先停止旧会话`）。
+- `ATTACHED`：`PYTHONLAB_IDLE_TIMEOUT_SECONDS`（默认 3600s）
+- `RUNNING`：`PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS`（默认 180s）
+
+命中后投递 `stop_session(force=True)`，以**真实 session 身份**通过 ownership fence 校验，删除容器并清理
+`debug:user:{owner_user_id}:sessions`。
+
+**孤儿探测（不是删除授权）**：
+
+- `cleanup_orphans` 按 `PYTHONLAB_ORPHAN_CLEANUP_ENABLED` 定期扫描容器名（`{namespace}_u{user_id}`）并按
+  `debug:user:{owner}:sessions` 判断 owner 是否仍有会话。
+- 它只做 owner 级探测：`terminate_session("orphan", ...)` 因缺少匹配的 ownership 记录会被保守拒绝
+  （日志 `Preserving sandbox without current ownership`），因此**调度任务成功不等于资源已回收**。该合同由
+  `backend/tests/pythonlab/test_sandbox_ownership_closure.py` 固定，不要把它改成按名字直删。
+
+**停止入口**：前端「重置/停止 (Reset)」显式调用
+`POST /api/v2/pythonlab/sessions/{session_id}/stop`；「调试」启动前也会先停掉旧会话。二者都不能只改前端本地状态，
+否则后端会话与共享容器会残留。
 
 ---
 
@@ -248,6 +317,20 @@ TIMEOUT_SECONDS=20 python backend/scripts/smoke_pythonlab_print_visibility_probe
 3. 查看 debugpy 诊断日志：`/tmp/debugpy/*.log`
 
 ---
+
+### Docker 暂时通信错误与启动恢复
+
+只读 container/image inspect 对受控的 Docker CLI 连接失败分类为 `DockerTransportError`，
+启动恢复继续保持 `STARTING` 并进入既有有限重试；权限、鉴权、TLS、非法资源和未知输出
+不按暂时通信错误放行。create、remove、cleanup 不因此放宽，资源接管仍校验可信归属。
+HTTP provider 仅对选定的 `NetworkError` / `TimeoutException` 类型进入暂时错误分支，
+不是对所有 `RuntimeError` 或 `TransportError` 重试。
+
+`max_retries` 约束单条 retry lineage，并非同 task ID 在 broker 重复投递下的全局计数。
+真实 worker 的 SIGKILL、重投、原锁自然到期、容器复用与 stop 回收证据，和未验证的
+连续重试耗尽、HTTP 包装根因、Chrome/WebKit、DAP/TTY 边界统一见
+[TEST_STATUS](../docker/testing/TEST_STATUS.md)。混用旧 worker 会保留旧失败行为；部署须
+保证相关 worker 与 backend 一致升级，不自动修复既有 `FAILED` 记录。
 
 ## pythonlab-worker
 

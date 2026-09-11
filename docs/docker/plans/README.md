@@ -14,7 +14,9 @@
 | [ui-single-page-governance.md](ui-single-page-governance.md) | `reference` | UI 样式、单页体检和最终回归唯一参考 |
 | [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) | `active` | 30/60/90 天详细任务、依赖、验证命令和退出标准 |
 | [2026-07-14-project-file-consolidation-plan.md](2026-07-14-project-file-consolidation-plan.md) | `active` | 当前文档、测试和脚本整理执行入口 |
-| [2026-08-16-full-project-audit-plan.md](2026-08-16-full-project-audit-plan.md) | `active` | 全项目审核与整体提升唯一执行入口（方法/清单/批次/度量/决策点） |
+| [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) | `active` | 本地全项目审查执行入口（XBK 优先、证据分级、隔离验证与修复检查点） |
+| [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) | `active` | 首轮候选与准确性复核唯一台账（确认/降级/待复核、业务反证、覆盖缺口与修复决策） |
+| [2026-09-09-release-readiness-gap.md](2026-09-09-release-readiness-gap.md) | `active` | 台账派生的 v1.6.0 发布差距清单（24 条逐条现状核对、待决策、未验项与发布流程差距） |
 
 ## 已完成/已归档
 

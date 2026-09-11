@@ -122,7 +122,7 @@
 
 4 个端点（2 公开 + 2 管理）。基于 `(module_key, section_key, item_key)` 三键定位的结构化内容系统。content 字段存储 JSON，tags 存储 JSON 数组，前端可按需解析。
 
-- **公开接口**：`GET /learning/content/{module_key}` 仅返回 `enabled=true` 的内容项
+- **公开接口**：`GET /learning/content/{module_key}` 仅返回 `enabled=true AND owner_id IS NULL` 的公共内容项；个人导图不经此通用接口返回，创建者使用既有 `/learning/mindmaps/my` 归属接口。管理员全量接口和发布/取消发布规则不变
 - **管理接口**：`GET /learning/content/{module_key}/admin` 返回全部内容项（含停用）；`PUT` upsert；`PATCH /enabled` 启用/停用切换
 
 ### Mindmaps（思维导图）

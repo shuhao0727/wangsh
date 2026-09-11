@@ -1,7 +1,39 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-07-24
+> 最后更新：2026-09-10（持久认证、XBK 取消与 PythonLab 接入）
+
+> 并发行为补充（2026-09-09）：XBK 手工选课写入/恢复及导入 execute 在持有学生、课程共享锁后重验父实体；父删除先锁父再级联，批量删除仅作用于冻结 ID 集合，preview 不作并发承诺。无新增响应字段、FK 或迁移，自然键更名政策未改变；详见 [XBK owner](../features/XBK.md)。
+
+## 未发布 AUTH 持久权威合同（2026-09-10）
+
+- `login`、`refresh`、`logout` 不新增路由或 token 来源。新增持久会话权威要求先完成 migration 和受控 enrollment；`auth_authority.ready` 未就绪时拒绝认证服务，不因 Redis 会话缺失自动接管旧凭据。切换流程不是公开 HTTP API，详见 [AUTH](../features/AUTH.md) 与 [部署说明](../docker/deploy/DEPLOY.md)。
+- PostgreSQL 是已接管会话的撤销依据，Redis 为投影；普通认证读取不能用缺失/迟到缓存绕过持久 inactive 或 nonce 不匹配。DB 提交后 Redis 发布失败仍可能产生持久撤销，失败响应不代表无副作用，也不把恢复旧 Redis key 当作恢复旧权限。
+- 本轮受控增量迁移与跨存储反证已在合成专库完成限定验证，正常库未迁移、未发布；不能把下方历史缓存丢失边界直接当作新实现结论，也不据此扩大成生产切换通过。具体覆盖和剩余 WS/SSE/真实实例整合状态仅见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+
+## 管理与课堂事件流会话合同补充
+
+`GET /api/v1/admin/stream`、`GET /api/v1/classroom/admin/stream`、`GET /api/v1/classroom/stream` 在既有接入认证后增加持续会话校验：订阅前及每帧发送前复核实际接受的 JWT/nonce/IP，空闲等待也有界复查。失效或存储故障结束流并退订；事件格式、角色守卫及 token 来源优先级不变，不改为成功空数据或匿名订阅。响应开始后不补发 HTTP 401。
+
+检查和网络发送不是原子操作，不能保证已经在途/已缓存事件被收回，也不刷新数据库角色或班级。AI 与小组讨论 SSE 不由此覆盖。规则见 [AUTH](../features/AUTH.md#管理与课堂-sse-会话持续校验)，证据见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。
+
+## 认证存储不可用反馈补充
+
+初始身份查询遇到已识别的数据库连接故障返回 `503` 并拒绝身份，覆盖 Bearer、已配置
+Cookie 回退、可选认证与 SSE admission；不将此故障当匿名或 `401`，无效 JWT 和缺少
+必需凭据的既有错误码不变。临时 DNS 解析失败 `socket.gaierror(EAI_AGAIN)`（含
+DBAPI 包装）属于已识别的暂时不可用；不单凭永久/未知 DNS 错误或异常 cause 链
+转换为 `503`，既有 DBAPI 连接失效标记及 SQL/编程错误的优先级见 AUTH。
+此处不自动重试，也不承诺故障时撤销凭据。
+详见 [AUTH](../features/AUTH.md#初始身份查询的数据库故障)。
+
+## 登录与 PythonLab 长连接合同补充
+
+以下 Redis-first 机制属于旧版本背景；当前未发布 AUTH 以本页顶部持久权威合同为准：同 IP 替换在数据库权威事务中确定，陈旧 Redis 绑定不误踢已经迁移的 owner，缓存发布失败不返回成功 token/Cookie。DB/Redis 仍非分布式原子提交，但已撤销会话不能通过恢复或丢失缓存重新获得权限，详见 [AUTH](../features/AUTH.md#持久会话权威与受控切换)。
+
+PythonLab terminal/DAP 保持原接入错误码和 token 优先级，既有连接新增输入、输出、attach 边界及空闲会话复查，撤销以 `4401` 关闭；取消并回收连接任务。检查后已在途 IO 不保证撤回，不周期刷新 DB 角色。详见 [PYTHONLAB](../features/PYTHONLAB.md#websocket-建连认证边界2026-09-09)。
+
+DAP 断连清理采用元信息原值 CAS 与连接租约条件检查，不覆盖 detach 等待期间的新状态/新 owner，不复活已过期元信息，也不延长其 TTL。原子存储能力缺失时保守跳过，不退回盲写；该保护只约束此清理 writer，不改变对外消息格式或扩为全模块事务。
 
 ## 一、健康检查
 
@@ -22,7 +54,15 @@
 | POST | `/auth/refresh` | 使用 refresh token 原子轮换访问令牌 | Refresh token |
 | GET | `/auth/health` | 认证服务健康检查 | 否 |
 
-`/auth/logout` 始终清除当前浏览器的 access/refresh Cookie。若 Redis 会话轮换暂时失败，已持久化的 refresh token 仍会先撤销；若数据库本身不可用，服务端撤销会记录告警并尽力回滚，但客户端登出仍返回成功，不会因基础设施故障保留浏览器 Cookie。
+`/auth/logout` 不要求必须提供凭据；有凭据时优先使用当前有效且 nonce 匹配的 access。access 缺失、过期、验签失败或无法证明当前会话时，使用配置的 refresh Cookie，缺少该值才读取兼容 `refresh_token`；不从请求 body 读取 refresh。refresh 必须有效且所属用户可登录，并在用户锁后重验。有效当前 access 与 Cookie 身份冲突时，只撤销 access 证明的账号。
+
+撤销在用户锁内执行：更新 refresh 撤销位、尝试 nonce 轮换、提交数据库。缓存轮换失败仍尝试提交 refresh 撤销；数据库提交失败仍告警并尽力回滚。始终尝试删除配置的 access/refresh Cookie。正常处理或无有效凭据的幂等清理返回 `200` 与 `{message: "登出成功", timestamp: ...}`；已识别的撤销异常返回 `503`、`revocation_status: "incomplete"` 及说明消息。logout 严格读取会话遇到故障且无有效 refresh fallback 时也返回 `503`，缺失 nonce 不授权撤销。读取兼容 Cookie 不等于清理全部兼容别名；`503` 不保证保留的凭据已失效，不提供双存储原子性。故障边界与身份/锁保护机制见 [认证 owner](../features/AUTH.md#服务端退出与撤销边界)，本地修复范围见 [审查台账 AUTH-01](../docker/plans/2026-09-08-project-audit-findings.md)。
+
+登录提交边界（2026-09-09）：先提交 refresh 替换，再重取用户锁并重验本次 refresh 后发布 Redis 会话。第一阶段提交失败不提前旋转 Redis；若重验发现已被新的登录/退出替换则返回 `409`，无成功登录 Cookie。Redis 发布失败不能撤回已提交的 refresh 替换，仍需按认证 owner 的故障边界处理。
+
+身份解析补充（2026-09-09）：旧 subject 仅接受有效未删除用户中的唯一匹配，歧义拒绝。可选认证依赖复用完整 nonce/IP 会话检查，认证 401 作为匿名，其他 HTTP 异常保留；Cookie 回退不扩大，普通 HTTP 不新增 query token。服务层身份查找不能替代完整认证。退出 access 歧义仍允许独立 refresh fallback；不可变 subject 迁移和双存储撤销保证见认证 owner。
+
+PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、terminal 任务或 DAP bridge IO 前校验有效用户及会话 nonce/IP；失败含存储异常关闭 4401，有效身份下不存在/owner 不符保持 4404/4403。仍先 accept 后 close，token 提取渠道及优先级不变、不新增 Cookie 回退。已建连接按上方长连接合同持续校验，但不承诺原子即时撤销。
 
 补充说明（2026-07-11）：
 - `/auth/refresh` 使用数据库行锁，在单个事务内撤销旧 token 并创建新 token；同一个 refresh token 并发或重复使用时只允许一次成功。
@@ -166,6 +206,7 @@
   `turns`、`preview`。会话详情与管理员详情返回消息的 `id`、`session_id`、
   `user_id`、`agent_id`、显示名称、`message_type`、`content`、`response_time_ms`
   和 `created_at`。这两类响应共用 `schemas/agents/conversation.py` 的权威模型。
+- 历史列表契约（2026-09-09）：省略 `agent_id` 查询本人所有智能体的会话；传入时筛选包含该智能体消息的本人 session，不把 session 拆成多个摘要。统计覆盖整个本人 session，按 `last_at DESC, session_id ASC` 排序后执行 session 级 `limit`。只有全部消息属于同一个非空 agent 时，摘要 `agent_id`/`display_agent_name` 才有身份值；混合或含 NULL 时二者均为 NULL，不得映射为当前 agent 续发。相同 session 字符串不跨用户聚合。`preview` 的问题/答案候选分别按 `created_at DESC, id DESC` 取最新一条，与详情的时间/ID 顺序对应；最新答案优先，空白则回退最新问题，二者空白则为空。保留 80 字符截断，不回捞更旧的非空消息，排名不缩小统计或 agent membership 的消息范围。
 - 当使用 OpenRouter 时，后端会自动做模型名双向回退以降低配置误差：
   - `xxx:free` 在 `404/429/5xx` 时可回退尝试 `xxx`
   - `xxx` 在“模型不存在类 404”或 `429/5xx` 时可回退尝试 `xxx:free`
@@ -361,6 +402,20 @@
 | GET | `/xbk/export` | 导出数据 | 管理员 |
 | GET | `/xbk/export/{export_type}` | 按类型导出 | 管理员 |
 
+### 校本课校验与筛选合同
+
+- 导入在预检、写入及提交尚未完成时遇到一次任务取消，会显式 rollback 并原样抛出取消；不新增正常响应状态。rollback 再次被取消时，直接保留 session 的调用方仍须负责 rollback/close。客户端 TCP 断连不等于服务端取消，响应丢失也不等于未提交；本接口不提供提交结果的幂等回放或已提交数据撤销保证。
+
+- XBK 请求与响应中的 `year` 是规范学年字符串 `YYYY-YYYY`（例如 `2026-2027`）；API/导入边界仍兼容四位起始年份 `2026` 并规范化输出，拒绝 `2026-2028` 等不连续区间。数据库三张 XBK 表使用 `VARCHAR(9)` 并施加连续学年 CHECK 约束。
+- `POST /xbk/import/preview` 与 `POST /xbk/import` 使用 multipart `file`，接受 `scope=students|courses|selections` 以及 `year`、`term`、`grade` 默认值；非空文件值优先，空单元格或缺列回退到默认值。
+- 预检返回有效/无效行数、预览和带工作表行号的错误。执行支持 `skip_invalid`；严格模式先完成全文件校验再写入，数据库失败回滚。导入格式、容量限制及重复键规则以 [XBK 功能文档](../features/XBK.md#导入校验与交互约定) 为准。
+- 非法文件/内容可返回 400，容量超限 413，字段/行校验失败 422；缺少旧 `.xls` 引擎返回 400 并提示格式转换。
+- 预检与执行均在单文件重复自然键、包含多个年份/学期组合、学生同学号与现存姓名/年级冲突时整份返回 422；`skip_invalid=true` 不绕过这些文件级保护。学生学号需跨班级及年级唯一；同人重复导入仍可更新班级/性别，具体规则见 XBK 文档。
+- `DELETE /xbk/data` 必须指定 `year` 和 `term`；携带 `class_name` 时 `scope=all|courses` 返回 400，不能按班级删除共享课程。父记录删除会清理同一时期的关联选课。
+- 学生、课程、选课 PUT 唯一键冲突返回 409 并回滚；不意味着自然键变更已实现关联级联改号。手工与导入共享字段规范化/校验，选课未知或已删除父实体：手工 404，导入作为行错误处理；“未选”只要求有效学生。学生导入冲突更新在数据库写入时重新校验身份，晚冲突整批回滚；新增/更新计数与父实体并发删除边界见 XBK 文档。
+- `/xbk/analysis/summary` 接受 `grade`；班级身份是 `(grade, class_name)`，班级筛选从有效名册解析实际年级，跨年级同名班级不合并。课程统计以有效课程目录为主表并保留 0 人课程，容量按课程所属年级的班级数计算；指定班级时每个匹配年级的 `class_count=1`，摘要课程数与真实课程统计行数一致。涉及学生的统计排除孤立及已删除学生选课。完全无选课记录属于“休学/其他”，课程代码为空串或“未选”的记录均属于“未选”，课程统计合并两种表示；未选明细与导出使用同一口径。
+- `GET /xbk/export?scope=selections|course_results` 对存在有效学生名册的选课按名册当前年级筛选并输出；孤立或无有效名册的选课回退使用选课记录中的年级快照。`class_name` 仅通过同学年、同学期、同学号的有效名册匹配，避免跨时期同学号造成班级筛选串数据。
+
 ### 公开配置（/xbk）
 
 | 方法 | 路径 | 说明 | 认证 |
@@ -446,7 +501,7 @@
 | `POST /assessment/admin/configs/{config_id}/batch-retest` | `session_ids` 或 `class_name` | 删除匹配的旧会话及其级联答题/初级画像，并清理对应高级画像 |
 | `POST /assessment/admin/profiles/generate` | `profile_type`、`target_id`、`agent_id` | 可选 `config_id`、`discussion_session_id`、`agent_ids`；小组画像必须绑定讨论会话 |
 | `POST /assessment/admin/profiles/batch-generate` | `user_ids`、`agent_id` | 可选 `config_id`、`discussion_session_id`、`agent_ids`；`user_ids` 至少 1 项，仅批量生成个人画像 |
-| `POST /assessment/sessions/start` | `config_id` | 配置必须启用且题库非空；尽量复用已有 `in_progress` 会话，但数据库没有严格唯一约束 |
+| `POST /assessment/sessions/start` | `config_id` | 配置必须存在且启用；先尝试复用本人同配置 `in_progress` 会话，否则须处于开放时间窗且题库非空；数据库没有严格唯一约束 |
 | `POST /assessment/sessions/{session_id}/answer` | `answer_id`、`student_answer` | 会话必须属于当前用户且仍在进行；同一答题记录不可重复提交 |
 
 列表与统计查询参数：
@@ -460,6 +515,8 @@
 | `GET /assessment/admin/profiles` | `skip>=0`、`1<=limit<=100`，可选 `profile_type`、`target_id` |
 | `GET /assessment/admin/configs/{config_id}/export` | 可选 `class_name`、`status`、`search`、`time_field=submitted_at|started_at`、`start_date/end_date=YYYY-MM-DD` |
 | `GET /assessment/my-profiles` | `skip>=0`、`1<=limit<=100` |
+
+`GET /assessment/my-profiles/{profile_id}` 要求 `profile_type=individual` 且 `target_id` 等于当前用户 ID 的字符串；其他类型即使数字碰撞也返回 403，缺失 ID 仍返回 404。管理端既有画像入口及其管理员权限不变，不能通过个人入口读取 group/class 报告。
 
 `profile_type` 仅允许 `individual`、`group`、`class`。完整 DB、Prompt 和前端契约见
 [`docs/features/ASSESSMENT.md`](../features/ASSESSMENT.md)。
@@ -480,10 +537,23 @@
 | 高级画像 | `profile_type`、`target_id`、`config_id`、`discussion_session_id`、`agent_ids`、`data_sources`、`result_text`、`scores` 和创建信息 |
 | 统计 | `total_students`、`submitted_count`、`avg_score`、`max_score`、`min_score`、`pass_rate`、`knowledge_rates`、分数分布和趋势 |
 
+结果访问：`GET /assessment/sessions/{session_id}/result` 在既有会话存在性与归属检查之后，仅接受 `submitted` / `graded`；进行中及其他非结果状态返回 `422 {"detail":"该检测尚未提交，无法查看结果"}`，不返回整卷答案或解析。合法单题提交的即时反馈保持不变，已答完但尚未交卷也不开放整卷结果。
+
+并发写入：单题 `/answer` 与整卷 `/submit` 在同一会话行上取得事务锁后重验状态，随后写入并提交。先保存成功的答案计入随后交卷；先交卷成功后单题保存返回既有 422；重复提交只允许一个成功。按取得锁的顺序处理，不承诺 HTTP 先到先处理，不提供响应丢失后的幂等成功回放。AI 调用仍位于该事务内，长事务与取消边界另行验收。
+
 评分时机：选择题立即精确判分；填空题立即 AI 评分，并在未配置智能体或 AI 失败时回退
 文本比对；简答题单题提交时只保存答案，整卷提交后统一评分。
 
 ### 学生端（/assessment）
+
+本组接口要求 `require_student_or_staff`（`student/teacher/admin/super_admin`）；未认证返回 401，其他角色返回 403，并非任意登录用户均可访问。
+
+`GET /assessment/available` 与新建会话共用开放窗判断：未设置的边界不限制，恰好开始或结束可起测。`POST /assessment/sessions/start` 在配置存在且启用、又无本人同配置进行中会话时，于查题、AI 与写入之前校验；窗前返回 `422 {"detail":"该测评尚未开始"}`，窗后返回 `422 {"detail":"该测评已结束"}`。可复用会话不受窗口重新限制，保持原 session、开始时间和答案；这不改变窗外配置在列表中隐藏的行为，也不保证严格并发幂等。配置禁用仍先于复用拒绝，原有成功响应字段不变。详见 [会话与答题边界](../features/ASSESSMENT.md#会话与答题边界)。
+
+
+起测并发（2026-09-09）：PostgreSQL READ COMMITTED 下，`POST /assessment/sessions/start` 先按配置与本人 ID 取得事务级互斥，再检查/复用进行中会话；已有会话被保存或交卷锁住时等待，不再跳过另建。事务提交、回滚或会话关闭释放互斥；不同配置/学生可独立起测。该保护只覆盖当前服务入口，不替代唯一约束、历史重复数据修复或新旧版本混跑验收；SQLite 不据此承诺并发唯一。开放窗、题目及响应字段不变。
+
+首轮自适应题在已建立的保存点内生成或写入失败时，仅回滚该题保存点，保留新会话、固定题及此前成功题目，并按既有合同建立无题目快照的占位答案；后续正常请求复用同一进行中会话，不重新生成首轮题。这不保证 AI 可用、占位题的后续评分完整性或首次起测并发唯一性；保存点建立前的自动 flush 及其他外层事务失败仍按请求边界整体回滚，不适用占位恢复。响应字段、开放窗与结果权限不变，无结构迁移。
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
@@ -506,7 +576,7 @@
 |------|------|------|------|
 | GET | `/learning/progress/{module_key}` | 获取当前用户学习进度；首次无记录返回 `200` 和同构默认 payload，`module_key` 支持 `ml`、`ai`、`agents` | 是 |
 | POST | `/learning/progress/{module_key}` | 保存当前用户学习进度 JSON，前端会按模块保留阶段状态、收藏、完成项和笔记 | 是 |
-| GET | `/learning/content/{module_key}` | 获取启用的学习内容扩展项；无数据库内容时前端回退内置内容 | 是 |
+| GET | `/learning/content/{module_key}` | 获取启用且 `owner_id IS NULL` 的公共学习内容；不包含个人导图 | 是 |
 | GET | `/learning/content/{module_key}/admin` | 管理员获取学习内容扩展项（包含禁用项） | 管理员 |
 | PUT | `/learning/content/{module_key}/{section_key}/{item_key}` | 创建或更新学习内容项，`content` 为结构化 JSON，唯一键为模块、分区、条目 | 管理员 |
 | PATCH | `/learning/content/{module_key}/{section_key}/{item_key}/enabled` | 启用或禁用学习内容项 | 管理员 |

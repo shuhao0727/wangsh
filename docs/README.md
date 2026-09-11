@@ -78,6 +78,12 @@
 - [../frontend/scripts/README.md](../frontend/scripts/README.md) - 前端脚本说明
 - [../scripts/xbk/README.md](../scripts/xbk/README.md) - XBK 脚本使用说明
 
+## 当前审查
+
+- [全项目审查计划（XBK 优先）](docker/plans/2026-09-08-project-comprehensive-audit-plan.md) — 范围、分工、验证与数据保护边界。
+- [全项目首轮问题台账](docker/plans/2026-09-08-project-audit-findings.md) — 初审候选与准确性复核状态、反证、限制及修复决策；不等同已确认 bug 清单；动态验证结果见 [当前测试状态](docker/testing/TEST_STATUS.md)。
+- [发布就绪差距清单](docker/plans/2026-09-09-release-readiness-gap.md) — 台账派生发布视图：24 条逐条现状核对、待用户决策项、未验项与发布流程差距。
+
 ## 整理约定
 
 - 稳定文档放 `docs/`

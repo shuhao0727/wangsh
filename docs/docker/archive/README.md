@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：docs
-> 最近复核：2026-07-24
+> 最近复核：2026-09-08
 
 本目录是 WangSh 历史文档的唯一索引。归档内容用于追溯，不再指导当前开发、测试或
 部署；当前入口见 [docs/README.md](../../README.md)。
@@ -36,6 +36,8 @@
 
 ### 2026-08 全方位多 Agent 诊断
 
+以下三份正文已从 Git 历史备份提交 `85ceba5` 恢复，并明确标记为 `archived`；它们只保留当时的审核证据和决策轨迹，不代表当前代码或运行状态。报告提到的 `screens/visual-review/` 截图目录当前不在工作区，本次未伪造或补建截图。
+
 - [2026-08-10-ui-branch-layout-review.md](2026-08-10-ui-branch-layout-review.md)
   UI 分支**布局与内容结构化审核**（DOM/几何 交叉预期布局）：结论 A- 结构健康
   （无错位/缺元素/重叠/响应式溢出）；逐页核对 hero/统计卡/表格/工作台/编辑器/独立页，
@@ -48,13 +50,22 @@
   `screens/visual-review/`。工程/代码层问题归并到 2026-08-06 报告 §B/§F。
 
 - [2026-08-06-multi-agent-diagnosis-report.md](2026-08-06-multi-agent-diagnosis-report.md)
-  **存活追踪文档**（工程健康 8 维 + UI 视觉 6 维合并）。当前状态：批次 1-2 已完成
+  **历史综合诊断快照**（工程健康 8 维 + UI 视觉 6 维合并）。快照记录：批次 1-2 已完成
   （accent 统一、V2 定一色，用户验收通过）、批次 3 进行中（token 映射地基 + 结果页壳整改）；
   待办 DEFECT-1（后台刷新弹回 /home，前端 token 续期）、DEFER-beam（光束图渲染暂缓）。
-  报告按 Decision Log + 状态字段持续更新，不删历史。**含 §F 全仓库全方位深度分析**（8 维度：
+  报告在当时按 Decision Log + 状态字段持续更新。**含 §F 全仓库全方位深度分析**（8 维度：
   架构/DB/安全/性能/前端/部署/测试/文档），含综合评级与全项目 TOP 问题（P0 假数据/mock 边界、
   task_analyses 缺索引、安全 SSRF/路径穿越、性能双跑 SSE+轮询等）。
   当前事实以代码、门禁结果和 owner 文档为准。
+
+### 2026-09 真实代理链验收
+
+- [2026-09-11-proxy-chain-acceptance.md](2026-09-11-proxy-chain-acceptance.md)
+  用当前工作区构建独立验收镜像（`wangsh-accept/*:proxy-accept-1`）部署合成栈，完成真实
+  代理链 8 场景验收：gate 关闭 503、受控 enrollment 恢复、Caddy 头清洗、同 IP A→B 替换撤销、
+  A→B→A 循环、不同 IP 不互踢、拓扑防护、后端直达伪造头边界。经网关路径全部通过；残留边界
+  （`AUTH_TRUST_X_FORWARDED_FOR` 无 peer 校验）仍待发布前治理。当前行为以
+  [AUTH](../../features/AUTH.md) 与 [DEPLOY](../../docker/deploy/DEPLOY.md) 为准。
 
 ### 2026-07 项目整理与发布收口
 
