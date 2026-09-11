@@ -27,8 +27,12 @@ export default defineConfig({
     include: [
       "src/components/**/*.test.{ts,tsx}",
       "src/pages/AIAgents/**/*.test.{ts,tsx}",
+      "src/pages/Xbk/**/*.test.{ts,tsx}",
       "src/pages/Admin/ITTechnology/pythonLab/**/*.test.{ts,tsx}",
       "src/hooks/queries/**/*.test.{ts,tsx}",
+      "src/hooks/useAppMeta.metadata.test.tsx",
+      "src/layouts/AdminLayout.mobile.test.tsx",
+      "src/pages/Admin/Dashboard/index.permissions.test.tsx",
       "src/lib/**/*.test.{ts,tsx}",
       "src/services/**/*.test.{ts,tsx}",
     ],

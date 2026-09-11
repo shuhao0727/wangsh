@@ -10,8 +10,8 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 
 ## 当前入口
 
-- `bootstrap_db.py` - 本地/部署场景数据库初始化；`--initial-only` 仅允许空库创建迁移链之前的 legacy baseline，不执行 stamp，随后必须完整运行 `alembic upgrade head`
-- `check_migration_state.py` - 生产迁移前只读检查，阻断 `alembic_version` 与真实 schema 漂移
+- `bootstrap_db.py` - 本地/部署场景数据库初始化；`--initial-only` 仅允许空库创建迁移链之前的 legacy baseline，不执行 stamp，随后必须完整运行 `alembic upgrade head`；创建前从独立 metadata 副本排除迁移管理的索引（含原生 SQL 定义），避免早于扩展创建 trgm 索引，不修改全局 ORM metadata；XBK 副本保留迁移前整数年份且不提前创建学年检查约束，由原迁移转换为当前学年范围，现有正常库不受此分支影响
+- `check_migration_state.py` - 生产迁移前只读检查，AST 静态解析 revision 图；只读目录快照下，仅审核指纹及完整目录匹配才豁免特定等价索引。未知 guard、异结构、跨 schema 同名保守阻断，不执行迁移模块或自动放宽审核。具体兼容与回退边界见 [DEPLOY](../../docs/docker/deploy/DEPLOY.md)。
 - `check_python_governance.py` - Python 文件物理行数与 AST 圈复杂度 ratchet 检查
 - `check_changed_lines_coverage.py` - changed-lines 覆盖率门禁（审计 T-2 / 治理 §4.3）
 - `smoke_openapi_sweep.py` - 只读 GET 广覆盖扫雷

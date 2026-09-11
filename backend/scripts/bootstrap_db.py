@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import os
 import re
@@ -6,7 +7,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from sqlalchemy import text
+from sqlalchemy import Integer, MetaData, text
 
 from app.db.database import engine
 from app.models import Base
@@ -61,16 +62,35 @@ async def _get_existing_public_tables(conn) -> set[str]:
 
 async def _create_legacy_baseline(conn) -> None:
     """Create only tables that predate the maintained Alembic migration chain."""
-    tables = [Base.metadata.tables[name] for name in LEGACY_BASELINE_TABLES]
+    # Current models include indexes introduced later by Alembic (some require
+    # extensions). Filter a private copy before emitting DDL; never mutate the
+    # ORM metadata or create-and-drop indexes before their dependencies exist.
+    baseline = MetaData()
+    for table in Base.metadata.tables.values():
+        table.to_metadata(baseline)
+    # These legacy tables predate the academic-year migration. Copying today's
+    # String(9)/check constraints would make its integer-to-range conversion
+    # fail even on an empty database. Keep the historical type only here.
+    for name in ("xbk_students", "xbk_courses", "xbk_selections"):
+        table = baseline.tables[name]
+        table.c.year.type = Integer()
+        table.c.year.comment = None
+        for constraint in tuple(table.constraints):
+            if constraint.name == f"ck_{name}_academic_year":
+                table.constraints.remove(constraint)
+    managed_indexes = _migration_managed_indexes()
+    tables = [baseline.tables[name] for name in LEGACY_BASELINE_TABLES]
+    for table in tables:
+        for index in tuple(table.indexes):
+            if index.name in managed_indexes:
+                table.indexes.remove(index)
     await conn.run_sync(
-        lambda sync_conn: Base.metadata.create_all(
+        lambda sync_conn: baseline.create_all(
             sync_conn,
             tables=tables,
             checkfirst=True,
         )
     )
-    for index_name in _migration_managed_indexes():
-        await conn.execute(text(f'DROP INDEX IF EXISTS "{index_name}"'))
     for table_name, column_name in MIGRATION_ORIGIN_COLUMNS:
         await conn.execute(
             text(f'ALTER TABLE "{table_name}" DROP COLUMN IF EXISTS "{column_name}"')
@@ -89,8 +109,20 @@ def _migration_managed_indexes() -> set[str]:
     pattern = re.compile(
         r"""op\.create_index\(\s*(?:op\.f\()?['"]([^'"]+)['"]"""
     )
+    sql_pattern = re.compile(
+        r'\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?'
+        r'(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))',
+        re.IGNORECASE,
+    )
     for path in VERSIONS_DIR.glob("*.py"):
-        indexes.update(pattern.findall(path.read_text(encoding="utf-8")))
+        source = path.read_text(encoding="utf-8")
+        indexes.update(pattern.findall(source))
+        # AST folds adjacent Python string literals, including SQL held in
+        # statement tuples; parsing does not import or execute migrations.
+        for node in ast.walk(ast.parse(source, filename=str(path))):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                for quoted, unquoted in sql_pattern.findall(node.value):
+                    indexes.add(quoted or unquoted.lower())
     return indexes
 
 

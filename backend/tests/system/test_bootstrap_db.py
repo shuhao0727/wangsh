@@ -146,3 +146,84 @@ def upgrade():
     monkeypatch.setattr(bootstrap_db, "VERSIONS_DIR", versions)
 
     assert bootstrap_db._migration_managed_indexes() == {"ix_plain", "ix_named"}
+
+
+def test_raw_sql_migration_indexes_are_deferred(tmp_path, monkeypatch):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    (versions / "raw.py").write_text(
+        "def upgrade():\n"
+        "    op.execute('CREATE INDEX IF NOT EXISTS ix_text_trgm ' 'ON t USING gin (body gin_trgm_ops)')\n"
+        "    op.execute('CREATE UNIQUE INDEX \"ix_quoted\" ON t (id)')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bootstrap_db, "VERSIONS_DIR", versions)
+    assert bootstrap_db._migration_managed_indexes() == {"ix_text_trgm", "ix_quoted"}
+
+
+def test_baseline_defers_migration_indexes_without_mutating_models():
+    from sqlalchemy import create_mock_engine
+
+    original_indexes = {
+        name: {id(index) for index in table.indexes}
+        for name, table in bootstrap_db.Base.metadata.tables.items()
+    }
+    statements = []
+    def capture_ddl(statement, *args, **kwargs):
+        statements.append(str(statement.compile(dialect=mock_engine.dialect)))
+
+    mock_engine = create_mock_engine("postgresql://", capture_ddl)
+
+    class Connection:
+        async def run_sync(self, action):
+            return action(mock_engine)
+
+        async def execute(self, statement):
+            statements.append(str(statement))
+
+    asyncio.run(bootstrap_db._create_legacy_baseline(Connection()))
+    ddl = "\n".join(statements)
+    assert "CREATE TABLE wz_articles" in ddl
+    assert "gin_trgm_ops" not in ddl
+    assert "CREATE EXTENSION" not in ddl
+    assert "DROP INDEX" not in ddl
+    assert "CREATE TABLE IF NOT EXISTS alembic_version" in ddl
+    assert original_indexes == {
+        name: {id(index) for index in table.indexes}
+        for name, table in bootstrap_db.Base.metadata.tables.items()
+    }
+
+
+def test_baseline_uses_legacy_xbk_year_before_academic_year_migration():
+    from sqlalchemy import create_mock_engine
+
+    statements = []
+    tables = ("xbk_students", "xbk_courses", "xbk_selections")
+    originals = {
+        name: (table.c.year.type, {id(c) for c in table.constraints})
+        for name, table in bootstrap_db.Base.metadata.tables.items()
+        if name in tables
+    }
+
+    def capture_ddl(statement, *args, **kwargs):
+        statements.append(str(statement.compile(dialect=mock_engine.dialect)))
+
+    mock_engine = create_mock_engine("postgresql://", capture_ddl)
+
+    class Connection:
+        async def run_sync(self, action):
+            return action(mock_engine)
+
+        async def execute(self, statement):
+            statements.append(str(statement))
+
+    asyncio.run(bootstrap_db._create_legacy_baseline(Connection()))
+    for name in tables:
+        ddl = next(s for s in statements if f"CREATE TABLE {name} (" in s)
+        assert "year INTEGER NOT NULL" in ddl
+        assert f"ck_{name}_academic_year" not in ddl
+        assert f"uq_{name}_year_term_" in ddl
+        original = bootstrap_db.Base.metadata.tables[name]
+        assert original.c.year.type is originals[name][0]
+        assert str(original.c.year.type) == "VARCHAR(9)"
+        assert {id(c) for c in original.constraints} == originals[name][1]

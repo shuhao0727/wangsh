@@ -36,10 +36,11 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
 COPY requirements.txt .
-RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
     pip install --upgrade pip \
     && env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
-    pip install --no-cache-dir -r requirements.txt
+    pip install -r requirements.txt
 
 COPY . .
 

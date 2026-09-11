@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { canFocusTerminal } from "./terminalVisibility";
 import { logger } from "@services/logger";
 import type { Terminal } from "xterm";
 import type { FitAddon } from "xterm-addon-fit";
@@ -439,7 +440,7 @@ const XtermTerminal = React.forwardRef<XtermTerminalHandle, XtermTerminalProps>(
 
           ws.onopen = () => {
               reconnectAttemptsRef.current = 0;
-              term.focus();
+              if (canFocusTerminal(containerRef.current)) term.focus();
               flushQueuedInput(ws);
               trace("ws_open");
           };

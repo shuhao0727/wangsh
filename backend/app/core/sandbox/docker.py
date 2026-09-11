@@ -4,12 +4,14 @@ import pty
 import shutil
 import json
 import time
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.config import settings
 from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
 from app.core.sandbox.docker_runtime import (
-    RedisDistributedLock,
+    RedisDistributedLock, WorkspaceOwnership,
+    inspect_container, check_reuse, remove_owned_container,
     run_async as _run_async,
 )
 
@@ -250,54 +252,51 @@ class DockerProvider(SandboxProvider):
 
     async def start_session(self, session_id: str, code: str, meta: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Start a Docker container for the session (with User-based Reuse Strategy).
-        Uses Redis Distributed Lock to handle concurrency.
+        Start or reuse a user container under a non-expiring workspace fence.
+        The trusted journal records the generation before the fence is released.
         """
         name = self._container_name(meta)
         runtime_mode = str(meta.get("runtime_mode") or "debug").lower()
         
-        async with RedisDistributedLock(name, timeout=120):
-            ws_path = self._ws_path_for_session(meta)
+        ws_path = self._ws_path_for_session(meta)
+        async with WorkspaceOwnership(_workspace_root(), ws_path, timeout=120) as ownership, RedisDistributedLock(name, timeout=120):
+            record = ownership.read()
+            if record and (record.get('phase') not in {'live', 'removed'}
+                           or record.get('container_name') != name):
+                raise RuntimeError('运行环境归属状态待核对，拒绝覆盖。')
             
-            # 1. Prepare Workspace Files (always overwrite)
-            # TODO: Consider making this async with aiofiles if disk I/O becomes a bottleneck
-            self._prepare_workspace_files(ws_path, code, meta)
-
-            # 2. Check if container exists and is running (Reuse)
-            if await self._docker_is_running(name):
-                logger.info(f"Reusing existing container: {name}")
-                if runtime_mode == "debug":
-                    logger.info(f"Recreating debug container for clean attach cycle: {name}")
-                    await _run_async(["docker", "rm", "-f", name], timeout_s=30)
-                else:
-                    return {
-                        "docker_container_id": name,
-                        "dap_host": None,
-                        "dap_port": None,
-                        "workspace_path": str(ws_path)
-                    }
-
-            # Cleanup stopped/dead container with same name
-            try:
-                await _run_async(["docker", "rm", "-f", name], timeout_s=30)
-            except Exception:
-                logger.debug("Docker: 清理残留容器 %s 失败，继续创建", name)
-
-            # 3. Build Command
+            if runtime_mode not in {"plain", "debug"}:
+                raise ValueError("Unsupported sandbox runtime mode")
+            limits = meta.get("limits") or {}
+            cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
+            mem_mb = _resolve_memory_mb_limit(limits, int(settings.PYTHONLAB_DEFAULT_MEMORY_MB))
             mount_path = await self._resolve_host_mount_path(ws_path)
+            effective_runtime = self.runtime or "runc"
+            if effective_runtime != "runc" and effective_runtime not in await self._get_available_runtimes():
+                effective_runtime = "runc"
+            expected = {
+                "mode": runtime_mode, "image": self.image, "mount": str(mount_path),
+                "host": {"Memory": mem_mb * 1024**2, "MemorySwap": mem_mb * 1024**2,
+                         "CpuPeriod": 100000, "CpuQuota": cpu_quota,
+                         "PidsLimit": settings.PYTHONLAB_CONTAINER_PIDS_LIMIT,
+                         "Runtime": effective_runtime},
+            }
+            existing = await inspect_container(_run_async, name)
+            if existing and existing.get("State", {}).get("Status") == "running":
+                return await self._reuse_running_container(
+                    session_id, code, meta, existing=existing, expected=expected,
+                    ws_path=ws_path, ownership=ownership, record=record,
+                )
+            if existing:
+                await self._retire_existing_container(session_id, meta, name, existing, ownership)
 
-            # Check workspace disk usage
             quota_mb = settings.PYTHONLAB_WORKSPACE_DISK_QUOTA_MB
             if mount_path.exists():
                 total_size = sum(f.stat().st_size for f in mount_path.rglob('*') if f.is_file())
                 if total_size > quota_mb * 1024 * 1024:
                     raise RuntimeError(f"Workspace exceeds disk quota: {total_size / 1024 / 1024:.1f}MB > {quota_mb}MB")
-
-            # Resource Limits
-            limits = meta.get("limits", {})
-            cpu_quota = int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA)
-            default_mem = int(settings.PYTHONLAB_DEFAULT_MEMORY_MB)
-            mem_mb = _resolve_memory_mb_limit(limits, default_mem)
+            record = ownership.claim(session_id, meta, name)
+            self._prepare_workspace_files(ws_path, code, {**meta, "session_id": session_id})
 
             if runtime_mode == "debug":
                 # Use python to kill debugpy since ps/pkill might be missing
@@ -338,6 +337,7 @@ class DockerProvider(SandboxProvider):
             cmd = [
                 "docker", "run", "-d", "-i", "-t",
                 "--name", name,
+                "--label", f"wangsh.pythonlab.runtime-mode={runtime_mode}",
                 "--security-opt", "no-new-privileges",
                 "--cap-drop", "ALL",
                 "--user", "1000:1000",
@@ -371,83 +371,137 @@ class DockerProvider(SandboxProvider):
 
             cmd.extend([self.image, "sh", "-lc", loop_cmd])
 
-            # 4. Run Container
+            return await self._start_new_container(cmd, runtime_mode, ws_path, ownership, record)
+
+    @staticmethod
+    def _live_owner_record(record: Optional[Dict[str, Any]], container_id: str) -> Optional[Dict[str, Any]]:
+        if not record or record.get('phase') != 'live':
+            raise RuntimeError('已有运行环境缺少可信 live 归属，拒绝接管或删除。')
+        if record.get('container_id') != container_id:
+            raise RuntimeError('运行环境已被外部替换，拒绝接管。')
+        return record
+
+    async def _reuse_running_container(
+        self, session_id: str, code: str, meta: Dict[str, Any], *,
+        existing: Dict[str, Any], expected: Dict[str, Any], ws_path: Path,
+        ownership: WorkspaceOwnership, record: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Validate and transfer a running generation while holding its fence."""
+        runtime_mode = expected["mode"]
+        name = self._container_name(meta)
+        live_owner = self._live_owner_record(record, existing['Id'])
+        same_session = await check_reuse(_run_async, existing, expected, ws_path, session_id, live_owner)
+        if same_session and live_owner and record.get('startup_task_id') != meta.get('startup_task_id'):
+            raise RuntimeError('同会话的另一个启动任务仍拥有运行环境。')
+        container_id = existing["Id"]
+        host_port = await self._get_dynamic_port(container_id) if runtime_mode == "debug" else 0
+        if runtime_mode == "debug" and host_port <= 0:
+            raise RuntimeError("已有调试环境端口不可用，请先停止旧会话。")
+        if not (same_session and live_owner):
+            record = ownership.claim(session_id, meta, name, container_id)
+        if not same_session:
+            self._prepare_workspace_files(ws_path, code, {**meta, 'session_id': session_id})
+        return {**self._start_result(container_id, ws_path, host_port), 'sandbox_owner_token': record['token']}
+
+    async def _retire_existing_container(
+        self, session_id: str, meta: Dict[str, Any], name: str,
+        existing: Dict[str, Any], ownership: WorkspaceOwnership,
+    ) -> None:
+        """Persist a deletion barrier before removing an inspected predecessor."""
+        # A terminal state is not permission to delete an externally replaced ID.
+        self._live_owner_record(ownership.read(), existing['Id'])
+        # Never remove a paused/restarting/unknown-state resource.
+        if existing.get("State", {}).get("Status") not in {"exited", "dead", "created"}:
+            raise RuntimeError("已有运行环境状态未知，拒绝覆盖。")
+        record = ownership.claim(session_id, meta, name, existing['Id'])
+        record['phase'] = 'deleting'
+        ownership.write(record)
+        await remove_owned_container(_run_async, existing["Id"])
+        record['phase'] = 'removed'
+        ownership.write(record)
+
+    def _start_result(self, container_id: str, ws_path: Path, host_port: int) -> Dict[str, Any]:
+        return {
+            "docker_container_id": container_id,
+            "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal") if host_port else None,
+            "dap_port": host_port or None,
+            "workspace_path": str(ws_path),
+        }
+
+    async def _start_new_container(self, cmd: List[str], runtime_mode: str, ws_path: Path, ownership: WorkspaceOwnership, record: Dict[str, Any]) -> Dict[str, Any]:
+        # Docker writes the ID before start: even a timed-out CLI can leave a
+        # created container. The private cidfile identifies only this attempt,
+        # never a same-name container owned by another session/worker.
+        with tempfile.TemporaryDirectory(prefix="pythonlab-start-") as temp_dir:
+            cidfile = Path(temp_dir) / "container.cid"
+            cmd[3:3] = ["--cidfile", str(cidfile)]
+            container_id = ""
             try:
                 rc, out, err = await _run_async(cmd, timeout_s=60)
-                if rc != 0:
-                    logger.error(f"Docker start failed: {(err or out or '').strip()[:1000]}")
-                    raise RuntimeError("运行环境启动失败，请稍后重试。如持续失败请联系老师。")
-                container_id = (out or "").strip()
-            except Exception as e:
-                logger.error(f"Docker start exception: {e}")
-                raise RuntimeError("运行环境启动异常，请稍后重试。")
-
-            if runtime_mode == "debug":
+                if rc:
+                    logger.error("Docker start failed: {}", (err or out or "")[:1000])
+                    raise RuntimeError("运行环境启动失败，请联系老师检查配置。")
+                container_id = out.strip()
+                if not container_id:
+                    raise RuntimeError("运行环境创建未返回资源标识。")
+                record.update(container_id=container_id, phase='live')
+                ownership.write(record)
                 host_port = 0
-                for _ in range(5): 
-                    host_port = await self._get_dynamic_port(container_id)
-                    if host_port > 0:
-                        break
-                    await asyncio.sleep(0.5)
-                if host_port <= 0:
-                    rc, out, err = await _run_async(["docker", "logs", "--tail", "50", container_id], timeout_s=5)
-                    logs = (out or "") + (err or "")
-                    try:
-                        await _run_async(["docker", "rm", "-f", container_id], timeout_s=30)
-                    except Exception:
-                        pass
-                    logger.error(f"Failed to resolve dynamic port. Logs: {logs[:500]}")
-                    raise RuntimeError("调试端口分配失败，请重试运行。")
+                if runtime_mode == "debug":
+                    for _ in range(5):
+                        host_port = await self._get_dynamic_port(container_id)
+                        if host_port > 0:
+                            break
+                        await asyncio.sleep(0.5)
+                    if host_port <= 0:
+                        raise TimeoutError("调试端口分配超时，请重试运行。")
                 await self._wait_for_readiness(container_id, host_port, runtime_mode)
-                return {
-                    "docker_container_id": container_id,
-                    "dap_host": getattr(settings, "DAP_HOST_IP", "host.docker.internal"),
-                    "dap_port": host_port,
-                    "workspace_path": str(ws_path)
-                }
-            await self._wait_for_readiness(container_id, 0, runtime_mode)
-            return {
-                "docker_container_id": container_id,
-                "dap_host": None,
-                "dap_port": None,
-                "workspace_path": str(ws_path)
-            }
+                return {**self._start_result(container_id, ws_path, host_port), 'sandbox_owner_token': record['token']}
+            except BaseException:
+                owned_id = container_id or (cidfile.read_text().strip() if cidfile.exists() else "")
+                if owned_id:
+                    # Persist the deletion barrier BEFORE awaiting Docker. If a
+                    # cancelled/failed CLI leaves daemon work in flight, subsequent
+                    # starts must not adopt that id after the fence is released.
+                    record.update(container_id=owned_id, phase='deleting')
+                    ownership.write(record)
+                    await remove_owned_container(_run_async, owned_id)
+                    record.update(container_id=owned_id, phase='removed')
+                    ownership.write(record)
+                # Without a cid the creating journal remains an explicit unknown;
+                # do not automatically create another possibly orphaned resource.
+                raise
+
+    async def _stop_owned(self, session_id: str, meta: Dict[str, Any], *, force: bool) -> None:
+        name = self._container_name(meta)
+        ws_path = self._ws_path_for_session(meta)
+        async with WorkspaceOwnership(_workspace_root(), ws_path) as ownership, RedisDistributedLock(name, timeout=30):
+            record = ownership.read()
+            if not ownership.owns(record, session_id, meta) or record.get('container_name') != name:
+                # Missing/legacy metadata and stale generations are not deletion authority.
+                logger.warning("Preserving sandbox without current ownership: {}", session_id)
+                return
+            container_id = record['container_id']
+            if not force and str(meta.get('runtime_mode') or 'debug').lower() != 'plain':
+                await self._kill_debugpy_in_container(container_id)
+                return
+            record['phase'] = 'deleting'
+            ownership.write(record)
+            await remove_owned_container(_run_async, container_id)
+            # Do not trust a caller-supplied workspace_path for recursive deletion.
+            # Keep the fence until both resource and workspace operations finish.
+            if force and ws_path.exists():
+                shutil.rmtree(ws_path)
+            record['phase'] = 'removed'
+            ownership.write(record)
 
     async def stop_session(self, session_id: str, meta: Dict[str, Any]) -> None:
-        """Soft stop: kill process but keep container."""
-        name = self._container_name(meta)
-        runtime_mode = str(meta.get("runtime_mode") or "debug").lower()
-        async with RedisDistributedLock(name, timeout=15):
-            if runtime_mode == "plain":
-                try:
-                    await _run_async(["docker", "rm", "-f", name], timeout_s=30)
-                except Exception:
-                    pass
-                return
-            try:
-                await self._kill_debugpy_in_container(name)
-            except Exception:
-                pass
+        """Stop only the exact resource generation still owned by this session."""
+        await self._stop_owned(session_id, meta, force=False)
 
     async def terminate_session(self, session_id: str, meta: Dict[str, Any]) -> None:
-        """Hard stop: remove container and workspace."""
-        name = self._container_name(meta)
-        async with RedisDistributedLock(name, timeout=30):
-            try:
-                await _run_async(["docker", "rm", "-f", name], timeout_s=30)
-            except Exception:
-                pass
-            
-            ws_path = meta.get("workspace_path")
-            if not ws_path:
-                ws_path = self._ws_path_for_session(meta)
-            
-            try:
-                p = Path(ws_path)
-                if p.exists() and p.is_dir():
-                    shutil.rmtree(str(p), ignore_errors=True)
-            except Exception:
-                pass
+        """Compare ownership and delete under the same non-expiring fence."""
+        await self._stop_owned(session_id, meta, force=True)
 
     async def list_active_sessions(self) -> List[str]:
         try:
@@ -687,8 +741,9 @@ class DockerProvider(SandboxProvider):
     async def _wait_for_readiness(self, container_id: str, host_port: int, runtime_mode: str = "debug"):
         deadline = time.monotonic() + self.readiness_timeout
         while time.monotonic() < deadline:
-            if not await self._docker_is_running(container_id):
-                 raise RuntimeError("运行环境异常退出，请重试。如持续失败请联系老师。")
+            info = await inspect_container(_run_async, container_id)
+            if not info or info.get("State", {}).get("Status") != "running":
+                raise RuntimeError("运行环境异常退出，请重试。如持续失败请联系老师。")
             if runtime_mode != "debug":
                 return
             listening = await self._debugpy_is_listening(container_id, self.debugpy_port)
@@ -697,9 +752,5 @@ class DockerProvider(SandboxProvider):
                 await asyncio.sleep(1.5)
                 return
             await asyncio.sleep(0.2)
-        # Timeout: cleanup the container to avoid orphans
-        try:
-            await _run_async(["docker", "rm", "-f", container_id], timeout_s=10)
-        except Exception:
-            pass
-        raise RuntimeError("调试服务启动超时，请重试运行。如持续失败请联系老师检查服务状态。")
+        # The creator owns cleanup; readiness must not remove a reused resource.
+        raise TimeoutError("调试服务启动超时，请重试运行。如持续失败请联系老师检查服务状态。")

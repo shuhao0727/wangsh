@@ -107,6 +107,8 @@ def test_plain_session_container_uses_interactive_shell(monkeypatch, tmp_path):
 
     async def fake_run_async(cmd: list[str], timeout_s: int = 30):
         run_calls.append(list(cmd))
+        if cmd[:2] == ["docker", "inspect"]:
+            return 1, "", "Error: No such object: synthetic-absent"
         if cmd[:3] == ["docker", "rm", "-f"]:
             return 0, "", ""
         if cmd[:3] == ["docker", "run", "-d"]:
@@ -206,3 +208,20 @@ def test_container_namespace_scopes_names_and_active_session_listing(monkeypatch
             "{{.Names}}",
         ]
     ]
+
+
+def test_inspect_daemon_failure_is_not_treated_as_missing_container():
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from app.core.sandbox.docker_runtime import inspect_container
+
+    # Unlike the explicit missing-container response in the shell test above,
+    # a daemon failure cannot authorize the provider to create a replacement.
+    run = AsyncMock(return_value=(1, "", "Cannot connect to the Docker daemon"))
+    with pytest.raises(RuntimeError, match="无法核对"):
+        asyncio.run(inspect_container(run, "synthetic-unavailable"))
+    run.assert_awaited_once_with(
+        ["docker", "inspect", "synthetic-unavailable"], timeout_s=10,
+    )

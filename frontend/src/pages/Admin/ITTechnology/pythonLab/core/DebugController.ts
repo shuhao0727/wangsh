@@ -181,7 +181,9 @@ export class DebugController {
         name: "Remote",
         type: "python",
         request: "attach",
-        redirectOutput: true,
+        // stdout/stderr already arrive through the persistent TTY. Redirecting
+        // them through DAP as well duplicates lines and corrupts input prompts.
+        redirectOutput: false,
         pathMappings: [
           {
             localRoot: "/workspace",

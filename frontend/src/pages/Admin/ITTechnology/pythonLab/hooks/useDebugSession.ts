@@ -187,6 +187,14 @@ export function useDebugSession(params: {
       return;
     }
 
+    // 用户级沙箱容器是复用的：残留的旧会话会让后端拒绝以新模式接管，报
+    // “运行环境模式不兼容，请先停止旧会话”。与 onRun 的自动重启保持一致，
+    // 这里先显式停止旧会话再启动调试，避免用户面对无法自救的提示。
+    const staleSessionId = runnerView.sessionId;
+    if (staleSessionId) {
+      pythonlabSessionApi.stop(staleSessionId).catch(() => {});
+    }
+
     const plan = decidePythonLabLaunchPlan({
       enabledBreakpointCount,
       pythonlabRuntime,
@@ -238,10 +246,17 @@ export function useDebugSession(params: {
     void stepOutUnifiedRun();
   }, [stepOutUnifiedRun]);
   const onReset = useCallback(() => {
+    // 只重置前端状态会让共享沙箱容器与用户会话集合残留：用户再次调试时会被
+    // “运行环境模式不兼容，请先停止旧会话”阻断，而 Reset 又停不掉后端会话。
+    // 因此这里必须显式通知后端停止当前会话（后端 stop 会回收容器并清理会话集合）。
+    const sessionId = runnerView.sessionId;
+    if (sessionId) {
+      pythonlabSessionApi.stop(sessionId).catch(() => {});
+    }
     resetAllRunners();
     setLastLaunchMode("idle");
     setLastDebugFallback(null);
-  }, [resetAllRunners, setLastDebugFallback, setLastLaunchMode]);
+  }, [resetAllRunners, runnerView.sessionId, setLastDebugFallback, setLastLaunchMode]);
 
   const debugCapabilityBase = useMemo(() => createDebugCapabilityMapV1(debugMode), [debugMode]);
   const runnerPolicy = activeRunnerKind;

@@ -27,12 +27,14 @@ class FakeCache:
     async def get_client(self):
         if self.client is None:
             raise AssertionError("fake redis client was not configured")
+        self.client.cache_store = self.store
         return self.client
 
 
 class FakeRedisClient:
     def __init__(self):
         self.values: dict[str, str] = {}
+        self.get_calls: list[str] = []
         self.counters: dict[str, int] = {}
         self.expiries: dict[str, int] = {}
 
@@ -53,17 +55,43 @@ class FakeRedisClient:
         return True
 
     async def get(self, key: str):
-        return self.values.get(key)
+        self.get_calls.append(key)
+        return self._raw_value(key)
+
+    def _raw_value(self, key: str):
+        if key in self.values:
+            return self.values[key]
+        store = getattr(self, "cache_store", {})
+        if key in store:
+            return json.dumps(store[key], ensure_ascii=False)
+        return None
 
     async def pexpire(self, key: str, milliseconds: int):
         self.expiries[key] = milliseconds
         return True
 
-    async def eval(self, _script: str, _numkeys: int, key: str, value: str):
+    async def eval(self, _script: str, _numkeys: int, key: str, value: str, *args):
+        if _numkeys == 2:
+            return await self._cleanup_cas(key, value, *args)
         if self.values.get(key) == value:
             self.values.pop(key, None)
             return 1
         return 0
+
+
+    async def _cleanup_cas(self, session_key, owner_key, owner_value, expected, replacement):
+        # Two-key production contract; genuine atomicity is tested on Redis.
+        owner = self.values.get(owner_key)
+        if owner is not None and owner != owner_value:
+            return 0
+        if owner == owner_value:
+            self.values.pop(owner_key, None)
+        if not expected or not replacement:
+            return 0
+        if self._raw_value(session_key) != expected:
+            return 0
+        self.cache_store[session_key] = json.loads(replacement)
+        return 1
 
 
 class FakeCeleryApp:
@@ -154,6 +182,15 @@ def _patch_ws_auth_and_cache(monkeypatch, *, fake_cache: FakeCache, user: dict |
     monkeypatch.setattr(handlers_module, "cache", fake_cache)
     # Mock auth_get_current_user in the handlers module
     monkeypatch.setattr(handlers_module, "auth_get_current_user", _auth)
+    # These are transport/ownership tests with synthetic token strings. Session
+    # admission is independently exercised with real JWT/SQLite/ASGI WS tests.
+    async def _session(_user_id, _payload, _websocket):
+        return {"ok": True, "reason": "ok"}
+
+    from app.api.pythonlab.ws import session_auth
+
+    monkeypatch.setattr(session_auth, "verify_token", lambda _token: {"sn": "synthetic-session"})
+    monkeypatch.setattr(session_auth, "verify_request_session_detail", _session)
 
 
 def _patch_terminal_docker_provider(monkeypatch, provider_cls):
@@ -584,7 +621,12 @@ def test_terminal_ws_plain_mode_marks_session_terminated_on_done_marker(monkeypa
         closed_fds.append(fd)
 
     monkeypatch.setattr(ws_api.os, "write", _fake_write)
-    monkeypatch.setattr(ws_api.os, "read", _fake_read)
+    # fd=11 is a transport double, not an OS descriptor. Mock the cancellable
+    # reader boundary; real descriptor readiness/cleanup has independent tests.
+    async def _fake_read_pty(fd: int, size: int):
+        return _fake_read(fd, size)
+
+    monkeypatch.setattr(handlers_module, "read_pty", _fake_read_pty)
     monkeypatch.setattr(ws_api.os, "close", _fake_close)
     websocket = FakeWebSocket(query_params={"token": "valid-token"}, incoming=[ws_api.WebSocketDisconnect()])
 
@@ -1352,6 +1394,12 @@ def test_dap_ws_rate_limits_frequent_requests(monkeypatch):
     monkeypatch.setattr(ws_api, "WS_RATE_LIMIT_PER_SEC", 1)
     monkeypatch.setattr(ws_api, "now_iso", lambda: "2026-04-07T00:00:00+00:00")
     monkeypatch.setattr(ws_api.asyncio, "gather", _make_mainline_gather(main_count=1))
+
+    # Exercise rate limiting without the background bridge opening a real socket.
+    async def _pending_open_connection(*_args, **_kwargs):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(ws_api.asyncio, "open_connection", _pending_open_connection)
     websocket = FakeWebSocket(
         query_params={"token": "valid-token"},
         incoming=[

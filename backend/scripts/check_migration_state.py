@@ -7,7 +7,10 @@ that would otherwise surface later as Alembic ``DuplicateTable`` or
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import hashlib
+import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -22,6 +25,29 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 
+# Audited OPS-04 contract: the complete semantic AST, not a filename/helper-name
+# allowlist. Covers _index_exists, its unqualified pg_indexes query, all bindings
+# and the guarded upgrade call. Comments/formatting do not change this digest;
+# any executable change requires a fresh review (never regenerate automatically).
+_REVIEWED_INDEX_GUARD_AST = "1776bb5fd1de3345f861d8c00121e382e0a14f8b346509b95d081634e4afb14f"
+_REVIEWED_INDEX = "ix_znt_group_discussion_sessions_group_name"
+_REVIEWED_TABLE = "znt_group_discussion_sessions"
+_REVIEWED_DEFINITION = (
+    f"CREATE INDEX {_REVIEWED_INDEX} ON public.{_REVIEWED_TABLE} USING btree (group_name)"
+)
+
+
+@dataclass(frozen=True)
+class IndexDefinition:
+    schema: str
+    table: str
+    definition: str
+    valid: bool
+    ready: bool
+    live: bool
+    kind: str
+
+
 @dataclass(frozen=True)
 class MigrationOps:
     revision: str
@@ -29,6 +55,8 @@ class MigrationOps:
     create_tables: set[str] = field(default_factory=set)
     create_indexes: set[str] = field(default_factory=set)
     add_columns: set[tuple[str, str]] = field(default_factory=set)
+    guarded_indexes: dict[str, str] = field(default_factory=dict)
+    review_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -43,7 +71,17 @@ def normalize_identifier(value: str) -> str:
 
 def _load_revision_namespace(path: Path) -> dict[str, object]:
     namespace: dict[str, object] = {}
-    exec(path.read_text(encoding="utf-8"), namespace)
+    # Reading the graph must never import/execute migration modules.
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        targets = node.targets if isinstance(node, ast.Assign) else (
+            [node.target] if isinstance(node, ast.AnnAssign) else []
+        )
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in {"revision", "down_revision"}:
+                try:
+                    namespace[target.id] = ast.literal_eval(node.value)
+                except (ValueError, TypeError) as exc:
+                    raise RuntimeError(f"{path.name}: non-literal {target.id}") from exc
     return namespace
 
 
@@ -59,6 +97,8 @@ def load_revision_graph(versions_dir: Path = VERSIONS_DIR) -> tuple[dict[str, Pa
         if not isinstance(revision, str):
             continue
 
+        if revision in revisions:
+            raise RuntimeError(f"duplicate Alembic revision: {revision}")
         revisions[revision] = path
         parents: set[str] = set()
         if isinstance(down_revision, str):
@@ -69,6 +109,25 @@ def load_revision_graph(versions_dir: Path = VERSIONS_DIR) -> tuple[dict[str, Pa
         down_revisions[revision] = parents
         referenced.update(parents)
 
+    missing = referenced - set(revisions)
+    if missing:
+        raise RuntimeError(f"missing Alembic parent revision(s): {sorted(missing)}")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def validate(revision: str) -> None:
+        if revision in visiting:
+            raise RuntimeError(f"cycle in Alembic graph at {revision}")
+        if revision in visited:
+            return
+        visiting.add(revision)
+        for parent in down_revisions[revision]:
+            validate(parent)
+        visiting.remove(revision)
+        visited.add(revision)
+
+    for revision in revisions:
+        validate(revision)
     heads = set(revisions) - referenced
     return revisions, down_revisions, heads
 
@@ -135,6 +194,23 @@ def pending_revisions_from_current(
     return pending
 
 
+def _guard_ast_digest(tree: ast.AST) -> str:
+    # ast.dump changed its empty-field rendering between supported Python
+    # versions. Canonicalize meaningful fields explicitly, retaining executable
+    # differences while treating omitted None/[] identically.
+    def canonical(value):
+        if isinstance(value, ast.AST):
+            return [type(value).__name__, {
+                name: canonical(item) for name, item in ast.iter_fields(value)
+                if item is not None and item != []
+            }]
+        if isinstance(value, list):
+            return [canonical(item) for item in value]
+        return value
+
+    return hashlib.sha256(json.dumps(canonical(tree), sort_keys=True).encode()).hexdigest()
+
+
 def parse_migration_ops(path: Path, revision: str) -> MigrationOps:
     content = path.read_text(encoding="utf-8")
 
@@ -143,13 +219,53 @@ def parse_migration_ops(path: Path, revision: str) -> MigrationOps:
         for match in re.finditer(r"""op\.create_table\(\s*['"]([^'"]+)['"]""", content)
     }
 
-    create_indexes = {
-        normalize_identifier(match.group(1))
-        for match in re.finditer(
-            r"""op\.create_index\(\s*(?:op\.f\()?['"]([^'"]+)['"]""",
-            content,
-        )
-    }
+    tree = ast.parse(content)
+    reviewed = _guard_ast_digest(tree) == _REVIEWED_INDEX_GUARD_AST
+    create_indexes: set[str] = set()
+    guarded_indexes: dict[str, str] = {}
+    review_errors: list[str] = []
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    upgrades = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "upgrade"]
+    # Follow local helper calls without executing them. A helper's control flow
+    # is not an audited direct upgrade operation, so index creation fails closed.
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    reachable = list(upgrades)
+    seen = set(upgrades)
+    for function in reachable:
+        for call in ast.walk(function):
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
+                helper = functions.get(call.func.id)
+                if helper is not None and helper not in seen:
+                    seen.add(helper)
+                    reachable.append(helper)
+    for upgrade in reachable:
+        for node in ast.walk(upgrade):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id == "op"
+                    and node.func.attr == "create_index"):
+                continue
+            name_node = node.args[0] if node.args else next(
+                (kw.value for kw in node.keywords if kw.arg == "index_name"), None
+            )
+            if (isinstance(name_node, ast.Call) and isinstance(name_node.func, ast.Attribute)
+                    and isinstance(name_node.func.value, ast.Name) and name_node.func.value.id == "op"
+                    and name_node.func.attr == "f" and len(name_node.args) == 1):
+                name_node = name_node.args[0]
+            if not isinstance(name_node, ast.Constant) or not isinstance(name_node.value, str):
+                review_errors.append(f"line {node.lineno}: unreviewed dynamic index name")
+                continue
+            name = normalize_identifier(name_node.value)
+            create_indexes.add(name)
+            ancestor = parents[node]
+            conditional = upgrade not in upgrades
+            while ancestor is not upgrade:
+                if not isinstance(ancestor, ast.Expr):
+                    conditional = True
+                ancestor = parents[ancestor]
+            if reviewed and name == _REVIEWED_INDEX:
+                guarded_indexes[name] = _REVIEWED_DEFINITION
+            elif conditional or any(kw.arg in {None, "if_not_exists"} for kw in node.keywords):
+                review_errors.append(f"{name}: unreviewed index guard/control flow; manual review required")
 
     add_columns: set[tuple[str, str]] = set()
     for match in re.finditer(
@@ -164,6 +280,8 @@ def parse_migration_ops(path: Path, revision: str) -> MigrationOps:
         create_tables=create_tables,
         create_indexes=create_indexes,
         add_columns=add_columns,
+        guarded_indexes=guarded_indexes,
+        review_errors=tuple(review_errors),
     )
 
 
@@ -173,9 +291,11 @@ def build_drift_messages(
     existing_tables: set[str],
     existing_indexes: set[str],
     existing_columns: set[tuple[str, str]],
+    existing_index_definitions: dict[str, tuple[IndexDefinition, ...]] | None = None,
 ) -> list[str]:
     messages: list[str] = []
     for ops in pending_ops:
+        messages.extend(f"{ops.revision}: {error}" for error in ops.review_errors)
         table_conflicts = sorted(ops.create_tables & existing_tables)
         if table_conflicts:
             messages.append(
@@ -183,7 +303,25 @@ def build_drift_messages(
                 f"{', '.join(table_conflicts)}"
             )
 
-        index_conflicts = sorted(ops.create_indexes & existing_indexes)
+        index_conflicts = sorted((ops.create_indexes - ops.guarded_indexes.keys()) & existing_indexes)
+        for name, expected in ops.guarded_indexes.items():
+            definitions = (existing_index_definitions or {}).get(name, ())
+            if existing_index_definitions is None:
+                messages.append(f"{ops.revision}: {name}: missing index catalog evidence for reviewed guard")
+                continue
+            if not definitions and name not in existing_indexes:
+                continue  # The reviewed guard will create the absent index.
+            # The historical helper searches every schema. More than one match,
+            # even an equivalent public index plus a shadow, needs manual review.
+            equivalent = len(definitions) == 1 and definitions[0] == IndexDefinition(
+                schema="public", table=_REVIEWED_TABLE, definition=expected,
+                valid=True, ready=True, live=True, kind="i",
+            )
+            if not equivalent or name not in existing_indexes:
+                messages.append(
+                    f"{ops.revision}: {name}: guarded index is not structurally equivalent "
+                    "(or catalog evidence is missing/ambiguous); refusing to skip drift"
+                )
         if index_conflicts:
             messages.append(
                 f"{ops.revision}: pending migration would create existing index(es): "
@@ -198,7 +336,9 @@ def build_drift_messages(
     return messages
 
 
-async def _load_database_state(conn) -> tuple[list[str], set[str], set[str], set[tuple[str, str]]]:
+async def _load_database_state(conn) -> tuple[
+    list[str], set[str], set[str], set[tuple[str, str]], dict[str, tuple[IndexDefinition, ...]]
+]:
     version_table = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
     has_version_table = version_table.scalar_one_or_none() is not None
 
@@ -222,13 +362,26 @@ async def _load_database_state(conn) -> tuple[list[str], set[str], set[str], set
     index_rows = await conn.execute(
         text(
             """
-            SELECT indexname
-            FROM pg_indexes
-            WHERE schemaname = 'public'
+            SELECT idx.relname, ns.nspname, tbl.relname,
+                   pg_catalog.pg_get_indexdef(i.indexrelid),
+                   i.indisvalid, i.indisready, i.indislive, CAST(idx.relkind AS text)
+            FROM pg_catalog.pg_index AS i
+            JOIN pg_catalog.pg_class AS idx ON idx.oid = i.indexrelid
+            JOIN pg_catalog.pg_namespace AS ns ON ns.oid = idx.relnamespace
+            JOIN pg_catalog.pg_class AS tbl ON tbl.oid = i.indrelid
             """
         )
     )
-    existing_indexes = {normalize_identifier(row[0]) for row in index_rows}
+    # Preserve catalog case and the complete server deparse: do not lowercase,
+    # strip quotes, predicates, operator classes, INCLUDE or storage options.
+    definitions_by_name: dict[str, list[IndexDefinition]] = {}
+    existing_indexes: set[str] = set()
+    for row in index_rows:
+        name = str(row[0])
+        definitions_by_name.setdefault(name, []).append(IndexDefinition(*row[1:]))
+        if row[1] == "public":
+            existing_indexes.add(normalize_identifier(name))
+    existing_index_definitions = {name: tuple(items) for name, items in definitions_by_name.items()}
 
     column_rows = await conn.execute(
         text(
@@ -244,7 +397,7 @@ async def _load_database_state(conn) -> tuple[list[str], set[str], set[str], set
         for row in column_rows
     }
 
-    return current_revisions, existing_tables, existing_indexes, existing_columns
+    return current_revisions, existing_tables, existing_indexes, existing_columns, existing_index_definitions
 
 
 def evaluate_migration_state(
@@ -253,9 +406,13 @@ def evaluate_migration_state(
     existing_tables: set[str],
     existing_indexes: set[str],
     existing_columns: set[tuple[str, str]],
+    existing_index_definitions: dict[str, tuple[IndexDefinition, ...]] | None = None,
     versions_dir: Path = VERSIONS_DIR,
 ) -> MigrationCheckResult:
-    revisions, down_revisions, heads = load_revision_graph(versions_dir)
+    try:
+        revisions, down_revisions, heads = load_revision_graph(versions_dir)
+    except (RuntimeError, SyntaxError, ValueError) as exc:
+        return MigrationCheckResult(ok=False, messages=[str(exc)])
 
     if not current_revisions:
         if existing_tables:
@@ -295,6 +452,7 @@ def evaluate_migration_state(
         existing_tables=existing_tables,
         existing_indexes=existing_indexes,
         existing_columns=existing_columns,
+        existing_index_definitions=existing_index_definitions,
     )
     if drift_messages:
         return MigrationCheckResult(
@@ -317,13 +475,18 @@ async def async_main() -> int:
     from app.db.database import engine
 
     async with engine.connect() as conn:
-        current_revisions, existing_tables, existing_indexes, existing_columns = await _load_database_state(conn)
+        # A consistent, read-only catalog snapshot; no normal DB migration or stamp.
+        async with conn.begin():
+            await conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+            (current_revisions, existing_tables, existing_indexes,
+             existing_columns, existing_index_definitions) = await _load_database_state(conn)
 
     result = evaluate_migration_state(
         current_revisions=current_revisions,
         existing_tables=existing_tables,
         existing_indexes=existing_indexes,
         existing_columns=existing_columns,
+        existing_index_definitions=existing_index_definitions,
     )
     prefix = "[OK]" if result.ok else "[FAIL]"
     for message in result.messages:

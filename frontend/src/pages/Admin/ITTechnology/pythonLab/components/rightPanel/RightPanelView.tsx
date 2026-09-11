@@ -34,6 +34,7 @@ import { useCode } from "@/pages/Admin/ITTechnology/pythonLab/stores/CodeContext
 import { useFlow } from "@/pages/Admin/ITTechnology/pythonLab/stores/FlowContext";
 import { useRunnerActions } from "@/pages/Admin/ITTechnology/pythonLab/stores/RunnerActionsContext";
 import { useUI, VARIABLE_COLUMNS } from "@/pages/Admin/ITTechnology/pythonLab/stores/UIContext";
+import { TerminalTabContent } from "./TerminalTabContent";
 import { DebugTab } from "./DebugTab";
 import { PipelineTab } from "./PipelineTab";
 import { wsUrl } from "@/pages/Admin/ITTechnology/pythonLab/hooks/dapRunnerHelpers";
@@ -585,7 +586,8 @@ export const RightPanel = React.memo(function RightPanel() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="terminal" className="mt-0 flex-1 min-h-0 overflow-hidden p-1">
+          <div className="relative flex flex-1 min-h-0 flex-col">
+          <TerminalTabContent active={activeTab === "terminal"} keepConnected={shouldUseBackendTerminal}>
             <div className="flex h-full flex-col bg-surface p-1">
               <div className="flex-1 min-h-0">
                 {!shouldUseBackendTerminal && terminalBridge ? (
@@ -605,7 +607,7 @@ export const RightPanel = React.memo(function RightPanel() {
                 )}
               </div>
             </div>
-          </TabsContent>
+          </TerminalTabContent>
           <TabsContent value="debug" className="mt-0 flex-1 min-h-0 overflow-hidden">
             <DebugTab
               runner={runner}
@@ -624,6 +626,7 @@ export const RightPanel = React.memo(function RightPanel() {
               onRefreshBeautify={onRefreshBeautify}
             />
           </TabsContent>
+          </div>
         </Tabs>
       </div>
       <FloatingPopup
