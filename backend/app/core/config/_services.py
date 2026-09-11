@@ -83,3 +83,8 @@ class ServicesSettingsMixin:
     GITHUB_SYNC_REPO_BRANCH: str = Field(default="main")
     GITHUB_SYNC_TOKEN: str = Field(default="")
     GITHUB_SYNC_DELETE_MODE: str = Field(default="unpublish")
+
+    # ==================== XBK 导出 ====================
+    # 选课表导出的工作表编辑保护密码。仅为防止误改的工作表保护，不构成文件加密；
+    # 生产环境建议通过环境变量覆盖并定期轮换（默认值仅为兼容既有工作簿）。
+    XBK_EXPORT_SHEET_PASSWORD: str = Field(default="wangshu0727")

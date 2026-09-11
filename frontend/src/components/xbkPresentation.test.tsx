@@ -11,7 +11,7 @@ vi.mock("@/services", () => ({
     getSummary: vi.fn(),
     getCourseStats: vi.fn(),
     getClassStats: vi.fn(),
-    getStudentsWithoutSelection: vi.fn(),
+    getStudentsWithEmptySelection: vi.fn(),
   },
 }));
 
@@ -39,7 +39,7 @@ describe("XBK presentation contracts", () => {
       }],
     } as never);
     vi.mocked(xbkDataApi.getClassStats).mockResolvedValue({ items: [] } as never);
-    vi.mocked(xbkDataApi.getStudentsWithoutSelection).mockResolvedValue({
+    vi.mocked(xbkDataApi.getStudentsWithEmptySelection).mockResolvedValue({
       items: [],
     } as never);
   });
@@ -49,7 +49,7 @@ describe("XBK presentation contracts", () => {
       <XbkAnalysisModal
         open
         onCancel={vi.fn()}
-        filters={{ year: 2026, term: "上学期" }}
+        filters={{ year: "2026-2027", term: "上学期" }}
       />,
     );
 
@@ -57,13 +57,14 @@ describe("XBK presentation contracts", () => {
     expect(badge).toHaveClass("bg-error-soft");
   });
 
-  it("keeps the current-page export action in the XBK toolbar", () => {
+  it("labels export as all filtered results rather than the current page", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/pages/Xbk/index.tsx"),
       "utf8",
     );
 
     expect(source).toContain("handleExportCurrentTable");
-    expect(source).toContain("当前页");
+    expect(source).toContain("导出筛选结果");
+    expect(source).toContain("符合筛选条件的全部结果（不限当前分页）");
   });
 });
