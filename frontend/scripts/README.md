@@ -34,6 +34,15 @@ npm run token:check:ci
 npm run test:scripts
 ```
 
+元信息专项测试：在 `frontend/` 下运行 `npm test -- src/hooks/useAppMeta.metadata.test.tsx`，
+验证本地构建版本、环境标签及无网络请求行为；该文件已显式纳入默认测试收集。
+
+后台交互与权限专项：在 `frontend/` 下运行
+`npm test -- src/layouts/AdminLayout.mobile.test.tsx src/pages/Admin/Dashboard/index.permissions.test.tsx`。
+这两个文件显式纳入默认测试收集；组件测试检查交互状态及按身份取数，
+不能替代真实浏览器中侧栏层级、指针命中、版本标签裁切和网关权限的验收。
+
+
 ## 生成产物与配置文件
 
 - `ui-audit-baseline.json` 是 UI 审计基线文件，属于受控生成产物；只有在确认 UI 变化符合预期后才更新基线。刷新时必须先审计当前 `HEAD`，新基线不得高于修复前快照，不能用抬高阈值掩盖本轮新增命中。

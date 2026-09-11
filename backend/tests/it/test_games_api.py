@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.params import Depends
@@ -10,6 +11,7 @@ from starlette.requests import Request
 
 import app.core.deps as deps
 from app.api.endpoints.it import games as games_api
+from app.core import session_guard
 from app.db.database import get_db
 
 
@@ -163,21 +165,23 @@ def test_download_records_the_forwarded_client_ip(monkeypatch, tmp_path):
         return game
 
     monkeypatch.setattr(games_api.game_service, "get_game", fake_get_game)
-    monkeypatch.setattr(
-        games_api.game_service,
-        "resolve_game_file_path",
-        lambda _game: stored,
-    )
+    monkeypatch.setattr(games_api.game_service, "resolve_game_file_path", lambda _game: stored)
     monkeypatch.setattr(
         games_api.game_service,
         "record_download",
         capture_download,
     )
+    # S7 治理：ASGITransport 显式 peer=127.0.0.1 并划入可信代理网段，
+    # 转发头才会被采纳（TestClient 默认 peer 非 IP，会回退 0.0.0.0）。
+    monkeypatch.setattr(session_guard.settings, "AUTH_TRUST_X_FORWARDED_FOR", True)
+    monkeypatch.setattr(session_guard.settings, "AUTH_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
 
-    response = TestClient(_authenticated_app()).get(
-        "/it/games/7/download",
-        headers={"X-Forwarded-For": "203.0.113.9"},
-    )
+    async def run():
+        transport = httpx.ASGITransport(app=_authenticated_app(), client=("127.0.0.1", 12345))
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/it/games/7/download", headers={"X-Forwarded-For": "203.0.113.9"})
+
+    response = asyncio.run(run())
 
     assert response.status_code == 200
     assert recorded["ip_address"] == "203.0.113.9"
