@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 class ConversationSummary(BaseModel):
     session_id: str
-    agent_id: int
+    agent_id: Optional[int] = None
     display_agent_name: Optional[str] = None
     display_user_name: Optional[str] = None
     last_at: datetime

@@ -17,6 +17,7 @@ vi.mock("@services", () => ({
 }));
 
 vi.mock("@services/api", () => ({
+  subscribeAuthIdentityChange: vi.fn(() => () => {}),
   AUTH_EXPIRED_EVENT: "ws:auth-expired",
   clearPersistedAuthExpiredDetail: vi.fn(),
   extractAuthErrorDetail: vi.fn(() => ""),

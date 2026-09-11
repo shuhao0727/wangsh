@@ -8,8 +8,89 @@ import axios from "axios";
 import { config } from "./config";
 import { logger } from "./logger";
 
-let refreshPromise: Promise<void> | null = null;
+// Identity generation fences JS effects, including other tabs. It cannot undo
+// HttpOnly Set-Cookie processed by the browser or retract server-side effects.
+let authEpoch = 0;
+let pendingLoginEpoch: number | null = null;
+let refreshPromise: { epoch: number; promise: Promise<void> } | null = null;
+type AuthRequestConfig = InternalAxiosRequestConfig & { _authEpoch?: number };
+const advanceAuthEpoch = () => {
+  authEpoch += 1;
+  pendingLoginEpoch = null;
+  refreshPromise = null;
+  return authEpoch;
+};
+const assertAuthEpoch = (epoch: number, signal?: AxiosRequestConfig["signal"]) => {
+  syncSharedIdentity();
+  if (epoch !== authEpoch || signal?.aborted) {
+    throw new axios.CanceledError("Authentication identity changed");
+  }
+};
+// Requests issued during login still use the prior identity's credentials.
+// Their refresh must not commit tokens or expire/cancel the pending login.
+const assertRefreshEpoch = (epoch: number, signal?: AxiosRequestConfig["signal"]) => {
+  assertAuthEpoch(epoch, signal);
+  if (pendingLoginEpoch === epoch || remoteLoginPending) {
+    throw new axios.CanceledError("Authentication login is pending");
+  }
+};
 const ACCESS_TOKEN_KEY = "ws_access_token";
+// The marker announces login intent before a new token exists. Read the live
+// snapshot at request/response boundaries: storage events can arrive late.
+const IDENTITY_KEY = "ws_auth_identity";
+const IDENTITY_EVENT = "ws:auth-identity-changed";
+const readSharedIdentity = () => {
+  try {
+    return { marker: localStorage.getItem(IDENTITY_KEY), token: localStorage.getItem(ACCESS_TOKEN_KEY) };
+  } catch { return null; }
+};
+let observedIdentity = readSharedIdentity();
+const identityPending = (marker?: string | null) => {
+  try { return JSON.parse(marker || "null")?.phase === "pending"; }
+  catch { return false; }
+};
+let remoteLoginPending = identityPending(observedIdentity?.marker);
+const syncSharedIdentity = () => {
+  const current = readSharedIdentity();
+  if (!current || (current.marker === observedIdentity?.marker && current.token === observedIdentity?.token)) return;
+  observedIdentity = current;
+  advanceAuthEpoch();
+  remoteLoginPending = identityPending(current.marker);
+  if (remoteLoginPending) pendingLoginEpoch = authEpoch;
+  try {
+    if (current.token) sessionStorage.setItem(ACCESS_TOKEN_KEY, current.token);
+    else sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  } catch { /* Storage unavailable: cross-tab coordination is best effort. */ }
+  window.dispatchEvent(new CustomEvent(IDENTITY_EVENT, {
+    detail: { pending: remoteLoginPending, hasToken: !!current.token },
+  }));
+};
+const publishIdentity = (phase: "pending" | "settled" | "signed-out") => {
+  remoteLoginPending = false;
+  try {
+    localStorage.setItem(IDENTITY_KEY, JSON.stringify({ id: crypto.randomUUID(), phase }));
+  } catch { /* No shared storage means no cross-tab guarantee. */ }
+  observedIdentity = readSharedIdentity();
+};
+export const subscribeAuthIdentityChange = (listener: (identity: { pending: boolean; hasToken: boolean }) => void) => {
+  const onIdentity = (event: Event) => listener((event as CustomEvent).detail);
+  const onStorage = (event: StorageEvent) => {
+    if (event.storageArea === localStorage && (!event.key || event.key === ACCESS_TOKEN_KEY || event.key === IDENTITY_KEY)) syncSharedIdentity();
+  };
+  window.addEventListener(IDENTITY_EVENT, onIdentity);
+  window.addEventListener("storage", onStorage);
+  syncSharedIdentity();
+  // A new tab/reloaded provider did not receive the earlier storage event.
+  // Do not bootstrap it from cookies while logout/pending intent is persisted.
+  const marker = readSharedIdentity()?.marker;
+  let signedOut = false;
+  try { signedOut = JSON.parse(marker || "null")?.phase === "signed-out"; } catch { /* Legacy marker. */ }
+  if (signedOut || identityPending(marker)) listener({ pending: identityPending(marker), hasToken: false });
+  return () => {
+    window.removeEventListener(IDENTITY_EVENT, onIdentity);
+    window.removeEventListener("storage", onStorage);
+  };
+};
 const REFRESH_ATTEMPT_AT_KEY = "ws_refresh_attempt_at";
 const AUTH_EXPIRED_DETAIL_KEY = "ws_auth_expired_detail";
 const REFRESH_COOLDOWN_MS = 5200;
@@ -122,12 +203,15 @@ export const notifyAuthExpired = (reason?: string) => {
   lastAuthExpiredNotifyAt = now;
   lastAuthExpiredReason = msg;
   logger.debug("[auth-expired] dispatch", detail);
+  const notifyEpoch = authEpoch;
   window.dispatchEvent(
     new CustomEvent(AUTH_EXPIRED_EVENT, {
       detail,
     }),
   );
   window.setTimeout(() => {
+    syncSharedIdentity();
+    if (notifyEpoch !== authEpoch) return;
     window.dispatchEvent(
       new CustomEvent(AUTH_EXPIRED_EVENT, {
         detail,
@@ -139,8 +223,10 @@ export const notifyAuthExpired = (reason?: string) => {
 export const getStoredAccessToken = () => {
   if (typeof window === "undefined") return null;
   try {
-    // 跨 tab 刷新 token 以 localStorage 为准，避免旧 sessionStorage 覆盖新令牌
-    return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    syncSharedIdentity();
+    // An explicit shared logout must not revive this tab's old session token.
+    return localStorage.getItem(ACCESS_TOKEN_KEY) ||
+      (localStorage.getItem(IDENTITY_KEY) ? null : sessionStorage.getItem(ACCESS_TOKEN_KEY));
   } catch {
     return null;
   }
@@ -203,10 +289,20 @@ const postRefreshRequest = async (
   instance: AxiosInstance,
   refreshToken?: string | null,
   requestConfig?: SilentAxiosRequestConfig,
+  epoch = authEpoch,
 ) => {
+  assertAuthEpoch(epoch, requestConfig?.signal);
+  if (remoteLoginPending) throw new axios.CanceledError("Authentication login pending in another tab");
   await waitForRefreshCooldown();
+  assertAuthEpoch(epoch, requestConfig?.signal);
   markRefreshAttemptAt(Date.now());
-  return instance.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}, requestConfig);
+  const response = await instance.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}, {
+    ...requestConfig,
+    _authEpoch: epoch,
+  } as SilentAxiosRequestConfig);
+  // Also guard direct refreshToken consumers that store response tokens themselves.
+  assertRefreshEpoch(epoch, requestConfig?.signal);
+  return response;
 };
 
 export const getCookieToken = () => {
@@ -237,6 +333,7 @@ export const authTokenStorage = {
         sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
         // localStorage 用于跨 tab 共享登录状态（实际认证靠 HttpOnly cookie）
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        observedIdentity = readSharedIdentity();
       }
       // 安全：refresh token 不写入 JS 可读的 storage，交由后端 HttpOnly cookie 管理
       // （cookie 已 httponly=true，XSS 无法读取；避免 refresh token 明文暴露面）
@@ -244,12 +341,14 @@ export const authTokenStorage = {
     }
   },
   clear() {
+    advanceAuthEpoch();
     if (typeof window === "undefined") return;
     try {
       sessionStorage.removeItem(ACCESS_TOKEN_KEY);
       localStorage.removeItem(ACCESS_TOKEN_KEY);
     } catch {
     }
+    publishIdentity("signed-out");
   },
 };
 
@@ -315,6 +414,13 @@ const createApiClient = (): AxiosInstance => {
   // 请求拦截器
   instance.interceptors.request.use(
     (requestConfig) => {
+      syncSharedIdentity();
+      if (remoteLoginPending && !isAuthEndpoint(requestConfig.url)) {
+        throw new axios.CanceledError("Authentication login pending in another tab");
+      }
+      const authRequest = requestConfig as AuthRequestConfig;
+      authRequest._authEpoch ??= authEpoch;
+      assertAuthEpoch(authRequest._authEpoch, requestConfig.signal);
       const token = getStoredAccessToken() || getCookieToken();
       if (token && !isAuthEndpoint(requestConfig.url)) {
         requestConfig.headers = requestConfig.headers ?? {};
@@ -344,6 +450,7 @@ const createApiClient = (): AxiosInstance => {
   // 响应拦截器
   instance.interceptors.response.use(
     (response: AxiosResponse<ApiResponse | ValidationErrorResponse>) => {
+      assertAuthEpoch((response.config as AuthRequestConfig)._authEpoch ?? authEpoch, response.config.signal);
       if (config.features.debug) {
         logger.debug("✅ API 响应:", {
           url: response.config.url,
@@ -413,7 +520,9 @@ const createApiClient = (): AxiosInstance => {
       }
 
       const originalRequest = error.config;
-      
+      const requestEpoch = (originalRequest as AuthRequestConfig | undefined)?._authEpoch ?? authEpoch;
+      assertAuthEpoch(requestEpoch, originalRequest?.signal);
+
       // 防止无限重试
       if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
         if (!isAuthEndpoint(originalRequest.url)) {
@@ -421,6 +530,7 @@ const createApiClient = (): AxiosInstance => {
           const requestToken = readRequestToken(originalRequest);
           // 若该请求携带了旧 token，优先用最新 token 重试一次，减少不必要 refresh
           if (latestToken && latestToken !== requestToken) {
+            originalRequest._retry = true;
             originalRequest.headers = originalRequest.headers ?? {};
             originalRequest.headers.Authorization = `Bearer ${latestToken}`;
             return instance(originalRequest);
@@ -445,36 +555,42 @@ const createApiClient = (): AxiosInstance => {
             throw new Error("刷新接口返回401");
           }
 
-          if (!refreshPromise) {
-            refreshPromise = (async () => {
+          if (!refreshPromise || refreshPromise.epoch !== requestEpoch) {
+            const flight = { epoch: requestEpoch, promise: Promise.resolve() };
+            flight.promise = (async () => {
               const applyTokens = (resp: AxiosResponse) => {
+                assertAuthEpoch(requestEpoch);
                 const raw = resp?.data as Record<string, unknown> | null;
                 const data = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as Record<string, string> | null;
                 if (data?.access_token || data?.refresh_token) {
+                  // Token rotation is not a new identity; same-generation waiters may retry.
                   authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
                 }
               };
 
               try {
                 // refresh 续期走 HttpOnly cookie：请求不带 body token（getStoredRefreshToken 恒为 null）
-                const resp = await postRefreshRequest(instance, null, { silent: true });
+                const resp = await postRefreshRequest(instance, null, { silent: true }, requestEpoch);
                 applyTokens(resp);
                 return;
               } catch (e: unknown) {
+                assertRefreshEpoch(requestEpoch);
                 const status = (e as ApiError)?.response?.status;
                 // refresh 接口存在 5s 速率限制，跨 tab 并发时先等待再补一次
                 if (status === 429) {
-                  const resp3 = await postRefreshRequest(instance, null, { silent: true });
+                  const resp3 = await postRefreshRequest(instance, null, { silent: true }, requestEpoch);
                   applyTokens(resp3);
                   return;
                 }
                 throw e;
               }
             })().finally(() => {
-              refreshPromise = null;
+              if (refreshPromise === flight) refreshPromise = null;
             });
+            refreshPromise = flight;
           }
-          await refreshPromise;
+          await refreshPromise.promise;
+          assertAuthEpoch(requestEpoch, originalRequest.signal);
           logger.debug("✅ API: 会话刷新成功，重试原始请求");
           
           // 更新原始请求的 Token Header
@@ -486,6 +602,8 @@ const createApiClient = (): AxiosInstance => {
           
           return instance(originalRequest);
         } catch (_refreshError) {
+          assertRefreshEpoch(requestEpoch, originalRequest.signal);
+          if (axios.isCancel(_refreshError)) return Promise.reject(_refreshError);
           const err = _refreshError as ApiError;
           const detail = extractErrorDetail(err);
           const preferredDetail =
@@ -627,6 +745,10 @@ export const authApi = {
     password: string,
     config?: AxiosRequestConfig,
   ) => {
+    syncSharedIdentity();
+    const loginEpoch = advanceAuthEpoch();
+    pendingLoginEpoch = loginEpoch;
+    publishIdentity("pending");
     const params = new URLSearchParams();
     params.append("username", username);
     params.append("password", password);
@@ -636,17 +758,30 @@ export const authApi = {
     return api.client
       .post("/auth/login", params.toString(), {
         ...config,
+        _authEpoch: loginEpoch,
         headers: {
           ...config?.headers,
           "Content-Type": "application/x-www-form-urlencoded",
         },
-      })
+      } as AxiosRequestConfig)
       .then((resp) => {
+        assertAuthEpoch(loginEpoch, config?.signal);
+        // Also invalidate work issued while login was pending with the prior token.
+        advanceAuthEpoch();
         const data = resp?.data as Record<string, string> | null;
         if (data?.access_token || data?.refresh_token) {
           authTokenStorage.set(data?.access_token ?? null, data?.refresh_token ?? null);
         }
+        publishIdentity("settled");
         return resp;
+      }).finally(() => {
+        // Failure/abort preserves A's tokens but invalidates all work started
+        // during this attempt. An older login must not release a newer fence.
+        syncSharedIdentity();
+        if (authEpoch === loginEpoch) {
+          advanceAuthEpoch();
+          publishIdentity("settled");
+        }
       });
   },
 
@@ -654,10 +789,16 @@ export const authApi = {
   getCurrentUser: (config?: AxiosRequestConfig) => api.client.get("/auth/me", config),
 
   // 登出
-  logout: () =>
-    api.client.post("/auth/logout").finally(() => {
-      authTokenStorage.clear();
-    }),
+  logout: () => {
+    // Capture proof before clearing. Never clear in finally: a later login owns
+    // its own storage, even when this logout fails (including server 503).
+    const token = getStoredAccessToken() || getCookieToken();
+    authTokenStorage.clear();
+    return api.client.post("/auth/logout", undefined, {
+      _authEpoch: authEpoch,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    } as AxiosRequestConfig);
+  },
 
   // 刷新令牌
   refreshToken: (refreshToken?: string, requestConfig?: SilentAxiosRequestConfig) =>

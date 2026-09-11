@@ -82,6 +82,7 @@ def _make_config(id=1, enabled=True, subject="信息技术", title="测试检测
         id=id, enabled=enabled, subject=subject, title=title,
         total_score=total_score, time_limit_minutes=time_limit_minutes,
         agent_id=agent_id, created_at="2025-01-01T00:00:00",
+        available_start=None, available_end=None,
         question_config=question_config or '{"choice": {"count": 2}, "fill": {"count": 1}}',
     )
     return c
@@ -150,6 +151,8 @@ class MockScalarResult:
 def _make_db(execute_side_effects=None):
     """构造 AsyncMock db，可以按顺序返回不同结果"""
     db = AsyncMock()
+    # AsyncSession.get_bind is synchronous; PG locking is tested on real PG.
+    db.get_bind = MagicMock(return_value=SimpleNamespace(dialect=SimpleNamespace(name="sqlite")))
     if execute_side_effects:
         db.execute.side_effect = execute_side_effects
     db.add = MagicMock()

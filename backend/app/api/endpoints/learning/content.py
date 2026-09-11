@@ -26,7 +26,7 @@ async def list_learning_content(
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
-    """获取学习模块启用内容。"""
+    """获取学习模块启用的公共内容。"""
     _validate_module_key(module_key)
     return await content_svc.list_learning_content(db, module_key)
 

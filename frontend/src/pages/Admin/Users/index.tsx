@@ -263,10 +263,14 @@ const AdminUsers: React.FC = () => {
           className="hidden"
           accept=".xlsx,.csv,.txt"
           onChange={async (e) => {
-            const file = e.target.files?.[0];
+            const input = e.currentTarget;
+            const file = input.files?.[0];
             if (!file) return;
-            await actions.handleFileUpload(file);
-            e.currentTarget.value = "";
+            try {
+              await actions.handleFileUpload(file);
+            } finally {
+              input.value = "";
+            }
           }}
         />
         <Button

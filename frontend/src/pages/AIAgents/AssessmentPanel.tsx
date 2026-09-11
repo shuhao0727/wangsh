@@ -184,7 +184,12 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answerResults, setAnswerResults] = useState<Map<number, AnswerResult>>(new Map());
   const [submittingAnswerId, setSubmittingAnswerId] = useState<number | null>(null);
+  // Shared synchronous lock: React disabled state cannot protect same-batch events
+  // or a confirmation callback that was captured before an answer started saving.
   const submittingRef = useRef(false);
+  const submittedSessionRef = useRef<number | null>(null);
+  const answerDraftsRef = useRef(new Map<number, string>());
+  const failedAnswersRef = useRef(new Set<number>());
   // 答题进度提示
   const [answerProgress, setAnswerProgress] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -332,6 +337,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setQuestions(qs);
       setCurrentIdx(0);
       setAnswerResults(new Map());
+      answerDraftsRef.current.clear();
+      failedAnswersRef.current.clear();
+      submittedSessionRef.current = null;
       setAnswerInput("");
       setView("quiz");
     } catch (e: any) {
@@ -350,6 +358,9 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setQuestions(qs);
       setCurrentIdx(0);
       setAnswerResults(new Map());
+      answerDraftsRef.current.clear();
+      failedAnswersRef.current.clear();
+      submittedSessionRef.current = null;
       setAnswerInput("");
       setView("quiz");
     } catch (e: any) {
@@ -362,9 +373,10 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 提交单题 ───
   const handleSubmitAnswer = useCallback(async (answerId: number, answer: string) => {
     if (!sessionId || !answer.trim()) return;
-    if (submittingRef.current) return;
+    if (submittingRef.current || submittedSessionRef.current === sessionId) return;
     try {
       submittingRef.current = true;
+      answerDraftsRef.current.set(answerId, answer);
       setSubmittingAnswerId(answerId);
       // 乐观更新：立即显示选中状态
       setQuestions((prev) =>
@@ -375,6 +387,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
         answer_id: answerId,
         student_answer: answer.trim(),
       });
+      answerDraftsRef.current.delete(answerId);
+      failedAnswersRef.current.delete(answerId);
       setAnswerResults((prev) => new Map(prev).set(answerId, result));
       setQuestions((prev) =>
         prev.map((q) => q.answer_id === answerId ? { ...q, student_answer: answer, is_answered: true } : q)
@@ -401,10 +415,8 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
       setAnswerProgress(null);
     } catch (e: any) {
       setAnswerProgress(null);
-      // 回滚乐观更新
-      setQuestions((prev) =>
-        prev.map((q) => q.answer_id === answerId ? { ...q, student_answer: null } : q)
-      );
+      // Keep the draft visible and require a successful explicit retry before settlement.
+      failedAnswersRef.current.add(answerId);
       showMessage.error(e.message || "提交答案失败");
     } finally {
       submittingRef.current = false;
@@ -459,11 +471,23 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
   // ─── 提交整卷 ───
   const handleSubmitAll = useCallback(async () => {
     if (!sessionId) return;
+    if (submittingRef.current) {
+      showMessage.warning("答案保存或检测提交中，请稍候再提交检测");
+      return;
+    }
+    if (answerDraftsRef.current.size || failedAnswersRef.current.size) {
+      showMessage.warning("仍有未保存或保存失败的答案，请先保存成功后再提交检测");
+      return;
+    }
+    submittingRef.current = true;
     try {
       setSubmitting(true);
       showMessage.loading({ content: "正在提交并评分，请稍候...", key: "submit", duration: 0 });
-      const _submitResult = await assessmentSessionApi.submit(sessionId);
-      showMessage.success({ content: "提交成功", key: "submit" });
+      if (submittedSessionRef.current !== sessionId) {
+        await assessmentSessionApi.submit(sessionId);
+        submittedSessionRef.current = sessionId;
+        showMessage.success({ content: "提交成功", key: "submit" });
+      }
       // 立即加载答题详情
       const result = await assessmentSessionApi.getResult(sessionId);
       setSessionResult(result);
@@ -476,6 +500,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     } catch (e: any) {
       showMessage.error({ content: e.message || "提交失败", key: "submit" });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }, [sessionId, startProfilePolling]);
@@ -629,6 +654,18 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
     </div>
   );
 
+  const updateAnswerInput = (answerId: number, value: string) => {
+    if (submittingRef.current || submittedSessionRef.current === sessionId) return;
+    if (value.trim() || failedAnswersRef.current.has(answerId)) answerDraftsRef.current.set(answerId, value);
+    else answerDraftsRef.current.delete(answerId);
+    setAnswerInput(value);
+  };
+
+  const goToQuestion = (index: number) => {
+    setCurrentIdx(index);
+    setAnswerInput(answerDraftsRef.current.get(questions[index].answer_id) ?? "");
+  };
+
   // ─── 渲染答题视图 ───
   const renderQuiz = () => {
     const q = questions[currentIdx];
@@ -665,7 +702,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
             return (
               <div
                 key={qq.answer_id}
-                onClick={() => { setCurrentIdx(i); setAnswerInput(""); }}
+                onClick={() => goToQuestion(i)}
                 className="flex h-6 w-6 items-center justify-center rounded text-xs"
                 style={{
                   background:
@@ -718,7 +755,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
                       name={`assessment-choice-${q.answer_id}`}
                       value={letter}
                       checked={(q.student_answer || undefined) === letter}
-                      disabled={!!result || submittingAnswerId === q.answer_id}
+                      disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
                       onChange={() => {
                         if (!result && !submittingRef.current) {
                           void handleSubmitAnswer(q.answer_id, letter);
@@ -733,13 +770,24 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
             </div>
           )}
 
+          {q.question_type === "choice" && !result && failedAnswersRef.current.has(q.answer_id) && (
+            <Button
+              size="sm"
+              className="mt-2"
+              disabled={submittingAnswerId !== null || submitting}
+              onClick={() => void handleSubmitAnswer(q.answer_id, answerDraftsRef.current.get(q.answer_id) ?? "")}
+            >
+              重试保存
+            </Button>
+          )}
+
           {/* 填空题 */}
           {q.question_type === "fill" && (
             <div>
               <Input
                 value={result ? (q.student_answer || "") : answerInput}
-                onChange={(e) => !result && setAnswerInput(e.target.value)}
-                disabled={!!result || submittingAnswerId === q.answer_id}
+                onChange={(e) => !result && updateAnswerInput(q.answer_id, e.target.value)}
+                disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
                 placeholder="输入答案"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !result && answerInput.trim()) {
@@ -765,11 +813,13 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               <Textarea
                 rows={4}
                 value={result ? (q.student_answer || "") : answerInput}
-                onChange={(e) => !result && setAnswerInput(e.target.value)}
-                disabled={!!result || submittingAnswerId === q.answer_id}
+                onChange={(e) => !result && updateAnswerInput(q.answer_id, e.target.value)}
+                disabled={!!result || submittingAnswerId !== null || submitting || submittedSessionRef.current === sessionId}
                 placeholder="输入答案"
                 onBlur={() => {
-                  if (!result && answerInput.trim()) void handleSubmitAnswer(q.answer_id, answerInput);
+                  if (!result && !failedAnswersRef.current.has(q.answer_id) && answerInput.trim()) {
+                    void handleSubmitAnswer(q.answer_id, answerInput);
+                  }
                 }}
               />
               {!result && answerInput.trim() && (
@@ -822,7 +872,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           <Button
             size="sm"
             disabled={currentIdx === 0}
-            onClick={() => { setCurrentIdx(currentIdx - 1); setAnswerInput(""); }}
+            onClick={() => goToQuestion(currentIdx - 1)}
           >
             <ChevronLeft className="h-4 w-4" />
             上一题
@@ -830,7 +880,7 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
           {currentIdx < questions.length - 1 ? (
             <Button
               size="sm"
-              onClick={() => { setCurrentIdx(currentIdx + 1); setAnswerInput(""); }}
+              onClick={() => goToQuestion(currentIdx + 1)}
             >
               下一题
               <ChevronRight className="h-4 w-4" />
@@ -841,6 +891,10 @@ const AssessmentPanel: React.FC<Props> = ({ isAuthenticated, userId }) => {
               className="!bg-[var(--ws-color-purple)] hover:!bg-[var(--ws-color-purple)]"
               disabled={submitting}
               onClick={() => {
+                if (submittingRef.current) {
+                  showMessage.warning("答案保存或检测提交中，请稍候再提交检测");
+                  return;
+                }
                 setConfirmState({ message: "确定提交检测？提交后无法修改答案。", onOk: () => { void handleSubmitAll(); } });
               }}
             >

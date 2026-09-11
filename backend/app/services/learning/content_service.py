@@ -41,12 +41,13 @@ def _content_payload(item: LearningContentItem) -> Dict[str, Any]:
 
 
 async def list_learning_content(db: AsyncSession, module_key: str) -> List[Dict[str, Any]]:
-    """获取学习模块启用内容。"""
+    """获取学习模块启用的公共内容；个人内容由专用归属接口提供。"""
     stmt = (
         select(LearningContentItem)
         .where(
             LearningContentItem.module_key == module_key,
             LearningContentItem.enabled.is_(True),
+            LearningContentItem.owner_id.is_(None),
         )
         .order_by(
             LearningContentItem.section_key,

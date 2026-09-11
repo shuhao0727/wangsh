@@ -202,7 +202,10 @@ const AdminLayout: React.FC = () => {
 
       <aside
         role="navigation" aria-label="管理导航"
-        className="fixed left-0 top-0 bottom-0 z-[var(--ws-z-header)] border-r border-border-secondary transition-[transform,box-shadow] duration-200"
+        className={cn(
+          "fixed left-0 top-0 bottom-0 border-r border-border-secondary transition-[transform,box-shadow] duration-200",
+          isMobile ? "z-[var(--ws-z-floating-panel)]" : "z-[var(--ws-z-header)]"
+        )}
         style={{
           background: "linear-gradient(180deg, var(--ws-color-surface-2), var(--ws-color-surface))",
           width: sidebarWidth,

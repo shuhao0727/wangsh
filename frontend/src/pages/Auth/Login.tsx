@@ -10,13 +10,7 @@ import useAuth from "@hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-const resolveLoginDestination = (role: string, redirect: string) => {
-  if (redirect !== "/home") return redirect;
-  if (role === "teacher") return "/admin/classroom-interaction";
-  if (role === "admin" || role === "super_admin") return "/admin/dashboard";
-  return redirect;
-};
+import { resolveLoginDestination } from "@/utils/loginDestination";
 
 const LoginPage: React.FC = () => {
   const auth = useAuth();
@@ -26,9 +20,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const redirect = useMemo(() => {
     const sp = new URLSearchParams(location.search);
-    const raw = sp.get("redirect") || "/home";
-    if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-    return "/home";
+    return resolveLoginDestination(sp.get("redirect"));
   }, [location.search]);
 
   const requireAdmin = useMemo(() => redirect.startsWith("/admin"), [redirect]);
@@ -65,7 +57,7 @@ const LoginPage: React.FC = () => {
       void auth.logout();
       return;
     }
-    void navigate(resolveLoginDestination(auth.user?.role_code || "", redirect), {
+    void navigate(redirect, {
       replace: true,
     });
   }, [auth, navigate, redirect, requireAdmin]);
@@ -85,7 +77,7 @@ const LoginPage: React.FC = () => {
     }
     localStorage.removeItem("ws_guest_mode");
     showMessage.success("登录成功");
-    void navigate(resolveLoginDestination(role, redirect), { replace: true });
+    void navigate(redirect, { replace: true });
   };
 
   return (

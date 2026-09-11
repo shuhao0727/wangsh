@@ -1,26 +1,14 @@
-import { useEffect, useState } from "react";
-import { api } from "@services";
 import config from "@services/config";
-import { logger } from "@services/logger";
 
 export interface AppMeta {
   version: string;
   envLabel: string;
 }
 
-let cachedMeta: AppMeta | null = null;
-let loadingPromise: Promise<AppMeta> | null = null;
-
 const normalizeVersion = (v?: string | null): string => {
   const s = String(v ?? "").trim();
   if (!s || s.toLowerCase() === "unknown") return "–";
   return s;
-};
-
-const asOptionalString = (v: unknown): string | undefined => {
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  return undefined;
 };
 
 const readEnvLabel = (): string => {
@@ -32,91 +20,10 @@ const readEnvLabel = (): string => {
   return envStr;
 };
 
-const fetchMeta = async (): Promise<AppMeta> => {
-  // 版本优先级：
-  // 1) /api/v1/system/overview.version
-  // 2) REACT_APP_VERSION 或 APP_VERSION
-  // 3) /api/v1/system/settings.project.version
-  // 4) "–"
-  let version: string | undefined;
-
-  // 尝试 1)：system/overview
-  try {
-    const resp = await api.get<Record<string, unknown>>("/system/overview");
-    const data = resp?.data as unknown as Record<string, unknown> | undefined;
-    // 兼容返回结构：可能是 { data: {...} } 或直接 {...}
-    const nested = data?.data as Record<string, unknown> | undefined;
-    const ver = data?.version || nested?.version;
-    version = normalizeVersion(asOptionalString(ver));
-    if (version !== "–") {
-      logger.debug?.("AppMeta: overview.version 命中", { version });
-    }
-  } catch {
-    // ignore
-  }
-
-  // 尝试 2)：环境变量
-  if (!version || version === "–") {
-    const vEnv =
-      config?.version || // 兼容旧逻辑（但会被标准化去除 unknown）
-      "";
-    version = normalizeVersion(vEnv);
-    if (version !== "–") {
-      logger.debug?.("AppMeta: 来自环境变量/配置", { version });
-    }
-  }
-
-  // 尝试 3)：system/settings
-  if (!version || version === "–") {
-    try {
-      const resp = await api.get<Record<string, unknown>>("/system/settings");
-      const data = resp?.data as unknown as Record<string, unknown> | undefined;
-      const project = data?.project as Record<string, unknown> | undefined;
-      const ver = project?.version || data?.VERSION;
-      version = normalizeVersion(asOptionalString(ver));
-      if (version !== "–") {
-        logger.debug?.("AppMeta: settings.VERSION 命中", { version });
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // 兜底
-  if (!version) version = "–";
-
-  const envLabel = readEnvLabel();
-  return { version, envLabel };
-};
-
-export const useAppMeta = (): AppMeta => {
-  const [meta, setMeta] = useState<AppMeta>(cachedMeta ?? { version: "–", envLabel: readEnvLabel() });
-
-  useEffect(() => {
-    let mounted = true;
-    if (cachedMeta) {
-      setMeta(cachedMeta);
-      return;
-    }
-    if (!loadingPromise) {
-      loadingPromise = fetchMeta()
-        .then((m) => {
-          cachedMeta = m;
-          return m;
-        })
-        .finally(() => {
-          loadingPromise = null;
-        });
-    }
-    void loadingPromise.then((m) => {
-      if (mounted) setMeta(m);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  return meta;
-};
+// Build metadata is public and identity-independent; never query privileged system APIs.
+export const useAppMeta = (): AppMeta => ({
+  version: normalizeVersion(config.version),
+  envLabel: readEnvLabel(),
+});
 
 export default useAppMeta;

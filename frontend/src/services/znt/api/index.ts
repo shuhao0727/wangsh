@@ -110,8 +110,8 @@ const agentDataApi = {
     BaseResponse<
       Array<{
         session_id: string;
-        agent_id: number;
-        display_agent_name?: string;
+        agent_id: number | null;
+        display_agent_name?: string | null;
         display_user_name?: string;
         last_at: string;
         turns: number;

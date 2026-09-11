@@ -12,30 +12,50 @@ async def list_user_conversations(
     db: AsyncSession,
     *,
     user_id: int,
-    agent_id: int,
+    agent_id: int | None = None,
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
+    # A session has the same identity here and in the detail endpoint. Filter
+    # session membership after aggregation so another agent's (or NULL-agent)
+    # messages in the same user's session still contribute to its summary.
+    agent_filter = (
+        "HAVING sum(CASE WHEN agent_id = :agent_id THEN 1 ELSE 0 END) > 0"
+        if agent_id is not None else ""
+    )
+    # Rank within each message type using the reverse of detail's (created_at, id)
+    # order. Keep all ranked rows for counts and agent membership; only preview
+    # takes rank 1, preserving answer-first/blank fallback below.
     sql = text(
-        """
-        WITH sessions AS (
-            SELECT
-                session_id,
-                max(created_at) AS last_at,
-                max(display_user_name) AS display_user_name,
-                max(display_agent_name) AS display_agent_name,
-                sum(CASE WHEN message_type='question' THEN 1 ELSE 0 END) AS question_count,
-                sum(CASE WHEN message_type='answer' THEN 1 ELSE 0 END) AS answer_count,
-                max(CASE WHEN message_type='question' THEN content END) AS last_question,
-                max(CASE WHEN message_type='answer' THEN content END) AS last_answer
+        f"""
+        WITH ranked_messages AS (
+            SELECT *,
+                row_number() OVER (
+                    PARTITION BY session_id, message_type
+                    ORDER BY created_at DESC, id DESC
+                ) AS message_rank
             FROM v_conversations_with_deleted
             WHERE user_id = :user_id
-              AND agent_id = :agent_id
               AND session_id IS NOT NULL
+        ), sessions AS (
+            SELECT
+                session_id,
+                CASE WHEN count(agent_id) = count(*) AND count(DISTINCT agent_id) = 1
+                     THEN max(agent_id) ELSE NULL END AS agent_id,
+                max(created_at) AS last_at,
+                max(display_user_name) AS display_user_name,
+                CASE WHEN count(agent_id) = count(*) AND count(DISTINCT agent_id) = 1
+                     THEN max(display_agent_name) ELSE NULL END AS display_agent_name,
+                sum(CASE WHEN message_type='question' THEN 1 ELSE 0 END) AS question_count,
+                sum(CASE WHEN message_type='answer' THEN 1 ELSE 0 END) AS answer_count,
+                max(CASE WHEN message_type='question' AND message_rank = 1 THEN content END) AS last_question,
+                max(CASE WHEN message_type='answer' AND message_rank = 1 THEN content END) AS last_answer
+            FROM ranked_messages
             GROUP BY session_id
+            {agent_filter}
         )
         SELECT *
         FROM sessions
-        ORDER BY last_at DESC
+        ORDER BY last_at DESC, session_id ASC
         LIMIT :limit
         """
     )
@@ -53,7 +73,7 @@ async def list_user_conversations(
         items.append(
             {
                 "session_id": r.get("session_id"),
-                "agent_id": agent_id,
+                "agent_id": r.get("agent_id"),
                 "display_agent_name": r.get("display_agent_name"),
                 "display_user_name": r.get("display_user_name"),
                 "last_at": r.get("last_at"),

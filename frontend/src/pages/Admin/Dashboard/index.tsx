@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   RefreshCw, CheckCircle, XCircle,
@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AdminPage } from "@components/Admin";
 import { StatCard } from "@components/Common/StatCard";
 import { api, config } from "@services";
+import useAuth, { AuthRequestGate } from "@hooks/useAuth";
+import { canAccessRoles, SUPER_ADMIN_ROLES } from "@components/Auth/roleAccess";
 
 const dot = (ok: boolean) => ok
   ? <span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-success)]" role="status" aria-label="运行正常" />
@@ -26,32 +28,65 @@ const StatusRow: React.FC<StatusRowProps> = ({ label, value, ok }) => (
   </div>
 );
 
-const AdminDashboard: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [health, setHealth] = useState<any>(null);
-  const [overview, setOverview] = useState<any>(null);
-  const [errorText, setErrorText] = useState<string>("");
+interface Health {
+  status?: string;
+  checks?: { database?: string; redis?: string };
+  system?: { timestamp?: string; version?: string; environment?: string };
+}
+interface Overview { counts?: { users?: number; articles?: number; agents?: number } }
 
+const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOverview }) => {
+  const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [errorText, setErrorText] = useState("");
+  const [overviewError, setOverviewError] = useState(false);
+  const gate = useRef(new AuthRequestGate()).current;
+
+  // No system query hook/key exists yet. Keep requests local rather than creating
+  // an ad-hoc shared cache; the keyed parent owns their authenticated lifetime.
   const loadAll = useCallback(async () => {
+    const request = gate.begin();
     setLoading(true);
     setErrorText("");
+    setOverview(null);
+    setOverviewError(false);
+    // These endpoints return raw objects, not the generic ApiResponse envelope.
+    const loadHealth = async () => {
+      try {
+        const response = await api.client.get<Health>("/health", { signal: request.signal });
+        if (gate.isCurrent(request)) setHealth(response.data);
+      } catch {
+        if (gate.isCurrent(request)) {
+          setErrorText("无法获取健康状态，请重试。");
+          setHealth(null);
+        }
+      }
+    };
+    const loadOverview = async () => {
+      if (!canViewOverview) return;
+      try {
+        const response = await api.client.get<Overview>("/system/overview", { signal: request.signal });
+        if (gate.isCurrent(request)) setOverview(response.data);
+      } catch {
+        if (gate.isCurrent(request)) {
+          setOverview(null);
+          setOverviewError(true);
+        }
+      }
+    };
     try {
-      const h = await api.get("/health");
-      setHealth(h.data);
-    } catch (e: any) {
-      setErrorText(e?.response?.data?.detail || e?.message || "加载健康状态失败");
-      setHealth(null);
+      await Promise.all([loadHealth(), loadOverview()]);
+    } finally {
+      if (gate.isCurrent(request)) setLoading(false);
+      gate.release(request);
     }
-    try {
-      const o = await api.get("/system/overview");
-      setOverview(o.data);
-    } catch {
-      setOverview(null);
-    }
-    setLoading(false);
-  }, []);
+  }, [canViewOverview, gate]);
 
-  useEffect(() => { void loadAll(); }, [loadAll]);
+  useEffect(() => {
+    void loadAll();
+    return () => gate.cancel();
+  }, [loadAll, gate]);
 
   const isHealthy = health?.status === "healthy";
 
@@ -68,6 +103,20 @@ const AdminDashboard: React.FC = () => {
           刷新
         </Button>
       </div>
+
+      {!canViewOverview && (
+        <Alert className="mb-5">
+          <AlertTitle>系统统计权限</AlertTitle>
+          <AlertDescription>仅超级管理员可查看系统统计；您仍可查看和刷新健康检查。</AlertDescription>
+        </Alert>
+      )}
+
+      {canViewOverview && overviewError && (
+        <Alert className="mb-5" variant="destructive">
+          <AlertTitle>系统统计请求失败</AlertTitle>
+          <AlertDescription>无法获取系统统计，请确认权限后重试。健康检查仍可使用。</AlertDescription>
+        </Alert>
+      )}
 
       {errorText && (
         <Alert className="mb-5 border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)] text-[var(--ws-color-warning)] [&>svg]:text-[var(--ws-color-warning)]">
@@ -104,11 +153,17 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           {/* 数据概览卡片 */}
+          {canViewOverview && overview && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} variant="horizontal" color="primary" />
             <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} variant="horizontal" color="purple" />
             <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} variant="horizontal" color="warning" />
           </div>
+
+          )}
+          {canViewOverview && loading && !overview && !overviewError && (
+            <div role="status" className="text-sm text-text-secondary">正在加载系统统计…</div>
+          )}
 
           {/* 健康检查详情 */}
           <div className="rounded-xl p-4 bg-surface-2">
@@ -131,6 +186,16 @@ const AdminDashboard: React.FC = () => {
       )}
     </AdminPage>
   );
+};
+
+const AdminDashboard: React.FC = () => {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading || !isAuthenticated || !user) {
+    return <AdminPage><div role="status">{isLoading ? "正在确认登录状态…" : "请登录后查看系统状态。"}</div></AdminPage>;
+  }
+  // Reset state on user OR role changes, before any old data can be rendered.
+  return <DashboardStatus key={JSON.stringify([user.id, user.role_code])}
+    canViewOverview={canAccessRoles(user.role_code, SUPER_ADMIN_ROLES)} />;
 };
 
 export default AdminDashboard;

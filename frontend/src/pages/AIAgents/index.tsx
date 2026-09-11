@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,9 +75,33 @@ const AIAgentsPage: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   // 新增：流式生成内容（独立于messages，避免高频更新历史记录）
   const [streamingContent, setStreamingContent] = useState<string>("");
-  
+
   const [sessions, setSessions] = useState<ConversationSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // All history reads share one generation, including automatic restoration.
+  const historyRequest = useRef(0);
+  const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "error" | "readonly">("idle");
+
+  const historyStatusMessage = historyStatus === "loading"
+    ? "历史记录加载中…"
+    : historyStatus === "readonly"
+      ? "该历史会话仅可查看，请新建会话后发送"
+      : "历史记录加载失败，请重新选择会话或新建会话";
+
+  // Invalidate before passive effects/promises can publish another identity's data.
+  useLayoutEffect(() => {
+    historyRequest.current += 1;
+    setMessages([]);
+    setSessions([]);
+    setCurrentSessionId(null);
+    setWorkflowGroups([]);
+    setHistoryStatus("idle");
+    setStreamingContent("");
+    setCurrentStreamingMessageId(null);
+    setIsStreaming(false);
+    return () => { historyRequest.current += 1; };
+  }, [auth.isAuthenticated, auth.user?.id, currentAgent?.id]);
 
   // 输入消息
   const [inputMessage, setInputMessage] = useState("");
@@ -242,6 +266,9 @@ const AIAgentsPage: React.FC = () => {
   );
 
   const createNewConversation = useCallback((agent: Agent) => {
+    if (!auth.isAuthenticated || !auth.user?.id) return;
+    historyRequest.current += 1;
+    setHistoryStatus("idle");
     const newSessionId = generateSessionId();
     setCurrentSessionId(newSessionId);
     try {
@@ -257,56 +284,72 @@ const AIAgentsPage: React.FC = () => {
         agentId: agent.id,
       },
     ]);
-  }, [getSessionStorageKey]);
+  }, [auth.isAuthenticated, auth.user?.id, getSessionStorageKey]);
 
   const loadSessionsAndMaybeRestore = useCallback(async (agent: Agent) => {
-    if (!auth.isAuthenticated) return;
+    if (!auth.isAuthenticated || !auth.user?.id) return;
     const agentIdNum = parseInt(String(agent.id), 10);
     if (!Number.isFinite(agentIdNum)) return;
 
-    const listResp = await agentDataApi.listConversations({
-      agent_id: agentIdNum,
-      limit: 5,
-    });
-    if (!listResp.success) return;
-    setSessions(listResp.data);
-
-    let preferred: string | null = null;
+    const request = ++historyRequest.current;
+    setHistoryStatus("loading");
+    setMessages([]);
+    setWorkflowGroups([]);
     try {
-      preferred = localStorage.getItem(getSessionStorageKey(agent.id));
-    } catch {}
+      const listResp = await agentDataApi.listConversations({
+        agent_id: agentIdNum,
+        limit: 5,
+      });
+      if (request !== historyRequest.current) return;
+      if (!listResp.success) throw new Error(listResp.message);
+      // Do not assign orphaned/other-agent history to the current agent.
+      const agentSessions = listResp.data.filter((session) => session.agent_id === agentIdNum);
+      setSessions(agentSessions);
 
-    const selected =
-      (preferred && listResp.data.find((s) => s.session_id === preferred)?.session_id) ||
-      listResp.data[0]?.session_id ||
-      null;
+      let preferred: string | null = null;
+      try {
+        preferred = localStorage.getItem(getSessionStorageKey(agent.id));
+      } catch {}
 
-    if (!selected) {
-      createNewConversation(agent);
-      return;
-    }
+      const selected =
+        (preferred && agentSessions.find((s) => s.session_id === preferred)?.session_id) ||
+        agentSessions[0]?.session_id ||
+        null;
 
-    setCurrentSessionId(selected);
-    const msgResp = await agentDataApi.getConversationMessages(selected);
-    if (!msgResp.success) return;
+      if (!selected) {
+        createNewConversation(agent);
+        return;
+      }
 
-    const mapped: Message[] = msgResp.data.map((m) => ({
-      id: String(m.id),
-      content: m.content,
-      sender: m.message_type === "question" ? "user" : "agent",
-      timestamp: m.created_at,
-      agentId: agent.id,
-    }));
-    setMessages(mapped.length ? mapped : [
-      {
-        id: `welcome-${Date.now()}`,
-        content: `你好！我是${agent.name}，有什么可以帮助你的吗？`,
-        sender: "agent",
-        timestamp: new Date().toISOString(),
+      setCurrentSessionId(selected);
+      const msgResp = await agentDataApi.getConversationMessages(selected);
+      if (request !== historyRequest.current) return;
+      if (!msgResp.success) throw new Error(msgResp.message);
+
+      const mapped: Message[] = msgResp.data.map((m) => ({
+        id: String(m.id),
+        content: m.content,
+        sender: m.message_type === "question" ? "user" : "agent",
+        timestamp: m.created_at,
         agentId: agent.id,
-      },
-    ]);
-  }, [auth.isAuthenticated, createNewConversation, getSessionStorageKey]);
+      }));
+      setMessages(mapped.length ? mapped : [
+        {
+          id: `welcome-${Date.now()}`,
+          content: `你好！我是${agent.name}，有什么可以帮助你的吗？`,
+          sender: "agent",
+          timestamp: new Date().toISOString(),
+          agentId: agent.id,
+        },
+      ]);
+      setHistoryStatus("idle");
+    } catch (error) {
+      if (request !== historyRequest.current) return;
+      setHistoryStatus("error");
+      logger.error("加载历史记录失败:", error);
+      showMessage.error("历史记录加载失败，请重新选择会话或新建会话");
+    }
+  }, [auth.isAuthenticated, auth.user?.id, createNewConversation, getSessionStorageKey]);
 
   useEffect(() => {
     if (!currentAgent) return;
@@ -316,6 +359,7 @@ const AIAgentsPage: React.FC = () => {
 
   // 切换智能体
   const handleAgentChange = (agentId: string) => {
+    historyRequest.current += 1;
     stopStream("navigation");
     setStreamingContent("");
     setCurrentStreamingMessageId(null);
@@ -350,6 +394,11 @@ const AIAgentsPage: React.FC = () => {
       currentAgent: currentAgent ? currentAgent.name : "null",
     });
 
+    if (historyStatus !== "idle") {
+      showMessage.warning(historyStatusMessage);
+      return;
+    }
+
     if (!content) {
       showMessage.warning("请输入消息内容");
       return;
@@ -375,6 +424,12 @@ const AIAgentsPage: React.FC = () => {
       return;
     }
 
+    if (!auth.user?.id) {
+      showMessage.warning("用户信息加载中，请稍后发送");
+      return;
+    }
+
+    const request = ++historyRequest.current;
     logger.debug("✅ 已登录，发送消息并开启SSE");
     const activeSessionId = currentSessionId || generateSessionId();
     if (!currentSessionId) {
@@ -459,7 +514,7 @@ const AIAgentsPage: React.FC = () => {
       };
 
       const persistUsage = async (answerText: string) => {
-        if (usageSaved || !userMessage.content || !auth.isAuthenticated) return;
+        if (request !== historyRequest.current || usageSaved || !userMessage.content || !auth.isAuthenticated) return;
         usageSaved = true;
         try {
           await agentDataApi.createUsage({
@@ -470,12 +525,21 @@ const AIAgentsPage: React.FC = () => {
             session_id: activeSessionId,
             response_time_ms: Date.now() - streamStartedAt,
           });
+          if (request !== historyRequest.current) return;
           setTimeout(() => {
+            if (request !== historyRequest.current) return;
             agentDataApi.listConversations({
               agent_id: parseInt(String(currentAgent.id), 10),
               limit: 5,
             }).then(listResp => {
-              if (listResp.success) setSessions(listResp.data);
+              if (request !== historyRequest.current) return;
+              if (listResp.success) {
+                const activeSummary = listResp.data.find((session) => session.session_id === activeSessionId);
+                if (activeSummary && activeSummary.agent_id !== Number(currentAgent.id)) {
+                  setHistoryStatus("readonly");
+                }
+                setSessions(listResp.data.filter((session) => session.agent_id === Number(currentAgent.id)));
+              }
             }).catch(() => {});
           }, 1000);
         } catch (error) {
@@ -497,9 +561,11 @@ const AIAgentsPage: React.FC = () => {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           callbacks: {
             onDelta: (text) => {
+              if (request !== historyRequest.current) return;
               setStreamingContent(text);
             },
             onEnd: (fullText) => {
+              if (request !== historyRequest.current) return;
               if (!fullText || !fullText.trim()) {
                 const errMsg: Message = {
                   id: `err-${Date.now()}`,
@@ -528,6 +594,7 @@ const AIAgentsPage: React.FC = () => {
               void persistUsage(fullText);
             },
             onError: (errText, partialText) => {
+              if (request !== historyRequest.current) return;
               const errMsg: Message = {
                 id: `err-${Date.now()}`,
                 content: `⚠️ ${errText}`,
@@ -552,18 +619,20 @@ const AIAgentsPage: React.FC = () => {
               setIsStreaming(false);
             },
             onWorkflowStarted: (groupId) => {
+              if (request !== historyRequest.current) return;
               currentGroupId = groupId;
               setWorkflowGroups((prev) => [
                 ...prev,
                 { id: groupId, label: `工作流 ${prev.length + 1}`, nodes: [], messageId: agentMessageId },
               ]);
             },
-            onNodeStarted: (name) => addNode(name),
-            onNodeFinished: (name, detail) => finishNode(name, detail),
+            onNodeStarted: (name) => { if (request === historyRequest.current) addNode(name); },
+            onNodeFinished: (name, detail) => { if (request === historyRequest.current) finishNode(name, detail); },
           },
           timeoutMs: STREAM_IDLE_TIMEOUT_MS,
         });
       } catch (e: any) {
+        if (request !== historyRequest.current) return;
         if (e?.name === "AbortError") return;
         const errMsg: Message = {
           id: `err-${Date.now()}`,
@@ -618,27 +687,39 @@ const AIAgentsPage: React.FC = () => {
   };
 
   const handleSelectSession = async (sessionId: string) => {
-    if (!currentAgent) return;
-    if (!auth.isAuthenticated) return;
+    if (!currentAgent || !auth.isAuthenticated || !auth.user?.id) return;
+    if (!sessions.some((session) => session.session_id === sessionId && session.agent_id === Number(currentAgent.id))) return;
+    const request = ++historyRequest.current;
+    setHistoryStatus("loading");
     stopStream("navigation");
     setStreamingContent("");
     setCurrentStreamingMessageId(null);
     setIsStreaming(false);
     setCurrentSessionId(sessionId);
+    setMessages([]);
+    setWorkflowGroups([]);
     try {
       localStorage.setItem(getSessionStorageKey(currentAgent.id), sessionId);
     } catch {}
-    const msgResp = await agentDataApi.getConversationMessages(sessionId);
-    if (!msgResp.success) return;
-    const mapped: Message[] = msgResp.data.map((m) => ({
-      id: String(m.id),
-      content: m.content,
-      sender: m.message_type === "question" ? "user" : "agent",
-      timestamp: m.created_at,
-      agentId: currentAgent.id,
-    }));
-    setWorkflowGroups([]);
-    setMessages(mapped);
+    try {
+      const msgResp = await agentDataApi.getConversationMessages(sessionId);
+      if (request !== historyRequest.current) return;
+      if (!msgResp.success) throw new Error(msgResp.message);
+      const mapped: Message[] = msgResp.data.map((m) => ({
+        id: String(m.id),
+        content: m.content,
+        sender: m.message_type === "question" ? "user" : "agent",
+        timestamp: m.created_at,
+        agentId: currentAgent.id,
+      }));
+      setMessages(mapped);
+      setHistoryStatus("idle");
+    } catch (error) {
+      if (request !== historyRequest.current) return;
+      setHistoryStatus("error");
+      logger.error("加载历史记录失败:", error);
+      showMessage.error("历史记录加载失败，请重新选择会话或新建会话");
+    }
   };
 
   useEffect(() => {
@@ -769,6 +850,11 @@ const AIAgentsPage: React.FC = () => {
         {/* Chat Area */}
         <div className="flex-1 min-w-0 flex flex-col h-full">
           <div className="flex-1 flex flex-col h-full overflow-hidden">
+            {historyStatus !== "idle" && (
+              <div role="status" className="px-4 py-2 text-sm text-text-secondary">
+                {historyStatusMessage}
+              </div>
+            )}
             <ChatArea
               messages={messages}
               currentAgent={currentAgent}

@@ -2,13 +2,14 @@
 测评会话服务 - 学生答题流程 + 管理端统计
 """
 
+import hashlib
 import json
 import random
 from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, update, delete
+from sqlalchemy import select, func, and_, or_, update, delete, text
 from sqlalchemy.orm import selectinload
 
 from loguru import logger
@@ -20,6 +21,13 @@ from app.models.assessment import (
     AssessmentAnswer,
     AssessmentBasicProfile,
     StudentProfile,
+)
+
+
+# Compatibility exports keep existing callers and tests on the same parser contract.
+from app.services.assessment.ai_response_parsing import (
+    _parse_grading_json,
+    _parse_question_json,
 )
 
 
@@ -62,57 +70,20 @@ async def _ai_generate_realtime_question(
     return _parse_question_json(raw, knowledge_point, question_type, score)
 
 
-def _parse_question_json(raw_text: str, knowledge_point: str, question_type: str, score: int) -> dict:
-    """解析 AI 返回的题目 JSON"""
-    import re as _re
-
-    text = raw_text.strip()
-    # 尝试从 markdown 代码块提取
-    match = _re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, _re.DOTALL)
-    if match:
-        text = match.group(1)
-    else:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end > start:
-            text = text[start:end + 1]
-
-    try:
-        data = json.loads(text)
-        options = data.get("options")
-        if isinstance(options, dict):
-            options = json.dumps(options, ensure_ascii=False)
-        elif isinstance(options, list):
-            options = json.dumps(dict(zip("ABCD", options)), ensure_ascii=False)
-        return {
-            "content": str(data.get("content", "")),
-            "options": options,
-            "correct_answer": str(data.get("correct_answer", "")),
-            "explanation": str(data.get("explanation", "")),
-            "knowledge_point": knowledge_point,
-            "question_type": question_type,
-            "score": score,
-        }
-    except (json.JSONDecodeError, ValueError):
-        logger.warning(f"无法解析 AI 出题 JSON: {raw_text[:200]}")
-        # 返回一个兜底题目
-        return {
-            "content": f"关于「{knowledge_point}」的练习题（AI生成失败，请跳过）",
-            "options": json.dumps({"A": "选项A", "B": "选项B", "C": "选项C", "D": "选项D"}),
-            "correct_answer": "A",
-            "explanation": "",
-            "knowledge_point": knowledge_point,
-            "question_type": question_type,
-            "score": score,
-        }
-
-
 # ─── 学生端 ───
+
+
+def _availability_error(config: AssessmentConfig, now: datetime) -> str | None:
+    """开放时间窗包含起止时刻；未设置的一侧不限制。"""
+    if config.available_start and now < config.available_start:
+        return "该测评尚未开始"
+    if config.available_end and now > config.available_end:
+        return "该测评已结束"
+    return None
 
 
 async def get_available_configs(db: AsyncSession, user_id: int) -> list[dict]:
     """获取学生可用的测评列表（enabled=True + 在开放时段内），附带该学生的答题状态"""
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
 
     configs_result = await db.execute(
@@ -123,13 +94,7 @@ async def get_available_configs(db: AsyncSession, user_id: int) -> list[dict]:
     configs = list(configs_result.scalars().all())
 
     # 过滤时间窗口
-    visible_configs = []
-    for c in configs:
-        if c.available_start and now < c.available_start:
-            continue
-        if c.available_end and now > c.available_end:
-            continue
-        visible_configs.append(c)
+    visible_configs = [c for c in configs if _availability_error(c, now) is None]
 
     # 批量查询该学生在这些配置下的 session
     config_ids = [c.id for c in visible_configs]
@@ -172,10 +137,31 @@ async def get_available_configs(db: AsyncSession, user_id: int) -> list[dict]:
     return items
 
 
+async def _lock_session_start(db: AsyncSession, config_id: int, user_id: int) -> None:
+    """Serialize starts even when no session row exists (PostgreSQL only).
+
+    The namespace and stable digest avoid Python's per-process hash and unrelated
+    row locks. A digest collision only serializes unrelated starts; it cannot
+    select another student's session. The request transaction owns/relinquishes
+    the lock on commit/rollback/close, including provider failure or cancellation.
+    SQLite remains a unit-test backend, not a concurrent-start guarantee.
+    """
+    if db.get_bind().dialect.name == "postgresql":
+        key = int.from_bytes(hashlib.sha256(
+            f"wangsh:assessment:start:{config_id}:{user_id}".encode("ascii")
+        ).digest()[:8], "big", signed=True)
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(CAST(:key AS bigint))"), {"key": key}
+        )
+
+
 async def start_session(
     db: AsyncSession, config_id: int, user_id: int
 ) -> dict:
-    """开始检测：校验 → 检查已有会话 → 抽题 → 创建 session + answers"""
+    """开始检测：校验 → 复用已有会话 → 新建时间窗校验 → 抽题 → 创建 session + answers"""
+    # Lock before the first read so a waiter sees the committed session.
+    await _lock_session_start(db, config_id, user_id)
+
     # 1. 校验配置
     config_result = await db.execute(
         select(AssessmentConfig).where(AssessmentConfig.id == config_id)
@@ -186,7 +172,7 @@ async def start_session(
     if not config.enabled:
         raise ValueError("该测评尚未开放")
 
-    # 2. 检查已有 in_progress 会话（幂等，加锁防并发）
+    # 2. 起测互斥后复用本人会话；等待保存/交卷行锁，不能跳过被锁会话
     existing_result = await db.execute(
         select(AssessmentSession).where(
             and_(
@@ -194,7 +180,7 @@ async def start_session(
                 AssessmentSession.user_id == user_id,
                 AssessmentSession.status == "in_progress",
             )
-        ).with_for_update(skip_locked=True)
+        ).with_for_update().execution_options(populate_existing=True)
     )
     existing = existing_result.scalar_one_or_none()
     if existing:
@@ -211,6 +197,11 @@ async def start_session(
             "time_limit_minutes": config.time_limit_minutes,
             "started_at": existing.started_at,
         }
+
+    # 时间窗仅限制新建，不中断已有会话的续答；拒绝须早于查题、AI 和写入。
+    availability_error = _availability_error(config, datetime.now(timezone.utc))
+    if availability_error:
+        raise ValueError(availability_error)
 
     # 3. 抽固定题 + 生成自适应题首轮
     drawn_questions = await _draw_questions(db, config)
@@ -243,41 +234,9 @@ async def start_session(
             knowledge_point=q.knowledge_point,
         ))
 
-    # 6. 为每个自适应知识点生成首轮题目
+    # 6. 每个知识点的首轮失败只回滚该题，不丢失新会话或已建答案。
     for aq in adaptive_questions:
-        ac = {}
-        if aq.adaptive_config:
-            try: ac = json.loads(aq.adaptive_config)
-            except Exception: pass
-        try:
-            snapshot = await _ai_generate_realtime_question(
-                db, config, aq.knowledge_point or "未知",
-                aq.question_type, aq.score,
-                prompt_hint=ac.get("prompt_hint", ""),
-            )
-            db.add(AssessmentAnswer(
-                session_id=session.id,
-                question_id=aq.id,
-                question_snapshot=json.dumps(snapshot, ensure_ascii=False),
-                question_type=snapshot.get("question_type", aq.question_type),
-                max_score=aq.score,
-                knowledge_point=aq.knowledge_point,
-                is_adaptive=True,
-                attempt_seq=1,
-            ))
-        except Exception as e:
-            logger.error(f"自适应首轮出题失败 kp={aq.knowledge_point}: {e}")
-            await db.rollback()
-            # 创建一个占位 answer
-            db.add(AssessmentAnswer(
-                session_id=session.id,
-                question_id=aq.id,
-                question_type=aq.question_type,
-                max_score=aq.score,
-                knowledge_point=aq.knowledge_point,
-                is_adaptive=True,
-                attempt_seq=1,
-            ))
+        await _create_initial_adaptive_answer(db, config, session.id, aq)
 
     await db.commit()
     await db.refresh(session)
@@ -290,6 +249,45 @@ async def start_session(
         "time_limit_minutes": config.time_limit_minutes,
         "started_at": session.started_at,
     }
+
+
+async def _create_initial_adaptive_answer(
+    db: AsyncSession, config: AssessmentConfig, session_id: int, question: AssessmentQuestion
+) -> None:
+    """Isolate a provider/SQL failure with a savepoint, retaining the placeholder contract."""
+    adaptive_config = {}
+    if question.adaptive_config:
+        try:
+            adaptive_config = json.loads(question.adaptive_config)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    answer_fields = {
+        "session_id": session_id,
+        "question_id": question.id,
+        "question_type": question.question_type,
+        "max_score": question.score,
+        "knowledge_point": question.knowledge_point,
+        "is_adaptive": True,
+        "attempt_seq": 1,
+    }
+    try:
+        # begin_nested flushes preceding answers first. Its rollback leaves that outer
+        # state intact, unlike Session.rollback(), which also removes the new session.
+        async with db.begin_nested():
+            snapshot = await _ai_generate_realtime_question(
+                db, config, question.knowledge_point or "未知",
+                question.question_type, question.score,
+                prompt_hint=adaptive_config.get("prompt_hint", ""),
+            )
+            db.add(AssessmentAnswer(**{
+                **answer_fields,
+                "question_snapshot": json.dumps(snapshot, ensure_ascii=False),
+                "question_type": snapshot.get("question_type", question.question_type),
+            }))
+            await db.flush()
+    except Exception as exc:
+        logger.error(f"自适应首轮出题失败 kp={answer_fields['knowledge_point']}: {exc}")
+        db.add(AssessmentAnswer(**answer_fields))
 
 
 async def _draw_questions(
@@ -420,7 +418,7 @@ async def submit_answer(
     student_answer: str,
 ) -> dict:
     """提交单题答案 — 支持固定题和自适应题"""
-    session = await _load_session(db, session_id, user_id)
+    session = await _load_session(db, session_id, user_id, for_update=True)
     if session.status != "in_progress":
         raise ValueError("该检测已提交，无法继续答题")
 
@@ -428,6 +426,7 @@ async def submit_answer(
     answer_result = await db.execute(
         select(AssessmentAnswer)
         .options(selectinload(AssessmentAnswer.question))
+        .execution_options(populate_existing=True)
         .where(
             and_(
                 AssessmentAnswer.id == answer_id,
@@ -704,7 +703,9 @@ async def submit_session(
     db: AsyncSession, session_id: int, user_id: int
 ) -> dict:
     """提交整卷：AI 评分简答题 → 计算总分 → 生成初级画像"""
-    session = await _load_session(db, session_id, user_id, load_answers=True)
+    session = await _load_session(
+        db, session_id, user_id, load_answers=True, for_update=True
+    )
     if session.status != "in_progress":
         raise ValueError("该检测已提交")
 
@@ -789,8 +790,10 @@ async def submit_session(
 async def get_session_result(
     db: AsyncSession, session_id: int, user_id: int
 ) -> dict:
-    """获取检测结果（含每题详情）"""
+    """获取已提交/已评分的检测结果（含每题详情）"""
     session = await _load_session(db, session_id, user_id, load_answers=True)
+    if session.status not in ("submitted", "graded"):
+        raise ValueError("该检测尚未提交，无法查看结果")
 
     config_result = await db.execute(
         select(AssessmentConfig).where(AssessmentConfig.id == session.config_id)
@@ -1292,9 +1295,14 @@ async def _load_session(
     session_id: int,
     user_id: int,
     load_answers: bool = False,
+    for_update: bool = False,
 ) -> AssessmentSession:
     """加载 session 并校验归属"""
     query = select(AssessmentSession).where(AssessmentSession.id == session_id)
+    if for_update:
+        # Serialize answer writes and settlement on the same session before reading
+        # status/answers. Refresh identity-map state after waiting for another writer.
+        query = query.with_for_update().execution_options(populate_existing=True)
     if load_answers:
         query = query.options(
             selectinload(AssessmentSession.answers)
@@ -1342,45 +1350,3 @@ async def _ai_grade_answer(
         db, agent_id=config.agent_id, message=prompt
     )
     return _parse_grading_json(raw, max_score)
-
-
-def _parse_grading_json(raw_text: str, max_score: int) -> dict:
-    """解析 AI 评分返回的 JSON"""
-    import re
-
-    text = raw_text.strip()
-
-    # 尝试提取 JSON 对象
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        text = text[start:end + 1]
-
-    try:
-        data = json.loads(text)
-        score = int(data.get("score", 0))
-        score = max(0, min(score, max_score))
-        return {
-            "score": score,
-            "is_correct": bool(data.get("is_correct", False)),
-            "feedback": str(data.get("feedback", "")),
-        }
-    except (json.JSONDecodeError, ValueError, TypeError):
-        pass
-
-    # 尝试从 markdown 代码块提取
-    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            score = max(0, min(int(data.get("score", 0)), max_score))
-            return {
-                "score": score,
-                "is_correct": bool(data.get("is_correct", False)),
-                "feedback": str(data.get("feedback", "")),
-            }
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass
-
-    logger.warning(f"无法解析 AI 评分 JSON: {raw_text[:200]}")
-    return {"score": 0, "is_correct": False, "feedback": "AI 评分解析失败"}

@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { authApi } from "@services";
 import {
   AUTH_EXPIRED_EVENT,
+  subscribeAuthIdentityChange,
   clearPersistedAuthExpiredDetail,
   extractAuthErrorDetail,
   getPersistedAuthExpiredDetail,
@@ -15,7 +16,9 @@ import {
   getCookieToken,
   notifyAuthExpired,
 } from "@services/api";
+import { showMessage } from "@/lib/toast";
 import { logger } from "@services/logger";
+import { AuthQueryScope } from "@components/Auth/AuthQueryScope";
 
 export interface User {
   id: number;
@@ -212,6 +215,7 @@ const useAuthController = () => {
   const login = useCallback(
     async (username: string, password: string) => {
       const request = authRequestGateRef.current.begin();
+      cancelCurrentRequest();
       setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
@@ -259,22 +263,27 @@ const useAuthController = () => {
     [cancelCurrentRequest, fetchCurrentUser],
   );
 
-  // 登出
+  // 登出：先隔离本地身份和业务缓存，不等待网络返回才隐藏旧数据。
   const logout = useCallback(async () => {
-    authRequestGateRef.current.cancel();
+    const request = authRequestGateRef.current.begin();
     cancelCurrentRequest();
+    clearPersistedAuthExpiredDetail();
+    setAuthState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
     try {
       await authApi.logout();
     } catch (error) {
+      if (!authRequestGateRef.current.isCurrent(request)) return;
       logger.error("登出失败:", error);
+      const warning = "已清除本页登录状态，但服务端会话撤销未确认。请重新登录后重试退出；在确认前不要将共享设备交给他人。";
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false, error: warning });
+      showMessage.warning({ content: warning, duration: 15000 });
     } finally {
-      clearPersistedAuthExpiredDetail();
-      setAuthState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      });
+      authRequestGateRef.current.release(request);
     }
   }, [cancelCurrentRequest]);
 
@@ -378,6 +387,16 @@ const useAuthController = () => {
     };
   }, [cancelCurrentRequest]);
 
+  // Never render A's permissions alongside B's shared credentials. Storage events
+  // and API boundary checks both enter this gate; only a new /me may publish B.
+  useEffect(() => subscribeAuthIdentityChange(({ pending, hasToken }) => {
+    authRequestGateRef.current.cancel();
+    cancelCurrentRequest();
+    clearPersistedAuthExpiredDetail();
+    setAuthState({ user: null, isAuthenticated: false, isLoading: !pending && hasToken, error: null });
+    if (!pending && hasToken) void fetchCurrentUser();
+  }), [cancelCurrentRequest, fetchCurrentUser]);
+
   // 统一处理全局会话过期事件（由 API 层在 refresh 失败时触发）
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -448,7 +467,17 @@ const useAuthController = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const controller = useAuthController();
-  return React.createElement(AuthContext.Provider, { value: controller }, children);
+  const user = controller.user;
+  // A key resets observers as well as their client, including placeholderData
+  // and callbacks which captured the previous client's setQueryData.
+  const scopeKey = user && controller.isAuthenticated
+    ? JSON.stringify([user.id, user.role_code, user.class_name ?? null, user.study_year ?? null, user.is_active])
+    : "guest";
+  return React.createElement(
+    AuthContext.Provider,
+    { value: controller },
+    React.createElement(AuthQueryScope, { key: scopeKey, children }),
+  );
 };
 
 const useAuth = () => {

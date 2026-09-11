@@ -219,9 +219,10 @@ const UserMenu: React.FC<UserMenuProps> = ({
           onClick={() => {
             handleMenuClick("logout");
             localStorage.removeItem("ws_guest_mode");
-            void auth.logout().then(() => {
-              window.location.href = "/login";
-            });
+            // Navigate with the local logout, never with its delayed response:
+            // that response may belong to an identity replaced by a new login.
+            void auth.logout();
+            void navigate("/login", { replace: true });
           }}
         >
           <LogOut className="mr-2 h-4 w-4" />
