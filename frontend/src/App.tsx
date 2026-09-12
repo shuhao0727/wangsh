@@ -100,14 +100,14 @@ function App() {
         ? detail.reason.trim()
         : "登录已过期，请重新登录";
       if (detail?.kind === "replaced") {
-        showMessage.error({ content: "你的账号已在其他地方登录，当前设备已下线，请重新登录", key: "auth-expired", duration: 6 });
+        showMessage.error({ content: "你的账号已在其他地方登录，当前设备已下线，请重新登录", key: "auth-expired", duration: 6000 });
         return;
       }
       if (detail?.kind === "ip_changed") {
-        showMessage.error({ content: reason, key: "auth-expired", duration: 5 });
+        showMessage.error({ content: reason, key: "auth-expired", duration: 5000 });
         return;
       }
-      showMessage.warning({ content: reason, key: "auth-expired", duration: 4 });
+      showMessage.warning({ content: reason, key: "auth-expired", duration: 4000 });
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
 

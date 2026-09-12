@@ -262,9 +262,19 @@ async def verify_request_session_detail(
     *, db=None,
 ) -> Dict[str, Literal[True] | Literal[False] | str]:
     """验证请求中的令牌是否与当前有效会话匹配，并返回失败原因。"""
-    if not await verify_access_family(user_id, token_payload, db):
-        return {"ok": False, "reason": "family_revoked"}
     token_nonce = str(token_payload.get("sn", ""))
+    if not await verify_access_family(user_id, token_payload, db):
+        # 持久权威已拒绝。区分“被新登录替换”（持久状态仍 active、但 nonce 已轮换）
+        # 与“主动登出/撤销/过期”（状态 inactive 或缺失），避免把替换误报成泛化失效。
+        state = await _durable_session_state(user_id, db)
+        if (
+            state is not None
+            and state.active
+            and token_nonce
+            and state.nonce != token_nonce
+        ):
+            return {"ok": False, "reason": "replaced_by_new_login"}
+        return {"ok": False, "reason": "family_revoked"}
     stored = await get_user_session(user_id)
     if not stored:
         return {"ok": False, "reason": "expired_or_missing"}
@@ -278,6 +288,18 @@ async def verify_request_session_detail(
         if ip and stored.get("ip") and ip != stored.get("ip"):
             return {"ok": False, "reason": "ip_mismatch"}
     return {"ok": True, "reason": "ok"}
+
+
+async def _durable_session_state(user_id: int, db=None):
+    """Read the durable AuthSessionState row, opening a session when needed."""
+    from app.core.session_family import session_state
+
+    if db is not None:
+        return await session_state(db, user_id)
+    from app.db.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        return await session_state(session, user_id)
 
 
 async def verify_request_session(user_id: int, token_payload: Dict[str, Any], request: Optional[Request] = None) -> bool:

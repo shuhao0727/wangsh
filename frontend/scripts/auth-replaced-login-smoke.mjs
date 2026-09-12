@@ -174,6 +174,13 @@ async function main() {
       { timeout: 20_000 },
     );
 
+    await oldPage
+      .waitForFunction(
+        ({ reason }) => (document.body.innerText || "").includes(reason),
+        { reason: expectedReason },
+        { timeout: 8_000 },
+      )
+      .catch(() => {});
     const state = await collectAuthReplayState(oldPage);
     report.oldDevice.final = {
       url: state.url,

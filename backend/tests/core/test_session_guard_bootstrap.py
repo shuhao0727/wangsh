@@ -100,6 +100,46 @@ def test_verify_request_session_detail_reports_replaced_login(monkeypatch):
     assert detail == {"ok": False, "reason": "replaced_by_new_login"}
 
 
+def test_verify_request_session_detail_durable_replaced_login(monkeypatch):
+    """持久权威拒绝时，若状态仍 active 但 nonce 已轮换，应报“被新登录替换”。"""
+
+    async def fake_verify_access_family(_user_id, _payload, db=None):
+        return False
+
+    class FakeState:
+        active = True
+        nonce = "fresh-nonce"
+
+    async def fake_durable_state(_user_id, db=None):
+        return FakeState()
+
+    monkeypatch.setattr(session_guard, "verify_access_family", fake_verify_access_family)
+    monkeypatch.setattr(session_guard, "_durable_session_state", fake_durable_state)
+
+    detail = asyncio.run(session_guard.verify_request_session_detail(7, {"sn": "old-nonce"}, None))
+    assert detail == {"ok": False, "reason": "replaced_by_new_login"}
+
+
+def test_verify_request_session_detail_durable_revoked_keeps_generic(monkeypatch):
+    """主动登出/撤销（状态 inactive）不误报成异地登录。"""
+
+    async def fake_verify_access_family(_user_id, _payload, db=None):
+        return False
+
+    class FakeState:
+        active = False
+        nonce = "old-nonce"
+
+    async def fake_durable_state(_user_id, db=None):
+        return FakeState()
+
+    monkeypatch.setattr(session_guard, "verify_access_family", fake_verify_access_family)
+    monkeypatch.setattr(session_guard, "_durable_session_state", fake_durable_state)
+
+    detail = asyncio.run(session_guard.verify_request_session_detail(7, {"sn": "old-nonce"}, None))
+    assert detail == {"ok": False, "reason": "family_revoked"}
+
+
 def test_rotate_user_session_fails_when_server_session_cannot_be_written(monkeypatch):
     async def fake_set_user_session(_user_id, _data):
         return False
