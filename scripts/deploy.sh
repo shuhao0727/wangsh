@@ -579,7 +579,7 @@ case "${cmd}" in
   simulate)
     require_docker
     sim_web_port="${SIM_WEB_PORT:-16608}"
-    sim_version="${SIM_VERSION:-1.6.0}"
+    sim_version="${SIM_VERSION:-2.0}"
     sim_image_prefix="${SIM_IMAGE_REPOSITORY_PREFIX:-shuhao07}"
     sim_project="wangsh_sim"
     sim_namespace="wangsh_sim"
