@@ -120,6 +120,18 @@ PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。新 Al
   发布结束后新 mutation 仍可能在 HTTP 响应到达前取胜，客户端可能收到已失效的 token；
   后续请求按 DB 状态拒绝。没有“返回过成功就一直有效”的保证。
 
+### 被替换会话的 401 反馈（2026-09-12）
+
+同一用户再次登录后，旧设备的 access 会被持久权威拒绝，`401` detail 区分两种语义：
+
+- 持久状态仍 `active` 但 `nonce` 已被新登录轮换 → `账号已在其他地方登录，请重新登录`，
+  前端据此展示“你的账号已在其他地方登录，当前设备已下线，请重新登录”。
+- 主动登出/撤销/过期（状态 `inactive` 或缺失）→ `会话已失效，请重新登录`，不误报异地登录。
+
+判定在 `session_guard.verify_request_session_detail`：持久权威拒绝时先读
+`auth_session_states`，仅当 `active` 且 nonce 不匹配才给替换语义；Redis 投影不是该判定依据。
+该反馈不改变撤销强度、`409`/`503` 合同或 cookie 清理行为。
+
 ### 转发头可信范围（S7 治理，2026-09-11）
 
 `AUTH_TRUST_X_FORWARDED_FOR=true` 时，转发头（`AUTH_IP_HEADER_ORDER`）**仅在真实 socket

@@ -60,6 +60,8 @@ DAP 断连清理采用元信息原值 CAS 与连接租约条件检查，不覆�
 
 登录提交边界（2026-09-09）：先提交 refresh 替换，再重取用户锁并重验本次 refresh 后发布 Redis 会话。第一阶段提交失败不提前旋转 Redis；若重验发现已被新的登录/退出替换则返回 `409`，无成功登录 Cookie。Redis 发布失败不能撤回已提交的 refresh 替换，仍需按认证 owner 的故障边界处理。
 
+被替换会话反馈（2026-09-12）：同一用户被新登录替换后，旧 access 访问 `/auth/me` 等受保护端点返回 `401`，detail 区分「账号已在其他地方登录，请重新登录」（持久状态仍 active 但 nonce 已轮换）与「会话已失效，请重新登录」（登出/撤销/过期）。前端仅对前者展示“已下线”提示。判定不依赖 Redis 投影，见 [AUTH](../features/AUTH.md#被替换会话的-401-反馈2026-09-12)。
+
 身份解析补充（2026-09-09）：旧 subject 仅接受有效未删除用户中的唯一匹配，歧义拒绝。可选认证依赖复用完整 nonce/IP 会话检查，认证 401 作为匿名，其他 HTTP 异常保留；Cookie 回退不扩大，普通 HTTP 不新增 query token。服务层身份查找不能替代完整认证。退出 access 歧义仍允许独立 refresh fallback；不可变 subject 迁移和双存储撤销保证见认证 owner。
 
 PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、terminal 任务或 DAP bridge IO 前校验有效用户及会话 nonce/IP；失败含存储异常关闭 4401，有效身份下不存在/owner 不符保持 4404/4403。仍先 accept 后 close，token 提取渠道及优先级不变、不新增 Cookie 回退。已建连接按上方长连接合同持续校验，但不承诺原子即时撤销。

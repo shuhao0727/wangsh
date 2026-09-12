@@ -26,6 +26,17 @@
   [验收报告](archive/2026-09-11-v2-multiagent-acceptance.md)。
 - 未验证边界：TTL/迁移回滚、真实 NAT 共享 IP、多副本压力与全站发布验收仍开放。
 
+## v2.0.0 发布候选补充：真实栈全面测试修复（2026-09-12）
+
+对 `release/v1.6.0-audit-fixes` 最近 12 个提交在 Docker 生产镜像栈上做全面真实测试，发现并修复：
+
+- **版本一致性门禁**：`frontend/package.json`/`package-lock.json` 同步为 `2.0.0`；`check-version-consistency.mjs` 区分完整版本（2.0.0）与镜像标签（major.minor `2.0`）；`deploy.sh` `SIM_VERSION` 与发布 workflow 默认 tag 同步为 `2.0`。
+- **发布镜像版本注入**：workflow 导出 `source_version`（`frontend/package.json` 完整版本），frontend 构建改用 `REACT_APP_VERSION=${{ env.SOURCE_VERSION }}`，避免版本标签显示占位符。
+- **workflow 合同**：生产 compose 不再钉死 Redis `container_name`（对齐 DEPLOY.md）；合同测试补 BuildKit 正则、compose 锚点与 rollback fake-docker 的 `config --images`/`alembic history`。
+- **XBK 脚本与学年迁移同步**：`scripts/xbk/{common,dataset,seed,smoke,import_samples}.py` 改用 `YYYY-YYYY` 学年字符串与 `学年` 导出表头；导入样例不再通过导入改姓名。
+- **AUTH 被替换会话反馈**：旧设备被新登录替换后，`401` detail 返回「账号已在其他地方登录，请重新登录」（持久状态 active 但 nonce 轮换），与登出/过期的「会话已失效」区分；前端 toast 时长改毫秒（6000/5000/4000）确保提示可见。
+- **验证**：prod-smoke `13 pass / 1 warn / 0 fail`；前端 `type-check` + `94 文件/676 tests`；后端 `1670 passed / 100 skipped`；真实名册导入 1018 学生/29 课程/974 选课，导出 XLSX 学年列全 str。
+
 ## 未发布：PythonLab 终端生命周期与输出修复（2026-09-10）
 
 - 后端终端在切换至调试器或参考页时保持挂载和流连接，修复晚切终端丢失输入提示；隐藏终端不进入焦点或辅助技术导航，WS 打开不抢后台焦点。本地终端保留既有按需生命周期。

@@ -12,7 +12,7 @@
 - `rollback.sh` - 回滚入口
 - `migrate-db.sh` - 数据库迁移
 - `health-check-detailed.sh` - 细粒度健康检查
-- `check-version-consistency.mjs` - CI 版本一致性检查
+- `check-version-consistency.mjs` - CI 版本一致性检查（完整版本号与镜像标签 major.minor 分开校验，权威源为 `frontend/package.json`）
 - `workflow-contracts.test.mjs` - GitHub Actions、发布和日志脱敏合同测试
 - `check-markdown-contracts.mjs` - Markdown 链接、生命周期、归档和派生数字检查
 - `markdown-contracts.test.mjs` - Markdown 合同与独立 workflow 回归测试

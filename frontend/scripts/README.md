@@ -10,7 +10,7 @@
   当前依赖版本 marker 和全部非空核心文件时跳过
 - `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
-- `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测
+- `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测；先等待提示文案在页面正文可见，再判定 `PASS`，避免仅凭 storage/detail 回放通过而 UI 未渲染的误判
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
 - `prod-smoke-ui.mjs` - 生产烟测的浏览器 UI 步骤入口；页面加载成功但预期操作控件
   缺失时记录为 `WARN`，不会误记为 `PASS`
