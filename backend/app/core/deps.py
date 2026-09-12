@@ -108,6 +108,41 @@ async def _lookup_identity(token: str, db: AsyncSession) -> Optional[Dict[str, A
         raise HTTPException(status_code=503, detail="无法核验身份，请稍后重试") from exc
 
 
+def _session_reject_detail(result: Dict[str, Any]) -> str:
+    """Map session verification failure reasons to user-facing messages."""
+    reason = str(result.get("reason") or "")
+    if reason == "replaced_by_new_login":
+        return "账号已在其他地方登录，请重新登录"
+    if reason == "ip_mismatch":
+        return "登录环境已变更，请重新登录"
+    return "会话已失效，请重新登录"
+
+
+async def _verify_session_fence(db, user: Dict[str, Any], effective_token: str, request) -> None:
+    """Verify the session fence for a resolved identity; raises HTTP 401/503."""
+    try:
+        payload = verify_token(effective_token) or {}
+        result = await verify_request_session_detail(
+            int(user.get("id") or 0), payload, request,
+            db=db,
+        )
+        if not result.get("ok"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=_session_reject_detail(result),
+            )
+    except HTTPException:
+        raise
+    except FamilyStoreUnavailable as e:
+        raise HTTPException(status_code=503, detail="无法核验会话，请稍后重试") from e
+    except Exception as e:
+        logger.error("会话验证异常: {}", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="会话验证失败，请重新登录",
+        )
+
+
 async def get_current_user(
     token: Optional[str] = Depends(get_access_token),
     db: AsyncSession = Depends(get_db),
@@ -146,33 +181,7 @@ async def get_current_user(
             detail="无效的认证令牌",
         )
     # 会话有效性校验（基于nonce，必要时校验IP）
-    try:
-        payload = verify_token(effective_token) or {}
-        result = await verify_request_session_detail(
-            int(user.get("id") or 0), payload, request,
-            db=db,
-        )
-        if not result.get("ok"):
-            reason = str(result.get("reason") or "")
-            detail = "会话已失效，请重新登录"
-            if reason == "replaced_by_new_login":
-                detail = "账号已在其他地方登录，请重新登录"
-            elif reason == "ip_mismatch":
-                detail = "登录环境已变更，请重新登录"
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=detail,
-            )
-    except HTTPException:
-        raise
-    except FamilyStoreUnavailable as e:
-        raise HTTPException(status_code=503, detail="无法核验会话，请稍后重试") from e
-    except Exception as e:
-        logger.error("会话验证异常: {}", e)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="会话验证失败，请重新登录",
-        )
+    await _verify_session_fence(db, user, effective_token, request)
     _remember_stream_session(request, user, effective_token)
     return cast(UserInfo, user)
 

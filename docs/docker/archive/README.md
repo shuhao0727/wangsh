@@ -64,8 +64,12 @@
   用当前工作区构建独立验收镜像（`wangsh-accept/*:proxy-accept-1`）部署合成栈，完成真实
   代理链 8 场景验收：gate 关闭 503、受控 enrollment 恢复、Caddy 头清洗、同 IP A→B 替换撤销、
   A→B→A 循环、不同 IP 不互踢、拓扑防护、后端直达伪造头边界。经网关路径全部通过；残留边界
-  （`AUTH_TRUST_X_FORWARDED_FOR` 无 peer 校验）仍待发布前治理。当前行为以
-  [AUTH](../../features/AUTH.md) 与 [DEPLOY](../../docker/deploy/DEPLOY.md) 为准。
+  （`AUTH_TRUST_X_FORWARDED_FOR` 无 peer 校验）已由 `AUTH_TRUSTED_PROXY_CIDRS` 治理并复测。
+  当前行为以 [AUTH](../../features/AUTH.md) 与 [DEPLOY](../../docker/deploy/DEPLOY.md) 为准。
+- [2026-09-11-v2-multiagent-acceptance.md](2026-09-11-v2-multiagent-acceptance.md)
+  v2.0 真实 Docker 栈 4 域多 agent 验收（认证/XBK/前端/运维）：27 通过 / 3 口径不符
+  （均裁定无产品缺陷，含 XBK 前端路径对齐核查）。环境为独立 `v2accept` 项目、
+  镜像 `shuhao07/*:2.0`，XBK 使用真实名单/课程/选课文件。
 
 ### 2026-07 项目整理与发布收口
 

@@ -253,6 +253,27 @@ def _validate_start_recovery_owner(record, session_id, task_id, meta, name):
             raise RuntimeError("Startup recovery generation changed; refusing takeover")
 
 
+def _recovery_expected_config(provider, workspace, current, limits, runtime, memory):
+    """Build the expected host configuration for the interrupted container."""
+    return {
+        "mode": str(current.get("runtime_mode") or "debug").lower(),
+        "image": provider.image,
+        "mount": str(provider._resolve_host_mount_path(workspace)),
+        "host": {"Memory": memory * 1024**2, "MemorySwap": memory * 1024**2,
+                 "CpuPeriod": 100000, "CpuQuota": int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA),
+                 "PidsLimit": settings.PYTHONLAB_CONTAINER_PIDS_LIMIT, "Runtime": runtime},
+    }
+
+
+def _validated_recovery_target(provider, current, task_id, workspace):
+    """Verify the STARTING snapshot still names this task and workspace."""
+    if not current or current.get("status") != SESSION_STATUS_STARTING or current.get("startup_task_id") != task_id:
+        return None
+    if provider._ws_path_for_session(current) != workspace:
+        raise RuntimeError("Startup recovery workspace changed")
+    return current
+
+
 async def _recover_interrupted_start(provider, session_id, task_id, code, meta):
     """Recover only the existing running generation; never create/retire by name."""
     from app.core.sandbox import docker as docker_provider
@@ -268,11 +289,10 @@ async def _recover_interrupted_start(provider, session_id, task_id, code, meta):
         docker_provider._workspace_root(), workspace, timeout=120,
     ) as ownership, RedisDistributedLock(name, timeout=120):
         # Lock acquisition can wait for a dead worker's genuine Redis lease.
-        _, current = await _read_start_snapshot(session_id)
-        if not current or current.get("status") != SESSION_STATUS_STARTING or current.get("startup_task_id") != task_id:
+        _, snapshot = await _read_start_snapshot(session_id)
+        current = _validated_recovery_target(provider, snapshot, task_id, workspace)
+        if current is None:
             return None
-        if provider._ws_path_for_session(current) != workspace:
-            raise RuntimeError("Startup recovery workspace changed")
         record = ownership.read()
         _validate_start_recovery_owner(record, session_id, task_id, current, name)
         existing = await docker_provider.inspect_container(docker_provider._run_async, record["container_id"])
@@ -286,13 +306,7 @@ async def _recover_interrupted_start(provider, session_id, task_id, code, meta):
         runtime = provider.runtime or "runc"
         if runtime != "runc" and runtime not in await provider._get_available_runtimes():
             runtime = "runc"
-        expected = {
-            "mode": mode, "image": provider.image,
-            "mount": str(await provider._resolve_host_mount_path(workspace)),
-            "host": {"Memory": memory * 1024**2, "MemorySwap": memory * 1024**2,
-                     "CpuPeriod": 100000, "CpuQuota": int(limits.get("cpu_quota") or settings.PYTHONLAB_DEFAULT_CPU_QUOTA),
-                     "PidsLimit": settings.PYTHONLAB_CONTAINER_PIDS_LIMIT, "Runtime": runtime},
-        }
+        expected = _recovery_expected_config(provider, workspace, current, limits, runtime, memory)
         result = await provider._reuse_running_container(
             session_id, code, current, existing=existing, expected=expected,
             ws_path=workspace, ownership=ownership, record=record,
@@ -311,6 +325,49 @@ def _start_failure_updates(exc, task_id: str, retries: int, max_retries: int) ->
         "error_detail": str(exc),
         "startup_task_id": task_id,
     }
+
+
+async def _persist_start_failure(session_id, task_id, exc, retries, max_retries, recovering):
+    """Persist a startup failure without turning provider errors into retryable cache errors."""
+    updates = _start_failure_updates(exc, task_id, retries, max_retries)
+    if recovering and updates["status"] == SESSION_STATUS_PENDING:
+        # A retry must revalidate the journal, never enter the create path.
+        updates.update(status=SESSION_STATUS_STARTING, error_code="SANDBOX_RECOVERY_RETRYING")
+    try:
+        return await _save_start_outcome(session_id, task_id, updates, allow_pending=True)
+    except Exception:
+        # A failed status write must not turn a permanent provider error
+        # into a retryable cache error. The original failure owns policy.
+        logger.exception("Could not persist PythonLab startup failure")
+        raise exc
+
+
+async def _publish_ready_outcome(session_id, task_id, meta, result, provider):
+    """Publish READY via a single CAS; reconcile rejection/compensation after."""
+    try:
+        published = await _save_start_outcome(session_id, task_id, {
+            **result, "status": SESSION_STATUS_READY,
+            "error_code": None, "error_detail": None,
+        })
+    except Exception as publication_error:
+        try:
+            committed = await _recover_start_publication(
+                session_id, task_id, meta, result, provider, publication_error,
+            )
+        except Exception as recovery_error:
+            # Do not autoretry a resource whose publication/deletion may
+            # have committed. Its trusted journal remains the recovery key.
+            raise RuntimeError("Sandbox publication recovery failed: " + str(recovery_error)) from recovery_error
+        if not committed:
+            raise RuntimeError("Sandbox READY publication failed; generation compensation completed") from publication_error
+        return
+    if not published:
+        # A concurrent writer may have published this same generation.
+        # Reconcile a rejected CAS too; never delete an acknowledged READY.
+        await _recover_start_publication(
+            session_id, task_id, meta, result, provider,
+            RuntimeError("Sandbox READY compare-and-set rejected"),
+        )
 
 
 @celery_app.task(
@@ -356,47 +413,18 @@ def start_session(self, session_id: str):
                     return
             else:
                 result = await provider.start_session(session_id, code, meta)
-            try:
-                published = await _save_start_outcome(session_id, task_id, {
-                    **result, "status": SESSION_STATUS_READY,
-                    "error_code": None, "error_detail": None,
-                })
-            except Exception as publication_error:
-                publication_rejected = True
-                try:
-                    committed = await _recover_start_publication(
-                        session_id, task_id, meta, result, provider, publication_error,
-                    )
-                except Exception as recovery_error:
-                    # Do not autoretry a resource whose publication/deletion may
-                    # have committed. Its trusted journal remains the recovery key.
-                    raise RuntimeError("Sandbox publication recovery failed: " + str(recovery_error)) from recovery_error
-                if not committed:
-                    raise RuntimeError("Sandbox READY publication failed; generation compensation completed") from publication_error
-                return
-            if not published:
-                publication_rejected = True
-                # A concurrent writer may have published this same generation.
-                # Reconcile a rejected CAS too; never delete an acknowledged READY.
-                await _recover_start_publication(
-                    session_id, task_id, meta, result, provider,
-                    RuntimeError("Sandbox READY compare-and-set rejected"),
-                )
+            # 发布阶段的异常不得被失败状态持久化覆盖：
+            # 补偿结果（已提交保留 / FAILED 栅栏）由 _recover_start_publication 负责。
+            publication_rejected = True
+            await _publish_ready_outcome(session_id, task_id, meta, result, provider)
+            publication_rejected = False
         except Exception as exc:
             if publication_rejected:
                 # Cleanup uncertainty must not disappear behind Celery SUCCESS.
                 raise
-            updates = _start_failure_updates(exc, task_id, self.request.retries, self.max_retries)
-            if recovering and updates["status"] == SESSION_STATUS_PENDING:
-                # A retry must revalidate the journal, never enter the create path.
-                updates.update(status=SESSION_STATUS_STARTING, error_code="SANDBOX_RECOVERY_RETRYING")
-            try:
-                saved = await _save_start_outcome(session_id, task_id, updates, allow_pending=True)
-            except Exception:
-                # A failed status write must not turn a permanent provider error
-                # into a retryable cache error. The original failure owns policy.
-                logger.exception("Could not persist PythonLab startup failure")
-                raise exc
+            saved = await _persist_start_failure(
+                session_id, task_id, exc, self.request.retries, self.max_retries, recovering,
+            )
             # A stop or another task took ownership while the provider awaited.
             # Never resurrect that session or schedule another create attempt.
             if not saved:
@@ -470,14 +498,60 @@ def cleanup_orphans():
     _run_async(run())
 
 
+def _cleanup_ttl_settings():
+    """Return (unattached_ttl, heartbeat_timeout, idle_timeout) in seconds."""
+    unattached_ttl = int(getattr(settings, "PYTHONLAB_UNATTACHED_TTL_SECONDS", DEFAULT_UNATTACHED_TTL) or DEFAULT_UNATTACHED_TTL)
+    heartbeat_timeout = int(getattr(settings, "PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS", 60) or 60)
+    idle_timeout = int(getattr(settings, "PYTHONLAB_IDLE_TIMEOUT_SECONDS", DEFAULT_SESSION_TTL) or DEFAULT_SESSION_TTL)
+    return unattached_ttl, heartbeat_timeout, idle_timeout
+
+
+def _cleanup_age_seconds(meta, now):
+    """Age since last heartbeat/creation; None when the timestamp is unusable."""
+    last = str(meta.get("last_heartbeat_at") or meta.get("created_at") or "")
+    try:
+        last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+    return (now - last_dt).total_seconds()
+
+
+def _cleanup_should_stop(status, age, unattached_ttl, heartbeat_timeout, idle_timeout):
+    """Decide whether a session has outlived its lease for its current status."""
+    if status in {SESSION_STATUS_PENDING, SESSION_STATUS_READY}:
+        return age > unattached_ttl
+    if status == SESSION_STATUS_RUNNING:
+        return age > heartbeat_timeout
+    if status == SESSION_STATUS_STOPPED:
+        # A stopped session is no longer attached, so it must not pin the shared
+        # owner container for the whole idle window: that is exactly what made a
+        # same-owner follow-up debug fail with "运行环境模式不兼容，请先停止旧会话"
+        # for up to an hour.
+        return age > unattached_ttl
+    if status == SESSION_STATUS_ATTACHED:
+        return age > idle_timeout
+    return age > heartbeat_timeout
+
+
+async def _cleanup_terminate(client, k, meta, sid):
+    """Mark terminating and dispatch a forced stop for one stale session."""
+    try:
+        # Force terminate for stale sessions
+        celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid, True])
+    except Exception:
+        logger.exception("cleanup_stale_sessions 发送 stop_session 任务失败")
+    meta["status"] = SESSION_STATUS_TERMINATING
+    await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
+
+
 @celery_app.task(name="app.tasks.pythonlab.cleanup_stale_sessions")
 def cleanup_stale_sessions():
     async def run():
         client = await cache.get_client()
         now = datetime.now(timezone.utc)
-        unattached_ttl = int(getattr(settings, "PYTHONLAB_UNATTACHED_TTL_SECONDS", DEFAULT_UNATTACHED_TTL) or DEFAULT_UNATTACHED_TTL)
-        heartbeat_timeout = int(getattr(settings, "PYTHONLAB_HEARTBEAT_TIMEOUT_SECONDS", 60) or 60)
-        idle_timeout = int(getattr(settings, "PYTHONLAB_IDLE_TIMEOUT_SECONDS", DEFAULT_SESSION_TTL) or DEFAULT_SESSION_TTL)
+        unattached_ttl, heartbeat_timeout, idle_timeout = _cleanup_ttl_settings()
 
         cursor: int = 0
         while True:
@@ -492,47 +566,11 @@ def cleanup_stale_sessions():
                 sid = str(meta.get("session_id") or "")
                 if not sid:
                     continue
-                last = str(meta.get("last_heartbeat_at") or meta.get("created_at") or "")
-                try:
-                    last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-                    if last_dt.tzinfo is None:
-                        last_dt = last_dt.replace(tzinfo=timezone.utc)
-                except Exception:
+                age = _cleanup_age_seconds(meta, now)
+                if age is None:
                     continue
-                age = (now - last_dt).total_seconds()
-                should_stop = False
-                
-                if st in {SESSION_STATUS_PENDING, SESSION_STATUS_READY}:
-                    if age > unattached_ttl:
-                        should_stop = True
-                else:
-                    if st == SESSION_STATUS_RUNNING:
-                         # Running sessions generally shouldn't timeout unless very long?
-                         # Let's say heartbeat timeout applies
-                         if age > heartbeat_timeout:
-                             should_stop = True
-                    elif st == SESSION_STATUS_STOPPED:
-                        # A stopped session is no longer attached, so it must not pin
-                        # the shared owner container for the whole idle window: that
-                        # is exactly what made a same-owner follow-up debug fail with
-                        # "运行环境模式不兼容，请先停止旧会话" for up to an hour.
-                        if age > unattached_ttl:
-                            should_stop = True
-                    elif st == SESSION_STATUS_ATTACHED:
-                        if age > idle_timeout:
-                            should_stop = True
-                    else:
-                        if age > heartbeat_timeout:
-                            should_stop = True
-
-                if should_stop:
-                    try:
-                        # Force terminate for stale sessions
-                        celery_app.send_task("app.tasks.pythonlab.stop_session", args=[sid, True])
-                    except Exception:
-                        logger.exception("cleanup_stale_sessions 发送 stop_session 任务失败")
-                    meta["status"] = SESSION_STATUS_TERMINATING
-                    await cache.set(str(k), meta, expire_seconds=int(meta.get("ttl_seconds") or 300))
+                if _cleanup_should_stop(st, age, unattached_ttl, heartbeat_timeout, idle_timeout):
+                    await _cleanup_terminate(client, k, meta, sid)
 
             if cursor == 0:
                 break

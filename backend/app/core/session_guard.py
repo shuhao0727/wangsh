@@ -57,6 +57,35 @@ def _peer_trusted(request: Optional[Request]) -> bool:
     return False
 
 
+def _first_forwarded_ip(header: str, value: str) -> Optional[str]:
+    """从单个转发头取值中提取第一个合法 IP；解析失败返回 None。"""
+    candidates = []
+    if header.lower() == "forwarded":
+        # Forwarded: for=1.2.3.4;proto=http;by=...
+        for p in _split_header(value.replace(";", ",")):
+            if "for=" in p:
+                candidates.append(p.split("for=")[-1].strip().strip("\"").strip("[]"))
+    else:
+        # X-Forwarded-For / X-Real-IP / Remote-Addr
+        candidates = _split_header(value)
+    for cand in candidates:
+        try:
+            ipaddress.ip_address(cand)
+            return cand
+        except ValueError:
+            continue
+    return None
+
+
+def _peer_ip(request: Optional[Request]) -> str:
+    host = request.client.host if request and request.client else "0.0.0.0"
+    try:
+        ipaddress.ip_address(host)
+        return host
+    except ValueError:
+        return "0.0.0.0"
+
+
 def extract_client_ip(request: Request) -> str:
     """
     提取客户端IP：
@@ -65,40 +94,14 @@ def extract_client_ip(request: Request) -> str:
     - 取 X-Forwarded-For 第一个合法IP；
     - 否则回退真实 peer IP（client.host）。
     """
-    header_order = _split_header(settings.AUTH_IP_HEADER_ORDER)
     if settings.AUTH_TRUST_X_FORWARDED_FOR and _peer_trusted(request):
-        for h in header_order:
+        for h in _split_header(settings.AUTH_IP_HEADER_ORDER):
             hv = request.headers.get(h) or request.headers.get(h.lower())
-            if not hv:
-                continue
-            # Forwarded: for=1.2.3.4;proto=http;by=...
-            if h.lower() == "forwarded":
-                # 极简解析
-                parts = _split_header(hv.replace(";", ","))
-                for p in parts:
-                    if "for=" in p:
-                        cand = p.split("for=")[-1].strip().strip("\"").strip("[]")
-                        try:
-                            ipaddress.ip_address(cand)
-                            return cand
-                        except Exception:
-                            continue
-            else:
-                # X-Forwarded-For / X-Real-IP / Remote-Addr
-                for cand_raw in _split_header(hv):
-                    cand = cand_raw.strip().strip("\"").strip("[]")
-                    try:
-                        ipaddress.ip_address(cand)
-                        return cand
-                    except Exception:
-                        continue
-    # fallback to peer
-    host = request.client.host if request and request.client else "0.0.0.0"
-    try:
-        ipaddress.ip_address(host)
-        return host
-    except Exception:
-        return "0.0.0.0"
+            if hv:
+                candidate = _first_forwarded_ip(h, hv)
+                if candidate is not None:
+                    return candidate
+    return _peer_ip(request)
 
 
 def _session_ttl() -> int:

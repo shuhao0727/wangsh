@@ -16,14 +16,14 @@
 
 ## v2.0.0 发布候选（2026-09-11，镜像标签 2.0）
 
-- **认证**：持久会话权威闭环（DB 为撤销权威、受控 enrollment、S7 转发头可信网段治理）；真实代理链 8 场景验收通过（见 [归档](../archive/2026-09-11-proxy-chain-acceptance.md)）。
+- **认证**：持久会话权威闭环（DB 为撤销权威、受控 enrollment、S7 转发头可信网段治理）；真实代理链 8 场景验收通过（见 [归档](archive/2026-09-11-proxy-chain-acceptance.md)）。
 - **XBK**：学年字符串迁移（`20260908_0001_xbk_academic_year`）、导入/手工共用校验、并发锁与取消回滚、导出文本防护与密码环境变量化。
 - **业务**：测评结果白名单、画像权限、时间窗校验、AI 历史代次、前端身份缓存隔离（AuthQueryScope）。
 - **PythonLab/运维**：沙箱复用校验、CAS 状态、WS 建连校验、迁移预检审计 guard、有限瞬态重试。
 - **镜像**：标签统一为 `2.0`（backend/frontend/gateway/typst-worker/pythonlab-worker/pythonlab-sandbox），
   6 个镜像已推送 Docker Hub 并同步 `latest`（2026-09-11）。
 - **真实栈多 agent 验收**：4 域 27 通过 / 3 口径不符（无产品缺陷），见
-  [验收报告](../archive/2026-09-11-v2-multiagent-acceptance.md)。
+  [验收报告](archive/2026-09-11-v2-multiagent-acceptance.md)。
 - 未验证边界：TTL/迁移回滚、真实 NAT 共享 IP、多副本压力与全站发布验收仍开放。
 
 ## 未发布：PythonLab 终端生命周期与输出修复（2026-09-10）

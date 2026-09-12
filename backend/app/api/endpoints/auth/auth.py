@@ -148,6 +148,20 @@ async def login_for_access_token(
 
 
 
+async def _publish_ip_binding_if_leased(db, user_id: int, state) -> None:
+    """Re-publish the durable IP lease; a lost binding write is not silent."""
+    deadline = state.ip_expires_at
+    if deadline is None:
+        return
+    if deadline.tzinfo is None:  # SQLite isolated tests return naive UTC.
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    remaining = int((deadline - datetime.now(timezone.utc)).total_seconds())
+    if remaining > 0 and not await set_ip_binding(
+        state.ip, {"user_id": user_id, "nonce": state.nonce}, ttl=remaining,
+    ):
+        raise RuntimeError("无法写入服务端IP绑定")
+
+
 async def _publish_committed_login(
     db: AsyncSession, user_id: int, refresh_token: str, request: Request,
     *, preserve_cache_ttl: bool = False,
@@ -171,15 +185,7 @@ async def _publish_committed_login(
             if isinstance(cached, dict) and cached.get("nonce") == state.nonce and cached.get("ip") == state.ip:
                 return state.nonce, state.ip
         await rotate_user_session(user_id, keep_ip=state.ip, nonce=state.nonce)
-        deadline = state.ip_expires_at
-        if deadline is not None:
-            if deadline.tzinfo is None:  # SQLite isolated tests return naive UTC.
-                deadline = deadline.replace(tzinfo=timezone.utc)
-            remaining = int((deadline - datetime.now(timezone.utc)).total_seconds())
-            if remaining > 0 and not await set_ip_binding(
-                state.ip, {"user_id": user_id, "nonce": state.nonce}, ttl=remaining,
-            ):
-                raise RuntimeError("无法写入服务端IP绑定")
+        await _publish_ip_binding_if_leased(db, user_id, state)
         return state.nonce, state.ip
     finally:
         await db.rollback()
@@ -352,6 +358,27 @@ async def logout(
     }
 
 
+async def _refresh_durable_session(db, user_info, family, client_ip) -> str:
+    """Validate the durable session state for a refresh; returns the nonce."""
+    from app.core.session_family import valid_family_nonce
+
+    user_id = int(user_info["user_id"])
+    state = await session_state(db, user_id)
+    try:
+        sess = await get_user_session_strict(user_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="无法核验刷新会话，请稍后重试") from exc
+    if sess is not None and (not isinstance(sess, dict) or not valid_family_nonce(sess.get("nonce"))):
+        raise HTTPException(status_code=503, detail="刷新会话记录无效，请稍后重试")
+    if state is None or not state.active or (family and state.nonce != family):
+        raise HTTPException(status_code=401, detail="刷新会话未接管或已被替换，请重新登录")
+    if sess is None and state.ip != client_ip:
+        # Existing cache-loss policy uses the requesting IP, but does not
+        # claim a new IP binding. Never overwrite another owner's lease.
+        state.ip, state.ip_expires_at = client_ip, None
+    return state.nonce
+
+
 @router.post("/refresh")
 async def refresh_access_token(
     request: Request,
@@ -361,7 +388,7 @@ async def refresh_access_token(
 ) -> Dict[str, Any]:
     """
     使用刷新令牌获取新的访问令牌
-    
+
     令牌轮换：生成新的刷新令牌，撤销旧的刷新令牌
     """
     # 速率限制：同一 IP 每 5 秒最多 1 次刷新请求
@@ -387,7 +414,7 @@ async def refresh_access_token(
             detail="无效或过期的刷新令牌",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         # 准备新的访问令牌数据
         token_data = {
@@ -398,28 +425,14 @@ async def refresh_access_token(
             "type": "admin"
         }
 
-        user_id = int(user_info["user_id"])
-        state = await session_state(db, user_id)
-        try:
-            sess = await get_user_session_strict(user_id)
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail="无法核验刷新会话，请稍后重试") from exc
-        if sess is not None and (not isinstance(sess, dict) or not valid_family_nonce(sess.get("nonce"))):
-            raise HTTPException(status_code=503, detail="刷新会话记录无效，请稍后重试")
-        if state is None or not state.active or (family and state.nonce != family):
-            raise HTTPException(status_code=401, detail="刷新会话未接管或已被替换，请重新登录")
-        if sess is None and state.ip != client_ip:
-            # Existing cache-loss policy uses the requesting IP, but does not
-            # claim a new IP binding. Never overwrite another owner's lease.
-            state.ip, state.ip_expires_at = client_ip, None
-        nonce = state.nonce
+        nonce = await _refresh_durable_session(db, user_info, family, client_ip)
         # Durable rotation/recovery is committed before Redis publication.
         # A consumed refresh stays consumed if the response is lost (existing
         # one-use policy); an explicit fresh login is always the recovery route.
         new_refresh_token = user_info["refresh_token"]
         await db.commit()
         nonce, _ = await _publish_committed_login(
-            db, user_id, new_refresh_token, request, preserve_cache_ttl=True,
+            db, int(user_info["user_id"]), new_refresh_token, request, preserve_cache_ttl=True,
         )
 
         access_token = create_access_token(

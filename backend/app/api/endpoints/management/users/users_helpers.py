@@ -90,14 +90,14 @@ async def batch_delete_users(
             )
 
         _assert_users_deletable(current_user, list(users))
-        
+
         # 批量软删除
         deleted_ids = []
         for user in users:
             # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
             user.is_deleted = True  # type: ignore
             deleted_ids.append(user.id)
-        
+
         await db.commit()
 
         await publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
@@ -107,7 +107,7 @@ async def batch_delete_users(
             "message": f"成功删除 {len(deleted_ids)} 个用户",
             "deleted_ids": deleted_ids
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

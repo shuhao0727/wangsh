@@ -169,7 +169,6 @@ async def stream_public_config(
     )
 
 
-
 @router.put("/public-config", response_model=GroupDiscussionPublicConfig)
 async def set_public_config(
     payload: GroupDiscussionPublicConfig,
@@ -319,7 +318,6 @@ async def get_group_discussion_messages(
         for r in rows
     ]
     return GroupDiscussionMessageListResponse(items=items, next_after_id=int(next_after))
-
 
 @router.get("/stream")
 async def stream_group_discussion_messages(

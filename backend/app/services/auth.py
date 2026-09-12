@@ -488,6 +488,91 @@ class AuthCutoverEvidenceError(ValueError):
                          + ",".join(map(str, self.user_ids)))
 
 
+async def _collect_cutover_sessions(db, users, live_uids, reauthenticate_user_ids):
+    """Baseline per-user cache evidence; live users without proof become uncertain."""
+    from app.core.session_guard import get_auth_snapshot_strict, _key_user
+    from app.core.session_family import valid_family_nonce
+
+    sessions: dict[int, dict] = {}
+    deadlines: dict[int, object] = {}
+    uncertain: set[int] = set()
+    snapshot = await get_auth_snapshot_strict([_key_user(user.id) for user in users]) if users else {}
+    for user in users:
+        if not user.is_active or user.is_deleted or user.id in reauthenticate_user_ids:
+            continue
+        cached, deadline = snapshot[_key_user(user.id)]
+        if (isinstance(cached, dict) and valid_family_nonce(cached.get("nonce"))
+                and isinstance(cached.get("ip"), str) and 0 < len(cached["ip"]) <= 64
+                and deadline is not None):
+            sessions[user.id] = cached
+            deadlines[user.id] = deadline
+        elif user.id in live_uids or cached is not None:
+            uncertain.add(user.id)
+    return sessions, deadlines, uncertain
+
+
+async def _prune_ip_contested_sessions(db, sessions, deadlines, uncertain) -> None:
+    """With per-IP uniqueness, only the binding-proven owner keeps its session."""
+    from app.core.session_guard import get_auth_snapshot_strict, _key_ip
+    from app.core.session_family import valid_family_nonce
+
+    groups: dict[str, list[int]] = {}
+    for uid, cached in sessions.items():
+        groups.setdefault(cached["ip"], []).append(uid)
+    if not groups:
+        return
+    bindings = await get_auth_snapshot_strict([_key_ip(ip) for ip in groups])
+    for ip, uids in groups.items():
+        binding, deadline = bindings[_key_ip(ip)]
+        if binding is None and len(uids) == 1:
+            # User snapshot proves sole owner even if IP key was lost.
+            # Retain only that existing remaining lease, never reset TTL.
+            continue
+        winner = _binding_proven_winner(binding, uids, sessions, deadline, valid_family_nonce)
+        if winner is not None:
+            deadlines[winner] = min(deadlines[winner], deadline)
+            for uid in uids:
+                if uid != winner:
+                    sessions.pop(uid)
+        else:
+            uncertain.update(uids)
+
+
+def _binding_proven_winner(binding, uids, sessions, deadline, valid_nonce) -> Optional[int]:
+    """Return the sole owner whose session nonce matches a valid IP binding."""
+    winner = binding.get("user_id") if isinstance(binding, dict) else None
+    if not (type(winner) is int and winner > 0 and winner in uids):
+        return None
+    if (valid_nonce(binding.get("nonce")) and binding["nonce"] == sessions[winner]["nonce"]
+            and deadline is not None):
+        return winner
+    return None
+
+
+def _materialize_cutover_state(db, users, live, sessions, deadlines, gate) -> None:
+    """Write durable session rows, revoke unproven refresh tokens, open the gate."""
+    import secrets
+    from app.models import AuthSessionState
+
+    for user in users:
+        cached = sessions.get(user.id)
+        db.add(AuthSessionState(
+            user_id=user.id,
+            nonce=cached["nonce"] if cached else secrets.token_urlsafe(16),
+            ip=cached["ip"] if cached else "", active=cached is not None,
+            ip_expires_at=deadlines[user.id] if cached else None,
+        ))
+    for token in live:
+        cached = sessions.get(token.user_id)
+        try:
+            family = refresh_family(token.token)
+        except ValueError:
+            family = "invalid"
+        if not cached or (family and family != cached["nonce"]):
+            token.is_revoked = True
+    gate.ready = True
+
+
 async def bootstrap_durable_auth_authority(
     db, *, legacy_writers_stopped: bool = False,
     reauthenticate_user_ids: frozenset[int] = frozenset(),
@@ -504,8 +589,6 @@ async def bootstrap_durable_auth_authority(
     import secrets
     from sqlalchemy import select, text
     from app.models import AuthAuthority, AuthSessionState, RefreshToken, User
-    from app.core.session_guard import get_auth_snapshot_strict, _key_user, _key_ip
-    from app.core.session_family import valid_family_nonce
 
     if not legacy_writers_stopped:
         raise ValueError("Stop and drain all legacy authentication writers before cutover")
@@ -514,22 +597,12 @@ async def bootstrap_durable_auth_authority(
     if db.in_transaction():
         raise ValueError("Cutover requires a fresh dedicated transaction")
     try:
-        await lock_auth_mutation(db, require_ready=False)
-        gate = await db.scalar(select(AuthAuthority).where(AuthAuthority.id == 1).with_for_update())
+        gate = await _cutover_gate_and_fence(db, User, RefreshToken)
         if gate is None:
             raise RuntimeError("Apply the AUTH authority migration first")
         if gate.ready:
             await db.rollback()
             return {"already_ready": 1, "preserved": 0, "reauthenticate": 0}
-        if await db.scalar(select(AuthSessionState.user_id).limit(1)) is not None:
-            raise RuntimeError("Closed authority has existing evidence; refusing to overwrite it")
-        if db.get_bind().dialect.name == "postgresql":
-            # Unlike the advisory lock, these also fence non-AUTH account/token
-            # writers while reading the baseline. Operational Redis freeze and
-            # draining OLD replicas are still mandatory, not inferred here.
-            quote = db.get_bind().dialect.identifier_preparer.quote
-            names = ", ".join(quote(m.__table__.name) for m in (User, RefreshToken))
-            await db.execute(text(f"LOCK TABLE {names} IN SHARE ROW EXCLUSIVE MODE"))
         users = (await db.execute(select(User).order_by(User.id))).scalars().all()
         if not reauthenticate_user_ids <= {user.id for user in users}:
             raise ValueError("Reauthentication approval contains unknown user ids")
@@ -538,62 +611,13 @@ async def bootstrap_durable_auth_authority(
             RefreshToken.expires_at > datetime.now(timezone.utc),
         ))).scalars().all()
         live_uids = {token.user_id for token in live}
-        sessions = {}
-        deadlines = {}
-        uncertain = set()
-        snapshot = await get_auth_snapshot_strict([_key_user(user.id) for user in users]) if users else {}
-        for user in users:
-            if not user.is_active or user.is_deleted or user.id in reauthenticate_user_ids:
-                continue
-            cached, deadline = snapshot[_key_user(user.id)]
-            if (isinstance(cached, dict) and valid_family_nonce(cached.get("nonce"))
-                    and isinstance(cached.get("ip"), str) and 0 < len(cached["ip"]) <= 64
-                    and deadline is not None):
-                sessions[user.id] = cached
-                deadlines[user.id] = deadline
-            elif user.id in live_uids or cached is not None:
-                uncertain.add(user.id)
+        sessions, deadlines, uncertain = await _collect_cutover_sessions(
+            db, users, live_uids, reauthenticate_user_ids)
         if settings.AUTH_USER_UNIQUE_PER_IP:
-            groups = {}
-            for uid, cached in sessions.items():
-                groups.setdefault(cached["ip"], []).append(uid)
-            bindings = await get_auth_snapshot_strict([_key_ip(ip) for ip in groups]) if groups else {}
-            for ip, uids in groups.items():
-                binding, deadline = bindings[_key_ip(ip)]
-                if binding is None and len(uids) == 1:
-                    # User snapshot proves sole owner even if IP key was lost.
-                    # Retain only that existing remaining lease, never reset TTL.
-                    continue
-                winner = binding.get("user_id") if isinstance(binding, dict) else None
-                if (type(winner) is int and winner > 0 and winner in uids
-                        and valid_family_nonce(binding.get("nonce"))
-                        and binding["nonce"] == sessions[winner]["nonce"]
-                        and deadline is not None):
-                    deadlines[winner] = min(deadlines[winner], deadline)
-                    for uid in uids:
-                        if uid != winner:
-                            sessions.pop(uid)
-                else:
-                    uncertain.update(uids)
+            await _prune_ip_contested_sessions(db, sessions, deadlines, uncertain)
         if uncertain:
             raise AuthCutoverEvidenceError(uncertain)
-        for user in users:
-            cached = sessions.get(user.id)
-            db.add(AuthSessionState(
-                user_id=user.id,
-                nonce=cached["nonce"] if cached else secrets.token_urlsafe(16),
-                ip=cached["ip"] if cached else "", active=cached is not None,
-                ip_expires_at=deadlines[user.id] if cached else None,
-            ))
-        for token in live:
-            cached = sessions.get(token.user_id)
-            try:
-                family = refresh_family(token.token)
-            except ValueError:
-                family = "invalid"
-            if not cached or (family and family != cached["nonce"]):
-                token.is_revoked = True
-        gate.ready = True
+        _materialize_cutover_state(db, users, live, sessions, deadlines, gate)
         result = {"already_ready": 0, "preserved": len(sessions),
                   "reauthenticate": len(live_uids - sessions.keys())}
         await db.flush()
@@ -605,3 +629,24 @@ async def bootstrap_durable_auth_authority(
     except BaseException:
         await db.rollback()
         raise
+
+
+async def _cutover_gate_and_fence(db, User, RefreshToken):
+    """Lock the closed authority row and fence legacy writers on PostgreSQL."""
+    from sqlalchemy import select, text
+    from app.models import AuthAuthority, AuthSessionState
+
+    await lock_auth_mutation(db, require_ready=False)
+    gate = await db.scalar(select(AuthAuthority).where(AuthAuthority.id == 1).with_for_update())
+    if gate is None or gate.ready:
+        return gate
+    if await db.scalar(select(AuthSessionState.user_id).limit(1)) is not None:
+        raise RuntimeError("Closed authority has existing evidence; refusing to overwrite it")
+    if db.get_bind().dialect.name == "postgresql":
+        # Unlike the advisory lock, these also fence non-AUTH account/token
+        # writers while reading the baseline. Operational Redis freeze and
+        # draining OLD replicas are still mandatory, not inferred here.
+        quote = db.get_bind().dialect.identifier_preparer.quote
+        names = ", ".join(quote(m.__table__.name) for m in (User, RefreshToken))
+        await db.execute(text(f"LOCK TABLE {names} IN SHARE ROW EXCLUSIVE MODE"))
+    return gate
