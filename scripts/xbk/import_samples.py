@@ -119,7 +119,7 @@ def generate_import_samples() -> Dict[str, Any]:
             "年级": update_student.get("grade") or "高一",
             "班级": update_student.get("class_name"),
             "学号": update_student.get("student_no"),
-            "姓名": f"{update_student.get('name', '学生')}-导入更新",
+            "姓名": update_student.get("name") or "学生",
             "性别": update_student.get("gender") or "男",
         },
         {

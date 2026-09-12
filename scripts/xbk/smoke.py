@@ -251,7 +251,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
         )
         student_row = _find_exact(students, "student_no", update_student_no)
         student_payload = {
-            "year": int(student_row["year"]),
+            "year": str(student_row["year"]),
             "term": str(student_row["term"]),
             "grade": student_row.get("grade"),
             "class_name": str(student_row["class_name"]),
@@ -287,7 +287,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
         )
         course_row = _find_exact(courses, "course_code", update_course_code)
         course_payload = {
-            "year": int(course_row["year"]),
+            "year": str(course_row["year"]),
             "term": str(course_row["term"]),
             "grade": course_row.get("grade"),
             "course_code": str(course_row["course_code"]),
@@ -333,7 +333,7 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
             raise RuntimeError("Cannot find selection row for update.")
 
         selection_payload = {
-            "year": int(selection_row["year"]),
+            "year": str(selection_row["year"]),
             "term": str(selection_row["term"]),
             "grade": selection_row.get("grade"),
             "student_no": str(selection_row["student_no"]),
@@ -400,12 +400,12 @@ def run_smoke(manifest_path: Path | None = None) -> Dict[str, Any]:
 
         ensure_dir(settings.export_dir)
         export_scopes = {
-            "students": ["年份", "学号", "姓名"],
-            "courses": ["年份", "课程代码", "课程名称"],
-            "selections": ["年份", "学号", "课程代码"],
-            "course_results": ["年份", "学号", "课程代码", "课程名称"],
-            "unselected": ["年份", "学号", "姓名"],
-            "suspended": ["年份", "学号", "姓名"],
+            "students": ["学年", "学号", "姓名"],
+            "courses": ["学年", "课程代码", "课程名称"],
+            "selections": ["学年", "学号", "课程代码"],
+            "course_results": ["学年", "学号", "课程代码", "课程名称"],
+            "unselected": ["学年", "学号", "姓名"],
+            "suspended": ["学年", "学号", "姓名"],
         }
 
         export_result: Dict[str, Any] = {}

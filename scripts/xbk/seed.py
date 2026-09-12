@@ -152,7 +152,7 @@ async def reset_and_seed(reset: bool = False) -> Dict[str, Any]:
                       AND term = $2
                       AND course_code = ''
                     """,
-                    settings.year,
+                    settings.academic_year,
                     settings.term,
                 )
                 or 0
@@ -174,7 +174,7 @@ async def reset_and_seed(reset: bool = False) -> Dict[str, Any]:
                           AND x.student_no = s.student_no
                       )
                     """,
-                    settings.year,
+                    settings.academic_year,
                     settings.term,
                 )
                 or 0
@@ -184,6 +184,7 @@ async def reset_and_seed(reset: bool = False) -> Dict[str, Any]:
         result = {
             "timestamp": utc_now_iso(),
             "year": settings.year,
+            "academic_year": settings.academic_year,
             "term": settings.term,
             "reset": reset,
             "seed_rows": {

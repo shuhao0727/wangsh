@@ -62,6 +62,11 @@ class Settings:
     sample_dir: Path
     export_dir: Path
 
+    @property
+    def academic_year(self) -> str:
+        """Canonical ``YYYY-YYYY`` academic year matching the XBK varchar(9) column."""
+        return f"{self.year:04d}-{self.year + 1:04d}"
+
 
 def get_settings() -> Settings:
     load_project_env()

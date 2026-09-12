@@ -41,7 +41,7 @@ def build_seed_dataset(settings: Settings) -> Dict[str, List[Dict[str, Any]]]:
                 student_no = f"{settings.year}{1 if grade == '高一' else 2}{class_index:02d}{student_index:02d}"
                 students.append(
                     {
-                        "year": settings.year,
+                        "year": settings.academic_year,
                         "term": settings.term,
                         "grade": grade,
                         "class_name": class_name,
@@ -54,7 +54,7 @@ def build_seed_dataset(settings: Settings) -> Dict[str, List[Dict[str, Any]]]:
         for course in GRADE_COURSES[grade]:
             courses.append(
                 {
-                    "year": settings.year,
+                    "year": settings.academic_year,
                     "term": settings.term,
                     "grade": grade,
                     **course,
