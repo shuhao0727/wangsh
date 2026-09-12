@@ -459,6 +459,15 @@ if [[ "$*" == *" ps postgres" ]]; then
   echo "postgres Up"
   exit 0
 fi
+if [[ "$*" == *" config --images" ]]; then
+  echo "shuhao07/wangsh-backend:1.6.0"
+  exit 0
+fi
+if [[ "$*" == *" alembic history" ]]; then
+  echo "target_revision"
+  echo "target_revision -> parent_revision"
+  exit 0
+fi
 if [[ "$*" == *" ps --status running --services backend typst-worker pythonlab-worker" ]]; then
   cat <<'EOF'
 ${runningWriteServices.join("\n")}
@@ -596,7 +605,7 @@ test("local production simulation uses local images and can smoke with guarantee
 test("production compose isolates Redis and PythonLab runtime resources", () => {
   const compose = read("docker-compose.yml");
   const devCompose = read("docker-compose.dev.yml");
-  const redisBody = compose.match(/^  redis:\n([\s\S]*?)^  backend:/m)?.[1] ?? "";
+  const redisBody = compose.match(/^  redis:\n    image: redis:7-alpine\n([\s\S]*?)^  backend:/m)?.[1] ?? "";
 
   assert.doesNotMatch(redisBody, /container_name:/);
   assert.match(compose, /^\s{2}REDIS_HOST: redis$/m);
@@ -1103,7 +1112,7 @@ test("frontend production install validates required browser runtime files", () 
   const dockerignore = read("frontend/.dockerignore");
   const viteConfig = read("frontend/vite.config.ts");
   const installLayer =
-    dockerfile.match(/RUN env -u http_proxy([\s\S]*?)\n\nCOPY \. \./)?.[1] ?? "";
+    dockerfile.match(/RUN --mount=type=cache[\s\S]*?env -u http_proxy([\s\S]*?)\n\nCOPY \. \./)?.[1] ?? "";
   const buildLayer =
     dockerfile.match(/RUN npm run build([\s\S]*?)\n\nFROM /)?.[0] ?? "";
 
@@ -1415,7 +1424,7 @@ test("version consistency rejects drift in production and release defaults", () 
   writeFileSync(join(frontendDirectory, "package-lock.json"), '{"version":"1.6.0"}\n');
   writeFileSync(
     join(directory, ".env.example"),
-    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6.0\nREACT_APP_VERSION=1.6.0\n",
+    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6\nREACT_APP_VERSION=1.6.0\n",
   );
   writeFileSync(
     join(directory, "docker-compose.yml"),
@@ -1423,11 +1432,11 @@ test("version consistency rejects drift in production and release defaults", () 
   );
   writeFileSync(
     join(scriptsDirectory, "deploy.sh"),
-    'sim_version="${SIM_VERSION:-1.6.0}"\n',
+    'sim_version="${SIM_VERSION:-1.6}"\n',
   );
   writeFileSync(
     join(workflowsDirectory, "dockerhub-amd64.yml"),
-    'image_tag:\n  default: "1.6.0"\n',
+    'image_tag:\n  default: "1.6"\n',
   );
 
   const result = spawnSync("node", ["scripts/check-version-consistency.mjs"], {
