@@ -158,6 +158,305 @@ def test_owner_concurrency_main_stops_created_session(monkeypatch):
     assert stopped == [("token", "session-1")]
 
 
+def test_owner_concurrency_stop_200_retains_final_cleanup_eligibility(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    stopped = []
+    tracked = []
+    monkeypatch.setattr(
+        module,
+        "stop_session",
+        lambda token, sid: stopped.append((token, sid)),
+    )
+
+    module.stop_tracked_session("token", "session-1", tracked)
+    module.stop_tracked_session("token", "session-1", tracked)
+
+    assert stopped == [("token", "session-1"), ("token", "session-1")]
+    assert tracked == ["session-1"]
+
+
+def test_owner_concurrency_matrix_retains_all_sessions_for_final_cleanup(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    monkeypatch.setattr(module, "PASSWORD", "secret")
+    monkeypatch.setattr(module, "OWNER_MODE", "matrix")
+    monkeypatch.setattr(module, "EXPECT_OWNER_BEHAVIOR", "steal")
+    monkeypatch.setattr(module, "RUNTIME_RETRY_INTERVAL_SECONDS", 0)
+    monkeypatch.setattr(module, "login", lambda: "token")
+
+    sessions = iter(["detect", "strict-busy", "strict-ready"])
+    events = []
+
+    def fake_create(_token, **_kwargs):
+        sid = next(sessions)
+        events.append(("create", sid))
+        return sid
+
+    def fake_wait(_token, sid, **_kwargs):
+        events.append(("wait", sid))
+        if sid == "strict-busy":
+            raise RuntimeError(f"session failed: {module.RUNTIME_BUSY_ERROR}")
+
+    async def fake_run(_token, sid, mode, expected=""):
+        events.append(("run", sid, mode, expected))
+        return "steal"
+
+    def fake_stop(token, sid):
+        events.append(("stop", token, sid))
+
+    monkeypatch.setattr(module, "create_session", fake_create)
+    monkeypatch.setattr(module, "wait_for_ready", fake_wait)
+    monkeypatch.setattr(module, "run_owner_mode_smoke", fake_run)
+    monkeypatch.setattr(module, "stop_session", fake_stop)
+
+    assert module.main() == module.EXIT_OK
+    assert events == [
+        ("create", "detect"),
+        ("wait", "detect"),
+        ("run", "detect", "auto", ""),
+        ("stop", "token", "detect"),
+        ("create", "strict-busy"),
+        ("wait", "strict-busy"),
+        ("stop", "token", "strict-busy"),
+        ("create", "strict-ready"),
+        ("wait", "strict-ready"),
+        ("run", "strict-ready", "auto", "steal"),
+        # A successful HTTP stop is only an asynchronous cleanup request. The
+        # final pass retries every created session, including earlier stops.
+        ("stop", "token", "strict-ready"),
+        ("stop", "token", "strict-busy"),
+        ("stop", "token", "detect"),
+    ]
+
+
+def test_owner_concurrency_cleanup_deadline_caps_create_request(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    clock = {"now": 100.0}
+    captured_timeouts = []
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+    def timeout_post(*_args, timeout, **_kwargs):
+        captured_timeouts.append(timeout)
+        raise module.requests.Timeout("synthetic create timeout")
+
+    monkeypatch.setattr(module.requests, "post", timeout_post)
+
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.create_session(
+            "token",
+            deadline=105.0,
+            lifecycle_label="matrix strict",
+            attempt=2,
+        )
+
+    assert captured_timeouts == [5.0]
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+
+
+def test_owner_concurrency_cleanup_deadline_caps_ready_wait(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    clock = {"now": 200.0}
+    captured_timeouts = []
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+    def timeout_get(*_args, timeout, **_kwargs):
+        captured_timeouts.append(timeout)
+        raise module.requests.Timeout("synthetic status timeout")
+
+    monkeypatch.setattr(module.requests, "get", timeout_get)
+
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.wait_for_ready(
+            "token",
+            "session-1",
+            deadline=204.0,
+            lifecycle_label="matrix strict",
+            attempt=1,
+        )
+
+    assert captured_timeouts == [4.0]
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+
+
+def test_owner_concurrency_ready_observed_after_cleanup_deadline_is_lifecycle(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    clock = {"now": 225.0}
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+    def late_ready(*_args, **_kwargs):
+        clock["now"] = 230.0
+        return _Response({"status": "READY"})
+
+    monkeypatch.setattr(module.requests, "get", late_ready)
+
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.wait_for_ready(
+            "token",
+            "session-1",
+            deadline=230.0,
+            lifecycle_label="matrix strict",
+            attempt=1,
+        )
+
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+
+
+def test_owner_concurrency_late_create_is_tracked_before_lifecycle_timeout(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    monkeypatch.setattr(module, "RUNTIME_CLEANUP_TIMEOUT_SECONDS", 5)
+    clock = {"now": 400.0}
+    get_calls = []
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+    def late_create(*_args, **_kwargs):
+        clock["now"] = 406.0
+        return _Response({"session_id": "late-session"})
+
+    monkeypatch.setattr(module.requests, "post", late_create)
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *_args, **_kwargs: get_calls.append(True),
+    )
+
+    tracked = []
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.create_ready_session(
+            "token",
+            tracked,
+            "matrix strict",
+            retry_runtime_busy=True,
+        )
+
+    assert tracked == ["late-session"]
+    assert get_calls == []
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+
+
+def test_owner_concurrency_cleanup_deadline_prevents_another_create(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    monkeypatch.setattr(module, "RUNTIME_CLEANUP_MAX_ATTEMPTS", 3)
+    monkeypatch.setattr(module, "RUNTIME_CLEANUP_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(module, "RUNTIME_RETRY_INTERVAL_SECONDS", 5)
+
+    clock = {"now": 250.0}
+    created = []
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(
+        module.time,
+        "sleep",
+        lambda seconds: clock.__setitem__("now", clock["now"] + seconds),
+    )
+
+    def fake_create(_token, **_kwargs):
+        created.append("busy-1")
+        return "busy-1"
+
+    def fake_wait(_token, _sid, **_kwargs):
+        raise RuntimeError(f"session failed: {module.RUNTIME_BUSY_ERROR}")
+
+    monkeypatch.setattr(module, "create_session", fake_create)
+    monkeypatch.setattr(module, "wait_for_ready", fake_wait)
+    monkeypatch.setattr(module, "stop_session", lambda *_args: None)
+
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.create_ready_session(
+            "token",
+            [],
+            "matrix strict",
+            retry_runtime_busy=True,
+        )
+
+    assert created == ["busy-1"]
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+    assert "timeout" in str(exc_info.value)
+
+
+def test_owner_concurrency_runtime_busy_retry_requires_exact_error(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    created = []
+    stopped = []
+
+    def fake_create(_token, **_kwargs):
+        sid = f"session-{len(created) + 1}"
+        created.append(sid)
+        return sid
+
+    def fake_wait(_token, _sid, **_kwargs):
+        raise RuntimeError(
+            f"session failed: {module.RUNTIME_BUSY_ERROR} cleanup permanently failed"
+        )
+
+    monkeypatch.setattr(module, "create_session", fake_create)
+    monkeypatch.setattr(module, "wait_for_ready", fake_wait)
+    monkeypatch.setattr(module, "stop_session", lambda _token, sid: stopped.append(sid))
+
+    tracked = []
+    with pytest.raises(RuntimeError, match="cleanup permanently failed"):
+        module.create_ready_session(
+            "token",
+            tracked,
+            "matrix strict",
+            retry_runtime_busy=True,
+        )
+
+    assert created == ["session-1"]
+    assert tracked == created
+    assert stopped == []
+
+
+def test_owner_concurrency_runtime_busy_retry_is_bounded_and_backed_off(monkeypatch):
+    module = _load_script("smoke_pythonlab_ws_owner_concurrency")
+    monkeypatch.setattr(module, "RUNTIME_CLEANUP_MAX_ATTEMPTS", 3)
+    monkeypatch.setattr(module, "RUNTIME_CLEANUP_TIMEOUT_SECONDS", 60)
+    monkeypatch.setattr(module, "RUNTIME_RETRY_INTERVAL_SECONDS", 1)
+    monkeypatch.setattr(module, "RUNTIME_RETRY_MAX_INTERVAL_SECONDS", 1.5)
+
+    clock = {"now": 300.0}
+    sleeps = []
+    created = []
+    stopped = []
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    def fake_create(_token, **_kwargs):
+        sid = f"busy-{len(created) + 1}"
+        created.append(sid)
+        return sid
+
+    def fake_wait(_token, _sid, **_kwargs):
+        raise RuntimeError(f"session failed: {module.RUNTIME_BUSY_ERROR}")
+
+    monkeypatch.setattr(module.time, "sleep", fake_sleep)
+    monkeypatch.setattr(module, "create_session", fake_create)
+    monkeypatch.setattr(module, "wait_for_ready", fake_wait)
+    monkeypatch.setattr(module, "stop_session", lambda _token, sid: stopped.append(sid))
+
+    tracked = []
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module.create_ready_session(
+            "token",
+            tracked,
+            "matrix strict",
+            retry_runtime_busy=True,
+        )
+
+    assert created == ["busy-1", "busy-2", "busy-3"]
+    assert stopped == created
+    assert tracked == created
+    assert sleeps == [1, 1.5]
+    assert exc_info.value.code == module.EXIT_DETECT
+    assert exc_info.value.category == "lifecycle"
+    assert "3 bounded attempts" in str(exc_info.value)
+
+
 def test_dap_round_stops_session_when_ready_wait_fails(monkeypatch):
     module = _load_script("smoke_pythonlab_dap_step_watch_soak")
     monkeypatch.setattr(module, "create_session", lambda *_args: "session-2")

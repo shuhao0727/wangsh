@@ -235,8 +235,8 @@ jobs:
       #     Celery/agent 与 typst 编译），落地参照 pythonlab-pr-runtime.yml
       #     的全栈模式（postgres/redis service + uvicorn + worker）。
       #   - smoke_pythonlab_dap_step_watch_soak：需 pythonlab 沙箱 docker
-      #     镜像 + 长时 soak；aiohttp 不在 requirements-dev（pythonlab CI
-      #     额外安装），归入 pythonlab 专项 workflow 系列，暂缓。
+      #     镜像 + 长时 soak；aiohttp 已由 requirements-dev 统一声明，但完整
+      #     运行栈仍归入 pythonlab 专项 workflow 系列，暂缓。
       #   - frontend auth-replaced-login-smoke / prod-smoke-ui：Playwright +
       #     前端+后端栈；其纯函数库 prod-smoke-ui-lib.test.mjs 已随
       #     frontend-quality 的 test:scripts 覆盖，浏览器全流程暂缓。

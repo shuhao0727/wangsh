@@ -9,6 +9,7 @@
 # 测试
 pytest==9.0.2
 aiosqlite==0.22.1  # 隔离认证 HTTP/ORM 回归，不连接业务数据库
+aiohttp==3.14.3  # PythonLab WebSocket smoke/soak、清理回归与发布烟测
 requests==2.32.3
 
 # 覆盖率（changed-lines 门禁，审计 T-2 / 治理 §4.3）

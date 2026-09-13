@@ -26,6 +26,27 @@ CI 和生产镜像中稳定解析 `scripts.bootstrap_db`。仓库根目录另有
 - `smoke_pythonlab_print_visibility_probe.py` - PythonLab print 可见性探针
 - `soak_pythonlab_phasec.py` - PythonLab Phase C 专项门禁
 
+## PythonLab owner 并发 smoke
+
+`smoke_pythonlab_ws_owner_concurrency.py` 的 `OWNER_MODE=matrix` 分为两阶段：先以
+`auto` 检测当前 owner 行为，随后显式请求停止 detect session，再以检测结果或
+`EXPECT_OWNER_BEHAVIOR` 执行严格断言。阶段切换只对后端返回的精确 runtime-busy 错误
+`已有会话仍在使用运行环境或状态未知，请先停止旧会话。` 做生命周期重试；认证、HTTP、
+断言及其他未知错误不会被吞掉或误当成清理竞态。
+
+清理等待是有界的：`RUNTIME_CLEANUP_TIMEOUT_SECONDS` 默认 45 秒，同时限制 session
+create 请求和 READY 状态轮询；耗尽后以 `lifecycle`、退出码 `EXIT_DETECT=4` 失败，
+不误报为普通 network 错误。runtime-busy 最多创建 3 个候选 session，
+`RUNTIME_RETRY_INTERVAL_SECONDS` 默认 1 秒并采用指数退避，单次退避上限为 4 秒，
+不会每秒无限创建真实 session 或无限派发 Celery 工作。
+
+`/stop` 返回 HTTP 200 只表示异步清理请求已被接受，不证明 runtime 已立即释放；因此
+所有已创建 session ID 都保留在最终清理列表，脚本在 `finally` 中再次发起幂等 stop。
+该最终步骤是清理重试，不应表述为已经轮询证明 runtime 完全释放。脚本使用的
+`requests` 与 `aiohttp` 由 `backend/requirements-dev.txt` 维护；
+`pythonlab-pr-runtime.yml` 安装完整开发依赖，Phase C 与 owner 专项 workflow 则固定安装
+同版本的最小依赖集合。
+
 ## changed-lines 覆盖率门禁
 
 读取 pytest-cov 的 JSON 报告（`--cov-report=json`，默认

@@ -158,7 +158,7 @@ class LogoutHarness:
 
 
 @pytest.fixture
-def isolated(monkeypatch):
+def isolated(monkeypatch, tmp_path):
     def deny_network(*args, **kwargs):
         raise AssertionError("isolated logout tests must not connect to external services")
 
@@ -189,7 +189,12 @@ def isolated(monkeypatch):
                 harness.rollback_active_transactions.append(self.in_transaction())
                 await super().rollback()
 
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        # WebSocket auth watchers overlap login/logout DB sessions. An in-memory
+        # SQLite URL uses one StaticPool connection, so concurrent transactions can
+        # rollback or close each other under coverage. A per-context file keeps the
+        # test isolated while giving each short-lived session its own connection.
+        db_path = tmp_path / f"auth-{secrets.token_hex(8)}.sqlite3"
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
 
         @event.listens_for(engine.sync_engine, "connect")
         def enable_foreign_keys(connection, _):

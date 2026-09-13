@@ -105,9 +105,20 @@ tests/
 
 ## 认证退出隔离回归
 
-开发依赖由 `backend/requirements-dev.txt` 维护，其中 `aiosqlite` 仅用于本地内存 ORM 回归。在满足上文 no-dotenv/no-network 前置保护的运行器中选择 `tests/auth/test_logout_revocation_isolated.py` 与 `tests/auth/test_auth_logout_refresh.py`，不是安装依赖后直接调用 pytest。
+开发依赖由 `backend/requirements-dev.txt` 维护。`aiosqlite` 仅用于隔离 SQLite ORM 回归；
+普通单会话用例可使用内存数据库，涉及 WebSocket watcher 与 login/logout 并发 session 的
+夹具使用每个测试上下文独立的临时文件数据库，避免内存 SQLite `StaticPool` 让并发事务
+共享同一物理连接。`requirements-dev.txt` 同时声明 `aiohttp`，使系统清理回归能够导入并
+验证 PythonLab WebSocket smoke/soak 脚本；脚本运行方式、生命周期重试与最终清理语义由
+`backend/scripts/README.md` 维护。
+在满足上文 no-dotenv/no-network 前置保护的运行器中选择
+`tests/auth/test_logout_revocation_isolated.py` 与 `tests/auth/test_auth_logout_refresh.py`，
+不是安装依赖后直接调用 pytest。
 
-新增退出回归使用真实 FastAPI auth router、JWT 签发/验签、ORM 和 nonce 校验；每项创建仅含合成 User/RefreshToken 的 SQLite 内存库并开启外键，不创建或访问业务表。DB session 与 session cache 被替换为隔离适配器，socket 连接被夹具阻断，不需要启动应用、PostgreSQL 或 Redis。
+新增退出回归使用真实 FastAPI auth router、JWT 签发/验签、ORM 和 nonce 校验；每项只创建
+包含合成 User/RefreshToken 的隔离 SQLite 数据库并开启外键，不创建或访问业务表，也不连接
+开发或生产 PostgreSQL。DB session 与 session cache 被替换为隔离适配器，socket 连接被夹具
+阻断，不需要启动应用、PostgreSQL 或 Redis。
 
 - 校验新 DB session 读到的持久撤销位、保留令牌副本的 refresh/`me` 返回，以及配置 Cookie 的清理，不只检查 `200`。
 - 覆盖无效 access 的 refresh fallback、nonce 写入/读取失败、数据库 commit 失败、Cookie/header 冲突、旧会话重登保护和 refresh replay。

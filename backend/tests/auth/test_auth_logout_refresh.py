@@ -230,12 +230,18 @@ def test_login_uses_atomic_refresh_token_issue(monkeypatch):
             "student_id": "T007",
         }
 
-    async def fake_verify_refresh_token(db, token):
+    async def fake_publish_committed_login(
+        db,
+        user_id,
+        refresh_token,
+        request,
+        *,
+        preserve_cache_ttl=False,
+    ):
         assert db.commit_count == 1
-        assert token == "atomic-refresh-token"
-        return {"user_id": 7}
-
-    async def fake_on_successful_login(user_id, request):
+        assert user_id == 7
+        assert refresh_token == "atomic-refresh-token"
+        assert preserve_cache_ttl is False
         return "login-nonce", "127.0.0.1"
 
     async def fake_lock_user_for_login(db, user_id):
@@ -261,9 +267,12 @@ def test_login_uses_atomic_refresh_token_issue(monkeypatch):
         raise AssertionError("login must not create refresh tokens in a separate transaction")
 
     monkeypatch.setattr(auth_api.rate_limiter, "check", fake_rate_limiter_check)
-    monkeypatch.setattr(auth_api, "verify_refresh_token", fake_verify_refresh_token)
     monkeypatch.setattr(auth_api, "authenticate_user_auto", fake_authenticate)
-    monkeypatch.setattr(auth_api, "on_successful_login", fake_on_successful_login)
+    monkeypatch.setattr(
+        auth_api,
+        "_publish_committed_login",
+        fake_publish_committed_login,
+    )
     monkeypatch.setattr(
         auth_api,
         "lock_user_for_login",
