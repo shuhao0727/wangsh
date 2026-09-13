@@ -197,7 +197,11 @@ def isolated(monkeypatch, tmp_path):
         engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
 
         @event.listens_for(engine.sync_engine, "connect")
-        def enable_foreign_keys(connection, _):
+        def configure_sqlite(connection, _):
+            # SSE/WS session checks overlap logout writes. WAL mirrors PostgreSQL's
+            # reader/writer concurrency closely enough for this isolation fixture;
+            # rollback-journal mode can make a covered read block the logout commit.
+            connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA foreign_keys=ON")
 
         harness.db_factory = async_sessionmaker(engine, class_=FaultSession, expire_on_commit=False)
