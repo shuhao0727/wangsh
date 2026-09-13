@@ -26,10 +26,12 @@
   [验收报告](archive/2026-09-11-v2-multiagent-acceptance.md)。
 - 未验证边界：TTL/迁移回滚、真实 NAT 共享 IP、多副本压力与全站发布验收仍开放。
 
-## 未发布：v2.0.0 候选门禁、Docker 全量验收与发布准备（2026-09-13）
+## v2.0.0 候选门禁、Docker 全量验收与镜像发布（2026-09-13）
 
-对 PR #1 的门禁根因和当前 release-set 做本地闭环，当前仍待 GitHub 提交/推送与 Docker Hub
-正式发布：
+对 PR #1 的门禁根因和当前 6 镜像集合完成本地闭环。运行时代码提交
+`c653906f586ecaae4fde4b413d7fd4e612e867b8` 已推送到
+`release/v1.6.0-audit-fixes`，已验证镜像也已发布到 Docker Hub `:2.0`。本次是经用户明确要求执行的
+本地两阶段发布；GitHub Actions 尚未在 `main` 上复核该提交，因此不把本地发布记录冒称 workflow 证据：
 
 - **版本口径门禁（`repo-config`）**：`ci-quality.yml` 的 Compose 镜像标签检查改为调用
   `node scripts/check-version-consistency.mjs --print-image-tag`，完整版本 `2.0.0` 与镜像标签
@@ -58,8 +60,21 @@
 - **清理**：第一轮约 `95 MB` 生成物移到 `/tmp/wangsh-garbage-20260913-093358`；5 个
   dangling 镜像回收约 `279.4 MB`；验证结束后第二轮再归档约 `75 MB` 前端 build/Vite cache、
   Python 字节码与本轮 Playwright 仓库副本。没有删除 `.env`、业务数据或 volume。
-- **发布绑定**：Docker Hub 阶段不得重新构建；只允许把上述已验证本地 Image ID 推到唯一
-  staging tag，核验 6 个远端 manifest 后 promote 到 `:2.0`。默认不覆盖 `latest`。
+- **GitHub 与 Docker Hub 发布**：先推送运行时代码提交
+  `c653906f586ecaae4fde4b413d7fd4e612e867b8`，再把 6 个已经过 Compose、健康检查和浏览器验收的
+  本地 Image ID 原样标记为 `2.0-verified-c653906-20260913` 并推送；没有重新 build。远端逐项
+  核验 config digest 与本地 Image ID 一致、平台均为 `linux/amd64` 后，使用
+  `imagetools create --prefer-index=false` 原样提升到 `:2.0`，因此 staging 与正式 digest 相同。
+  `latest` 的 6 个 digest 在发布前后逐项一致，本轮没有更新 `latest`。
+
+| Docker Hub repository | 已验证本地 Image ID | staging / 正式 `:2.0` digest |
+|---|---|---|
+| `shuhao07/wangsh-backend` | `sha256:5a265cfbdf2eeaea68a145e869a094de573838d889ab95b3365d5d7030dd99e1` | `sha256:dd721edaaf059ed6f204a6737d8aa13532ea6beacb030e1871c4c232c0ed44a5` |
+| `shuhao07/wangsh-typst-worker` | `sha256:f12d02aeed23070f9aa78851a5049fe614b1fa08486eb92ef0dac4f24adf8f03` | `sha256:4ae204ea6e8ecc43358cb48beb31a656bd622372b8fb5c401467cbebae26acbb` |
+| `shuhao07/wangsh-pythonlab-worker` | `sha256:b3fa14fbcf215802134827ee94f5cb7f4ebc6bce5445773a029c80af7f2647fa` | `sha256:df298132ab291a58c464c1d20724cb13601e407cbdc6ea9c6a2d205f23d9b2d2` |
+| `shuhao07/pythonlab-sandbox` | `sha256:7b1e46394a9bde06b02e54cf74e4c7dd85ecf5daeab41634df22375c05bb4f58` | `sha256:7902be0debbafae47dd3f339b68e61874908a78c2fc6f215e09698270a65b168` |
+| `shuhao07/wangsh-frontend` | `sha256:c68547902e9414a99b20f8d6c5c39bc3b34af93c09b145b0dfa4d11bbfb6a147` | `sha256:df0e33854ef7e2d876d22bd20750c67757c1258da89e5290b4b01fc8310562bf` |
+| `shuhao07/wangsh-gateway` | `sha256:781865985a68ae1c874ddde57c5934da08340aeab4e01b25109ed2fd4ad18c0b` | `sha256:aa8a1a38bf7824f0189f1cc3c40cd75c3a2a4bb3afef71d520223d348639a686` |
 
 ## v2.0.0 发布候选补充：真实栈全面测试修复（2026-09-12）
 

@@ -7,7 +7,7 @@
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
 
-## R6 门禁、Docker 全量验收与发布准备（2026-09-13，本地通过，待推送）
+## R6 门禁、Docker 全量验收与镜像发布（2026-09-13，已完成）
 
 本节记录当前工作树的最新证据，覆盖下方同主题历史状态；不把本地通过冒称 GitHub Actions
 已经运行，也不把公开页 smoke 扩称全角色/全业务 E2E。
@@ -53,9 +53,14 @@
   `279.4 MB`，复核 dangling 数量为 `0`。验证结束后第二轮又将 `frontend/build`、
   Vite cache、本轮 Python 字节码与 Playwright 仓库副本共约 `75 MB` 移到
   `/tmp/wangsh-garbage-postverify-20260913-102702`。未删除 `.env`、业务数据、volume 或未知镜像。
-- **当前边界**：本节写入时尚未提交/推送 GitHub，GitHub Actions 尚未对当前 commit 复核，
-  Docker Hub 也尚未发布本轮已验证 Image ID；发布阶段禁止重新 build，必须将这 6 个本地
-  Image ID 先推唯一 staging tag，远端完整验收后再 promote 到 `:2.0`，默认不更新 `latest`。
+- **发布结果**：运行时代码提交 `c653906f586ecaae4fde4b413d7fd4e612e867b8` 已推送到
+  `release/v1.6.0-audit-fixes`。6 个已验证本地 Image ID 未经重新 build，先推送唯一 staging tag
+  `2.0-verified-c653906-20260913`；远端核验 config digest 与本地 Image ID 一致、平台均为
+  `linux/amd64` 后，原样提升到正式 `:2.0`。正式 digest 依次为：backend
+  `dd721eda...`、typst-worker `4ae204ea...`、pythonlab-worker `df298132...`、sandbox
+  `7902be0d...`、frontend `df0e3385...`、gateway `aa8a1a38...`。发布前后 6 个 `latest`
+  digest 完全一致，本轮未更新 `latest`。GitHub Actions 尚未在 `main` 上复核该提交，不能把本地
+  两阶段发布记录冒称 workflow 结果。完整 digest 台账见 `docs/docker/RELEASE_NOTES.md`。
 
 ## R5 三主线并行复核（2026-09-11，代码与整合已验，Excel 原生 setup 已打开但六份导出验收仍阻断，未发布）
 
