@@ -25,6 +25,22 @@ from test_pythonlab_v2_ws_behavior import FakeCeleryApp
 _ORIGINAL_CONNECT = socket.socket.connect
 
 
+async def wait_for_task_cleanup(baseline, timeout=1.0):
+    """Allow async driver/session finalizers to finish before leak assertion."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        pending = [task for task in asyncio.all_tasks() - baseline if not task.done()]
+        if not pending:
+            return
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(0.01, remaining))
+    pending = [task for task in asyncio.all_tasks() - baseline if not task.done()]
+    assert not pending, f"background tasks survived cleanup: {pending!r}"
+
+
 class ASGIWebSocketClient:
     """An actual WebSocket ASGI scope; no replacement of the endpoint or auth."""
 
@@ -228,8 +244,7 @@ def test_established_connection_real_logout(isolated, monkeypatch, kind, endpoin
                     else:
                         assert state.detached
                         assert not state.business.client.values.get('debug:session:synthetic-session:ws_owner')
-                await asyncio.sleep(0)
-                assert not [t for t in asyncio.all_tasks() - initial_tasks if not t.done()]
+                await wait_for_task_cleanup(initial_tasks)
             finally:
                 if hasattr(state, 'peer'):
                     state.peer.close()
@@ -349,8 +364,7 @@ def test_asgi_cancellation_cleans_tasks(isolated, monkeypatch, endpoint):
                             os.fstat(state.fd)
                     else:
                         assert state.detached
-                await asyncio.sleep(0)
-                assert not [t for t in asyncio.all_tasks() - baseline if not t.done()]
+                await wait_for_task_cleanup(baseline)
             finally:
                 if hasattr(state, 'peer'):
                     state.peer.close()
@@ -417,6 +431,5 @@ def test_cancel_during_dap_owner_acquire_cleans_lease(isolated, monkeypatch):
                 await ws.expect_revoked()
                 assert not state.business.client.values.get('debug:session:synthetic-session:ws_owner')
                 assert not state.seen
-            await asyncio.sleep(0)
-            assert not [t for t in asyncio.all_tasks() - baseline if not t.done()]
+            await wait_for_task_cleanup(baseline)
     asyncio.run(scenario())
