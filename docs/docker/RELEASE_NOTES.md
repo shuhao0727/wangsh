@@ -28,10 +28,13 @@
 
 ## v2.0.0 候选门禁、Docker 全量验收与镜像发布（2026-09-13）
 
-对 PR #1 的门禁根因和当前 6 镜像集合完成本地闭环。运行时代码提交
-`c653906f586ecaae4fde4b413d7fd4e612e867b8` 已推送到
-`release/v1.6.0-audit-fixes`，已验证镜像也已发布到 Docker Hub `:2.0`。本次是经用户明确要求执行的
-本地两阶段发布；GitHub Actions 尚未在 `main` 上复核该提交，因此不把本地发布记录冒称 workflow 证据：
+对 PR #1 的首轮门禁根因和当前 6 镜像集合完成发布闭环。运行时代码提交
+`c653906f586ecaae4fde4b413d7fd4e612e867b8` 绑定已发布 Docker Hub `:2.0` 镜像；随后
+CI-only/test-only 收口已形成提交 `9ab18200174145d4cee3832e1f86fc0c74de09fb` 和
+`68d8b0cef8ac9844e24ec80326b9e63166588ab7`，均已推送到
+`release/v1.6.0-audit-fixes`。截至 2026-09-13，最新提交的 PR 分支门禁已全部通过；这些
+后续提交不改变生产应用代码、schema、API、生产依赖或已发布镜像内容，不把 PR 分支结果冒称
+`main` 已合并或已复验：
 
 - **版本口径门禁（`repo-config`）**：`ci-quality.yml` 的 Compose 镜像标签检查改为调用
   `node scripts/check-version-consistency.mjs --print-image-tag`，完整版本 `2.0.0` 与镜像标签
@@ -47,25 +50,35 @@
 - **PythonLab PR gate 登录超时**：`pythonlab-pr-runtime.yml` 在 migration 后、backend/worker
   启动前增加合成库 enrollment，调用 `bootstrap_durable_auth_authority(...,
   legacy_writers_stopped=True)`，并以独立 session 复核 `ready`；生产仍走 `auth/cutover.py`。
-- **全量回归**：后端隔离全量 `3045 passed / 170 skipped`，Python governance 两种口径均
-  `errors=0 / warnings=24`；前端 Vitest 与脚本合计 `705 passed`，type-check/build/token 检查
-  通过，lint `0 errors / 468 warnings`；生产/开发 Compose 与版本检查通过，workflow contracts `56 passed`，Markdown contracts
-  `113 files / 428 links / 0 missing`、合同测试 `10 passed`，`git diff --check` 通过。
-- **真实 Docker release-set**：完整重建 6 个 `linux/amd64` `:2.0` 镜像，并用生产 Compose
+- **CI-only/test-only 收口（已提交并远端通过）**：
+  - `9ab1820` 在 SQLite 测试隔离夹具中启用 WAL，消除覆盖率运行下 SSE/logout 并发的
+    rollback-journal 锁竞争；产品 logout 语义保持不变。
+  - `68d8b0c` 为 PythonLab owner matrix 的 Docker sandbox 清理增加最多 10 次有界重试、
+    最终残留检查和诊断输出，容忍已知的 transient removal race，其他错误仍失败。
+  - 当前未提交测试夹具中的 WebSocket session/task cleanup 等待已在本轮形成独立提交，详见
+    [当前测试状态](testing/TEST_STATUS.md)。这些修复均不改变运行时镜像
+    `c653906f586ecaae4fde4b413d7fd4e612e867b8`。
+- **远端 Actions（最新提交 `68d8b0c`）**：`ci-quality` Run `34739812265`、
+  `markdown-quality` Run `34739812213`、`pr-pythonlab-owner-gate` Run `34739812343`、
+  `pr-pythonlab-phasec-gate` Run `34739812377` 均为 `success`。该结果绑定 PR 分支，不能写成
+  `main` 已复验。
+- **全量回归（运行时与当前测试收口）**：运行时代码提交
+  `c653906f586ecaae4fde4b413d7fd4e612e867b8` 的后端隔离全量基线为
+  `3054 passed / 170 skipped / 2467 warnings / 0 failed`；当前 WebSocket 隔离定向回归为
+  `22 passed / 21 skipped / 8 warnings`。后续 CI-only/test-only 工作树的动态结果不回写运行时
+  镜像基线，完整门禁以最新远端 Run 为准。
+- **真实 Docker release-set**：完整构建 6 个 `linux/amd64` `:2.0` 镜像，并用生产 Compose
   在 `http://127.0.0.1:16608` 真实启动；数据库、Redis、backend、frontend、gateway 和两个
   worker healthy，PythonLab sandbox 可创建，Alembic/Celery/API 健康检查通过。
-- **浏览器验收**：Playwright 在 4 档桌面尺寸生成登录页截图，真实点击访客入口进入 `/home`；
-  console errors/warnings 为 `0`，首页显示 `v2.0.0`。证据只保存在
-  `/tmp/wangsh-docker-verify-20260913/`，不提交截图或日志。
+- **浏览器验收**：Playwright 在真实 Docker 栈上执行访客入口和 PythonLab 原生 pointer-click
+  smoke，生成登录首页及多断点 Continue 截图；console errors/warnings 为 `0`，首页显示
+  `v2.0.0`。证据只保存在 `/tmp/wangsh-docker-verify-20260913/`，不提交截图或日志。
 - **清理**：第一轮约 `95 MB` 生成物移到 `/tmp/wangsh-garbage-20260913-093358`；5 个
   dangling 镜像回收约 `279.4 MB`；验证结束后第二轮再归档约 `75 MB` 前端 build/Vite cache、
-  Python 字节码与本轮 Playwright 仓库副本。没有删除 `.env`、业务数据或 volume。
-- **GitHub 与 Docker Hub 发布**：先推送运行时代码提交
-  `c653906f586ecaae4fde4b413d7fd4e612e867b8`，再把 6 个已经过 Compose、健康检查和浏览器验收的
-  本地 Image ID 原样标记为 `2.0-verified-c653906-20260913` 并推送；没有重新 build。远端逐项
-  核验 config digest 与本地 Image ID 一致、平台均为 `linux/amd64` 后，使用
-  `imagetools create --prefer-index=false` 原样提升到 `:2.0`，因此 staging 与正式 digest 相同。
-  `latest` 的 6 个 digest 在发布前后逐项一致，本轮没有更新 `latest`。
+  Python 字节码与本轮 Playwright 仓库副本。没有删除 `.env`、业务数据或验证 volume。
+- **GitHub 与 Docker Hub 发布**：已推送运行时代码和 CI/test 收口提交；6 个已通过 Compose、
+  健康检查和浏览器验收的 `:2.0` 镜像正式 digest 与本地核验一致。没有重新 build 或更新
+  `latest`；六个 digest 见下表，且在后续 CI/test 文档提交后保持不变。
 
 | Docker Hub repository | 已验证本地 Image ID | staging / 正式 `:2.0` digest |
 |---|---|---|

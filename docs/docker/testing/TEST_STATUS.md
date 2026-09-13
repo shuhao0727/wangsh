@@ -7,10 +7,40 @@
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
 
+## R6.1 发布后 CI-only/test-only 门禁收口（2026-09-13，已完成）
+
+本节记录提交 `9ab18200174145d4cee3832e1f86fc0c74de09fb`、
+`68d8b0cef8ac9844e24ec80326b9e63166588ab7` 及当前测试夹具收口的 PR 分支结果。修复只影响
+CI/test 依赖来源、workflow 清理和测试夹具，不修改生产应用代码、API、数据库 schema、生产
+依赖或已发布的 6 个 Docker Hub `:2.0` 镜像。结果绑定
+`release/v1.6.0-audit-fixes`，不是 `main` 合并后的证明。
+
+- **远端 Actions 全绿**：最新提交 `68d8b0cef8ac9844e24ec80326b9e63166588ab7` 的
+  `ci-quality` Run `34739812265`、`markdown-quality` Run `34739812213`、
+  `pr-pythonlab-owner-gate` Run `34739812343`、`pr-pythonlab-phasec-gate` Run `34739812377`
+  均为 `success`。
+- **SQLite 并发隔离**：`backend/tests/auth/test_logout_revocation_isolated.py` 启用 WAL，
+  避免覆盖率运行下 SSE/logout 并发的 rollback-journal 锁竞争；logout 的 503 语义没有被改成
+  测试替身，产品行为保持原定义。
+- **PythonLab 清理竞态**：`.github/workflows/pythonlab-pr-runtime.yml` 对 sandbox 容器清理
+  增加最多 10 次有界重试、最终残留检查和诊断输出；已知 transient removal race 可恢复，其他
+  Docker 错误仍然阻断 workflow。
+- **WebSocket task/session 收尾**：`backend/tests/pythonlab/test_ws_revocation_isolated.py`
+  使用有界 `wait_for_task_cleanup` 等待异步 session/task finalizer，再执行无泄漏断言；本地
+  定向回归为 `22 passed / 21 skipped / 8 warnings`。
+- **本地收口结果**：后端隔离全量基线为 `3054 passed / 170 skipped / 2467 warnings /
+  0 failed`；本地 Markdown 扫描为 `113 files / 430 links / 0 missing`，合同测试为
+  `10 passed / 0 failed`。旧 Run `34733798985`、`34733799159` 的失败保留为历史事实，不能
+  用来否定当前 `68d8b0c` 已通过的门禁。
+- **镜像不变**：本节修复没有重新构建或推送 Docker Hub 镜像；6 个 `:2.0` digest 仍以
+  [发布记录](../RELEASE_NOTES.md) 中的表格为准，`latest` 未更新。
+
+
 ## R6 门禁、Docker 全量验收与镜像发布（2026-09-13，已完成）
 
-本节记录当前工作树的最新证据，覆盖下方同主题历史状态；不把本地通过冒称 GitHub Actions
-已经运行，也不把公开页 smoke 扩称全角色/全业务 E2E。
+本节冻结运行时代码提交 `c653906f586ecaae4fde4b413d7fd4e612e867b8` 的发布证据，
+覆盖下方同主题历史状态；后续 CI-only/test-only 收口以 R6.1 为准。本节不把本地通过冒称
+GitHub Actions 已经运行，也不把公开页 smoke 扩称全角色/全业务 E2E。
 
 - **repo-config（版本口径）**：`ci-quality.yml` 的 Compose 镜像标签检查改为调用
   `node scripts/check-version-consistency.mjs --print-image-tag`；当前完整版本为 `2.0.0`，镜像
@@ -97,7 +127,7 @@
 ### 当前门禁与保护边界
 
 - 主任务独立可选认证/subject/SSE/WS 六文件隔离回归，最终源码复跑 `main/auth-final-independent/entry-final.xml`：**165 passed / 21 skipped / 8 warnings**；跳过项仅需专属 Redis UNIX socket，未以 TCP 外部资源代替。实际 JWT/SQLite/ASGI，非 PG/真实浏览器整合；完整 AUTH 冻结文件（含 session_family）前后无变化，旧结果保留于 `main/auth-entry/`。首轮默认 pytest log 触发写域 guard，显式把日志放证据目录后通过，首败保留。
-- 最终前端 `main/type-check-final3.log` **exit 0**，两文件回归 `main/pythonlab-regression-final.log` **2 文件 / 3 tests passed**，覆盖终端隐藏生命周期与单一 TTY 输出源；此前完整 PythonLab 专项 `pythonlab/pythonlab-vitest-02.log` **52 文件 / 258 tests passed**，是此前执行结果，不是本次收口重跑；较早单文件结果保留。误在根目录执行 npm 的设施失败 `main/type-check-final.log` 保留。本轮当前 Markdown 扫描摘要：**110 files / 416 links / 0 missing**；首次旧摘要及 AUTH owner 改标题导致的旧锚点失效已保留并修正，`main/markdown-final.log` **exit 0**、`main/markdown-tests-final.log` **10 passed**、`main/diff-check-final.log` **exit 0**；整合文档收口后再次执行的门禁见 `main/markdown-closeout.log`、`main/markdown-tests-closeout.log`、`main/diff-check-closeout.log`。2026-09-11 新增代理链验收报告后实测摘要为 `111 files / 421 links / 0 missing`（含 S7 治理合同补充）；同日新增 v2 多 agent 验收报告并修正 RELEASE_NOTES 链接后实测摘要为 `112 files / 424 links / 0 missing`。2026-09-12 全面真实测试修复与文档同步（AUTH/API/RELEASE_NOTES/scripts README）后实测摘要为 `112 files / 425 links / 0 missing`。2026-09-13 新增 Docker 清理、重建、全量验证与发布计划并补齐三层索引后，当前实测摘要为 `113 files / 428 links / 0 missing`。
+- 最终前端 `main/type-check-final3.log` **exit 0**，两文件回归 `main/pythonlab-regression-final.log` **2 文件 / 3 tests passed**，覆盖终端隐藏生命周期与单一 TTY 输出源；此前完整 PythonLab 专项 `pythonlab/pythonlab-vitest-02.log` **52 文件 / 258 tests passed**，是此前执行结果，不是本次收口重跑；较早单文件结果保留。误在根目录执行 npm 的设施失败 `main/type-check-final.log` 保留。本轮当前 Markdown 扫描摘要：**110 files / 416 links / 0 missing**；首次旧摘要及 AUTH owner 改标题导致的旧锚点失效已保留并修正，`main/markdown-final.log` **exit 0**、`main/markdown-tests-final.log` **10 passed**、`main/diff-check-final.log` **exit 0**；整合文档收口后再次执行的门禁见 `main/markdown-closeout.log`、`main/markdown-tests-closeout.log`、`main/diff-check-closeout.log`。2026-09-11 新增代理链验收报告后实测摘要为 `111 files / 421 links / 0 missing`（含 S7 治理合同补充）；同日新增 v2 多 agent 验收报告并修正 RELEASE_NOTES 链接后实测摘要为 `112 files / 424 links / 0 missing`。2026-09-12 全面真实测试修复与文档同步（AUTH/API/RELEASE_NOTES/scripts README）后实测摘要为 `112 files / 425 links / 0 missing`。2026-09-13 新增 Docker 清理、重建、全量验证与发布计划并补齐三层索引后，当时实测摘要为 `113 files / 428 links / 0 missing`。
 - 不提交、推送、部署或 prune；不触正常业务数据、登录页及原有容器。`main/baseline.json`、`main/containers.before.json` 为本轮对照基线，最终资源保护审计 `main/final-audit.json`：原 **57 个容器元信息无变化**，当前 **70 个容器**，无意外新增，HEAD/Login 未变；本批已登记 sandbox 的回收解释中间快照数量变化。只核元信息与指定源码，不把容器元信息一致称为业务卷字节验证。
 
 ## R4 接续独立核验（2026-09-10，未发布，全项目仍未闭环）
@@ -1314,9 +1344,12 @@ Git。开发缓存可以继续留在本地复用，不作为正式发布证据�
 
 ## 四、待执行验证
 
-- 配置 `PYTHONLAB_SMOKE_USERNAME` / `PYTHONLAB_SMOKE_PASSWORD` 后，在当前
-  `main` 复验 PythonLab owner concurrency 和 Phase C 专项 workflow；现有失败
-  记录的直接原因是仓库缺少这两个 secrets。
+- 当前 PR #1 分支为 `release/v1.6.0-audit-fixes`。提交并推送 R6.1 的
+  CI-only/test-only 收口后，绑定该新提交复验 `ci-quality`、
+  `pr-pythonlab-owner-gate`、`pr-pythonlab-phasec-gate` 与 `markdown-quality`；在 PR
+  合并并由 `main` 对应 workflow 运行前，不写成 `main` 已复验。旧 Phase C Run
+  `34733799071` 已成功；旧 owner Run `34733799159` 是 runtime 清理时序失败，不是
+  secrets 缺失。
 - 升级 GitHub Actions action runtime，消除 Node 20 弃用提醒。
 - Docker Hub 六镜像和 `release-set.txt` 已通过手工发布链验证；GitHub
   `dockerhub-amd64` workflow 仍需配置 `DOCKERHUB_USERNAME` /
