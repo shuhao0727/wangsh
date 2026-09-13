@@ -118,6 +118,58 @@ jobs:
           alembic upgrade head
           python scripts/bootstrap_db.py
 
+      # AUTH 持久权威迁移只插入 auth_authority(id=1, ready=false)，而登录在 ready
+      # 未置位时 fail closed（503「认证持久状态尚未完成受控迁移」），会让后面的浏览器
+      # smoke 一直停在登录页。CI 使用一次性合成库，这里调用产品 service API 完成一次性
+      # enrollment，并在独立事务中核验 ready，避免把问题留给 60s 登录超时。
+      # 生产切换必须走 backend/app/api/endpoints/auth/cutover.py 的停流、排空与冻结
+      # 流程，不能复用这段 CI 夹具。
+      - name: enroll auth authority gate (CI synthetic database)
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+          from app.services.auth import bootstrap_durable_auth_authority
+
+
+          def database_url() -> str:
+              return (
+                  "postgresql+asyncpg://"
+                  f"{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
+                  f"@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}"
+                  f"/{os.environ['POSTGRES_DB']}"
+              )
+
+
+          async def main() -> None:
+              engine = create_async_engine(database_url())
+              try:
+                  async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+                      result = await bootstrap_durable_auth_authority(
+                          db, legacy_writers_stopped=True
+                      )
+                  async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+                      ready = await db.scalar(
+                          text("SELECT ready FROM auth_authority WHERE id = 1")
+                      )
+              finally:
+                  await engine.dispose()
+              if ready is not True:
+                  raise SystemExit(
+                      "auth authority still not ready after enrollment: "
+                      f"{ready!r} result={result}"
+                  )
+              print(f"auth authority enrollment: {result}")
+
+
+          asyncio.run(main())
+          PY
+
       - name: start current PR backend and worker
         working-directory: backend
         run: |

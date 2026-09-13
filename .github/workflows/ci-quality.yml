@@ -48,7 +48,9 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
       - name: compose image tags
         run: |
-          expected="$(node -p "require('./frontend/package.json').version")"
+          # 镜像标签口径（major.minor）与完整版本号的派生规则只由该脚本维护，
+          # 避免这里再从 package.json 推出完整版本号导致门禁自相矛盾。
+          expected_tag="$(node scripts/check-version-consistency.mjs --print-image-tag)"
           images="$(docker compose --env-file .env.example -f docker-compose.yml config --images)"
           echo "$images"
           wangsh_images="$(echo "$images" | grep -E '/(wangsh-[^:]+|pythonlab-sandbox):' || true)"
@@ -56,9 +58,9 @@ jobs:
             echo "No wangsh images found in production compose config."
             exit 1
           fi
-          mismatches="$(echo "$wangsh_images" | grep -v ":${expected}$" || true)"
+          mismatches="$(echo "$wangsh_images" | grep -v ":${expected_tag}$" || true)"
           if [ -n "$mismatches" ]; then
-            echo "Found wangsh images not tagged ${expected}:"
+            echo "Found wangsh images not tagged ${expected_tag}:"
             echo "$mismatches"
             exit 1
           fi

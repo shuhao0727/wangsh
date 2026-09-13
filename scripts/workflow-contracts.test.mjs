@@ -527,6 +527,9 @@ test("docker publish validates source version and does not default to latest", (
   assert.match(workflow, /RELEASE_TAG:\s*\$\{\{\s*inputs\.image_tag\s*\}\}/);
   assert.match(workflow, /validate image tag against source version/);
   assert.match(workflow, /frontend\/package\.json/);
+  assert.match(workflow, /echo "SOURCE_VERSION=\$source_version" >> "\$GITHUB_ENV"/);
+  assert.match(workflow, /REACT_APP_VERSION=\$\{\{ env\.SOURCE_VERSION \}\}/);
+  assert.doesNotMatch(workflow, /echo "source_version=\$source_version" >> "\$GITHUB_ENV"/);
   const runBlocks = [...workflow.matchAll(/^\s+run:\s*\|\n((?:^\s{10,}.*\n?)*)/gm)]
     .map((match) => match[1]);
   for (const runBlock of runBlocks) {
@@ -1310,6 +1313,66 @@ test("PythonLab PR wrappers execute the checked-out PR runtime", () => {
   assert.match(phasecGate, /frontend\/src\/lib\/monacoWorkers\.ts/);
 });
 
+test("PythonLab PR runtime enrolls durable auth before starting the runtime", () => {
+  const workflow = read(".github/workflows/pythonlab-pr-runtime.yml");
+  const migrateMarker = "- name: migrate current PR database";
+  const enrollmentMarker =
+    "- name: enroll auth authority gate (CI synthetic database)";
+  const startMarker = "- name: start current PR backend and worker";
+  const migrateIndex = workflow.indexOf(migrateMarker);
+  const enrollmentIndex = workflow.indexOf(enrollmentMarker);
+  const startIndex = workflow.indexOf(startMarker);
+
+  assert.ok(migrateIndex >= 0, "missing PythonLab migration step");
+  assert.ok(
+    enrollmentIndex > migrateIndex,
+    "auth authority enrollment must run after migration",
+  );
+  assert.ok(
+    startIndex > enrollmentIndex,
+    "backend and worker must start after auth authority enrollment",
+  );
+
+  const enrollmentStep = workflow.slice(enrollmentIndex, startIndex);
+  assert.match(
+    enrollmentStep,
+    /from app\.services\.auth import bootstrap_durable_auth_authority/,
+  );
+  assert.match(
+    enrollmentStep,
+    /bootstrap_durable_auth_authority\(\s*db,\s*legacy_writers_stopped=True\s*\)/,
+  );
+
+  const sessionPattern =
+    /async with async_sessionmaker\(engine, expire_on_commit=False\)\(\) as db:/g;
+  const sessions = [...enrollmentStep.matchAll(sessionPattern)];
+  assert.equal(
+    sessions.length,
+    2,
+    "enrollment and ready verification must use separate sessions",
+  );
+
+  const bootstrapIndex = enrollmentStep.indexOf(
+    "result = await bootstrap_durable_auth_authority(",
+  );
+  const readyQueryIndex = enrollmentStep.indexOf(
+    'text("SELECT ready FROM auth_authority WHERE id = 1")',
+  );
+  assert.ok(sessions[0].index < bootstrapIndex);
+  assert.ok(
+    sessions[1].index > bootstrapIndex,
+    "ready verification must open a new session after enrollment",
+  );
+  assert.ok(
+    readyQueryIndex > sessions[1].index,
+    "the independent verification session must query ready",
+  );
+  assert.match(
+    enrollmentStep,
+    /if ready is not True:\s*\n\s*raise SystemExit\(/,
+  );
+});
+
 test("PythonLab PR runtime provisions, verifies, and cleans local dependencies", () => {
   const workflow = read(".github/workflows/pythonlab-pr-runtime.yml");
 
@@ -1409,6 +1472,20 @@ test("CI validates every maintained shell entry separately", () => {
     workflow,
     /bash -n scripts\/deploy\.sh\s+scripts\/rollback\.sh/,
   );
+});
+
+test("version consistency prints the exact image tag", () => {
+  const result = spawnSync(
+    "node",
+    ["scripts/check-version-consistency.mjs", "--print-image-tag"],
+    {
+      cwd: new URL(repoRoot).pathname,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout, "2.0");
 });
 
 test("version consistency rejects drift in production and release defaults", () => {

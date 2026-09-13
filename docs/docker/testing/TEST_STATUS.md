@@ -2,10 +2,60 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：1.6.0
-> 最近更新：2026-09-11
+> 当前版本：2.0.0
+> 最近更新：2026-09-13
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+
+## R6 门禁、Docker 全量验收与发布准备（2026-09-13，本地通过，待推送）
+
+本节记录当前工作树的最新证据，覆盖下方同主题历史状态；不把本地通过冒称 GitHub Actions
+已经运行，也不把公开页 smoke 扩称全角色/全业务 E2E。
+
+- **repo-config（版本口径）**：`ci-quality.yml` 的 Compose 镜像标签检查改为调用
+  `node scripts/check-version-consistency.mjs --print-image-tag`；当前完整版本为 `2.0.0`，镜像
+  标签为 `2.0`。生产和开发 Compose 均已真实渲染通过。
+- **Docker Hub 前端版本注入**：发布 workflow 统一写入并读取大写 `SOURCE_VERSION`；合同测试
+  禁止恢复为小写 `source_version`，避免 Linux runner 上前端版本静默回退为 `unknown`。
+- **backend-pytest（Python governance）**：`backend/app/core/sandbox/docker.py` file-size 回归
+  `705→756` 后，已把 mountinfo 与 `HOST_WORKSPACE_ROOT` 解析拆到
+  `backend/app/core/sandbox/docker_paths.py`（`DockerMountMixin`），`docker.py` 为 `756→655` 行；
+  baseline complexity 条目按 `moved_from` 迁移。普通与 `--base-ref origin/main` 治理检查均为
+  `errors=0 / warnings=24`。
+- **phasec-pr-gate / owner-concurrency-pr-gate（登录超时）**：CI 在 migration 后、backend/worker
+  启动前增加一次性合成库 AUTH enrollment；调用 `bootstrap_durable_auth_authority(...,
+  legacy_writers_stopped=True)`，并使用独立 session 复核 `ready is True`。生产切换仍必须走
+  `auth/cutover.py` 的停流、排空与冻结流程。
+- **后端全量隔离回归**：独立临时 PostgreSQL 16 与 Redis 7、禁读仓库 `.env*`、只允许连接
+  临时回环服务；最终 `3045 passed / 170 skipped / 2467 warnings / 0 failed`，耗时 `76.70s`。
+  两次中间失败分别来自隔离配置缺 `APP_VERSION` 和网络守卫/独立 Redis 夹具，均只修正
+  `/tmp` 外部运行器后重跑，未改源码或接入正常服务。证据：
+  `/tmp/wangsh-backend-validation-20260913/`。
+- **前端全门禁**：`type-check` 通过；lint `0 errors / 468 warnings`；Vitest
+  `94 files / 676 passed`；脚本测试 `29 passed`；生产 build `4366 modules`；token 检查
+  `1821 references / 0 undefined`。合计自动化测试 `705 passed / 0 failed`。
+- **生产 release-set 构建**：以 `linux/amd64` 完整重建 backend、typst-worker、
+  pythonlab-worker、pythonlab-sandbox、frontend、gateway 共 6 个 `:2.0` 镜像；当前 Image ID
+  分别以 `5a265c...`、`f12d02...`、`b3fa14...`、`7b1e46...`、`c68547...`、`781865...`
+  开头，容器标签与实际 Image ID 一致。构建日志：
+  `/tmp/wangsh-docker-verify-20260913/logs/11-full-release-build.txt`。
+- **真实 Docker 运行**：隔离 Compose 元数据使用 `COMPOSE_PROJECT_NAME=wangsh-verify`，网关端口
+  `16608`；PostgreSQL、Redis、backend、frontend、gateway、Typst worker、PythonLab worker
+  均 healthy，sandbox running。`/api/v1/health` 返回 database/redis healthy，Alembic 为
+  `20260910_0001_auth_authority (head)`，两个 Celery node 均 pong；PythonLab 一次性 sandbox
+  启动成功。运行阶段未强制 amd64 基础服务，避免 ARM64 本机 Redis 架构误配。
+- **真实浏览器**：Playwright 访问 `http://127.0.0.1:16608`，在 `1280×800`、`1440×900`、
+  `1680×1050`、`1920×1080` 四档截图；真实点击“访客模式进入”到 `/home`，首页显示
+  `v2.0.0`。console errors/warnings 均为 `0`，5 个公开 feature flag API 均 HTTP 200。
+  截图与日志位于 `/tmp/wangsh-docker-verify-20260913/`，不提交仓库。
+- **清理**：第一轮约 `95 MB` 可重建生成物移到
+  `/tmp/wangsh-garbage-20260913-093358`；5 个 dangling 镜像已删除，Docker 报告回收约
+  `279.4 MB`，复核 dangling 数量为 `0`。验证结束后第二轮又将 `frontend/build`、
+  Vite cache、本轮 Python 字节码与 Playwright 仓库副本共约 `75 MB` 移到
+  `/tmp/wangsh-garbage-postverify-20260913-102702`。未删除 `.env`、业务数据、volume 或未知镜像。
+- **当前边界**：本节写入时尚未提交/推送 GitHub，GitHub Actions 尚未对当前 commit 复核，
+  Docker Hub 也尚未发布本轮已验证 Image ID；发布阶段禁止重新 build，必须将这 6 个本地
+  Image ID 先推唯一 staging tag，远端完整验收后再 promote 到 `:2.0`，默认不更新 `latest`。
 
 ## R5 三主线并行复核（2026-09-11，代码与整合已验，Excel 原生 setup 已打开但六份导出验收仍阻断，未发布）
 
@@ -42,7 +92,7 @@
 ### 当前门禁与保护边界
 
 - 主任务独立可选认证/subject/SSE/WS 六文件隔离回归，最终源码复跑 `main/auth-final-independent/entry-final.xml`：**165 passed / 21 skipped / 8 warnings**；跳过项仅需专属 Redis UNIX socket，未以 TCP 外部资源代替。实际 JWT/SQLite/ASGI，非 PG/真实浏览器整合；完整 AUTH 冻结文件（含 session_family）前后无变化，旧结果保留于 `main/auth-entry/`。首轮默认 pytest log 触发写域 guard，显式把日志放证据目录后通过，首败保留。
-- 最终前端 `main/type-check-final3.log` **exit 0**，两文件回归 `main/pythonlab-regression-final.log` **2 文件 / 3 tests passed**，覆盖终端隐藏生命周期与单一 TTY 输出源；此前完整 PythonLab 专项 `pythonlab/pythonlab-vitest-02.log` **52 文件 / 258 tests passed**，是此前执行结果，不是本次收口重跑；较早单文件结果保留。误在根目录执行 npm 的设施失败 `main/type-check-final.log` 保留。本轮当前 Markdown 扫描摘要：**110 files / 416 links / 0 missing**；首次旧摘要及 AUTH owner 改标题导致的旧锚点失效已保留并修正，`main/markdown-final.log` **exit 0**、`main/markdown-tests-final.log` **10 passed**、`main/diff-check-final.log` **exit 0**；整合文档收口后再次执行的门禁见 `main/markdown-closeout.log`、`main/markdown-tests-closeout.log`、`main/diff-check-closeout.log`。2026-09-11 新增代理链验收报告后实测摘要为 `111 files / 421 links / 0 missing`（含 S7 治理合同补充）；同日新增 v2 多 agent 验收报告并修正 RELEASE_NOTES 链接后实测摘要为 `112 files / 424 links / 0 missing`。2026-09-12 全面真实测试修复与文档同步（AUTH/API/RELEASE_NOTES/scripts README）后实测摘要为 `112 files / 425 links / 0 missing`。
+- 最终前端 `main/type-check-final3.log` **exit 0**，两文件回归 `main/pythonlab-regression-final.log` **2 文件 / 3 tests passed**，覆盖终端隐藏生命周期与单一 TTY 输出源；此前完整 PythonLab 专项 `pythonlab/pythonlab-vitest-02.log` **52 文件 / 258 tests passed**，是此前执行结果，不是本次收口重跑；较早单文件结果保留。误在根目录执行 npm 的设施失败 `main/type-check-final.log` 保留。本轮当前 Markdown 扫描摘要：**110 files / 416 links / 0 missing**；首次旧摘要及 AUTH owner 改标题导致的旧锚点失效已保留并修正，`main/markdown-final.log` **exit 0**、`main/markdown-tests-final.log` **10 passed**、`main/diff-check-final.log` **exit 0**；整合文档收口后再次执行的门禁见 `main/markdown-closeout.log`、`main/markdown-tests-closeout.log`、`main/diff-check-closeout.log`。2026-09-11 新增代理链验收报告后实测摘要为 `111 files / 421 links / 0 missing`（含 S7 治理合同补充）；同日新增 v2 多 agent 验收报告并修正 RELEASE_NOTES 链接后实测摘要为 `112 files / 424 links / 0 missing`。2026-09-12 全面真实测试修复与文档同步（AUTH/API/RELEASE_NOTES/scripts README）后实测摘要为 `112 files / 425 links / 0 missing`。2026-09-13 新增 Docker 清理、重建、全量验证与发布计划并补齐三层索引后，当前实测摘要为 `113 files / 428 links / 0 missing`。
 - 不提交、推送、部署或 prune；不触正常业务数据、登录页及原有容器。`main/baseline.json`、`main/containers.before.json` 为本轮对照基线，最终资源保护审计 `main/final-audit.json`：原 **57 个容器元信息无变化**，当前 **70 个容器**，无意外新增，HEAD/Login 未变；本批已登记 sandbox 的回收解释中间快照数量变化。只核元信息与指定源码，不把容器元信息一致称为业务卷字节验证。
 
 ## R4 接续独立核验（2026-09-10，未发布，全项目仍未闭环）

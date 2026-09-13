@@ -2,7 +2,8 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-09-09
+> 最近复核：2026-09-13
+> 当前发布口径：v2.0.0 发布候选；标题中的 v1.6.0 是本清单建立时的范围。
 > 归档条件：工作区修复完成拆分提交与推送、门禁全绿、用户决策项全部关闭后，长期结论并入 RELEASE_NOTES 并归档。
 
 本清单是[审计台账](2026-09-08-project-audit-findings.md)的派生发布视图：以台账最新批次
@@ -57,7 +58,10 @@ Redis/worker/Docker 的原子 claim 仍未闭环**（对应 5 个 strict xfail �
 3. **AUTH-04**：登录凭据变更是否全会话撤销。
 4. **FE-02**：跨筛选/跨页批量选择语义（保留并展示明细 or 筛选变化清空）。
 5. **业务名册恢复**：独立审批（备份 → dry-run → 确认 → 事务执行 → 对账 → 回滚预案）。
-6. **Python governance 7 errors**：拆分超限函数，或治理豁免决策。
+6. ~~**Python governance 7 errors**：拆分超限函数，或治理豁免决策。~~ → **已处理（2026-09-13）**：
+   `--base-ref` 路径下实际阻断项只有 1 条（`backend/app/core/sandbox/docker.py` file-size 回归
+   705→756）。已把 mount 解析拆到 `backend/app/core/sandbox/docker_paths.py`，并按 `moved_from`
+   迁移 baseline complexity 条目；未改用治理豁免。
 
 ## 四、发布前必须补齐的验证（非本地隔离环境）
 
@@ -70,18 +74,26 @@ Redis/worker/Docker 的原子 claim 仍未闭环**（对应 5 个 strict xfail �
 - **AI**：真实供应商调用；SSE 断线重连/取消；AI 长事务与测评并发。
 - **运维**：OPS-01 网络隔离设计评审；中间版本迁移演练；备份恢复演练；依赖安全扫描；
   Typst/PDF/Monaco 等重型模块生产构建运行。
-- **门禁**：Python governance 7 errors 修复；3 个 skip 用例补齐（2 个 XBK HTTP 缺显式 app
-  分配、1 个历史 XLS 缺 xlrd）；bundle-budget/ui-audit 重跑；前端 lint 469 warnings 收敛。
+- **门禁**：~~Python governance 7 errors 修复~~ → **已处理（2026-09-13）**（拆分 `docker.py`
+  并迁移 baseline 条目；`check_python_governance.py check --base-ref origin/main` errors=0）；
+  3 个 skip 用例补齐（2 个 XBK HTTP 缺显式 app 分配、1 个历史 XLS 缺 xlrd）；
+  bundle-budget/ui-audit 重跑；前端 lint 469 warnings 收敛；CI 镜像标签门禁已与
+  完整版本/镜像标签双口径对齐。
 
-## 五、发布流程差距（现状：全部未做）
+## 五、发布流程差距（2026-09-13 复核）
 
-1. **提交/推送**：工作区约 86 个 modified + 60 个 untracked 未提交，main 领先 origin 1 个
-   提交未推送。建议按主题拆分 4 组提交：① XBK 学年+校验+导出；② 认证会话闭环
-   （session_family/stream_session/guard）；③ 业务+前端（BIZ/FE 修复）；④ PythonLab+运维+
-   迁移预检。`git diff --check` 已通过。
-2. **CI**：提交后 GitHub Actions 全绿。
-3. **版本/镜像**：v1.6.0 无 tag；6 个 amd64 镜像已手工推送但 latest 未更新 → 打 tag、
-   按 release-set 全量 build/push、staging 部署验证。
+1. **提交/推送**：上一批次改动已提交并推送到 `release/v1.6.0-audit-fixes`；当前 R6
+   门禁、Docker Hub workflow、PythonLab 路径拆分及发布验证文档仍在工作区，尚未提交/推送。
+   完成本轮真实 Docker 验收和门禁后，必须选择性暂存并普通推送，不能把上一批次的干净状态
+   当作当前事实。`main` 是否领先远端需在最终推送前重新 fetch 后确认。
+2. **CI**：PR #1「release: v2.0.0 审计修复与发布候选」已开（mergeable / UNSTABLE）。原 4 个红
+   check 中 `repo-config`（内联检查拿完整版本号比对 major.minor 镜像标签）与
+   `backend-pytest → python governance`（`docker.py` file-size 回归）**已修复（2026-09-13）**；
+   `phasec-pr-gate` / `owner-concurrency-pr-gate` 的登录超时已定位为 CI 未做 AUTH 受控
+   enrollment（`auth_authority.ready=false` 使登录返 503），已在 `pythonlab-pr-runtime.yml`
+   补 enrollment 夹具，**仍需 CI 复核**。
+3. **版本/镜像**：v2.0 镜像已推送并同步 latest（2026-09-11）；正式 tag 仍未打，建议门禁全绿后
+   打 tag、按 release-set 全量 build/push、staging 部署验证。
 4. **生产**：备份 → 迁移 → 部署 → 冒烟 → RELEASE_NOTES 更新。
 5. **凭据卫生**：~~明文密码常量 `wangshu0727`~~ → **已修复（2026-09-11）**：改为
    `settings.XBK_EXPORT_SHEET_PASSWORD`（`.env.example` 已加说明），旧值仅作兼容默认；
@@ -89,6 +101,7 @@ Redis/worker/Docker 的原子 claim 仍未闭环**（对应 5 个 strict xfail �
 
 ## 六、可立即执行、无需用户决策的事项
 
-- 按主题拆分提交并推送（见五.1）。
+- 当前 R6 改动按本轮验证结果选择性暂存、提交并推送（见五.1）。
 - ~~同步台账四处不一致~~（已修复，见二）。
-- 修复 3 个 skip 用例与 governance 7 errors（函数拆分）。
+- ~~修复 3 个 skip 用例与 governance 7 errors（函数拆分）~~ → governance 已拆分修复；
+  3 个 skip 用例仍未补齐。

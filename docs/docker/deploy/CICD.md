@@ -103,6 +103,11 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 - **功能**：调用 `pythonlab-pr-runtime.yml`，先执行可见性预热探针，再执行默认
   5 轮 PR soak；同一全栈运行时也执行真实浏览器 PythonLab smoke，失败上传
   backend/worker/frontend 日志并始终清理临时资源
+- **共享运行时说明**：`pythonlab-pr-runtime.yml` 在数据库迁移后执行一次 CI 合成库的
+  AUTH 受控 enrollment（`auth_authority.ready`）。权威 gate 未置位时登录经
+  `lock_auth_mutation` fail closed 返回 503「认证持久状态尚未完成受控迁移」，
+  浏览器 smoke 会一直停在登录页直到 60s 超时；该步骤只用于一次性合成库，生产切换
+  必须走 `auth/cutover.py` 的停流排空流程
 
 ### 2.6 ci-quality.yml — 通用质量门禁
 

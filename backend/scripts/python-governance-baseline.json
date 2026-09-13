@@ -153,11 +153,12 @@
   "backend/app/core/sandbox/docker.py::DockerProvider._get_current_container_bind_mounts": {
    "ceiling": 16
   },
-  "backend/app/core/sandbox/docker.py::DockerProvider._resolve_host_mount_path_from_mountinfo": {
-   "ceiling": 21
-  },
   "backend/app/core/sandbox/docker.py::DockerProvider.start_session": {
    "ceiling": 27
+  },
+  "backend/app/core/sandbox/docker_paths.py::DockerMountMixin._resolve_host_mount_path_from_mountinfo": {
+   "ceiling": 21,
+   "moved_from": "backend/app/core/sandbox/docker.py::DockerProvider._resolve_host_mount_path_from_mountinfo"
   },
   "backend/app/core/sandbox/k8s.py::K8sProvider.start_session": {
    "ceiling": 14

@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：project-governance
-> 最近复核：2026-07-19
+> 最近复核：2026-09-13
 
 本目录只保留仍需执行的计划和稳定参考。已完成内容进入 owner、必要归档或 Git 历史，
 不再为无引用旧路径长期保留 redirect。
@@ -17,6 +17,7 @@
 | [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) | `active` | 本地全项目审查执行入口（XBK 优先、证据分级、隔离验证与修复检查点） |
 | [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) | `active` | 首轮候选与准确性复核唯一台账（确认/降级/待复核、业务反证、覆盖缺口与修复决策） |
 | [2026-09-09-release-readiness-gap.md](2026-09-09-release-readiness-gap.md) | `active` | 台账派生的 v1.6.0 发布差距清单（24 条逐条现状核对、待决策、未验项与发布流程差距） |
+| [2026-09-13-docker-clean-build-verify-release-plan.md](2026-09-13-docker-clean-build-verify-release-plan.md) | `active` | Docker 垃圾清理、生产 release-set 重建、真实运行验收、GitHub 与 Docker Hub 发布闭环 |
 
 ## 已完成/已归档
 

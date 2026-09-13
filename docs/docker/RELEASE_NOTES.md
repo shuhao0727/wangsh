@@ -2,7 +2,7 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-09-10
+> 最近复核：2026-09-13
 > 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
 >
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
@@ -26,12 +26,47 @@
   [验收报告](archive/2026-09-11-v2-multiagent-acceptance.md)。
 - 未验证边界：TTL/迁移回滚、真实 NAT 共享 IP、多副本压力与全站发布验收仍开放。
 
+## 未发布：v2.0.0 候选门禁、Docker 全量验收与发布准备（2026-09-13）
+
+对 PR #1 的门禁根因和当前 release-set 做本地闭环，当前仍待 GitHub 提交/推送与 Docker Hub
+正式发布：
+
+- **版本口径门禁（`repo-config`）**：`ci-quality.yml` 的 Compose 镜像标签检查改为调用
+  `node scripts/check-version-consistency.mjs --print-image-tag`，完整版本 `2.0.0` 与镜像标签
+  `2.0` 的双口径收敛到同一脚本。
+- **Docker Hub 前端版本注入**：workflow 原先写入小写 `source_version`，但前端构建读取大写
+  `SOURCE_VERSION`；Linux runner 环境变量区分大小写，可能静默生成版本为 `unknown` 的镜像。
+  当前已统一为大写并增加合同回归。
+- **Python governance file-size 回归（`backend-pytest`）**：阻断项是
+  `backend/app/core/sandbox/docker.py` `705→756` 行。已把 `/proc/self/mountinfo` 与
+  `HOST_WORKSPACE_ROOT` 路径解析拆到 `backend/app/core/sandbox/docker_paths.py`
+  （`DockerMountMixin`，`_workspace_root` re-export 保持兼容），`docker.py` `756→655` 行；
+  baseline complexity 条目按 `moved_from` 迁移，未提高 ceiling。
+- **PythonLab PR gate 登录超时**：`pythonlab-pr-runtime.yml` 在 migration 后、backend/worker
+  启动前增加合成库 enrollment，调用 `bootstrap_durable_auth_authority(...,
+  legacy_writers_stopped=True)`，并以独立 session 复核 `ready`；生产仍走 `auth/cutover.py`。
+- **全量回归**：后端隔离全量 `3045 passed / 170 skipped`，Python governance 两种口径均
+  `errors=0 / warnings=24`；前端 Vitest 与脚本合计 `705 passed`，type-check/build/token 检查
+  通过，lint `0 errors / 468 warnings`；生产/开发 Compose 与版本检查通过，workflow contracts `56 passed`，Markdown contracts
+  `113 files / 428 links / 0 missing`、合同测试 `10 passed`，`git diff --check` 通过。
+- **真实 Docker release-set**：完整重建 6 个 `linux/amd64` `:2.0` 镜像，并用生产 Compose
+  在 `http://127.0.0.1:16608` 真实启动；数据库、Redis、backend、frontend、gateway 和两个
+  worker healthy，PythonLab sandbox 可创建，Alembic/Celery/API 健康检查通过。
+- **浏览器验收**：Playwright 在 4 档桌面尺寸生成登录页截图，真实点击访客入口进入 `/home`；
+  console errors/warnings 为 `0`，首页显示 `v2.0.0`。证据只保存在
+  `/tmp/wangsh-docker-verify-20260913/`，不提交截图或日志。
+- **清理**：第一轮约 `95 MB` 生成物移到 `/tmp/wangsh-garbage-20260913-093358`；5 个
+  dangling 镜像回收约 `279.4 MB`；验证结束后第二轮再归档约 `75 MB` 前端 build/Vite cache、
+  Python 字节码与本轮 Playwright 仓库副本。没有删除 `.env`、业务数据或 volume。
+- **发布绑定**：Docker Hub 阶段不得重新构建；只允许把上述已验证本地 Image ID 推到唯一
+  staging tag，核验 6 个远端 manifest 后 promote 到 `:2.0`。默认不覆盖 `latest`。
+
 ## v2.0.0 发布候选补充：真实栈全面测试修复（2026-09-12）
 
 对 `release/v1.6.0-audit-fixes` 最近 12 个提交在 Docker 生产镜像栈上做全面真实测试，发现并修复：
 
 - **版本一致性门禁**：`frontend/package.json`/`package-lock.json` 同步为 `2.0.0`；`check-version-consistency.mjs` 区分完整版本（2.0.0）与镜像标签（major.minor `2.0`）；`deploy.sh` `SIM_VERSION` 与发布 workflow 默认 tag 同步为 `2.0`。
-- **发布镜像版本注入**：workflow 导出 `source_version`（`frontend/package.json` 完整版本），frontend 构建改用 `REACT_APP_VERSION=${{ env.SOURCE_VERSION }}`，避免版本标签显示占位符。
+- **发布镜像版本注入**：workflow 从 `frontend/package.json` 读取完整版本并导出 `SOURCE_VERSION`，frontend 构建使用 `REACT_APP_VERSION=${{ env.SOURCE_VERSION }}`，避免版本标签显示占位符。
 - **workflow 合同**：生产 compose 不再钉死 Redis `container_name`（对齐 DEPLOY.md）；合同测试补 BuildKit 正则、compose 锚点与 rollback fake-docker 的 `config --images`/`alembic history`。
 - **XBK 脚本与学年迁移同步**：`scripts/xbk/{common,dataset,seed,smoke,import_samples}.py` 改用 `YYYY-YYYY` 学年字符串与 `学年` 导出表头；导入样例不再通过导入改姓名。
 - **AUTH 被替换会话反馈**：旧设备被新登录替换后，`401` detail 返回「账号已在其他地方登录，请重新登录」（持久状态 active 但 nonce 轮换），与登出/过期的「会话已失效」区分；前端 toast 时长改毫秒（6000/5000/4000）确保提示可见。

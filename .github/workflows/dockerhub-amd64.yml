@@ -64,7 +64,7 @@ jobs:
             exit 1
           fi
           source_version="$(node -p "require('./frontend/package.json').version")"
-          echo "source_version=$source_version" >> "$GITHUB_ENV"
+          echo "SOURCE_VERSION=$source_version" >> "$GITHUB_ENV"
           node scripts/check-version-consistency.mjs
 
       - uses: docker/setup-buildx-action@v3

@@ -35,6 +35,7 @@
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与稳定 reference 索引
 - [docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
 - [docker/plans/2026-07-14-project-file-consolidation-plan.md](docker/plans/2026-07-14-project-file-consolidation-plan.md) - 当前文档、测试和脚本整理执行计划
+- [docker/plans/2026-09-13-docker-clean-build-verify-release-plan.md](docker/plans/2026-09-13-docker-clean-build-verify-release-plan.md) - 当前 Docker 清理、已验证镜像发布与全量验收执行计划
 
 > 已完成的阶段报告、批次摘要和发布历史已压缩为一份归档摘要，详见
 > [docker/archive/README.md](docker/archive/README.md)。
