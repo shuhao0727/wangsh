@@ -226,18 +226,39 @@ describe("auth identity races through the real Axios adapter", () => {
     expectNoExpiry();
   });
 
-  it("suppresses the queued duplicate expired event after a new identity starts", async () => {
-    vi.useFakeTimers();
+  it("dispatches one event and allows its persisted detail to be consumed only once", () => {
+    service.notifyAuthExpired("你的账号已在其他地方登录");
+
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(service.consumeAuthExpiredDetail()).toMatchObject({
+      reason: "你的账号已在其他地方登录",
+      kind: "replaced",
+    });
+    expect(service.consumeAuthExpiredDetail()).toBeNull();
+    expect(sessionStorage.getItem("ws_auth_expired_detail")).toBeNull();
+    expect(localStorage.getItem("ws_auth_expired_detail")).toBeNull();
+  });
+
+  it("deduplicates the same immediate auth-expired notification without queuing a replay", () => {
     service.notifyAuthExpired("A expired");
+    service.notifyAuthExpired("A expired");
+
     expect(expired).toHaveBeenCalledTimes(1);
-    const login = service.authApi.login("B", "synthetic-password");
-    await flush();
-    requests.find(r => r.config.url === "/auth/login")!.reply(200, { access_token: "B" });
-    await login;
-    service.clearPersistedAuthExpiredDetail();
-    await vi.runAllTimersAsync();
-    expect(expired).toHaveBeenCalledTimes(1);
-    expectToken("B");
+  });
+
+  it("does not replay legacy localStorage text or expired sessionStorage events", () => {
+    localStorage.setItem("ws_auth_expired_detail", "你的账号已在其他地方登录");
+    expect(service.consumeAuthExpiredDetail()).toBeNull();
+    expect(localStorage.getItem("ws_auth_expired_detail")).toBeNull();
+
+    sessionStorage.setItem("ws_auth_expired_detail", JSON.stringify({
+      reason: "你的账号已在其他地方登录",
+      kind: "replaced",
+      at: Date.now() - 60_001,
+      eventId: "expired-event",
+    }));
+    expect(service.consumeAuthExpiredDetail()).toBeNull();
+    expect(sessionStorage.getItem("ws_auth_expired_detail")).toBeNull();
   });
 
   it("does not dispatch refresh after logout during the cooldown", async () => {
@@ -533,4 +554,26 @@ it("a tab opened during remote pending login cannot refresh its cookies", async 
   const result = await observe(service.authApi.refreshToken());
   expect(axios.isCancel(result.error)).toBe(true);
   expect(requests).toHaveLength(0);
+});
+
+it("logs method, safe path, status and server detail in the first error line", async () => {
+  const { logger } = await import("./logger");
+  vi.mocked(logger.error).mockClear();
+  const detail = "活动 10「for语句」未设置班级，无法用于课堂计划";
+  const result = observe(
+    service.api.post("/classroom/plans/admin/3/start?source=console", {}),
+  );
+
+  (await next("/classroom/plans/admin/3/start?source=console")).reply(400, { detail });
+
+  expect((await result).error).toBeInstanceOf(AxiosError);
+  expect(logger.error).toHaveBeenCalledWith(
+    `❌ API 错误响应: POST /classroom/plans/admin/3/start 400 - ${detail}`,
+    {
+      method: "POST",
+      url: "/classroom/plans/admin/3/start",
+      status: 400,
+      data: { detail },
+    },
+  );
 });

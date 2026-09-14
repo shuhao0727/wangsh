@@ -130,7 +130,14 @@ PostgreSQL 保存撤销依据，Redis 只保存可重建的会话投影。新 Al
 
 判定在 `session_guard.verify_request_session_detail`：持久权威拒绝时先读
 `auth_session_states`，仅当 `active` 且 nonce 不匹配才给替换语义；Redis 投影不是该判定依据。
-该反馈不改变撤销强度、`409`/`503` 合同或 cookie 清理行为。
+当 Redis 中存在 nonce、但与 access token 不一致时，也必须重新读取持久状态确认：数据库仍为
+当前 token nonce 时按 Redis 投影陈旧处理并允许请求；数据库 nonce 确已轮换时才返回异地登录，
+数据库状态 inactive 或缺失时返回普通会话失效。该反馈不改变撤销强度、`409`/`503` 合同或
+cookie 清理行为。
+
+前端把认证失效详情作为 60 秒内、同标签页的一次性事件处理：只写 `sessionStorage`，展示后立即
+消费并清理；旧 `localStorage` 文本、过期事件、React StrictMode 重挂载以及普通登录入口均不得
+重放历史“异地登录”提示。真实的新登录替换仍清除旧 token，并只提示一次。
 
 ### 转发头可信范围（S7 治理，2026-09-11）
 

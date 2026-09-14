@@ -412,3 +412,40 @@ def test_existing_mixed_class_plan_cannot_start():
         )
 
     assert exc_info.value.status_code == 400
+    detail = str(exc_info.value.detail)
+    assert "班级不一致" in detail
+    assert "高一(1)班" in detail
+    assert "高一(2)班" in detail
+    assert "活动 10" in detail
+    assert "活动 11" in detail
+
+
+def test_existing_plan_without_class_names_blocking_activity():
+    plan = _plan(1, [None])
+    plan.items[0].activity.title = "for语句"
+
+    with pytest.raises(HTTPException) as exc_info:
+        plan_api._assert_plan_class_scope(plan)
+
+    assert exc_info.value.status_code == 400
+    assert "活动 10「for语句」" in str(exc_info.value.detail)
+    assert "未设置班级" in str(exc_info.value.detail)
+
+
+def test_start_missing_plan_returns_404(monkeypatch):
+    async def fake_manage(_db, plan_id, _current_user):
+        raise plan_svc.ClassroomPlanNotFoundError(f"计划 {plan_id} 不存在")
+
+    monkeypatch.setattr(plan_api, "_assert_can_manage_plan", fake_manage)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            plan_api.start_plan(
+                3,
+                db=object(),
+                current_user={"id": 10, "role_code": "admin"},
+            )
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "计划 3 不存在"

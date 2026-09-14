@@ -17,7 +17,12 @@ import {
 } from "@components/Auth/roleAccess";
 import GlobalErrorBoundary from "@components/Common/GlobalErrorBoundary";
 import PageErrorBoundary from "@components/Common/PageErrorBoundary";
-import { AUTH_EXPIRED_EVENT, type AuthExpiredKind } from "@services/api";
+import {
+  AUTH_EXPIRED_EVENT,
+  clearPersistedAuthExpiredDetail,
+  consumeAuthExpiredDetail,
+  type AuthExpiredDetail,
+} from "@services/api";
 
 // 旧路由兼容重定向
 const ArticleEditRedirect: React.FC = () => {
@@ -95,10 +100,11 @@ function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onAuthExpired = (event: Event) => {
-      const detail = (event as CustomEvent<{ reason?: string; kind?: AuthExpiredKind }>).detail;
+      const detail = (event as CustomEvent<Partial<AuthExpiredDetail>>).detail;
       const reason = typeof detail?.reason === "string" && detail.reason.trim()
         ? detail.reason.trim()
         : "登录已过期，请重新登录";
+      clearPersistedAuthExpiredDetail();
       if (detail?.kind === "replaced") {
         showMessage.error({ content: "你的账号已在其他地方登录，当前设备已下线，请重新登录", key: "auth-expired", duration: 6000 });
         return;
@@ -111,11 +117,7 @@ function App() {
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
 
-    const cachedDetail = (
-      window as typeof window & {
-        __wsLastAuthExpiredDetail?: { reason?: string; kind?: AuthExpiredKind } | null;
-      }
-    ).__wsLastAuthExpiredDetail;
+    const cachedDetail = consumeAuthExpiredDetail();
     if (cachedDetail) {
       onAuthExpired(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: cachedDetail }));
     }

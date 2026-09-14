@@ -17,6 +17,10 @@ from app.services.classroom_plan_rules import (
 )
 
 
+class ClassroomPlanNotFoundError(ValueError):
+    """请求的课堂计划不存在。"""
+
+
 async def _load_and_validate_activities(
     db: AsyncSession,
     activity_ids: List[int],
@@ -475,5 +479,5 @@ async def _get_plan(db: AsyncSession, plan_id: int) -> ClassroomPlan:
     result = await db.execute(q)
     plan = result.scalar_one_or_none()
     if not plan:
-        raise ValueError(f"计划 {plan_id} 不存在")
+        raise ClassroomPlanNotFoundError(f"计划 {plan_id} 不存在")
     return plan

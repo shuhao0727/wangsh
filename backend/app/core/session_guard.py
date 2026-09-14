@@ -255,6 +255,35 @@ async def on_successful_login(
     return nonce_data["nonce"], ip
 
 
+async def _durable_rejection_reason(user_id: int, token_nonce: str, db=None) -> str:
+    """把持久会话拒绝细分为新登录替换或普通撤销。"""
+    state = await _durable_session_state(user_id, db)
+    if state is not None and state.active and token_nonce and state.nonce != token_nonce:
+        return "replaced_by_new_login"
+    return "family_revoked"
+
+
+async def _resolve_authoritative_session_ip(
+    user_id: int,
+    token_nonce: str,
+    stored: Dict[str, Any],
+    db=None,
+) -> Tuple[Optional[str], str]:
+    """核对 Redis 投影与持久会话，返回（失败原因，权威 IP）。"""
+    authoritative_ip = str(stored.get("ip", "") or "")
+    if token_nonce == str(stored.get("nonce", "")):
+        return None, authoritative_ip
+
+    # Redis 只是持久会话权威的投影。重新读取数据库，避免把陈旧投影误报为
+    # “账号已在其他地方登录”；只有权威 nonce 确已轮换才给替换语义。
+    state = await _durable_session_state(user_id, db)
+    if state is None or not state.active:
+        return "family_revoked", ""
+    if str(state.nonce or "") != token_nonce:
+        return "replaced_by_new_login", ""
+    return None, str(getattr(state, "ip", "") or "")
+
+
 async def verify_request_session_detail(
     user_id: int,
     token_payload: Dict[str, Any],
@@ -264,28 +293,19 @@ async def verify_request_session_detail(
     """验证请求中的令牌是否与当前有效会话匹配，并返回失败原因。"""
     token_nonce = str(token_payload.get("sn", ""))
     if not await verify_access_family(user_id, token_payload, db):
-        # 持久权威已拒绝。区分“被新登录替换”（持久状态仍 active、但 nonce 已轮换）
-        # 与“主动登出/撤销/过期”（状态 inactive 或缺失），避免把替换误报成泛化失效。
-        state = await _durable_session_state(user_id, db)
-        if (
-            state is not None
-            and state.active
-            and token_nonce
-            and state.nonce != token_nonce
-        ):
-            return {"ok": False, "reason": "replaced_by_new_login"}
-        return {"ok": False, "reason": "family_revoked"}
+        reason = await _durable_rejection_reason(user_id, token_nonce, db)
+        return {"ok": False, "reason": reason}
     stored = await get_user_session(user_id)
-    if not stored:
+    if not stored or not token_nonce:
         return {"ok": False, "reason": "expired_or_missing"}
-    stored_nonce = str(stored.get("nonce", ""))
-    if not token_nonce:
-        return {"ok": False, "reason": "expired_or_missing"}
-    if token_nonce != stored_nonce:
-        return {"ok": False, "reason": "replaced_by_new_login"}
+    reason, authoritative_ip = await _resolve_authoritative_session_ip(
+        user_id, token_nonce, stored, db,
+    )
+    if reason:
+        return {"ok": False, "reason": reason}
     if settings.AUTH_ENFORCE_SAME_IP_PER_REQUEST and request is not None:
         ip = extract_client_ip(request)
-        if ip and stored.get("ip") and ip != stored.get("ip"):
+        if ip and authoritative_ip and ip != authoritative_ip:
             return {"ok": False, "reason": "ip_mismatch"}
     return {"ok": True, "reason": "ok"}
 

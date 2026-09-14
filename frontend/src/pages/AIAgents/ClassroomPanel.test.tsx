@@ -48,7 +48,7 @@ describe("ClassroomPanel role boundary", () => {
     vi.unstubAllGlobals();
   });
 
-  it("does not start student classroom requests for an administrator", () => {
+  it("shows the management entry without starting student requests for an administrator", () => {
     render(
       <ClassroomPanel
         isAuthenticated
@@ -61,8 +61,15 @@ describe("ClassroomPanel role boundary", () => {
     expect(classroomApi.getActive).not.toHaveBeenCalled();
     expect(planApi.getActivePlan).not.toHaveBeenCalled();
     expect(MockEventSource.created).toHaveLength(0);
-    expect(floatingBtnRegistry.register).not.toHaveBeenCalled();
-    expect(screen.queryByText("课堂互动")).not.toBeInTheDocument();
+    expect(floatingBtnRegistry.register).toHaveBeenCalledWith(
+      "classroom",
+      expect.any(Number),
+      expect.any(Function),
+    );
+    expect(screen.getByRole("link", { name: "课堂互动" })).toHaveAttribute(
+      "href",
+      "/admin/classroom-interaction",
+    );
   });
 
   it("keeps polling and realtime updates enabled for a student", async () => {

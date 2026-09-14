@@ -37,7 +37,7 @@ vi.mock("@/components/Auth/AnimatedLoginCharacters", () => ({
 }));
 
 vi.mock("@/lib/toast", () => ({
-  showMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  showMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), destroy: vi.fn() },
 }));
 
 const LocationProbe = () => {

@@ -177,6 +177,56 @@ def test_activity_loader_uses_compatibility_validation_entrypoint(monkeypatch):
     assert calls == [[activity]]
 
 
+def test_activity_class_scope_error_names_activity_without_class():
+    activity = SimpleNamespace(
+        id=10,
+        title="for语句",
+        class_name=None,
+        created_by=7,
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        plan_svc._validate_activity_class_scope([activity])
+
+    message = str(exc_info.value)
+    assert "活动 10「for语句」" in message
+    assert "未设置班级" in message
+
+
+def test_activity_class_scope_error_lists_conflicting_classes():
+    activities = [
+        SimpleNamespace(
+            id=11,
+            title="条件判断",
+            class_name="高一(1)班",
+            created_by=7,
+        ),
+        SimpleNamespace(
+            id=12,
+            title="循环结构",
+            class_name="高一(2)班",
+            created_by=7,
+        ),
+    ]
+
+    with pytest.raises(ValueError) as exc_info:
+        plan_svc._validate_activity_class_scope(activities)
+
+    message = str(exc_info.value)
+    assert "班级不一致" in message
+    assert "高一(1)班" in message
+    assert "活动 11「条件判断」" in message
+    assert "高一(2)班" in message
+    assert "活动 12「循环结构」" in message
+
+
+def test_get_plan_raises_dedicated_not_found_error():
+    db = _FakeDB(execute_results=[_FakeResult(value=None)])
+
+    with pytest.raises(plan_svc.ClassroomPlanNotFoundError, match="计划 3 不存在"):
+        asyncio.run(plan_svc.get_plan(db, 3))
+
+
 def _make_plan(status="draft", items=None, plan_id=1):
     plan = SimpleNamespace(
         id=plan_id,
@@ -392,6 +442,36 @@ def test_reset_plan_resets_items(monkeypatch):
     assert result.current_item_id is None
     assert all(it.status == "pending" for it in result.items)
     assert db.commit_count == 1
+
+
+def test_reset_plan_keeps_historical_missing_class_for_start_validation(monkeypatch):
+    """历史无班级计划仍可重置，但后续启动必须由班级规则明确拦截。"""
+    item = _make_item(1, 0, status="ended", activity_status="ended")
+    item.activity.title = "for语句"
+    item.activity.class_name = None
+    plan = _make_plan(status="ended", items=[item])
+
+    async def fake_get(_db, _pid):
+        return plan
+
+    monkeypatch.setattr(plan_svc, "_get_plan", fake_get)
+    db = _FakeDB()
+
+    reset = asyncio.run(
+        plan_svc.reset_plan(
+            db, plan_id=1, owner_id=None, is_global_manager=True
+        )
+    )
+
+    assert reset.status == "draft"
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(
+            plan_svc.start_plan(
+                db, plan_id=1, owner_id=None, is_global_manager=True
+            )
+        )
+    assert "活动 10「for语句」" in str(exc_info.value)
+    assert "未设置班级" in str(exc_info.value)
 
 
 # ── 测试：下一题 ──

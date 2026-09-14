@@ -11,8 +11,6 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import useAuth from "@hooks/useAuth";
-import { notifyAuthExpired } from "@services/api";
-import { getAuthExpiredReason } from "@/lib/auth-expired";
 import { logger } from "@services/logger";
 
 interface UserMenuProps {
@@ -102,15 +100,10 @@ const UserMenu: React.FC<UserMenuProps> = ({
     const isGuest = typeof window !== "undefined" && localStorage.getItem("ws_guest_mode") === "1";
     const guestLabel = "访客模式";
     const loginLabel = "登录";
-    const replayStoredAuthExpiredReason = () => {
-      const reason = getAuthExpiredReason();
-      if (reason) notifyAuthExpired(reason);
-    };
     if (mode === "button") {
       return (
         <Button
           onClick={() => {
-            replayStoredAuthExpiredReason();
             if (onMenuClick) {
               onMenuClick("login");
             }
@@ -130,7 +123,6 @@ const UserMenu: React.FC<UserMenuProps> = ({
         onClick={(e) => {
           logger.debug("UserMenu - 点击未登录区域");
           e.stopPropagation();
-          replayStoredAuthExpiredReason();
           if (onMenuClick) {
             logger.debug("UserMenu - 调用 onMenuClick('login')");
             onMenuClick("login");

@@ -10,7 +10,10 @@ from app.core.deps import require_staff, require_student
 from app.schemas.user_info import UserInfo
 from app.services import classroom_plan as svc
 from app.services import classroom as activity_svc
-from app.services.classroom import normalize_class_name
+from app.services.classroom_plan_rules import (
+    validate_activity_class_scope,
+    validate_plan_class_scope,
+)
 from app.models.classroom import ClassroomPlanItem
 
 router = APIRouter()
@@ -30,6 +33,11 @@ class PlanUpdate(BaseModel):
 
 def _is_global_manager(current_user: UserInfo) -> bool:
     return current_user.get("role_code") in {"admin", "super_admin"}
+
+
+def _plan_http_error(exc: ValueError) -> HTTPException:
+    status_code = 404 if isinstance(exc, svc.ClassroomPlanNotFoundError) else 400
+    return HTTPException(status_code=status_code, detail=str(exc))
 
 
 async def _assert_can_manage_plan(
@@ -57,7 +65,7 @@ async def _assert_activities_manageable(
 ) -> None:
     is_global_manager = _is_global_manager(current_user)
     user_id = current_user.get("id")
-    class_names: set[str] = set()
+    activities = []
     for activity_id in activity_ids:
         try:
             activity = await activity_svc._get_activity(db, activity_id)
@@ -65,24 +73,18 @@ async def _assert_activities_manageable(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not is_global_manager and activity.created_by != user_id:
             raise HTTPException(status_code=403, detail="无权使用他人创建的课堂活动")
-        class_name = normalize_class_name(activity.class_name)
-        if not class_name:
-            raise HTTPException(status_code=400, detail="课堂计划中的活动必须设置班级")
-        class_names.add(class_name)
-    if len(class_names) != 1:
-        raise HTTPException(status_code=400, detail="课堂计划中的活动必须属于同一班级")
+        activities.append(activity)
+    try:
+        validate_activity_class_scope(activities)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _assert_plan_class_scope(plan) -> None:
-    class_names: set[str] = set()
-    for item in plan.items:
-        activity = item.activity
-        class_name = normalize_class_name(getattr(activity, "class_name", None))
-        if not class_name:
-            raise HTTPException(status_code=400, detail="课堂计划中的活动必须设置班级")
-        class_names.add(class_name)
-    if len(class_names) != 1:
-        raise HTTPException(status_code=400, detail="课堂计划中的活动必须属于同一班级")
+    try:
+        validate_plan_class_scope(plan)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _format_item(
@@ -149,7 +151,7 @@ async def create_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.put("/admin/{plan_id}")
@@ -175,7 +177,7 @@ async def update_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.delete("/admin/{plan_id}")
@@ -196,7 +198,7 @@ async def delete_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.get("/admin")
@@ -221,7 +223,7 @@ async def get_plan(
         await _assert_can_manage_plan(db, plan_id, current_user)
         return _format_plan(await svc.get_plan(db, plan_id))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/start")
@@ -244,7 +246,7 @@ async def start_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/reset")
@@ -266,7 +268,7 @@ async def reset_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/next")
@@ -288,7 +290,7 @@ async def next_item(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/end")
@@ -310,7 +312,7 @@ async def end_plan(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/items/{item_id}/start")
@@ -334,7 +336,7 @@ async def start_item(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 @router.post("/admin/{plan_id}/items/{item_id}/end")
@@ -358,7 +360,7 @@ async def end_item(
     except svc.ClassroomPlanPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _plan_http_error(e) from e
 
 
 # ── 学生端 ──

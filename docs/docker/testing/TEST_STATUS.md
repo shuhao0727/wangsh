@@ -1150,8 +1150,9 @@ Docker Hub 发布仍对应 `origin/main`；文档或代码继续变更后，必�
 - GroupDiscussion 并发创建冲突回滚前会保存旧成员的会话 ID，切组清理不再读取
   rollback 后过期的 ORM 对象；旧成员删除与新成员插入使用同一次提交，失败显式
   rollback，避免 `MissingGreenlet` 500 或提前永久退出原组。
-- ClassroomPanel 已按学生用户 ID 做作用域隔离；管理员不再启动学生课堂轮询、计划请求
-  或 SSE，账号切换会清理历史答案，旧异步回调不会覆盖新用户状态。
+- ClassroomPanel 已拆分浮动入口权限与学生参与作用域：管理员和超级管理员显示通往
+  `/admin/classroom-interaction` 的管理入口，但不启动学生课堂轮询、计划请求或 SSE；
+  学生账号切换仍会清理历史答案，旧异步回调不会覆盖新用户状态。
 - ClassroomPanel 当前 8 个定向回归除角色和身份边界外，还覆盖同账号活动刷新乱序、
   旧结果失败覆盖较新活动、历史题统计乱序，以及跨账号手动刷新锁隔离。
 - 思维导图编辑器的 iframe 数据保存回归仍保留；此前真实 Chromium 结果只证明当前

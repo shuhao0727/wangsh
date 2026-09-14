@@ -162,9 +162,12 @@ const CircleProgress = ({
   );
 };
 
-const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, userId }) => {
-  const canUse = isAuthenticated && isStudent && userId != null;
-  const participantId = canUse ? userId : null;
+const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isAdmin, userId }) => {
+  const canParticipate = isAuthenticated && isStudent && userId != null;
+  const canManage = isAuthenticated && isAdmin;
+  const canShowEntry = canParticipate || canManage;
+  const participantId = canParticipate ? userId : null;
+  const entryScope = canParticipate ? `student:${participantId}` : canManage ? "admin" : null;
   const participantIdRef = useRef<number | null>(participantId);
   participantIdRef.current = participantId;
   const [open, setOpen] = useState(false);
@@ -570,38 +573,53 @@ const ClassroomPanel: React.FC<Props> = ({ isAuthenticated, isStudent, userId })
 
   // 注册到全局按钮注册表
   useEffect(() => {
-    if (participantId == null) return;
+    if (entryScope == null) return;
     floatingBtnRegistry.register("classroom", btnTop, (v) => {
       setBtnTop(v);
       try { localStorage.setItem(STORAGE_KEYS.BTN_TOP, String(v)); } catch {}
     });
     return () => floatingBtnRegistry.unregister("classroom");
-  }, [participantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entryScope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (participantId == null) return;
+    if (entryScope == null) return;
     floatingBtnRegistry.updateTop("classroom", btnTop);
-  }, [participantId, btnTop]);
+  }, [entryScope, btnTop]);
 
-  if (!canUse) return null;
+  if (!canShowEntry) return null;
 
-  const floatingBtn = !open && (
+  const opensManagementPage = !canParticipate && canManage;
+
+  const floatingBtn = (opensManagementPage || !open) && (
     <div
       style={{ position: "fixed", left: 0, top: `${btnTop}%`, zIndex: "var(--ws-z-floating-btn)", cursor: "grab", touchAction: "none" }}
       onPointerDown={handleBtnDragStart}
       onPointerMove={handleBtnDragMove}
       onPointerUp={handleBtnDragEnd}
     >
-      <Button
-        onClick={() => { if (!btnDragged.current) handleOpen(); }}
-        className="ws-floating-entry-btn ws-floating-entry-btn--classroom"
-      >
-        <Zap className="h-4 w-4" />课堂互动
-      </Button>
+      {opensManagementPage ? (
+        <Button asChild className="ws-floating-entry-btn ws-floating-entry-btn--classroom">
+          <a
+            href="/admin/classroom-interaction"
+            onClick={(event) => {
+              if (btnDragged.current) event.preventDefault();
+            }}
+          >
+            <Zap className="h-4 w-4" />课堂互动
+          </a>
+        </Button>
+      ) : (
+        <Button
+          onClick={() => { if (!btnDragged.current) handleOpen(); }}
+          className="ws-floating-entry-btn ws-floating-entry-btn--classroom"
+        >
+          <Zap className="h-4 w-4" />课堂互动
+        </Button>
+      )}
     </div>
   );
 
-  if (!open) return ReactDOM.createPortal(floatingBtn, document.body);
+  if (opensManagementPage || !open) return ReactDOM.createPortal(floatingBtn, document.body);
 
   const panel = (
     <div ref={floatingRef} onMouseUp={handleResizeUp} style={{

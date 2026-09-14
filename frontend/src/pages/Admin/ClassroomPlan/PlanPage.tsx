@@ -1,6 +1,6 @@
 // 课堂计划 - 独立页面
 import { showMessage } from "@/lib/toast";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   type ColumnDef,
   getCoreRowModel,
@@ -37,7 +37,12 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { planApi, type Plan, type PlanItem } from "@services/classroomPlan";
+import {
+  isPlanNotFoundError,
+  planApi,
+  type Plan,
+  type PlanItem,
+} from "@services/classroomPlan";
 import { classroomApi, type Activity, type ActivityStats } from "@services/classroom";
 import { AdminPage } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
@@ -57,6 +62,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -70,6 +76,7 @@ import {
 import { queryKeys } from "@hooks/queries/queryKeys";
 
 const ACTIVITY_FETCH_BATCH_SIZE = 100;
+const PLAN_NOT_FOUND_MESSAGE = "该计划已被删除或不存在，列表已刷新";
 
 const parseErr = (e: any, fallback = "操作失败") =>
   String(e?.response?.data?.detail || e?.message || fallback);
@@ -186,6 +193,7 @@ interface PlanFormPanelProps {
   loadingActivities: boolean;
   onCancel: () => void;
   onSubmit: (payload: PlanFormSubmitPayload) => Promise<void> | void;
+  onRequestError: (error: unknown, planId: number) => boolean;
 }
 
 const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
@@ -194,6 +202,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
   loadingActivities,
   onCancel,
   onSubmit,
+  onRequestError,
 }) => {
   const [title, setTitle] = useState("");
   const [search, setSearch] = useState("");
@@ -269,7 +278,9 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
         selectedIds: [...selectedIds],
       });
     } catch (e: any) {
-      showMessage.error(parseErr(e));
+      if (!editing || !onRequestError(e, editing.id)) {
+        showMessage.error(parseErr(e));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -426,6 +437,7 @@ interface ConsolePanelProps {
   onEndItem: (planId: number, itemId: number) => Promise<void>;
   onRestartItem: (planId: number, itemId: number) => Promise<void>;
   onUpdateItemTime: (planId: number, itemId: number, timeLimit: number) => Promise<void>;
+  onRequestError: (error: unknown, planId: number) => boolean;
 }
 
 const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
@@ -438,6 +450,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
   onEndItem,
   onRestartItem,
   onUpdateItemTime,
+  onRequestError,
 }) => {
   const [loading, setLoading] = useState<string | null>(null);
   const [editTimeId, setEditTimeId] = useState<number | null>(null);
@@ -470,7 +483,9 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
       await fn();
       await onRefresh(plan.id);
     } catch (e: any) {
-      showMessage.error(parseErr(e));
+      if (!onRequestError(e, plan.id)) {
+        showMessage.error(parseErr(e));
+      }
     } finally {
       setLoading(null);
     }
@@ -482,7 +497,9 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
       showMessage.success("时间已更新");
       setEditTimeId(null);
     } catch (e: any) {
-      showMessage.error(parseErr(e));
+      if (!onRequestError(e, plan.id)) {
+        showMessage.error(parseErr(e));
+      }
     }
   };
 
@@ -492,7 +509,9 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
       await onRefresh(plan.id);
       showMessage.success("已刷新");
     } catch (e: any) {
-      showMessage.error(parseErr(e));
+      if (!onRequestError(e, plan.id)) {
+        showMessage.error(parseErr(e));
+      }
     } finally {
       setLoading(null);
     }
@@ -705,6 +724,9 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
         <SheetContent side="right" className="w-full max-w-[680px] overflow-y-auto px-4 py-4 sm:px-6">
           <SheetHeader>
             <SheetTitle>{drawerActivity?.title || "活动详情"}</SheetTitle>
+            <SheetDescription className="sr-only">
+              查看活动配置、作答统计与分析信息
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-3">
             {drawerActivity && <ActivityDetailContent activity={drawerActivity} stats={drawerStats} />}
@@ -745,6 +767,7 @@ const ClassroomPlanPage: React.FC = () => {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [consolePlan, setConsolePlan] = useState<Plan | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const missingPlanNoticeRef = useRef<{ planId: number; at: number } | null>(null);
 
   // ── TanStack Query: plan list ────────────────────────────
   const queryParams = useMemo(
@@ -762,6 +785,31 @@ const ClassroomPlanPage: React.FC = () => {
     setEditingPlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
     setConsolePlan((prev) => (prev?.id === nextPlan.id ? nextPlan : prev));
   }, []);
+
+  const handlePlanRequestError = useCallback((error: unknown, planId: number): boolean => {
+    if (!isPlanNotFoundError(error, planId)) return false;
+
+    setEditingPlan((prev) => (prev?.id === planId ? null : prev));
+    setConsolePlan((prev) => (prev?.id === planId ? null : prev));
+    setDeleteTarget((prev) => (prev === planId ? null : prev));
+    setRightView((prev) => {
+      if (prev.type === "form" && prev.editingId === planId) return { type: "none" };
+      if (prev.type === "console" && prev.planId === planId) return { type: "none" };
+      return prev;
+    });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
+
+    const now = Date.now();
+    const previousNotice = missingPlanNoticeRef.current;
+    if (
+      previousNotice?.planId !== planId ||
+      now - previousNotice.at > 2000
+    ) {
+      missingPlanNoticeRef.current = { planId, at: now };
+      showMessage.warning(PLAN_NOT_FOUND_MESSAGE);
+    }
+    return true;
+  }, [queryClient]);
 
   const loadActivities = useCallback(async () => {
     setActivityLoading(true);
@@ -802,24 +850,31 @@ const ClassroomPlanPage: React.FC = () => {
       return;
     }
 
-    void loadPlanDetail(rightView.editingId).catch((e) => {
-      showMessage.error(parseErr(e, "加载计划详情失败"));
+    const planId = rightView.editingId;
+    void loadPlanDetail(planId).catch((e) => {
+      if (!handlePlanRequestError(e, planId)) {
+        showMessage.error(parseErr(e, "加载计划详情失败"));
+      }
     });
-  }, [loadPlanDetail, rightView]);
+  }, [handlePlanRequestError, loadPlanDetail, rightView]);
 
   useEffect(() => {
     if (rightView.type !== "console") {
       return;
     }
 
-    void loadPlanDetail(rightView.planId).catch((e) => {
-      showMessage.error(parseErr(e, "加载计划详情失败"));
+    const planId = rightView.planId;
+    void loadPlanDetail(planId).catch((e) => {
+      if (!handlePlanRequestError(e, planId)) {
+        showMessage.error(parseErr(e, "加载计划详情失败"));
+      }
     });
-  }, [loadPlanDetail, rightView]);
+  }, [handlePlanRequestError, loadPlanDetail, rightView]);
 
-  const invalidatePlans = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all });
-  }, [queryClient]);
+  const invalidatePlans = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.classroomPlans.all }),
+    [queryClient],
+  );
 
   const handleRefreshList = useCallback(async () => {
     await Promise.all([
@@ -828,14 +883,24 @@ const ClassroomPlanPage: React.FC = () => {
     ]);
 
     if (rightView.type === "form" && rightView.editingId != null) {
-      await loadPlanDetail(rightView.editingId);
+      try {
+        await loadPlanDetail(rightView.editingId);
+      } catch (error) {
+        if (handlePlanRequestError(error, rightView.editingId)) return;
+        throw error;
+      }
     }
     if (rightView.type === "console") {
-      await loadPlanDetail(rightView.planId);
+      try {
+        await loadPlanDetail(rightView.planId);
+      } catch (error) {
+        if (handlePlanRequestError(error, rightView.planId)) return;
+        throw error;
+      }
     }
 
     showMessage.success("已刷新");
-  }, [loadActivities, loadPlanDetail, invalidatePlans, rightView]);
+  }, [handlePlanRequestError, loadActivities, loadPlanDetail, invalidatePlans, rightView]);
 
   const handleRefreshPlan = useCallback(async (id: number) => {
     await loadPlanDetail(id);
@@ -852,7 +917,7 @@ const ClassroomPlanPage: React.FC = () => {
       if (page !== 1) {
         setPage(1);
       } else {
-        invalidatePlans();
+        void invalidatePlans();
       }
       showMessage.success("创建成功");
       return;
@@ -863,7 +928,7 @@ const ClassroomPlanPage: React.FC = () => {
     setEditingPlan(null);
     setConsolePlan(updated);
     setRightView({ type: "console", planId: updated.id });
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("已更新");
   }, [applyPlanUpdate, invalidatePlans, page, rightView]);
 
@@ -893,12 +958,14 @@ const ClassroomPlanPage: React.FC = () => {
       if (nextPage !== page) {
         setPage(nextPage);
       } else {
-        invalidatePlans();
+        void invalidatePlans();
       }
 
       showMessage.success("已删除");
     } catch (e: any) {
-      showMessage.error(parseErr(e, "删除失败"));
+      if (!handlePlanRequestError(e, id)) {
+        showMessage.error(parseErr(e, "删除失败"));
+      }
     }
   };
 
@@ -920,42 +987,42 @@ const ClassroomPlanPage: React.FC = () => {
   const handleStartPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.start(planId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("计划已启动");
   }, [applyPlanUpdate, invalidatePlans]);
 
   const handleEndPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.end(planId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("计划已结束");
   }, [applyPlanUpdate, invalidatePlans]);
 
   const handleResetPlan = useCallback(async (planId: number) => {
     const nextPlan = await planApi.reset(planId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("计划已重置");
   }, [applyPlanUpdate, invalidatePlans]);
 
   const handleStartItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.startItem(planId, itemId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("题目已开始");
   }, [applyPlanUpdate, invalidatePlans]);
 
   const handleEndItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.endItem(planId, itemId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("题目已结束");
   }, [applyPlanUpdate, invalidatePlans]);
 
   const handleRestartItem = useCallback(async (planId: number, itemId: number) => {
     const nextPlan = await planApi.startItem(planId, itemId);
     applyPlanUpdate(nextPlan);
-    invalidatePlans();
+    void invalidatePlans();
     showMessage.success("题目已重新开始");
   }, [applyPlanUpdate, invalidatePlans]);
 
@@ -972,7 +1039,7 @@ const ClassroomPlanPage: React.FC = () => {
 
     const refreshedPlan = await planApi.get(planId);
     applyPlanUpdate(refreshedPlan);
-    invalidatePlans();
+    void invalidatePlans();
   }, [applyPlanUpdate, invalidatePlans]);
 
   const rightTitle =
@@ -1095,7 +1162,16 @@ const ClassroomPlanPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <div className="text-sm font-semibold">计划列表</div>
               <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="outline" onClick={() => { void handleRefreshList(); }} disabled={listLoading}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void handleRefreshList().catch((error) => {
+                      showMessage.error(parseErr(error, "刷新失败"));
+                    });
+                  }}
+                  disabled={listLoading}
+                >
                   {listLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   刷新
                 </Button>
@@ -1167,6 +1243,7 @@ const ClassroomPlanPage: React.FC = () => {
                     loadingActivities={activityLoading}
                     onCancel={() => setRightView({ type: "none" })}
                     onSubmit={handleFormSubmit}
+                    onRequestError={handlePlanRequestError}
                   />
                 )}
                 {rightView.type === "console" && consolePlan && (
@@ -1180,6 +1257,7 @@ const ClassroomPlanPage: React.FC = () => {
                     onEndItem={handleEndItem}
                     onRestartItem={handleRestartItem}
                     onUpdateItemTime={handleUpdateItemTime}
+                    onRequestError={handlePlanRequestError}
                   />
                 )}
               </div>

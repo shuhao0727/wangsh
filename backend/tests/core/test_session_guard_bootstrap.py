@@ -88,11 +88,41 @@ def test_on_successful_login_always_rotates_same_user_session(monkeypatch):
     assert writes[1][1]["nonce"] == second_nonce
 
 
-def test_verify_request_session_detail_reports_replaced_login(monkeypatch):
+def test_verify_request_session_detail_accepts_authoritative_session_when_redis_is_stale(monkeypatch):
     async def fake_get_user_session(_user_id):
         return {"nonce": "fresh-nonce", "ip": "127.0.0.1"}
 
+    class FakeState:
+        active = True
+        nonce = "old-nonce"
+        ip = "127.0.0.1"
+
+    async def fake_durable_state(_user_id, db=None):
+        return FakeState()
+
     monkeypatch.setattr(session_guard, "get_user_session", fake_get_user_session)
+    monkeypatch.setattr(session_guard, "_durable_session_state", fake_durable_state)
+    _patch_durable_family(monkeypatch)
+
+    detail = asyncio.run(session_guard.verify_request_session_detail(7, {"sn": "old-nonce"}, None))
+
+    assert detail == {"ok": True, "reason": "ok"}
+
+
+def test_verify_request_session_detail_confirms_replacement_against_durable_state(monkeypatch):
+    async def fake_get_user_session(_user_id):
+        return {"nonce": "fresh-nonce", "ip": "127.0.0.1"}
+
+    class FakeState:
+        active = True
+        nonce = "fresh-nonce"
+        ip = "127.0.0.1"
+
+    async def fake_durable_state(_user_id, db=None):
+        return FakeState()
+
+    monkeypatch.setattr(session_guard, "get_user_session", fake_get_user_session)
+    monkeypatch.setattr(session_guard, "_durable_session_state", fake_durable_state)
     _patch_durable_family(monkeypatch)
 
     detail = asyncio.run(session_guard.verify_request_session_detail(7, {"sn": "old-nonce"}, None))

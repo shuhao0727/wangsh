@@ -93,9 +93,19 @@ export const subscribeAuthIdentityChange = (listener: (identity: { pending: bool
 };
 const REFRESH_ATTEMPT_AT_KEY = "ws_refresh_attempt_at";
 const AUTH_EXPIRED_DETAIL_KEY = "ws_auth_expired_detail";
+const AUTH_EXPIRED_DETAIL_TTL_MS = 60_000;
 const REFRESH_COOLDOWN_MS = 5200;
 export const AUTH_EXPIRED_EVENT = "ws:auth-expired";
 export type AuthExpiredKind = "expired" | "replaced" | "ip_changed";
+export type AuthExpiredDetail = {
+  reason: string;
+  kind: AuthExpiredKind;
+  at: number;
+  eventId: string;
+};
+type AuthExpiredWindow = typeof window & {
+  __wsLastAuthExpiredDetail?: AuthExpiredDetail | null;
+};
 let lastAuthExpiredNotifyAt = 0;
 let lastAuthExpiredReason = "";
 
@@ -130,6 +140,19 @@ const readAuthExpiredDetailFromUnknown = (value: unknown): string | undefined =>
   return undefined;
 };
 
+export const formatApiErrorLogMessage = (params: {
+  method?: unknown;
+  url?: unknown;
+  status?: unknown;
+  data?: unknown;
+}): string => {
+  const method = String(params.method || "REQUEST").toUpperCase();
+  const url = String(params.url || "unknown").split(/[?#]/, 1)[0] || "unknown";
+  const status = Number.isFinite(Number(params.status)) ? String(params.status) : "unknown";
+  const detail = readAuthExpiredDetailFromUnknown(params.data)?.replace(/\s+/g, " ").trim();
+  return `❌ API 错误响应: ${method} ${url} ${status}${detail ? ` - ${detail}` : ""}`;
+};
+
 export const extractAuthErrorDetail = (err?: ApiError | unknown): string | undefined => {
   const error = err as ApiError | undefined;
   const responseData = error?.response?.data;
@@ -142,30 +165,48 @@ export const extractAuthErrorDetail = (err?: ApiError | unknown): string | undef
   return undefined;
 };
 
-export const getPersistedAuthExpiredDetail = (): string | null => {
+const clearStoredAuthExpiredDetail = () => {
   if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || localStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || "";
-    const text = raw.trim();
-    return text || null;
-  } catch {
-    return null;
-  }
-};
-
-export const clearPersistedAuthExpiredDetail = () => {
-  if (typeof window === "undefined") return;
   try {
     sessionStorage.removeItem(AUTH_EXPIRED_DETAIL_KEY);
     localStorage.removeItem(AUTH_EXPIRED_DETAIL_KEY);
   } catch {
   }
+};
+
+const readPersistedAuthExpiredDetail = (): AuthExpiredDetail | null => {
+  if (typeof window === "undefined") return null;
   try {
-    (
-      window as typeof window & {
-        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string; at?: number } | null;
-      }
-    ).__wsLastAuthExpiredDetail = null;
+    const raw = sessionStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || localStorage.getItem(AUTH_EXPIRED_DETAIL_KEY) || "";
+    if (!raw.trim()) return null;
+    const parsed = JSON.parse(raw) as Partial<AuthExpiredDetail>;
+    const reason = normalizeAuthExpiredReason(parsed?.reason);
+    const at = Number(parsed?.at);
+    if (!Number.isFinite(at) || Date.now() - at > AUTH_EXPIRED_DETAIL_TTL_MS || Date.now() < at) {
+      clearStoredAuthExpiredDetail();
+      return null;
+    }
+    return {
+      reason,
+      kind: parsed?.kind === "replaced" || parsed?.kind === "ip_changed" ? parsed.kind : "expired",
+      at,
+      eventId: typeof parsed?.eventId === "string" && parsed.eventId ? parsed.eventId : `legacy:${at}`,
+    };
+  } catch {
+    // Legacy plain-text values have no creation time and can be arbitrarily old.
+    clearStoredAuthExpiredDetail();
+    return null;
+  }
+};
+
+export const getPersistedAuthExpiredDetail = (): string | null =>
+  readPersistedAuthExpiredDetail()?.reason ?? null;
+
+export const clearPersistedAuthExpiredDetail = () => {
+  if (typeof window === "undefined") return;
+  clearStoredAuthExpiredDetail();
+  try {
+    (window as AuthExpiredWindow).__wsLastAuthExpiredDetail = null;
   } catch {
   }
 };
@@ -173,51 +214,57 @@ export const clearPersistedAuthExpiredDetail = () => {
 export const persistAuthExpiredDetail = (reason?: string) => {
   const msg = normalizeAuthExpiredReason(reason);
   if (typeof window === "undefined") return msg;
+  const at = Date.now();
+  const detail: AuthExpiredDetail = {
+    reason: msg,
+    kind: classifyAuthExpiredKind(msg),
+    at,
+    eventId: `${at}:${Math.random().toString(36).slice(2)}`,
+  };
   try {
-    sessionStorage.setItem(AUTH_EXPIRED_DETAIL_KEY, msg);
-    localStorage.setItem(AUTH_EXPIRED_DETAIL_KEY, msg);
+    // Keep this only for a same-tab reload/redirect. Cross-tab identity is
+    // synchronized separately; a permanent localStorage error becomes stale UI.
+    sessionStorage.setItem(AUTH_EXPIRED_DETAIL_KEY, JSON.stringify(detail));
+    localStorage.removeItem(AUTH_EXPIRED_DETAIL_KEY);
   } catch {
   }
   try {
-    (
-      window as typeof window & {
-        __wsLastAuthExpiredDetail?: { reason?: string; kind?: string; at?: number } | null;
-      }
-    ).__wsLastAuthExpiredDetail = {
-      reason: msg,
-      kind: classifyAuthExpiredKind(msg),
-      at: Date.now(),
-    };
+    (window as AuthExpiredWindow).__wsLastAuthExpiredDetail = detail;
   } catch {
   }
   return msg;
 };
 
+export const consumeAuthExpiredDetail = (): AuthExpiredDetail | null => {
+  if (typeof window === "undefined") return null;
+  const cached = (window as AuthExpiredWindow).__wsLastAuthExpiredDetail;
+  const detail = cached && Date.now() >= cached.at && Date.now() - cached.at <= AUTH_EXPIRED_DETAIL_TTL_MS
+    ? cached
+    : readPersistedAuthExpiredDetail();
+  clearPersistedAuthExpiredDetail();
+  return detail;
+};
+
 export const notifyAuthExpired = (reason?: string) => {
   if (typeof window === "undefined") return;
-  const msg = persistAuthExpiredDetail(reason);
+  const msg = normalizeAuthExpiredReason(reason);
   const now = Date.now();
-  const kind = classifyAuthExpiredKind(msg);
-  const detail = { reason: msg, kind, at: now };
   if (now - lastAuthExpiredNotifyAt < 3000 && lastAuthExpiredReason === msg) return;
   lastAuthExpiredNotifyAt = now;
   lastAuthExpiredReason = msg;
+  persistAuthExpiredDetail(msg);
+  const detail = (window as AuthExpiredWindow).__wsLastAuthExpiredDetail || {
+    reason: msg,
+    kind: classifyAuthExpiredKind(msg),
+    at: now,
+    eventId: `${now}:fallback`,
+  };
   logger.debug("[auth-expired] dispatch", detail);
-  const notifyEpoch = authEpoch;
   window.dispatchEvent(
     new CustomEvent(AUTH_EXPIRED_EVENT, {
       detail,
     }),
   );
-  window.setTimeout(() => {
-    syncSharedIdentity();
-    if (notifyEpoch !== authEpoch) return;
-    window.dispatchEvent(
-      new CustomEvent(AUTH_EXPIRED_EVENT, {
-        detail,
-      }),
-    );
-  }, 0);
 };
 
 export const getStoredAccessToken = () => {
@@ -651,8 +698,16 @@ const createApiClient = (): AxiosInstance => {
         }
         const silent = !!(error.config as InternalAxiosRequestConfig & { silent?: boolean })?.silent;
         if (!silent) {
-          logger.error("❌ API 错误响应:", {
-            url: error.config.url,
+          const method = String(error.config.method || "REQUEST").toUpperCase();
+          const url = String(error.config.url || "unknown").split(/[?#]/, 1)[0] || "unknown";
+          logger.error(formatApiErrorLogMessage({
+            method,
+            url,
+            status: error.response.status,
+            data: loggedData,
+          }), {
+            method,
+            url,
             status: error.response.status,
             data: loggedData,
           });

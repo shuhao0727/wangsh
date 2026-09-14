@@ -35,6 +35,20 @@ export interface PlanListResponse {
   total: number;
 }
 
+export const isPlanNotFoundError = (error: unknown, planId?: number): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const response = (error as { response?: { status?: unknown } }).response;
+  if (Number(response?.status) !== 404) return false;
+
+  const requestUrl = String(
+    (error as { config?: { url?: unknown } }).config?.url ?? "",
+  ).split("?", 1)[0];
+  if (!requestUrl || planId === undefined) return true;
+
+  const planUrl = `${BASE}/admin/${planId}`;
+  return requestUrl === planUrl || requestUrl.startsWith(`${planUrl}/`);
+};
+
 export const planApi = {
   // 管理端
   list: async (skip = 0, limit = 20): Promise<PlanListResponse> => {

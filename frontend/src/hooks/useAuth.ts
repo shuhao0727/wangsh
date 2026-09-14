@@ -216,6 +216,8 @@ const useAuthController = () => {
     async (username: string, password: string) => {
       const request = authRequestGateRef.current.begin();
       cancelCurrentRequest();
+      clearPersistedAuthExpiredDetail();
+      showMessage.destroy("auth-expired");
       setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
@@ -416,15 +418,6 @@ const useAuthController = () => {
       });
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
-
-    const cachedDetail = (
-      window as typeof window & {
-        __wsLastAuthExpiredDetail?: { reason?: string } | null;
-      }
-    ).__wsLastAuthExpiredDetail;
-    if (cachedDetail?.reason) {
-      onAuthExpired(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: cachedDetail }));
-    }
 
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired as EventListener);
   }, [cancelCurrentRequest]);
