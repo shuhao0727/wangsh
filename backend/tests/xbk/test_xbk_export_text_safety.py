@@ -99,6 +99,9 @@ def specialized_bytes(kind, row, *, grade=None, term=TERM, empty=False):
     results = ([] if empty else [row],)
     if kind != "distribution":
         results += ([] if empty else [row],)
+    if kind == "course-selection" and not empty:
+        # course_selection now populates the class sheet from active selections.
+        results += ([row],)
 
     async def run():
         response = await exports.export_tables(
@@ -251,7 +254,7 @@ def test_template_validation_and_protection_are_preserved(course_code):
     assert catalog.protection.password == expected_password_hash
     assert roster.protection.password == expected_password_hash
     assert roster["B2"].protection.locked and not roster["D2"].protection.locked
-    assert roster["D2"].value is None
+    assert roster["D2"].value == course_code
     validation = roster.data_validations.dataValidation[0]
     assert validation.formula1 == '=IFERROR(AND(D2<>"",COUNTIF(D:D,D2)<=VLOOKUP(D2&"",\'校本课程目录\'!$A$3:$D$3,4,0)),FALSE)'
     with ZipFile(BytesIO(content)) as archive:

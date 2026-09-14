@@ -36,6 +36,14 @@ async def require_xbk_access(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="XBK 未开放")
 
 
+def apply_search_filter(stmt, search_text: Optional[str], columns: List[Any]):
+    """按调用方提供的关联字段统一应用关键词搜索。"""
+    if search_text and search_text.strip():
+        keyword = f"%{search_text.strip()}%"
+        stmt = stmt.where(or_(*(column.ilike(keyword) for column in columns)))
+    return stmt
+
+
 def apply_common_filters(
     stmt,
     model,
@@ -53,16 +61,14 @@ def apply_common_filters(
     if grade:
         conditions.append(model.grade == grade)
     if search_text and search_text.strip():
-        keyword = f"%{search_text.strip()}%"
-        text_conditions = []
-        for col in [
-            "student_no", "name", "class_name",
-            "course_code", "course_name", "teacher", "location",
-        ]:
-            if hasattr(model, col):
-                text_conditions.append(getattr(model, col).ilike(keyword))
-        if text_conditions:
-            conditions.append(or_(*text_conditions))
+        text_columns = [
+            getattr(model, col) for col in [
+                "student_no", "name", "class_name",
+                "course_code", "course_name", "teacher", "location",
+            ] if hasattr(model, col)
+        ]
+        if text_columns:
+            conditions.append(or_(*[column.ilike(f"%{search_text.strip()}%") for column in text_columns]))
     if conditions:
         stmt = stmt.where(and_(*conditions))
     return stmt

@@ -11,7 +11,7 @@ from sqlalchemy import Numeric, case, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.academic_year import split_academic_year
-from app.models import XbkCourse, XbkStudent
+from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.core.config import settings
 from app.services.xbk.exports.common import apply_table_style, auto_adjust_column_width, class_sort_key, safe_sheet_name, force_text_cells
 
@@ -145,6 +145,29 @@ def _adjust_catalog_dimensions(ws) -> None:
         ws.row_dimensions[r].height = min(18 * max_lines, 72)
 
 
+
+async def _load_selection_map(db: AsyncSession, year: str, term: str, students: List[XbkStudent]) -> Dict[str, str]:
+    if not students:
+        return {}
+    selection_stmt = (
+        select(XbkSelection)
+        .where(
+            XbkSelection.is_deleted.is_(False),
+            XbkSelection.year == year, XbkSelection.term == term,
+            XbkSelection.student_no.in_([student.student_no for student in students]),
+        )
+        .order_by(
+            XbkSelection.student_no.asc(),
+            case((XbkSelection.course_code.op("~")("^[0-9]+$"), cast(XbkSelection.course_code, Numeric(50, 0))), else_=None).asc().nulls_last(),
+            XbkSelection.course_code.asc(),
+        )
+    )
+    selections = (await db.execute(selection_stmt)).scalars().all()
+    result: Dict[str, str] = {}
+    for selection in selections:
+        result.setdefault(selection.student_no, selection.course_code)
+    return result
+
 async def build_student_course_selection_xlsx(
     db: AsyncSession,
     year: str,
@@ -181,6 +204,13 @@ async def build_student_course_selection_xlsx(
     if class_name:
         stu_stmt = stu_stmt.where(XbkStudent.class_name == class_name)
     students = (await db.execute(stu_stmt.order_by(XbkStudent.class_name.asc(), XbkStudent.student_no.asc()))).scalars().all()
+
+    # The class sheets are an operational view of the current selection result,
+    # not a blank roster. Load active selections for the filtered roster and
+    # write the student's single course code into column D below. The student
+    # roster remains the driving table so deleted/orphan selections can never
+    # create rows in a class sheet.
+    selections_by_student = await _load_selection_map(db, year, term, students)
 
     students_by_class: Dict[tuple[str, str], List[XbkStudent]] = {}
     for student in students:
@@ -221,7 +251,7 @@ async def build_student_course_selection_xlsx(
         ws = wb.create_sheet(safe_sheet_name(sheet_label))
         ws.append(["班级", "学号", "姓名", "课程代码"])
         for s in stus:
-            ws.append([s.class_name, s.student_no, s.name, None])
+            ws.append([s.class_name, s.student_no, s.name, selections_by_student.get(s.student_no)])
 
         apply_table_style(ws, header_row=1, start_row=2, end_row=ws.max_row, start_col=1, end_col=4)
         auto_adjust_column_width(ws, max_width=30)

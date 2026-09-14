@@ -42,6 +42,11 @@ def roster():
                       student_no="00001", name="学生", is_deleted=False)
 
 
+def selected(student_no="00001", code="C1"):
+    return XbkSelection(year=2026, term="上学期", student_no=student_no,
+                        course_code=code, name="学生", is_deleted=False)
+
+
 @pytest.mark.parametrize("kind,builder_name", [
     ("course-selection", "build_student_course_selection_xlsx"),
     ("distribution", "build_class_distribution_xlsx"),
@@ -83,7 +88,7 @@ def test_class_export_uses_roster_grade_and_excludes_deleted_students():
 
 @pytest.mark.parametrize("code", ["001", "1234567890123456789012345", "H1-AI-02", "1.5"])
 def test_student_template_preserves_course_identifiers_and_supports_text_codes(code):
-    db = CaptureDb([catalog(code)], [roster()])
+    db = CaptureDb([catalog(code)], [roster()], [])
     output = asyncio.run(course_selection.build_student_course_selection_xlsx(
         db, 2026, "上学期", None, None, None))
     wb = load_workbook(output)
@@ -93,6 +98,30 @@ def test_student_template_preserves_course_identifiers_and_supports_text_codes(c
     assert "ISNUMBER(D2)" not in validation.formula1
     assert 'VLOOKUP' in validation.formula1
     assert ",4,0)" in validation.formula1
+
+
+def test_student_course_selection_populates_current_codes_by_class():
+    second = roster()
+    second.student_no = "00002"
+    second.name = "未选学生"
+    db = CaptureDb(
+        [catalog("C1"), catalog("C2")],
+        [roster(), second],
+        [selected("00001", "C1")],
+    )
+
+    output = asyncio.run(course_selection.build_student_course_selection_xlsx(
+        db, 2026, "上学期", None, None, None, grade="高一"
+    ))
+    ws = load_workbook(output)["1班"]
+
+    assert ws["D2"].value == "C1"
+    assert ws["D3"].value is None
+    # A filtered export still uses the roster scope and never leaks an orphan
+    # selection into another class sheet.
+    assert len(db.statements) == 3
+    assert "xbk_selections" in str(db.statements[2])
+    assert "IN" in str(db.statements[2])
 
 
 @pytest.mark.parametrize("builder,args", [

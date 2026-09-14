@@ -43,10 +43,10 @@ class _CrudDb:
             if tuple(column.key for column in statement.selected_columns) == ("id",):
                 return _ScalarResult([row.id for row in self.parents[table]
                                       if tuple(getattr(row, field) for field in fields) in keys])
-            assert statement._for_update_arg is not None and statement._for_update_arg.read
+            assert statement._for_update_arg is not None
             self.parent_queries.append(table)  # actual SHARE-lock query
-            return _ScalarResult([row for row in self.parents[table] if row.id in keys])
-        return _ScalarResult(self.execute_values.pop(0))
+            return _ScalarResult(list(self.parents[table]))
+        return _ScalarResult(self.execute_values.pop(0) if self.execute_values else [])
 
     def add(self, value):
         self.added.append(value)
@@ -106,7 +106,7 @@ def test_create_selection_validates_relations_and_persists():
     assert result["id"] == 1
     assert result["student_no"] == "2026001"
     assert result["course_code"] == "CS101"
-    assert db.parent_queries == ["xbk_students", "xbk_courses"]
+    assert db.parent_queries == ["xbk_students", "xbk_courses", "xbk_students", "xbk_courses"]
     assert len(db.added) == 1
     assert db.commit_count == 1
 
@@ -170,6 +170,6 @@ def test_create_unselected_requires_only_active_student():
     assert result["id"] == 1
     assert result["student_no"] == "2026001"
     assert result["course_code"] == "未选"
-    assert db.parent_queries == ["xbk_students"]
+    assert db.parent_queries == ["xbk_students", "xbk_students"]
     assert len(db.added) == 1
     assert db.commit_count == 1

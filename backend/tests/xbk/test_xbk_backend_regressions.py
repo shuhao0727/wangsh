@@ -468,6 +468,121 @@ def _export_records(db, scope, *, sheet="data", **filters):
     return [dict(zip(rows[0], row)) for row in rows[1:]]
 
 
+
+def test_selections_search_excludes_course_name_teacher_and_location(db):
+    target = student("SELECTION-001", year=2032, cls="选课班")
+    target.name = "选课学生"
+    selected_course = course("SELECTION-01", year=2032, grade="高一")
+    selected_course.course_name = "仅课程结果可搜"
+    selected_course.teacher = "仅课程结果教师"
+    selected_course.location = "仅课程结果地点"
+    seed(
+        db,
+        target,
+        selected_course,
+        selection("SELECTION-001", "SELECTION-01", year=2032),
+    )
+
+    for keyword in ["SELECTION-001", "选课学生", "选课班", "SELECTION-01"]:
+        result = run_filtered(
+            selections.list_selections,
+            db,
+            year=FUTURE_YEAR,
+            term="上学期",
+            grade="高一",
+            search_text=keyword,
+            page=1,
+            size=50,
+        )
+        assert result["total"] == 1, keyword
+        assert result["items"][0]["student_no"] == "SELECTION-001"
+        exported = _export_records(
+            db,
+            "selections",
+            term="上学期",
+            class_name=None,
+            search_text=keyword,
+        )
+        assert [(row["学号"], row["课程代码"]) for row in exported] == [
+            ("SELECTION-001", "SELECTION-01")
+        ]
+
+    for keyword in ["仅课程结果可搜", "仅课程结果教师", "仅课程结果地点"]:
+        result = run_filtered(
+            selections.list_selections,
+            db,
+            year=FUTURE_YEAR,
+            term="上学期",
+            grade="高一",
+            search_text=keyword,
+            page=1,
+            size=50,
+        )
+        assert result["total"] == 0, keyword
+        assert _export_records(
+            db,
+            "selections",
+            term="上学期",
+            class_name=None,
+            search_text=keyword,
+        ) == []
+
+
+def test_course_results_search_covers_student_class_and_course_fields(db):
+    target = student("SEARCH-001", year=2032, cls="目标班")
+    target.name = "目标学生"
+    seed(
+        db,
+        target,
+        course("SPECIAL-01", year=2032, grade="高一"),
+        selection("SEARCH-001", "SPECIAL-01", year=2032),
+    )
+    special = db.session.scalar(select(XbkCourse).where(XbkCourse.course_code == "SPECIAL-01"))
+    special.course_name = "人工智能实验"
+    special.teacher = "李老师"
+    special.location = "创新教室"
+    db.session.commit()
+
+    for keyword in ["SEARCH-001", "目标学生", "目标班", "SPECIAL-01", "人工智能实验", "李老师", "创新教室"]:
+        result = run_filtered(
+            selections.list_course_results,
+            db,
+            year=FUTURE_YEAR,
+            term="上学期",
+            grade="高一",
+            search_text=keyword,
+            page=1,
+            size=50,
+        )
+        assert result["total"] == 1, keyword
+        assert result["items"][0]["student_no"] == "SEARCH-001"
+
+        exported = _export_records(
+            db,
+            "course_results",
+            term="上学期",
+            class_name=None,
+            search_text=keyword,
+        )
+        assert [(row["学号"], row["课程代码"]) for row in exported] == [("SEARCH-001", "SPECIAL-01")]
+
+
+def test_unselected_export_honors_search_text(db):
+    empty_a = student("EMPTY-A", year=2032)
+    empty_a.name = "未选甲"
+    empty_b = student("EMPTY-B", year=2032)
+    empty_b.name = "未选乙"
+    seed(
+        db,
+        empty_a, empty_b,
+        selection("EMPTY-A", "未选", year=2032),
+        selection("EMPTY-B", "未选", year=2032),
+    )
+    rows = _export_records(db, "unselected", term="上学期", search_text="未选甲")
+    assert [row["学号"] for row in rows] == ["EMPTY-A"]
+
+    assert _export_records(db, "unselected", term="上学期", search_text="不存在的学生") == []
+
 def test_course_stats_merge_legacy_blank_and_imported_unselected(db):
     seed(db, student("BLANK", year=2032), student("MARKER", year=2032),
          selection("BLANK", "", year=2032), selection("MARKER", "未选", year=2032))

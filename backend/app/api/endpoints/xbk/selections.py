@@ -17,7 +17,7 @@ from app.schemas.xbk.academic_year import AcademicYear
 from app.services.xbk.locking import lock_rows
 from app.schemas.xbk import XbkListResponse, XbkSelectionOut, XbkSelectionUpsert
 
-from ._common import apply_common_filters, require_xbk_access, selection_reference_errors
+from ._common import apply_common_filters, apply_search_filter, require_xbk_access, selection_reference_errors
 
 router = APIRouter()
 
@@ -41,6 +41,62 @@ async def _validate_student_and_course(
         raise HTTPException(status_code=404, detail=errors[0][0])
 
 
+async def _enforce_selection_rules(
+    db: AsyncSession,
+    *,
+    year: AcademicYear,
+    term: str,
+    student_no: str,
+    course_code: str,
+    exclude_selection_id: Optional[int] = None,
+) -> None:
+    """Enforce one active choice per student and course quota atomically.
+
+    Writers acquire locks in the shared XBK order: student, course, then
+    selections. The course lock serializes capacity checks, so concurrent
+    writers cannot both consume the last seat.
+    """
+    student_rows = await lock_rows(
+        db, XbkStudent,
+        XbkStudent.year == year, XbkStudent.term == term,
+        XbkStudent.student_no == student_no, XbkStudent.is_deleted.is_(False),
+    )
+    if not student_rows:
+        raise HTTPException(status_code=404, detail="学生不存在（请先维护学生名单；须为同学年、同学期且未删除）")
+
+    courses = []
+    if course_code not in ("", "未选"):
+        courses = await lock_rows(
+            db, XbkCourse,
+            XbkCourse.year == year, XbkCourse.term == term,
+            XbkCourse.course_code == course_code, XbkCourse.is_deleted.is_(False),
+        )
+        if not courses:
+            raise HTTPException(status_code=404, detail="课程不存在（请先维护选课目录；须为同学年、同学期且未删除）")
+
+    active_for_student = await lock_rows(
+        db, XbkSelection,
+        XbkSelection.year == year, XbkSelection.term == term,
+        XbkSelection.student_no == student_no, XbkSelection.is_deleted.is_(False),
+    )
+    conflicts = [row for row in active_for_student if exclude_selection_id is None or row.id != exclude_selection_id]
+    if conflicts:
+        raise HTTPException(status_code=409, detail="每名学生只能选择一门课程")
+
+    if not courses:
+        return
+    course = courses[0]
+    selections = await lock_rows(
+        db, XbkSelection,
+        XbkSelection.year == year, XbkSelection.term == term,
+        XbkSelection.course_code == course_code, XbkSelection.is_deleted.is_(False),
+    )
+    used = sum(1 for row in selections if row.id != exclude_selection_id)
+    quota = int(course.quota or 0)
+    if used >= quota:
+        raise HTTPException(status_code=409, detail=f"课程已满（限额 {quota} 人）")
+
+
 # ---------------------------------------------------------------------------
 # CRUD 端点
 # ---------------------------------------------------------------------------
@@ -58,18 +114,18 @@ async def create_selection(
         student_no=payload.student_no,
         course_code=payload.course_code,
     )
-    existing = (
-        await db.execute(
-            select(XbkSelection).where(
-                XbkSelection.year == payload.year,
-                XbkSelection.term == payload.term,
-                XbkSelection.student_no == payload.student_no,
-                XbkSelection.course_code == payload.course_code,
-            ).with_for_update().execution_options(populate_existing=True)
-        )
-    ).scalar_one_or_none()
-    if existing and not existing.is_deleted:  # type: ignore[truthy-bool]
-        raise HTTPException(status_code=409, detail="选课记录已存在")
+    existing_rows = await lock_rows(
+        db, XbkSelection,
+        XbkSelection.year == payload.year,
+        XbkSelection.term == payload.term,
+        XbkSelection.student_no == payload.student_no,
+        XbkSelection.course_code == payload.course_code,
+    )
+    existing = existing_rows[0] if existing_rows else None
+    await _enforce_selection_rules(
+        db, year=payload.year, term=payload.term, student_no=payload.student_no,
+        course_code=payload.course_code,
+    )
     row = existing or XbkSelection()
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
@@ -104,6 +160,10 @@ async def update_selection(
         term=payload.term,
         student_no=payload.student_no,
         course_code=payload.course_code,
+    )
+    await _enforce_selection_rules(
+        db, year=payload.year, term=payload.term, student_no=payload.student_no,
+        course_code=payload.course_code, exclude_selection_id=selection_id,
     )
     rows = await lock_rows(db, XbkSelection, XbkSelection.id == selection_id)
     row = rows[0] if rows else None
@@ -169,11 +229,24 @@ async def list_selections(
                 XbkSelection.student_no == XbkStudent.student_no,
             ),
         )
+        .outerjoin(
+            XbkCourse,
+            and_(
+                XbkCourse.is_deleted.is_(False),
+                XbkCourse.year == XbkSelection.year,
+                XbkCourse.term == XbkSelection.term,
+                XbkCourse.course_code == XbkSelection.course_code,
+            ),
+        )
         .where(XbkStudent.is_deleted.is_(False))
     )
 
-    # 过滤条件作用于 XbkStudent
-    stmt = apply_common_filters(stmt, XbkStudent, year, term, grade, search_text)
+    # 关键词覆盖学生、班级以及关联课程字段。
+    stmt = apply_common_filters(stmt, XbkStudent, year, term, grade, None)
+    stmt = apply_search_filter(stmt, search_text, [
+        XbkStudent.student_no, XbkStudent.name, XbkStudent.class_name,
+        XbkSelection.course_code,
+    ])
 
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)
@@ -258,7 +331,12 @@ async def list_course_results(
         .where(XbkStudent.is_deleted.is_(False))
     )
 
-    stmt = apply_common_filters(stmt, XbkStudent, year, term, grade, search_text)
+    stmt = apply_common_filters(stmt, XbkStudent, year, term, grade, None)
+    stmt = apply_search_filter(stmt, search_text, [
+        XbkStudent.student_no, XbkStudent.name, XbkStudent.class_name,
+        XbkSelection.course_code, XbkCourse.course_name,
+        XbkCourse.teacher, XbkCourse.location,
+    ])
 
     if class_name:
         stmt = stmt.where(XbkStudent.class_name == class_name)

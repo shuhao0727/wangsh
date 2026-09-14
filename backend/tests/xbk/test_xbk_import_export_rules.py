@@ -7,6 +7,7 @@ import io
 from types import SimpleNamespace
 
 import pandas as pd
+from openpyxl import load_workbook
 import pytest
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
@@ -19,6 +20,7 @@ from app.api.endpoints.xbk.import_export import (
     _remap_columns,
     _students_mapping,
     _template_columns,
+    download_template,
     _validate_required_columns,
     preview_import,
 )
@@ -209,10 +211,34 @@ def test_remap_courses_alias_columns() -> None:
         assert col in remapped.columns
 
 
+def test_remap_courses_accepts_课程人数_alias() -> None:
+    df = pd.DataFrame([{
+        "学年": "2026-2027", "学期": "上学期", "年级": "高一",
+        "课程代码": "G1-01", "课程名称": "课程A", "课程人数": 3,
+    }])
+    remapped = _remap_columns(df, _courses_mapping())
+    assert "各班限报人数" in remapped.columns
+    assert remapped.iloc[0]["各班限报人数"] == 3
+
+
 def test_template_columns_contract() -> None:
     assert _template_columns("students") == ["学年", "学期", "年级", "班级", "学号", "姓名", "性别"]
     assert _template_columns("courses") == ["学年", "学期", "年级", "课程代码", "课程名称", "课程负责人", "各班限报人数", "上课地点"]
     assert _template_columns("selections") == ["学年", "学期", "年级", "学号", "姓名", "课程代码"]
+
+
+def test_download_template_contains_notes_and_text_columns() -> None:
+    async def read_response():
+        response = await download_template(scope="courses", db=None, _={})
+        return b"".join([chunk async for chunk in response.body_iterator])
+
+    payload = asyncio.run(read_response())
+    workbook = load_workbook(io.BytesIO(payload))
+    assert workbook.sheetnames == ["template", "示例与说明"]
+    ws = workbook["template"]
+    assert ws["A1"].value == "学年"
+    assert ws["A2"].number_format == "@"
+    assert "2026-2027" in "\n".join(str(row[1].value) for row in workbook["示例与说明"].iter_rows(min_row=2))
 
 
 def test_preview_import_students_header_only_returns_zero() -> None:

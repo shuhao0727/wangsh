@@ -209,7 +209,13 @@ def test_live_grade_and_preserved_selection_name_contract(scope):
 @pytest.mark.parametrize('search', ['SNAPSHOT-ORPHAN', 'C1', 'CATALOG', '教师专词'])
 def test_orphan_diagnostics_keep_legacy_search(scope, search):
     result = asyncio.run(exercise(scope, {'search_text': search}, scope+'-old-search-'+search))
-    assert result['sheets']['data'] == []  # These are not live roster search terms.
+    supported_search = search == 'C1' or (
+        scope == 'course_results' and search in {'CATALOG', '教师专词'}
+    )
+    if not supported_search:
+        assert result['sheets']['data'] == []  # These are not live roster search terms.
+    else:
+        assert result['sheets']['data']  # Search contract supports these fields.
     expected = {'ORPHAN'} if search == 'SNAPSHOT-ORPHAN' else {'009', 'ORPHAN'}
     if scope == 'selections' and search in {'CATALOG', '教师专词'}:
         expected = set()
