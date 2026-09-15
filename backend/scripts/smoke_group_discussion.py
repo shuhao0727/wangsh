@@ -323,13 +323,20 @@ def _run_round(
         password=admin_password,
     )
 
+    code, anonymous_pub = _http_json(
+        "GET",
+        f"{base_url}/ai-agents/group-discussion/public-config",
+        timeout=12,
+    )
+    _expect(code, anonymous_pub, 401, "anonymous public-config should be rejected")
+
     code, pub = _http_json(
         "GET",
         f"{base_url}/ai-agents/group-discussion/public-config",
         headers={"Authorization": f"Bearer {admin_token}"},
         timeout=12,
     )
-    _expect(code, pub, 200, "public-config get failed")
+    _expect(code, pub, 200, "authenticated public-config get failed")
     code, pub2 = _http_json(
         "PUT",
         f"{base_url}/ai-agents/group-discussion/public-config",
