@@ -35,32 +35,72 @@ LEGACY_BASELINE_TABLES = (
     "xxjs_dianming",
 )
 MIGRATION_ORIGIN_COLUMNS = (("znt_group_discussion_members", "muted_until"),)
+# Early migrations guarded these indexes with table_schema='public' and a later
+# historical migration drops them without transaction-safe existence checks.
+# A non-public legacy baseline must provide the disposable indexes so that the
+# unchanged historical chain can advance. They are removed by 04afffb306ed.
+NON_PUBLIC_LEGACY_DROP_INDEXES = (
+    ("idx_inf_typst_assets_note_id_path", "inf_typst_assets", "note_id, path"),
+    ("idx_inf_typst_assets_sha256", "inf_typst_assets", "sha256"),
+    ("idx_inf_typst_notes_compiled_hash", "inf_typst_notes", "compiled_hash"),
+    ("idx_inf_typst_notes_published", "inf_typst_notes", "published"),
+    (
+        "idx_znt_group_discussion_sessions_class_name",
+        "znt_group_discussion_sessions",
+        "class_name",
+    ),
+)
 VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 
-async def _has_alembic_version(conn) -> bool:
-    table_result = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
-    if table_result.scalar_one_or_none() is None:
+async def _current_schema(conn) -> str:
+    schema = (await conn.execute(text("SELECT current_schema()"))).scalar_one_or_none()
+    if not schema:
+        raise RuntimeError(
+            "PostgreSQL search_path does not contain an existing schema; "
+            "cannot bootstrap the database"
+        )
+    return str(schema)
+
+
+async def _has_alembic_version(conn, schema: str) -> bool:
+    table_result = await conn.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_class AS c
+                JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema
+                  AND c.relname = 'alembic_version'
+                  AND c.relkind IN ('r', 'p')
+            )
+            """
+        ),
+        {"schema": schema},
+    )
+    if not table_result.scalar_one():
         return False
     result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
     return result.scalar_one_or_none() is not None
 
 
-async def _get_existing_public_tables(conn) -> set[str]:
+async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
     result = await conn.execute(
         text(
             """
             SELECT tablename
             FROM pg_tables
-            WHERE schemaname = 'public'
+            WHERE schemaname = :schema
               AND tablename != 'alembic_version'
             """
-        )
+        ),
+        {"schema": schema},
     )
     return {str(row[0]) for row in result}
 
 
-async def _create_legacy_baseline(conn) -> None:
+async def _create_legacy_baseline(conn, *, schema: str) -> None:
     """Create only tables that predate the maintained Alembic migration chain."""
     # Current models include indexes introduced later by Alembic (some require
     # extensions). Filter a private copy before emitting DDL; never mutate the
@@ -95,6 +135,14 @@ async def _create_legacy_baseline(conn) -> None:
         await conn.execute(
             text(f'ALTER TABLE "{table_name}" DROP COLUMN IF EXISTS "{column_name}"')
         )
+    if schema != "public":
+        for index_name, table_name, columns in NON_PUBLIC_LEGACY_DROP_INDEXES:
+            await conn.execute(
+                text(
+                    f'CREATE INDEX IF NOT EXISTS "{index_name}" '
+                    f'ON "{table_name}" ({columns})'
+                )
+            )
     await conn.execute(
         text(
             "CREATE TABLE IF NOT EXISTS alembic_version "
@@ -104,11 +152,57 @@ async def _create_legacy_baseline(conn) -> None:
     print("Legacy baseline tables created; Alembic version remains unset")
 
 
+def _static_string_constants(tree: ast.Module) -> dict[str, str]:
+    """Return module-level string constants without importing migrations."""
+    constants: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        try:
+            value = ast.literal_eval(node.value)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(value, str):
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = value
+    return constants
+
+
+def _create_index_name(node: ast.Call, constants: dict[str, str]) -> str | None:
+    """Resolve the first argument of ``op.create_index`` statically."""
+    function = node.func
+    if not (
+        isinstance(function, ast.Attribute)
+        and function.attr == "create_index"
+        and isinstance(function.value, ast.Name)
+        and function.value.id == "op"
+        and node.args
+    ):
+        return None
+
+    argument = node.args[0]
+    if (
+        isinstance(argument, ast.Call)
+        and isinstance(argument.func, ast.Attribute)
+        and argument.func.attr == "f"
+        and isinstance(argument.func.value, ast.Name)
+        and argument.func.value.id == "op"
+        and argument.args
+    ):
+        argument = argument.args[0]
+
+    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+        return argument.value
+    if isinstance(argument, ast.Name):
+        return constants.get(argument.id)
+    return None
+
+
 def _migration_managed_indexes() -> set[str]:
     indexes: set[str] = set()
-    pattern = re.compile(
-        r"""op\.create_index\(\s*(?:op\.f\()?['"]([^'"]+)['"]"""
-    )
     sql_pattern = re.compile(
         r'\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?'
         r'(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))',
@@ -116,10 +210,17 @@ def _migration_managed_indexes() -> set[str]:
     )
     for path in VERSIONS_DIR.glob("*.py"):
         source = path.read_text(encoding="utf-8")
-        indexes.update(pattern.findall(source))
-        # AST folds adjacent Python string literals, including SQL held in
-        # statement tuples; parsing does not import or execute migrations.
-        for node in ast.walk(ast.parse(source, filename=str(path))):
+        tree = ast.parse(source, filename=str(path))
+        constants = _static_string_constants(tree)
+        # Resolve literal, op.f(...), and module-level constant names passed to
+        # op.create_index. Parsing never imports or executes migration modules.
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = _create_index_name(node, constants)
+                if name:
+                    indexes.add(name)
+            # AST folds adjacent Python string literals, including SQL held in
+            # statement tuples.
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 for quoted, unquoted in sql_pattern.findall(node.value):
                     indexes.add(quoted or unquoted.lower())
@@ -173,18 +274,20 @@ async def _ensure_views(conn) -> None:
 
 async def main(*, initial_only: bool = False) -> None:
     async with engine.begin() as conn:
-        has_alembic_version = await _has_alembic_version(conn)
+        schema = await _current_schema(conn)
+        has_alembic_version = await _has_alembic_version(conn, schema)
         if not has_alembic_version:
-            existing_tables = await _get_existing_public_tables(conn)
+            existing_tables = await _get_existing_schema_tables(conn, schema)
             if existing_tables:
                 raise RuntimeError(
-                    "alembic_version is missing or empty, but public schema already has tables. "
+                    "alembic_version is missing or empty, but the effective schema "
+                    f"{schema!r} already has tables. "
                     "Refusing to run create_all/stamp on a non-empty database. "
                     "Run `python /app/scripts/check_migration_state.py`, back up the database, "
                     "inspect the schema, and stamp only a verified revision."
                 )
             if initial_only:
-                await _create_legacy_baseline(conn)
+                await _create_legacy_baseline(conn, schema=schema)
                 return
             raise RuntimeError(
                 "Empty database has not been migrated. Run `alembic upgrade head` before "

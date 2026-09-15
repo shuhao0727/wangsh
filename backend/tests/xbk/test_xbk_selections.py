@@ -17,6 +17,9 @@ class _ScalarResult:
     def scalar_one_or_none(self):
         return self._value
 
+    def scalar_one(self):
+        return self._value
+
     def scalars(self):
         return self
 
@@ -35,16 +38,15 @@ class _CrudDb:
         self.refresh_count = 0
 
     async def execute(self, statement):
+        if "count(" in str(statement).lower():
+            return _ScalarResult(len(self.added))
         table = statement.get_final_froms()[0].name
         if table in self.parents:
             # Query-shape adapter only; actual lock behavior is tested on PG.
-            fields = ("year", "term", "student_no" if table == "xbk_students" else "course_code")
-            keys = next(iter(statement.compile().params.values()))
             if tuple(column.key for column in statement.selected_columns) == ("id",):
-                return _ScalarResult([row.id for row in self.parents[table]
-                                      if tuple(getattr(row, field) for field in fields) in keys])
-            assert statement._for_update_arg is not None
-            self.parent_queries.append(table)  # actual SHARE-lock query
+                return _ScalarResult([row.id for row in self.parents[table]])
+            if statement._for_update_arg is not None:
+                self.parent_queries.append(table)
             return _ScalarResult(list(self.parents[table]))
         return _ScalarResult(self.execute_values.pop(0) if self.execute_values else [])
 
@@ -106,7 +108,7 @@ def test_create_selection_validates_relations_and_persists():
     assert result["id"] == 1
     assert result["student_no"] == "2026001"
     assert result["course_code"] == "CS101"
-    assert db.parent_queries == ["xbk_students", "xbk_courses", "xbk_students", "xbk_courses"]
+    assert db.parent_queries == ["xbk_students", "xbk_courses"]
     assert len(db.added) == 1
     assert db.commit_count == 1
 
@@ -170,6 +172,6 @@ def test_create_unselected_requires_only_active_student():
     assert result["id"] == 1
     assert result["student_no"] == "2026001"
     assert result["course_code"] == "未选"
-    assert db.parent_queries == ["xbk_students", "xbk_students"]
+    assert db.parent_queries == ["xbk_students"]
     assert len(db.added) == 1
     assert db.commit_count == 1

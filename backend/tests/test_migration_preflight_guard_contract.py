@@ -70,11 +70,14 @@ def test_same_name_different_structure_or_unusable_index_is_blocked(changes):
     assert INDEX in " ".join(result.messages)
 
 
-@pytest.mark.parametrize("public_exists", [True, False])
-def test_unqualified_historical_guard_cannot_trust_cross_schema_names(public_exists):
-    foreign = catalog(schema="shadow")
-    definitions = {INDEX: (catalog(), foreign) if public_exists else (foreign,)}
-    assert not evaluate(indexes={INDEX} if public_exists else set(), definitions=definitions).ok
+def test_schema_scoped_guard_ignores_same_name_index_in_other_schema():
+    definitions = {INDEX: (catalog(), catalog(schema="shadow"))}
+    assert evaluate(indexes={INDEX}, definitions=definitions).ok
+
+
+def test_schema_scoped_guard_does_not_treat_foreign_index_as_current():
+    definitions = {INDEX: (catalog(schema="shadow"),)}
+    assert evaluate(indexes=set(), definitions=definitions).ok
 
 
 def test_empty_head_and_missing_revision_controls():
@@ -199,11 +202,13 @@ def test_catalog_loader_preserves_structure_flags_and_all_schemas():
             return self[0][0] if self else None
 
     class Connection:
-        async def execute(self, statement):
+        async def execute(self, statement, params=None):
             sql = str(statement)
             statements.append(sql)
-            if "to_regclass" in sql:
-                return Rows([("alembic_version",)])
+            if "SELECT current_schema()" in sql:
+                return Rows([("public",)])
+            if "SELECT EXISTS" in sql:
+                return Rows([(True,)])
             if "SELECT version_num" in sql:
                 return Rows([("20260428_agent_idx",)])
             if "FROM pg_tables" in sql:
@@ -217,14 +222,17 @@ def test_catalog_loader_preserves_structure_flags_and_all_schemas():
                 return Rows([(TABLE, "group_name")])
             raise AssertionError(f"unexpected SQL: {sql}")
 
-    current, tables, indexes, columns, definitions = asyncio.run(preflight._load_database_state(Connection()))
+    schema, current, tables, indexes, columns, definitions = asyncio.run(
+        preflight._load_database_state(Connection())
+    )
+    assert schema == "public"
     assert current == ["20260428_agent_idx"]
     assert tables == {TABLE} and indexes == {INDEX} and columns == {(TABLE, "group_name")}
     assert definitions[INDEX] == (catalog(), catalog(schema="shadow", valid=False, ready=False, live=False, kind="I"))
-    assert not evaluate(definitions=definitions).ok
+    assert evaluate(definitions=definitions).ok
     query = next(sql for sql in statements if "pg_catalog.pg_index AS i" in sql)
     assert "pg_catalog.pg_get_indexdef" in query
-    assert "WHERE" not in query.upper()  # Unqualified historical guard sees all schemas.
+    assert "WHERE" not in query.upper()  # Catalog keeps all schemas for audit evidence.
     assert all(sql.strip().upper().startswith("SELECT") for sql in statements)
 
 
@@ -234,11 +242,15 @@ def test_catalog_query_casts_postgres_internal_char_for_asyncpg():
 
     class Rows(list):
         def scalar_one_or_none(self):
-            return None
+            return self[0][0] if self else None
 
     class Connection:
-        async def execute(self, statement):
+        async def execute(self, statement, params=None):
             sql = str(statement)
+            if "SELECT current_schema()" in sql:
+                return Rows([("public",)])
+            if "SELECT EXISTS" in sql:
+                return Rows([(False,)])
             if 'pg_catalog.pg_index AS i' in sql:
                 assert 'CAST(idx.relkind AS text)' in sql
             return Rows()
@@ -278,13 +290,15 @@ def test_async_entrypoint_passes_real_loader_evidence_to_real_evaluator(monkeypa
         def begin(self):
             return Context(self)
 
-        async def execute(self, statement):
+        async def execute(self, statement, params=None):
             sql = str(statement)
             statements.append(sql)
             if sql.startswith('SET TRANSACTION'):
                 return Rows()
-            if 'to_regclass' in sql:
-                return Rows([('alembic_version',)])
+            if 'SELECT current_schema()' in sql:
+                return Rows([('public',)])
+            if 'SELECT EXISTS' in sql:
+                return Rows([(True,)])
             if 'SELECT version_num' in sql:
                 return Rows([('20260428_agent_idx',)])
             if 'FROM pg_tables' in sql:

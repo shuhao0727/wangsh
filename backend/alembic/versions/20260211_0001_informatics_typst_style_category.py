@@ -51,7 +51,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'inf_typst_notes'
+                WHERE table_schema = current_schema() AND table_name = 'inf_typst_notes'
             ) THEN
                 ALTER TABLE inf_typst_notes ADD COLUMN IF NOT EXISTS summary VARCHAR(500) NOT NULL DEFAULT '';
                 ALTER TABLE inf_typst_notes ADD COLUMN IF NOT EXISTS category_path VARCHAR(200) NOT NULL DEFAULT '';

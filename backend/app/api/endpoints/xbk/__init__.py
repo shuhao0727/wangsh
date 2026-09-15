@@ -12,6 +12,7 @@ from app.api.endpoints.xbk.bulk_ops import router as bulk_ops_router
 from app.api.endpoints.xbk.analysis import router as analysis_router
 from app.api.endpoints.xbk.import_export import router as import_export_router
 from app.api.endpoints.xbk.exports import router as exports_router
+from app.api.endpoints.xbk.course_selection_workbook import router as course_selection_workbook_router
 
 
 router = APIRouter()
@@ -26,3 +27,5 @@ router.include_router(bulk_ops_router, tags=["xbk"], prefix="/data")
 router.include_router(analysis_router, tags=["xbk"], prefix="/analysis")
 router.include_router(import_export_router, tags=["xbk"], prefix="")
 router.include_router(exports_router, tags=["xbk"], prefix="")
+
+router.include_router(course_selection_workbook_router, tags=["xbk"])

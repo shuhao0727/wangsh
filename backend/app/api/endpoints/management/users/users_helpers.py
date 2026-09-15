@@ -6,6 +6,8 @@
 router 由 users.py include 组合，函数经 users.py 对外 re-export。
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,11 @@ from app.core.deps import require_admin, get_db
 from app.utils.errors import safe_error_detail
 from app.models import User
 from app.core.pubsub import publish
+from app.services.user_governance import (
+    assert_last_active_super_admin,
+    lock_account_governance,
+    revoke_if_account_removed,
+)
 
 from .policy import (
     ADMIN_MANAGEABLE_ROLES,
@@ -21,6 +28,17 @@ from .policy import (
     is_plain_admin as _is_plain_admin,
 )
 from .schemas import BatchDeleteRequest, UserStatsResponse
+
+logger = logging.getLogger(__name__)
+
+
+async def _publish_user_change_after_commit(payload: dict) -> None:
+    """Do not report rollback semantics after the database already committed."""
+    try:
+        await publish("admin_global", payload)
+    except Exception:
+        logger.exception("批量用户治理已提交，但变更通知发布失败")
+
 
 router = APIRouter()
 
@@ -73,13 +91,14 @@ async def batch_delete_users(
                 detail="请选择要删除的用户",
             )
 
-        # 获取符合条件的用户 - 使用SQLAlchemy正确的语法
-        query = select(User).where(
-            User.id.in_(normalized_ids),
-            User.is_deleted == False
-        ).with_for_update()
-        result = await db.execute(query)
-        users = result.scalars().all()
+        actor, locked_users = await lock_account_governance(
+            db, actor_id=current_user.get("id"), target_ids=normalized_ids
+        )
+        users = [
+            locked_users[user_id]
+            for user_id in normalized_ids
+            if user_id in locked_users and not locked_users[user_id].is_deleted
+        ]
 
         found_ids = {user.id for user in users}
         missing_ids = [user_id for user_id in normalized_ids if user_id not in found_ids]
@@ -89,7 +108,18 @@ async def batch_delete_users(
                 detail=f"以下用户不存在或已删除: {missing_ids}",
             )
 
-        _assert_users_deletable(current_user, list(users))
+        _assert_users_deletable(actor, list(users))
+        await assert_last_active_super_admin(
+            db,
+            {
+                user.id: (user.role_code, bool(user.is_active), True)
+                for user in users
+            },
+        )
+        for user in users:
+            await revoke_if_account_removed(
+                db, user, final_is_active=bool(user.is_active), final_is_deleted=True
+            )
 
         # 批量软删除
         deleted_ids = []
@@ -100,7 +130,9 @@ async def batch_delete_users(
 
         await db.commit()
 
-        await publish("admin_global", {"type": "user_changed", "action": "batch_delete"})
+        await _publish_user_change_after_commit(
+            {"type": "user_changed", "action": "batch_delete"}
+        )
 
         return {
             "success": True,

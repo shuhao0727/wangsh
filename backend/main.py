@@ -29,6 +29,7 @@ from app.api import api_router
 from app.api.v2.pythonlab import router as v2_pythonlab_router
 from app.core.celery_app import celery_app
 from app.core.log_sanitizer import install_log_sanitization
+from app.core.request_budget import RequestBudgetMiddleware
 from app.utils.cache import cache
 from app.core.startup import (
     init_database,
@@ -211,6 +212,7 @@ elif settings.CORS_ORIGINS:
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(HttpMetricsMiddleware)
+app.add_middleware(RequestBudgetMiddleware)
 
 # 注册全局异常处理器
 app.add_exception_handler(Exception, generic_exception_handler)

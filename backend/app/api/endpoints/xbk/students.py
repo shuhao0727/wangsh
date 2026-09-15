@@ -15,6 +15,7 @@ from app.db.database import get_db
 from app.models import XbkStudent, XbkSelection
 from app.schemas.xbk.academic_year import AcademicYear
 from app.services.xbk.locking import lock_rows
+from app.services.xbk.selection_rules import guard_student_change
 from app.schemas.xbk import XbkListResponse, XbkStudentOut, XbkStudentUpsert
 
 from ._common import apply_common_filters, require_xbk_access
@@ -72,7 +73,10 @@ async def create_student(
     if existing and not existing.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=409, detail="学生已存在")
     row = existing or XbkStudent()
-    for k, v in payload.model_dump().items():
+    values = payload.model_dump()
+    if existing:
+        await guard_student_change(db, existing, values)
+    for k, v in values.items():
         setattr(row, k, v)
     row.is_deleted = False  # type: ignore[assignment]
     row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
@@ -100,7 +104,9 @@ async def update_student(
     row = rows[0] if rows else None
     if not row or row.is_deleted:  # type: ignore[truthy-bool]
         raise HTTPException(status_code=404, detail="学生不存在")
-    for k, v in payload.model_dump().items():
+    values = payload.model_dump()
+    await guard_student_change(db, row, values)
+    for k, v in values.items():
         setattr(row, k, v)
     row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:

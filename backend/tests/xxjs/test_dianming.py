@@ -183,7 +183,12 @@ def test_list_students():
 
     db = _FakeDB([_ScalarResult(students)])
     result = asyncio.run(
-        list_students(year="2026", class_name="高一(1)班", db=db, _={"id": 1})
+        list_students(
+            year="2026",
+            class_name="高一(1)班",
+            db=db,
+            _={"id": 1, "role_code": "admin"},
+        )
     )
     assert len(result) == 2
 

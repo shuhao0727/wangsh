@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.endpoints.xbk import courses, import_export, selections, students
 from app.core.deps import require_admin
+from app.core.exception_handlers import generic_exception_handler
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
 
@@ -70,6 +71,7 @@ def env(request):
     session = Session(engine, expire_on_commit=False)
     db = AsyncFacade(session, trace)
     app = FastAPI()
+    app.add_exception_handler(Exception, generic_exception_handler)
     for module in (students, courses, selections):
         app.include_router(module.router, prefix="/data")
     app.include_router(import_export.router)
@@ -84,7 +86,7 @@ def env(request):
     app.dependency_overrides[require_admin] = synthetic_admin
 
     async def call(method, path, **kwargs):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://synthetic.invalid") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://synthetic.invalid") as client:
             response = await client.request(method, path, **kwargs)
         trace.append({"method": method, "path": path, "request": kwargs.get("json", kwargs.get("params")),
                       "status": response.status_code, "response": response.json()})
@@ -397,8 +399,8 @@ def test_real_sql_failure_rolls_back_earlier_update_and_restore(env, scope):
 
     async def scenario():
         response = await env.imp(scope, [PAYLOADS[scope], invalid])
-        assert response.status_code == 409, response.text
-        assert "回滚" in response.json()["detail"]
+        assert response.status_code == 500, response.text
+        assert response.json()["detail"] == "服务器内部错误"
         assert "synthetic private diagnostic" not in response.text
         assert any(t.get("transaction") == "rollback" for t in env.trace)
         assert env.snapshot() == before
@@ -429,7 +431,7 @@ def test_both_missing_parents_report_row_and_skip_writes_nothing(env):
 def test_parent_queries_chunked_and_grade_snapshot_not_reference(env):
     # Different snapshot grades do not add a new cross-grade rejection policy.
     rows = [{**SELECTION, "student_no": f"{index:05}", "grade": "快照年级"} for index in range(501)]
-    env.seed(XbkCourse(**{**COURSE, "grade": "共享年级"}),
+    env.seed(XbkCourse(**{**COURSE, "grade": "共享年级", "quota": 501}),
              *(XbkStudent(**{**STUDENT, "student_no": row["student_no"]}) for row in rows))
 
     async def scenario():

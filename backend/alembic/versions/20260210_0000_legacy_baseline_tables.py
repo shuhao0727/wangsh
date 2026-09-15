@@ -55,7 +55,7 @@ def _table_exists(table_name: str) -> bool:
 def _index_exists(index_name: str) -> bool:
     conn = op.get_bind()
     row = conn.execute(
-        sa.text("SELECT 1 FROM pg_indexes WHERE indexname = :idx"),
+        sa.text("SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = :idx"),
         {"idx": index_name},
     ).first()
     return row is not None

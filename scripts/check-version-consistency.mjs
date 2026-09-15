@@ -30,6 +30,10 @@ const expectedImageTag =
 
 // CI 需要按同一派生规则校验 compose 实际渲染出的镜像标签（只有 docker 能取到），
 // 因此暴露只打印标签的模式，避免调用方各自推导出不同口径。
+if (process.argv.includes("--print-version")) {
+  process.stdout.write(expectedVersion);
+  process.exit(0);
+}
 if (process.argv.includes("--print-image-tag")) {
   process.stdout.write(expectedImageTag);
   process.exit(0);

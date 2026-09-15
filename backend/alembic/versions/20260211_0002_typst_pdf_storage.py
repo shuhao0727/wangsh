@@ -14,7 +14,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'inf_typst_notes'
+                WHERE table_schema = current_schema() AND table_name = 'inf_typst_notes'
             ) THEN
                 ALTER TABLE inf_typst_notes ADD COLUMN IF NOT EXISTS compiled_pdf_path VARCHAR(500);
                 ALTER TABLE inf_typst_notes ADD COLUMN IF NOT EXISTS compiled_pdf_size INTEGER;

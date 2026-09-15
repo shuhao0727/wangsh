@@ -56,22 +56,23 @@ function runDeployWithFakeDocker({
   const expectedImages =
     composeImages ??
     [
-      "shuhao07/wangsh-backend:1.6.0",
-      "shuhao07/wangsh-typst-worker:1.6.0",
-      "shuhao07/wangsh-pythonlab-worker:1.6.0",
-      "shuhao07/pythonlab-sandbox:1.6.0",
-      "shuhao07/wangsh-frontend:1.6.0",
-      "shuhao07/wangsh-gateway:1.6.0",
+      "shuhao07/wangsh-backend:2.1",
+      "shuhao07/wangsh-typst-worker:2.1",
+      "shuhao07/wangsh-pythonlab-worker:2.1",
+      "shuhao07/pythonlab-sandbox:2.1",
+      "shuhao07/wangsh-frontend:2.1",
+      "shuhao07/wangsh-gateway:2.1",
     ];
   const envValues = {
-    APP_VERSION: "1.6.0",
-    IMAGE_TAG: "1.6.0",
+    APP_VERSION: "2.1.0",
+    REACT_APP_VERSION: "2.1.0",
+    IMAGE_TAG: "2.1",
     IMAGE_REPOSITORY_PREFIX: "shuhao07",
     IMAGE_NAME_BACKEND: "wangsh-backend",
     IMAGE_NAME_WORKER: "wangsh-typst-worker",
     IMAGE_NAME_PYTHONLAB_WORKER: "wangsh-pythonlab-worker",
     IMAGE_NAME_GATEWAY: "wangsh-gateway",
-    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:1.6.0",
+    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1",
     ...envOverrides,
   };
 
@@ -109,7 +110,7 @@ if [[ "$*" == *"buildx imagetools inspect"* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:1.6.0`;
+    const ref = `shuhao07/${image}:2.1`;
     const digest = dockerDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf 'Name: %s\\nDigest: %s\\n' "$ref" '${digest}' ;;`;
   })
@@ -123,7 +124,7 @@ if [[ "$*" == image\\ inspect* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:1.6.0`;
+    const ref = `shuhao07/${image}:2.1`;
     const digest = localDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf '%s\\n' 'shuhao07/${image}@${digest}' ;;`;
   })
@@ -164,7 +165,7 @@ exit 1
 }
 
 function makeReleaseSet({
-  version = "1.6.0",
+  version = "2.1",
   rows = requiredReleaseImages,
   digest = null,
   refOverrides = {},
@@ -692,6 +693,45 @@ test("Compose passes the configured application timezone to backend services", (
   );
 });
 
+test("production simulation enrolls synthetic auth authority before smoke", () => {
+  const deploy = read("scripts/deploy.sh");
+  const simulateBody =
+    deploy.match(/\n\s*simulate\)([\s\S]*?)\n\s*;;/)?.[1] ?? "";
+
+  const healthIndex = simulateBody.indexOf(
+    'curl -fsS "http://localhost:${sim_web_port}/api/health" >/dev/null',
+  );
+  const enrollmentIndex = simulateBody.indexOf(
+    "result = await bootstrap_durable_auth_authority(",
+  );
+  const smokeIndex = simulateBody.indexOf(
+    'if [ "${SIM_RUN_PROD_SMOKE:-false}" = "true" ]; then',
+  );
+
+  assert.ok(healthIndex >= 0, "simulation must wait for backend health");
+  assert.ok(
+    enrollmentIndex > healthIndex,
+    "synthetic auth enrollment must run after backend health",
+  );
+  assert.ok(
+    smokeIndex > enrollmentIndex,
+    "synthetic auth enrollment must run before login-based smoke",
+  );
+  assert.match(
+    simulateBody,
+    /bootstrap_durable_auth_authority\(\s*db,\s*legacy_writers_stopped=True\s*\)/,
+  );
+  assert.match(
+    simulateBody,
+    /text\("SELECT ready FROM auth_authority WHERE id = 1"\)/,
+  );
+  assert.match(simulateBody, /if ready is not True:/);
+  assert.match(
+    simulateBody,
+    /Production must still use the explicit auth\/cutover\.py/,
+  );
+});
+
 test("production simulation overrides parent variables and owns isolated workspaces", () => {
   const deploy = read("scripts/deploy.sh");
   const simulateBody =
@@ -1190,6 +1230,34 @@ test("verify-release-set accepts a complete release set with matching compose an
   assert.match(result.stdout, /release-set verified/);
 });
 
+test("verify-release-set accepts full application versions with a major.minor image tag", () => {
+  const result = runDeployWithFakeDocker({
+    releaseSet: makeReleaseSet({ version: "2.1" }),
+    envOverrides: {
+      APP_VERSION: "2.1.0",
+      REACT_APP_VERSION: "2.1.0",
+      IMAGE_TAG: "2.1",
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("verify-release-set rejects application, frontend, image-tag, and release version drift", () => {
+  const cases = [
+    { releaseSet: makeReleaseSet(), envOverrides: { APP_VERSION: "2.2.0" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { REACT_APP_VERSION: "2.2.0" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2" } },
+    { releaseSet: makeReleaseSet({ version: "2.2" }) },
+  ];
+
+  for (const testCase of cases) {
+    const result = runDeployWithFakeDocker(testCase);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stderr}${result.stdout}`, /version|tag|source/i);
+  }
+});
+
 test("verify-release-set rejects missing, duplicate, or tag-mismatched release rows", () => {
   const missing = runDeployWithFakeDocker({
     releaseSet: makeReleaseSet({ rows: requiredReleaseImages.slice(0, -1) }),
@@ -1485,7 +1553,7 @@ test("version consistency prints the exact image tag", () => {
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(result.stdout, "2.0");
+  assert.equal(result.stdout, "2.1");
 });
 
 test("version consistency rejects drift in production and release defaults", () => {

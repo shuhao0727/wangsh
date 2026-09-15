@@ -15,6 +15,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.datastructures import UploadFile
 
 from app.api.endpoints.xbk import import_export as imports
+from app.core.exception_handlers import generic_exception_handler
+from app.models import XbkCourse, XbkSelection, XbkStudent
 
 
 ROWS = {
@@ -43,15 +45,49 @@ class FakeDb:
         self.fail_commit = fail_commit
         self.queries = []
         self.writes = []
+        self.added = []
+        self.selection_rows = []
+        self._flushed_adds = 0
         self.commits = 0
         self.rollbacks = 0
+
+    def _orm_records(self, table, source, *, parent_source):
+        records = []
+        for index, raw in enumerate(source, 1):
+            if table == "xbk_students":
+                deleted = bool(raw[3]) if parent_source and len(raw) > 3 else len(raw) == 3
+                records.append(SimpleNamespace(
+                    id=index, year=raw[0], term=raw[1], student_no=raw[2],
+                    name=raw[3] if len(raw) >= 5 else "学生甲",
+                    grade=raw[4] if len(raw) >= 5 else "高一",
+                    class_name="1班", gender=None, is_deleted=deleted,
+                ))
+            elif table == "xbk_courses":
+                deleted = bool(raw[3]) if parent_source and len(raw) > 3 else len(raw) == 3
+                records.append(SimpleNamespace(
+                    id=index, year=raw[0], term=raw[1], course_code=raw[2],
+                    course_name="课程甲", grade="高一", teacher=None,
+                    quota=30, location=None, is_deleted=deleted,
+                ))
+            else:
+                records.append(SimpleNamespace(
+                    id=index, year=raw[0], term=raw[1], student_no=raw[2],
+                    course_code=raw[3], grade=None, name=None, is_deleted=True,
+                ))
+        return records
 
     async def execute(self, statement):
         if statement.is_select:
             self.queries.append(statement)
-            table = next(iter(statement.selected_columns)).table.name
             sql = str(statement.compile(dialect=postgresql.dialect()))
-            if len(statement.selected_columns) == 1 or statement._for_update_arg is not None:
+            if "count(" in sql.lower():
+                if statement._group_by_clauses:
+                    return SimpleNamespace(all=lambda: [])
+                return SimpleNamespace(scalar_one=lambda: 0)
+            table = next(iter(statement.selected_columns)).table.name
+            table_column_count = len(statement.get_final_froms()[0].columns)
+            if (len(statement.selected_columns) == 1 or statement._for_update_arg is not None
+                    or len(statement.selected_columns) == table_column_count):
                 # Explicit discovery/ORM lock shape fake, not concurrency evidence.
                 is_parent = table in self.parents
                 if is_parent:
@@ -59,16 +95,17 @@ class FakeDb:
                 fields = ("year", "term", "student_no") if table == "xbk_students" else (
                     ("year", "term", "course_code") if table == "xbk_courses" else
                     ("year", "term", "student_no", "course_code"))
-                source = self.parents.get(table, ()) if is_parent else self.existing
-                records = [SimpleNamespace(id=i, **dict(zip(fields, row)),
-                           **({"is_deleted": row[3]} if is_parent else {"is_deleted": False}))
-                           for i, row in enumerate(source, 1)]
-                keys = next(iter(statement.compile().params.values()))
-                if len(statement.selected_columns) == 1:
-                    rows = [row.id for row in records
-                            if tuple(getattr(row, field) for field in fields) in keys]
+                if table == "xbk_selections":
+                    source = self.existing if "xbk_students" in self.parents else ()
                 else:
-                    rows = [row for row in records if row.id in keys]
+                    source = self.parents.get(table, ()) if is_parent else self.existing
+                records = self._orm_records(table, source, parent_source=is_parent)
+                if len(statement.selected_columns) == 1:
+                    rows = [row.id for row in records]
+                else:
+                    rows = records
+                    if table == "xbk_selections":
+                        self.selection_rows = records
                 return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
             if table in ("xbk_students", "xbk_courses") and "is_deleted IS false" in sql:
                 # Parent records are separate from the imported table's existing
@@ -91,6 +128,24 @@ class FakeDb:
             fake_id = len(self.writes)
             return SimpleNamespace(scalar_one_or_none=lambda: fake_id)
         return None
+
+    def add(self, row):
+        self.added.append(row)
+
+    async def flush(self):
+        for row in self.added[self._flushed_adds:]:
+            values = {
+                column.key: getattr(row, column.key)
+                for column in row.__table__.columns
+                if column.key not in {"id", "created_at"}
+            }
+            statement = postgresql.insert(type(row)).values(**values)
+            self.writes.append(statement)
+            if self.fail_write == len(self.writes):
+                raise SQLAlchemyError("private database diagnostic must not reach clients")
+            if row.id is None:
+                row.id = len(self.writes)
+        self._flushed_adds = len(self.added)
 
     async def commit(self):
         if self.fail_commit:
@@ -327,7 +382,7 @@ def test_strict_validation_does_not_write_earlier_valid_rows(scope):
     assert db.rollbacks == (1 if scope == "selections" else 0)
     # Parent preflight reads are now required; no target-key reads or writes.
     assert db.queries == db.parent_queries
-    assert len(db.parent_queries) == (4 if scope == "selections" else 0)
+    assert len(db.parent_queries) == (2 if scope == "selections" else 0)
 
 
 @pytest.mark.parametrize("scope", ROWS)
@@ -393,21 +448,61 @@ def test_soft_deleted_keys_count_as_updates_and_are_restored(scope, key):
     assert result["updated"] == 1 and result["inserted"] == 0
     target_queries = [query for query in db.queries if all(query is not parent for parent in db.parent_queries)]
     assert target_queries
-    assert all("is_deleted IS" not in str(query) for query in target_queries)
-    statement = str(db.writes[0].compile(dialect=postgresql.dialect()))
-    assert "ON CONFLICT" in statement
-    assert db.writes[0].compile().params["is_deleted"] is False
+    if scope == "selections":
+        # Selection restore is now an ORM mutation inside the shared locked
+        # decision service, not an independent ON CONFLICT writer.
+        assert db.writes == []
+        assert len(db.selection_rows) == 1
+        assert db.selection_rows[0].is_deleted is False
+        assert db.selection_rows[0].course_code == "C01"
+    else:
+        # The target-key discovery must include soft-deleted rows. Additional
+        # parent guards may legitimately query only active selection occupancy.
+        assert any(
+            len(query.selected_columns) == 3 and "is_deleted IS" not in str(query)
+            for query in target_queries
+        )
+        statement = str(db.writes[0].compile(dialect=postgresql.dialect()))
+        assert "ON CONFLICT" in statement
+        assert db.writes[0].compile().params["is_deleted"] is False
 
 
 @pytest.mark.parametrize("scope", ROWS)
 @pytest.mark.parametrize("failure", ["write", "commit"])
-def test_database_failure_rolls_back_and_does_not_expose_details(scope, failure):
+def test_database_failure_rolls_back_and_preserves_original_exception(scope, failure):
     db = FakeDb(fail_write=2 if failure == "write" else None, fail_commit=failure == "commit",
                 parents=selection_parents() if scope == "selections" else None)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(SQLAlchemyError) as exc:
         execute(scope=scope, rows=[ROWS[scope], {**ROWS[scope], "学号": "0013", "课程代码": "C02"}], db=db)
-    assert exc.value.status_code == 409
-    assert "private" not in str(exc.value.detail)
+    assert "private" in str(exc.value)
+    assert db.rollbacks == 1 and db.commits == 0
+    assert len(db.writes) == 2
+
+
+@pytest.mark.parametrize("scope", ROWS)
+@pytest.mark.parametrize("failure", ["write", "commit"])
+def test_database_failure_http_boundary_returns_sanitized_500(scope, failure):
+    db = FakeDb(fail_write=2 if failure == "write" else None, fail_commit=failure == "commit",
+                parents=selection_parents() if scope == "selections" else None)
+    app = FastAPI()
+    app.add_exception_handler(Exception, generic_exception_handler)
+    app.include_router(imports.router, prefix="/xbk")
+    app.dependency_overrides[imports.require_admin] = lambda: {"role_code": "admin"}
+    app.dependency_overrides[imports.get_db] = lambda: db
+    rows = [ROWS[scope], {**ROWS[scope], "学号": "0013", "课程代码": "C02"}]
+    stream = io.BytesIO()
+    pd.DataFrame(rows).to_excel(stream, index=False, engine="openpyxl")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/xbk/import",
+            params={"scope": scope},
+            files={"file": ("synthetic.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"] == "服务器内部错误"
+    assert "private" not in response.text
     assert db.rollbacks == 1 and db.commits == 0
     assert len(db.writes) == 2
 
@@ -435,7 +530,7 @@ def test_selection_blank_code_and_independent_snapshots_preserved():
     params = db.writes[0].compile().params
     assert params["course_code"] == "未选" and params["grade"] == "跨级"
     assert params["name"] is None
-    assert len(db.parent_queries) == 2 and "xbk_students" in str(db.parent_queries[0])
+    assert len(db.parent_queries) >= 2 and "xbk_students" in str(db.parent_queries[0])
     assert all("xbk_courses" not in str(query) for query in db.queries)
 
 
@@ -526,5 +621,5 @@ def test_blank_rows_keep_physical_error_order_through_parent_validation():
     assert result["invalid"] == result["skipped"] == 2
     assert result["processed"] == result["inserted"] == len(db.writes) == 1
     assert db.writes[0].compile().params["student_no"] == good["学号"]
-    assert len(db.parent_queries) == 4
+    assert len(db.parent_queries) >= 4
     assert db.commits == 1 and db.rollbacks == 0

@@ -22,7 +22,7 @@ def _column_exists(table: str, column: str) -> bool:
     row = conn.execute(
         text(
             "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = :t AND column_name = :c"
+            "WHERE table_schema = current_schema() AND table_name = :t AND column_name = :c"
         ),
         {"t": table, "c": column},
     ).first()
@@ -33,7 +33,7 @@ def _index_exists(index_name: str) -> bool:
     conn = op.get_bind()
     row = conn.execute(
         text(
-            "SELECT 1 FROM pg_indexes WHERE indexname = :idx"
+            "SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = :idx"
         ),
         {"idx": index_name},
     ).first()
@@ -59,7 +59,7 @@ def upgrade():
     col_info = conn.execute(
         text(
             "SELECT is_nullable FROM information_schema.columns "
-            "WHERE table_name = 'xxjs_dianming' AND column_name = 'updated_at'"
+            "WHERE table_schema = current_schema() AND table_name = 'xxjs_dianming' AND column_name = 'updated_at'"
         )
     ).first()
     if col_info and col_info[0] == "YES":

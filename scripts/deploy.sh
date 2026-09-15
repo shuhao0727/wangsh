@@ -265,20 +265,37 @@ verify_release_set() {
     fi
   done
 
-  expected_version=""
-  for version_key in IMAGE_TAG APP_VERSION VERSION REACT_APP_VERSION; do
-    configured_version="$(env_value "${version_key}")"
-    [ -z "${configured_version}" ] && continue
-    if [ "${configured_version}" != "${release_version}" ]; then
-      echo "release-set version mismatch for ${version_key}: release=${release_version} configured=${configured_version}" >&2
-      return 2
-    fi
-    [ -z "${expected_version}" ] && expected_version="${configured_version}"
-  done
-  if [ -z "${expected_version}" ]; then
-    echo "release-set version mismatch: no configured version value" >&2
+  source_version="$(node "${repo_root}/scripts/check-version-consistency.mjs" --print-version)" || {
+    echo "failed to derive source application version" >&2
+    return 1
+  }
+  source_image_tag="$(node "${repo_root}/scripts/check-version-consistency.mjs" --print-image-tag)" || {
+    echo "failed to derive source image tag" >&2
+    return 1
+  }
+  if [ "${release_version}" != "${source_image_tag}" ]; then
+    echo "release-set version mismatch for source: release=${release_version} expected_image_tag=${source_image_tag}" >&2
     return 2
   fi
+
+  configured_image_tag="$(env_value IMAGE_TAG)"
+  if [ -z "${configured_image_tag}" ]; then
+    echo "release-set version mismatch: IMAGE_TAG is not configured" >&2
+    return 2
+  fi
+  if [ "${configured_image_tag}" != "${release_version}" ]; then
+    echo "release-set version mismatch for IMAGE_TAG: release=${release_version} configured=${configured_image_tag}" >&2
+    return 2
+  fi
+
+  for version_key in APP_VERSION VERSION REACT_APP_VERSION; do
+    configured_version="$(env_value "${version_key}")"
+    [ -z "${configured_version}" ] && continue
+    if [ "${configured_version}" != "${source_version}" ]; then
+      echo "release-set application version mismatch for ${version_key}: source=${source_version} configured=${configured_version}" >&2
+      return 2
+    fi
+  done
 
   for index in "${!release_image_names[@]}"; do
     if [[ "${release_refs[${index}]}" != *":${release_version}" ]]; then
@@ -579,7 +596,7 @@ case "${cmd}" in
   simulate)
     require_docker
     sim_web_port="${SIM_WEB_PORT:-16608}"
-    sim_version="${SIM_VERSION:-2.0}"
+    sim_version="${SIM_VERSION:-2.1}"
     sim_image_prefix="${SIM_IMAGE_REPOSITORY_PREFIX:-shuhao07}"
     sim_project="wangsh_sim"
     sim_namespace="wangsh_sim"
@@ -789,6 +806,38 @@ EOF
       sleep 1
     done
     curl -fsS "http://localhost:${sim_web_port}/api/health" >/dev/null
+
+    # The simulation database is disposable and has no legacy writers. Alembic deliberately
+    # creates AUTH with ready=false, so enroll the synthetic database before login-based smoke.
+    # Production must still use the explicit auth/cutover.py stop-drain-freeze workflow.
+    run_sim_compose exec -T backend python - <<'PY'
+import asyncio
+
+from sqlalchemy import text
+
+from app.db.database import AsyncSessionLocal
+from app.services.auth import bootstrap_durable_auth_authority
+
+
+async def main() -> None:
+    async with AsyncSessionLocal() as db:
+        result = await bootstrap_durable_auth_authority(
+            db, legacy_writers_stopped=True
+        )
+    async with AsyncSessionLocal() as db:
+        ready = await db.scalar(
+            text("SELECT ready FROM auth_authority WHERE id = 1")
+        )
+    if ready is not True:
+        raise SystemExit(
+            "simulation auth authority still not ready after enrollment: "
+            f"{ready!r} result={result}"
+        )
+    print(f"simulation auth authority enrollment: {result}")
+
+
+asyncio.run(main())
+PY
 
     if [ "${SIM_RUN_PROD_SMOKE:-false}" = "true" ]; then
       PROD_SMOKE_ORIGIN="http://localhost:${sim_web_port}" \

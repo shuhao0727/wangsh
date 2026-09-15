@@ -6,9 +6,54 @@
 2. feature_flags 路由注册检查
 3. 公开端点不需要认证
 4. 管理端点需要认证
+5. 公开端点仅接受14个既有 key，并只投影严格布尔 enabled
 """
 
-from app.api.endpoints.system.feature_flags import FeatureFlagSchema
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from fastapi import HTTPException, Response
+
+from app.api.endpoints.system.feature_flags import (
+    PUBLIC_FEATURE_FLAG_KEYS,
+    PUBLIC_FEATURE_FLAG_NOT_FOUND,
+    FeatureFlagSchema,
+    get_public_feature_flag,
+)
+
+
+EXPECTED_PUBLIC_FEATURE_FLAG_KEYS = {
+    "ai_agents_nav_enabled",
+    "informatics_competition_nav_enabled",
+    "it_technology_nav_enabled",
+    "personal_programs_nav_enabled",
+    "articles_nav_enabled",
+    "it_dianming_enabled",
+    "it_survey_enabled",
+    "it_mindmap_enabled",
+    "it_python_lab_enabled",
+    "it_machine_learning_enabled",
+    "it_ai_exploration_enabled",
+    "it_agent_exploration_enabled",
+    "it_game_lock_cracker_enabled",
+    "it_game_repo_enabled",
+}
+
+
+class _ScalarResult:
+    def __init__(self, flag):
+        self._flag = flag
+
+    def scalar_one_or_none(self):
+        return self._flag
+
+
+def _db_returning(flag):
+    db = SimpleNamespace()
+    db.execute = AsyncMock(return_value=_ScalarResult(flag))
+    return db
 
 
 def test_feature_flag_schema_basic():
@@ -57,6 +102,7 @@ def test_public_feature_flag_no_auth():
             deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
             dep_names = [getattr(d, "__name__", str(d)) for d in deps]
             assert "require_admin" not in dep_names
+            assert "require_super_admin" not in dep_names
             return
     assert False, "Public feature flag route not found"
 
@@ -75,3 +121,88 @@ def test_admin_feature_flags_require_auth():
         deps = [d.call for d in route.dependant.dependencies]  # type: ignore[union-attr]
         dep_names = [getattr(d, "__name__", str(d)) for d in deps]
         assert "require_super_admin" in dep_names, f"{route.path} ({methods}) missing require_super_admin"
+
+
+def test_public_feature_flag_allowlist_matches_existing_consumers():
+    assert PUBLIC_FEATURE_FLAG_KEYS == EXPECTED_PUBLIC_FEATURE_FLAG_KEYS
+    assert len(PUBLIC_FEATURE_FLAG_KEYS) == 14
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_public_feature_flag_projects_only_boolean_enabled(enabled):
+    key = "it_python_lab_enabled"
+    db = _db_returning(
+        SimpleNamespace(
+            key=key,
+            value={
+                "enabled": enabled,
+                "api_key": "synthetic-secret",
+                "api_url": "https://internal.invalid",
+                "model": "private-model",
+                "nested": {"token": "synthetic-token"},
+            },
+        )
+    )
+    response = Response()
+
+    result = asyncio.run(get_public_feature_flag(key=key, response=response, db=db))
+
+    assert result.model_dump() == {"key": key, "value": {"enabled": enabled}}
+    assert response.headers["cache-control"] == "no-store"
+    db.execute.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "stored_value",
+    [
+        {},
+        {"other": True},
+        {"enabled": "true"},
+        {"enabled": 1},
+        {"enabled": None},
+        "not-an-object",
+        [True],
+        None,
+    ],
+)
+def test_public_feature_flag_invalid_or_missing_enabled_preserves_empty_default(stored_value):
+    key = "it_dianming_enabled"
+    db = _db_returning(SimpleNamespace(key=key, value=stored_value))
+
+    result = asyncio.run(get_public_feature_flag(key=key, response=Response(), db=db))
+
+    assert result.model_dump() == {"key": key, "value": {}}
+
+
+def test_public_feature_flag_missing_row_preserves_empty_default():
+    key = "articles_nav_enabled"
+    db = _db_returning(None)
+
+    result = asyncio.run(get_public_feature_flag(key=key, response=Response(), db=db))
+
+    assert result.model_dump() == {"key": key, "value": {}}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "python_lab_agent_config",
+        "ai_agent_config",
+        "unknown_existing_flag",
+        "unknown_missing_flag",
+    ],
+)
+def test_public_feature_flag_rejects_non_allowlisted_key_before_query(key):
+    db = _db_returning(
+        SimpleNamespace(
+            key=key,
+            value={"enabled": True, "api_key": "synthetic-secret"},
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(get_public_feature_flag(key=key, response=Response(), db=db))
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == PUBLIC_FEATURE_FLAG_NOT_FOUND
+    db.execute.assert_not_awaited()

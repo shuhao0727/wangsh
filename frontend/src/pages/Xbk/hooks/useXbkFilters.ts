@@ -3,7 +3,7 @@ import { getCurrentAcademicYear } from "../academicYear";
 
 type Filters = {
   year?: string;
-  term?: "上学期" | "下学期";
+  term?: string;
   grade?: "高一" | "高二";
   class_name?: string;
   search_text?: string;

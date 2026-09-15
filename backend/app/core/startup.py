@@ -16,6 +16,7 @@ from app.db.database import engine, AsyncSessionLocal
 from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.core.http_client import HttpClientManager
+from app.core.session_family import lock_auth_mutation
 from app.utils.cache import shutdown_cache, startup_cache
 from app.core.pubsub import shutdown_pubsub
 from app.models import User
@@ -36,7 +37,8 @@ async def init_database():
         return
     logger.info("检查数据库初始化状态（生产请使用 Alembic 迁移）...")
     async with engine.begin() as conn:
-        existing_tables = await _get_existing_public_tables(conn)
+        schema = await _current_schema(conn)
+        existing_tables = await _get_existing_schema_tables(conn, schema)
         has_alembic_revision = await _has_alembic_revision(conn)
         if existing_tables:
             if has_alembic_revision:
@@ -56,51 +58,63 @@ async def init_database():
 
 
 async def init_super_admin():
-    """创建或更新超级管理员账户"""
+    """Create the configured super administrator once, without overriding governance.
+
+    Startup is a privileged writer.  It therefore joins the global AUTH lock
+    order and never reactivates, promotes, or resets an existing account.
+    Subsequent password and lifecycle changes must go through audited account
+    administration instead of being silently undone by a restart.
+    """
     logger.info("检查超级管理员账户...")
+    admin_username = settings.SUPER_ADMIN_USERNAME
+    admin_password = settings.SUPER_ADMIN_PASSWORD
+    admin_full_name = settings.SUPER_ADMIN_FULL_NAME
+
+    if not all([admin_username, admin_password]):
+        logger.warning("超级管理员配置不完整，跳过创建")
+        return
+
     try:
-        admin_username = settings.SUPER_ADMIN_USERNAME
-        admin_password = settings.SUPER_ADMIN_PASSWORD
-        admin_full_name = settings.SUPER_ADMIN_FULL_NAME
-
-        if not all([admin_username, admin_password]):
-            logger.warning("超级管理员配置不完整，跳过创建")
-            return
-
-        hashed_password = hash_super_admin_password()
-
         async with AsyncSessionLocal() as session:
-            query = select(User).where(
-                User.username == admin_username,
-                User.role_code.in_(["admin", "super_admin"]),
-            )
-            result = await session.execute(query)
-            existing_admin = result.scalar_one_or_none()
-
-            if existing_admin:
-                existing_admin.hashed_password = hashed_password  # type: ignore[assignment]
-                existing_admin.role_code = "super_admin"  # type: ignore[assignment]
-                existing_admin.is_active = True  # type: ignore
-                existing_admin.full_name = admin_full_name if admin_full_name else existing_admin.full_name  # type: ignore[assignment]
-                if not existing_admin.student_id:
-                    existing_admin.student_id = "A001"  # type: ignore[assignment]
-                logger.info(f"超级管理员账户已更新: {admin_username}")
-            else:
-                new_admin = User(
-                    username=admin_username,
-                    hashed_password=hashed_password,
-                    student_id="A001",
-                    full_name=admin_full_name if admin_full_name else "系统超级管理员",
-                    role_code="super_admin",
-                    is_active=True,
+            await lock_auth_mutation(session, require_ready=False)
+            existing_user = (
+                await session.execute(
+                    select(User)
+                    .where(User.username == admin_username)
+                    .with_for_update()
                 )
-                session.add(new_admin)
-                logger.info(f"超级管理员账户已创建: {admin_username}")
+            ).scalar_one_or_none()
 
+            if existing_user is not None:
+                if (
+                    existing_user.role_code == "super_admin"
+                    and existing_user.is_active
+                    and not existing_user.is_deleted
+                ):
+                    logger.info("超级管理员账户已存在，启动过程不重置其凭据或资料: {}", admin_username)
+                else:
+                    logger.warning(
+                        "配置的超级管理员用户名已被人工停用、删除、降权或占用；"
+                        "启动过程不会覆盖治理结果: {}",
+                        admin_username,
+                    )
+                await session.rollback()
+                return
+
+            new_admin = User(
+                username=admin_username,
+                hashed_password=hash_super_admin_password(),
+                student_id="A001",
+                full_name=admin_full_name or "系统超级管理员",
+                role_code="super_admin",
+                is_active=True,
+            )
+            session.add(new_admin)
             await session.commit()
-            logger.info("超级管理员账户设置完成")
-    except Exception as e:
-        logger.error(f"创建超级管理员失败: {e}")
+            logger.info("超级管理员账户已创建: {}", admin_username)
+    except Exception:
+        logger.exception("创建超级管理员失败，应用启动已中止")
+        raise
 
 
 async def init_seed_data():
@@ -198,22 +212,30 @@ async def shutdown(cleanup_task: "asyncio.Task[None] | None"):
 
 # ---- 内部辅助函数 ----
 
-async def _get_existing_public_tables(conn) -> set[str]:
+async def _current_schema(conn) -> str:
+    schema = (await conn.execute(text("SELECT current_schema()"))).scalar_one_or_none()
+    if not schema:
+        raise RuntimeError("PostgreSQL search_path does not contain an existing schema")
+    return str(schema)
+
+
+async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
     result = await conn.execute(
         text(
             """
             SELECT tablename
             FROM pg_tables
-            WHERE schemaname = 'public'
+            WHERE schemaname = :schema
               AND tablename != 'alembic_version'
             """
-        )
+        ),
+        {"schema": schema},
     )
     return {str(row[0]) for row in result}
 
 
 async def _has_alembic_revision(conn) -> bool:
-    version_table = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
+    version_table = await conn.execute(text("SELECT to_regclass('alembic_version')"))
     if version_table.scalar_one_or_none() is None:
         return False
     result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))

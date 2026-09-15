@@ -18,8 +18,8 @@ depends_on = None
 def _table_exists(table: str) -> bool:
     conn = op.get_bind()
     row = conn.execute(
-        text("SELECT 1 FROM information_schema.tables WHERE table_schema = :schema AND table_name = :table"),
-        {"schema": "public", "table": table},
+        text("SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = :table"),
+        {"table": table},
     ).first()
     return row is not None
 
@@ -90,13 +90,13 @@ def upgrade():
     op.execute("""
         DO $$
         BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ix_ml_books_module_key') THEN
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_ml_books_module_key') THEN
                 CREATE INDEX ix_ml_books_module_key ON ml_books (module_key);
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ix_ml_book_chapters_book_id') THEN
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_ml_book_chapters_book_id') THEN
                 CREATE INDEX ix_ml_book_chapters_book_id ON ml_book_chapters (book_id);
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ix_ml_book_chapters_slug') THEN
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_ml_book_chapters_slug') THEN
                 CREATE INDEX ix_ml_book_chapters_slug ON ml_book_chapters (book_id, slug);
             END IF;
         END

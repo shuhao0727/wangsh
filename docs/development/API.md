@@ -1,7 +1,64 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-09-10（持久认证、XBK 取消与 PythonLab 接入）
+> 最后更新：2026-09-14（第一、二阶段未发布候选合同）
+
+## 第一、二阶段未发布候选 API 合同（2026-09-14）
+
+以下合同已进入当前源码，但尚未部署或迁移正常数据库。
+
+### 公共配置与账号治理
+
+- `GET /system/public/feature-flags/{key}` 只接受 14 个明确公开 key；未知 key 在数据库查询前
+  返回 `404`。成功响应只可能包含空 `value` 或严格布尔 `value.enabled`，并设置
+  `Cache-Control: no-store`。管理端 `/system/feature-flags*` 权限仍为 `super_admin`。
+- `PUT /users/{user_id}`、`DELETE /users/{user_id}`、`POST /users/batch-delete` 以及
+  `POST /users/import` 中导致账号停用、删除、恢复或降权的变更，按 AUTH ready gate 和
+  持久撤销事务执行。移除最后一名活跃 `super_admin` 返回 `409`，detail 中包含
+  `code=LAST_ACTIVE_SUPER_ADMIN`；普通资料更新不撤销会话。
+- `POST /users/` 在写入前进入同一 AUTH 全局事务锁并重新校验操作者，已被停用、删除或
+  降权的在途管理员请求不能继续创建账号。应用启动只在配置用户名不存在时创建超级管理员，
+  不再重置或恢复已存在账号。
+
+### 点名对象级授权
+
+- `GET /xxjs/dianming/classes`：`admin/super_admin` 可读取全局聚合；学生只返回认证身份
+  `study_year + class_name` 对应的班级；教师授权关系尚未建立，因此当前教师返回 `403`。
+- `GET /xxjs/dianming/students?year=...&class_name=...`：学生跨班、跨学年或身份映射缺失
+  时在查询名单前返回 `403`；管理员保留全局读取。
+
+### XBK 事务与工作簿边界
+
+- 手工新增/改课、导入执行和软删除恢复统一裁决同一学年、学期、学号的唯一有效位置及
+  每班课程容量；并发陈旧源记录或候选唯一约束冲突返回 `409`。
+- `course-selection` 工作簿覆盖实际名册中的全部班级并携带版本化基线。
+  `POST /xbk/course-selection-workbook/preview` 以管理员身份、`year`、`term` 和 multipart XLSX
+  生成签名预览令牌；`POST /xbk/course-selection-workbook/confirm` 必须回传同一文件和令牌。
+  `plan_id` 是内容摘要，授权边界由服务器签名令牌提供。确认先从文件恢复不可变导出合同并
+  核对令牌，再在数据库锁内重验完整名册、课程代码/名称/限额和选课状态；完整原基线可应用，
+  完整目标状态幂等返回 `already_applied`，部分目标、第三状态或父数据变化整批拒绝。
+- 现有 `POST /xbk/import/preview` 与 `POST /xbk/import` 仍只接受
+  `scope=students|courses|selections` 的既有导入合同，不会自动识别 R3 工作簿。预览不预留名额，
+  最终容量和唯一有效位置仍以确认事务为准。
+- R4 partial unique index 已在回环地址的一次性 PostgreSQL 中完成迁移循环、历史有效重复阻断、
+  回滚后无半成品索引以及真实 asyncpg 约束名验证；同周期同学生的第二条有效选课会被目标
+  约束拒绝，软删除记录不参与限制。该证据不表示正常数据库已连接或迁移，也不表示服务已部署。
+
+### 解析前请求预算
+
+ASGI middleware 在 FastAPI/Starlette 表单解析前约束请求头和表单请求体：请求头最多 100 条、
+总计 32 KiB、单条 8 KiB；无效或冲突的 `Content-Length` 返回 `400`，请求头超限返回
+`431`，预声明或累计请求体超限返回 `413`，等待下一段请求体数据超时返回 `408`。路由预算为：
+
+- `/auth/login`：16 KiB；
+- `/users/import`、`/xbk/import/preview`、`/xbk/import`：12 MiB；
+- `/informatics/typst-notes/*/assets`：6 MiB；
+- `/admin/it/games`：502 MiB 请求预算，业务层仍保留 500 MiB 文件上限；
+- 其他未登记的 `POST/PUT/PATCH` 表单：2 MiB。
+
+该预算仅覆盖 `application/x-www-form-urlencoded` 与 `multipart/form-data`，不套用于 JSON。
+它不等于网关原始请求限制、入口限速、并发治理或 multipart 解析 CPU 抢占治理。
+`python-multipart==0.0.32` 目前只写入候选依赖清单，尚未安装到正式 venv 或候选镜像。
 
 > 并发行为补充（2026-09-09）：XBK 手工选课写入/恢复及导入 execute 在持有学生、课程共享锁后重验父实体；父删除先锁父再级联，批量删除仅作用于冻结 ID 集合，preview 不作并发承诺。无新增响应字段、FK 或迁移，自然键更名政策未改变；详见 [XBK owner](../features/XBK.md)。
 
@@ -407,6 +464,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 ### 校本课校验与筛选合同
 
 - 导入在预检、写入及提交尚未完成时遇到一次任务取消，会显式 rollback 并原样抛出取消；不新增正常响应状态。rollback 再次被取消时，直接保留 session 的调用方仍须负责 rollback/close。客户端 TCP 断连不等于服务端取消，响应丢失也不等于未提交；本接口不提供提交结果的幂等回放或已提交数据撤销保证。
+- R3 使用独立端点 `POST /xbk/course-selection-workbook/preview` 与 `POST /xbk/course-selection-workbook/confirm`；二者均要求管理员权限、multipart XLSX、`year` 和 `term`，确认还要求预览返回的签名 `preview_token`。同一 token 与同一文件重复确认在完整目标状态返回 `already_applied`；文件与 token 计划不一致返回 `409`。现有两个通用导入 POST 不会自动识别或执行该工作簿。
 
 - XBK 请求与响应中的 `year` 是规范学年字符串 `YYYY-YYYY`（例如 `2026-2027`）；API/导入边界仍兼容四位起始年份 `2026` 并规范化输出，拒绝 `2026-2028` 等不连续区间。数据库三张 XBK 表使用 `VARCHAR(9)` 并施加连续学年 CHECK 约束。
 - `POST /xbk/import/preview` 与 `POST /xbk/import` 使用 multipart `file`，接受 `scope=students|courses|selections` 以及 `year`、`term`、`grade` 默认值；非空文件值优先，空单元格或缺列回退到默认值。

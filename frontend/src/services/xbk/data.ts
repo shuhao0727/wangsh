@@ -1,7 +1,10 @@
 import { api } from "../api";
 
 export type XbkScope = "students" | "courses" | "selections";
-export type XbkExportType = "course-selection" | "teacher-distribution" | "distribution";
+export type XbkExportType =
+  | "course-selection"
+  | "teacher-distribution"
+  | "distribution";
 export type XbkExportScope =
   | "students"
   | "courses"
@@ -111,13 +114,92 @@ export interface XbkImportResult {
   errors: { row: number; errors: string[] }[];
 }
 
+export type XbkCourseSelectionWorkbookChangedAction =
+  | "select"
+  | "set_unselected";
+export type XbkCourseSelectionWorkbookConfirmStatus =
+  | "applied"
+  | "already_applied"
+  | "no_changes";
+
+export interface XbkCourseSelectionWorkbookChangedRow {
+  sheet: string;
+  row: number;
+  grade: string;
+  class_name: string;
+  student_no: string;
+  name: string;
+  baseline_course: string | null;
+  submitted_course: string | null;
+  target_course: string | null;
+  action: XbkCourseSelectionWorkbookChangedAction;
+}
+
+export interface XbkCourseSelectionWorkbookPreviewResponse {
+  plan_id: string;
+  preview_token: string;
+  token_version: number;
+  expires_at: string;
+  year: string;
+  term: string;
+  baseline_id: string;
+  total_rows: number;
+  changed: number;
+  unchanged: number;
+  changed_rows: XbkCourseSelectionWorkbookChangedRow[];
+  notice: string;
+}
+
+export interface XbkCourseSelectionWorkbookConfirmResponse {
+  plan_id: string;
+  status: XbkCourseSelectionWorkbookConfirmStatus;
+  changed: number;
+  inserted: number;
+  updated: number;
+}
+
+export interface XbkCourseSelectionWorkbookErrorIssue {
+  code: string;
+  message: string;
+  sheet: string | null;
+  row: number | null;
+  student_no: string | null;
+  course_code: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface XbkCourseSelectionWorkbookErrorDetail {
+  code: string;
+  message: string;
+  issues: XbkCourseSelectionWorkbookErrorIssue[];
+}
+
+export interface XbkCourseSelectionWorkbookErrorResponse {
+  detail: XbkCourseSelectionWorkbookErrorDetail;
+}
+
+export interface XbkCourseSelectionWorkbookPreviewParams {
+  year: string;
+  term: string;
+  file: File;
+}
+
+export interface XbkCourseSelectionWorkbookConfirmParams extends XbkCourseSelectionWorkbookPreviewParams {
+  preview_token: string;
+}
+
 export const xbkDataApi = {
-  getMeta: async (params: { year?: string; term?: string; grade?: string } = {}): Promise<XbkMeta> => {
+  getMeta: async (
+    params: { year?: string; term?: string; grade?: string } = {},
+  ): Promise<XbkMeta> => {
     const res = await api.client.get("/xbk/data/meta", { params });
     return res.data as XbkMeta;
   },
 
-  downloadTemplate: async (params: { scope: XbkScope; grade?: string }): Promise<Blob> => {
+  downloadTemplate: async (params: {
+    scope: XbkScope;
+    grade?: string;
+  }): Promise<Blob> => {
     const res = await api.client.get("/xbk/import/template", {
       params,
       responseType: "blob",
@@ -135,9 +217,43 @@ export const xbkDataApi = {
     const form = new FormData();
     form.append("file", params.file);
     const res = await api.client.post("/xbk/import/preview", form, {
-      params: { scope: params.scope, year: params.year, term: params.term, grade: params.grade },
+      params: {
+        scope: params.scope,
+        year: params.year,
+        term: params.term,
+        grade: params.grade,
+      },
     });
     return res.data as XbkImportPreview;
+  },
+
+  previewCourseSelectionWorkbook: async (
+    params: XbkCourseSelectionWorkbookPreviewParams,
+  ): Promise<XbkCourseSelectionWorkbookPreviewResponse> => {
+    const form = new FormData();
+    form.append("year", params.year);
+    form.append("term", params.term);
+    form.append("file", params.file);
+    const res = await api.client.post(
+      "/xbk/course-selection-workbook/preview",
+      form,
+    );
+    return res.data as XbkCourseSelectionWorkbookPreviewResponse;
+  },
+
+  confirmCourseSelectionWorkbook: async (
+    params: XbkCourseSelectionWorkbookConfirmParams,
+  ): Promise<XbkCourseSelectionWorkbookConfirmResponse> => {
+    const form = new FormData();
+    form.append("year", params.year);
+    form.append("term", params.term);
+    form.append("preview_token", params.preview_token);
+    form.append("file", params.file);
+    const res = await api.client.post(
+      "/xbk/course-selection-workbook/confirm",
+      form,
+    );
+    return res.data as XbkCourseSelectionWorkbookConfirmResponse;
   },
 
   listStudents: async (params: {
@@ -165,11 +281,16 @@ export const xbkDataApi = {
     return res.data as XbkListResponse<XbkCourseRow>;
   },
 
-  createStudent: async (payload: Omit<XbkStudentRow, "id">): Promise<XbkStudentRow> => {
+  createStudent: async (
+    payload: Omit<XbkStudentRow, "id">,
+  ): Promise<XbkStudentRow> => {
     const res = await api.client.post("/xbk/data/students", payload);
     return res.data as XbkStudentRow;
   },
-  updateStudent: async (id: number, payload: Omit<XbkStudentRow, "id">): Promise<XbkStudentRow> => {
+  updateStudent: async (
+    id: number,
+    payload: Omit<XbkStudentRow, "id">,
+  ): Promise<XbkStudentRow> => {
     const res = await api.client.put(`/xbk/data/students/${id}`, payload);
     return res.data as XbkStudentRow;
   },
@@ -177,11 +298,16 @@ export const xbkDataApi = {
     await api.client.delete(`/xbk/data/students/${id}`);
   },
 
-  createCourse: async (payload: Omit<XbkCourseRow, "id">): Promise<XbkCourseRow> => {
+  createCourse: async (
+    payload: Omit<XbkCourseRow, "id">,
+  ): Promise<XbkCourseRow> => {
     const res = await api.client.post("/xbk/data/courses", payload);
     return res.data as XbkCourseRow;
   },
-  updateCourse: async (id: number, payload: Omit<XbkCourseRow, "id">): Promise<XbkCourseRow> => {
+  updateCourse: async (
+    id: number,
+    payload: Omit<XbkCourseRow, "id">,
+  ): Promise<XbkCourseRow> => {
     const res = await api.client.put(`/xbk/data/courses/${id}`, payload);
     return res.data as XbkCourseRow;
   },
@@ -189,11 +315,16 @@ export const xbkDataApi = {
     await api.client.delete(`/xbk/data/courses/${id}`);
   },
 
-  createSelection: async (payload: Omit<XbkSelectionRow, "id">): Promise<XbkSelectionRow> => {
+  createSelection: async (
+    payload: Omit<XbkSelectionRow, "id">,
+  ): Promise<XbkSelectionRow> => {
     const res = await api.client.post("/xbk/data/selections", payload);
     return res.data as XbkSelectionRow;
   },
-  updateSelection: async (id: number, payload: Omit<XbkSelectionRow, "id">): Promise<XbkSelectionRow> => {
+  updateSelection: async (
+    id: number,
+    payload: Omit<XbkSelectionRow, "id">,
+  ): Promise<XbkSelectionRow> => {
     const res = await api.client.put(`/xbk/data/selections/${id}`, payload);
     return res.data as XbkSelectionRow;
   },
@@ -347,9 +478,12 @@ export const xbkDataApi = {
     grade?: string;
     class_name?: string;
   }): Promise<{ items: XbkStudentRow[] }> => {
-    const res = await api.client.get("/xbk/analysis/students-without-selection", {
-      params,
-    });
+    const res = await api.client.get(
+      "/xbk/analysis/students-without-selection",
+      {
+        params,
+      },
+    );
     return res.data as { items: XbkStudentRow[] };
   },
 
@@ -359,9 +493,12 @@ export const xbkDataApi = {
     grade?: string;
     class_name?: string;
   }): Promise<{ items: XbkStudentRow[] }> => {
-    const res = await api.client.get("/xbk/analysis/students-with-empty-selection", {
-      params,
-    });
+    const res = await api.client.get(
+      "/xbk/analysis/students-with-empty-selection",
+      {
+        params,
+      },
+    );
     return res.data as { items: XbkStudentRow[] };
   },
 };

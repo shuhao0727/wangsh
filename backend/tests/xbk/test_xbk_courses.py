@@ -114,7 +114,8 @@ def test_update_course_changes_existing_row():
         quota=10,
         is_deleted=False,
     )
-    db = _CrudDb([row])
+    # Locked course, then no selection references and no occupied class buckets.
+    db = _CrudDb([row, [], []])
 
     result = asyncio.run(update_course(6, _payload(), db, {"role_code": "admin"}))
 

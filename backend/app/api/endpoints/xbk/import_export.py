@@ -13,13 +13,15 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import Numeric, and_, case, cast, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.api.endpoints.xbk._common import (
-    UNSELECTED_COURSE_CODES, apply_common_filters, apply_search_filter, selection_reference_errors,
-)
+from app.api.endpoints.xbk._common import (UNSELECTED_COURSE_CODES, apply_common_filters,
+                                           apply_search_filter, selection_reference_errors)
 from app.services.xbk.locking import lock_key_rows
+from app.services.xbk.selection_rules import (SelectionMutation, apply_selection_mutations,
+                                              guard_course_change, guard_student_change,
+                                              is_active_selection_unique_violation)
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
@@ -39,7 +41,6 @@ from ._import_parsing import (
 router = APIRouter()
 
 
-# Bound both upload size and the expanded workbook before pandas allocates cells.
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
 MAX_IMPORT_EXPANDED_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_ROWS = 50_000
@@ -48,17 +49,13 @@ _PG_INT_MIN = -(2 ** 31)
 _PG_INT_MAX = 2 ** 31 - 1
 
 
-# Characters stripped by Python str.strip; use the same bound set in SQL for
-# legacy rows. Plain SQL trim() only removes spaces and would reject safe imports.
+# Match Python str.strip in SQL; plain trim() only removes spaces.
 _IDENTITY_WHITESPACE = (
-    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
-    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
-    "\u2028\u2029\u202f\u205f\u3000"
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004"
+    "\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 )
 _STUDENT_IDENTITY_CONFLICT = (
-    "导入学号与数据库中另一姓名或年级的学生冲突，已阻止整份文件导入。"
-    "请核对跨班级、跨年级的唯一学号；如需更正姓名或年级，请明确编辑原记录。"
-)
+    "导入学号与数据库中另一姓名或年级的学生冲突，已阻止整份文件导入。请核对跨班级、跨年级的唯一学号；如需更正姓名或年级，请明确编辑原记录。")
 
 
 def _student_identity_condition(values: Dict[str, Any]):
@@ -420,8 +417,6 @@ async def preview_import(
 
 async def _execute_import_upsert(db, scope, model, statement, key_fields, updates, values):
     if scope == "students":
-        # Recheck identity after PostgreSQL acquires the conflicting row lock;
-        # a preflight read cannot protect concurrent inserts.
         statement = statement.on_conflict_do_update(
             index_elements=key_fields, set_=updates,
             where=_student_identity_condition(values),
@@ -432,6 +427,64 @@ async def _execute_import_upsert(db, scope, model, statement, key_fields, update
     else:
         statement = statement.on_conflict_do_update(index_elements=key_fields, set_=updates)
         await db.execute(statement)
+
+
+async def _guard_import_parent(db, scope, current, values):
+    if current is None:
+        return
+    guard = guard_student_change if scope == "students" else guard_course_change
+    await guard(db, current, values)
+
+
+async def _apply_valid_import_rows(db, scope, model, key_fields, valid):
+    keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
+    if scope == "selections":
+        mutations = [SelectionMutation(values, replace_existing=True) for values, _ in valid]
+        decision = await apply_selection_mutations(db, mutations)
+        return len(valid), decision.inserted, decision.updated
+    locked = await lock_key_rows(db, model, key_fields, keys)
+    parent_by_key = {tuple(getattr(row, field) for field in key_fields): row for row in locked}
+    await _validate_student_identities(scope, valid, db)
+    existing = set(parent_by_key)
+    key_columns = [getattr(model, field) for field in key_fields]
+    for offset in range(0, len(keys), 500):
+        statement = select(*key_columns).where(tuple_(*key_columns).in_(keys[offset:offset + 500]))
+        existing.update(tuple(row) for row in (await db.execute(statement)).all())
+    now = datetime.now(timezone.utc)
+    inserted = updated = 0
+    for values, _ in sorted(valid, key=lambda item: tuple(item[0][field] for field in key_fields)):
+        key = tuple(values[field] for field in key_fields)
+        await _guard_import_parent(db, scope, parent_by_key.get(key), values)
+        updates = {field: value for field, value in values.items() if field not in key_fields}
+        updates.update(is_deleted=False, updated_at=now)
+        statement = insert(model).values(**values, is_deleted=False, created_at=now, updated_at=now)
+        await _execute_import_upsert(db, scope, model, statement, key_fields, updates, values)
+        updated += int(key in existing)
+        inserted += int(key not in existing)
+        existing.add(key)
+    return len(valid), inserted, updated
+
+
+async def _commit_import_rows(db, scope, model, key_fields, valid):
+    try:
+        result = await _apply_valid_import_rows(db, scope, model, key_fields, valid)
+        await db.commit()
+        return result
+    except asyncio.CancelledError:
+        await db.rollback()
+        raise
+    except IntegrityError as exc:
+        await db.rollback()
+        if is_active_selection_unique_violation(exc):
+            raise HTTPException(status_code=409,
+                                detail="导入失败：学生在本学期已有有效选课，请刷新后重试") from exc
+        raise
+    except SQLAlchemyError:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
 
 
 @router.post("/import", status_code=200)
@@ -446,82 +499,29 @@ async def import_data(
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
     try:
-        total, _, valid, errors = await _prepare_import(scope, year, term, grade, file, db, lock_references=True)
-        # Strict failure and all-invalid input must release preflight SHARE locks
-        # even when a caller keeps the session open after this function returns.
+        total, _, valid, errors = await _prepare_import(scope, year, term, grade, file, db)
         if errors and not skip_invalid:
             raise HTTPException(status_code=422, detail=errors[0])
     except asyncio.CancelledError:
-        # Cancellation is a BaseException; release preflight locks and reset an
-        # asyncpg-invalidated transaction before a retained caller can retry.
         await db.rollback()
         raise
     except SQLAlchemyError:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="导入失败，数据库操作已回滚，请刷新数据后重试") from None
+        raise
     except Exception:
         if scope == "selections":
             await db.rollback()
         raise
-    if not valid and scope == "selections":
-        await db.rollback()
     model, _, _, _, key_fields = _import_spec(scope)
-    processed = inserted = updated = 0
     if valid:
-        try:
-            # Parent imports/restores use the same ID order as deletion. New keys
-            # remain protected by the existing atomic ON CONFLICT identity rule.
-            # For selections, parent SHARE locks were taken during preparation;
-            # existing children now follow in the same immutable-ID order.
-            await lock_key_rows(db, model, key_fields, [
-                tuple(values[field] for field in key_fields) for values, _ in valid
-            ])
-            await _validate_student_identities(scope, valid, db)
-            keys = list({tuple(values[field] for field in key_fields) for values, _ in valid})
-            existing = set()
-            # Include soft-deleted rows: restoring a unique key is an UPDATE, not INSERT.
-            # Chunk keys to keep PostgreSQL bind parameters bounded on large imports.
-            for offset in range(0, len(keys), 500):
-                key_columns = [getattr(model, field) for field in key_fields]
-                statement = select(*key_columns).where(tuple_(*key_columns).in_(keys[offset:offset + 500]))
-                existing.update(tuple(row) for row in (await db.execute(statement)).all())
-            now = datetime.now(timezone.utc)
-            for values, _ in sorted(valid, key=lambda item: tuple(item[0][field] for field in key_fields)):
-                key = tuple(values[field] for field in key_fields)
-                updates = {field: value for field, value in values.items() if field not in key_fields}
-                updates.update(is_deleted=False, updated_at=now)
-                statement = insert(model).values(
-                    **values, is_deleted=False, created_at=now, updated_at=now,
-                )
-                await _execute_import_upsert(db, scope, model, statement, key_fields, updates, values)
-                processed += 1
-                if key in existing:
-                    updated += 1
-                else:
-                    inserted += 1
-                # File-level duplicate keys have already been rejected.
-                existing.add(key)
-            await db.commit()
-        except asyncio.CancelledError:
-            # Preserve cancellation (never turn it into an HTTP success/error),
-            # while giving direct callers the same cleanup as get_db exit.
+        processed, inserted, updated = await _commit_import_rows(db, scope, model, key_fields, valid)
+    else:
+        processed = inserted = updated = 0
+        if scope == "selections":
             await db.rollback()
-            raise
-        except SQLAlchemyError:
-            await db.rollback()
-            raise HTTPException(status_code=409, detail="导入失败，数据库操作已回滚，请刷新数据后重试") from None
-        except Exception:
-            await db.rollback()
-            raise
-    return {
-        "total_rows": total,
-        "processed": processed,
-        "inserted": inserted,
-        "updated": updated,
-        "skipped": len(errors),
-        "invalid": len(errors),
-        "errors": errors[:50],
-    }
+    return {"total_rows": total, "processed": processed, "inserted": inserted,
+            "updated": updated, "skipped": len(errors), "invalid": len(errors),
+            "errors": errors[:50]}
 
 
 @router.get("/export")

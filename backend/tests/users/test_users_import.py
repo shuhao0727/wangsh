@@ -1,6 +1,7 @@
 """Users 导入测试"""
 import asyncio
 import io
+
 from types import SimpleNamespace
 
 from fastapi import UploadFile
@@ -14,6 +15,12 @@ class _ScalarResult:
 
     def scalar_one_or_none(self):
         return self._value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value if isinstance(self._value, list) else [self._value]
 
 
 class _Savepoint:
@@ -31,6 +38,13 @@ class _ImportDb:
         self.commit_count = 0
         self.savepoints = []
         self.added = []
+        self.execute_count = 0
+        self.actor = SimpleNamespace(
+            id=10, role_code="admin", is_active=True, is_deleted=False
+        )
+
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
 
     async def begin_nested(self):
         if self.begin_nested_failures:
@@ -40,8 +54,19 @@ class _ImportDb:
         self.savepoints.append(savepoint)
         return savepoint
 
-    async def execute(self, _query):
-        return _ScalarResult(self.existing_user)
+    async def execute(self, query):
+        self.execute_count += 1
+        if query._for_update_arg is not None and query._order_by_clauses:
+            rows = [self.actor]
+            if self.existing_user is not None:
+                rows.append(self.existing_user)
+            return _ScalarResult(rows)
+        if query._for_update_arg is not None:
+            return _ScalarResult(self.existing_user)
+        return _ScalarResult(None)
+
+    async def scalar(self, _query):
+        return self.existing_user.id if self.existing_user is not None else None
 
     def add(self, value):
         self.added.append(value)
@@ -66,6 +91,7 @@ def test_admin_import_cannot_modify_existing_privileged_user():
         class_name=None,
         role_code="super_admin",
         is_active=True,
+        is_deleted=False,
     )
     db = _ImportDb(existing_user)
     csv_content = (

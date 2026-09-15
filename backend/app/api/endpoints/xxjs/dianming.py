@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin, require_user
 from app.models.xxjs.dianming import XxjsDianming
+from app.services.xxjs.dianming_access import (
+    authorize_dianming_class_read,
+    resolve_dianming_read_scope,
+)
 from app.utils.errors import safe_error_detail
 from app.schemas.xxjs.dianming import (
     DianmingClass,
@@ -35,14 +39,20 @@ async def list_classes(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_user),
 ) -> Any:
-    """获取所有班级列表（聚合视图）"""
-    stmt = (
-        select(
-            XxjsDianming.year,
-            XxjsDianming.class_name,
-            func.count(XxjsDianming.id).label("count"),
+    """获取当前用户有权读取的班级列表（聚合视图）。"""
+    scope = resolve_dianming_read_scope(_)
+    stmt = select(
+        XxjsDianming.year,
+        XxjsDianming.class_name,
+        func.count(XxjsDianming.id).label("count"),
+    )
+    if not scope.is_global:
+        stmt = stmt.where(
+            XxjsDianming.year == scope.year,
+            XxjsDianming.class_name == scope.class_name,
         )
-        .group_by(XxjsDianming.year, XxjsDianming.class_name)
+    stmt = (
+        stmt.group_by(XxjsDianming.year, XxjsDianming.class_name)
         .order_by(XxjsDianming.year.desc(), XxjsDianming.class_name.asc())
     )
     rows = (await db.execute(stmt)).all()
@@ -56,7 +66,8 @@ async def list_students(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_user),
 ) -> Any:
-    """获取指定班级的学生名单"""
+    """获取指定班级的学生名单。"""
+    authorize_dianming_class_read(_, year=year, class_name=class_name)
     stmt = (
         select(XxjsDianming)
         .where(

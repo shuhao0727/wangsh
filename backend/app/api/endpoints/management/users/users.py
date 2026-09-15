@@ -11,6 +11,7 @@
 （users.router、users.create_user、users.UserCreate 等）不变。
 """
 
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, or_, func
@@ -21,6 +22,11 @@ from app.core.deps import require_admin, get_db
 from app.utils.errors import safe_error_detail
 from app.models import User
 from app.core.pubsub import publish
+from app.services.user_governance import (
+    assert_last_active_super_admin,
+    lock_account_governance,
+    revoke_if_account_removed,
+)
 
 from . import import_service
 from .import_service import (
@@ -58,6 +64,17 @@ from .users_helpers import (
     get_user_stats,
     batch_delete_users,
 )
+
+logger = logging.getLogger(__name__)
+
+
+async def _publish_user_change_after_commit(payload: dict) -> None:
+    """Do not turn a committed account mutation into a false failure."""
+    try:
+        await publish("admin_global", payload)
+    except Exception:
+        logger.exception("用户治理已提交，但变更通知发布失败")
+
 
 router = APIRouter()
 router.include_router(users_import_router)
@@ -211,7 +228,10 @@ async def create_user(
     """
     try:
         target_role = user_data.role_code or "student"
-        _assert_role_assignment_allowed(current_user, target_role)
+        actor, _ = await lock_account_governance(
+            db, actor_id=current_user.get("id"), target_ids=[]
+        )
+        _assert_role_assignment_allowed(actor, target_role)
 
         # 检查唯一性约束 - 检查值是否为None，而不是SQLAlchemy对象
         existing_checks = []
@@ -261,8 +281,10 @@ async def create_user(
         await db.commit()
         await db.refresh(new_user)
 
-        # 发布事件
-        await publish("admin_global", {"type": "user_changed", "action": "create", "id": new_user.id})
+        # 发布事件；提交后的通知失败不能伪装成账号创建失败。
+        await _publish_user_change_after_commit(
+            {"type": "user_changed", "action": "create", "id": new_user.id}
+        )
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(new_user)
@@ -283,6 +305,41 @@ async def create_user(
         )
 
 
+async def _assert_update_unique_fields(
+    db: AsyncSession, user: User, user_id: int, user_data: UserUpdate
+) -> None:
+    checks = []
+    if user_data.username is not None and user_data.username != user.username:
+        checks.append(User.username == user_data.username)
+    if user_data.student_id is not None and user_data.student_id != user.student_id:
+        checks.append(User.student_id == user_data.student_id)
+    if not checks:
+        return
+
+    existing_user = (
+        await db.execute(select(User).where(or_(*checks), User.id != user_id))
+    ).scalar_one_or_none()
+    if existing_user and existing_user.username == user_data.username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
+    if existing_user and existing_user.student_id == user_data.student_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="学号已存在")
+
+
+def _apply_user_update(user: User, user_data: UserUpdate) -> None:
+    for field in (
+        "student_id",
+        "username",
+        "full_name",
+        "class_name",
+        "study_year",
+        "role_code",
+        "is_active",
+    ):
+        value = getattr(user_data, field)
+        if value is not None:
+            setattr(user, field, value)
+
+
 @router.put("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
@@ -294,22 +351,18 @@ async def update_user(
     更新用户信息（需要管理员权限）
     """
     try:
-        # 获取现有用户 - 使用SQLAlchemy正确的语法
-        query = select(User).where(
-            User.id == user_id,
-            User.is_deleted == False
-        ).with_for_update()
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-        
-        if not user:
+        actor, locked_users = await lock_account_governance(
+            db, actor_id=current_user.get("id"), target_ids=[user_id]
+        )
+        user = locked_users.get(user_id)
+        if not user or user.is_deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
 
         # 普通管理员不能修改超级管理员和其他管理员（允许修改自己）
-        is_current_admin = _is_plain_admin(current_user)
+        is_current_admin = _is_plain_admin(actor)
         if is_current_admin and user.role_code in ("super_admin", "admin") and user.id != current_user.get("id"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -319,68 +372,28 @@ async def update_user(
         # 普通管理员只能将角色改为 student 或 teacher
         if is_current_admin:
             if user_data.role_code:
-                _assert_role_assignment_allowed(current_user, user_data.role_code)
+                _assert_role_assignment_allowed(actor, user_data.role_code)
 
-        # 检查唯一性约束（排除当前用户）
-        existing_checks = []
-        
-        # 检查值是否为None，而不是SQLAlchemy对象
-        # 类型忽略：Pylance不理解这是Python值而不是SQLAlchemy对象
-        if user_data.username is not None and user_data.username != user.username:
-            existing_checks.append(User.username == user_data.username)
-        
-        if user_data.student_id is not None and user_data.student_id != user.student_id:
-            existing_checks.append(User.student_id == user_data.student_id)
-        
-        # 类型忽略：Pylance不理解这个条件检查
-        if existing_checks:  # type: ignore
-            check_query = select(User).where(
-                or_(*existing_checks),
-                User.id != user_id
-            )
-            check_result = await db.execute(check_query)
-            existing_user = check_result.scalar_one_or_none()
-            
-            if existing_user:
-                if existing_user.username == user_data.username:  # type: ignore[union-attr]
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="用户名已存在"
-                    )
-                if existing_user.student_id == user_data.student_id:  # type: ignore[union-attr]
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="学号已存在"
-                    )
-        
-        # 更新用户信息
-        # 类型忽略：Pylance不理解SQLAlchemy的动态类型转换
-        if user_data.student_id is not None:
-            user.student_id = user_data.student_id  # type: ignore
-        
-        if user_data.username is not None:
-            user.username = user_data.username  # type: ignore
-        
-        if user_data.full_name is not None:
-            user.full_name = user_data.full_name  # type: ignore
-        
-        if user_data.class_name is not None:
-            user.class_name = user_data.class_name  # type: ignore
-        
-        if user_data.study_year is not None:
-            user.study_year = user_data.study_year  # type: ignore
-        
-        if user_data.role_code is not None:
-            user.role_code = user_data.role_code  # type: ignore
-        
-        if user_data.is_active is not None:
-            user.is_active = user_data.is_active  # type: ignore
+        await _assert_update_unique_fields(db, user, user_id, user_data)
+
+        final_role = user_data.role_code if user_data.role_code is not None else user.role_code
+        final_active = user_data.is_active if user_data.is_active is not None else bool(user.is_active)
+        await assert_last_active_super_admin(
+            db, {user.id: (final_role, final_active, bool(user.is_deleted))}
+        )
+        await revoke_if_account_removed(
+            db, user, final_is_active=final_active, final_is_deleted=bool(user.is_deleted)
+        )
+
+        _apply_user_update(user, user_data)
 
         await db.commit()
         await db.refresh(user)
 
         # 发布事件
-        await publish("admin_global", {"type": "user_changed", "action": "update", "id": user_id})
+        await _publish_user_change_after_commit(
+            {"type": "user_changed", "action": "update", "id": user_id}
+        )
 
         # 使用 Pydantic 的 model_validate 方法
         return UserResponse.model_validate(user)
@@ -411,15 +424,11 @@ async def delete_user(
     删除用户（软删除，需要管理员权限）
     """
     try:
-        # 获取现有用户 - 使用SQLAlchemy正确的语法
-        query = select(User).where(
-            User.id == user_id,
-            User.is_deleted == False
-        ).with_for_update()
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-        
-        if not user:
+        actor, locked_users = await lock_account_governance(
+            db, actor_id=current_user.get("id"), target_ids=[user_id]
+        )
+        user = locked_users.get(user_id)
+        if not user or user.is_deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
@@ -427,9 +436,15 @@ async def delete_user(
 
         # 普通管理员不能删除管理员或超级管理员
         _assert_users_deletable(
-            current_user,
+            actor,
             [user],
             detail="无权删除该用户",
+        )
+        await assert_last_active_super_admin(
+            db, {user.id: (user.role_code, bool(user.is_active), True)}
+        )
+        await revoke_if_account_removed(
+            db, user, final_is_active=bool(user.is_active), final_is_deleted=True
         )
 
         # 软删除：标记为已删除
@@ -438,7 +453,9 @@ async def delete_user(
         await db.commit()
 
         # 发布事件
-        await publish("admin_global", {"type": "user_changed", "action": "delete", "id": user_id})
+        await _publish_user_change_after_commit(
+            {"type": "user_changed", "action": "delete", "id": user_id}
+        )
 
         return {
             "success": True,

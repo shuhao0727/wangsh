@@ -1,7 +1,9 @@
+import asyncio
 from pathlib import Path
 from textwrap import dedent
 
 from scripts.check_migration_state import (
+    _load_database_state,
     evaluate_migration_state,
     load_revision_graph,
     pending_revisions_from_current,
@@ -22,6 +24,88 @@ def _write_revision(path: Path, revision: str, down_revision: str | tuple[str, .
         ),
         encoding="utf-8",
     )
+
+
+class _Rows:
+    def __init__(self, rows=(), scalar=None):
+        self._rows = list(rows)
+        self._scalar = scalar
+
+    def __iter__(self):
+        return iter(self._rows)
+
+    def scalar_one(self):
+        return self._scalar
+
+    def scalar_one_or_none(self):
+        return self._scalar
+
+
+class _SchemaStateConnection:
+    def __init__(self):
+        self.calls = []
+
+    async def execute(self, statement, parameters=None):
+        sql = str(statement)
+        self.calls.append((sql, parameters))
+        if "SELECT current_schema()" in sql:
+            return _Rows(scalar="tenant_test")
+        if "SELECT EXISTS" in sql and "alembic_version" in sql:
+            return _Rows(scalar=True)
+        if "SELECT version_num FROM alembic_version" in sql:
+            return _Rows(rows=[("001_head",)])
+        if "FROM pg_tables" in sql:
+            return _Rows(rows=[("sample_table",)])
+        if "FROM pg_catalog.pg_index" in sql:
+            return _Rows(
+                rows=[
+                    (
+                        "ix_sample",
+                        "tenant_test",
+                        "sample_table",
+                        "CREATE INDEX ix_sample ON tenant_test.sample_table USING btree (id)",
+                        True,
+                        True,
+                        True,
+                        "i",
+                    ),
+                    (
+                        "ix_shadow",
+                        "public",
+                        "sample_table",
+                        "CREATE INDEX ix_shadow ON public.sample_table USING btree (id)",
+                        True,
+                        True,
+                        True,
+                        "i",
+                    ),
+                ]
+            )
+        if "FROM information_schema.columns" in sql:
+            return _Rows(rows=[("sample_table", "id")])
+        raise AssertionError(sql)
+
+
+def test_database_state_uses_effective_current_schema():
+    conn = _SchemaStateConnection()
+
+    state = asyncio.run(_load_database_state(conn))
+
+    schema, revisions, tables, indexes, columns, definitions = state
+    assert schema == "tenant_test"
+    assert revisions == ["001_head"]
+    assert tables == {"sample_table"}
+    assert indexes == {"ix_sample"}
+    assert columns == {("sample_table", "id")}
+    assert set(definitions) == {"ix_sample", "ix_shadow"}
+    schema_bound_calls = [
+        parameters
+        for sql, parameters in conn.calls
+        if ":schema" in sql
+    ]
+    assert schema_bound_calls
+    assert all(parameters == {"schema": "tenant_test"} for parameters in schema_bound_calls)
+    assert all("to_regclass('public.alembic_version')" not in sql for sql, _ in conn.calls)
 
 
 def test_detects_existing_table_for_pending_migration(tmp_path):
@@ -192,6 +276,11 @@ def test_alembic_online_migrations_expand_legacy_version_table_capacity():
 
     assert "async with connectable.begin() as connection" in env_content
     assert "await connection.run_sync(ensure_alembic_version_capacity)" in env_content
+    assert "SELECT current_schema()" in compat_content
+    assert "n.nspname = :schema" in compat_content
+    assert "version_table_schema=effective_schema(connection)" in env_content
+    assert "Always bind the version table" in compat_content
+    assert "to_regclass('public.alembic_version')" not in compat_content
     assert "ALTER COLUMN version_num TYPE VARCHAR(64)" in compat_content
 
 

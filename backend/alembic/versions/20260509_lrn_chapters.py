@@ -19,7 +19,7 @@ depends_on = None
 def _table_exists(table: str) -> bool:
     result = op.get_bind().execute(
         sa.text(
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = :t)"
         ),
         {"t": table},
     )

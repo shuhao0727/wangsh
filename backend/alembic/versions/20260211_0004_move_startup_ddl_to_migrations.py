@@ -14,7 +14,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_group_discussion_sessions'
+                WHERE table_schema = current_schema() AND table_name = 'znt_group_discussion_sessions'
             ) THEN
                 ALTER TABLE znt_group_discussion_sessions ADD COLUMN IF NOT EXISTS class_name VARCHAR(64);
                 ALTER TABLE znt_group_discussion_sessions ADD COLUMN IF NOT EXISTS group_name VARCHAR(64);
@@ -45,21 +45,21 @@ def upgrade() -> None:
 
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_group_discussion_analyses'
+                WHERE table_schema = current_schema() AND table_name = 'znt_group_discussion_analyses'
             ) THEN
                 ALTER TABLE znt_group_discussion_analyses ADD COLUMN IF NOT EXISTS compare_session_ids TEXT;
             END IF;
 
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_agents'
+                WHERE table_schema = current_schema() AND table_name = 'znt_agents'
             ) THEN
                 ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS description TEXT;
             END IF;
 
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_conversations'
+                WHERE table_schema = current_schema() AND table_name = 'znt_conversations'
             ) THEN
                 CREATE OR REPLACE VIEW v_conversations_with_deleted AS
                 SELECT

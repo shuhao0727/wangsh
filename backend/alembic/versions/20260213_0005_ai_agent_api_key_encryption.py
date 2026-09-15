@@ -15,7 +15,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_agents'
+                WHERE table_schema = current_schema() AND table_name = 'znt_agents'
             ) THEN
                 ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT;
                 ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS api_key_last4 VARCHAR(8);
@@ -37,7 +37,7 @@ def downgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'znt_agents'
+                WHERE table_schema = current_schema() AND table_name = 'znt_agents'
             ) THEN
                 ALTER TABLE znt_agents DROP COLUMN IF EXISTS has_api_key;
                 ALTER TABLE znt_agents DROP COLUMN IF EXISTS api_key_last4;

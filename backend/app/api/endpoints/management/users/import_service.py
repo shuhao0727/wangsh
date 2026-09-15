@@ -13,6 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from app.utils.errors import safe_error_detail
+from app.services.user_governance import (
+    assert_last_active_super_admin,
+    lock_import_account_governance,
+    revoke_if_account_removed,
+)
 
 from .policy import assert_role_assignment_allowed, assert_users_mutable
 from .schemas import ImportUserResponse, UserImportResult
@@ -174,15 +179,6 @@ def _parse_import_user(row: Dict[str, str]) -> Dict[str, Any]:
     }
 
 
-async def _find_import_user(db: AsyncSession, student_id: str) -> User | None:
-    query = select(User).where(
-        User.student_id == student_id,
-        User.is_deleted == False,
-    ).with_for_update()
-    result = await db.execute(query)
-    return result.scalar_one_or_none()
-
-
 async def _ensure_username_available(
     db: AsyncSession,
     username: Optional[str],
@@ -207,10 +203,19 @@ async def _update_import_user(
     row_number: int,
 ) -> ImportUserResponse:
     assert_users_mutable(data["current_user"], [user])
+    final_role = data["role_code"]
+    final_active = data["is_active"]
+    await assert_last_active_super_admin(
+        db, {user.id: (final_role, final_active, bool(user.is_deleted))}
+    )
+    await revoke_if_account_removed(
+        db, user, final_is_active=final_active, final_is_deleted=bool(user.is_deleted)
+    )
     user.full_name = data["full_name"]  # type: ignore[assignment]
     user.study_year = data["study_year"] or user.study_year  # type: ignore[assignment]
     user.class_name = data["class_name"] or user.class_name  # type: ignore[assignment]
-    user.is_active = data["is_active"]  # type: ignore[assignment]
+    user.role_code = final_role  # type: ignore[assignment]
+    user.is_active = final_active  # type: ignore[assignment]
     username = data["username"]
     if username and username != user.username:
         await _ensure_username_available(
@@ -264,9 +269,13 @@ async def _import_user_row(
     row_number: int,
 ) -> tuple[ImportUserResponse, bool]:
     data = _parse_import_user(row)
-    data["current_user"] = current_user
-    assert_role_assignment_allowed(current_user, data["role_code"])
-    existing_user = await _find_import_user(db, data["student_id"])
+    actor, existing_user = await lock_import_account_governance(
+        db,
+        actor_id=current_user.get("id"),
+        student_id=data["student_id"],
+    )
+    data["current_user"] = actor
+    assert_role_assignment_allowed(actor, data["role_code"])
     if existing_user:
         return await _update_import_user(db, existing_user, data, row_number), False
     return await _create_import_user(db, data, row_number), True

@@ -2,10 +2,146 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.0.0
-> 最近更新：2026-09-13
+> 当前版本：2.1.0
+> 最近更新：2026-09-15
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+## 发布前开放风险复核（2026-09-14，只读审查）
+
+- **非默认 PostgreSQL `search_path`：阻断。** 已有专项用例仅验证兼容版本表逻辑和有限场景；完整
+  Alembic 链在自定义 schema 下仍缺少可回放的 upgrade → downgrade → re-upgrade 证据。
+  XBK 最新 migration 的索引名已改为静态字面量，`backend/scripts/check_migration_state.py` 静态门禁
+  已通过；但这不替代自定义 schema 下的真实迁移链回放，发布仍阻断。
+- **教师点名：安全保持 403。** `teacher` 在 `backend/app/services/xxjs/dianming_access.py`
+  没有权威班级授权关系时明确拒绝；本轮 `tests/xxjs/test_dianming_object_access.py` 相关回归通过。
+  在授权数据源、撤销和审计关系落库前，不得开放教师点名。
+- **验收报告格式：已标准化为发布准入要求。** 每次迁移/发布报告必须记录目标标识、源码/镜像
+  digest、数据库 `current_schema`、database/role `search_path`、迁移前后 revision、预期表/索引、
+  upgrade/downgrade/re-upgrade 结果、备份恢复证据、运行命令、时间和责任人。
+- **当前门禁结果：** 点名对象授权专项 `20 passed, 1 skipped`；Python compileall 通过；前端
+  type-check 通过。生产数据库只读预检未执行，未连接正常服务或正常数据库。
+
+
+## 当前源码生产等价一次性栈验收（2026-09-14，未发布候选）
+
+- 使用当前 dirty worktree 源码构建 `wangsh-real-e2e-backend:20260914`
+  （arm64，镜像 ID `sha256:1053d945a9234806f6c6be2c5b601429915edf460c7de333b8e6ba10d7121cc6`），
+  以独立 Compose、PostgreSQL 16 tmpfs、Redis 7 tmpfs、正式 bootstrap → Alembic → AUTH cutover
+  顺序和两个 Uvicorn worker启动；gateway 仅绑定 `127.0.0.1:17608`。
+- 从空数据库升级到 `20260914_0001_xbk_active_selection_unique`，AUTH cutover 返回
+  `already_ready=0, preserved=0, reauthenticate=0`；生产 health 为 healthy、debug=false。
+- 真实 TCP/Cookie/JWT/multipart XLSX 验收 `result-mainagent03.json` 全部通过：动态班级导出、
+  非管理员 403、token 篡改 401、文件/计划不匹配 409、首次确认 `applied`、同 token 同文件重复
+  确认 `already_applied`、普通选课超限 409、畸形/高压缩 XLSX 拒绝及最终 API 状态一致。
+- 2026-09-14 的真实 Chromium 产品 UI 验收已完整覆盖工作簿链：通过页面导出真实 XLSX，填写
+  后使用真实文件选择器上传，preview 返回 `200`，页面显示 1 项变更；首次 confirm 返回 `applied`，
+  UI 选课总表可见目标学生进入目标课程。同一签名 confirm 请求重试返回 `already_applied`；重新
+  上传已应用的旧工作簿时，因工作簿导出基线过期在 preview 阶段返回预期 `422`，两者属于不同
+  安全边界。最终日志未发现后端异常或 HTTP 5xx；预期负向验证产生的 `409/422` 均与安全裁决一致。
+- 隔离前端镜像重建后，一个未刷新的旧管理页面曾请求已不存在的旧哈希 chunk。新增的
+  `vite:preloadError` 恢复逻辑已在一次真实 Chromium 隔离观察中触发“一次自动刷新 →
+  `sessionStorage` 防循环 → 错误边界”链路；但独立二次复验和正式验收报告尚未完成，正式前端切换
+  仍列为发布观察项，不能误记为“无非预期 4xx”。
+- 真实 PostgreSQL 终态存在 partial unique index；回查结果为目标学生仅 1 条有效选课，重复有效
+  选课、同学生同课程重复、课程超额和活跃孤儿选课均为 0。重复 confirm 未增加课程人数。
+- 修复学年筛选值不在服务器历史学年列表时 Select 显示空白的问题后，已重新构建一次性生产等价
+  隔离前端镜像，并用真实 Chromium 复验当前学年正确显示、服务器历史学年仍可选择，且既有选课
+  结果仍可见。
+- 最新回归：R3/HTTP/apply 三文件 `48 passed, 8 warnings`；第一批清洁禁网门禁
+  `849 passed, 2 skipped, 9 warnings`；第二阶段门禁 `1185 passed, 3 skipped, 9 warnings`；
+  R4 合同门禁 `6 passed, 1 warning`。门禁清单相互重叠，数字不得相加冒充唯一用例总数。
+- 真实 PostgreSQL 同计划并发文件 `8 passed, 8 warnings`：两个独立 session 对同 token、同 XLSX
+  确认时真实进入锁等待，最终一个 `applied`、一个 `already_applied`，且仅一条有效选课。
+- 真实 HTTP 并发运行 `r0915a01` 通过最后一个名额竞争、工作簿与普通选课竞争的整批回滚、
+  同 token 并发确认和串行重复确认；数据库幂等指纹保持
+  `ee81c6825e35434f120d42fe7537781b`，无重复、超 quota、孤儿或部分提交。
+- 所有数据均为合成数据，未连接正常数据库，未接触 5433/6608/8000/6379/8081，未推送镜像、
+  未部署生产。因此只能表述为“当前源码生产等价一次性环境通过”，不能表述为已经发布。
+
+## 第二阶段隔离发布验证（2026-09-14，未发布候选）
+
+本阶段在第一批无网络基线之后，补做一次性 PostgreSQL、R3 工作簿服务层、真实 Excel/WPS
+往返和隔离依赖候选验证。所有数据库数据均为合成数据；未连接、读取或迁移正常数据库，未
+重启业务服务、构建/推送镜像或部署。
+
+### 第二阶段统一无网络隔离门禁
+
+- 仓库外运行器 `run_second_stage_isolated.py` 在第一批白名单基础上加入 R3 预览/确认、XBK
+  导入错误合同与 HTTP 脱敏边界测试；使用 `env -i`、禁用插件和 conftest、临时目录，并在
+  collection 前阻断 socket、DNS 与网络连接。
+- **最新复跑**：`1185 passed, 3 skipped, 9 warnings`。跳过项均依赖专用
+  PostgreSQL，不能由无网络门禁冒充真实数据库验证；真实 PostgreSQL 结果另见下一节。
+
+### 一次性 PostgreSQL、迁移与并发
+
+- **环境**：一次性容器 `wangsh-pg-audit-20260914211501-9129dfca`，数据库
+  `wangsh_pg_test_9129dfca`，schema `audit_9129dfca`，仅绑定回环端口
+  `127.0.0.1:53627`，镜像为 `postgres:16-alpine`。
+- **结果**：`7 passed, 8 warnings in 1.81s`。覆盖 Alembic
+  upgrade → downgrade → upgrade、历史有效重复阻断与失败事务回滚、清理合成重复后的
+  重试升级、partial unique index 的有效/软删除边界，以及 asyncpg 返回的目标与非目标
+  `constraint_name` 分类。
+- **并发边界**：XBK 最后一个名额竞争由一方成功、等待方锁后复核并返回 `409`，最终人数为
+  `1`；AUTH 并发自停用、互相降权及相同学号并发创建均完成锁后重验。
+- **资源与正常库保护**：结束后容器、卷和一次性环境文件残留均为 `0`。未触碰本机
+  `127.0.0.1:5432` 或现有 `wangsh-postgres:5433`，该结果不是正常数据库迁移或生产验收。
+- **新发现风险**：非默认 PostgreSQL `search_path` 下，Alembic 兼容函数对
+  `public.alembic_version` 的检查与未限定 schema 的建表/改表语句不一致，可能产生
+  `DuplicateTableError`。默认 `public` 路径当前通过；自定义 schema/多租户路径尚未整改和
+  验收。
+
+### R3 工作簿预览/确认服务层
+
+- 已新增预览与确认服务层，使用服务器端 `WorkbookExpectation`、稳定 SHA-256 内容摘要
+  `plan_id`，确认时重新核验完整有效学生集合、完整有效课程集合和全部学生选课基线，最终
+  整批只调用一次统一事务裁决。`plan_id` 不是服务器签名，HTTP 接入必须另设服务器信任边界。
+- 覆盖正常应用、`already_applied`、`no_changes`、明确未选、陈旧基线、计划篡改、部分应用、
+  新增有效学生、新增有效课程、新增学生已有选课、多条有效选课冲突、整批回滚与取消回滚；
+  无变化行的预览后漂移也会阻断确认。
+- **最新独立复跑**：`48 passed, 8 warnings`。
+- **接入边界**：已接入管理员 multipart `POST /xbk/import/preview` 与 `POST /xbk/import/confirm` 路由；真实 UI 上传/确认已在一次性生产等价栈验证。仍不能据此宣称已部署生产或已处理真实业务数据。
+
+### Excel/WPS 真实往返
+
+- Excel 实际打开、保存、关闭后的文件 SHA-256 为
+  `5e96331b37c52db562ace98f130a294a4208580b3e427d9967f9d63b8fe8625f`；WPS 对应文件为
+  `ff22c17a015d1f52d59216cf0740afd28c35824d540f19635aa78673ed3fb5f6`。
+- 两个成品均重新解析为 `format=xbk-course-selection`、`version=1`、学年
+  `2026-2027`、学期“上学期”、`4` 行，基线标识保持一致；班级页数据验证、工作表保护、
+  D 列可编辑格和 `veryHidden` 元数据页仍存在。
+- Excel 将标准 `dataValidations` 转换为 `x14:dataValidations` 扩展。openpyxl 会警告不支持
+  该扩展，因此不能再用 openpyxl 保存 Excel 往返成品；这不是验证规则丢失。WPS 保存后的
+  重新解析和结构检查通过。
+
+### `python-multipart` 隔离候选
+
+- `backend/requirements.txt` 候选声明为 `0.0.32`；从仓库外隔离候选目录实际加载该版本，
+  上传/导入相关回归本轮重跑为 `328 passed, 1 skipped, 8 warnings in 5.18s`。
+- 正式 `backend/venv` 当前仍安装 `0.0.22`，候选及生产镜像未升级或重建。因此该结果只证明
+  隔离候选兼容性，不证明正式 venv、Docker 镜像或生产入口已经使用 `0.0.32`。
+
+本阶段关闭了第一批中“专用 PostgreSQL、R3 服务层、Excel/WPS 往返和隔离依赖候选未验”的
+部分空白，但仍不支持部署、正常数据库迁移、R3 HTTP 在生产环境可用或“全部漏洞已关闭”的结论。
+
+## 第一批整改无网络隔离门禁（2026-09-14，未发布候选）
+
+本轮覆盖公共配置白名单、账号生命周期治理、点名对象级授权、解析前请求预算，以及 XBK
+统一事务裁决、全班工作簿和候选唯一约束。验证由仓库外隔离运行器
+`run_first_batch_isolated.py` 执行，运行器未纳入仓库。
+
+- **统一结果（本轮重跑）**：`841 passed, 2 skipped, 9 warnings in 6.56s`。
+- **隔离条件**：`env -i` 清空继承环境，显式禁用 pytest 插件自动加载与仓库 conftest，
+  使用测试文件白名单、临时工作目录和 pytest basetemp，并在导入 pytest 前阻断 socket、DNS
+  与网络连接；未连接正常 PostgreSQL、Redis 或业务服务。
+- **2 个 skip**：均为需要专用 PostgreSQL 的用例；在没有安全测试数据库 URL 时按设计跳过，
+  不能记作 PostgreSQL 并发或迁移验证通过。
+- **9 条 warning**：8 条为项目既有 Pydantic V2 class-based config 弃用提示，1 条为
+  Alembic `path_separator` 弃用提示；本轮没有因此失败。
+- **未覆盖**：正式 venv/候选镜像中的 `python-multipart 0.0.32`、专用 PostgreSQL 的 R4
+  真实迁移与锁行为、正常数据库迁移、真实 Redis TCP 故障、完整认证交错、R3 数据库回导、
+  Excel/WPS 往返、网关限速/并发/解析 CPU 治理及生产发布。
+
+该结果只支持“第一批源码候选通过无网络隔离门禁”，不支持直接生产发布或宣称全部漏洞关闭。
 
 ## R6.1 发布后 CI-only/test-only 门禁收口（2026-09-13，已完成）
 
@@ -1388,3 +1524,33 @@ SIM_RUN_PROD_SMOKE=true \
 SIM_CLEANUP=true \
 bash scripts/deploy.sh simulate
 ```
+
+## 2026-09-15 Gateway 风险整改（生产候选，隔离验证）
+
+- `gateway/Caddyfile` 增加 Caddy 2.8.4 原生请求头上限 `64KB`、server 读取/写入/空闲超时，以及反代 dial、响应头、读取、写入和 keep-alive 超时。
+- 未加入未经验证的第三方 `rate_limit` 指令；通用 IP/并发限速继续要求由受信任 WAF/LB/API Gateway 提供。
+- `gateway/tests/test_caddy_config.sh` 通过 Caddy Docker 镜像执行配置合同检查和 `caddy adapt --validate`。
+- 本轮隔离 Docker 已记录独立宿主端口、`413`、`431`、上游超时、`/api/health` 健康检查和前端反代结果；另发现部分超限请求前缀可能到达 upstream，因此 `413` 仅表示客户端最终拒绝，不能证明零转发。未访问正常端口、未部署生产。
+
+## 2026-09-15 WangSh 2.1 发布前全量回归（本地隔离）
+
+- 使用独立 PostgreSQL 16 容器 `wangsh-release21-pg`，仅绑定回环地址
+  `127.0.0.1:55433`；未连接开发数据库或正式数据库。
+- 空库已执行 initial bootstrap、Alembic `upgrade head` 与应用 bootstrap，迁移状态只读预检确认
+  当前单一 head 为 `20260914_0001_xbk_active_selection_unique`。
+- 修复 schema-aware 迁移预检合同后，后端全量回归最终为
+  `3183 passed / 183 skipped / 2468 warnings / 0 failed`，覆盖率 `66%`，耗时
+  `125.77s`。警告主要为既有 Pydantic、SQLite 和依赖弃用提示，不阻断本次候选发布。
+- Python governance 普通检查和 `--base-ref origin/main` 均为
+  `errors=0 / warnings=28`；版本一致性为应用 `2.1.0`、镜像标签 `2.1`；Docker workflow
+  contracts 为 `56 passed / 0 failed`。
+- 六个 `linux/amd64` 本地候选镜像已构建并通过 `verify-local-images`；`2.0` 六镜像回滚集完整保留。
+- 使用 `SIM_VERSION=2.1 SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate`
+  完成一次性真实生产模拟：`14` 个步骤中 `12 PASS / 2 WARN / 0 FAIL / 0 SKIP`。管理员登录、
+  AUTH 被替换登录、用户、文章、XBK、点名、测评、课堂/智能体、小组讨论、Typst、PythonLab
+  owner/DAP/print 和产品 UI 均通过；OpenAPI 只读扫描的两个模型发现接口按权限返回 `401`，空白
+  模拟库没有稳定学习内容和 ML book 可执行原数据恢复验证，因此汇总为非阻断 WARN。
+- 模拟前在空白一次性库显式完成 AUTH authority enrollment，结果为
+  `already_ready=0, preserved=0, reauthenticate=0`；模拟结束后容器、网络和数据卷均由脚本清理。
+  该夹具不适用于正式数据库。
+- Docker Hub manifest、release-set 与 GitHub Actions 结果将在远端步骤真实完成后补充，不提前宣称通过。

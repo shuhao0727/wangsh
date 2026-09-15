@@ -7,6 +7,9 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.endpoints.management.users import users as users_api
+from app.api.endpoints.management.users import users_helpers
+from app.models import User
+from sqlalchemy import select
 
 
 class _ScalarRows:
@@ -27,8 +30,9 @@ class _ScalarRows:
 
 
 class _FakeDb:
-    def __init__(self, values=None):
+    def __init__(self, values=None, *, actor_role="admin"):
         self.values = list(values or [])
+        self.actor_role = actor_role
         self.commit_count = 0
         self.rollback_count = 0
         self.added = []
@@ -58,6 +62,19 @@ class _StatsDb:
     async def execute(self, query):
         self.queries.append(query)
         return _ScalarRows([])
+
+
+@pytest.fixture(autouse=True)
+def synthetic_governance_lock(monkeypatch):
+    async def lock(db, *, actor_id, target_ids):
+        # Preserve the old unit tests' lock assertion while the real isolated
+        # suite exercises the complete governance service and transactions.
+        db.queries.append(select(User).where(User.id.in_(list(target_ids))).with_for_update())
+        actor = {"id": actor_id, "role_code": db.actor_role}
+        return actor, {value.id: value for value in db.values}
+
+    monkeypatch.setattr(users_api, "lock_account_governance", lock)
+    monkeypatch.setattr(users_helpers, "lock_account_governance", lock)
 
 
 def test_users_endpoint_is_split_behind_compatible_facade():
@@ -255,7 +272,7 @@ def test_delete_user_locks_target_before_authorization_check():
 
 def test_batch_delete_rejects_missing_targets_without_partial_delete():
     student = SimpleNamespace(id=1, role_code="student", is_deleted=False)
-    db = _FakeDb([student])
+    db = _FakeDb([student], actor_role="super_admin")
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(

@@ -1,8 +1,70 @@
 # 部署指南
 
-> 最后更新：2026-07-22
+> 最后更新：2026-09-14
 
 ---
+
+## 第二阶段未发布候选的发布前置（2026-09-14）
+
+本批已完成第一批无网络门禁后的隔离 PostgreSQL、R3 服务层、Excel/WPS 往返与候选依赖
+验证，但仍不得按“已生产发布”处理；没有执行服务重启、镜像构建/推送、正常数据库迁移或
+真实数据修复，也不能据此宣称全部漏洞已经关闭。
+
+### 依赖与请求入口
+
+- `backend/requirements.txt` 已将候选 `python-multipart` 固定为 `0.0.32`。该版本已从仓库外
+  隔离候选目录加载并通过上传/导入回归，但正式本地 venv 仍为 `0.0.22`，候选及生产镜像均
+  未升级或重建。发布前仍需在正式候选镜像中确认实际安装版本并复跑入口回归，再生成
+  release-set。
+- 应用新增的 ASGI 请求预算发生在表单解析前，但它**不替代** Caddy/上游网关的原始请求头
+  和请求体限制，也不提供入口限速、连接/任务并发治理或 multipart 解析 CPU 抢占控制。生产
+  方案仍需独立核对网关限制、超时、限速、并发和可观测性。
+
+### XBK 候选迁移与回导边界
+
+- `20260914_0001_xbk_active_selection_unique` 已在回环端口、唯一数据库与唯一 schema 的
+  一次性 PostgreSQL 16 容器中完成 upgrade → downgrade → upgrade、历史有效重复阻断、
+  真实 asyncpg 约束识别和最后一个名额并发竞争验证。验证后一次性容器、卷和环境文件均已
+  清理；过程未连接或迁移 `127.0.0.1:5432`、`wangsh-postgres:5433` 等正常数据库。
+- 迁移会取得 `xbk_selections` 的 `SHARE ROW EXCLUSIVE` 锁，并在发现活跃重复时阻断，
+  不会自动清理历史数据。生产发布仍必须先只读预检重复和 schema 状态，完成可恢复备份，
+  停止并排空所有旧版选课 writer，在批准的维护窗口中执行审核过的目标 revision。一次性
+  PostgreSQL 通过不构成正常数据库迁移授权。
+- Alembic 兼容逻辑在非默认 `search_path` 下仍需专项验证：版本表存在性检查固定指向
+  `public.alembic_version`，而未限定 schema 的 `CREATE TABLE`/`ALTER TABLE alembic_version`
+  会跟随当前 `search_path`，可能触发 `DuplicateTableError`。XBK 最新 migration 的索引名已改为
+  静态字面量，静态迁移门禁已通过；但自定义 schema 或多租户迁移前仍必须完成真实专项回放。
+- R3 已接入管理员 multipart HTTP 预览/确认路由：`POST /xbk/import/preview` 与
+  `POST /xbk/import/confirm`。预览使用服务器端期望值和签名 token，确认时重新核验完整有效
+  学生集合、课程集合、选课基线与容量，并通过统一事务裁决整批应用。该链路已在一次性生产
+  等价栈由真实产品 UI 上传/确认验证；仍不得据此宣称已部署生产或已处理真实业务数据。
+- Excel 与 WPS 均已真实打开、保存、关闭并重新解析工作簿，班级页验证、保护、可编辑填写区
+  和 `veryHidden` 元数据页保持。Excel 会把标准数据验证转换为 `x14:dataValidations` 扩展；
+  openpyxl 对该扩展会发出不支持警告，因此不得再用 openpyxl 保存 Excel 往返成品，以免移除
+  验证规则。真实客户端往返通过仍不替代正常数据库回导验收。
+
+### AUTH 与点名上线检查
+
+- 超级管理员启动初始化只创建完全缺失的配置账号；若用户名已存在，不会在重启时重置
+  密码、提升角色或重新激活。发布前必须确认已有配置账号状态符合预期，不能依赖重启修复账号。
+- 账号停用/删除/恢复/降权依赖 AUTH authority ready gate 和同事务持久撤销。发布前仍需在
+  候选栈核对 migration/enrollment 状态及真实 login/refresh/logout 交错，不得绕过 ready gate。
+- 教师—点名班级授权数据源尚未建立，当前教师读取会安全返回 `403`。这是候选的保守行为，
+  不是教师功能已经完整交付；若要开放教师使用，必须先设计可撤销的授权关系及迁移。
+
+## 发布验收报告最低字段（发布准入）
+
+每次候选发布、数据库迁移或回滚验收必须生成可回放报告，并至少包含：
+
+- 目标环境标识、执行时间、责任人、源码 commit、镜像 tag/digest 与 release-set；
+- 数据库标识、`current_schema`、database/role `search_path`、迁移前 revision、目标 revision；
+- 预期/实际表、索引、约束与 schema 归属；
+- upgrade、downgrade、re-upgrade（或明确的备份恢复回滚）结果及完整命令；
+- 备份任务/文件标识、保存位置与隔离恢复验证证据；
+- 点名教师 `403`、XBK 唯一性/容量、健康检查、错误合同和前端切换结果；
+- 未执行项、阻断项、风险接受人和发布结论。
+
+动态结果统一写入 `docs/docker/testing/TEST_STATUS.md`；本页只维护发布步骤与准入条件。
 
 ## 隔离生产镜像模拟的安全边界
 
@@ -63,7 +125,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前版本**: 1.6.0
+- **当前发布候选版本**: 2.1.0（Docker 镜像标签 `2.1`）
 
 ### 快速连接
 ```bash
@@ -149,15 +211,17 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.0.0
-IMAGE_TAG=2.0
-REACT_APP_VERSION=2.0.0
+APP_VERSION=2.1.0
+IMAGE_TAG=2.1
+REACT_APP_VERSION=2.1.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整版本号（如 `2.0.0`）的权威源；
-`IMAGE_TAG` 使用同源的 major.minor（如 `2.0`）。`check-version-consistency.mjs`
-按这两套口径分别校验，两者必须同源一致。
+`frontend/package.json` 的 `version` 是完整版本号（如 `2.1.0`）的权威源；
+`IMAGE_TAG` 使用同源的 major.minor（如 `2.1`）。`check-version-consistency.mjs`
+按这两套口径分别校验，两者必须同源一致。 `verify-release-set` 同样按这一区分校验：
+release-set 和 `IMAGE_TAG` 必须等于派生出的 major.minor 标签，`APP_VERSION`、`VERSION`（如配置）
+和 `REACT_APP_VERSION` 必须等于完整应用版本，不能把 `2.1.0` 与镜像标签 `2.1` 错判为漂移。
 
 当前版本更新仍是显式同步，不会自动改写其他文件。至少需要同步
 `.env.example`、`frontend/package.json` 和 `frontend/package-lock.json`。
@@ -202,12 +266,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.0` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.0` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.0` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.0` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.0` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.0` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -225,14 +289,17 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.0
+SIM_VERSION=2.1
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
 SIM_CLEANUP=false
 ```
 
-`simulate` 是本地生产镜像验证入口，不消费 `release-set.txt`。脚本会先确认 Compose
+`simulate` 是本地生产镜像验证入口，不消费 `release-set.txt`。一次性隔离数据库在迁移与
+健康检查后会自动完成合成 AUTH authority enrollment，并用独立 session 核验 `ready=true`，
+然后才运行需要登录的 smoke；这不适用于正式数据库，正式切换仍必须执行本页前述
+`auth/cutover.py` 停流、排空、配对快照与显式 apply 流程。脚本会先确认 Compose
 引用和 PythonLab sandbox 镜像均已存在于本机，再停止旧的 `wangsh_sim` 栈并清理
 `data/pythonlab/simulations/run.*` 残留目录。模拟固定覆盖
 `COMPOSE_PROJECT_NAME=wangsh_sim`、版本、镜像、端口和
@@ -284,9 +351,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.0.0
-IMAGE_TAG=2.0
-REACT_APP_VERSION=2.0.0
+APP_VERSION=2.1.0
+IMAGE_TAG=2.1
+REACT_APP_VERSION=2.1.0
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -380,9 +447,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.0.0          # 应用版本号
-IMAGE_TAG=2.0              # Docker 镜像标签（major.minor，与 package.json 同源）
-REACT_APP_VERSION=2.0.0    # 前端版本号
+APP_VERSION=2.1.0          # 应用版本号
+IMAGE_TAG=2.1              # Docker 镜像标签（major.minor，与 package.json 同源）
+REACT_APP_VERSION=2.1.0    # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 
@@ -836,3 +903,22 @@ docker compose logs backend | grep ERROR
 - 数据库连接失败
 - Worker 队列堆积
 - 磁盘空间不足
+
+### 网关边界治理（生产候选）
+
+生产候选 `gateway/Caddyfile` 使用 Caddy 2.8.4 原生能力，不依赖未验证的第三方限速模块：
+
+- - 请求头上限 `64KB`，超限由 Caddy 返回 `431`；
+- Caddy server 读取请求头、读取请求体、写响应和空闲连接分别设置 `5s`、`30s`、`30s`、`2m`；
+- 反代 dial、等待上游响应头、读取上游响应、写入上游请求分别设置 `5s`、`30s`、`60s`、`30s`；
+- 上游 keep-alive 空闲时间设置为 `30s`。
+
+本配置不伪造通用 IP 限速或并发限速。Caddy 2.8.4 当前镜像未启用已验证的第三方限速模块；公网部署如需要 IP/租户限速、并发配额、WAF 和慢连接清理，必须由受信任的 WAF/LB/API Gateway 提供并在发布验收中记录证据。隔离验证不得接触正常端口，使用独立 Docker 网络和宿主端口。
+
+配置合同和 Docker 语法检查：
+
+```bash
+gateway/tests/test_caddy_config.sh
+```
+
+发布前还必须在独立网关环境验证 `413`、`431`、上游响应超时、健康检查和现有 `/api/*`、前端反代不回归；这些隔离证据不能替代公网边缘防护验收。

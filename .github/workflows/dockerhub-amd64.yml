@@ -6,7 +6,7 @@ on:
       image_tag:
         description: image tag
         required: true
-        default: "2.0"
+        default: "2.1"
       push_latest:
         description: also push latest
         required: true

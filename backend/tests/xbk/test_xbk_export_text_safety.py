@@ -17,6 +17,7 @@ from openpyxl.utils.protection import hash_password
 from app.api.endpoints.xbk import exports, import_export
 from app.core.config import settings
 from app.services.xbk.exports import common
+from app.services.xbk.course_selection_workbook import METADATA_SHEET
 
 
 NS = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
@@ -248,7 +249,9 @@ def test_numeric_quota_remains_numeric(value):
 def test_template_validation_and_protection_are_preserved(course_code):
     content = specialized_bytes("course-selection", synthetic_row(course_code=course_code))
     wb = assert_xlsx_contract(content)
-    catalog, roster = wb.worksheets
+    catalog = wb["校本课程目录"]
+    roster = next(ws for ws in wb.worksheets if ws.title not in {"校本课程目录", METADATA_SHEET})
+    assert wb[METADATA_SHEET].sheet_state == "veryHidden"
     assert catalog.protection.sheet and roster.protection.sheet
     expected_password_hash = hash_password(settings.XBK_EXPORT_SHEET_PASSWORD)
     assert catalog.protection.password == expected_password_hash
@@ -256,7 +259,10 @@ def test_template_validation_and_protection_are_preserved(course_code):
     assert roster["B2"].protection.locked and not roster["D2"].protection.locked
     assert roster["D2"].value == course_code
     validation = roster.data_validations.dataValidation[0]
-    assert validation.formula1 == '=IFERROR(AND(D2<>"",COUNTIF(D:D,D2)<=VLOOKUP(D2&"",\'校本课程目录\'!$A$3:$D$3,4,0)),FALSE)'
+    assert validation.formula1 == (
+        '=IFERROR(OR(D2="",D2="未选",AND(D2<>"",'
+        'COUNTIF(D:D,D2)<=VLOOKUP(D2&"",\'校本课程目录\'!$A$3:$D$3,4,0))),FALSE)'
+    )
     with ZipFile(BytesIO(content)) as archive:
         catalog_tree = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
         roster_tree = ET.fromstring(archive.read("xl/worksheets/sheet2.xml"))

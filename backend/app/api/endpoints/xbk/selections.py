@@ -7,94 +7,24 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Numeric, and_, cast, func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.models import XbkCourse, XbkSelection, XbkStudent
 from app.schemas.xbk.academic_year import AcademicYear
 from app.services.xbk.locking import lock_rows
+from app.services.xbk.selection_rules import (
+    SelectionMutation,
+    apply_selection_mutations,
+    is_active_selection_unique_violation,
+)
 from app.schemas.xbk import XbkListResponse, XbkSelectionOut, XbkSelectionUpsert
 
-from ._common import apply_common_filters, apply_search_filter, require_xbk_access, selection_reference_errors
+from ._common import apply_common_filters, apply_search_filter, require_xbk_access
 
 router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# 内部辅助
-# ---------------------------------------------------------------------------
-
-async def _validate_student_and_course(
-    db: AsyncSession,
-    *,
-    year: AcademicYear,
-    term: str,
-    student_no: str,
-    course_code: str,
-) -> None:
-    errors = await selection_reference_errors(db, [{
-        "year": year, "term": term, "student_no": student_no, "course_code": course_code,
-    }], lock=True)
-    if errors[0]:
-        raise HTTPException(status_code=404, detail=errors[0][0])
-
-
-async def _enforce_selection_rules(
-    db: AsyncSession,
-    *,
-    year: AcademicYear,
-    term: str,
-    student_no: str,
-    course_code: str,
-    exclude_selection_id: Optional[int] = None,
-) -> None:
-    """Enforce one active choice per student and course quota atomically.
-
-    Writers acquire locks in the shared XBK order: student, course, then
-    selections. The course lock serializes capacity checks, so concurrent
-    writers cannot both consume the last seat.
-    """
-    student_rows = await lock_rows(
-        db, XbkStudent,
-        XbkStudent.year == year, XbkStudent.term == term,
-        XbkStudent.student_no == student_no, XbkStudent.is_deleted.is_(False),
-    )
-    if not student_rows:
-        raise HTTPException(status_code=404, detail="学生不存在（请先维护学生名单；须为同学年、同学期且未删除）")
-
-    courses = []
-    if course_code not in ("", "未选"):
-        courses = await lock_rows(
-            db, XbkCourse,
-            XbkCourse.year == year, XbkCourse.term == term,
-            XbkCourse.course_code == course_code, XbkCourse.is_deleted.is_(False),
-        )
-        if not courses:
-            raise HTTPException(status_code=404, detail="课程不存在（请先维护选课目录；须为同学年、同学期且未删除）")
-
-    active_for_student = await lock_rows(
-        db, XbkSelection,
-        XbkSelection.year == year, XbkSelection.term == term,
-        XbkSelection.student_no == student_no, XbkSelection.is_deleted.is_(False),
-    )
-    conflicts = [row for row in active_for_student if exclude_selection_id is None or row.id != exclude_selection_id]
-    if conflicts:
-        raise HTTPException(status_code=409, detail="每名学生只能选择一门课程")
-
-    if not courses:
-        return
-    course = courses[0]
-    selections = await lock_rows(
-        db, XbkSelection,
-        XbkSelection.year == year, XbkSelection.term == term,
-        XbkSelection.course_code == course_code, XbkSelection.is_deleted.is_(False),
-    )
-    used = sum(1 for row in selections if row.id != exclude_selection_id)
-    quota = int(course.quota or 0)
-    if used >= quota:
-        raise HTTPException(status_code=409, detail=f"课程已满（限额 {quota} 人）")
 
 
 # ---------------------------------------------------------------------------
@@ -107,39 +37,23 @@ async def create_selection(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    await _validate_student_and_course(
-        db,
-        year=payload.year,
-        term=payload.term,
-        student_no=payload.student_no,
-        course_code=payload.course_code,
-    )
-    existing_rows = await lock_rows(
-        db, XbkSelection,
-        XbkSelection.year == payload.year,
-        XbkSelection.term == payload.term,
-        XbkSelection.student_no == payload.student_no,
-        XbkSelection.course_code == payload.course_code,
-    )
-    existing = existing_rows[0] if existing_rows else None
-    await _enforce_selection_rules(
-        db, year=payload.year, term=payload.term, student_no=payload.student_no,
-        course_code=payload.course_code,
-    )
-    row = existing or XbkSelection()
-    for k, v in payload.model_dump().items():
-        setattr(row, k, v)
-    row.is_deleted = False  # type: ignore[assignment]
-    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
-    db.add(row)
     try:
+        result = await apply_selection_mutations(
+            db, [SelectionMutation(payload.model_dump())],
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="选课记录已存在")
+        if is_active_selection_unique_violation(exc):
+            raise HTTPException(
+                status_code=409,
+                detail="该学生在本学期已有有效选课，请刷新后重试",
+            ) from exc
+        raise
     except Exception:
         await db.rollback()
         raise
+    row = result.rows[0]
     await db.refresh(row)
     return XbkSelectionOut.model_validate(row).model_dump()
 
@@ -151,35 +65,23 @@ async def update_selection(
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_admin),
 ) -> Dict[str, Any]:
-    row = (await db.execute(select(XbkSelection).where(XbkSelection.id == selection_id))).scalar_one_or_none()
-    if not row or row.is_deleted:  # type: ignore[truthy-bool]
-        raise HTTPException(status_code=404, detail="选课记录不存在")
-    await _validate_student_and_course(
-        db,
-        year=payload.year,
-        term=payload.term,
-        student_no=payload.student_no,
-        course_code=payload.course_code,
-    )
-    await _enforce_selection_rules(
-        db, year=payload.year, term=payload.term, student_no=payload.student_no,
-        course_code=payload.course_code, exclude_selection_id=selection_id,
-    )
-    rows = await lock_rows(db, XbkSelection, XbkSelection.id == selection_id)
-    row = rows[0] if rows else None
-    if not row or row.is_deleted:
-        raise HTTPException(status_code=404, detail="选课记录不存在")
-    for k, v in payload.model_dump().items():
-        setattr(row, k, v)
-    row.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     try:
+        result = await apply_selection_mutations(
+            db, [SelectionMutation(payload.model_dump(), selection_id=selection_id)],
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="选课记录已存在")
+        if is_active_selection_unique_violation(exc):
+            raise HTTPException(
+                status_code=409,
+                detail="该学生在本学期已有有效选课，请刷新后重试",
+            ) from exc
+        raise
     except Exception:
         await db.rollback()
         raise
+    row = result.rows[0]
     await db.refresh(row)
     return XbkSelectionOut.model_validate(row).model_dump()
 

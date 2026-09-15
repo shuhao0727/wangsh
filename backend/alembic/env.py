@@ -16,7 +16,10 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.database import Base
-from app.db.alembic_compat import ensure_alembic_version_capacity
+from app.db.alembic_compat import (
+    effective_schema,
+    ensure_alembic_version_capacity,
+)
 from app.core.config import settings
 
 import app.models
@@ -72,7 +75,10 @@ async def run_migrations_online() -> None:
     async with connectable.begin() as connection:
         await connection.run_sync(ensure_alembic_version_capacity)
 
-    async with connectable.connect() as connection:
+    # Use a transaction-scoped connection so migration DDL and the version row
+    # commit together; a plain connect() can roll back the Alembic transaction
+    # when the connection closes, especially on async PostgreSQL paths.
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
     
     await connectable.dispose()
@@ -82,6 +88,7 @@ def do_run_migrations(connection):
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        version_table_schema=effective_schema(connection),
         compare_type=True,
         compare_server_default=True,
     )

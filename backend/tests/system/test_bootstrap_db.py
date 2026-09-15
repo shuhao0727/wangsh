@@ -38,13 +38,14 @@ def test_initial_only_bootstrap_defers_empty_database_to_alembic(monkeypatch):
     conn = _FakeConn()
     calls = {"baseline": 0, "compat": 0, "views": 0}
 
-    async def fake_has_alembic_version(_conn):
+    async def fake_has_alembic_version(_conn, _schema):
         return False
 
-    async def fake_existing_tables(_conn):
+    async def fake_existing_tables(_conn, _schema):
         return set()
 
-    async def fake_create_legacy_baseline(_conn):
+    async def fake_create_legacy_baseline(_conn, *, schema):
+        assert schema == "public"
         calls["baseline"] += 1
 
     async def fake_ensure_compat_columns(_conn):
@@ -53,8 +54,12 @@ def test_initial_only_bootstrap_defers_empty_database_to_alembic(monkeypatch):
     async def fake_ensure_views(_conn):
         calls["views"] += 1
 
+    async def fake_current_schema(_conn):
+        return "public"
+
+    monkeypatch.setattr(bootstrap_db, "_current_schema", fake_current_schema)
     monkeypatch.setattr(bootstrap_db, "_has_alembic_version", fake_has_alembic_version)
-    monkeypatch.setattr(bootstrap_db, "_get_existing_public_tables", fake_existing_tables)
+    monkeypatch.setattr(bootstrap_db, "_get_existing_schema_tables", fake_existing_tables)
     monkeypatch.setattr(bootstrap_db, "_create_legacy_baseline", fake_create_legacy_baseline)
     monkeypatch.setattr(bootstrap_db, "_ensure_compat_columns", fake_ensure_compat_columns)
     monkeypatch.setattr(bootstrap_db, "_ensure_views", fake_ensure_views)
@@ -79,14 +84,18 @@ def test_initial_only_bootstrap_defers_empty_database_to_alembic(monkeypatch):
 
 
 def test_initial_bootstrap_refuses_non_empty_database_without_version(monkeypatch):
-    async def fake_has_alembic_version(_conn):
+    async def fake_has_alembic_version(_conn, _schema):
         return False
 
-    async def fake_existing_tables(_conn):
+    async def fake_existing_tables(_conn, _schema):
         return {"sys_users"}
 
+    async def fake_current_schema(_conn):
+        return "public"
+
+    monkeypatch.setattr(bootstrap_db, "_current_schema", fake_current_schema)
     monkeypatch.setattr(bootstrap_db, "_has_alembic_version", fake_has_alembic_version)
-    monkeypatch.setattr(bootstrap_db, "_get_existing_public_tables", fake_existing_tables)
+    monkeypatch.setattr(bootstrap_db, "_get_existing_schema_tables", fake_existing_tables)
 
     class FakeEngine:
         def begin(self):
@@ -100,19 +109,23 @@ def test_initial_bootstrap_refuses_non_empty_database_without_version(monkeypatc
 
     monkeypatch.setattr(bootstrap_db, "engine", FakeEngine())
 
-    with pytest.raises(RuntimeError, match="public schema already has tables"):
+    with pytest.raises(RuntimeError, match="effective schema .*public.* already has tables"):
         asyncio.run(bootstrap_db.main(initial_only=True))
 
 
 def test_post_migration_bootstrap_refuses_unmigrated_empty_database(monkeypatch):
-    async def fake_has_alembic_version(_conn):
+    async def fake_has_alembic_version(_conn, _schema):
         return False
 
-    async def fake_existing_tables(_conn):
+    async def fake_existing_tables(_conn, _schema):
         return set()
 
+    async def fake_current_schema(_conn):
+        return "public"
+
+    monkeypatch.setattr(bootstrap_db, "_current_schema", fake_current_schema)
     monkeypatch.setattr(bootstrap_db, "_has_alembic_version", fake_has_alembic_version)
-    monkeypatch.setattr(bootstrap_db, "_get_existing_public_tables", fake_existing_tables)
+    monkeypatch.setattr(bootstrap_db, "_get_existing_schema_tables", fake_existing_tables)
 
     class FakeEngine:
         def begin(self):
@@ -148,6 +161,20 @@ def upgrade():
     assert bootstrap_db._migration_managed_indexes() == {"ix_plain", "ix_named"}
 
 
+def test_migration_managed_index_constant_is_deferred(tmp_path, monkeypatch):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    (versions / "constant.py").write_text(
+        '_INDEX_NAME = "uq_active_selection"\n'
+        "def upgrade():\n"
+        '    op.create_index(_INDEX_NAME, "sample", ["id"], unique=True)\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bootstrap_db, "VERSIONS_DIR", versions)
+
+    assert bootstrap_db._migration_managed_indexes() == {"uq_active_selection"}
+
+
 def test_raw_sql_migration_indexes_are_deferred(tmp_path, monkeypatch):
     versions = tmp_path / "versions"
     versions.mkdir()
@@ -181,7 +208,7 @@ def test_baseline_defers_migration_indexes_without_mutating_models():
         async def execute(self, statement):
             statements.append(str(statement))
 
-    asyncio.run(bootstrap_db._create_legacy_baseline(Connection()))
+    asyncio.run(bootstrap_db._create_legacy_baseline(Connection(), schema="public"))
     ddl = "\n".join(statements)
     assert "CREATE TABLE wz_articles" in ddl
     assert "gin_trgm_ops" not in ddl
@@ -192,6 +219,33 @@ def test_baseline_defers_migration_indexes_without_mutating_models():
         name: {id(index) for index in table.indexes}
         for name, table in bootstrap_db.Base.metadata.tables.items()
     }
+
+
+def test_non_public_baseline_creates_disposable_legacy_drop_indexes():
+    from sqlalchemy import create_mock_engine
+
+    statements = []
+
+    def capture_ddl(statement, *args, **kwargs):
+        statements.append(str(statement.compile(dialect=mock_engine.dialect)))
+
+    mock_engine = create_mock_engine("postgresql://", capture_ddl)
+
+    class Connection:
+        async def run_sync(self, action):
+            return action(mock_engine)
+
+        async def execute(self, statement, parameters=None):
+            statements.append(str(statement))
+
+    asyncio.run(
+        bootstrap_db._create_legacy_baseline(
+            Connection(), schema="bootstrap_custom_test"
+        )
+    )
+    ddl = "\n".join(statements)
+    for index_name, table_name, _columns in bootstrap_db.NON_PUBLIC_LEGACY_DROP_INDEXES:
+        assert f'CREATE INDEX IF NOT EXISTS "{index_name}" ON "{table_name}"' in ddl
 
 
 def test_baseline_uses_legacy_xbk_year_before_academic_year_migration():
@@ -217,7 +271,7 @@ def test_baseline_uses_legacy_xbk_year_before_academic_year_migration():
         async def execute(self, statement):
             statements.append(str(statement))
 
-    asyncio.run(bootstrap_db._create_legacy_baseline(Connection()))
+    asyncio.run(bootstrap_db._create_legacy_baseline(Connection(), schema="public"))
     for name in tables:
         ddl = next(s for s in statements if f"CREATE TABLE {name} (" in s)
         assert "year INTEGER NOT NULL" in ddl

@@ -59,12 +59,13 @@ def test_export_endpoint_passes_grade_to_every_builder(monkeypatch, kind, builde
     assert builder.call_args.kwargs.get("grade") == "高一" or "高一" in builder.call_args.args
 
 
-def test_student_template_filters_both_roster_and_catalog_by_grade():
-    db = CaptureDb([], [])
+def test_student_template_uses_all_actual_classes_even_when_page_has_filters():
+    db = CaptureDb([], [], [])
     asyncio.run(course_selection.build_student_course_selection_xlsx(
-        db, 2026, "上学期", None, None, None, grade="高一"))
-    assert "xbk_courses.grade" in str(db.statements[0])
-    assert "xbk_students.grade" in str(db.statements[1])
+        db, 2026, "上学期", "1班", None, None, grade="高一"))
+    assert "xbk_courses.grade =" not in str(db.statements[0])
+    assert "xbk_students.grade =" not in str(db.statements[1])
+    assert "xbk_students.class_name =" not in str(db.statements[1])
 
 
 def test_teacher_export_filters_roster_by_grade_and_excludes_deleted_students():
@@ -113,7 +114,7 @@ def test_student_course_selection_populates_current_codes_by_class():
     output = asyncio.run(course_selection.build_student_course_selection_xlsx(
         db, 2026, "上学期", None, None, None, grade="高一"
     ))
-    ws = load_workbook(output)["1班"]
+    ws = load_workbook(output)["高一1班"]
 
     assert ws["D2"].value == "C1"
     assert ws["D3"].value is None

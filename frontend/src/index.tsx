@@ -10,6 +10,10 @@ import App from './App';
 import { AuthProvider } from '@hooks/useAuth';
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { installChunkLoadRecovery } from "@/utils/chunkLoadRecovery";
+
+// 在应用启动前监听 Vite 动态分包加载失败，避免更新期间旧页面卡在旧 hash chunk。
+installChunkLoadRecovery();
 
 // 获取根元素
 const container = document.getElementById('root');

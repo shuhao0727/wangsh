@@ -29,7 +29,7 @@ VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 # allowlist. Covers _index_exists, its unqualified pg_indexes query, all bindings
 # and the guarded upgrade call. Comments/formatting do not change this digest;
 # any executable change requires a fresh review (never regenerate automatically).
-_REVIEWED_INDEX_GUARD_AST = "1776bb5fd1de3345f861d8c00121e382e0a14f8b346509b95d081634e4afb14f"
+_REVIEWED_INDEX_GUARD_AST = "69b2c63890b2e55b866415577c68ab652a760641e6535223cef7c2790eed6e92"
 _REVIEWED_INDEX = "ix_znt_group_discussion_sessions_group_name"
 _REVIEWED_TABLE = "znt_group_discussion_sessions"
 _REVIEWED_DEFINITION = (
@@ -292,6 +292,7 @@ def build_drift_messages(
     existing_indexes: set[str],
     existing_columns: set[tuple[str, str]],
     existing_index_definitions: dict[str, tuple[IndexDefinition, ...]] | None = None,
+    schema: str = "public",
 ) -> list[str]:
     messages: list[str] = []
     for ops in pending_ops:
@@ -309,12 +310,14 @@ def build_drift_messages(
             if existing_index_definitions is None:
                 messages.append(f"{ops.revision}: {name}: missing index catalog evidence for reviewed guard")
                 continue
-            if not definitions and name not in existing_indexes:
+            # The reviewed helper is scoped to current_schema(); same-name
+            # indexes in other schemas do not affect its decision.
+            effective_definitions = tuple(item for item in definitions if item.schema == schema)
+            if not effective_definitions and name not in existing_indexes:
                 continue  # The reviewed guard will create the absent index.
-            # The historical helper searches every schema. More than one match,
-            # even an equivalent public index plus a shadow, needs manual review.
-            equivalent = len(definitions) == 1 and definitions[0] == IndexDefinition(
-                schema="public", table=_REVIEWED_TABLE, definition=expected,
+            schema_definition = expected.replace(" ON public.", f" ON {schema}.")
+            equivalent = len(effective_definitions) == 1 and effective_definitions[0] == IndexDefinition(
+                schema=schema, table=_REVIEWED_TABLE, definition=schema_definition,
                 valid=True, ready=True, live=True, kind="i",
             )
             if not equivalent or name not in existing_indexes:
@@ -337,10 +340,38 @@ def build_drift_messages(
 
 
 async def _load_database_state(conn) -> tuple[
-    list[str], set[str], set[str], set[tuple[str, str]], dict[str, tuple[IndexDefinition, ...]]
+    str,
+    list[str],
+    set[str],
+    set[str],
+    set[tuple[str, str]],
+    dict[str, tuple[IndexDefinition, ...]],
 ]:
-    version_table = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
-    has_version_table = version_table.scalar_one_or_none() is not None
+    schema_result = await conn.execute(text("SELECT current_schema()"))
+    schema = schema_result.scalar_one_or_none()
+    if not schema:
+        raise RuntimeError(
+            "PostgreSQL search_path does not contain an existing schema; "
+            "cannot inspect migration state"
+        )
+    schema = str(schema)
+
+    version_table = await conn.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_class AS c
+                JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema
+                  AND c.relname = 'alembic_version'
+                  AND c.relkind IN ('r', 'p')
+            )
+            """
+        ),
+        {"schema": schema},
+    )
+    has_version_table = bool(version_table.scalar_one_or_none())
 
     current_revisions: list[str] = []
     if has_version_table:
@@ -352,10 +383,11 @@ async def _load_database_state(conn) -> tuple[
             """
             SELECT tablename
             FROM pg_tables
-            WHERE schemaname = 'public'
+            WHERE schemaname = :schema
               AND tablename != 'alembic_version'
             """
-        )
+        ),
+        {"schema": schema},
     )
     existing_tables = {normalize_identifier(row[0]) for row in table_rows}
 
@@ -379,7 +411,7 @@ async def _load_database_state(conn) -> tuple[
     for row in index_rows:
         name = str(row[0])
         definitions_by_name.setdefault(name, []).append(IndexDefinition(*row[1:]))
-        if row[1] == "public":
+        if row[1] == schema:
             existing_indexes.add(normalize_identifier(name))
     existing_index_definitions = {name: tuple(items) for name, items in definitions_by_name.items()}
 
@@ -388,16 +420,24 @@ async def _load_database_state(conn) -> tuple[
             """
             SELECT table_name, column_name
             FROM information_schema.columns
-            WHERE table_schema = 'public'
+            WHERE table_schema = :schema
             """
-        )
+        ),
+        {"schema": schema},
     )
     existing_columns = {
         (normalize_identifier(row[0]), normalize_identifier(row[1]))
         for row in column_rows
     }
 
-    return current_revisions, existing_tables, existing_indexes, existing_columns, existing_index_definitions
+    return (
+        schema,
+        current_revisions,
+        existing_tables,
+        existing_indexes,
+        existing_columns,
+        existing_index_definitions,
+    )
 
 
 def evaluate_migration_state(
@@ -408,6 +448,7 @@ def evaluate_migration_state(
     existing_columns: set[tuple[str, str]],
     existing_index_definitions: dict[str, tuple[IndexDefinition, ...]] | None = None,
     versions_dir: Path = VERSIONS_DIR,
+    schema: str = "public",
 ) -> MigrationCheckResult:
     try:
         revisions, down_revisions, heads = load_revision_graph(versions_dir)
@@ -419,8 +460,8 @@ def evaluate_migration_state(
             return MigrationCheckResult(
                 ok=False,
                 messages=[
-                    "alembic_version is missing or empty, but public schema already has tables: "
-                    f"{', '.join(sorted(existing_tables)[:20])}",
+                    "alembic_version is missing or empty, but effective schema "
+                    f"{schema!r} already has tables: {', '.join(sorted(existing_tables)[:20])}",
                     "Refusing to auto-stamp a non-empty database. Back up the database, inspect the schema, "
                     "then run an explicit Alembic stamp only after confirming the schema matches the target revision.",
                 ],
@@ -453,6 +494,7 @@ def evaluate_migration_state(
         existing_indexes=existing_indexes,
         existing_columns=existing_columns,
         existing_index_definitions=existing_index_definitions,
+        schema=schema,
     )
     if drift_messages:
         return MigrationCheckResult(
@@ -478,7 +520,7 @@ async def async_main() -> int:
         # A consistent, read-only catalog snapshot; no normal DB migration or stamp.
         async with conn.begin():
             await conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
-            (current_revisions, existing_tables, existing_indexes,
+            (schema, current_revisions, existing_tables, existing_indexes,
              existing_columns, existing_index_definitions) = await _load_database_state(conn)
 
     result = evaluate_migration_state(
@@ -487,6 +529,7 @@ async def async_main() -> int:
         existing_indexes=existing_indexes,
         existing_columns=existing_columns,
         existing_index_definitions=existing_index_definitions,
+        schema=schema,
     )
     prefix = "[OK]" if result.ok else "[FAIL]"
     for message in result.messages:

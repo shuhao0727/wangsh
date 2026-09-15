@@ -14,7 +14,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'inf_typst_assets'
+                WHERE table_schema = current_schema() AND table_name = 'inf_typst_assets'
             ) THEN
                 ALTER TABLE inf_typst_assets ADD COLUMN IF NOT EXISTS sha256 VARCHAR(64);
                 ALTER TABLE inf_typst_assets ADD COLUMN IF NOT EXISTS size_bytes INTEGER;
@@ -29,11 +29,11 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'inf_typst_assets'
+                WHERE table_schema = current_schema() AND table_name = 'inf_typst_assets'
             ) THEN
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.table_constraints
-                    WHERE constraint_name = 'inf_typst_assets_uploaded_by_id_fkey'
+                    WHERE table_schema = current_schema() AND constraint_name = 'inf_typst_assets_uploaded_by_id_fkey'
                 ) THEN
                     ALTER TABLE inf_typst_assets
                     ADD CONSTRAINT inf_typst_assets_uploaded_by_id_fkey
@@ -45,7 +45,7 @@ def upgrade() -> None:
     )
     op.execute("""
         DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='inf_typst_assets') THEN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name='inf_typst_assets') THEN
                 EXECUTE 'CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_note_id_path ON inf_typst_assets(note_id, path)';
                 EXECUTE 'CREATE INDEX IF NOT EXISTS idx_inf_typst_assets_sha256 ON inf_typst_assets(sha256)';
             END IF;

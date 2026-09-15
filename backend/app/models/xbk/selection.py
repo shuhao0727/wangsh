@@ -2,7 +2,7 @@
 XBK 选课结果表
 """
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import expression
 from app.db.database import Base
@@ -25,6 +25,14 @@ class XbkSelection(Base):
             "course_code",
             name="uq_xbk_selections_year_term_student_no_course_code",
         ),
+        Index(
+            "uq_xbk_selections_active_period_student",
+            "year",
+            "term",
+            "student_no",
+            unique=True,
+            postgresql_where=text("is_deleted IS FALSE"),
+        ).ddl_if(dialect="postgresql"),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
