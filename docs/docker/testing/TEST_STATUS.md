@@ -6,6 +6,34 @@
 > 最近更新：2026-09-15
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+## 2026-09-15 生产部署只读预检与恢复演练（阻断）
+
+- **生产现状：** 目标主机 `shuhao-Virtual-Machine` 的 WangSh 生产栈仍运行
+  `shuhao07/*:2.0`，应用配置为 `APP_VERSION=2.0.0` / `IMAGE_TAG=2.0`；数据库为
+  PostgreSQL `16.14`，`current_schema=public`，session `search_path="$user", public`，数据库约
+  `47 MB`。生产源码停留在 `cdf1df29`，且 `docker-compose.yml` 有生产专用未提交调整，后续
+  更新不得覆盖。
+- **迁移状态与阻断：** `public.alembic_version=20260910_0001_auth_authority`，AUTH authority
+  `ready=true`。待执行 head 为 `20260914_0001_xbk_active_selection_unique`，但只读查询发现
+  3 组历史有效重复选课：刘宇轩（150，课程 6/19）、陈子轩（438，课程 8/18）、朱子涵
+  （728，课程 21/7）。该 migration 会按设计拒绝并回滚，未执行生产迁移。必须由业务方明确
+  每名学生保留哪一门，再在停写、备份和复核后处理；不得自动猜测或直接删除。
+- **数据观察：** 按当前“课程限额按班级分别计算”的规则，只读统计发现 97 个班级-课程组合
+  超额，共超出 167 个位置，单组最大超出 4；这是历史数据治理项，不是本次唯一索引 migration
+  的直接 DDL 阻断。另有 3 条空课程代码记录，代码合同将空值视为“未选”，不应误判为缺失课程。
+- **备份与恢复实测：** 已生成生产一致性自定义格式备份
+  `/home/shuhao/backups/wangsh/wangsh_db_pre_2.2_20260915_190028.dump`（约 `18 MB`，权限
+  `0600`），SHA-256 为
+  `9872a7b7c05dd2994be8919fcfccfed07ab4268aa838244c50b67af521f29c79`。首次隔离恢复因
+  readiness 检查只验证服务接受连接、未等待目标数据库创建而失败；修正为等待管理库 SQL-ready
+  并显式建库后，使用独立 PostgreSQL 16 容器恢复成功。生产与恢复库的核心计数完全一致：
+  users `381`、students `1909`、courses `57`、selections `917`、revision 与 AUTH ready 均一致；
+  临时恢复容器和卷已删除，正式备份保留。
+- **镜像与 release-set 决策：** 用户已明确授权本轮继续使用并覆盖 Docker Hub 现有 `2.1` 标签。
+  应用版本保持 `2.1.0`，正式镜像标签为 `2.1`；本轮只发布代码和镜像，不执行生产迁移、部署或
+  重启。生产库中 3 组历史重复选课记录按用户要求暂不处理并保留。正式 `release-set.txt` 必须在
+  六个镜像成功推送后，依据远端 registry manifest digest 生成并校验；在推送完成前不生成伪造文件。
+
 ## 发布前开放风险复核（2026-09-14，只读审查）
 
 - **非默认 PostgreSQL `search_path`：阻断。** 已有专项用例仅验证兼容版本表逻辑和有限场景；完整
@@ -21,6 +49,51 @@
 - **当前门禁结果：** 点名对象授权专项 `20 passed, 1 skipped`；Python compileall 通过；前端
   type-check 通过。生产数据库只读预检未执行，未连接正常服务或正常数据库。
 
+## 2026-09-15 AI 智能体强制正式登录整改（当前工作区，Docker/浏览器已验）
+
+- **行为边界：** 网站访客浏览模式继续保留，但前端 `/ai-agents` 由正式登录守卫保护；匿名用户
+  跳转登录页并完整保留站内 pathname、query 与 hash。后端 `/api/v1/ai-agents` 命名空间中的
+  智能体列表、会话、使用记录写入、流式对话和小组讨论配置/消息/流统一执行服务端认证；匿名
+  返回 `401`，有效会话中的历史 `guest` 角色返回 `403`。本功能修复没有新增数据库结构或
+  migration；真实验证时将本地开发库中已存在但尚未应用的 AUTH/XBK revision 升级到 head。
+- **部署前候选复验（2026-09-15）：** 使用本地已有基础镜像和当前源码/构建产物生成未发布的
+  `wangsh-local/wangsh-backend:2.1-prep-20260915`（`sha256:45d928cd8c6fc08871271761bd4583717b4a9a569bbce241351983b1a5210f03`）、
+  `wangsh-local/wangsh-frontend:2.1-prep-20260915`（`sha256:7201533d0623af4d46b0223015f55ede916a7fb9588970da9f519f6cdd06c7da`）和
+  `wangsh-local/wangsh-gateway:2.1-prep-20260915`（`sha256:067d10eb0eb55f64ce1fcc3ef41815bb04e1673bd6bcc77862a46cc0ef5b468f`）。
+  未执行依赖安装或镜像拉取；`/api/health` 为 healthy，匿名 5 个 AI 端点均为 `401`，新 Chromium
+  会话访问 AI 深链正确跳转登录且不展示智能体内容；正式账号登录后列表、历史和配置加载正常，
+  真实 Provider 流返回“部署前验证通过”。正式 `shuhao07/*:2.1` 标签未被覆盖，候选仅用于本地验收。
+- **静态与自动化复核：** `PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
+  tests/ai_agents` 为 `196 passed, 2435 warnings`；覆盖动态路由认证依赖树、匿名 ASGI 请求在
+  智能体列表、历史、配置和 Provider 服务之前被拒绝、正式用户核心路由准入、`guest` 角色拒绝
+  以及受认证 SSE 会话边界。前端专项实际为 `2 files / 41 tests passed`；`npm run type-check`
+  与 `npm run build` 均通过。警告主要为既有 Pydantic、SQLite、jieba、Browserslist、PDF.js
+  和大 chunk 提示；本轮未扩大范围处理。
+- **依赖复用与 Docker 实测：** 未执行 `npm install`、`npm ci`、`pip install` 或镜像拉取；后端
+  复用本地 `shuhao07/wangsh-backend:2.1` 并挂载当前源码，前端复用当前 `frontend/build` 和
+  本地 `caddy:2-alpine` 静态运行，PostgreSQL/Redis 使用既有开发容器。迁移前只读预检通过，
+  在仓库外生成并校验 `16 MB` PostgreSQL 备份；停写窗口将开发库从
+  `20260908_0001_xbk_academic_year` 升级到 `20260914_0001_xbk_active_selection_unique`。
+  AUTH 受控切换 dry-run/apply 均为 `preserved=1, reauthenticate=0`，最终 `ready=true`；这不是生产
+  环境发布或生产数据库迁移结论。
+- **真实 HTTP/Chromium 闭环：** 未登录访问 `/home` 正常显示访客页面；访问
+  `/ai-agents?agent=test-agent#chat` 跳转
+  `/login?redirect=%2Fai-agents%3Fagent%3Dtest-agent%23chat`，未短暂展示智能体内容。匿名及退出后
+  对 active、conversations、stream、group-discussion public-config 和 public-config/stream 的
+  5 个请求均为 `401`。超级管理员真实登录 `200` 后返回原 AI 深链，列表、配置、会话加载均为
+  `200`；发送“请只回复：登录验证通过”后真实 Provider 流返回“登录验证通过”，stream `200`、
+  usage `201`；退出 `200` 后立即回到登录页并再次拒绝上述接口。额外保留本次签发的旧 access
+  token 做撤销验证：退出前 AI 请求 `200`，退出后同一 token 请求普通 AI API 与 SSE 均为 `401`。
+  日志未发现该闭环中的非预期 `500`、数据库异常或匿名业务写入。
+- **部署前观察项：** 通过 Caddy 访问已登录页面时，现有 `/api/v1/admin/stream` 长连接在浏览器
+  重连/页面关闭时会产生 `ERR_INCOMPLETE_CHUNKED_ENCODING`，网关日志对应为预期的
+  `context canceled`；AI 业务流本身返回 `200` 且内容完整。本轮未扩大范围修改后台全局 SSE，
+  因此“AI 功能通过”不等于“浏览器控制台零警告”。
+- **剩余边界：** 当前开发库没有 `role_code=guest` 的真实账号，因此历史 `guest` 的真实浏览器
+  `403` 未在正常数据中构造；该边界由后端专项和前端守卫测试覆盖。四种正式角色中本轮真实浏览器
+  仅使用 `super_admin`，其余三种由自动化准入测试覆盖。该专项完成时仓库缺少正式发布所需的
+  `release-set.txt`，且尚未执行生产预检；后续生产只读预检与恢复演练结果及阻断项以本页顶部
+  “生产部署只读预检与恢复演练”章节为准。
 
 ## 当前源码生产等价一次性栈验收（2026-09-14，未发布候选）
 

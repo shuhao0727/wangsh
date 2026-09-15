@@ -7,6 +7,9 @@ from fastapi.params import Depends
 import app.core.deps as deps
 import app.api.endpoints.agents.ai_agents.crud as crud_api
 import app.api.endpoints.agents.ai_agents.usage as usage_api
+import app.api.endpoints.agents.ai_agents.conversations as conversations_api
+import app.api.endpoints.agents.ai_agents.group_discussion as group_discussion_api
+import app.api.endpoints.agents.ai_agents.stream as stream_api
 import app.api.endpoints.agents.model_discovery as model_discovery_api
 
 
@@ -23,7 +26,7 @@ def test_usage_routes_require_admin():
 
 
 def test_usage_create_requires_login():
-    _assert_depends_on(usage_api.create_usage_record, "current_user", deps.require_user)
+    _assert_depends_on(usage_api.create_usage_record, "current_user", deps.require_registered_user)
 
 
 def test_model_discovery_discover_routes_require_admin():
@@ -52,6 +55,43 @@ def test_ai_agents_crud_routes_require_admin():
     _assert_depends_on(crud_api.delete_existing_agent, "_", deps.require_admin)
     _assert_depends_on(crud_api.test_agent_connection, "_", deps.require_admin)
     _assert_depends_on(crud_api.discover_agent_models, "_", deps.require_admin)
+
+
+def test_active_agents_requires_registered_login():
+    _assert_depends_on(crud_api.read_active_agents, "current_user", deps.require_registered_user)
+
+
+def test_conversation_routes_require_registered_login():
+    _assert_depends_on(conversations_api.list_conversations, "current_user", deps.require_registered_user)
+    _assert_depends_on(conversations_api.get_conversation, "current_user", deps.require_registered_user)
+
+
+def test_chat_stream_requires_registered_login():
+    _assert_depends_on(stream_api.stream_agent_chat_endpoint, "current_user", deps.require_registered_user)
+
+
+def test_group_discussion_public_config_is_not_anonymous():
+    _assert_depends_on(group_discussion_api.get_public_config, "current_user", deps.require_registered_user)
+    _assert_depends_on(
+        group_discussion_api.stream_public_config,
+        "current_user",
+        deps.require_registered_user_sse,
+    )
+
+
+def test_registered_user_dependency_rejects_guest_role():
+    try:
+        asyncio.run(deps.require_registered_user({"id": 99, "role_code": "guest"}))
+    except deps.HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("guest role must not access agent features")
+
+
+def test_registered_user_dependency_allows_supported_roles():
+    for role_code in ("student", "teacher", "admin", "super_admin"):
+        user = {"id": 99, "role_code": role_code}
+        assert asyncio.run(deps.require_registered_user(user)) == user
 
 
 class _FakeResult:

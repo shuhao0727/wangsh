@@ -3,7 +3,13 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_super_admin, require_admin
+from app.core.deps import (
+    get_db,
+    get_current_user,
+    require_registered_user,
+    require_super_admin,
+    require_admin,
+)
 from app.schemas.agents import (
     AIAgentCreate,
     AIAgentUpdate,
@@ -114,7 +120,7 @@ async def read_agents(
 @router.get("/active", response_model=List[AIAgentResponse])
 async def read_active_agents(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_registered_user),
 ):
     try:
         agents = await get_active_agents(db)

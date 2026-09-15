@@ -359,3 +359,30 @@ async def require_user_sse(
     return current_user
 
 
+REGISTERED_USER_ROLES = frozenset({"student", "teacher", "admin", "super_admin"})
+
+
+def _ensure_registered_user(current_user: UserInfo) -> UserInfo:
+    """拒绝历史 guest 角色；访客模式必须先登录正式账号才能使用受限功能。"""
+    if current_user.get("role_code") not in REGISTERED_USER_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="访客模式不能使用此功能，请先登录正式账号",
+        )
+    return current_user
+
+
+async def require_registered_user(
+    current_user: UserInfo = Depends(get_current_user),
+) -> UserInfo:
+    """要求有效登录，且角色必须是正式注册用户。"""
+    return _ensure_registered_user(current_user)
+
+
+async def require_registered_user_sse(
+    current_user: UserInfo = Depends(get_current_user_sse),
+) -> UserInfo:
+    """SSE 版正式用户鉴权，兼容 EventSource query token。"""
+    return _ensure_registered_user(current_user)
+
+

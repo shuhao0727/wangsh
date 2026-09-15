@@ -75,7 +75,7 @@ async def conversation_client(user_id=11, extra_rows=()):
             async with factory() as session:
                 yield session
 
-        app.dependency_overrides[api.require_user] = synthetic_user
+        app.dependency_overrides[api.require_registered_user] = synthetic_user
         app.dependency_overrides[api.get_db] = synthetic_db
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://isolated") as client:
             yield client, factory

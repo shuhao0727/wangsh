@@ -11,7 +11,12 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.deps import get_db, require_admin, require_user, require_user_sse
+from app.core.deps import (
+    get_db,
+    require_admin,
+    require_registered_user,
+    require_registered_user_sse,
+)
 from app.core.config import settings
 from app.services import classroom as svc
 from app.schemas.agents import (
@@ -95,6 +100,7 @@ async def _enforce_frontend_visibility(db: AsyncSession, user: Dict[str, Any]) -
 @router.get("/public-config", response_model=GroupDiscussionPublicConfig)
 async def get_public_config(
     db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionPublicConfig:
     enabled = await GroupDiscussionPublicConfigService.get_enabled(db)
     return GroupDiscussionPublicConfig(
@@ -106,6 +112,8 @@ async def get_public_config(
 
 @router.get("/public-config/stream")
 async def stream_public_config(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_registered_user_sse),
     db: AsyncSession = Depends(get_db),
 ):
     async def gen():
@@ -159,7 +167,7 @@ async def stream_public_config(
                     pass
 
     return StreamingResponse(
-        gen(),
+        session_checked_stream(gen(), request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
@@ -192,7 +200,7 @@ async def set_public_config(
 async def join_group_discussion(
     payload: GroupDiscussionJoinRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionJoinResponse:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
@@ -234,7 +242,7 @@ async def list_groups(
     keyword: Optional[str] = Query(None, description="可选：按组号或组名搜索"),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionGroupListResponse:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
@@ -276,7 +284,7 @@ async def update_group_name(
     session_id: int,
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionJoinResponse:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
@@ -300,7 +308,7 @@ async def get_group_discussion_messages(
     after_id: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionMessageListResponse:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
@@ -325,7 +333,7 @@ async def stream_group_discussion_messages(
     session_id: int = Query(..., ge=1),
     after_id: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user_sse),
+    current_user: Dict[str, Any] = Depends(require_registered_user_sse),
 ):
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)
@@ -403,7 +411,7 @@ async def stream_group_discussion_messages(
 async def post_group_discussion_message(
     payload: GroupDiscussionSendRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_user),
+    current_user: Dict[str, Any] = Depends(require_registered_user),
 ) -> GroupDiscussionMessageOut:
     user = _require_discussion_user(current_user)
     await _enforce_frontend_visibility(db, user)

@@ -232,20 +232,41 @@ def test_analysis_still_rejects_student(isolated, monkeypatch, case):
     asyncio.run(run())
 
 
-def test_public_config_stream_stays_anonymous(isolated, monkeypatch):
+def test_public_config_stream_requires_login_and_accepts_registered_user(isolated, monkeypatch):
     async def run():
         async with isolated() as h:
             h.app.include_router(group_discussion.router)
+
             async def enabled(db):
                 return True
+
             monkeypatch.setattr(group_discussion.GroupDiscussionPublicConfigService, "get_enabled", enabled)
             monkeypatch.setattr(settings, "GROUP_DISCUSSION_REDIS_ENABLED", False)
-            wire = Wire(h.app, "/group-discussion/public-config/stream", "GET")
+            monkeypatch.setattr(stream_session, "CHECK_INTERVAL_SECONDS", 0.01)
+
+            anonymous = Wire(h.app, "/group-discussion/public-config/stream", "GET")
             try:
-                await asyncio.wait_for(wire.frame.wait(), 2)
-                assert wire.status == 200
-                assert not wire.scope.get("state", {}).get("accepted_stream_session")
-                assert any(b'"enabled": true' in m.get("body", b"") for m in wire.messages)
+                await asyncio.wait_for(anonymous.frame.wait(), 2)
+                assert anonymous.status == 401
+                assert not anonymous.scope.get("state", {}).get("accepted_stream_session")
+                assert not any(b'"enabled": true' in m.get("body", b"") for m in anonymous.messages)
             finally:
-                await wire.close()
+                await anonymous.close()
+
+            pair = await h.login()
+            authenticated = Wire(
+                h.app,
+                "/group-discussion/public-config/stream",
+                "GET",
+                pair["access_token"],
+            )
+            try:
+                await asyncio.wait_for(authenticated.frame.wait(), 2)
+                assert authenticated.status == 200
+                assert authenticated.scope["state"]["accepted_stream_session"][0] == 1
+                assert any(b'"enabled": true' in m.get("body", b"") for m in authenticated.messages)
+                await h.logout(pair)
+                await asyncio.wait_for(asyncio.shield(authenticated.task), 1)
+            finally:
+                await authenticated.close()
     asyncio.run(run())

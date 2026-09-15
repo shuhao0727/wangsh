@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_user
+from app.core.deps import get_db, require_registered_user
 from app.core.stream_session import session_checked_stream
 from app.utils.errors import safe_error_detail
 from app.schemas.agents import AgentChatRequest
@@ -18,7 +18,7 @@ async def stream_agent_chat_endpoint(
     request: Request,
     body: AgentChatRequest = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: UserInfo = Depends(require_user),
+    current_user: UserInfo = Depends(require_registered_user),
 ):
     try:
         from app.services.agents.chat_stream import stream_agent_chat

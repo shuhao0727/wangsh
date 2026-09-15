@@ -259,6 +259,11 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | GET | `/ai-agents/admin/export/hot-questions` | 导出热门问题 | 管理员 |
 | GET | `/ai-agents/admin/export/student-chains` | 导出学生链 | 管理员 |
 
+认证边界（2026-09-15）：
+- `/api/v1/ai-agents` 下所有路由均要求服务端认证；“是”表示仅允许正式登录角色 `student`、`teacher`、`admin`、`super_admin`，历史 `guest` 角色不属于正式登录用户。
+- 未携带有效登录凭据返回 `401`；有效会话但角色为 `guest` 返回 `403`。准入失败时不得进入智能体业务服务、会话读写或外部模型调用。
+- 前端 `/ai-agents` 同步使用登录守卫并保留安全的站内 `redirect`，但前端守卫不替代上述 API 权限。
+
 补充说明（2026-03-24）：
 - `GET /ai-agents/conversations` 返回按 `session_id` 聚合的会话摘要：
   `session_id`、`agent_id`、`display_agent_name`、`display_user_name`、`last_at`、
@@ -305,8 +310,8 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `.../public-config` | 获取公开配置 | 否 |
-| GET | `.../public-config/stream` | SSE 监听配置变更 | 否 |
+| GET | `.../public-config` | 获取已登录用户可见的配置 | 是 |
+| GET | `.../public-config/stream` | SSE 监听配置变更 | 是 |
 | PUT | `.../public-config` | 更新公开配置 | 管理员 |
 | POST | `.../join` | 加入小组 | 是 |
 | GET | `.../groups` | 获取小组列表 | 是 |

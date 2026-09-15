@@ -6,6 +6,7 @@ import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
 import AdminGuard from "@components/Auth/AdminGuard";
+import AuthenticatedGuard from "@components/Auth/AuthenticatedGuard";
 import RoleGuard from "@components/Auth/RoleGuard";
 import { IT_GAMES_ADMIN_ROLES } from "@components/Auth/ITGamesAccess";
 import {
@@ -149,7 +150,7 @@ function App() {
 
             <Route element={<BasicLayout />}>
               <Route path="/home" element={<PageErrorBoundary pageName="home"><HomePage /></PageErrorBoundary>} />
-              <Route path="/ai-agents" element={<PageErrorBoundary pageName="ai-agents"><AIAgentsPage /></PageErrorBoundary>} />
+              <Route path="/ai-agents" element={<AuthenticatedGuard><PageErrorBoundary pageName="ai-agents"><AIAgentsPage /></PageErrorBoundary></AuthenticatedGuard>} />
               <Route path="/informatics" element={<PageErrorBoundary pageName="informatics"><InformaticsPage /></PageErrorBoundary>} />
               <Route path="/informatics/:id" element={<PageErrorBoundary pageName="informatics-detail"><InformaticsDetailPage /></PageErrorBoundary>} />
               <Route path="/it-technology" element={<PageErrorBoundary pageName="it-technology"><ITTechnologyPage /></PageErrorBoundary>} />

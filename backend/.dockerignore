@@ -4,6 +4,9 @@ venv
 .pytest_cache
 .mypy_cache
 .ruff_cache
+.coverage
+coverage.json
+htmlcov/
 .DS_Store
 *.log
 docker/bin/

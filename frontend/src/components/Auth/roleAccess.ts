@@ -1,5 +1,6 @@
 export type AppRole = "super_admin" | "admin" | "teacher" | "student";
 
+export const REGISTERED_USER_ROLES = ["student", "teacher", "admin", "super_admin"] as const satisfies readonly AppRole[];
 export const ADMIN_ROLES = ["admin", "super_admin"] as const satisfies readonly AppRole[];
 export const STAFF_ROLES = ["teacher", "admin", "super_admin"] as const satisfies readonly AppRole[];
 export const SUPER_ADMIN_ROLES = ["super_admin"] as const satisfies readonly AppRole[];

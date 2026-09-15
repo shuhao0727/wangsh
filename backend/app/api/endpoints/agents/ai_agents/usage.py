@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
-from app.core.deps import get_db, require_admin, require_user
+from app.core.deps import get_db, require_admin, require_registered_user
 from app.utils.errors import safe_error_detail
 from app.utils.cache import cache, cache_key_generator
 from app.schemas.agents import (
@@ -118,7 +118,7 @@ async def read_agent_usage_statistics(
 async def create_usage_record(
     usage_in: AgentUsageCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_user),
+    current_user: dict = Depends(require_registered_user),
 ):
     try:
         from sqlalchemy import select
