@@ -50,8 +50,6 @@
 - [../features/PYTHONLAB.md](../features/PYTHONLAB.md#能力边界) - PythonLab 能力矩阵与删除/拆分边界
 - [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 治理与回归唯一参考
 - [plans/2026-07-11-project-governance-30-60-90-execution-plan.md](plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
-- [plans/2026-07-14-project-file-consolidation-plan.md](plans/2026-07-14-project-file-consolidation-plan.md) - 当前文档、测试和脚本整理执行计划
-- [plans/2026-09-13-docker-clean-build-verify-release-plan.md](plans/2026-09-13-docker-clean-build-verify-release-plan.md) - 当前 Docker 清理、重建、真实验收和已验证镜像发布计划
 
 ### 已归档计划
 

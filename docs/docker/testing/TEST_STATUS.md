@@ -238,7 +238,7 @@ CI/test 依赖来源、workflow 清理和测试夹具，不修改生产应用代
   使用有界 `wait_for_task_cleanup` 等待异步 session/task finalizer，再执行无泄漏断言；本地
   定向回归为 `22 passed / 21 skipped / 8 warnings`。
 - **本地收口结果**：后端隔离全量基线为 `3054 passed / 170 skipped / 2467 warnings /
-  0 failed`；本地 Markdown 扫描为 `113 files / 430 links / 0 missing`，合同测试为
+  0 failed`；本地 Markdown 扫描为 `113 files / 431 links / 0 missing`，合同测试为
   `10 passed / 0 failed`。旧 Run `34733798985`、`34733799159` 的失败保留为历史事实，不能
   用来否定当前 `68d8b0c` 已通过的门禁。
 - **镜像不变**：本节修复没有重新构建或推送 Docker Hub 镜像；6 个 `:2.0` digest 仍以

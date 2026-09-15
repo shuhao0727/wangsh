@@ -1,10 +1,10 @@
 # WangSh Docker 清理、重建、全量验证与发布计划
 
-> 状态：active
+> 状态：archived
 > Owner：ops
-> 最近复核：2026-09-13
-> 替代文档：无
-> 归档条件：本计划全部执行完成，长期有效的发布/验证结论已同步到 `docs/docker/deploy/DEPLOY.md`、`docs/docker/deploy/CICD.md` 与 `docs/docker/testing/TEST_STATUS.md` 后，将本文件标记为 `archived` 并移入 `docs/docker/archive/`。
+> 最近复核：2026-09-15
+> 替代文档：../RELEASE_NOTES.md、../testing/TEST_STATUS.md、../deploy/DEPLOY.md
+> 归档原因：2.1 发布闭环、项目临时产物整理和旧 2.0 标签清理已完成；本文件保留为历史执行证据。
 
 ## 一、计划目标
 
@@ -35,7 +35,7 @@
   - `backend/scripts/python-governance-baseline.json`
   - `docs/docker/RELEASE_NOTES.md`
   - `docs/docker/deploy/CICD.md`
-  - `docs/docker/plans/2026-09-09-release-readiness-gap.md`
+  - `docs/docker/archive/2026-09-09-release-readiness-gap.md`
   - `docs/docker/testing/TEST_STATUS.md`
   - `scripts/check-version-consistency.mjs`
 - 这些改动视为当前待交付内容。任何执行者都不得使用 `git reset --hard`、`git checkout --`、`git clean`、强制推送或其他方式覆盖/回滚它们。

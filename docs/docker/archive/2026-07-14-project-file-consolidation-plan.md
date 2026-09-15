@@ -1,13 +1,14 @@
 # WangSh 项目整理执行计划
 
-> 状态：active
+> 状态：archived
 > Owner：project-governance
-> 最近复核：2026-07-24
-> 归档条件：当前整理批次提交并通过提交后门禁，剩余专项转入对应 owner 或 30/60/90 计划
+> 最近复核：2026-09-15
+> 替代文档：../testing/TEST_STATUS.md；长期治理转入 30/60/90 计划
+> 归档原因：2026-09-15 文件整理批次已完成，当前动态事实已沉淀到 TEST_STATUS.md
 
 本文是当前文件整理工作的唯一执行入口。动态测试结果统一写入
 [TEST_STATUS.md](../testing/TEST_STATUS.md)，长期改进统一写入
-[30/60/90 计划](2026-07-11-project-governance-30-60-90-execution-plan.md)。
+[30/60/90 计划](../plans/2026-07-11-project-governance-30-60-90-execution-plan.md)。
 
 ## 当前清理批次（2026-09-09）
 

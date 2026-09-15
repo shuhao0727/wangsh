@@ -101,3 +101,15 @@
 - 新增归档时更新本页，不再新增第二份 archive summary。
 - 仍有真实引用的高层旧路径才保留 redirect；owner 已完整承接且无引用的旧路径直接删除。
 - 删除归档正文前，先确认 owner 文档和 Git 历史能够覆盖其唯一信息。
+
+### 2026-09 文件整理与 2.1 发布闭环
+
+- [2026-09-13-docker-clean-build-verify-release-plan.md](2026-09-13-docker-clean-build-verify-release-plan.md)
+  记录 2.1 发布候选的 Docker 构建、真实隔离验证、GitHub/Docker Hub 推送及旧标签清理；
+  当前正式事实以 [RELEASE_NOTES.md](../RELEASE_NOTES.md)、
+  [TEST_STATUS.md](../testing/TEST_STATUS.md) 和 [DEPLOY.md](../deploy/DEPLOY.md) 为准。
+- [2026-09-09-release-readiness-gap.md](2026-09-09-release-readiness-gap.md)
+  保留 v1.6/v2.0 阶段的审计差距快照，已由 2.1 发布记录替代。
+- [2026-07-14-project-file-consolidation-plan.md](2026-07-14-project-file-consolidation-plan.md)
+  保留项目整理批次的删除边界、引用核对与可恢复清理策略；后续动态清理由
+  [TEST_STATUS.md](../testing/TEST_STATUS.md) 记录。

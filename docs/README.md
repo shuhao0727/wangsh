@@ -34,9 +34,8 @@
 
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与稳定 reference 索引
 - [docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
-- [docker/plans/2026-07-14-project-file-consolidation-plan.md](docker/plans/2026-07-14-project-file-consolidation-plan.md) - 当前文档、测试和脚本整理执行计划
-- [docker/plans/2026-09-13-docker-clean-build-verify-release-plan.md](docker/plans/2026-09-13-docker-clean-build-verify-release-plan.md) - 当前 Docker 清理、已验证镜像发布与全量验收执行计划
 
+> 2026-09-15 文件整理、旧 2.0 标签清理和 2.1 发布闭环的历史执行计划已移入 [docker/archive/README.md](docker/archive/README.md)。
 > 已完成的阶段报告、批次摘要和发布历史已压缩为一份归档摘要，详见
 > [docker/archive/README.md](docker/archive/README.md)。
 
@@ -83,7 +82,6 @@
 
 - [全项目审查计划（XBK 优先）](docker/plans/2026-09-08-project-comprehensive-audit-plan.md) — 范围、分工、验证与数据保护边界。
 - [全项目首轮问题台账](docker/plans/2026-09-08-project-audit-findings.md) — 初审候选与准确性复核状态、反证、限制及修复决策；不等同已确认 bug 清单；动态验证结果见 [当前测试状态](docker/testing/TEST_STATUS.md)。
-- [发布就绪差距清单](docker/plans/2026-09-09-release-readiness-gap.md) — 台账派生发布视图：24 条逐条现状核对、待用户决策项、未验项与发布流程差距。
 
 ## 整理约定
 
