@@ -418,14 +418,14 @@ PythonLab 右侧调试控制按钮是高频连续点击控件，点击可靠性�
 ### GitHub Actions
 
 **并发测试**：`.github/workflows/pythonlab-owner-concurrency.yml`
-- 定时：UTC 02:30
-- 手动触发
+- 手动触发或由其他工作流通过 `workflow_call` 调用（不再定时调度）
 - 使用已部署的专项测试环境和 `PYTHONLAB_SMOKE_*` secrets
+- 未提供 API URL、用户名或密码中的任一项时跳过并输出说明，不判定失败
 
 **Phase C 测试**：`.github/workflows/pythonlab-phasec-gate.yml`
-- 定时：UTC 03:10
-- 手动触发
+- 手动触发或由其他工作流通过 `workflow_call` 调用（不再定时调度）
 - 使用已部署的专项测试环境和 `PYTHONLAB_SMOKE_*` secrets
+- 未提供 API URL、用户名或密码中的任一项时跳过并输出说明，不判定失败
 
 **当前 PR 全核运行时**：`.github/workflows/pythonlab-pr-runtime.yml`
 - 由 `.github/workflows/pr-pythonlab-owner-gate.yml` 和
