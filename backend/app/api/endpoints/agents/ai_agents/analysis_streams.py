@@ -357,7 +357,7 @@ async def save_task_analysis_stream(
             # 分析用智能体（用于调用 LLM）：优先使用 analysis_agent_id，否则用 agent_id
             llm_agent_id = body.analysis_agent_id or body.agent_id
             result_data = await db.execute(
-                select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
+                select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted.is_(False))
             )
             agent = result_data.scalar_one_or_none()
             api_endpoint, api_key, agent_type, agent_model = "", "", "", ""

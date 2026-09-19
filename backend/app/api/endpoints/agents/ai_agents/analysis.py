@@ -117,7 +117,7 @@ async def task_analysis(
     result = await db.execute(
         select(AIAgent).where(
             AIAgent.id == body.agent_id,
-            AIAgent.is_deleted == False,
+            AIAgent.is_deleted.is_(False),
         )
     )
     agent = result.scalar_one_or_none()
@@ -189,7 +189,7 @@ async def save_task_analysis(
     effective_start = body.start_at or (effective_end - timedelta(hours=1))
     llm_agent_id = body.analysis_agent_id or body.agent_id
     result_data = await db.execute(
-        select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
+        select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted.is_(False))
     )
     agent = result_data.scalar_one_or_none()
     api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
