@@ -41,6 +41,7 @@ from app.services.agents import (
 from app.services.agents.analysis_compatibility import (
     delete_compatible_sibling as _delete_compatible_siblings,
 )
+from app.services.agents.providers.common import resolve_credentials
 
 from .analysis_helpers import (
     _sse,
