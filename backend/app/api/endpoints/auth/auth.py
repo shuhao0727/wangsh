@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.session_family import (
-    refresh_family, verify_access_family, valid_family_nonce,
+    refresh_family, verify_access_family,
     claim_durable_session, revoke_durable_session, session_state,
 )
 from app.core.deps import get_db, get_current_user as require_current_user
@@ -27,11 +27,12 @@ from app.services.auth import (
     verify_refresh_token,
     lock_refresh_token_owner_for_logout,
     rotate_refresh_token,
-    revoke_all_user_refresh_tokens,
+    revoke_all_user_refresh_tokens,  # noqa: F401  测试 monkeypatch 目标，保留模块属性
 )
 from app.schemas.user_info import UserInfo
 from app.core.session_guard import (
-    on_successful_login, get_user_session, get_user_session_strict,
+    on_successful_login,  # noqa: F401  测试 monkeypatch 目标，保留模块属性
+    get_user_session_strict,
     rotate_user_session, extract_client_ip, set_ip_binding,
 )
 from app.utils.rate_limit import rate_limiter

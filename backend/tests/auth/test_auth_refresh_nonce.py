@@ -17,7 +17,6 @@ from starlette.responses import Response
 
 import app.api.endpoints.auth.auth as auth_api
 from app.core import session_guard
-from app.services import auth as auth_service
 
 # 新契约中的有效 nonce（22 位 [A-Za-z0-9_-]）。
 NONCE_22 = "abcdefghijklmnopqrstuv"
