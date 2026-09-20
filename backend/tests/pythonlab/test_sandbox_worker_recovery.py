@@ -156,9 +156,12 @@ def test_bad_inspect_payload_is_permanent():
 def test_unknown_ownership_or_invalid_resource_is_rejected_before_image_transport(reason):
     info, expected = _reuse_fixture()
     owner = _owner()
-    if reason == 'owner': owner = None
-    elif reason == 'resource': info['HostConfig']['Memory'] = 1
-    else: info['Mounts'] = []
+    if reason == 'owner':
+        owner = None
+    elif reason == 'resource':
+        info['HostConfig']['Memory'] = 1
+    else:
+        info['Mounts'] = []
     async def run(cmd, timeout_s):
         pytest.fail('invalid ownership/resources must be rejected before contacting image provider')
     with pytest.raises(RuntimeError):
