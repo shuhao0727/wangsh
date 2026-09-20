@@ -10,7 +10,6 @@ the versioned, idempotent seed format described by the project plan.
 if __name__ == "__main__":
     raise SystemExit("Archived course source only; direct database seeding is disabled.")
 
-import asyncio
 import json
 import sys
 import os
