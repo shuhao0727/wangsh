@@ -2,7 +2,7 @@
 答题记录模型 - 对应数据库表 znt_assessment_answers
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base

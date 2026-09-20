@@ -170,11 +170,6 @@ def test_generate_basic_profile_creates_new(mock_ai):
     assert db.flush.called
     assert mock_ai.called
 
-    # 验证 AI 被调用时 prompt 包含关键信息
-    call_args = mock_ai.call_args
-    prompt = call_args[1].get("message", "") or call_args[0][2] if len(call_args[0]) > 2 else ""
-    # prompt 应包含学科和得分信息
-
 
 @patch("app.services.agents.chat_blocking.run_agent_chat_blocking")
 def test_generate_basic_profile_ai_failure(mock_ai):

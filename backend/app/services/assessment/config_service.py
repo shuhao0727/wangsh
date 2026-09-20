@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, or_
 from sqlalchemy.orm import selectinload
 
-from loguru import logger
-
 from app.models.assessment import AssessmentConfig, AssessmentConfigAgent, AssessmentQuestion, AssessmentSession
 from app.schemas.assessment import AssessmentConfigCreate, AssessmentConfigUpdate
 

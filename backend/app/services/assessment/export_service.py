@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from app.models.assessment import (
     AssessmentSession,
     AssessmentAnswer,
-    AssessmentConfig,
     AssessmentBasicProfile,
 )
 from app.services.assessment.session_service import get_config_sessions
