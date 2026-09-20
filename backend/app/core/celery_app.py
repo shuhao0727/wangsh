@@ -5,7 +5,6 @@ Celery 异步任务简化配置
 import logging
 
 from celery import Celery
-from celery.schedules import crontab
 from celery.signals import after_setup_logger, after_setup_task_logger
 
 from app.core.config import settings

@@ -9,8 +9,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-from loguru import logger
-
 
 class Base(DeclarativeBase):
     """SQLAlchemy 基类"""
