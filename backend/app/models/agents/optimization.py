@@ -2,9 +2,7 @@
 优化记录模型定义 - 对应数据库表 znt_optimize_logs
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, ForeignKey
-from sqlalchemy.sql import expression
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey
 import uuid
 
 from app.db.database import Base
