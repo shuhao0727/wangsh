@@ -2,9 +2,32 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.0
-> 最近更新：2026-09-18
+> 当前版本：2.1.1
+> 最近更新：2026-09-20
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+
+## 2026-09-20 WangSh 2.1.1 发布候选验证（当前工作区）
+
+- **版本与范围：** 应用版本、前端 lockfile、Compose、部署脚本和 Docker workflow 已统一为完整
+  SemVer `2.1.1`；六个业务镜像引用均为 `shuhao07/*:2.1.1`。本轮只准备代码和镜像发布，
+  不部署生产服务器、不执行生产数据库迁移。
+- **AI 智能体安全修复：** Dify 流式响应会丢弃 `agent_thought`，跨网络分片和跨 SSE 事件过滤
+  `<think>` / reasoning 内容，并在写库、历史读取、管理端使用记录和 Excel 导出边界清理旧推理内容；
+  清理后为空时不新增 answer 行，question 保持原样。未批量改写历史数据库。
+- **后端验证：** `backend/tests/ai_agents` 为 `216 passed / 2444 warnings / 0 failed`；Python
+  governance（相对 `origin/main`）为 `errors=0 / warnings=29`，共检查 `328` 个文件、`1826`
+  个函数。警告均为既有弃用、复杂度预警区间或文件长度预警，不阻断候选发布。
+- **前端验证：** type-check 通过；Vitest 为 `99` 个测试文件、`712 passed / 0 failed`；lint 为
+  `0 errors / 470 warnings`；生产构建通过。警告主要为既有 TypeScript `any`、PDF.js `eval` 和
+  大 chunk 提示。
+- **发布合同验证：** 版本一致性检查通过；Docker workflow contracts 为 `60 passed / 0 failed`；
+  Markdown contracts 为 `10 passed / 0 failed`，派生检查为 `113 files / 436 links / 0 missing`；
+  `docker compose ... config`、部署脚本语法和 `git diff --check` 均通过。
+- **远端发布状态：** GitHub Actions 尚未配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，因此
+  `dockerhub-amd64` 暂不能完成六镜像远端推送和 `release-set` 生成。正式镜像必须在本候选合并到
+  最新 `main` 后触发，输入 `image_tag=2.1.1`、`push_latest=false`；在 workflow 成功前不得宣称
+  `2.1.1` 已发布。
 
 ## 2026-09-15 生产部署只读预检与恢复演练（阻断）
 

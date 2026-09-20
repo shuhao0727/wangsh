@@ -1,6 +1,6 @@
 # 部署指南
 
-> 最后更新：2026-09-14
+> 最后更新：2026-09-20
 
 ---
 
@@ -125,7 +125,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前发布候选版本**: 2.1.0（Docker 镜像标签 `2.1`）
+- **当前发布候选版本**: 2.1.1（Docker 镜像标签 `2.1.1`）
 
 ### 快速连接
 ```bash
@@ -211,17 +211,16 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.0
-IMAGE_TAG=2.1
-REACT_APP_VERSION=2.1.0
+APP_VERSION=2.1.1
+IMAGE_TAG=2.1.1
+REACT_APP_VERSION=2.1.1
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整版本号（如 `2.1.0`）的权威源；
-`IMAGE_TAG` 使用同源的 major.minor（如 `2.1`）。`check-version-consistency.mjs`
-按这两套口径分别校验，两者必须同源一致。 `verify-release-set` 同样按这一区分校验：
-release-set 和 `IMAGE_TAG` 必须等于派生出的 major.minor 标签，`APP_VERSION`、`VERSION`（如配置）
-和 `REACT_APP_VERSION` 必须等于完整应用版本，不能把 `2.1.0` 与镜像标签 `2.1` 错判为漂移。
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.1`）的权威源；
+`IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
+必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
+校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
 
 当前版本更新仍是显式同步，不会自动改写其他文件。至少需要同步
 `.env.example`、`frontend/package.json` 和 `frontend/package-lock.json`。
@@ -266,12 +265,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1.1` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1.1` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1.1` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1.1` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1.1` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1.1` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -289,7 +288,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1
+SIM_VERSION=2.1.1
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -351,9 +350,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.0
-IMAGE_TAG=2.1
-REACT_APP_VERSION=2.1.0
+APP_VERSION=2.1.1
+IMAGE_TAG=2.1.1
+REACT_APP_VERSION=2.1.1
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -447,9 +446,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.0          # 应用版本号
-IMAGE_TAG=2.1              # Docker 镜像标签（major.minor，与 package.json 同源）
-REACT_APP_VERSION=2.1.0    # 前端版本号
+APP_VERSION=2.1.1          # 应用版本号
+IMAGE_TAG=2.1.1             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.1.1     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 

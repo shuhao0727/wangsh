@@ -56,23 +56,23 @@ function runDeployWithFakeDocker({
   const expectedImages =
     composeImages ??
     [
-      "shuhao07/wangsh-backend:2.1",
-      "shuhao07/wangsh-typst-worker:2.1",
-      "shuhao07/wangsh-pythonlab-worker:2.1",
-      "shuhao07/pythonlab-sandbox:2.1",
-      "shuhao07/wangsh-frontend:2.1",
-      "shuhao07/wangsh-gateway:2.1",
+      "shuhao07/wangsh-backend:2.1.1",
+      "shuhao07/wangsh-typst-worker:2.1.1",
+      "shuhao07/wangsh-pythonlab-worker:2.1.1",
+      "shuhao07/pythonlab-sandbox:2.1.1",
+      "shuhao07/wangsh-frontend:2.1.1",
+      "shuhao07/wangsh-gateway:2.1.1",
     ];
   const envValues = {
-    APP_VERSION: "2.1.0",
-    REACT_APP_VERSION: "2.1.0",
-    IMAGE_TAG: "2.1",
+    APP_VERSION: "2.1.1",
+    REACT_APP_VERSION: "2.1.1",
+    IMAGE_TAG: "2.1.1",
     IMAGE_REPOSITORY_PREFIX: "shuhao07",
     IMAGE_NAME_BACKEND: "wangsh-backend",
     IMAGE_NAME_WORKER: "wangsh-typst-worker",
     IMAGE_NAME_PYTHONLAB_WORKER: "wangsh-pythonlab-worker",
     IMAGE_NAME_GATEWAY: "wangsh-gateway",
-    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1",
+    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1.1",
     ...envOverrides,
   };
 
@@ -110,7 +110,7 @@ if [[ "$*" == *"buildx imagetools inspect"* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1`;
+    const ref = `shuhao07/${image}:2.1.1`;
     const digest = dockerDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf 'Name: %s\\nDigest: %s\\n' "$ref" '${digest}' ;;`;
   })
@@ -124,7 +124,7 @@ if [[ "$*" == image\\ inspect* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1`;
+    const ref = `shuhao07/${image}:2.1.1`;
     const digest = localDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf '%s\\n' 'shuhao07/${image}@${digest}' ;;`;
   })
@@ -165,7 +165,7 @@ exit 1
 }
 
 function makeReleaseSet({
-  version = "2.1",
+  version = "2.1.1",
   rows = requiredReleaseImages,
   digest = null,
   refOverrides = {},
@@ -1290,13 +1290,13 @@ test("verify-release-set accepts a complete release set with matching compose an
   assert.match(result.stdout, /release-set verified/);
 });
 
-test("verify-release-set accepts full application versions with a major.minor image tag", () => {
+test("verify-release-set accepts one full SemVer for application and image tag", () => {
   const result = runDeployWithFakeDocker({
-    releaseSet: makeReleaseSet({ version: "2.1" }),
+    releaseSet: makeReleaseSet({ version: "2.1.1" }),
     envOverrides: {
-      APP_VERSION: "2.1.0",
-      REACT_APP_VERSION: "2.1.0",
-      IMAGE_TAG: "2.1",
+      APP_VERSION: "2.1.1",
+      REACT_APP_VERSION: "2.1.1",
+      IMAGE_TAG: "2.1.1",
     },
   });
 
@@ -1307,8 +1307,10 @@ test("verify-release-set rejects application, frontend, image-tag, and release v
   const cases = [
     { releaseSet: makeReleaseSet(), envOverrides: { APP_VERSION: "2.2.0" } },
     { releaseSet: makeReleaseSet(), envOverrides: { REACT_APP_VERSION: "2.2.0" } },
-    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2" } },
-    { releaseSet: makeReleaseSet({ version: "2.2" }) },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.1" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2.0" } },
+    { releaseSet: makeReleaseSet({ version: "2.1.2" }) },
+    { releaseSet: makeReleaseSet({ version: "2.2.0" }) },
   ];
 
   for (const testCase of cases) {
@@ -1613,7 +1615,7 @@ test("version consistency prints the exact image tag", () => {
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(result.stdout, "2.1");
+  assert.equal(result.stdout, "2.1.1");
 });
 
 test("version consistency rejects drift in production and release defaults", () => {
@@ -1626,10 +1628,13 @@ test("version consistency rejects drift in production and release defaults", () 
   mkdirSync(scriptsDirectory, { recursive: true });
   mkdirSync(workflowsDirectory, { recursive: true });
   writeFileSync(join(frontendDirectory, "package.json"), '{"version":"1.6.0"}\n');
-  writeFileSync(join(frontendDirectory, "package-lock.json"), '{"version":"1.6.0"}\n');
+  writeFileSync(
+    join(frontendDirectory, "package-lock.json"),
+    '{"version":"1.6.0","packages":{"":{"version":"1.6.0"}}}\n',
+  );
   writeFileSync(
     join(directory, ".env.example"),
-    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6\nREACT_APP_VERSION=1.6.0\n",
+    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6.0\nREACT_APP_VERSION=1.6.0\n",
   );
   writeFileSync(
     join(directory, "docker-compose.yml"),
@@ -1637,11 +1642,11 @@ test("version consistency rejects drift in production and release defaults", () 
   );
   writeFileSync(
     join(scriptsDirectory, "deploy.sh"),
-    'sim_version="${SIM_VERSION:-1.6}"\n',
+    'sim_version="${SIM_VERSION:-1.6.0}"\n',
   );
   writeFileSync(
     join(workflowsDirectory, "dockerhub-amd64.yml"),
-    'image_tag:\n  default: "1.6"\n',
+    'image_tag:\n  default: "1.6.0"\n',
   );
 
   const result = spawnSync("node", ["scripts/check-version-consistency.mjs"], {
