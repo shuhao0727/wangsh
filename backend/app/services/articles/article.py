@@ -3,19 +3,16 @@
 标签功能已移除，仅保留文章和分类功能
 """
 
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select, update, delete, and_, desc, func
+from sqlalchemy import select, update, delete, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.articles import Article, Category, MarkdownStyle
-from app.models.core import User
+from app.models.articles import Article, MarkdownStyle
 from app.schemas.articles import (
-    ArticleCreate, 
-    ArticleUpdate, 
-    ArticleResponse,
-    ArticleWithRelations
+    ArticleCreate,
+    ArticleUpdate,
 )
 
 

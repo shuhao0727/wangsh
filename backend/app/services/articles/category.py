@@ -8,7 +8,7 @@ from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.articles import Category, Article
-from app.schemas.articles import CategoryCreate, CategoryUpdate, CategoryResponse
+from app.schemas.articles import CategoryCreate, CategoryUpdate
 
 
 class CategoryService:
