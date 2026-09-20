@@ -3,8 +3,8 @@
 用于从AI服务商API获取可用模型列表
 """
 
-from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl
+from typing import Optional, List, Dict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from enum import Enum
 
 

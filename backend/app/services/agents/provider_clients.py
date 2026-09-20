@@ -121,7 +121,7 @@ async def discover_models_deepseek(config: ServiceProviderConfig) -> List[AIMode
                     )
                     models.append(model_info)
 
-    except Exception as e:
+    except Exception:
         # 如果API调用失败，返回预设模型
         models = COMMON_MODEL_PRESETS.get(AIServiceProvider.DEEPSEEK, [])
 
@@ -160,7 +160,7 @@ async def discover_models_anthropic(config: ServiceProviderConfig) -> List[AIMod
                     )
                     models.append(model_info)
 
-    except Exception as e:
+    except Exception:
         # 如果API调用失败，返回预设模型
         models = COMMON_MODEL_PRESETS.get(AIServiceProvider.ANTHROPIC, [])
 
@@ -318,7 +318,7 @@ async def discover_models_ollama(config: ServiceProviderConfig) -> List[AIModelI
                     )
                     models.append(model_info)
 
-    except Exception as e:
+    except Exception:
         # Ollama默认没有预设模型
         models = []
 
