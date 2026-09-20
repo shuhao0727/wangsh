@@ -41,8 +41,12 @@ from app.services.agents import (
 from app.services.agents.analysis_compatibility import (
     delete_compatible_sibling as _delete_compatible_siblings,
 )
+from app.services.agents.providers.common import resolve_credentials
 
-from .analysis_helpers import (
+# 下面三组导入是**有意的 re-export**：这些名字拆分前定义在本文件，拆分后迁到子模块，
+# 回导以保持本模块对外属性集合不变（见模块 docstring 声明的 re-export 契约）。它们在本
+# 文件内不直接使用，因此在语句上整体标注 noqa，避免被当作死导入删除。
+from .analysis_helpers import (  # noqa: F401  有意回导，非未使用导入
     _sse,
     _analysis_window,
     _serialize_teacher_marks,
@@ -60,13 +64,13 @@ from .analysis_helpers import (
     _chain_list_item,
     _trend_top_themes,
 )
-from .analysis_streams import (
+from .analysis_streams import (  # noqa: F401  有意回导，非未使用导入
     router as streams_router,
     save_hot_question_analysis_stream,
     save_student_chain_analysis_stream,
     save_task_analysis_stream,
 )
-from .analysis_prompts import (
+from .analysis_prompts import (  # noqa: F401  有意回导，非未使用导入
     router as prompts_router,
     list_prompt_templates,
     create_prompt_template,
@@ -116,7 +120,7 @@ async def task_analysis(
     result = await db.execute(
         select(AIAgent).where(
             AIAgent.id == body.agent_id,
-            AIAgent.is_deleted == False,
+            AIAgent.is_deleted.is_(False),
         )
     )
     agent = result.scalar_one_or_none()
@@ -188,7 +192,7 @@ async def save_task_analysis(
     effective_start = body.start_at or (effective_end - timedelta(hours=1))
     llm_agent_id = body.analysis_agent_id or body.agent_id
     result_data = await db.execute(
-        select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
+        select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted.is_(False))
     )
     agent = result_data.scalar_one_or_none()
     api_endpoint, api_key, agent_type, agent_model = "", "", "", ""

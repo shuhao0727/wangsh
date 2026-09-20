@@ -15,8 +15,9 @@
   "backend/app/api/endpoints/agents/ai_agents/group_discussion.py::stream_group_discussion_messages.gen": {
    "ceiling": 13
   },
-  "backend/app/api/endpoints/agents/ai_agents/group_discussion.py::stream_public_config.gen": {
-   "ceiling": 14
+  "backend/app/api/endpoints/agents/ai_agents/group_discussion_public_config.py::stream_public_config.gen": {
+   "ceiling": 14,
+   "moved_from": "backend/app/api/endpoints/agents/ai_agents/group_discussion.py::stream_public_config.gen"
   },
   "backend/app/api/endpoints/agents/ai_agents/usage.py::read_agent_usage_statistics": {
    "ceiling": 13
@@ -336,9 +337,6 @@
   }
  },
  "file_ceilings": {
-  "backend/app/api/endpoints/agents/ai_agents/group_discussion.py": {
-   "ceiling": 780
-  },
   "backend/app/api/endpoints/assessment/admin.py": {
    "ceiling": 735
   },

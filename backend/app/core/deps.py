@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.session_family import FamilyStoreUnavailable
 from app.services.auth import get_current_user as auth_get_current_user
 from app.services.auth import verify_token
-from app.core.session_guard import verify_request_session, verify_request_session_detail
+from app.core.session_guard import verify_request_session_detail
 from app.schemas.user_info import UserInfo
 
 # OAuth2 配置

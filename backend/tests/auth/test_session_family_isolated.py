@@ -1,13 +1,11 @@
 """Real router/JWT/SQLite regressions for new families; no external services."""
 import asyncio
-from contextlib import asynccontextmanager
 
 import pytest
 from sqlalchemy import select
 
 from app.api.endpoints.auth import auth as api
 from app.core import session_guard
-from app.core.config import settings
 from app.models import RefreshToken
 from app.services.auth import verify_token
 from test_logout_revocation_isolated import isolated  # noqa: F401

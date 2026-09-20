@@ -390,3 +390,29 @@ def test_preview_batch_stays_one_query_with_session_limits_and_full_aggregates(l
                     assert row["display_user_name"] == "synthetic student"
                     assert row["preview"] == f"4 content {index}/5"
     run(scenario())
+
+
+def test_reasoning_content_is_removed_from_preview_and_detail():
+    async def scenario():
+        extra = [
+            (900, 11, 7, "reasoning", "question", "why", "2026-09-09 12:00:00"),
+            (
+                901,
+                11,
+                7,
+                "reasoning",
+                "answer",
+                "<think><!--dify-deepseek-reasoning-->hidden</think>visible answer",
+                "2026-09-09 12:00:01",
+            ),
+        ]
+        async with conversation_client(extra_rows=extra) as (client, _):
+            summaries = (await client.get("/ai-agents/conversations")).json()
+            summary = next(row for row in summaries if row["session_id"] == "reasoning")
+            detail = (await client.get("/ai-agents/conversations/reasoning")).json()
+
+            assert summary["preview"] == "visible answer"
+            assert detail[-1]["content"] == "visible answer"
+            assert detail[0]["content"] == "why"
+
+    run(scenario())

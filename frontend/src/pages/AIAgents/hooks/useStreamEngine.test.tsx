@@ -24,9 +24,7 @@ class MockXMLHttpRequest {
   setRequestHeader() {}
 
   getResponseHeader(name: string) {
-    return name.toLowerCase() === "content-type"
-      ? this.contentType
-      : null;
+    return name.toLowerCase() === "content-type" ? this.contentType : null;
   }
 
   send() {}
@@ -256,7 +254,9 @@ describe("useStreamEngine long responses", () => {
       });
     });
 
-    const pieces = Array.from({ length: 1000 }, (_, index) => String(index % 10));
+    const pieces = Array.from({ length: 1000 }, (_, index) =>
+      String(index % 10),
+    );
     act(() => {
       MockXMLHttpRequest.latest?.push(pieces.map(deltaEvent).join(""));
       MockXMLHttpRequest.latest?.push(endEvent(pieces.join("")));
@@ -335,6 +335,126 @@ describe("useStreamEngine long responses", () => {
     });
 
     expect(callbacks.onEnd).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it("filters Dify reasoning content split across message events", async () => {
+    const callbacks = {
+      onDelta: vi.fn(),
+      onEnd: vi.fn(),
+      onError: vi.fn(),
+    };
+    const { result } = renderHook(() => useStreamEngine());
+
+    let streamPromise!: Promise<void>;
+    act(() => {
+      streamPromise = result.current.startStream({
+        url: "/api/v1/ai-agents/stream",
+        body: { message: "reasoning" },
+        callbacks,
+      });
+    });
+
+    const difyMessage = (answer: string) =>
+      `data: ${JSON.stringify({ event: "message", answer })}\n\n`;
+    act(() => {
+      MockXMLHttpRequest.latest?.push(difyMessage("<th"));
+      MockXMLHttpRequest.latest?.push(
+        difyMessage("ink>\n<!--dify-deepseek-reasoning-->内部推理"),
+      );
+      MockXMLHttpRequest.latest?.push(difyMessage("</thi"));
+      MockXMLHttpRequest.latest?.push(difyMessage("nk>正式回答"));
+      MockXMLHttpRequest.latest?.push(
+        `data: ${JSON.stringify({ event: "message_end" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.finish();
+    });
+    await act(async () => {
+      await streamPromise;
+    });
+
+    expect(callbacks.onEnd).toHaveBeenCalledWith("正式回答");
+    expect(callbacks.onDelta).not.toHaveBeenCalledWith(
+      expect.stringContaining("内部推理"),
+    );
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it("ignores reasoning and unknown events even when they contain text", async () => {
+    const callbacks = {
+      onDelta: vi.fn(),
+      onEnd: vi.fn(),
+      onError: vi.fn(),
+    };
+    const { result } = renderHook(() => useStreamEngine());
+
+    let streamPromise!: Promise<void>;
+    act(() => {
+      streamPromise = result.current.startStream({
+        url: "/api/v1/ai-agents/stream",
+        body: { message: "reasoning" },
+        callbacks,
+      });
+    });
+
+    act(() => {
+      MockXMLHttpRequest.latest?.push(
+        `data: ${JSON.stringify({ event: "agent_thought", thought: "内部推理", answer: "不能展示" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.push(
+        `event: vendor_debug\ndata: ${JSON.stringify({ content: "调试内容" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.push(
+        `data: ${JSON.stringify({ event: "message", answer: "正式回答" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.push(
+        `data: ${JSON.stringify({ event: "message_end" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.finish();
+    });
+    await act(async () => {
+      await streamPromise;
+    });
+
+    expect(callbacks.onEnd).toHaveBeenCalledWith("正式回答");
+    expect(callbacks.onEnd).not.toHaveBeenCalledWith(
+      expect.stringContaining("不能展示"),
+    );
+    expect(callbacks.onEnd).not.toHaveBeenCalledWith(
+      expect.stringContaining("调试内容"),
+    );
+  });
+
+  it("sanitizes a complete answer supplied by message_end", async () => {
+    const callbacks = {
+      onDelta: vi.fn(),
+      onEnd: vi.fn(),
+      onError: vi.fn(),
+    };
+    const { result } = renderHook(() => useStreamEngine());
+
+    let streamPromise!: Promise<void>;
+    act(() => {
+      streamPromise = result.current.startStream({
+        url: "/api/v1/ai-agents/stream",
+        body: { message: "reasoning" },
+        callbacks,
+      });
+    });
+
+    act(() => {
+      MockXMLHttpRequest.latest?.push(
+        endEvent(
+          "<think><!--dify-deepseek-reasoning-->内部推理</think>最终答案",
+        ),
+      );
+      MockXMLHttpRequest.latest?.finish();
+    });
+    await act(async () => {
+      await streamPromise;
+    });
+
+    expect(callbacks.onEnd).toHaveBeenCalledWith("最终答案");
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 });

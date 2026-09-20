@@ -4,19 +4,13 @@
       start_session、submit_answer、submit_session、get_config_statistics
 """
 import asyncio
-import json
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
 
 from app.services.assessment.session_service import (
     _parse_grading_json,
-    get_available_configs,
     start_session,
     submit_answer,
-    submit_session,
-    get_session_questions,
-    get_session_result,
-    get_config_sessions,
     get_config_statistics,
     _draw_questions,
     _load_session,

@@ -91,7 +91,7 @@ async def _resolve_prompt_text(
         await db.execute(
             select(AgentAnalysisPromptTemplate).where(
                 AgentAnalysisPromptTemplate.id == prompt_template_id,
-                AgentAnalysisPromptTemplate.is_active == True,
+                AgentAnalysisPromptTemplate.is_active.is_(True),
             )
         )
     ).scalar_one_or_none()
@@ -138,7 +138,7 @@ async def _resolve_analysis_agent_credentials(
         await db.execute(
             select(AIAgent).where(
                 AIAgent.id == analysis_agent_id,
-                AIAgent.is_deleted == False,
+                AIAgent.is_deleted.is_(False),
             )
         )
     ).scalar_one_or_none()

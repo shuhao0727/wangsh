@@ -185,7 +185,8 @@ async def save_hot_question_analysis_stream(
                 },
             )
         except asyncio.CancelledError:
-            import logging; logging.getLogger(__name__).info("SSE client disconnected, hot analysis cancelled")
+            import logging
+            logging.getLogger(__name__).info("SSE client disconnected, hot analysis cancelled")
         except Exception as exc:
             yield _sse("error", {"message": safe_error_detail("热点问题分析失败", exc), "progress": 100})
 
@@ -330,7 +331,8 @@ async def save_student_chain_analysis_stream(
                 },
             )
         except asyncio.CancelledError:
-            import logging; logging.getLogger(__name__).info("SSE client disconnected, chain analysis cancelled")
+            import logging
+            logging.getLogger(__name__).info("SSE client disconnected, chain analysis cancelled")
         except Exception as exc:
             yield _sse("error", {"message": safe_error_detail("学生问题链分析失败", exc), "progress": 100})
 
@@ -357,7 +359,7 @@ async def save_task_analysis_stream(
             # 分析用智能体（用于调用 LLM）：优先使用 analysis_agent_id，否则用 agent_id
             llm_agent_id = body.analysis_agent_id or body.agent_id
             result_data = await db.execute(
-                select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted == False)
+                select(AIAgent).where(AIAgent.id == llm_agent_id, AIAgent.is_deleted.is_(False))
             )
             agent = result_data.scalar_one_or_none()
             api_endpoint, api_key, agent_type, agent_model = "", "", "", ""
@@ -448,7 +450,8 @@ async def save_task_analysis_stream(
                 },
             )
         except asyncio.CancelledError:
-            import logging; logging.getLogger(__name__).info("SSE client disconnected, analysis cancelled")
+            import logging
+            logging.getLogger(__name__).info("SSE client disconnected, analysis cancelled")
         except Exception as exc:
             yield _sse("error", {"message": safe_error_detail("任务分析失败", exc), "progress": 100})
 

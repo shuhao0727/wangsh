@@ -6,7 +6,7 @@
 """
 
 import time
-from typing import List, Tuple
+from typing import List
 
 from app.core.config import settings
 from app.db.database import engine

@@ -56,23 +56,23 @@ function runDeployWithFakeDocker({
   const expectedImages =
     composeImages ??
     [
-      "shuhao07/wangsh-backend:2.1",
-      "shuhao07/wangsh-typst-worker:2.1",
-      "shuhao07/wangsh-pythonlab-worker:2.1",
-      "shuhao07/pythonlab-sandbox:2.1",
-      "shuhao07/wangsh-frontend:2.1",
-      "shuhao07/wangsh-gateway:2.1",
+      "shuhao07/wangsh-backend:2.1.1",
+      "shuhao07/wangsh-typst-worker:2.1.1",
+      "shuhao07/wangsh-pythonlab-worker:2.1.1",
+      "shuhao07/pythonlab-sandbox:2.1.1",
+      "shuhao07/wangsh-frontend:2.1.1",
+      "shuhao07/wangsh-gateway:2.1.1",
     ];
   const envValues = {
-    APP_VERSION: "2.1.0",
-    REACT_APP_VERSION: "2.1.0",
-    IMAGE_TAG: "2.1",
+    APP_VERSION: "2.1.1",
+    REACT_APP_VERSION: "2.1.1",
+    IMAGE_TAG: "2.1.1",
     IMAGE_REPOSITORY_PREFIX: "shuhao07",
     IMAGE_NAME_BACKEND: "wangsh-backend",
     IMAGE_NAME_WORKER: "wangsh-typst-worker",
     IMAGE_NAME_PYTHONLAB_WORKER: "wangsh-pythonlab-worker",
     IMAGE_NAME_GATEWAY: "wangsh-gateway",
-    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1",
+    PYTHONLAB_SANDBOX_IMAGE: "shuhao07/pythonlab-sandbox:2.1.1",
     ...envOverrides,
   };
 
@@ -110,7 +110,7 @@ if [[ "$*" == *"buildx imagetools inspect"* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1`;
+    const ref = `shuhao07/${image}:2.1.1`;
     const digest = dockerDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf 'Name: %s\\nDigest: %s\\n' "$ref" '${digest}' ;;`;
   })
@@ -124,7 +124,7 @@ if [[ "$*" == image\\ inspect* ]]; then
   case "$ref" in
 ${requiredReleaseImages
   .map((image) => {
-    const ref = `shuhao07/${image}:2.1`;
+    const ref = `shuhao07/${image}:2.1.1`;
     const digest = localDigestOverrides[image] ?? defaultDigest;
     return `    ${ref}) printf '%s\\n' 'shuhao07/${image}@${digest}' ;;`;
   })
@@ -165,7 +165,7 @@ exit 1
 }
 
 function makeReleaseSet({
-  version = "2.1",
+  version = "2.1.1",
   rows = requiredReleaseImages,
   digest = null,
   refOverrides = {},
@@ -862,6 +862,66 @@ test("PythonLab remote workflows pass canonical smoke credential variables", () 
   }
 });
 
+test("PythonLab optional remote workflows validate the complete environment", () => {
+  const workflows = [
+    read(".github/workflows/pythonlab-owner-concurrency.yml"),
+    read(".github/workflows/pythonlab-phasec-gate.yml"),
+  ];
+
+  for (const workflow of workflows) {
+    assert.doesNotMatch(workflow, /api_url:[\s\S]*?default:\s*["']?http:\/\/localhost:8000/);
+    assert.match(workflow, /PYTHONLAB_SMOKE_USERNAME:\s*\n\s*required:\s*false/);
+    assert.match(workflow, /PYTHONLAB_SMOKE_PASSWORD:\s*\n\s*required:\s*false/);
+    assert.match(
+      workflow,
+      /CONFIGURED_API_URL:\s*\$\{\{\s*inputs\.api_url\s*\|\|\s*github\.event\.inputs\.api_url\s*\|\|\s*vars\.PYTHONLAB_API_URL\s*\}\}/,
+    );
+    assert.match(
+      workflow,
+      /\[ -z "\$\{CONFIGURED_API_URL\}" \].*PYTHONLAB_SMOKE_USERNAME.*PYTHONLAB_SMOKE_PASSWORD/,
+    );
+    assert.match(workflow, /echo "available=false" >> "\$GITHUB_OUTPUT"/);
+    assert.match(workflow, /echo "available=true" >> "\$GITHUB_OUTPUT"/);
+    const missingConfigBranch = workflow.match(
+      /if \[ -z "\$\{CONFIGURED_API_URL\}" \][\s\S]*?; then([\s\S]*?)\n\s*else/,
+    );
+    assert.ok(missingConfigBranch, "missing the incomplete-environment branch");
+    assert.doesNotMatch(
+      missingConfigBranch[1],
+      /^\s*(?:exit\s+[1-9]\d*|false)\s*$/m,
+      "missing remote configuration must finish successfully",
+    );
+
+    const validateIndex = workflow.indexOf("- name: validate required secrets");
+    for (const stepName of ["checkout", "setup python", "install dependencies"]) {
+      const marker = `- name: ${stepName}`;
+      const stepIndex = workflow.indexOf(marker);
+      assert.ok(stepIndex > validateIndex, `${stepName} must run after environment validation`);
+      const stepBlock = workflow.slice(stepIndex, workflow.indexOf("\n\n", stepIndex));
+      assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
+    }
+  }
+
+  const owner = workflows[0];
+  for (const stepName of [
+    "run owner concurrency smoke",
+    "auto create issue for gate failure",
+    "auto close resolved gate issues",
+    "fail when smoke failed",
+  ]) {
+    const stepIndex = owner.indexOf(`- name: ${stepName}`);
+    const stepBlock = owner.slice(stepIndex, owner.indexOf("\n\n", stepIndex));
+    assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
+  }
+
+  const phasec = workflows[1];
+  for (const stepName of ["run phase c warmup probe", "run phase c soak gate"]) {
+    const stepIndex = phasec.indexOf(`- name: ${stepName}`);
+    const stepBlock = phasec.slice(stepIndex, phasec.indexOf("\n\n", stepIndex));
+    assert.match(stepBlock, /steps\.validate\.outputs\.available == 'true'/);
+  }
+});
+
 test("PythonLab workflows stream smoke output through the redacting executor", () => {
   const prRuntime = read(".github/workflows/pythonlab-pr-runtime.yml");
   const ownerRuntime = read(".github/workflows/pythonlab-owner-concurrency.yml");
@@ -1230,13 +1290,13 @@ test("verify-release-set accepts a complete release set with matching compose an
   assert.match(result.stdout, /release-set verified/);
 });
 
-test("verify-release-set accepts full application versions with a major.minor image tag", () => {
+test("verify-release-set accepts one full SemVer for application and image tag", () => {
   const result = runDeployWithFakeDocker({
-    releaseSet: makeReleaseSet({ version: "2.1" }),
+    releaseSet: makeReleaseSet({ version: "2.1.1" }),
     envOverrides: {
-      APP_VERSION: "2.1.0",
-      REACT_APP_VERSION: "2.1.0",
-      IMAGE_TAG: "2.1",
+      APP_VERSION: "2.1.1",
+      REACT_APP_VERSION: "2.1.1",
+      IMAGE_TAG: "2.1.1",
     },
   });
 
@@ -1247,8 +1307,10 @@ test("verify-release-set rejects application, frontend, image-tag, and release v
   const cases = [
     { releaseSet: makeReleaseSet(), envOverrides: { APP_VERSION: "2.2.0" } },
     { releaseSet: makeReleaseSet(), envOverrides: { REACT_APP_VERSION: "2.2.0" } },
-    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2" } },
-    { releaseSet: makeReleaseSet({ version: "2.2" }) },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.1" } },
+    { releaseSet: makeReleaseSet(), envOverrides: { IMAGE_TAG: "2.2.0" } },
+    { releaseSet: makeReleaseSet({ version: "2.1.2" }) },
+    { releaseSet: makeReleaseSet({ version: "2.2.0" }) },
   ];
 
   for (const testCase of cases) {
@@ -1553,7 +1615,7 @@ test("version consistency prints the exact image tag", () => {
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(result.stdout, "2.1");
+  assert.equal(result.stdout, "2.1.1");
 });
 
 test("version consistency rejects drift in production and release defaults", () => {
@@ -1566,10 +1628,13 @@ test("version consistency rejects drift in production and release defaults", () 
   mkdirSync(scriptsDirectory, { recursive: true });
   mkdirSync(workflowsDirectory, { recursive: true });
   writeFileSync(join(frontendDirectory, "package.json"), '{"version":"1.6.0"}\n');
-  writeFileSync(join(frontendDirectory, "package-lock.json"), '{"version":"1.6.0"}\n');
+  writeFileSync(
+    join(frontendDirectory, "package-lock.json"),
+    '{"version":"1.6.0","packages":{"":{"version":"1.6.0"}}}\n',
+  );
   writeFileSync(
     join(directory, ".env.example"),
-    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6\nREACT_APP_VERSION=1.6.0\n",
+    "APP_VERSION=1.6.0\nIMAGE_TAG=1.6.0\nREACT_APP_VERSION=1.6.0\n",
   );
   writeFileSync(
     join(directory, "docker-compose.yml"),
@@ -1577,11 +1642,11 @@ test("version consistency rejects drift in production and release defaults", () 
   );
   writeFileSync(
     join(scriptsDirectory, "deploy.sh"),
-    'sim_version="${SIM_VERSION:-1.6}"\n',
+    'sim_version="${SIM_VERSION:-1.6.0}"\n',
   );
   writeFileSync(
     join(workflowsDirectory, "dockerhub-amd64.yml"),
-    'image_tag:\n  default: "1.6"\n',
+    'image_tag:\n  default: "1.6.0"\n',
   );
 
   const result = spawnSync("node", ["scripts/check-version-consistency.mjs"], {

@@ -6,7 +6,7 @@ on:
       image_tag:
         description: image tag
         required: true
-        default: "2.1"
+        default: "2.1.1"
       push_latest:
         description: also push latest
         required: true
@@ -58,9 +58,9 @@ jobs:
             echo "image_tag must be a version-like tag, got: $RELEASE_TAG"
             exit 1
           fi
-          expected="$(node -p "const v = require('./frontend/package.json').version.split('.'); v[0] + '.' + v[1]")"
+          expected="$(node -p "require('./frontend/package.json').version")"
           if [ "$RELEASE_TAG" != "$expected" ]; then
-            echo "image_tag must match source major.minor version: expected=$expected actual=$RELEASE_TAG"
+            echo "image_tag must match source version: expected=$expected actual=$RELEASE_TAG"
             exit 1
           fi
           source_version="$(node -p "require('./frontend/package.json').version")"

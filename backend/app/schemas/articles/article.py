@@ -6,7 +6,6 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from uuid import UUID
 
 from app.schemas.articles.markdown_style import MarkdownStyleResponse
 

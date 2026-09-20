@@ -15,7 +15,6 @@ from loguru import logger
 from app.models.assessment import (
     AssessmentConfig,
     AssessmentSession,
-    AssessmentAnswer,
     AssessmentBasicProfile,
 )
 from app.models.assessment.profile import StudentProfile
@@ -154,7 +153,6 @@ async def _collect_agent_data(
 
         agent_name = sessions[0].get("display_agent_name", f"智能体{aid}")
         agent_names.append(agent_name)
-        total_turns = sum(s.get("turns", 0) for s in sessions)
 
         for s in sessions[:2]:
             sid = s.get("session_id")
@@ -174,7 +172,7 @@ async def _collect_agent_data(
 
     header = [
         f"- 使用的智能体：{'、'.join(agent_names)}",
-        f"- 提问 {sum(1 for l in all_lines if l.strip().startswith('学生:'))} 条",
+        f"- 提问 {sum(1 for line in all_lines if line.strip().startswith('学生:'))} 条",
         "- 对话内容摘要：",
     ]
     return "\n".join(header + all_lines[:40])

@@ -13,8 +13,16 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from app.core.deps import get_db, require_admin
 from app.schemas.agents import ConversationExportRequest
 from app.services.agents import analyze_hot_questions, analyze_student_chains
+from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
 
 router = APIRouter()
+
+
+def _sanitize_conversation_export_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    item = dict(row)
+    if item.get("message_type") == "answer":
+        item["content"] = sanitize_assistant_answer(item.get("content"))
+    return item
 
 
 @router.post("/admin/export/conversations")
@@ -52,7 +60,7 @@ async def export_selected_conversations_excel(
         """
     )
     result = await db.execute(sql, {"session_ids": session_ids})
-    rows = [dict(r) for r in result.mappings().all()]
+    rows = [_sanitize_conversation_export_row(r) for r in result.mappings().all()]
     if not rows:
         raise HTTPException(status_code=404, detail="未找到对应会话的对话记录")
 

@@ -2,12 +2,17 @@
 
 import codecs
 import json
+from copy import deepcopy
 from typing import AsyncGenerator, Optional, Dict, Any
 
 import httpx
 from loguru import logger
 
 from app.services.agents.ai_agent import get_agent
+from app.services.agents.assistant_answer_sanitizer import (
+    ReasoningContentFilter,
+    sanitize_reasoning_strings,
+)
 from app.services.agents.providers import (
     get_provider,
     provider_error_message,
@@ -237,7 +242,7 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
         }
         yield _sse_error(err)
         return
-    except Exception as e:
+    except Exception:
         breaker.record_failure(circuit_key)
         logger.exception("智能体流式请求失败: agent_id={}", agent_id)
         err = {"error": "stream_failed", "message": "智能体流式请求失败，请稍后重试"}
@@ -266,24 +271,129 @@ def _dify_event_type(event_block: str) -> Optional[str]:
 
 
 def _consume_dify_events(buffer: str) -> tuple[list[str], str]:
-    normalized = buffer.replace("\r\n", "\n").replace("\r", "\n")
+    # Keep a trailing CR buffered so a CRLF pair split across network chunks is
+    # normalized only after the LF arrives. Converting that CR immediately
+    # would manufacture a blank line and split one valid SSE event in two.
+    trailing_cr = buffer.endswith("\r")
+    complete = buffer[:-1] if trailing_cr else buffer
+    normalized = complete.replace("\r\n", "\n").replace("\r", "\n")
+    if trailing_cr:
+        normalized += "\r"
     blocks = normalized.split("\n\n")
     return blocks[:-1], blocks[-1]
+
+
+def _dify_event_payload(event_block: str) -> Optional[dict]:
+    data_lines = []
+    for line in event_block.split("\n"):
+        if line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+    if not data_lines:
+        return None
+    try:
+        payload = json.loads("\n".join(data_lines))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _replace_dify_event_payload(event_block: str, payload: dict) -> str:
+    lines = event_block.split("\n")
+    data_indexes = [index for index, line in enumerate(lines) if line.startswith("data:")]
+    encoded = "data: " + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if not data_indexes:
+        return event_block
+    first_index = data_indexes[0]
+    kept_lines = [line for index, line in enumerate(lines) if index not in data_indexes]
+    kept_lines.insert(first_index, encoded)
+    return "\n".join(kept_lines)
+
+
+def _set_dify_text_delta(payload: dict, event_type: Optional[str], value: str) -> bool:
+    if event_type == "text_chunk":
+        data = payload.get("data")
+        if isinstance(data, dict) and isinstance(data.get("text"), str):
+            data["text"] = value
+            return True
+        if isinstance(payload.get("text"), str):
+            payload["text"] = value
+            return True
+        return False
+
+    if isinstance(payload.get("answer"), str):
+        payload["answer"] = value
+        return True
+    data = payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("answer"), str):
+        data["answer"] = value
+        return True
+    return False
+
+
+def _get_dify_text_delta(payload: dict, event_type: Optional[str]) -> Optional[str]:
+    if event_type == "text_chunk":
+        data = payload.get("data")
+        if isinstance(data, dict) and isinstance(data.get("text"), str):
+            return data["text"]
+        value = payload.get("text")
+        return value if isinstance(value, str) else None
+
+    value = payload.get("answer")
+    if isinstance(value, str):
+        return value
+    data = payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("answer"), str):
+        return data["answer"]
+    return None
+
+
+def _sanitize_dify_event_block(
+    event_block: str,
+    reasoning_filter: ReasoningContentFilter,
+) -> Optional[str]:
+    event_type = _dify_event_type(event_block)
+    if event_type == "agent_thought":
+        return None
+
+    payload = _dify_event_payload(event_block)
+    if payload is None:
+        # Preserve comments/control fields, but never forward an unparseable
+        # data payload because it may contain a truncated reasoning fragment.
+        has_data = any(line.startswith("data:") for line in event_block.split("\n"))
+        return None if has_data else event_block
+
+    safe_payload = deepcopy(payload)
+    if event_type in {"message_delta", "message", "agent_message", "text_chunk"}:
+        delta = _get_dify_text_delta(safe_payload, event_type)
+        if delta is not None:
+            _set_dify_text_delta(
+                safe_payload,
+                event_type,
+                reasoning_filter.push(delta),
+            )
+    else:
+        safe_payload = sanitize_reasoning_strings(safe_payload)
+
+    if _is_dify_terminal(event_type):
+        reasoning_filter.finish()
+    return _replace_dify_event_payload(event_block, safe_payload)
 
 
 def _is_dify_terminal(event_type) -> bool:
     return event_type in {"message_end", "workflow_finished", "error"}
 
 
-def _scan_dify_event_blocks(event_blocks) -> tuple[bool, Optional[str]]:
-    completed = False
-    terminal_event_type = None
-    for event_block in event_blocks:
-        event_type = _dify_event_type(event_block)
-        if _is_dify_terminal(event_type):
-            completed = True
-            terminal_event_type = event_type
-    return completed, terminal_event_type
+def _update_dify_terminal_state(event_block: str, state: Dict[str, Any]) -> None:
+    event_type = _dify_event_type(event_block)
+    if _is_dify_terminal(event_type):
+        state["completed"] = True
+        state["event_type"] = event_type
+
+
+async def _nonempty_chunks(chunks):
+    async for chunk in chunks:
+        if chunk:
+            yield chunk
 
 
 def _record_dify_result(terminal_event_type, circuit_key) -> None:
@@ -333,7 +443,7 @@ async def _stream_dify(
     *,
     circuit_key: Optional[str] = None,
 ) -> AsyncGenerator[bytes, None]:
-    """Dify 流式：多候选 URL + SSE 透传"""
+    """Dify stream with event-level filtering and multi-candidate fallback."""
     headers = provider.build_headers()
     payload_primary, payload_fallback = _build_dify_payloads(provider, messages, model, user, inputs)
     candidates = provider.candidate_urls()
@@ -343,10 +453,10 @@ async def _stream_dify(
 
     for url in candidates:
         candidate_emitted = False
-        candidate_completed = False
-        terminal_event_type = None
+        terminal_state = {"completed": False, "event_type": None}
         decoder = codecs.getincrementaldecoder("utf-8")()
         event_buffer = ""
+        reasoning_filter = ReasoningContentFilter()
         try:
             try_payload = _dify_payload_for_url(payload_primary, payload_fallback, url)
 
@@ -355,24 +465,32 @@ async def _stream_dify(
                     last_error = f"status_{resp.status_code}"
                     continue
 
-                async for chunk in resp.aiter_bytes():
-                    if chunk:
-                        candidate_emitted = True
-                        emitted_any = True
-                        event_buffer += decoder.decode(chunk)
-                        event_blocks, event_buffer = _consume_dify_events(event_buffer)
-                        scan_completed, scan_terminal = _scan_dify_event_blocks(event_blocks)
-                        if scan_completed:
-                            candidate_completed = True
-                            terminal_event_type = scan_terminal
-                        yield chunk
+                async for chunk in _nonempty_chunks(resp.aiter_bytes()):
+                    candidate_emitted = True
+                    emitted_any = True
+                    event_buffer += decoder.decode(chunk)
+                    event_blocks, event_buffer = _consume_dify_events(event_buffer)
+                    for event_block in event_blocks:
+                        _update_dify_terminal_state(event_block, terminal_state)
+                        safe_block = _sanitize_dify_event_block(
+                            event_block, reasoning_filter
+                        )
+                        if safe_block is not None:
+                            yield (safe_block + "\n\n").encode("utf-8")
+
                 event_buffer += decoder.decode(b"", final=True)
-                trailing_event_type = _dify_event_type(event_buffer) if event_buffer else None
-                if _is_dify_terminal(trailing_event_type):
-                    candidate_completed = True
-                    terminal_event_type = trailing_event_type
-                if candidate_completed:
-                    _record_dify_result(terminal_event_type, circuit_key)
+                if event_buffer:
+                    _update_dify_terminal_state(event_buffer, terminal_state)
+                    safe_block = _sanitize_dify_event_block(
+                        event_buffer, reasoning_filter
+                    )
+                    if safe_block is not None:
+                        yield (safe_block + "\n\n").encode("utf-8")
+                else:
+                    reasoning_filter.finish()
+
+                if terminal_state["completed"]:
+                    _record_dify_result(terminal_state["event_type"], circuit_key)
                     return
                 if candidate_emitted:
                     last_error = "incomplete_stream"
@@ -380,8 +498,8 @@ async def _stream_dify(
                 last_error = "empty_stream"
         except Exception as e:
             last_error = str(e)
-            if candidate_completed:
-                _record_dify_result(terminal_event_type, circuit_key)
+            if terminal_state["completed"]:
+                _record_dify_result(terminal_state["event_type"], circuit_key)
                 return
             if emitted_any:
                 break

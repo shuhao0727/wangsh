@@ -4,7 +4,6 @@ Requires this batch's guarded harness; ordinary pytest collection skips safely.
 The harness disables dotenv/config/DB/broker and restricts Docker to exact IDs.
 """
 import asyncio
-from copy import deepcopy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,7 +31,8 @@ def env(monkeypatch):
     monkeypatch.setitem(tasks.celery_app.conf, 'task_store_eager_result', False)
     monkeypatch.setattr(docker_api, '_run_async', h.run_docker)
     provider = docker_api.DockerProvider()
-    async def mount(ws): return ws
+    async def mount(ws):
+        return ws
     monkeypatch.setattr(provider, '_resolve_host_mount_path', mount)
     monkeypatch.setattr(tasks, 'get_sandbox_provider', lambda: provider)
     yield SimpleNamespace(sid=sid, key=key, meta=meta, provider=provider)
@@ -43,7 +43,8 @@ def eager(env, task='task-a'):
     return tasks.start_session.apply(args=[env.sid], task_id=task, throw=False)
 
 
-def read(env): return json.loads(h.raw.get(env.key))
+def read(env):
+    return json.loads(h.raw.get(env.key))
 
 
 def record(env):
@@ -79,7 +80,8 @@ def test_initial_claim_cas_does_not_overwrite_stop_or_new_task(env, monkeypatch,
     fired = []
     def race(method, data):
         if data.get('status') == 'STARTING' and data.get('startup_task_id') == 'task-a' and not fired:
-            fired.append(method); h.raw.set(env.key, json.dumps(other))
+            fired.append(method)
+            h.raw.set(env.key, json.dumps(other))
     h.client.before_write = race
     eager(env)
     assert fired
@@ -127,9 +129,11 @@ def test_removed_journal_cannot_adopt_external_same_name_from_writable_meta(env,
     (ws/'main.py').write_text('external replacement sentinel')
     # Strip harness flags; wrapper re-applies them. Use fresh dedicated cidfile.
     for flag in ['--pull', '--label']:
-        index = creation.index(flag); del creation[index:index+2]
+        index = creation.index(flag)
+        del creation[index:index+2]
     creation[creation.index('--cidfile')+1] = str(h.RUN / ('replacement-' + env.sid + '.cid'))
-    if state == 'exited': creation[-1] = 'exit 0'
+    if state == 'exited':
+        creation[-1] = 'exit 0'
     rc, cid, _ = asyncio.run(h.run_docker(['docker', *creation]))
     assert rc == 0
     before = record(env)
@@ -166,7 +170,8 @@ def test_two_readers_racing_real_redis_have_only_one_ready_winner(env):
     h.raw.set(env.key, json.dumps(initial))
     barrier = Barrier(2)
     def race(method, data):
-        if data.get('status') == 'READY': barrier.wait(timeout=5)
+        if data.get('status') == 'READY':
+            barrier.wait(timeout=5)
     h.client.before_write = race
     def contender(index):
         return asyncio.run(tasks._save_start_outcome(env.sid, 'task-a', {'status': 'READY', 'winner': index}))

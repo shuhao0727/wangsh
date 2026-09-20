@@ -1,12 +1,27 @@
 """PythonLab 流程图语义回归。"""
 
 import textwrap
+
+import pytest
+
 from app.api.pythonlab.flow import _build_flow
 from app.api.pythonlab.constants import E_AST_TOO_LARGE, E_SYNTAX
 
 
 def _parse(code: str, options: dict = None):
     return _build_flow(code, options or {"limits": {"maxParseMs": 1500}})
+
+
+@pytest.mark.parametrize("max_depth", [8, "8"])
+def test_max_depth_accepts_integer_compatible_values(max_depth):
+    js = _parse("x = 1", {"expand": {"maxDepth": max_depth}})
+
+    assert js.get("diagnostics") == []
+
+
+def test_max_depth_rejects_invalid_integer_string():
+    with pytest.raises(ValueError):
+        _parse("x = 1", {"expand": {"maxDepth": "invalid"}})
 
 
 def test_while_has_false_and_exit():

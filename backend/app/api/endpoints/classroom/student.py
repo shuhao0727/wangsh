@@ -15,7 +15,6 @@ from app.schemas.classroom import ResponseSubmit
 from app.services import classroom as svc
 from app.services.classroom import calc_remaining, normalize_class_name
 
-from loguru import logger
 router = APIRouter()
 
 

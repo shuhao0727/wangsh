@@ -11,7 +11,6 @@ if os.environ.get("R5_AUTH_ISOLATED") != "1":
     pytest.skip("requires isolated R5 bootstrap", allow_module_level=True)
 
 import asyncio
-import copy
 import importlib.util
 import json
 import secrets
@@ -28,12 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.api.endpoints.auth import auth as api
 from app.core import session_guard as guard
 from app.core.config import settings
-from app.core.session_family import lock_auth_mutation, refresh_family
+from app.core.session_family import lock_auth_mutation
 from app.db import database
 from app.db.database import Base, get_db
 from app.models import AuthSessionState, AuthAuthority, RefreshToken, User
 from app.services import auth as service
-from test_logout_revocation_isolated import LogoutHarness, MemoryCache
+from test_logout_revocation_isolated import LogoutHarness
 
 
 class Cache:
@@ -52,16 +51,25 @@ class Cache:
         class Raw:
             def pipeline(self, transaction=True):
                 class Pipeline:
-                    def __init__(self): self.commands = []
-                    async def __aenter__(self): return self
-                    async def __aexit__(self, *args): pass
-                    def get(self, key): self.commands.append(("get", key)); return self
-                    def pttl(self, key): self.commands.append(("pttl", key)); return self
+                    def __init__(self):
+                        self.commands = []
+                    async def __aenter__(self):
+                        return self
+                    async def __aexit__(self, *args):
+                        pass
+                    def get(self, key):
+                        self.commands.append(("get", key))
+                        return self
+                    def pttl(self, key):
+                        self.commands.append(("pttl", key))
+                        return self
                     async def execute(self):
-                        if cache.fail_read: raise RuntimeError("synthetic read failure")
+                        if cache.fail_read:
+                            raise RuntimeError("synthetic read failure")
                         if cache.client:
                             async with cache.client.pipeline(transaction=True) as p:
-                                for op, key in self.commands: getattr(p, op)(cache.prefix + key)
+                                for op, key in self.commands:
+                                    getattr(p, op)(cache.prefix + key)
                                 return await p.execute()
                         now = datetime.now(timezone.utc)
                         return [cache.data.get(k) if op == "get" else (
@@ -181,7 +189,8 @@ def isolated_authority(monkeypatch):
         monkeypatch.setattr(settings,"AUTH_TRUST_X_FORWARDED_FOR",False)
         monkeypatch.setattr(settings,"AUTH_ENFORCE_SAME_IP_PER_REQUEST",False)
         monkeypatch.setattr(settings,"COOKIE_SECURE",False)
-        async def rate_check(*args,**kwargs): pass
+        async def rate_check(*args,**kwargs):
+            pass
         monkeypatch.setattr(api.rate_limiter,"check",rate_check)
         try:
             async with engine.begin() as conn:
@@ -192,17 +201,21 @@ def isolated_authority(monkeypatch):
                     from alembic.operations import Operations
                     p = Path(__file__).resolve().parents[2]/"alembic/versions/20260910_0001_auth_authority.py"
                     spec=importlib.util.spec_from_file_location("r5_migration",p)
-                    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-                    module.op=Operations(MigrationContext.configure(c));module.upgrade()
+                    module=importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    module.op=Operations(MigrationContext.configure(c))
+                    module.upgrade()
                 await conn.run_sync(migrate)
             async with h.db_factory() as db:
                 await service.bootstrap_durable_auth_authority(db, legacy_writers_stopped=True)
                 db.add_all([User(id=i,username=f"synthetic-{n}",full_name=f"Synthetic {n}",student_id=f"ID-{n}",
                     role_code="student",is_active=True,is_deleted=False) for i,n in [(1,"a"),(2,"b")]])
                 await db.commit()
-            h.app=FastAPI();h.app.include_router(api.router,prefix="/api/v1/auth")
+            h.app=FastAPI()
+            h.app.include_router(api.router,prefix="/api/v1/auth")
             async def dep():
-                async with h.db_factory() as db: yield db
+                async with h.db_factory() as db:
+                    yield db
             h.app.dependency_overrides[get_db]=dep
             yield h
         finally:
@@ -223,8 +236,11 @@ def test_replaced_credential_never_recovers(isolated_authority,legacy,cache_loss
             a=await h.old_legacy() if legacy else await h.login()
             b=await h.login("b")
             assert await h.revoked(a)
-            if cache_loss: await h.cache.delete(guard._key_user(1))
-            await h.refresh(a,401);await h.me(a,401);await h.me(b,200)
+            if cache_loss:
+                await h.cache.delete(guard._key_user(1))
+            await h.refresh(a,401)
+            await h.me(a,401)
+            await h.me(b,200)
             assert (await h.state(1))["active"] is False
     asyncio.run(run())
 
@@ -239,7 +255,8 @@ def test_legal_cache_loss_recovery(isolated_authority,legacy):
             await h.me(recovered,200)
             assert (await h.state(1))["active"]
             await h.refresh(a,401)  # one-use semantics unchanged
-            if not legacy: await h.me(a,200)
+            if not legacy:
+                await h.me(a,200)
     asyncio.run(run())
 
 
@@ -252,7 +269,8 @@ def test_logout_durable_even_with_redis_write_failure(isolated_authority,legacy,
             h.cache.fail_write=failure
             await h.logout(a)
             h.cache.fail_write=None
-            await h.me(a,401);await h.refresh(a,401)
+            await h.me(a,401)
+            await h.refresh(a,401)
             assert await h.revoked(a)
     asyncio.run(run())
 
@@ -270,21 +288,25 @@ def test_login_publish_failure_retry_retains_eviction(isolated_authority,phase,l
             h.cache.fail_write=None
             b=await h.login("b")
             await h.cache.delete(guard._key_user(1))
-            await h.refresh(a,401);await h.me(a,401);await h.me(b,200)
+            await h.refresh(a,401)
+            await h.me(a,401)
+            await h.me(b,200)
     asyncio.run(run())
 
 
 def test_login_commit_failure_has_no_cache_publication(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            a=await h.login();before=h.cache.writes
+            a=await h.login()
+            before=h.cache.writes
             h.fail_commit=True
             r=await h.request("POST","/login",data={"username":"Synthetic b","password":"ID-b"})
             assert r.status_code==500 and h.cache.writes==before
             h.fail_commit=False
             assert not await h.revoked(a)
             await h.me(a,200)
-            await h.login("b");await h.refresh(a,401)
+            await h.login("b")
+            await h.refresh(a,401)
     asyncio.run(run())
 
 
@@ -292,7 +314,8 @@ def test_login_commit_failure_has_no_cache_publication(isolated_authority):
 def test_unknown_commit_keeps_durable_result_and_safe_retry(isolated_authority,operation):
     async def run():
         async with isolated_authority() as h:
-            a=await h.login();before=h.cache.writes
+            a=await h.login()
+            before=h.cache.writes
             h.fail_commit_after=True
             if operation=="login":
                 r=await h.request("POST","/login",data={"username":"Synthetic b","password":"ID-b"})
@@ -304,7 +327,8 @@ def test_unknown_commit_keeps_durable_result_and_safe_retry(isolated_authority,o
             h.fail_commit_after=False
             assert await h.revoked(a)
             await h.refresh(a,401)
-            b=await h.login("b");await h.me(b,200)
+            b=await h.login("b")
+            await h.me(b,200)
             await h.me(a,401)
     asyncio.run(run())
 
@@ -312,12 +336,14 @@ def test_unknown_commit_keeps_durable_result_and_safe_retry(isolated_authority,o
 def test_logout_commit_failure_503_without_claiming_revocation(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            a=await h.old_legacy();h.fail_commit=True
+            a=await h.old_legacy()
+            h.fail_commit=True
             await h.logout(a,expected_status=503)
             h.fail_commit=False
             assert not await h.revoked(a)
             await h.me(a,200) # honest failure, not successful revocation
-            await h.logout(a);await h.me(a,401)
+            await h.logout(a)
+            await h.me(a,401)
     asyncio.run(run())
 
 
@@ -325,21 +351,23 @@ def test_logout_commit_failure_503_without_claiming_revocation(isolated_authorit
 def test_refresh_publish_failure_old_credential_retry_is_rejected(isolated_authority,phase):
     async def run():
         async with isolated_authority() as h:
-            a=await h.login();await h.cache.delete(guard._key_user(1))
+            a=await h.login()
+            await h.cache.delete(guard._key_user(1))
             h.cache.fail_write=phase
             r=await h.request("POST","/refresh",json={"refresh_token":a["refresh_token"]})
             assert r.status_code==500
             h.cache.fail_write=None
             assert await h.revoked(a)
             await h.refresh(a,401)
-            fresh=await h.login();await h.me(fresh,200)
+            fresh=await h.login()
+            await h.me(fresh,200)
     asyncio.run(run())
 
 
 def test_stale_redis_binding_does_not_evict_moved_durable_owner(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            a=await h.login()
+            _ = await h.login()
             moved=await h.request("POST","/login",ip="192.0.2.20",data={"username":"Synthetic a","password":"ID-a"})
             assert moved.status_code==200
             await h.login("b")
@@ -381,13 +409,15 @@ def test_publish_window_rechecks_committed_credential(isolated_authority,monkeyp
 def test_real_pg_concurrent_empty_ip_and_single_use(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            if not h.pg: pytest.skip("requires real PostgreSQL locks")
+            if not h.pg:
+                pytest.skip("requires real PostgreSQL locks")
             responses=await asyncio.gather(*[h.request("POST","/login",data={"username":f"Synthetic {u}","password":f"ID-{u}"}) for u in ("a","b")])
             assert all(r.status_code in (200,409) for r in responses)
             states=[await h.state(i) for i in (1,2)]
             assert sum(bool(s and s["active"]) for s in states)==1
             active=1 if states[0]["active"] else 2
-            pair=responses[active-1].json();assert responses[active-1].status_code==200
+            pair=responses[active-1].json()
+            assert responses[active-1].status_code==200
             await h.me(pair,200)
             refreshes=await asyncio.gather(*[h.request("POST","/refresh",json={"refresh_token":pair["refresh_token"]}) for _ in range(2)])
             assert sorted(r.status_code for r in refreshes)==[200,401]
@@ -397,15 +427,19 @@ def test_real_pg_concurrent_empty_ip_and_single_use(isolated_authority):
 def test_real_pg_lock_release_after_cancel(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            if not h.pg: pytest.skip("requires real PostgreSQL locks")
+            if not h.pg:
+                pytest.skip("requires real PostgreSQL locks")
             acquired=asyncio.Event()
             async def holder():
                 async with h.db_factory() as db:
-                    await lock_auth_mutation(db);acquired.set()
+                    await lock_auth_mutation(db)
+                    acquired.set()
                     await asyncio.Event().wait()
-            task=asyncio.create_task(holder());await acquired.wait()
+            task=asyncio.create_task(holder())
+            await acquired.wait()
             task.cancel()
-            with pytest.raises(asyncio.CancelledError): await task
+            with pytest.raises(asyncio.CancelledError):
+                await task
             a=await asyncio.wait_for(h.login(),3)
             await h.me(a,200)
     asyncio.run(run())
@@ -414,13 +448,15 @@ def test_real_pg_lock_release_after_cancel(isolated_authority):
 def test_refresh_does_not_renew_existing_session_cache_ttl(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            a=await h.login();writes=h.cache.writes
+            a=await h.login()
+            writes=h.cache.writes
             if h.pg:
                 key=h.cache.prefix+guard._key_user(1)
                 await h.cache.client.expire(key,100)
             refreshed=await h.refresh(a,200)
             assert h.cache.writes==writes
-            if h.pg: assert 0 < await h.cache.client.ttl(key) <= 100
+            if h.pg:
+                assert 0 < await h.cache.client.ttl(key) <= 100
             await h.me(refreshed,200)
     asyncio.run(run())
 
@@ -428,8 +464,10 @@ def test_refresh_does_not_renew_existing_session_cache_ttl(isolated_authority):
 def test_real_pg_deferred_commit_failure_rolls_back_eviction(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            if not h.pg: pytest.skip("requires real PostgreSQL deferred constraint")
-            a=await h.login();writes=h.cache.writes
+            if not h.pg:
+                pytest.skip("requires real PostgreSQL deferred constraint")
+            a=await h.login()
+            writes=h.cache.writes
             async with h.db_factory() as db:
                 await db.execute(text("""CREATE FUNCTION r5_fail_commit() RETURNS trigger LANGUAGE plpgsql AS $$
                     BEGIN IF NEW.user_id=2 THEN RAISE EXCEPTION 'synthetic deferred auth failure'; END IF;
@@ -443,15 +481,19 @@ def test_real_pg_deferred_commit_failure_rolls_back_eviction(isolated_authority)
             assert not await h.revoked(a)
             await h.me(a,200)
             async with h.db_factory() as db:
-                await db.execute(text("DROP TRIGGER r5_commit_failure ON auth_session_states"));await db.commit()
-            b=await h.login("b");await h.me(b,200);await h.refresh(a,401)
+                await db.execute(text("DROP TRIGGER r5_commit_failure ON auth_session_states"))
+                await db.commit()
+            b=await h.login("b")
+            await h.me(b,200)
+            await h.refresh(a,401)
     asyncio.run(run())
 
 
 def test_real_redis_timeout_keeps_durable_eviction(isolated_authority):
     async def run():
         async with isolated_authority() as h:
-            if not h.pg: pytest.skip("requires real Redis TCP")
+            if not h.pg:
+                pytest.skip("requires real Redis TCP")
             import redis.asyncio as redis
             a=await h.login()
             original=h.cache.client
@@ -465,12 +507,15 @@ def test_real_redis_timeout_keeps_durable_eviction(isolated_authority):
                 r=await h.request("POST","/login",data={"username":"Synthetic b","password":"ID-b"})
                 assert r.status_code==500
             finally:
-                await timed.aclose();h.cache.client=original
+                await timed.aclose()
+                h.cache.client=original
                 await asyncio.sleep(0.3)
             assert await h.revoked(a)
             b=await h.login("b")
             await h.cache.delete(guard._key_user(1))
-            await h.refresh(a,401);await h.me(a,401);await h.me(b,200)
+            await h.refresh(a,401)
+            await h.me(a,401)
+            await h.me(b,200)
     asyncio.run(run())
 
 
@@ -479,12 +524,14 @@ def test_logout_database_read_failure_is_503(isolated_authority,monkeypatch):
         async with isolated_authority() as h:
             a=await h.login()
             original=api.resolve_legacy_subject
-            async def fail(*args,**kwargs): raise RuntimeError("synthetic database unavailable")
+            async def fail(*args,**kwargs):
+                raise RuntimeError("synthetic database unavailable")
             monkeypatch.setattr(api,"resolve_legacy_subject",fail)
             await h.logout(a,expected_status=503)
             monkeypatch.setattr(api,"resolve_legacy_subject",original)
             assert not await h.revoked(a)
-            await h.logout(a);await h.me(a,401)
+            await h.logout(a)
+            await h.me(a,401)
     asyncio.run(run())
 
 
@@ -590,8 +637,10 @@ def test_migration_version_roundtrip_closed_gate(isolated_authority):
                     from alembic.script import ScriptDirectory
                     p = Path(__file__).resolve().parents[2]/"alembic/versions/20260910_0001_auth_authority.py"
                     spec = importlib.util.spec_from_file_location("r5_roundtrip", p)
-                    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-                    cfg = Config(); cfg.set_main_option("script_location", str(p.parents[1]))
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    cfg = Config()
+                    cfg.set_main_option("script_location", str(p.parents[1]))
                     scripts = ScriptDirectory.from_config(cfg)
                     assert scripts.get_revision(module.revision).down_revision == module.down_revision
                     ctx = MigrationContext.configure(c)
@@ -632,7 +681,8 @@ async def _assert_bad_binding_aborts(isolated_authority, override):
         await h.cache.set(guard._key_ip("192.0.2.10"), binding)
         async with h.db_factory() as db:
             await db.execute(delete(AuthSessionState))
-            await db.execute(update(AuthAuthority).values(ready=False)); await db.commit()
+            await db.execute(update(AuthAuthority).values(ready=False))
+            await db.commit()
             with pytest.raises(service.AuthCutoverEvidenceError) as err:
                 await service.bootstrap_durable_auth_authority(db, legacy_writers_stopped=True)
             assert err.value.user_ids == [1, 2]
@@ -674,7 +724,8 @@ def test_enrollment_existing_evidence_and_foreign_transaction_rejected(isolated_
         async with isolated_authority() as h:
             a = await h.login()
             async with h.db_factory() as db:
-                await db.execute(update(AuthAuthority).values(ready=False)); await db.commit()
+                await db.execute(update(AuthAuthority).values(ready=False))
+                await db.commit()
                 with pytest.raises(RuntimeError, match="existing evidence"):
                     await service.bootstrap_durable_auth_authority(db, legacy_writers_stopped=True)
                 await db.execute(select(AuthAuthority))
@@ -699,7 +750,8 @@ def test_expired_ip_lease_does_not_evict_or_get_republished(isolated_authority):
             await h.cache.delete(guard._key_user(1))
             a2 = await h.refresh(a, 200)
             assert (await h.cache.get(guard._key_ip("192.0.2.10")))["user_id"] == 2
-            await h.me(a2, 200); await h.me(b, 200)
+            await h.me(a2, 200)
+            await h.me(b, 200)
     asyncio.run(run())
 
 
@@ -733,17 +785,21 @@ def test_read_overlapping_replacement_has_explicit_admission_boundary(isolated_a
             async def paused(db, uid, payload):
                 result = await original(db, uid, payload)
                 if uid == 1 and result:
-                    entered.set(); await release.wait()
+                    entered.set()
+                    await release.wait()
                 return result
             monkeypatch.setattr(session_family, "durable_access_is_active", paused)
             pending = asyncio.create_task(h.me(a, 200))
             await asyncio.wait_for(entered.wait(), 3)
             b = await h.login("b")
-            release.set(); await pending
+            release.set()
+            await pending
             # In-flight read passed its durable admission before replacement.
             # Subsequent admissions MUST reject; no claim of cancelling HTTP.
             monkeypatch.setattr(session_family, "durable_access_is_active", original)
-            await h.me(a, 401); await h.refresh(a, 401); await h.me(b, 200)
+            await h.me(a, 401)
+            await h.refresh(a, 401)
+            await h.me(b, 200)
     asyncio.run(run())
 
 
@@ -755,7 +811,8 @@ def test_cutover_explicit_maintenance_entry_pg(isolated_authority):
             if not h.pg:
                 pytest.skip("explicit CLI enrollment requires dedicated PostgreSQL")
             async with h.db_factory() as db:
-                await db.execute(update(AuthAuthority).values(ready=False)); await db.commit()
+                await db.execute(update(AuthAuthority).values(ready=False))
+                await db.commit()
             plan = {"database_url": os.environ["R5_AUTH_DATABASE_URL"],
                     "redis_url": "redis://127.0.0.1:18871/15", "database_schema": h.schema}
             result = await cutover.enroll(plan, apply=False)
@@ -785,10 +842,12 @@ def test_cutover_plan_validation_and_default_dryrun(tmp_path, monkeypatch):
     assert cutover.load_plan(file) == plan
     for field in ("legacy_writers_stopped", "inflight_drained", "account_writes_frozen", "redis_auth_writes_frozen"):
         file.write_text(json.dumps({**plan, field: False}))
-        with pytest.raises(ValueError): cutover.load_plan(file)
+        with pytest.raises(ValueError):
+            cutover.load_plan(file)
     for ids in ([True], [1.0], ["1"], [-1]):
         file.write_text(json.dumps({**plan, "reauthenticate_user_ids": ids}))
-        with pytest.raises(ValueError): cutover.load_plan(file)
+        with pytest.raises(ValueError):
+            cutover.load_plan(file)
     file.write_text(json.dumps(plan))
     # Wrong target refuses before any database/cache/application setup.
     assert cutover.main(["--plan", str(file), "--confirm-database", "wrong"]) == 1

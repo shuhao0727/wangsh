@@ -205,9 +205,12 @@ def docker_env(monkeypatch, tmp_path):
         if state['readiness']:
             raise state['readiness']
     class Lock:
-        def __init__(self, *a, **kw): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): pass
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            pass
     monkeypatch.setattr(docker_api, '_run_async', run)
     monkeypatch.setattr(docker_api, 'RedisDistributedLock', Lock)
     monkeypatch.setattr(docker_runtime, 'cache', SimpleNamespace(get=AsyncMock(return_value={'status': 'TERMINATED'})))
@@ -235,19 +238,32 @@ def start_docker(env):
 def test_running_incompatible_container_is_not_reused_or_destroyed(docker_env, change):
     provider, meta, ws, state, calls = docker_env
     info = state['info']
-    if change == 'mode': info['Config']['Labels']['wangsh.pythonlab.runtime-mode'] = 'debug'
-    elif change == 'memory': meta['limits']['memory_mb'] = 256
-    elif change == 'swap': info['HostConfig']['MemorySwap'] = -1
-    elif change == 'cpu': meta['limits']['cpu_quota'] = 25000
-    elif change == 'period': info['HostConfig']['CpuPeriod'] = 50000
-    elif change == 'pids': info['HostConfig']['PidsLimit'] = 128
-    elif change == 'image': info['Config']['Image'] = 'old:image'
-    elif change == 'image-id': info['Image'] = 'sha256:old-image'
-    elif change == 'network': info['HostConfig']['NetworkMode'] = 'bridge'
-    elif change == 'runtime': info['HostConfig']['Runtime'] = 'other'
-    elif change == 'missing-label': info['Config']['Labels'] = {}
-    elif change == 'mount': info['Mounts'][0]['Source'] = '/unrelated'
-    elif change == 'user': info['Config']['User'] = 'root'
+    if change == 'mode':
+        info['Config']['Labels']['wangsh.pythonlab.runtime-mode'] = 'debug'
+    elif change == 'memory':
+        meta['limits']['memory_mb'] = 256
+    elif change == 'swap':
+        info['HostConfig']['MemorySwap'] = -1
+    elif change == 'cpu':
+        meta['limits']['cpu_quota'] = 25000
+    elif change == 'period':
+        info['HostConfig']['CpuPeriod'] = 50000
+    elif change == 'pids':
+        info['HostConfig']['PidsLimit'] = 128
+    elif change == 'image':
+        info['Config']['Image'] = 'old:image'
+    elif change == 'image-id':
+        info['Image'] = 'sha256:old-image'
+    elif change == 'network':
+        info['HostConfig']['NetworkMode'] = 'bridge'
+    elif change == 'runtime':
+        info['HostConfig']['Runtime'] = 'other'
+    elif change == 'missing-label':
+        info['Config']['Labels'] = {}
+    elif change == 'mount':
+        info['Mounts'][0]['Source'] = '/unrelated'
+    elif change == 'user':
+        info['Config']['User'] = 'root'
     with pytest.raises(RuntimeError):
         start_docker(docker_env)
     assert (ws/'main.py').read_text() == 'original active code'

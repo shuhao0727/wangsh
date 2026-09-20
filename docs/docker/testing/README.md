@@ -39,7 +39,8 @@ WangSh 项目采用多层次测试策略：
 - **通用质量**：`ci-quality.yml` — pytest + 前端 type-check/lint/build
 - **文档质量**：`markdown-quality.yml` — 相对链接、锚点、生命周期、归档索引、
   章节数量和动态文档统计
-- **PythonLab 定时专项**：owner-concurrency + phasec-gate，验证已部署环境
+- **PythonLab 远端专项**：owner-concurrency + phasec-gate，探测**已部署的专用环境**；
+  已移除定时触发，仅在手动触发或被其他工作流调用时运行，未完整配置 API URL 或 smoke secrets 时相关步骤跳过
 - **PythonLab PR 门禁**：`pythonlab-pr-runtime.yml` 启动当前 PR 的全栈运行时，
   执行 Chromium 真实 pointer-click smoke 和 owner/Phase C 探针
 - 详见 [../deploy/CICD.md](../deploy/CICD.md)

@@ -28,15 +28,15 @@ from app.services.user_governance import (
     revoke_if_account_removed,
 )
 
-from . import import_service
+from . import import_service  # noqa: F401  有意回导，非未使用导入
 from .import_service import (
-    USER_IMPORT_HEADERS,
-    USER_IMPORT_REQUIRED_FIELDS,
-    USER_IMPORT_TEMPLATE_ROWS,
-    normalize_cell_value as _normalize_cell_value,
-    parse_csv_rows as _parse_csv_rows,
-    parse_import_rows as _parse_import_rows,
-    parse_xlsx_rows as _parse_xlsx_rows,
+    USER_IMPORT_HEADERS,  # noqa: F401  有意回导，非未使用导入
+    USER_IMPORT_REQUIRED_FIELDS,  # noqa: F401  有意回导，非未使用导入
+    USER_IMPORT_TEMPLATE_ROWS,  # noqa: F401  有意回导，非未使用导入
+    normalize_cell_value as _normalize_cell_value,  # noqa: F401  有意回导，非未使用导入
+    parse_csv_rows as _parse_csv_rows,  # noqa: F401  有意回导，非未使用导入
+    parse_import_rows as _parse_import_rows,  # noqa: F401  有意回导，非未使用导入
+    parse_xlsx_rows as _parse_xlsx_rows,  # noqa: F401  有意回导，非未使用导入
 )
 from .policy import (
     ADMIN_MANAGEABLE_ROLES,
@@ -46,23 +46,23 @@ from .policy import (
     is_plain_admin as _is_plain_admin,
 )
 from .schemas import (
-    BatchDeleteRequest,
-    ImportUserResponse,
+    BatchDeleteRequest,  # noqa: F401  有意回导，非未使用导入
+    ImportUserResponse,  # noqa: F401  有意回导，非未使用导入
     UserCreate,
-    UserImportResult,
+    UserImportResult,  # noqa: F401  有意回导，非未使用导入
     UserListResponse,
     UserResponse,
     UserUpdate,
 )
 from .users_import import (
     router as users_import_router,
-    download_user_import_template,
-    import_users,
+    download_user_import_template,  # noqa: F401  有意回导，非未使用导入
+    import_users,  # noqa: F401  有意回导，非未使用导入
 )
 from .users_helpers import (
     router as users_helpers_router,
-    get_user_stats,
-    batch_delete_users,
+    get_user_stats,  # noqa: F401  有意回导，非未使用导入
+    batch_delete_users,  # noqa: F401  有意回导，非未使用导入
 )
 
 logger = logging.getLogger(__name__)
@@ -291,7 +291,7 @@ async def create_user(
         
     except HTTPException:
         raise
-    except IntegrityError as e:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -400,7 +400,7 @@ async def update_user(
         
     except HTTPException:
         raise
-    except IntegrityError as e:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

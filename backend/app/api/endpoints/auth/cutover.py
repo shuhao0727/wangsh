@@ -78,7 +78,8 @@ def main(argv=None) -> int:
             raise ValueError("Explicit Redis target required")
         # Dedicated process only. Avoid inherited application endpoints/secrets.
         keep = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "LANG", "TMPDIR")}
-        os.environ.clear(); os.environ.update(keep)
+        os.environ.clear()
+        os.environ.update(keep)
         os.environ.update(DEBUG="true", DATABASE_URL=plan["database_url"], REDIS_URL=plan["redis_url"],
                           SECRET_KEY=secrets.token_urlsafe(48),
                           AUTH_USER_UNIQUE_PER_IP=str(plan["unique_per_ip"]).lower(),

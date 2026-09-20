@@ -21,6 +21,7 @@ import type { ChatAreaProps, Message, WorkflowGroup, Agent } from "./types";
 import { logger } from "@services/logger";
 import { TimerDisplay } from "@components/TimerDisplay";
 import { normalizeMarkdown } from "@utils/normalizeMarkdown";
+import { sanitizeReasoningContent } from "./utils/reasoningContentFilter";
 import "./ChatArea.css";
 
 const workflowMessagePrefixes = [
@@ -112,6 +113,9 @@ const MessageBubble = React.memo<{
   };
 
   const isUser = message.sender === "user";
+  const displayContent = isUser
+    ? message.content
+    : sanitizeReasoningContent(message.content || "");
   const displayName = userDisplayName?.trim() || "我";
   const isWorkflowEvent =
     !isUser &&
@@ -322,7 +326,7 @@ const MessageBubble = React.memo<{
                 <div className="px-2 py-1" style={{ color: currentAgent?.color }}>
                   <ThinkingBubble />
                 </div>
-              ) : (isUser || message.content) ? (
+              ) : (isUser || displayContent) ? (
                 <div className="markdown-body">
                   {isUser ? message.content : (
                     <ReactMarkdown
@@ -330,7 +334,7 @@ const MessageBubble = React.memo<{
                       rehypePlugins={[rehypeKatex]}
                       components={markdownComponents}
                     >
-                      {normalizeMarkdown(message.content || "")}
+                      {normalizeMarkdown(displayContent || "")}
                     </ReactMarkdown>
                   )}
                 </div>

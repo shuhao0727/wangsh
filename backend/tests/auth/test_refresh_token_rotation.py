@@ -9,7 +9,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.config import settings
 from app.models import AuthAuthority, AuthSessionState, RefreshToken, User
 from app.services import auth
 

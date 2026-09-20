@@ -13,8 +13,10 @@ from app.tasks import pythonlab as tasks
 from test_sandbox_start_recovery import (  # Reuse isolated, self-contained fixtures.
     _REAL_GET_START_META,
     apply_start,
-    docker_env,
-    task_env,
+    # 以下两个是 pytest fixture：仅通过 ownership_env 的参数名被引用，
+    # 文件内无显式调用，必须保留导入。
+    docker_env,  # noqa: F401
+    task_env,  # noqa: F401
 )
 
 

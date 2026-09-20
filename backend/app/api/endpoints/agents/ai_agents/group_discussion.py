@@ -1,15 +1,11 @@
 import asyncio
-import io
 import json
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from fastapi.responses import Response, StreamingResponse
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from fastapi import APIRouter, Depends, Query, status, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.concurrency import run_in_threadpool
 
 from app.core.deps import (
     get_db,
@@ -18,8 +14,10 @@ from app.core.deps import (
     require_registered_user_sse,
 )
 from app.core.config import settings
-from app.services import classroom as svc
 from app.schemas.agents import (
+    GroupDiscussionAdminAnalysisListResponse,
+    GroupDiscussionAdminAnalysisOut,
+    GroupDiscussionAdminMessageListResponse,
     GroupDiscussionJoinRequest,
     GroupDiscussionJoinResponse,
     GroupDiscussionMuteRequest,
@@ -31,32 +29,8 @@ from app.schemas.agents import (
     GroupDiscussionSendRequest,
     GroupDiscussionGroupListResponse,
     GroupDiscussionGroupOut,
-    GroupDiscussionAdminSessionListResponse,
-    GroupDiscussionAdminSessionOut,
-    GroupDiscussionAdminMessageListResponse,
-    GroupDiscussionAdminAnalyzeRequest,
-    GroupDiscussionAdminAnalyzeResponse,
-    GroupDiscussionAdminCompareAnalyzeRequest,
-    GroupDiscussionAdminAnalysisListResponse,
-    GroupDiscussionAdminAnalysisOut,
-    GroupDiscussionPublicConfig,
-    GroupDiscussionMemberOut,
-    GroupDiscussionAdminMemberListResponse,
-    GroupDiscussionAdminDeleteSessionsRequest,
-    GroupDiscussionStudentProfileRequest,
-    GroupDiscussionCrossSystemRequest,
 )
-from typing import List
 from app.services.agents.group_discussion import (
-    admin_analyze_session,
-    admin_compare_analyze_sessions,
-    admin_cross_system_analysis,
-    admin_student_profile_analysis,
-    admin_delete_session,
-    admin_delete_sessions,
-    admin_list_analyses,
-    admin_list_messages,
-    admin_list_sessions,
     enforce_join_lock,
     ensure_session_view_access,
     set_join_lock,
@@ -69,131 +43,37 @@ from app.services.agents.group_discussion import (
     unmute_member,
     admin_add_member,
     admin_remove_member,
-    admin_list_members,
-    admin_list_all_sessions,
-    list_classes,
+    admin_list_messages,
+    admin_list_analyses,
 )
-from app.services.agents.group_discussion_public_config import GroupDiscussionPublicConfigService
+from app.services.agents.group_discussion_public_config import (  # noqa: F401  见下方回导说明
+    GroupDiscussionPublicConfigService,
+)
 from app.utils.cache import cache
 from app.core.stream_session import session_checked_stream
 
+from .group_discussion_common import (
+    _enforce_frontend_visibility,
+    _require_discussion_user,
+)
+from .group_discussion_admin import router as admin_router
+# public-config 路由本体已拆到独立模块。这里回导它的公开名字（并保留上方导入的
+# GroupDiscussionPublicConfigService），使本模块的属性集合与拆分前完全一致：
+# 测试会替换 group_discussion.GroupDiscussionPublicConfigService，并用
+# group_discussion.router 组装应用，这些名字必须继续作为本模块属性存在。
+from .group_discussion_public_config import (  # noqa: F401  有意回导，非未使用导入
+    PUBLIC_CONFIG_CHANNEL,
+    get_public_config,
+    set_public_config,
+    stream_public_config,
+    router as public_config_router,
+)
+
 
 router = APIRouter(prefix="/group-discussion")
-PUBLIC_CONFIG_CHANNEL = "znt:group_discussion:public_config"
 
-
-def _require_discussion_user(user: Dict[str, Any]) -> Dict[str, Any]:
-    if user.get("role_code") not in ["student", "admin", "super_admin"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问讨论组")
-    return user
-
-
-async def _enforce_frontend_visibility(db: AsyncSession, user: Dict[str, Any]) -> None:
-    role = str(user.get("role_code") or "")
-    if role != "student":
-        return
-    enabled = await GroupDiscussionPublicConfigService.get_enabled(db)
-    if not enabled:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="小组讨论暂时关闭")
-
-
-@router.get("/public-config", response_model=GroupDiscussionPublicConfig)
-async def get_public_config(
-    db: AsyncSession = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(require_registered_user),
-) -> GroupDiscussionPublicConfig:
-    enabled = await GroupDiscussionPublicConfigService.get_enabled(db)
-    return GroupDiscussionPublicConfig(
-        enabled=enabled,
-        join_lock_seconds=settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS,
-        rate_limit_seconds=settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS,
-    )
-
-
-@router.get("/public-config/stream")
-async def stream_public_config(
-    request: Request,
-    current_user: Dict[str, Any] = Depends(require_registered_user_sse),
-    db: AsyncSession = Depends(get_db),
-):
-    async def gen():
-        enabled = await GroupDiscussionPublicConfigService.get_enabled(db)
-        yield f"data: {json.dumps({'enabled': bool(enabled)}, ensure_ascii=False)}\n\n"
-
-        pubsub = None
-        if settings.GROUP_DISCUSSION_REDIS_ENABLED:
-            try:
-                client = await cache.get_client()
-                pubsub = client.pubsub()
-                await pubsub.subscribe(PUBLIC_CONFIG_CHANNEL)
-            except Exception:
-                pubsub = None
-
-        last_enabled = bool(enabled)
-        try:
-            while True:
-                try:
-                    if pubsub is not None:
-                        msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
-                        if msg is None:
-                            yield ":keepalive\n\n"
-                            continue
-                        data = msg.get("data")
-                        if isinstance(data, (bytes, bytearray)):
-                            data = data.decode("utf-8", errors="ignore")
-                        try:
-                            payload = json.loads(str(data)) if data is not None else {}
-                        except Exception:
-                            payload = {}
-                        enabled_val = bool(payload.get("enabled", last_enabled))
-                    else:
-                        await asyncio.sleep(2)
-                        enabled_val = bool(await GroupDiscussionPublicConfigService.get_enabled(db))
-
-                    if enabled_val != last_enabled:
-                        last_enabled = enabled_val
-                        yield f"data: {json.dumps({'enabled': bool(enabled_val)}, ensure_ascii=False)}\n\n"
-                except asyncio.CancelledError:
-                    break
-                except Exception:
-                    yield ":keepalive\n\n"
-                    await asyncio.sleep(1)
-        finally:
-            if pubsub is not None:
-                try:
-                    await pubsub.unsubscribe(PUBLIC_CONFIG_CHANNEL)
-                    await pubsub.close()
-                except Exception:
-                    pass
-
-    return StreamingResponse(
-        session_checked_stream(gen(), request),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
-    )
-
-
-@router.put("/public-config", response_model=GroupDiscussionPublicConfig)
-async def set_public_config(
-    payload: GroupDiscussionPublicConfig,
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionPublicConfig:
-    enabled = await GroupDiscussionPublicConfigService.set_enabled(db, bool(payload.enabled))
-    if settings.GROUP_DISCUSSION_REDIS_ENABLED:
-        try:
-            await cache.publish(PUBLIC_CONFIG_CHANNEL, {"enabled": bool(enabled)})
-        except Exception:
-            pass
-    return GroupDiscussionPublicConfig(
-        enabled=enabled,
-        join_lock_seconds=settings.GROUP_DISCUSSION_JOIN_LOCK_SECONDS,
-        rate_limit_seconds=settings.GROUP_DISCUSSION_RATE_LIMIT_SECONDS,
-    )
+# 路由聚合顺序须与原单文件实现一致：public-config -> 用户端路由 -> admin 路由
+router.include_router(public_config_router)
 
 
 @router.post("/join", response_model=GroupDiscussionJoinResponse)
@@ -256,11 +136,11 @@ async def list_groups(
         ignore_time = True if (role in ["admin", "super_admin"] or date) else False
 
     rows = await list_today_groups(
-        db, 
-        date=date, 
-        class_name=final_class_name, 
-        keyword=keyword, 
-        limit=limit, 
+        db,
+        date=date,
+        class_name=final_class_name,
+        keyword=keyword,
+        limit=limit,
         ignore_time_limit=ignore_time
     )
     items = [
@@ -466,160 +346,11 @@ async def remove_member_from_session(
     return {"success": True}
 
 
-@router.get("/admin/sessions", response_model=GroupDiscussionAdminSessionListResponse)
-async def admin_get_sessions(
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    class_name: Optional[str] = Query(None),
-    group_no: Optional[str] = Query(None),
-    group_name: Optional[str] = Query(None),
-    user_name: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词搜索（班级/组号/组名/姓名）"),
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminSessionListResponse:
-    rows, total, page_n, total_pages = await admin_list_sessions(
-        db,
-        start_date=start_date,
-        end_date=end_date,
-        class_name=class_name,
-        group_no=group_no,
-        group_name=group_name,
-        user_name=user_name,
-        keyword=keyword,
-        page=page,
-        size=size,
-    )
-    items = [
-        GroupDiscussionAdminSessionOut(
-            id=int(r.id),
-            session_date=r.session_date,
-            class_name=str(r.class_name),
-            group_no=str(r.group_no),
-            group_name=(str(r.group_name).strip() if r.group_name else None),
-            message_count=int(r.message_count or 0),
-            created_at=r.created_at,
-            last_message_at=r.last_message_at,
-        )
-        for r in rows
-    ]
-    return GroupDiscussionAdminSessionListResponse(
-        items=items,
-        total=total,
-        page=page_n,
-        page_size=size,
-        total_pages=total_pages,
-    )
-
-
-@router.get("/admin/export-sessions")
-async def admin_export_sessions(
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    class_name: Optional[str] = Query(None),
-    group_no: Optional[str] = Query(None),
-    group_name: Optional[str] = Query(None),
-    user_name: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词搜索（班级/组号/组名/姓名）"),
-    limit: int = Query(5000, ge=1, le=10000, description="最大导出行数，默认 5000，上限 10000"),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-):
-    """导出筛选后的会话列表为 Excel"""
-    export_limit = min(int(limit or 5000), 10000)
-    rows = await admin_list_all_sessions(
-        db,
-        start_date=start_date,
-        end_date=end_date,
-        class_name=class_name,
-        group_no=group_no,
-        group_name=group_name,
-        user_name=user_name,
-        keyword=keyword,
-        limit=export_limit,
-    )
-    if len(rows) > export_limit:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"导出结果超过 {export_limit} 条，请缩小筛选范围后重试",
-        )
-
-    def _build_xlsx(sessions) -> bytes:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "小组讨论会话"
-
-        headers = ["ID", "日期", "班级", "组号", "组名", "消息数", "创建时间", "最后消息"]
-        header_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-        header_font = Font(bold=True)
-        header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        for col, h in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=h)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = header_align
-
-        for row_idx, s in enumerate(sessions, 2):
-            ws.cell(row=row_idx, column=1, value=s.id)
-            ws.cell(row=row_idx, column=2, value=str(s.session_date) if s.session_date else "")
-            ws.cell(row=row_idx, column=3, value=s.class_name)
-            ws.cell(row=row_idx, column=4, value=s.group_no)
-            ws.cell(row=row_idx, column=5, value=s.group_name or "")
-            ws.cell(row=row_idx, column=6, value=int(s.message_count or 0))
-            ws.cell(row=row_idx, column=7, value=s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "")
-            ws.cell(row=row_idx, column=8, value=s.last_message_at.strftime("%Y-%m-%d %H:%M") if s.last_message_at else "")
-
-        col_widths = [8, 14, 18, 10, 20, 10, 18, 18]
-        for i, w in enumerate(col_widths, 1):
-            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
-
-        ws.freeze_panes = "A2"
-
-        buffer = io.BytesIO()
-        wb.save(buffer)
-        buffer.seek(0)
-        return buffer.getvalue()
-
-    excel_bytes = await run_in_threadpool(_build_xlsx, rows)
-    now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return Response(
-        content=excel_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="group_discussion_sessions_{now_str}.xlsx"'
-        },
-    )
-
-
-@router.delete("/admin/sessions/{session_id}", status_code=status.HTTP_200_OK)
-async def admin_delete_session_api(
-    session_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> Any:
-    await admin_delete_session(db, session_id=session_id)
-
-    # 发布事件
-    await svc.publish("admin_global", {"type": "discussion_changed", "action": "delete", "id": session_id})
-
-    return {"success": True}
-
-
-@router.post("/admin/sessions/batch-delete", status_code=status.HTTP_200_OK)
-async def admin_batch_delete_sessions_api(
-    payload: GroupDiscussionAdminDeleteSessionsRequest,
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> Any:
-    deleted = await admin_delete_sessions(db, session_ids=payload.session_ids)
-    await svc.publish("admin_global", {"type": "discussion_changed", "action": "batch_delete"})
-    return {"success": True, "deleted": deleted}
-
-
-@router.get("/admin/messages", response_model=GroupDiscussionAdminMessageListResponse)
+# 以下两个路由的函数体在本模块解析全局名（admin_list_messages / admin_list_analyses），
+# 测试会在 `group_discussion` 模块上 monkeypatch 这两个名字，因此必须定义在本模块内，
+# 并用 admin_router 注册（路径写全，与 group_discussion_admin.py 的约定一致）。
+# admin_router 的聚合放在本文件末尾，确保注册进 admin_router 的所有路由都被聚合。
+@admin_router.get("/admin/messages", response_model=GroupDiscussionAdminMessageListResponse)
 async def admin_get_messages(
     session_id: int = Query(..., ge=1),
     page: int = Query(1, ge=1),
@@ -648,82 +379,7 @@ async def admin_get_messages(
     )
 
 
-@router.get("/admin/members", response_model=GroupDiscussionAdminMemberListResponse)
-async def admin_get_members(
-    session_id: int = Query(..., ge=1),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminMemberListResponse:
-    members = await admin_list_members(db, session_id=session_id)
-    items = []
-    for m in members:
-        items.append(
-            GroupDiscussionMemberOut(
-                user_id=m.user_id,
-                username=getattr(m.user, "username", None),
-                full_name=getattr(m.user, "full_name", None),
-                student_id=getattr(m.user, "student_id", None),
-                joined_at=m.joined_at,
-                muted_until=m.muted_until,
-            )
-        )
-    return GroupDiscussionAdminMemberListResponse(items=items)
-
-
-@router.get("/admin/classes", response_model=List[str])
-async def admin_list_classes(
-    date: Optional[date] = Query(None),
-    db: AsyncSession = Depends(get_db),
-    _: Dict[str, Any] = Depends(require_admin),
-) -> List[str]:
-    return await list_classes(db, date=date)
-
-
-@router.post("/admin/analyze", response_model=GroupDiscussionAdminAnalyzeResponse)
-async def admin_analyze(
-    payload: GroupDiscussionAdminAnalyzeRequest,
-    db: AsyncSession = Depends(get_db),
-    admin_user: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminAnalyzeResponse:
-    r = await admin_analyze_session(
-        db,
-        session_id=payload.session_id,
-        agent_id=payload.agent_id,
-        admin_user=admin_user,
-        analysis_type=payload.analysis_type,
-        prompt=payload.prompt,
-    )
-    return GroupDiscussionAdminAnalyzeResponse(
-        analysis_id=int(r.id),
-        result_text=str(r.result_text),
-        created_at=r.created_at,
-    )
-
-
-@router.post("/admin/compare-analyze", response_model=GroupDiscussionAdminAnalyzeResponse)
-async def admin_compare_analyze(
-    payload: GroupDiscussionAdminCompareAnalyzeRequest,
-    db: AsyncSession = Depends(get_db),
-    admin_user: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminAnalyzeResponse:
-    r = await admin_compare_analyze_sessions(
-        db,
-        session_ids=payload.session_ids,
-        agent_id=payload.agent_id,
-        admin_user=admin_user,
-        bucket_seconds=payload.bucket_seconds,
-        analysis_type=payload.analysis_type,
-        prompt=payload.prompt,
-        use_cache=payload.use_cache,
-    )
-    return GroupDiscussionAdminAnalyzeResponse(
-        analysis_id=int(r.id),
-        result_text=str(r.result_text),
-        created_at=r.created_at,
-    )
-
-
-@router.get("/admin/analyses", response_model=GroupDiscussionAdminAnalysisListResponse)
+@admin_router.get("/admin/analyses", response_model=GroupDiscussionAdminAnalysisListResponse)
 async def admin_get_analyses(
     session_id: int = Query(..., ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -747,42 +403,5 @@ async def admin_get_analyses(
     return GroupDiscussionAdminAnalysisListResponse(items=items)
 
 
-@router.post("/admin/student-profile", response_model=GroupDiscussionAdminAnalyzeResponse)
-async def admin_student_profile(
-    payload: GroupDiscussionStudentProfileRequest,
-    db: AsyncSession = Depends(get_db),
-    admin_user: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminAnalyzeResponse:
-    r = await admin_student_profile_analysis(
-        db,
-        session_id=payload.session_id,
-        user_id=payload.user_id,
-        agent_id=payload.agent_id,
-        admin_user=admin_user,
-    )
-    return GroupDiscussionAdminAnalyzeResponse(
-        analysis_id=int(r.id),
-        result_text=str(r.result_text),
-        created_at=r.created_at,
-    )
-
-
-@router.post("/admin/cross-system-analyze", response_model=GroupDiscussionAdminAnalyzeResponse)
-async def admin_cross_system_analyze(
-    payload: GroupDiscussionCrossSystemRequest,
-    db: AsyncSession = Depends(get_db),
-    admin_user: Dict[str, Any] = Depends(require_admin),
-) -> GroupDiscussionAdminAnalyzeResponse:
-    r = await admin_cross_system_analysis(
-        db,
-        session_ids=payload.session_ids,
-        agent_id=payload.agent_id,
-        admin_user=admin_user,
-        target_date=payload.date,
-        class_name=payload.class_name,
-    )
-    return GroupDiscussionAdminAnalyzeResponse(
-        analysis_id=int(r.id),
-        result_text=str(r.result_text),
-        created_at=r.created_at,
-    )
+# admin 路由聚合放末尾：admin_router 的所有路由须先注册完毕，再整体聚合进本模块 router。
+router.include_router(admin_router)

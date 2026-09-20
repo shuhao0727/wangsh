@@ -1,8 +1,6 @@
 """XBK 模块结构与路由完整性测试"""
-import asyncio
 
 import pytest
-from types import SimpleNamespace
 
 from pydantic import ValidationError
 
@@ -11,7 +9,6 @@ from app.schemas.xbk import (
     XbkCourseUpsert,
     XbkListResponse,
     XbkSelectionOut,
-    XbkSelectionUpsert,
     XbkStudentOut,
     XbkStudentUpsert,
 )
@@ -120,7 +117,6 @@ def test_students_router_has_all_endpoints():
     """students 路由包含完整 CRUD 端点"""
     from app.api.endpoints.xbk.students import router
 
-    paths = [r.path for r in router.routes if hasattr(r, "path")]
     methods_map = {}
     for route in router.routes:
         if hasattr(route, "methods") and hasattr(route, "path"):

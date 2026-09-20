@@ -17,7 +17,6 @@ from app.utils.metrics import (
     collect_db_pool_metrics,
     collect_http_metrics,
     collect_typst_metrics,
-    percentile,
 )
 
 router = APIRouter(prefix="/system")

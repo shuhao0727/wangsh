@@ -9,8 +9,6 @@ import time
 from typing import Optional, List
 from urllib.parse import urlparse, urlunparse
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.schemas.agents import (
     AIServiceProvider,
     AIModelInfo,

@@ -13,7 +13,6 @@ from app.schemas.user_info import UserInfo
 from app.schemas.assessment import (
     SessionStartRequest,
     AnswerSubmitRequest,
-    BasicProfileResponse,
     ProfileResponse,
     ProfileListResponse,
 )
@@ -40,7 +39,7 @@ async def api_available(
     """获取学生可用的测评列表"""
     try:
         return await get_available_configs(db, current_user.get("id"))
-    except Exception as e:
+    except Exception:
         logger.exception("获取可用测评列表失败")
         raise HTTPException(status_code=500, detail="获取可用测评列表失败")
 
@@ -56,7 +55,7 @@ async def api_start_session(
         return await start_session(db, req.config_id, current_user.get("id"))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("开始检测失败")
         raise HTTPException(status_code=500, detail="开始检测失败")
 
@@ -72,7 +71,7 @@ async def api_get_questions(
         return await get_session_questions(db, session_id, current_user.get("id"))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("获取题目列表失败")
         raise HTTPException(status_code=500, detail="获取题目列表失败")
 
@@ -92,7 +91,7 @@ async def api_submit_answer(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("提交答案失败")
         raise HTTPException(status_code=500, detail="提交答案失败")
 
@@ -126,7 +125,7 @@ async def api_submit_session(
         return result
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("提交检测失败")
         raise HTTPException(status_code=500, detail="提交检测失败")
 
@@ -142,7 +141,7 @@ async def api_get_result(
         return await get_session_result(db, session_id, current_user.get("id"))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("获取检测结果失败")
         raise HTTPException(status_code=500, detail="获取检测结果失败")
 
@@ -179,7 +178,7 @@ async def api_get_basic_profile(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("获取初级画像失败")
         raise HTTPException(status_code=500, detail="获取初级画像失败")
 

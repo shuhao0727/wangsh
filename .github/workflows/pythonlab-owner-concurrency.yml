@@ -23,15 +23,14 @@ on:
         type: string
     secrets:
       PYTHONLAB_SMOKE_USERNAME:
-        required: true
+        required: false
       PYTHONLAB_SMOKE_PASSWORD:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       api_url:
-        description: API base url, example https://example.com
+        description: Deployed API base URL, example https://example.com
         required: true
-        default: "http://localhost:8000"
       owner_mode:
         description: auto/deny/steal/matrix
         required: true
@@ -52,8 +51,6 @@ on:
         description: issue dedupe dimension category/category_api
         required: false
         default: "category"
-  schedule:
-    - cron: "30 2 * * *"
 
 concurrency:
   group: pythonlab-owner-concurrency-${{ github.ref }}
@@ -67,35 +64,47 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - name: validate required secrets
+        id: validate
+        env:
+          CONFIGURED_API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          # 这是可选远端巡检；只有显式提供完整环境配置时才执行。
+          if [ -z "${CONFIGURED_API_URL}" ] || [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## PythonLab Owner Concurrency Smoke"
+              echo "- status: skipped"
+              echo "- reason: missing remote environment configuration"
+              echo "- required_secrets: PYTHONLAB_SMOKE_USERNAME, PYTHONLAB_SMOKE_PASSWORD"
+              echo "- required_api_url: workflow input api_url or vars.PYTHONLAB_API_URL"
+              echo "- hint: 完整配置远端 API URL 与 smoke secrets 后，本次调用才会执行"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: actions/setup-python@v5
+      - name: checkout
+        if: ${{ steps.validate.outputs.available == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: setup python
+        if: ${{ steps.validate.outputs.available == 'true' }}
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: install dependencies
+        if: ${{ steps.validate.outputs.available == 'true' }}
         run: |
           python -m pip install --upgrade pip
           pip install requests==2.32.3 aiohttp==3.14.3
 
-      - name: validate required secrets
-        env:
-          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
-        run: |
-          if [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
-            {
-              echo "## PythonLab Owner Concurrency Smoke"
-              echo "- exit_code: 2"
-              echo "- category: param"
-              echo "- reason: missing required secrets"
-              echo "- required_secrets: PYTHONLAB_SMOKE_USERNAME, PYTHONLAB_SMOKE_PASSWORD"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 2
-          fi
-
       - name: run owner concurrency smoke
         id: smoke_run
+        if: ${{ steps.validate.outputs.available == 'true' }}
         continue-on-error: true
         env:
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
@@ -135,7 +144,7 @@ jobs:
 
       - name: auto create issue for gate failure
         id: auto_issue
-        if: ${{ always() && contains(fromJson('["assert","detect"]'), steps.smoke_run.outputs.category) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
+        if: ${{ always() && steps.validate.outputs.available == 'true' && contains(fromJson('["assert","detect"]'), steps.smoke_run.outputs.category) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
         uses: actions/github-script@v7
         env:
           DEDUPE_WINDOW: ${{ inputs.dedupe_window || github.event.inputs.dedupe_window || vars.PYTHONLAB_ISSUE_DEDUPE_WINDOW || 'day' }}
@@ -228,7 +237,7 @@ jobs:
 
       - name: auto close resolved gate issues
         id: auto_close
-        if: ${{ always() && steps.smoke_run.outputs.exit_code == '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
+        if: ${{ always() && steps.validate.outputs.available == 'true' && steps.smoke_run.outputs.exit_code == '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
         uses: actions/github-script@v7
         env:
           DEDUPE_WINDOW: ${{ inputs.dedupe_window || github.event.inputs.dedupe_window || vars.PYTHONLAB_ISSUE_DEDUPE_WINDOW || 'day' }}
@@ -301,9 +310,16 @@ jobs:
 
       - name: write automation stats summary
         if: ${{ always() }}
+        env:
+          AVAILABLE: ${{ steps.validate.outputs.available }}
         run: |
           {
             echo "## Owner Gate Automation Stats"
+            if [ "${AVAILABLE}" != "true" ]; then
+              echo "- status: skipped"
+              echo "- reason: 未配置 PYTHONLAB_SMOKE_* secrets 或 vars.PYTHONLAB_API_URL"
+              echo "- note: owner concurrency smoke 已跳过，本次运行不判定失败"
+            fi
             echo "- issue_created: ${{ steps.auto_issue.outputs.created_count || '0' }}"
             echo "- issue_appended: ${{ steps.auto_issue.outputs.appended_count || '0' }}"
             echo "- issue_closed: ${{ steps.auto_close.outputs.closed_count || '0' }}"
@@ -311,5 +327,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: fail when smoke failed
-        if: ${{ always() && steps.smoke_run.outputs.exit_code != '0' }}
-        run: exit ${{ steps.smoke_run.outputs.exit_code }}
+        # exit_code 为空表示 smoke 步骤在写入该 output 之前就失败了（或未运行）：
+        # 此时条件里的 '' != '0' 为真，必须 fail-closed 到 1；直接用裸 `exit`
+        # 会返回上一条命令的状态（0），把失败伪装成成功。
+        if: ${{ always() && steps.validate.outputs.available == 'true' && steps.smoke_run.outputs.exit_code != '0' }}
+        run: exit ${{ steps.smoke_run.outputs.exit_code || 1 }}

@@ -3,8 +3,6 @@
 故障模式（治理前）：AUTH_TRUST_X_FORWARDED_FOR=True 时任何直连来源都可伪造
 X-Forwarded-For，从而篡改 IP 绑定与同 IP 会话替换判断。
 """
-import asyncio
-
 from starlette.requests import Request
 
 import app.core.session_guard as session_guard

@@ -1,13 +1,13 @@
 import asyncio
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from app.core.config import settings
 from app.core.sandbox.base import SandboxProvider, get_sitecustomize_content
 
 from loguru import logger
 
 try:
-    from kubernetes import client, config, watch
+    from kubernetes import client, config
     from kubernetes.client.rest import ApiException
     HAS_K8S = True
 except ImportError:
@@ -122,7 +122,8 @@ class K8sProvider(SandboxProvider):
              if e.status == 409:
                  try:
                     self.api_core.delete_namespaced_pod(name, self.namespace)
-                 except ApiException: pass
+                 except ApiException:
+                    pass
                  # We can't immediately recreate, K8s takes time to terminate. 
                  # For now, just fail.
                  raise RuntimeError(f"Pod {name} already exists. Please retry in a few seconds.")
@@ -154,9 +155,10 @@ class K8sProvider(SandboxProvider):
         }
 
     async def stop_session(self, session_id: str, meta: Dict[str, Any]) -> None:
-        if not self.api_core: return
+        if not self.api_core:
+            return
         name = f"pythonlab-{session_id}"
-        
+
         try:
             self.api_core.delete_namespaced_pod(name, self.namespace, grace_period_seconds=0)
         except ApiException:
@@ -168,7 +170,8 @@ class K8sProvider(SandboxProvider):
             pass
 
     async def list_active_sessions(self) -> List[str]:
-        if not self.api_core: return []
+        if not self.api_core:
+            return []
         try:
             pods = self.api_core.list_namespaced_pod(
                 self.namespace, 
@@ -184,7 +187,8 @@ class K8sProvider(SandboxProvider):
             return []
         
     async def is_healthy(self, session_id: str, meta: Dict[str, Any]) -> bool:
-        if not self.api_core: return False
+        if not self.api_core:
+            return False
         name = f"pythonlab-{session_id}"
         try:
             pod = self.api_core.read_namespaced_pod(name, self.namespace)

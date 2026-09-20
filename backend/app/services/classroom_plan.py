@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.models.classroom import ClassroomActivity, ClassroomPlan, ClassroomPlanItem
 from app.models.core.user import User
 from app.services import classroom as activity_svc
-from app.services.classroom_plan_rules import (
+from app.services.classroom_plan_rules import (  # noqa: F401  有意回导，非未使用导入
     ClassroomPlanPermissionError,
     assert_plan_manageable as _assert_plan_manageable,
     load_and_validate_activities as _load_and_validate_activities_impl,

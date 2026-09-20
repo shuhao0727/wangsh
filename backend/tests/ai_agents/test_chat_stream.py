@@ -580,3 +580,155 @@ def test_anthropic_payload_uses_configured_output_limit(monkeypatch):
     )
 
     assert payload["max_tokens"] == 8192
+
+
+def test_dify_filters_reasoning_blocks_and_agent_thought_events(monkeypatch):
+    class _DifyReasoningResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"message","answer":"<th"}\n\n'
+            yield (
+                'data: {"event":"message","answer":"ink>\\n'
+                '<!--dify-deepseek-reasoning-->internal reasoning"}\n\n'
+            ).encode("utf-8")
+            yield b'data: {"event":"agent_thought","thought":"private trace"}\n\n'
+            yield b'data: {"event":"message","answer":"</thi"}\n\n'
+            yield b'data: {"event":"message","answer":"nk>final answer"}\n\n'
+            yield b'data: {"event":"message_end"}\n\n'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyReasoningResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert "internal reasoning" not in output
+    assert "private trace" not in output
+    assert "<think>" not in output
+    assert "dify-deepseek-reasoning" not in output
+    assert '"answer":"final answer"' in output
+    assert '"event":"message_end"' in output
+
+
+def test_dify_drops_unparseable_trailing_data_that_may_contain_reasoning(monkeypatch):
+    class _DifyTruncatedReasoningResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"message","answer":"<think>private reasoning'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyTruncatedReasoningResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert "private reasoning" not in output
+    assert "<think>" not in output
+    assert '"error": "dify_stream_incomplete"' in output
+
+
+
+def test_dify_preserves_event_fields_when_crlf_is_split_across_chunks(monkeypatch):
+    class _DifyCrLfResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b"event: message\r"
+            yield b'\ndata: {"answer":"visible"}\r\n\r\n'
+            yield b"event: message_end\r"
+            yield b'\ndata: {"event":"message_end"}\r\n\r\n'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyCrLfResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert "event: message\n" in output
+    assert 'data: {"answer":"visible"}' in output
+    assert "event: message_end\n" in output
+    assert "dify_stream_incomplete" not in output
+
+
+def test_dify_filters_reasoning_split_across_message_delta_events(monkeypatch):
+    class _DifyMessageDeltaResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"message_delta","answer":"<th"}\n\n'
+            yield b'data: {"event":"message_delta","answer":"ink>secret"}\n\n'
+            yield b'data: {"event":"message_delta","answer":"</think>safe"}\n\n'
+            yield b'data: {"event":"message_end"}\n\n'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyMessageDeltaResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert "secret" not in output
+    assert "<think>" not in output
+    assert '"answer":"safe"' in output
+    assert '"event":"message_end"' in output

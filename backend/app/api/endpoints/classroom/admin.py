@@ -12,11 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.core.deps import require_staff
 from app.schemas.user_info import UserInfo
-from app.schemas.classroom import ActivityCreate, ActivityUpdate, ActivityEndRequest, ActivityResponse, ActivityStats
+from app.schemas.classroom import ActivityCreate, ActivityUpdate, ActivityEndRequest
 from app.services import classroom as svc
 from app.services.classroom import normalize_class_name
 
-from loguru import logger
 router = APIRouter()
 
 

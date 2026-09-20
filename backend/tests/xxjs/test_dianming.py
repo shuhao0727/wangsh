@@ -15,7 +15,6 @@
 import asyncio
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.schemas.xxjs.dianming import (
     DianmingClass,

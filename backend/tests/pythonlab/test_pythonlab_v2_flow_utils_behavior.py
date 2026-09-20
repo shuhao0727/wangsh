@@ -6,7 +6,6 @@
 
 import ast
 import time
-from typing import Optional
 
 import app.api.pythonlab.flow.utils as flow_utils
 

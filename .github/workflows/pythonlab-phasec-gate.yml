@@ -14,15 +14,14 @@ on:
         type: string
     secrets:
       PYTHONLAB_SMOKE_USERNAME:
-        required: true
+        required: false
       PYTHONLAB_SMOKE_PASSWORD:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       api_url:
-        description: API base url, example https://example.com
+        description: Deployed API base URL, example https://example.com
         required: true
-        default: "http://localhost:8000"
       rounds:
         description: soak rounds
         required: true
@@ -31,8 +30,6 @@ on:
         description: probe timeout seconds
         required: true
         default: "20"
-  schedule:
-    - cron: "10 3 * * *"
 
 concurrency:
   group: pythonlab-phasec-gate-${{ github.ref }}
@@ -45,28 +42,46 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: validate required secrets
+        id: validate
+        env:
+          CONFIGURED_API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL }}
+          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
+          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
+        run: |
+          # 这是可选远端巡检；只有显式提供完整环境配置时才执行。
+          if [ -z "${CONFIGURED_API_URL}" ] || [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## PythonLab Phase C Visibility Gate"
+              echo "- status: skipped"
+              echo "- reason: missing remote environment configuration"
+              echo "- required_secrets: PYTHONLAB_SMOKE_USERNAME, PYTHONLAB_SMOKE_PASSWORD"
+              echo "- required_api_url: workflow input api_url or vars.PYTHONLAB_API_URL"
+              echo "- hint: 完整配置远端 API URL 与 smoke secrets 后，本次调用才会执行"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - uses: actions/setup-python@v5
+      - name: checkout
+        if: ${{ steps.validate.outputs.available == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: setup python
+        if: ${{ steps.validate.outputs.available == 'true' }}
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: install dependencies
+        if: ${{ steps.validate.outputs.available == 'true' }}
         run: |
           python -m pip install --upgrade pip
           pip install requests==2.32.3 aiohttp==3.14.3
 
-      - name: validate required secrets
-        env:
-          PYTHONLAB_SMOKE_USERNAME: ${{ secrets.PYTHONLAB_SMOKE_USERNAME }}
-          PYTHONLAB_SMOKE_PASSWORD: ${{ secrets.PYTHONLAB_SMOKE_PASSWORD }}
-        run: |
-          if [ -z "${PYTHONLAB_SMOKE_USERNAME}" ] || [ -z "${PYTHONLAB_SMOKE_PASSWORD}" ]; then
-            echo "missing required secrets: PYTHONLAB_SMOKE_USERNAME/PYTHONLAB_SMOKE_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
-            exit 2
-          fi
-
       - name: run phase c warmup probe
+        if: ${{ steps.validate.outputs.available == 'true' }}
         env:
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
@@ -78,6 +93,7 @@ jobs:
 
       - name: run phase c soak gate
         id: gate
+        if: ${{ steps.validate.outputs.available == 'true' }}
         env:
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
           ROUNDS: ${{ inputs.rounds || github.event.inputs.rounds || vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
@@ -92,15 +108,22 @@ jobs:
       - name: write summary
         if: ${{ always() }}
         env:
+          AVAILABLE: ${{ steps.validate.outputs.available }}
           API_URL: ${{ inputs.api_url || github.event.inputs.api_url || vars.PYTHONLAB_API_URL || 'http://localhost:8000' }}
           ROUNDS: ${{ inputs.rounds || github.event.inputs.rounds || vars.PYTHONLAB_PHASEC_ROUNDS || '20' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || github.event.inputs.timeout_seconds || vars.PYTHONLAB_TIMEOUT_SECONDS || '20' }}
         run: |
           {
             echo "## PythonLab Phase C Visibility Gate"
-            echo "- api_url: ${API_URL}"
-            echo "- rounds: ${ROUNDS}"
-            echo "- timeout_seconds: ${TIMEOUT_SECONDS}"
+            if [ "${AVAILABLE}" != "true" ]; then
+              echo "- status: skipped"
+              echo "- reason: 未配置 PYTHONLAB_SMOKE_* secrets 或 vars.PYTHONLAB_API_URL"
+              echo "- note: probe/soak 已跳过，本次运行不判定失败"
+            else
+              echo "- api_url: ${API_URL}"
+              echo "- rounds: ${ROUNDS}"
+              echo "- timeout_seconds: ${TIMEOUT_SECONDS}"
+            fi
             if [ -f /tmp/phasec_soak/summary.json ]; then
               echo ""
               echo '```json'

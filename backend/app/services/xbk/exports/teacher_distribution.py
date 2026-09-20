@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from io import BytesIO
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.academic_year import split_academic_year
 from app.models import XbkCourse, XbkSelection, XbkStudent
-from app.services.xbk.exports.common import THIN_BORDER, class_sort_key, safe_sheet_name, force_text_workbook
+from app.services.xbk.exports.common import class_sort_key, safe_sheet_name, force_text_workbook
 
 
 def _title_year_range(year: str, year_start: Optional[int], year_end: Optional[int]) -> Tuple[int, int]:

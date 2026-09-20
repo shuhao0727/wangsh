@@ -1,7 +1,6 @@
 """阻塞式对话 — 使用 Provider 策略模式"""
 
 import asyncio
-import json
 from typing import Any, Dict, Optional
 
 from app.services.agents.ai_agent import get_agent

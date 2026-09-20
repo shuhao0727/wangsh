@@ -5,11 +5,11 @@
 import hashlib
 import json
 import random
+from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Optional, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, update, delete, text
+from sqlalchemy import select, func, and_, or_, delete, text
 from sqlalchemy.orm import selectinload
 
 from loguru import logger
@@ -551,8 +551,8 @@ async def submit_answer(
         aq = aq_result.scalar_one_or_none()
         ac = {}
         if aq and aq.adaptive_config:
-            try: ac = json.loads(aq.adaptive_config)
-            except Exception: pass
+            with suppress(Exception):
+                ac = json.loads(aq.adaptive_config)
         mastery_streak = ac.get("mastery_streak", 2)
         max_attempts = ac.get("max_attempts", 5)
 

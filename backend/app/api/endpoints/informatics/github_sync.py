@@ -20,7 +20,6 @@ from app.schemas.informatics.github_sync import (
     GithubSyncTriggerRequest,
 )
 from app.services.informatics.github_sync import (
-    decrypt_api_key,
     get_or_create_sync_settings,
     run_github_sync,
     serialize_sync_settings,

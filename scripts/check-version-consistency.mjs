@@ -21,12 +21,10 @@ const readEnv = (path) => {
   return values;
 };
 
-// 发布合同：package.json 的 version 是完整版本号（如 2.0.0），
-// 镜像标签使用 major.minor（如 2.0）。两者必须同源一致。
+// 发布合同：package.json 的 version 是完整 SemVer（如 2.1.1）的权威源，
+// 应用版本、镜像标签、release-set 与生产默认值必须完全一致。
 const expectedVersion = JSON.parse(read("frontend/package.json")).version;
-const versionParts = expectedVersion.split(".");
-const expectedImageTag =
-  versionParts.length >= 2 ? `${versionParts[0]}.${versionParts[1]}` : expectedVersion;
+const expectedImageTag = expectedVersion;
 
 // CI 需要按同一派生规则校验 compose 实际渲染出的镜像标签（只有 docker 能取到），
 // 因此暴露只打印标签的模式，避免调用方各自推导出不同口径。
@@ -52,8 +50,10 @@ const dockerhubDefault = read(".github/workflows/dockerhub-amd64.yml")
 const simulationDefault = read("scripts/deploy.sh")
   .match(/SIM_VERSION:-([^}]+)\}/)?.[1];
 
+const packageLock = JSON.parse(read("frontend/package-lock.json"));
 const versionChecks = [
-  ["frontend/package-lock.json", JSON.parse(read("frontend/package-lock.json")).version],
+  ["frontend/package-lock.json version", packageLock.version],
+  ["frontend/package-lock.json root package version", packageLock.packages?.[""]?.version],
   [".env.example APP_VERSION", readEnv(".env.example").get("APP_VERSION")],
   [".env.example REACT_APP_VERSION", readEnv(".env.example").get("REACT_APP_VERSION")],
 ];

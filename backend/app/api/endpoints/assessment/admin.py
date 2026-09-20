@@ -134,7 +134,7 @@ async def api_create_config(
         return _format_config_response(config)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("创建测评配置失败")
         raise HTTPException(status_code=500, detail="创建测评配置失败")
 
@@ -172,7 +172,7 @@ async def api_list_configs(
             "page_size": limit,
             "total_pages": total_pages,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("获取测评配置列表失败")
         raise HTTPException(status_code=500, detail="获取测评配置列表失败")
 
@@ -216,7 +216,7 @@ async def api_update_config(
         raise HTTPException(status_code=422, detail=str(e))
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("更新测评配置失败")
         raise HTTPException(status_code=500, detail="更新测评配置失败")
 
@@ -321,7 +321,7 @@ async def api_create_question(
         return QuestionResponse.from_orm(question)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("创建题目失败")
         raise HTTPException(status_code=500, detail="创建题目失败")
 
@@ -342,7 +342,7 @@ async def api_update_question(
         raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("更新题目失败")
         raise HTTPException(status_code=500, detail="更新题目失败")
 
@@ -382,7 +382,7 @@ async def api_get_class_names(
         )
         names = [r[0] for r in result.all()]
         return {"class_names": names}
-    except Exception as e:
+    except Exception:
         logger.exception("获取班级列表失败")
         raise HTTPException(status_code=500, detail="获取班级列表失败")
 
@@ -419,7 +419,7 @@ async def api_list_sessions(
             "page_size": limit,
             "total_pages": total_pages,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("获取答题列表失败")
         raise HTTPException(status_code=500, detail="获取答题列表失败")
 
@@ -435,7 +435,7 @@ async def api_allow_retest(
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("允许重测失败")
         raise HTTPException(status_code=500, detail="允许重测失败")
 
@@ -455,7 +455,7 @@ async def api_batch_retest(
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("批量重测失败")
         raise HTTPException(status_code=500, detail="批量重测失败")
 
@@ -524,7 +524,7 @@ async def api_get_session_detail(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("获取答题详情失败")
         raise HTTPException(status_code=500, detail="获取答题详情失败")
 
@@ -576,7 +576,7 @@ async def api_get_statistics(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("获取统计数据失败")
         raise HTTPException(status_code=500, detail="获取统计数据失败")
 

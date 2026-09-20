@@ -14,9 +14,9 @@ from contextlib import asynccontextmanager
 
 import pytest
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import delete, select, text
+from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.api.endpoints.xbk import bulk_ops, courses, selections, students
 from app.api.endpoints.xbk.import_export import import_data

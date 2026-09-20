@@ -237,7 +237,6 @@ async def issue_login_refresh_token(
     """在用户行锁保护下撤销旧 refresh token，并原子签发唯一新 token。"""
     from sqlalchemy import update
     from app.models import RefreshToken
-    import secrets
 
     try:
         if not user_locked and not await lock_user_for_login(db, user_id):
@@ -586,9 +585,8 @@ async def bootstrap_durable_auth_authority(
     reauthentication approval; no implicit bulk logout. The whole baseline and
     ready gate commit together. Caller must not mix unrelated pending DB writes.
     """
-    import secrets
-    from sqlalchemy import select, text
-    from app.models import AuthAuthority, AuthSessionState, RefreshToken, User
+    from sqlalchemy import select
+    from app.models import RefreshToken, User
 
     if not legacy_writers_stopped:
         raise ValueError("Stop and drain all legacy authentication writers before cutover")

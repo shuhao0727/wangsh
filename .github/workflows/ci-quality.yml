@@ -48,7 +48,7 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
       - name: compose image tags
         run: |
-          # 镜像标签口径（major.minor）与完整版本号的派生规则只由该脚本维护，
+          # 镜像标签与完整版本号统一使用 SemVer，规则只由该脚本维护，
           # 避免这里再从 package.json 推出完整版本号导致门禁自相矛盾。
           expected_tag="$(node scripts/check-version-consistency.mjs --print-image-tag)"
           images="$(docker compose --env-file .env.example -f docker-compose.yml config --images)"

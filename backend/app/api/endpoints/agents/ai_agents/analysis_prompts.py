@@ -37,7 +37,7 @@ async def list_prompt_templates(
     if analysis_type:
         stmt = stmt.where(AgentAnalysisPromptTemplate.analysis_type == analysis_type)
     if not include_inactive:
-        stmt = stmt.where(AgentAnalysisPromptTemplate.is_active == True)
+        stmt = stmt.where(AgentAnalysisPromptTemplate.is_active.is_(True))
     rows = (
         await db.execute(
             stmt.order_by(
@@ -64,7 +64,7 @@ async def create_prompt_template(
             await db.execute(
                 select(AgentAnalysisPromptTemplate).where(
                     AgentAnalysisPromptTemplate.analysis_type == body.analysis_type,
-                    AgentAnalysisPromptTemplate.is_default == True,
+                    AgentAnalysisPromptTemplate.is_default.is_(True),
                 )
             )
         ).scalars().all()
@@ -118,7 +118,7 @@ async def update_prompt_template(
                     select(AgentAnalysisPromptTemplate).where(
                         AgentAnalysisPromptTemplate.analysis_type == template.analysis_type,
                         AgentAnalysisPromptTemplate.id != template_id,
-                        AgentAnalysisPromptTemplate.is_default == True,
+                        AgentAnalysisPromptTemplate.is_default.is_(True),
                     )
                 )
             ).scalars().all()

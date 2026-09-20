@@ -5,7 +5,7 @@ Flow AST 转换模块
 """
 
 import ast
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from app.api.pythonlab.structured_ir import (
     IRAction,
@@ -15,7 +15,6 @@ from app.api.pythonlab.structured_ir import (
     IRContinue,
     IRForEach,
     IRForRange,
-    IRFunction,
     IRIf,
     IRImport,
     IRReturn,
@@ -27,8 +26,6 @@ from app.api.pythonlab.utils import make_edge
 
 from .build_ctx import _BuildCtx
 from .utils import (
-    _header_title,
-    _kind_of,
     _make_node,
     _mark_synthetic,
     _pend,
@@ -240,10 +237,6 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
         return loop_id, out
 
     if isinstance(stmt, IRForRange):
-        if str(stmt.step).strip() == "1":
-            iter_expr = f"range({stmt.start}, {stmt.stop})"
-        else:
-            iter_expr = f"range({stmt.start}, {stmt.stop}, {stmt.step})"
         # 区间风格：所有 range 都拆分为 初始化 → 条件(区间) → 循环体 → 递增
         step_text = str(stmt.step).strip()
         step_num = int(step_text) if step_text.lstrip("-").isdigit() else None
@@ -360,7 +353,6 @@ def _lower_stmt(ctx: _BuildCtx, stmt: IRStmt, parent_id: Optional[str], loop_hea
 
         # Process Body pendings
         # If we have else/finally, flow goes there.
-        target_after_body = None
         if stmt.orelse:
             # If we have else block, normal execution goes there
             else_entry, else_pend = _lower_block(ctx, stmt.orelse, parent_id, loop_header_stack)

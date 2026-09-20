@@ -1,6 +1,5 @@
 import os
 import time
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
