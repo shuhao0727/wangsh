@@ -6,10 +6,10 @@ AI智能体相关的 Pydantic 模型
 
 from datetime import datetime
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyHttpUrl
-from uuid import UUID
+from pydantic import BaseModel, Field, ConfigDict, field_validator, AnyHttpUrl
 
-from .conversation import ConversationMessage, ConversationSummary, UsageFilterOptions
+# 有意回导（legacy 兼容），非未使用导入；test_agent_conversations.py 依赖此回导
+from .conversation import ConversationMessage, ConversationSummary, UsageFilterOptions  # noqa: F401  有意回导，非未使用导入
 
 
 # 智能体类型定义
