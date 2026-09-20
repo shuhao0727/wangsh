@@ -24,23 +24,16 @@ from app.utils.cache import cache
 from app.api.pythonlab.constants import (
     CACHE_KEY_SESSION_PREFIX,
     DAP_HOST_DEFAULT,
-    WORKSPACE_MAIN_PY,
-    WORKSPACE_DIR,
     WS_HEARTBEAT_INTERVAL,
-    WS_MAX_DAP_MSG_BYTES,
-    WS_MAX_STDOUT_KB,
-    WS_RATE_LIMIT_PER_SEC,
     SESSION_STATUS_READY,
     SESSION_STATUS_ATTACHED,
     SESSION_STATUS_RUNNING,
     SESSION_STATUS_STOPPED,
     SESSION_STATUS_TERMINATED,
-    SESSION_STATUS_FAILED,
-    SESSION_STATUS_TERMINATING,
 )
 from app.api.pythonlab.utils import now_iso
 from app.api.pythonlab.ws.validation import _normalize_client_conn_id, _parse_last_seq, _build_dap_host_candidates
-from app.api.pythonlab.ws.bridge import _get_or_create_dap_bridge, _DAP_BRIDGES
+from app.api.pythonlab.ws.bridge import _get_or_create_dap_bridge
 
 
 _HANDLER_DEFAULT_NOW_ISO = now_iso
@@ -214,7 +207,8 @@ async def terminal_ws(websocket: WebSocket, session_id: str, db: AsyncSession = 
             logger.error(f"Error pumping WS to TTY: {e}")
             try:
                 await websocket.send_text(f"\r\nError writing to TTY: {e}\r\n")
-            except Exception: pass
+            except Exception:
+                pass
 
     async def pump_tty_to_ws():
         """将 TTY 数据泵送到 WebSocket"""

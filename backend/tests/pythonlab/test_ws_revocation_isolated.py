@@ -4,7 +4,6 @@ Run with dotenv/conftest disabled and network denied except the exact dedicated
 Redis UNIX socket. No normal DB/Redis, Docker or debugpy is used by this suite.
 """
 import asyncio
-import json
 import os
 import socket
 import sys

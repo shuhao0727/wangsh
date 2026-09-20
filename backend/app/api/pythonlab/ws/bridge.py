@@ -4,10 +4,8 @@ DAP 会话桥接器
 
 import asyncio
 import json
-import os
 import sys
 from collections import deque
-from datetime import datetime, timezone
 from typing import Any, Deque, Dict, Optional
 
 from loguru import logger
@@ -17,8 +15,6 @@ from app.core.config import settings
 from app.core.celery_app import celery_app
 from app.utils.cache import cache
 from app.api.pythonlab.constants import (
-    WORKSPACE_MAIN_PY,
-    WORKSPACE_DIR,
     WS_HEARTBEAT_INTERVAL,
     WS_MAX_DAP_MSG_BYTES,
     WS_MAX_STDOUT_KB,
@@ -28,12 +24,10 @@ from app.api.pythonlab.constants import (
     SESSION_STATUS_RUNNING,
     SESSION_STATUS_STOPPED,
     SESSION_STATUS_TERMINATED,
-    SESSION_STATUS_FAILED,
-    SESSION_STATUS_TERMINATING,
 )
 from app.api.pythonlab.utils import now_iso
 from app.api.pythonlab.ws.connection import _read_dap_message, _write_dap_message
-from app.api.pythonlab.ws.validation import _validate_dap_request_payload, _build_dap_host_candidates
+from app.api.pythonlab.ws.validation import _validate_dap_request_payload
 
 
 def _compat_ws_module():
