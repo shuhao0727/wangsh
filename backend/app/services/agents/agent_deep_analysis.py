@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .agent_analysis_events import (
+from .agent_analysis_events import (  # noqa: F401  有意回导，非未使用导入
     BLOOM_LEVELS,
     NEGATIVE_QUESTION_TYPES,
     POSITIVE_QUESTION_TYPES,
@@ -37,12 +37,12 @@ from .agent_analysis_events import (
     build_teacher_questions,
     load_conversation_events,
 )
-from .agent_analysis_summaries import (
+from .agent_analysis_summaries import (  # noqa: F401  有意回导，非未使用导入
     _int_or_fallback,
     summarize_chain_list_item,
     summarize_hot_list_item,
 )
-from .agent_chain_analysis import (
+from .agent_chain_analysis import (  # noqa: F401  有意回导，非未使用导入
     _build_ai_main_question_chain,
     _build_beam,
     _build_student_question_chains,
@@ -50,7 +50,7 @@ from .agent_chain_analysis import (
     _summarize_student_chain,
     _teacher_anchor_for_event,
 )
-from .agent_hot_analysis import (
+from .agent_hot_analysis import (  # noqa: F401  有意回导，非未使用导入
     _build_course_hotspot_sequence,
     _build_hot_teaching_suggestions,
     _build_timeline,

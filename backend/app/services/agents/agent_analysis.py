@@ -63,7 +63,6 @@ def _build_timeline_buckets(
 
     # 计算桶边界
     start_epoch = start_at.timestamp()
-    end_epoch = end_at.timestamp()
     buckets_map: Dict[float, List[Dict[str, Any]]] = {}
 
     for r in rows:

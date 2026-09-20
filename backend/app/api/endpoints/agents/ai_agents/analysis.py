@@ -43,7 +43,10 @@ from app.services.agents.analysis_compatibility import (
 )
 from app.services.agents.providers.common import resolve_credentials
 
-from .analysis_helpers import (
+# 下面三组导入是**有意的 re-export**：这些名字拆分前定义在本文件，拆分后迁到子模块，
+# 回导以保持本模块对外属性集合不变（见模块 docstring 声明的 re-export 契约）。它们在本
+# 文件内不直接使用，因此在语句上整体标注 noqa，避免被当作死导入删除。
+from .analysis_helpers import (  # noqa: F401  有意回导，非未使用导入
     _sse,
     _analysis_window,
     _serialize_teacher_marks,
@@ -61,13 +64,13 @@ from .analysis_helpers import (
     _chain_list_item,
     _trend_top_themes,
 )
-from .analysis_streams import (
+from .analysis_streams import (  # noqa: F401  有意回导，非未使用导入
     router as streams_router,
     save_hot_question_analysis_stream,
     save_student_chain_analysis_stream,
     save_task_analysis_stream,
 )
-from .analysis_prompts import (
+from .analysis_prompts import (  # noqa: F401  有意回导，非未使用导入
     router as prompts_router,
     list_prompt_templates,
     create_prompt_template,
