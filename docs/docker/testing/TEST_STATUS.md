@@ -3,7 +3,7 @@
 > 状态：active
 > Owner：testing
 > 当前版本：2.1.0
-> 最近更新：2026-09-15
+> 最近更新：2026-09-18
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
 ## 2026-09-15 生产部署只读预检与恢复演练（阻断）
@@ -21,6 +21,17 @@
 - **数据观察：** 按当前“课程限额按班级分别计算”的规则，只读统计发现 97 个班级-课程组合
   超额，共超出 167 个位置，单组最大超出 4；这是历史数据治理项，不是本次唯一索引 migration
   的直接 DDL 阻断。另有 3 条空课程代码记录，代码合同将空值视为“未选”，不应误判为缺失课程。
+- **人工裁决工具（2026-09-18，隔离验证）：** 新增只读审计与人工裁决脚本
+  `scripts/xbk/audit_active_duplicates.py`、`scripts/xbk/resolve_active_duplicates.py`
+  （共享 helper `scripts/xbk/_active_duplicate_common.py`），流程合同见
+  [XBK](../../features/XBK.md)。已在回环地址的一次性 PostgreSQL 16 与唯一测试库
+  `wangsh_dup_test` 中以合成夹具验证：audit 正确列出 3 组重复（2/2/3 条，软删除记录被排除）；
+  不带 `--apply` 的 audit 与 resolve dry-run 全表快照逐字节不变（零写入）；`--apply
+  --confirm-stop-writes` 软删除 4 条后，迁移 `_DUPLICATE_QUERY` 同语义查询返回空，真实迁移
+  `upgrade()` 由阻断转为成功建成 `uq_xbk_selections_active_period_student`；注入 BEFORE UPDATE
+  异常时事务整笔回滚（退出码 5，无半成品写入）。**本次未连接、未查询、未修改任何生产库，
+  也未处理那 3 组真实数据；真实重复仍待业务方逐组裁决。** 该轮隔离实例与卷已清理。
+  本轮当前 Markdown 派生摘要：`113 files / 436 links / 0 missing`。
 - **备份与恢复实测：** 已生成生产一致性自定义格式备份
   `/home/shuhao/backups/wangsh/wangsh_db_pre_2.2_20260915_190028.dump`（约 `18 MB`，权限
   `0600`），SHA-256 为
