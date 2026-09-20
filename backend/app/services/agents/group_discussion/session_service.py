@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -44,7 +44,6 @@ async def get_or_create_today_session(
     role = str(user.get("role_code") or "")
     is_admin = role in {"admin", "super_admin"}
     user_id = int(user["id"])
-    user_class = (user.get("class_name") or "").strip()
 
     # 解析目标班级
     from .core import resolve_target_class_name
