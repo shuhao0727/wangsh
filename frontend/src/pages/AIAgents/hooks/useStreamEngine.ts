@@ -6,6 +6,11 @@ import { useCallback, useRef } from "react";
 import { createParser } from "eventsource-parser";
 import type { ParsedEvent, ReconnectInterval } from "eventsource-parser";
 
+import {
+  createReasoningContentFilter,
+  sanitizeReasoningContent,
+} from "../utils/reasoningContentFilter";
+
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
   onEnd: (fullText: string) => void;
@@ -29,7 +34,13 @@ export function useStreamEngine() {
   const abortRef = useRef<AbortController | null>(null);
 
   const startStream = useCallback(async (options: StreamOptions) => {
-    const { url, body, callbacks, headers: extraHeaders, timeoutMs = 120_000 } = options;
+    const {
+      url,
+      body,
+      callbacks,
+      headers: extraHeaders,
+      timeoutMs = 120_000,
+    } = options;
 
     // 中止之前的请求
     if (abortRef.current) {
@@ -62,6 +73,8 @@ export function useStreamEngine() {
     let sawTerminalEvent = false;
     let deltaTimer: ReturnType<typeof setTimeout> | null = null;
     let lastNotifiedText = "";
+    let reasoningFilterFinished = false;
+    const reasoningFilter = createReasoningContentFilter();
     const hasVisibleText = (text: string) => text.trim().length > 0;
 
     const clearDeltaTimer = () => {
@@ -90,8 +103,32 @@ export function useStreamEngine() {
       }, 32);
     };
 
+    const appendAnswerDelta = (value: unknown) => {
+      if (reasoningFilterFinished || typeof value !== "string" || !value)
+        return;
+      const visibleDelta = reasoningFilter.push(value);
+      if (visibleDelta) {
+        fullText += visibleDelta;
+        scheduleDelta();
+      }
+    };
+
+    const finalizeReasoningFilter = () => {
+      if (reasoningFilterFinished) return;
+      reasoningFilterFinished = true;
+      const tail = reasoningFilter.finish();
+      if (tail) fullText += tail;
+    };
+
+    const replaceWithFinalAnswer = (value: unknown) => {
+      if (typeof value !== "string" || !value) return;
+      fullText = sanitizeReasoningContent(value);
+      reasoningFilterFinished = true;
+    };
+
     const finishSuccess = () => {
       if (finished) return;
+      finalizeReasoningFilter();
       flushDelta();
       finished = true;
       clearIdleTimeout();
@@ -100,6 +137,7 @@ export function useStreamEngine() {
 
     const finishError = (message: string) => {
       if (finished) return;
+      finalizeReasoningFilter();
       finished = true;
       clearIdleTimeout();
       clearDeltaTimer();
@@ -113,8 +151,46 @@ export function useStreamEngine() {
       clearDeltaTimer();
     };
 
+    const stringValue = (value: unknown): string =>
+      typeof value === "string" ? value : "";
+
+    const eventData = (payload: any) =>
+      payload?.data && typeof payload.data === "object"
+        ? payload.data
+        : payload;
+
+    const getDeltaText = (eventType: string, payload: any): string => {
+      const data = eventData(payload);
+      if (eventType === "text_chunk") {
+        return stringValue(data?.text) || stringValue(payload?.text);
+      }
+      if (eventType === "message_delta") {
+        return (
+          stringValue(data?.answer) ||
+          stringValue(data?.delta) ||
+          stringValue(payload?.delta) ||
+          stringValue(data?.text)
+        );
+      }
+      return stringValue(data?.answer) || stringValue(payload?.answer);
+    };
+
+    const getFinalAnswerText = (payload: any): string => {
+      const data = eventData(payload);
+      const outputs =
+        data?.outputs && typeof data.outputs === "object" ? data.outputs : null;
+      return (
+        stringValue(data?.answer) ||
+        stringValue(data?.text) ||
+        stringValue(data?.content) ||
+        stringValue(outputs?.answer) ||
+        stringValue(outputs?.text) ||
+        stringValue(outputs?.content)
+      );
+    };
+
     const handleEvent = (event: ParsedEvent | ReconnectInterval) => {
-      if (event.type !== 'event') return;
+      if (event.type !== "event") return;
       const eventType = event.event || "";
       let payload: any = null;
       let parsedJson = true;
@@ -125,10 +201,13 @@ export function useStreamEngine() {
         payload = { text: event.data };
       }
 
-      const resolvedEventType = eventType || (payload?.event ? String(payload.event) : "");
+      const resolvedEventType =
+        eventType || (payload?.event ? String(payload.event) : "");
       if (
-        !parsedJson
-        && ["message_end", "workflow_finished", "error"].includes(resolvedEventType)
+        !parsedJson &&
+        ["message_end", "workflow_finished", "error"].includes(
+          resolvedEventType,
+        )
       ) {
         finishError("流式终止事件格式错误");
         return;
@@ -136,52 +215,40 @@ export function useStreamEngine() {
       handleParsedEvent(resolvedEventType, payload);
     };
 
-    const getAnswerText = (payload: any) => {
-      const d = payload?.data || payload;
-      return d?.answer || d?.text || d?.content || d?.outputs?.answer || d?.outputs?.text || d?.outputs?.content || "";
-    };
-
     const handleParsedEvent = (eventType: string, payload: any) => {
       if (finished) return;
-      if (eventType === "message_delta") {
-        const delta = getAnswerText(payload) || payload?.delta || "";
-        if (delta) {
-          fullText += String(delta);
-          scheduleDelta();
-        }
-      } else if (eventType === "message") {
-        // Dify 流式 message 事件的 answer 是增量 delta，需要累加
-        const delta = getAnswerText(payload);
-        if (delta) {
-          fullText += String(delta);
-          scheduleDelta();
-        }
+      if (
+        ["message_delta", "message", "agent_message", "text_chunk"].includes(
+          eventType,
+        )
+      ) {
+        appendAnswerDelta(getDeltaText(eventType, payload));
       } else if (eventType === "message_end") {
         sawTerminalEvent = true;
-        const text = getAnswerText(payload);
-        if (text) {
-          fullText = String(text);
-        }
+        replaceWithFinalAnswer(getFinalAnswerText(payload));
+        finalizeReasoningFilter();
         if (hasVisibleText(fullText)) {
           finishSuccess();
           return;
         }
         finishError("模型未返回内容");
       } else if (eventType === "workflow_started") {
-        callbacks.onWorkflowStarted?.(payload?.workflow_run_id || `wf-${Date.now()}`);
+        callbacks.onWorkflowStarted?.(
+          payload?.workflow_run_id || `wf-${Date.now()}`,
+        );
       } else if (eventType === "node_started") {
         const name = payload?.data?.title || payload?.data?.node_name || "节点";
         callbacks.onNodeStarted?.(String(name));
       } else if (eventType === "node_finished") {
         const name = payload?.data?.title || payload?.data?.node_name || "节点";
-        const summary = getAnswerText(payload) || payload?.summary || "";
-        callbacks.onNodeFinished?.(String(name), summary ? String(summary) : undefined);
+        const rawSummary =
+          stringValue(payload?.data?.summary) || stringValue(payload?.summary);
+        const summary = sanitizeReasoningContent(rawSummary).slice(0, 500);
+        callbacks.onNodeFinished?.(String(name), summary || undefined);
       } else if (eventType === "workflow_finished") {
         sawTerminalEvent = true;
-        const final = getAnswerText(payload);
-        if (final) {
-          fullText = String(final);
-        }
+        replaceWithFinalAnswer(getFinalAnswerText(payload));
+        finalizeReasoningFilter();
         if (hasVisibleText(fullText)) {
           finishSuccess();
           return;
@@ -190,17 +257,14 @@ export function useStreamEngine() {
       } else if (eventType === "error") {
         sawTerminalEvent = true;
         const baseMsg = payload?.message || payload?.error || "对话发生错误";
-        const detail = typeof payload?.detail === "string" ? payload.detail.trim() : "";
-        const errMsg = detail ? `${baseMsg}（${detail.slice(0, 220)}）` : baseMsg;
+        const detail =
+          typeof payload?.detail === "string" ? payload.detail.trim() : "";
+        const errMsg = detail
+          ? `${baseMsg}（${detail.slice(0, 220)}）`
+          : baseMsg;
         finishError(String(errMsg));
-      } else {
-        // 未知事件类型，尝试提取文本
-        const fallback = getAnswerText(payload);
-        if (fallback) {
-          fullText += String(fallback);
-          scheduleDelta();
-        }
       }
+      // Unknown and reasoning-only events (for example agent_thought) are ignored.
     };
 
     try {
@@ -211,7 +275,9 @@ export function useStreamEngine() {
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.setRequestHeader("Accept", "text/event-stream");
         if (extraHeaders) {
-          Object.entries(extraHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+          Object.entries(extraHeaders).forEach(([k, v]) =>
+            xhr.setRequestHeader(k, v),
+          );
         }
         xhr.withCredentials = true;
 
@@ -244,7 +310,9 @@ export function useStreamEngine() {
               let detail = "";
               try {
                 const payload = JSON.parse(xhr.responseText);
-                detail = String(payload?.detail || payload?.message || payload?.error || "").trim();
+                detail = String(
+                  payload?.detail || payload?.message || payload?.error || "",
+                ).trim();
               } catch {
                 const text = xhr.responseText.trim();
                 if (text && !text.startsWith("<")) detail = text.slice(0, 220);
@@ -253,7 +321,10 @@ export function useStreamEngine() {
               finishError(`请求失败（HTTP ${xhr.status}）${suffix}`);
             } else {
               const contentType = xhr.getResponseHeader("Content-Type") || "";
-              if (contentType && !contentType.toLowerCase().includes("text/event-stream")) {
+              if (
+                contentType &&
+                !contentType.toLowerCase().includes("text/event-stream")
+              ) {
                 finishError("服务返回了非流式响应");
               } else if (hasVisibleText(fullText) && !sawTerminalEvent) {
                 finishError("流式响应提前结束");

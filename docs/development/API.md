@@ -1,7 +1,7 @@
 # API 接口清单
 
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
-> 最后更新：2026-09-14（第一、二阶段未发布候选合同）
+> 最后更新：2026-09-20（AI 智能体推理内容隔离）
 
 ## 第一、二阶段未发布候选 API 合同（2026-09-14）
 
@@ -263,6 +263,17 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - `/api/v1/ai-agents` 下所有路由均要求服务端认证；“是”表示仅允许正式登录角色 `student`、`teacher`、`admin`、`super_admin`，历史 `guest` 角色不属于正式登录用户。
 - 未携带有效登录凭据返回 `401`；有效会话但角色为 `guest` 返回 `403`。准入失败时不得进入智能体业务服务、会话读写或外部模型调用。
 - 前端 `/ai-agents` 同步使用登录守卫并保留安全的站内 `redirect`，但前端守卫不替代上述 API 权限。
+
+流式回答与持久化边界（2026-09-20）：
+- `POST /ai-agents/stream` 对 Dify 仍保持事件级实时流式转发，但会丢弃 `agent_thought`，并从
+  文本增量和终止事件中删除 `<think>…</think>` 与 Dify DeepSeek reasoning 标记；客户端不得
+  依赖接收供应商内部推理事件或未经处理的 Dify 原始 SSE。
+- 浏览器正文解析只接受 `message_delta`、`message`、`agent_message`、`text_chunk`；未知事件
+  即使包含 `text`、`content` 或 `answer` 也不进入正文。`message_end`、`workflow_finished`
+  仍是成功终止事件，并可携带经过清理的完整答案。
+- `POST /ai-agents/usage` 的 question 保持原样，assistant answer 在写入前清理；若清理后为空，
+  响应中的 `answer` 为空且不创建 answer 消息。会话摘要、会话详情和管理端使用记录对历史
+  answer 执行读取时兼容清理，但不会自动批量修改数据库中的旧行。
 
 补充说明（2026-03-24）：
 - `GET /ai-agents/conversations` 返回按 `session_id` 聚合的会话摘要：

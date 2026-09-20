@@ -10,6 +10,7 @@ from sqlalchemy import select, text
 
 from app.models.agents import AIAgent, ZntConversation
 from app.models.core import User
+from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
 
 
 def _parse_usage_datetime(value: Optional[str], is_end: bool = False) -> Optional[datetime]:
@@ -59,7 +60,7 @@ def _build_usage_response_from_session(row: Dict[str, Any]) -> Dict[str, Any]:
         "user_id": int(user_id or 0),
         "moxing_id": int(agent_id or 0),
         "question": row.get("question") or "",
-        "answer": row.get("answer") or "",
+        "answer": sanitize_assistant_answer(row.get("answer")),
         "session_id": row.get("session_id"),
         "response_time_ms": row.get("response_time_ms"),
         "used_at": row.get("used_at"),
@@ -94,13 +95,17 @@ async def create_agent_usage(
 
     question_row = None
     answer_row = None
+    safe_answer = sanitize_assistant_answer(answer) if answer is not None else None
+    conversation_identity = {
+        "user_id": user.id if user else None,
+        "user_name": user.full_name if user else None,
+        "agent_id": agent.id if agent else None,
+        "agent_name": agent.name if agent else None,
+    }
 
     if question:
         question_row = ZntConversation(
-            user_id=user.id if user else None,
-            user_name=user.full_name if user else None,
-            agent_id=agent.id if agent else None,
-            agent_name=agent.name if agent else None,
+            **conversation_identity,
             session_id=session_id,
             message_type="question",
             content=question,
@@ -109,15 +114,12 @@ async def create_agent_usage(
         )
         db.add(question_row)
 
-    if answer is not None:
+    if safe_answer and safe_answer.strip():
         answer_row = ZntConversation(
-            user_id=user.id if user else None,
-            user_name=user.full_name if user else None,
-            agent_id=agent.id if agent else None,
-            agent_name=agent.name if agent else None,
+            **conversation_identity,
             session_id=session_id,
             message_type="answer",
-            content=answer,
+            content=safe_answer,
             response_time_ms=response_time_ms,
             created_at=used_at_value,
         )
@@ -139,7 +141,7 @@ async def create_agent_usage(
         "user_id": (user.id if user else 0),
         "moxing_id": (agent.id if agent else 0),
         "question": question or "",
-        "answer": answer or "",
+        "answer": safe_answer or "",
         "session_id": session_id,
         "response_time_ms": response_time_ms,
         "used_at": persisted_at,

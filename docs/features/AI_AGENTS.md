@@ -1,6 +1,6 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-09-15
+> 最后更新：2026-09-20
 > 
 > **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
 
@@ -82,8 +82,8 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 **修复方案（3层）**：
 
 1. **后端 `backend/app/services/agents/chat_stream.py`**：
-   - 使用 `aiter_bytes()` 透传 Dify 原始 SSE 字节流
-   - 避免使用 `aiter_text()` 或 `aiter_lines()`（会缓冲）
+   - 使用 `aiter_bytes()` 增量读取 Dify SSE 字节流，并按单个 SSE 事件边界重新组帧
+   - 避免使用 `aiter_text()` 或 `aiter_lines()`（会缓冲），也不聚合完整响应后再返回
 
 2. **后端 `backend/app/api/endpoints/agents/ai_agents/stream.py`**：
    - StreamingResponse 添加响应头：
@@ -101,6 +101,23 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 - 替代 Fetch API（Fetch reader.read() 也会缓冲）
 
 **教训**：SSE 流式输出需要全链路禁用缓冲，任何一层缓冲都会导致前端一次性收到所有数据
+
+### Dify 推理内容隔离（2026-09-20）
+
+Dify 的 DeepSeek 插件可能把 `reasoning_content` 编入同一文本流，表现为
+`<think><!--dify-deepseek-reasoning-->…</think>`。该内容属于内部推理，不是用户可见回答，
+不得出现在浏览器 SSE、页面、使用记录或历史会话中。
+
+- 后端继续使用 `aiter_bytes()` 保持实时性，但不再对 Dify SSE 做无条件原始透传：按事件边界
+  增量解析，丢弃 `agent_thought`，并对 `message`、`agent_message`、`text_chunk` 的正文
+  执行可跨分片的状态化过滤。`message_end`、`workflow_finished` 等完整事件中的字符串也会清理。
+- 前端正文只接受 `message_delta`、`message`、`agent_message`、`text_chunk` 四类明确事件；
+  未知事件和推理事件默认忽略。流式增量、终止事件完整答案和 Markdown 渲染前各有一道清理边界。
+- 使用记录写入前统一清理 assistant answer；清理后为空时不创建 answer 行。会话摘要、本人详情、
+  管理员详情和使用记录响应会在读取时再次清理，以保护尚未治理的历史污染数据。用户 question
+  保持原样，避免用户正常讨论 `<think>` 标签时被修改。
+- 未闭合的 `<think>` 区块按失败关闭处理：区块开始后的剩余内容不展示、不持久化。该策略优先
+  防止推理泄露；历史数据库本身不会由应用启动或读取接口自动批量改写。
 
 ### 长回答与截断处理（2026-07-23）
 
@@ -301,7 +318,8 @@ Caddy 网关 → 浏览器，任一层错误缓冲都会破坏流式体验
 使用 `useStreamEngine` Hook：
 - XHR `onprogress` 监听数据流
 - `eventsource-parser` 解析 SSE 事件
-- 逐字显示 AI 响应
+- 正文事件白名单与跨分片推理内容过滤
+- 合并高频增量后实时显示 AI 响应
 
 ### UI 优化
 

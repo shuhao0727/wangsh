@@ -4,8 +4,11 @@
 """
 
 from typing import List, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
 
 
 async def list_user_conversations(
@@ -66,7 +69,7 @@ async def list_user_conversations(
     items: List[Dict[str, Any]] = []
     for r in rows:
         last_question = (r.get("last_question") or "").strip()
-        last_answer = (r.get("last_answer") or "").strip()
+        last_answer = sanitize_assistant_answer(r.get("last_answer")).strip()
         preview = last_answer or last_question
         if len(preview) > 80:
             preview = preview[:80] + "\u2026"
@@ -111,7 +114,14 @@ async def get_conversation_messages(
     )
     result = await db.execute(sql, {"user_id": user_id, "session_id": session_id})
     rows = result.mappings().all()
-    return [dict(r) for r in rows]
+    return [_sanitize_conversation_row(r) for r in rows]
+
+
+def _sanitize_conversation_row(row) -> Dict[str, Any]:
+    item = dict(row)
+    if item.get("message_type") == "answer":
+        item["content"] = sanitize_assistant_answer(item.get("content"))
+    return item
 
 
 async def get_conversation_messages_admin(
@@ -139,4 +149,4 @@ async def get_conversation_messages_admin(
     )
     result = await db.execute(sql, {"session_id": session_id})
     rows = result.mappings().all()
-    return [dict(r) for r in rows]
+    return [_sanitize_conversation_row(r) for r in rows]
