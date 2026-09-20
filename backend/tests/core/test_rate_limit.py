@@ -20,7 +20,6 @@ def test_redis_rate_limiter_allows_first_request(monkeypatch):
 
     limiter = RedisRateLimiter()
 
-    import app.utils.rate_limit as rl_module
     import app.utils.cache as cache_module
 
     async def fake_get_client_inner():
@@ -74,8 +73,6 @@ def test_in_memory_rate_limiter_allows_first():
 
 
 def test_in_memory_rate_limiter_blocks_rapid_repeat():
-    import app.utils.cache as cache_module
-
     async def fake_increment(key, amount=1):
         return 1
 

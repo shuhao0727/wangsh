@@ -5,8 +5,7 @@ Redis缓存工具
 
 import json
 import asyncio
-from typing import Any, Optional, Dict, List, Union
-from datetime import timedelta
+from typing import Any, Optional, List
 import redis.asyncio as redis
 from app.core.config import settings
 
@@ -337,7 +336,6 @@ def cache_decorator(
             # 从args中提取参数（假设是FastAPI的依赖注入，第一个参数是self或request）
             if args:
                 # 如果是类方法，跳过self
-                start_idx = 1 if hasattr(args[0], '__class__') else 0
                 # 简单处理：只考虑关键字参数
                 pass
             
