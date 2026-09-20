@@ -26,7 +26,7 @@ from app.services.informatics.typst_notes import (
     update_note,
     upsert_asset,
 )
-from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4, try_decrypt_api_key
+from app.utils.agent_secrets import decrypt_api_key, encrypt_api_key, last4, try_decrypt_api_key  # noqa: F401  有意回导，非未使用导入
 from app.utils.cache import cache
 from app.utils.typst_asset_validation import normalize_asset_path
 from app.utils.typst_pdf_storage import abs_pdf_path

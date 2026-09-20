@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from pathlib import Path
 
-from sqlalchemy import delete, select, func, cast, Integer, case, literal
+from sqlalchemy import delete, select, func, cast, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loguru import logger
