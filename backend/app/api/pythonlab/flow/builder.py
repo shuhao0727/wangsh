@@ -6,7 +6,7 @@ Flow 构建器模块
 
 import ast
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from app.api.pythonlab.constants import (
     API_VERSION_FLOW,
@@ -19,9 +19,7 @@ from app.api.pythonlab.constants import (
     E_AST_TOO_LARGE,
     E_PARSE_TIMEOUT,
     E_SYNTAX,
-    MAX_CODE_SIZE_BYTES,
     PARSER_VERSION_FLOW,
-    W_TRUNCATED,
     WS_RATE_LIMIT_PER_SEC,
 )
 from app.api.pythonlab.structured_ir import build_ir_functions, build_ir_module
@@ -77,7 +75,9 @@ def _build_flow(code: str, options: Dict[str, Any]) -> Dict[str, Any]:
     max_nodes = int(limits.get("maxNodes") or DEFAULT_MAX_NODES)
     max_edges = int(limits.get("maxEdges") or DEFAULT_MAX_EDGES)
     max_ast_nodes = int(limits.get("maxAstNodes") or DEFAULT_MAX_AST_NODES)
-    max_depth = int(expand.get("maxDepth") or DEFAULT_MAX_DEPTH)
+    # maxDepth is retained for API compatibility even though flow expansion does
+    # not currently consume the value. Keep integer coercion as input validation.
+    int(expand.get("maxDepth") or DEFAULT_MAX_DEPTH)
     expand_functions = str(expand.get("functions") or "all").strip().lower()
     if expand_functions not in {"none", "top", "all"}:
         expand_functions = "all"
