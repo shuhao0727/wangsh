@@ -24,6 +24,12 @@
 - **发布合同验证：** 版本一致性检查通过；Docker workflow contracts 为 `60 passed / 0 failed`；
   Markdown contracts 为 `10 passed / 0 failed`，派生检查为 `113 files / 436 links / 0 missing`；
   `docker compose ... config`、部署脚本语法和 `git diff --check` 均通过。
+- **本地镜像验证：** 六个 `linux/amd64` 业务镜像已按 `2.1.1` 完整构建并通过
+  `verify-local-images`。首次构建在阿里云 Debian 软件源长时间无进展后安全终止；按项目支持的
+  `DEBIAN_MIRROR` / `DEBIAN_SECURITY_MIRROR` 覆盖改用 Debian 官方源，仅重建三个后端派生镜像
+  后成功。镜像 ID 分别为 backend `0dcd2b0b128b`、frontend `b63a163f48aa`、gateway
+  `076457dcd175`、typst-worker `a47d7582b10e`、pythonlab-worker `acd223da7a95`、sandbox
+  `95e3a87d8692`。
 - **远端发布状态：** GitHub Actions 尚未配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，因此
   `dockerhub-amd64` 暂不能完成六镜像远端推送和 `release-set` 生成。正式镜像必须在本候选合并到
   最新 `main` 后触发，输入 `image_tag=2.1.1`、`push_latest=false`；在 workflow 成功前不得宣称
