@@ -237,7 +237,7 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
         }
         yield _sse_error(err)
         return
-    except Exception as e:
+    except Exception:
         breaker.record_failure(circuit_key)
         logger.exception("智能体流式请求失败: agent_id={}", agent_id)
         err = {"error": "stream_failed", "message": "智能体流式请求失败，请稍后重试"}

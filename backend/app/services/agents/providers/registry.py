@@ -1,7 +1,6 @@
 """Provider 注册表 — 根据 agent 配置返回对应的 Provider 实例"""
 
 import re
-from typing import Optional
 
 from .base import LLMProvider
 from .openai_provider import OpenAIProvider

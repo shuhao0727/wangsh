@@ -1,7 +1,7 @@
 """Provider 基类"""
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class LLMProvider(ABC):
