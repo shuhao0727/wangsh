@@ -15,7 +15,6 @@ SSE pub/sub 模块测试
 """
 
 import asyncio
-import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -184,7 +183,6 @@ def test_redis_publish_failure_fallback():
 
         return q.get_nowait()
 
-    import sys
     result = asyncio.run(run())
     assert result == {"type": "fallback_on_error"}
     _reset()
