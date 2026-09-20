@@ -4,9 +4,9 @@ Flow API 路由模块
 包含所有 API 端点定义。
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_user, require_admin
@@ -16,9 +16,7 @@ from app.api.pythonlab.constants import MAX_CODE_SIZE_BYTES
 from .builder import parse_flow_internal
 from .constants import (
     PROMPT_TEMPLATE_PATH,
-    OPTIMIZE_CODE_TEMPLATE_PATH,
     MAX_TEMPLATE_SIZE,
-    LOG_TYPES,
 )
 
 from .exceptions import (
