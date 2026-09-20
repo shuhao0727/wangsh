@@ -64,7 +64,7 @@ describe("async learning editors", () => {
 
     await waitFor(() => expect(showMessage.error).toHaveBeenCalled());
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.getByText(/加载失败/)).toBeInTheDocument();
+    expect(await screen.findByText(/加载失败/)).toBeInTheDocument();
   });
 
   it("does not open the module mindmap editor when the initial fetch returns 404", async () => {
@@ -83,7 +83,7 @@ describe("async learning editors", () => {
 
     await waitFor(() => expect(showMessage.error).toHaveBeenCalled());
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.getByText(/加载失败/)).toBeInTheDocument();
+    expect(await screen.findByText(/加载失败/)).toBeInTheDocument();
   });
 
   it("uses numeric SVG dimensions in the mindmap editor preview", async () => {
