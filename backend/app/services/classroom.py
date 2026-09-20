@@ -3,7 +3,7 @@
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Optional, Dict, List, Any
+from typing import Optional, List, Any
 
 from sqlalchemy import delete, select, func
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.classroom import ClassroomActivity, ClassroomResponse
 from app.models.core.user import User
-from app.services.classroom_analysis import (
+from app.services.classroom_analysis import (  # noqa: F401  有意回导，非未使用导入
     ClassroomAnalysisRetryableError,
     list_candidate_agents as _list_candidate_agents,
     mark_analysis_enqueue_failed,
