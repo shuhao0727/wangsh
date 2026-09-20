@@ -4,18 +4,15 @@ AI智能体服务
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from datetime import datetime
+from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, and_, or_
 
-from app.models.agents import AIAgent, ZntConversation
-from app.models.core import User
+from app.models.agents import AIAgent
 from app.schemas.agents import (
     AIAgentCreate,
     AIAgentUpdate,
-    AIAgentResponse,
     AgentTestRequest,
     AgentTestResponse,
     AgentStatisticsData,
