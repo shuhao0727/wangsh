@@ -16,7 +16,6 @@ from starlette.datastructures import UploadFile
 
 from app.api.endpoints.xbk import import_export as imports
 from app.core.exception_handlers import generic_exception_handler
-from app.models import XbkCourse, XbkSelection, XbkStudent
 
 
 ROWS = {
@@ -92,9 +91,6 @@ class FakeDb:
                 is_parent = table in self.parents
                 if is_parent:
                     self.parent_queries.append(statement)
-                fields = ("year", "term", "student_no") if table == "xbk_students" else (
-                    ("year", "term", "course_code") if table == "xbk_courses" else
-                    ("year", "term", "student_no", "course_code"))
                 if table == "xbk_selections":
                     source = self.existing if "xbk_students" in self.parents else ()
                 else:

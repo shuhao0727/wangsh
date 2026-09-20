@@ -4,7 +4,7 @@ import re
 from functools import partial
 from io import BytesIO
 from zipfile import ZipFile
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter

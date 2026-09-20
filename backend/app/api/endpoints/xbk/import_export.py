@@ -6,10 +6,8 @@ from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 from sqlalchemy import Numeric, and_, case, cast, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -160,7 +158,7 @@ def _preview_rows(rows: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str,
     return rows[: max(0, min(limit, 50))]
 
 
-from .import_templates import build_template_response, style_worksheet as _style_worksheet, template_columns as _template_columns
+from .import_templates import build_template_response, style_worksheet as _style_worksheet, template_columns as _template_columns  # noqa: F401  有意回导，测试用例按旧路径导入
 
 def _students_mapping() -> Dict[str, List[str]]:
     return {

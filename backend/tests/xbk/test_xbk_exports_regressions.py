@@ -1,6 +1,5 @@
 """Workbook/SQL-contract tests with fake query results; no configured DB access."""
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
