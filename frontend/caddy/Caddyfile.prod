@@ -18,6 +18,15 @@
 		respond "" 404
 	}
 
+	# 公开课独立 HTML 与资源必须命中真实文件，且入口 HTML 不使用长期缓存，
+	# 避免更新时引用已替换的资源，或把缺失的模块回退到 WangSh SPA。
+	@ai_partner path /games/ai-partner/*
+	handle @ai_partner {
+		try_files {path} =404
+		header Cache-Control "no-cache"
+		file_server
+	}
+
 	# 构建产物与运行时静态文件必须命中真实文件；缺失时返回 404，
 	# 不能回退到 index.html，否则浏览器会把 HTML 当成模块脚本加载。
 	@static_assets path /assets/* /static/* /pyodide/* /favicon.ico /favicon.svg /robots.txt /manifest.json
@@ -29,7 +38,7 @@
 
 	# 纯静态 SPA 路由回退
 	handle {
-		try_files {path} {path}/ /index.html
+		try_files {path} {path}/index.html /index.html
 		header Cache-Control "no-cache, no-store, must-revalidate"
 		header Pragma "no-cache"
 		header Expires "0"

@@ -12,6 +12,7 @@
 - `rollback.sh` - 回滚入口
 - `migrate-db.sh` - 数据库迁移
 - `health-check-detailed.sh` - 细粒度健康检查
+- `clean-local-artifacts.sh` - 本地临时产物与缓存清理（默认只预览，`--apply` 才删除）
 - `check-version-consistency.mjs` - CI 版本一致性检查（完整版本号与镜像标签统一使用 SemVer 校验，权威源为 `frontend/package.json`）
 - `workflow-contracts.test.mjs` - GitHub Actions、发布和日志脱敏合同测试
 - `check-markdown-contracts.mjs` - Markdown 链接、生命周期、归档和派生数字检查
@@ -84,6 +85,13 @@ python scripts/xbk/run_all.py --reset
 
 # Markdown 文档合同
 node --test scripts/markdown-contracts.test.mjs
+
+# 预览本地临时产物与测试缓存占用（默认不删除任何文件）
+bash scripts/clean-local-artifacts.sh
+
+# 实际回收 Playwright 转储、output/playwright 与 __pycache__/.pytest_cache/.ruff_cache；
+# 只删除被 .gitignore 忽略且不含跟踪文件的路径，不触碰 .codex/ 证据目录
+bash scripts/clean-local-artifacts.sh --apply
 ```
 
 生产模拟隔离、release-set、日志脱敏、证据权限和失败清理合同由

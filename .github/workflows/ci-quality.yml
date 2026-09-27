@@ -38,7 +38,8 @@ jobs:
             scripts/health-check-detailed.sh \
             scripts/prod-smoke/run.sh \
             start-dev.sh \
-            stop-dev.sh
+            stop-dev.sh \
+            scripts/clean-local-artifacts.sh
           do
             bash -n "$script"
           done

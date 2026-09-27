@@ -125,13 +125,13 @@ Python 进程
 ### 容器配置
 
 **镜像**：
-- 生产 Compose：`shuhao07/pythonlab-sandbox:${IMAGE_TAG}`，当前默认 `2.1.1`
+- 生产 Compose：`shuhao07/pythonlab-sandbox:${IMAGE_TAG}`，当前默认 `2.1.2`
 - 本地开发：`pythonlab-sandbox:py311-arm64`，可由 `PYTHONLAB_SANDBOX_IMAGE` 覆盖
 
 **镜像构建**：
 ```bash
 # 生产镜像统一通过受维护的六镜像构建入口
-IMAGE_TAG=2.1.1 bash scripts/deploy.sh build
+IMAGE_TAG=2.1.2 bash scripts/deploy.sh build
 
 # 开发入口会在本地 sandbox 镜像缺失时按当前架构自动构建
 bash start-dev.sh
