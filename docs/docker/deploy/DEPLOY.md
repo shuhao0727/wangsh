@@ -1,6 +1,6 @@
 # 部署指南
 
-> 最后更新：2026-09-20
+> 最后更新：2026-09-27
 
 ---
 
@@ -125,7 +125,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前发布候选版本**: 2.1.1（Docker 镜像标签 `2.1.1`）
+- **当前发布候选版本**: 2.1.2（Docker 镜像标签 `2.1.2`）
 
 ### 快速连接
 ```bash
@@ -211,13 +211,13 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.1
-IMAGE_TAG=2.1.1
-REACT_APP_VERSION=2.1.1
+APP_VERSION=2.1.2
+IMAGE_TAG=2.1.2
+REACT_APP_VERSION=2.1.2
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.1`）的权威源；
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.2`）的权威源；
 `IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
@@ -265,12 +265,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1.1` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1.1` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1.1` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1.1` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1.1` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1.1` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1.2` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1.2` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1.2` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1.2` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1.2` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1.2` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -288,7 +288,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1.1
+SIM_VERSION=2.1.2
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -350,9 +350,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.1
-IMAGE_TAG=2.1.1
-REACT_APP_VERSION=2.1.1
+APP_VERSION=2.1.2
+IMAGE_TAG=2.1.2
+REACT_APP_VERSION=2.1.2
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -446,9 +446,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.1          # 应用版本号
-IMAGE_TAG=2.1.1             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
-REACT_APP_VERSION=2.1.1     # 前端版本号
+APP_VERSION=2.1.2          # 应用版本号
+IMAGE_TAG=2.1.2             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.1.2     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 
@@ -541,7 +541,21 @@ docker compose exec -T pythonlab-worker docker --version
   - `frontend/caddy/Caddyfile.prod`
   - `gateway/Caddyfile`
 
-### 4. 前端镜像构建复制 Pyodide 失败
+### 4. 公开课独立静态页与 SPA 回退
+
+`/games` 是 WangSh 的 SPA 页面，必须回退到主站 `index.html`；
+`/games/ai-partner/index.html` 是独立构建的同源顶层页面，不经过主 SPA 路由。
+其 HTML、JS、CSS 和 favicon 必须随前端生产镜像一起构建。生产前端 Caddy
+对 `/games/ai-partner/*` 只提供真实存在的文件，缺失时返回 `404`，不能返回主站 HTML；
+入口 HTML 不长期缓存。SPA 回退使用 `{path}/index.html` 而非目录候选 `{path}/`，
+避免 `/games` 与同名静态目录冲突导致 404。
+
+本地先在隔离 `simulate` 环境验收 `/games`、`/games/ai-partner/index.html`、
+`/games/lock-cracker` 及静态资源 MIME/404。模拟通过不等于发布授权：
+待页面效果确认后才可按正式流程构建、推送、校验 release-set 并部署服务器。
+不得用一次性模拟镜像标签覆盖正式版本或在服务器直接从源码构建。
+
+### 5. 前端镜像构建复制 Pyodide 失败
 
 `frontend/public/pyodide` 是 `prebuild` 从 `node_modules/pyodide` 生成的目录，不是
 Docker 构建输入。该目录必须保留在 `frontend/.dockerignore` 中；否则本地残留文件或
@@ -583,7 +597,7 @@ test -s build/assets/pdf.worker.js
 Vite 复制 PDF worker 失败时必须抛出错误，Docker 构建还会复核最终
 `build/assets/pdf.worker.js`。
 
-### 5. Mindmap 本地运行时边界
+### 6. Mindmap 本地运行时边界
 
 `frontend/public/mindmap-demo/` 只保留在开发机，不进入 Git 或生产 Docker 构建上下文。
 Vite 开发服务器仍可读取本地目录；普通生产构建即使先复制了 `public/`，结束时也会删除
@@ -595,7 +609,7 @@ Vite 开发服务器仍可读取本地目录；普通生产构建即使先复制
 发布镜像；恢复该能力前，应先建立有固定版本、来源校验和许可说明的可复现生成、下载或
 独立镜像流程。
 
-### 6. Typst PDF 渲染失败
+### 7. Typst PDF 渲染失败
 
 确保 `typst-worker` 服务正常运行，且字体文件已正确挂载
 
@@ -604,7 +618,7 @@ docker compose ps typst-worker
 docker compose exec -T typst-worker typst --version
 ```
 
-### 7. 数据库连接失败
+### 8. 数据库连接失败
 
 检查 `POSTGRES_HOST` 配置：
 - Docker 内部：使用 `postgres`

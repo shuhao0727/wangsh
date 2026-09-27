@@ -84,7 +84,7 @@ const APPS = [
     action: 'agents',
     available: true,
   },
-  { key: 'it_game_lock_cracker_enabled', title: '小游戏', description: '枚举法 · 密码锁破解 · 更多教学小游戏', icon: <Network className="h-5 w-5" />, color: 'var(--ws-color-warning)', bg: 'color-mix(in srgb, var(--ws-color-warning) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-warning) 22%, transparent)', action: 'games', available: true },
+  { key: 'it_game_lock_cracker_enabled', title: '公开课', description: '召唤一名AI同学 · 三维选型课堂', icon: <Network className="h-5 w-5" />, color: 'var(--ws-color-warning)', bg: 'color-mix(in srgb, var(--ws-color-warning) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-warning) 22%, transparent)', action: 'games', available: true },
   {
     key: 'it_game_repo_enabled',
     title: '游戏',

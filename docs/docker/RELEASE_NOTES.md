@@ -2,13 +2,37 @@
 
 > 状态：active
 > Owner：release-ops
-> 最近复核：2026-09-20
+> 最近复核：2026-09-27
 > 归档条件：当前未发布内容进入正式版本记录，且后续发布记录替代其当前指导作用
 >
 > 目标：集中记录每次发布的关键变更、配置影响、构建/部署步骤、验证结果与回滚点。
 >
 > 历史命令说明：下方旧版本记录中的 `build_images.sh` 仅用于追溯，脚本已删除。
 > 当前构建入口统一使用 `scripts/deploy.sh build` 或 `scripts/deploy.sh build-amd64`。
+
+---
+
+## v2.1.2 正式发布：公开课《召唤一名AI同学》入口与静态页（2026-09-27）
+
+- 信息技术页将“小游戏”入口展示为“公开课”，`/games` 新增“召唤一名AI同学”卡片，
+  保留“密码锁破解”原有链接、功能开关与访问路径；未更改数据库、后端 API 或权限逻辑。
+- 前端镜像内收录公开课的正式静态构建产物，访问 `/games/ai-partner/index.html`；
+  生产 Caddy 对该目录只提供存在的文件，缺失资源返回 404，不回退到主 SPA。
+  同时修复 `/games` 目录与 SPA 路由冲突的回退规则。
+- 前端类型检查、712 项测试与构建通过；部署/工作流合同测试 `60 passed / 0 failed`，版本一致性
+  检查与 `git diff --check` 通过。使用 `shuhao07/*:2.1.2` 的隔离 Docker 生产模拟和项目自带 smoke
+  通过，已验证 `/games`、公开课三维画布、静态资源 MIME 和缺失资源 404。
+- 六个 `linux/amd64` 正式镜像已推送到 Docker Hub，`release-set-2.1.2.txt` 已按 registry
+  manifest digest 生成并在本地校验；服务器 `/home/shuhao/wangsh/.env` 的版本字段已更新为
+  `2.1.2`，部署前已备份 `.env` 与旧 `release-set.txt`，数据库未迁移。
+- 生产服务器 `shuhao-Virtual-Machine` 已运行六个 `2.1.2` 业务镜像。由于服务器直连
+  Docker Hub registry manifest 超时、配置的镜像 mirror 拉取出现 EOF，本次按已校验的本地
+  镜像通过 SSH 传输并使用 `docker compose --pull never` 启动，避免服务器源码构建；该部署偏差
+  已保留在验收记录中。生产详细健康检查最终为 `healthy`，API、数据库、Redis、前端、网关、
+  Typst worker 与 PythonLab worker 全部通过。
+- 生产自检确认 `/api/health`、`/games`、`/games/ai-partner/index.html`、`/games/lock-cracker`
+  返回 200，公开课 JS/CSS MIME 正确，缺失资源返回 404；公开课 HTML/JS/CSS 响应 SHA-256
+  与本地正式静态源一致。远端既有 `docker-compose.yml` 未提交改动保持不变。
 
 ---
 

@@ -2,9 +2,32 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.1
-> 最近更新：2026-09-20
+> 当前版本：2.1.2
+> 最近更新：2026-09-27
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
+
+
+## 2026-09-27 公开课静态页 v2.1.2 发布与生产验收（当前工作区）
+
+- **范围：** 信息技术页入口文案从“小游戏”改为“公开课”；`/games` 新增“召唤一名AI同学”
+  公开课卡片；保留 `/games/lock-cracker` 原有入口、功能开关和访问逻辑。公开课静态构建产物
+  以同源顶层页面 `/games/ai-partner/index.html` 集成，不使用 iframe。
+- **前端验证：** `npm run type-check`、`npm run test`（99 个测试文件、712 个测试通过）和
+  `npm run build` 通过；正式构建产物包含公开课 HTML、JS、CSS 和 favicon。部署/工作流合同测试
+  `node scripts/workflow-contracts.test.mjs` 为 `60 passed / 0 failed`，版本一致性检查和
+  `git diff --check` 通过。
+- **Docker 模拟：** 使用正式镜像 `shuhao07/*:2.1.2`、隔离端口 `16609` 启动生产模拟，
+  项目自带生产 smoke 全部通过；`/games`、公开课三维 canvas、密码锁页面、JS/CSS MIME 和
+  缺失资源 404 均通过。
+- **镜像与 release-set：** 六个 `linux/amd64` 业务镜像已构建并推送；
+  `release-set-2.1.2.txt` 按 Docker Hub registry manifest digest 生成并在本地校验。服务器直连
+  registry manifest 超时，配置的镜像 mirror 拉取出现 EOF，因此没有在服务器源码构建或依赖不确定的
+  registry 重拉；已将本地已验证镜像通过 SSH 传输到服务器，并按 `--pull never` 运行。
+- **生产验收：** `shuhao-Virtual-Machine` 的六个业务容器均为 `2.1.2` 且 healthy；详细健康检查
+  为 `healthy`（API、PostgreSQL、Redis、frontend、gateway、Typst worker、PythonLab worker
+  全部通过）。服务器本机自检确认 `/api/health`、`/games`、`/games/ai-partner/index.html`、
+  `/games/lock-cracker` 为 200，公开课 JS/CSS MIME 正确，缺失资源为 404；公开课 HTML/JS/CSS
+  响应 SHA-256 与本地正式静态源一致。未执行数据库迁移，旧 `.env` 与 `release-set.txt` 已备份。
 
 
 ## 2026-09-20 WangSh 2.1.1 发布候选验证（当前工作区）

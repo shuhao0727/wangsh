@@ -1,12 +1,13 @@
 /**
- * 小游戏列表页 /games
+ * 公开课与教学互动资源列表页 /games
  */
 import React from "react";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const GAMES = [
-  { id:"lock-cracker", title:"密码锁破解", desc:"理解枚举法——系统性地尝试所有可能组合，破解三种难度密码锁", icon:<Lock className="h-12 w-12"/>, color:"#F59E0B", href:"/games/lock-cracker", available:true },
+  { id:"ai-partner", title:"召唤一名AI同学", desc:"三维选型课堂：通过互动体验理解 AI 同学的选择与协作", icon:<Sparkles className="h-12 w-12"/>, color:"var(--ws-color-primary)", href:"/games/ai-partner/index.html", available:true },
+  { id:"lock-cracker", title:"密码锁破解", desc:"理解枚举法——系统性地尝试所有可能组合，破解三种难度密码锁", icon:<Lock className="h-12 w-12"/>, color:"var(--ws-color-warning)", href:"/games/lock-cracker", available:true },
 ];
 
 const GamesPage: React.FC = () => (
@@ -15,11 +16,11 @@ const GamesPage: React.FC = () => (
       <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
         <ArrowLeft className="h-4 w-4 mr-1"/>返回
       </Button>
-      <span className="ml-4 text-sm font-semibold">小游戏</span>
+      <span className="ml-4 text-sm font-semibold">公开课</span>
     </header>
     <div className="max-w-4xl mx-auto px-6 py-8">
-      <h2 className="text-lg font-bold mb-2">教学小游戏</h2>
-      <p className="text-sm text-text-tertiary mb-6">通过互动游戏理解编程概念</p>
+      <h2 className="text-lg font-bold mb-2">公开课与教学互动资源</h2>
+      <p className="text-sm text-text-tertiary mb-6">通过互动课堂与教学游戏理解编程和人工智能概念</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {GAMES.map(g => (
           <a key={g.id} href={g.href} target="_blank" rel="noopener noreferrer"

@@ -10,6 +10,7 @@ const frontendRoot = path.resolve(scriptsDir, "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const reviewedStaticAssets = new Map([
   ["frontend/public/favicon.svg", 64 * 1024],
+  ["frontend/public/games/ai-partner/favicon.svg", 64 * 1024],
 ]);
 const reviewedStaticExtension =
   /\.(?:ttf|otf|woff2?|eot|svg|png|jpe?g|gif|webp|wasm|map)$/i;

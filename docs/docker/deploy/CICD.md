@@ -23,13 +23,13 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
 
 - **触发方式**：手动触发（workflow_dispatch）
 - **输入参数**：
-  - `image_tag`（必填）：完整 SemVer 镜像标签（如 `2.1.1`）
+  - `image_tag`（必填）：完整 SemVer 镜像标签（如 `2.1.2`）
   - `push_latest`（可选）：是否同时推送 `latest` 标签，默认 `false`
 - **构建平台**：`linux/amd64`
 - **发布门禁**：workflow 通过 concurrency 串行执行，只允许当前 `origin/main` 对应
   commit 调用 reusable `ci-quality.yml`；非 main、落后提交或质量门禁失败时不发布镜像
 - **版本约束**：`image_tag` 必须与 `frontend/package.json` 的完整 SemVer 完全一致
-  （如 package.json 为 `2.1.1` 时 tag 也必须为 `2.1.1`）；workflow 输入通过环境变量传入 shell，
+  （如 package.json 为 `2.1.2` 时 tag 也必须为 `2.1.2`）；workflow 输入通过环境变量传入 shell，
   禁止直接拼接执行
 - **推广流程**：六个镜像先推 `${version}-build-${run_id}`，全部 staging
   manifest 可读取后再推广版本 tag；推广后逐镜像校验 registry manifest digest，
