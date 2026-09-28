@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = process.env.VERSION_CHECK_ROOT
   ? resolve(process.env.VERSION_CHECK_ROOT)
-  : resolve(import.meta.dirname, "..");
+  : resolve(scriptDir, "..");
 
 const read = (path) => readFileSync(resolve(root, path), "utf8");
 
