@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
+import { aiPartnerTheme } from "./vite.ai-partner-theme";
 import path from "path";
 import { copyFileSync, rmSync } from "fs";
 import { join } from "path";
@@ -111,6 +112,20 @@ export default defineConfig(async ({ mode }) => {
 
   const plugins: PluginOption[] = [
     react(),
+    aiPartnerTheme(),
+    {
+      name: "ai-partner-classroom-source",
+      configureServer(server) {
+        // Preserve the public classroom URL while serving maintained source.
+        server.middlewares.use((req, _res, next) => {
+          if ((req.url === "/games/ai-partner" || req.url?.startsWith("/games/ai-partner/")) && !req.url.startsWith("/games/ai-partner/favicon.svg")) {
+            req.url = req.url.replace(/^\/games\/ai-partner(?=\/|$)/, "/ai-partner");
+            if (req.url === "/ai-partner" || req.url === "/ai-partner/") req.url = "/ai-partner/index.html";
+          }
+          next();
+        });
+      },
+    },
       // 自定义插件：复制 PDF worker 文件到构建输出目录
       {
         name: "copy-pdf-worker",

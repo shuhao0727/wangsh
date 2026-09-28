@@ -1,0 +1,43 @@
+/* Standalone page: tokens supplied by virtual:wangsh-theme-tokens.css.
+   Scope additions to floating/auth UI; preserve the teaching Three scene. */
+
+.partner-floating, .partner-auth { color: var(--ws-color-text); font-family: inherit; font-size: 14px; line-height: 1.5; }
+.partner-floating [hidden], .partner-auth [hidden] { display: none !important; }
+.partner-floating button, .partner-auth button, .partner-auth a {
+  font: inherit; min-height: 40px; border: 1px solid var(--ws-color-border);
+  border-radius: 8px; padding: 7px 12px; background: var(--ws-color-surface);
+  color: var(--ws-color-primary-active); cursor: pointer;
+}
+.partner-floating button:focus-visible, .partner-auth button:focus-visible, .partner-auth a:focus-visible {
+  outline: 3px solid var(--ws-color-primary); outline-offset: 3px;
+}
+.partner-floating button:disabled, .partner-auth button:disabled { opacity: .6; cursor: not-allowed; }
+.partner-floating .partner-launcher {
+  position: fixed; left: max(20px, env(safe-area-inset-left)); top: max(20px, env(safe-area-inset-top));
+  z-index: 1100; background: var(--ws-color-primary); color: var(--ws-color-surface);
+  font-weight: 700; padding: 11px 18px;
+}
+.partner-panel {
+  position: fixed; z-index: 1101; left: max(20px, env(safe-area-inset-left)); top: max(82px, calc(env(safe-area-inset-top) + 62px));
+  width: min(440px, calc(100vw - 32px)); max-height: min(70dvh, 600px); overflow: auto;
+  box-sizing: border-box; padding: 18px; background: var(--ws-color-surface);
+  border: 1px solid var(--ws-color-border); border-radius: 14px;
+  box-shadow: 0 12px 40px var(--ws-color-border);
+}
+.partner-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.partner-panel h2 { margin: 0; font-size: 18px; }
+.partner-empty { color: var(--ws-color-text-secondary); font-size: 12px; margin: 10px 0; }
+.partner-round, .partner-feedback { font-size: 13px; margin: 10px 0; overflow-wrap: anywhere; }
+.partner-feedback:empty { display: none; }
+.partner-error { color: var(--ws-color-error); }
+.partner-table-wrap { margin-top: 12px; overflow-x: auto; }
+.partner-panel table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.partner-panel th, .partner-panel td { border-bottom: 1px solid var(--ws-color-border); text-align: left; padding: 9px 6px; overflow-wrap: anywhere; }
+.partner-panel th { background: var(--ws-color-surface-2); font-size: 12px; }
+.partner-panel th:first-child, .partner-panel th:last-child { width: 44px; }
+.partner-panel .partner-me { background: var(--ws-color-primary-muted); font-weight: 700; }
+.partner-auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; font-size: 12px; }
+.partner-auth span { flex: 1 0 100%; overflow-wrap: anywhere; }
+
+/* Reserve header space for the fixed desktop launcher; do not cover the title. */
+.partner-board-enabled .topbar .brand { margin-left: 84px; }

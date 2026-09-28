@@ -69,6 +69,27 @@ npm run test:scripts
 - 单页治理报告默认生成到 `../test-results/ui-page-reports/`，作为可重建验证产物，
   不进入正式文档或历史归档。
 
+## AI伙伴独立源码入口（未发布）
+
+以下 npm 入口在 `frontend/` 下使用，由主线程接入；此处不记录执行结果：
+
+| 命令 | 职责 |
+|---|---|
+| `npm run type-check` | 类型检查同时覆盖主站与 `ai-partner/` 独立源码 |
+| `npm run build` | 先构建主站，再独立构建 AI伙伴至 `build/games/ai-partner/` |
+| `npm run build:ai-partner` | 使用 `vite.ai-partner.config.ts` 独立构建 AI伙伴 |
+| `npm run dev:ai-partner` | 独立源码开发入口 |
+| `npm run test:ai-partner` | AI伙伴专项测试入口 |
+
+页面 URL 仍为 `/games/ai-partner/index.html`。旧 `public/games/ai-partner/` 仅移除
+`index.html` 和两份已打包 JS/CSS；`favicon.svg` 保留原位置以维持静态白名单，不迁往
+`ai-partner/public/`。独立 Vite 的 `publicDir` 复用 `public/games/ai-partner/`，
+将保留的 favicon 复制到 `build/games/ai-partner/`。
+
+本轮仅同步未发布说明，不构建或推送镜像、不部署；实际测试数字由主线程写入
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)，功能边界见
+[AI 智能体 owner](../../docs/features/AI_AGENTS.md#ai伙伴临时共享榜单未发布)。
+
 ## 维护规则
 
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。

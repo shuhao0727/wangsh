@@ -1,0 +1,76 @@
+{
+  "source": "external-local-source: img2threejs-试用/robot-v1",
+  "copied_at": "2026-09-28",
+  "note": "Source hashes before platform adaptation. Teaching original is read-only; no dist/node_modules/backups copied.",
+  "files": [
+    {
+      "path": "index.html",
+      "sha256": "ae86981c3f754c5341560d856b1efe0a6fb274e9b76c534026cf282e034c4a8e"
+    },
+    {
+      "path": "src/main.ts",
+      "sha256": "d1abe0ae8a0527b8316414cb6a2cc8282acc276b945f4513d37333915ccad943"
+    },
+    {
+      "path": "src/selection.ts",
+      "sha256": "b33da7f93bc924cc9620f096b071255880969927e264e779112c707e5e3b8b97"
+    },
+    {
+      "path": "src/qualityCapture.ts",
+      "sha256": "9fa11a3ffb8c18d7801f6781d0a455040eae440ff03b14da9fb7d2c527b828dd"
+    },
+    {
+      "path": "src/selection.css",
+      "sha256": "912806d07bcd3d680e10f0d3f7bb58adecf62bf52ef4874f82a461f814a33d30"
+    },
+    {
+      "path": "src/selection-rules.ts",
+      "sha256": "c33a6c3a5b85ca1e93c351786d363d98471eaa507a0aa6ae7403867d2e9b00e4"
+    },
+    {
+      "path": "src/classroom-scoring.ts",
+      "sha256": "03a7cbaf47b1bfdef5e7a47dd63650a9293b8644617dbcb2b8779d9e26394cc8"
+    },
+    {
+      "path": "src/style.css",
+      "sha256": "237ae304602f62c507f80c77e32eb10d1d231acef337466f7a3848e9723cf97e"
+    },
+    {
+      "path": "src/catalog.json",
+      "sha256": "c56491dbf817c1446af04ea0726eeb0ad1ef04ff9d12cfd4c7d23c3df9ee5fd4"
+    },
+    {
+      "path": "src/createObjectModel.ts",
+      "sha256": "55840452d947d572d29808da868896b8244b5ac39c47ef672540cc9309c67f28"
+    },
+    {
+      "path": "src/createClassroomRobot.ts",
+      "sha256": "819e1b00b2d5da61a6136064ba9cd7051758a12eccc63ec187c6e2edffd03ef6"
+    }
+  ],
+  "reused_assets": [
+    {
+      "path": "../public/games/ai-partner/favicon.svg",
+      "source_sha256": "0e7f321ee512094e08dc506fefcbf2e4312c06f9ebb1c1e708af58759651f54a",
+      "platform_sha256": "0e7f321ee512094e08dc506fefcbf2e4312c06f9ebb1c1e708af58759651f54a"
+    }
+  ],
+  "preservation": {
+    "unchanged_visual_and_rules": [
+      "src/createClassroomRobot.ts",
+      "src/createObjectModel.ts",
+      "src/qualityCapture.ts",
+      "src/selection-rules.ts",
+      "src/catalog.json",
+      "src/style.css",
+      "src/selection.css"
+    ],
+    "adapted": [
+      "index.html",
+      "src/main.ts",
+      "src/selection.ts",
+      "src/classroom-scoring.ts"
+    ],
+    "scoring_note": "scoreClassroomPlan and its five dimensions preserved byte-for-byte; legacy local leaderboard/history functions removed."
+  }
+}

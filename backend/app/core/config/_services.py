@@ -19,6 +19,13 @@ class ServicesSettingsMixin:
     AGENT_API_KEY: Optional[str] = Field(default=None)
     AI_AGENT_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=256, le=65536)
 
+    # ==================== 单节课临时浮动榜单 ====================
+    AI_PARTNER_LEADERBOARD_ROUND_ID: str = Field(
+        default="classroom", min_length=1, max_length=128, pattern=r".*\S.*"
+    )
+    AI_PARTNER_SCORING_AGENT_ID: Optional[int] = Field(default=None, gt=0)
+    AI_PARTNER_LEADERBOARD_DURATION_SECONDS: int = Field(default=3600, ge=1)
+
     # ==================== HTTPX 客户端配置 ====================
     HTTPX_MAX_CONNECTIONS: int = Field(default=100)
     HTTPX_MAX_KEEPALIVE_CONNECTIONS: int = Field(default=20)

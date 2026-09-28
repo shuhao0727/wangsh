@@ -125,7 +125,7 @@
 - **域名**: wangsh.cn
 - **SSH 端口**: 6607
 - **用户**: shuhao
-- **当前发布候选版本**: 2.1.2（Docker 镜像标签 `2.1.2`）
+- **当前发布候选版本**: 2.1.3（Docker 镜像标签 `2.1.3`）
 
 ### 快速连接
 ```bash
@@ -211,13 +211,13 @@ bash scripts/deploy.sh deploy
 `scripts/check-version-consistency.mjs` 阻止版本漂移：
 
 ```bash
-APP_VERSION=2.1.2
-IMAGE_TAG=2.1.2
-REACT_APP_VERSION=2.1.2
+APP_VERSION=2.1.3
+IMAGE_TAG=2.1.3
+REACT_APP_VERSION=2.1.3
 IMAGE_REPOSITORY_PREFIX=shuhao07
 ```
 
-`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.2`）的权威源；
+`frontend/package.json` 的 `version` 是完整 SemVer（如 `2.1.3`）的权威源；
 `IMAGE_TAG`、release-set、`APP_VERSION`、`VERSION`（如配置）和 `REACT_APP_VERSION`
 必须使用同一个完整版本号。`check-version-consistency.mjs` 与 `verify-release-set` 均按完全一致
 校验，避免补丁版本复用旧镜像标签或同标签镜像漂移。
@@ -265,12 +265,12 @@ DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ```
 
 构建的镜像列表：
-- `shuhao07/wangsh-backend:2.1.2` - 后端 FastAPI 服务
-- `shuhao07/wangsh-frontend:2.1.2` - 前端静态文件
-- `shuhao07/wangsh-gateway:2.1.2` - Caddy 网关
-- `shuhao07/wangsh-typst-worker:2.1.2` - Typst PDF 编译 worker
-- `shuhao07/wangsh-pythonlab-worker:2.1.2` - PythonLab 调试 worker
-- `shuhao07/pythonlab-sandbox:2.1.2` - PythonLab 沙箱镜像
+- `shuhao07/wangsh-backend:2.1.3` - 后端 FastAPI 服务
+- `shuhao07/wangsh-frontend:2.1.3` - 前端静态文件
+- `shuhao07/wangsh-gateway:2.1.3` - Caddy 网关
+- `shuhao07/wangsh-typst-worker:2.1.3` - Typst PDF 编译 worker
+- `shuhao07/wangsh-pythonlab-worker:2.1.3` - PythonLab 调试 worker
+- `shuhao07/pythonlab-sandbox:2.1.3` - PythonLab 沙箱镜像
 
 ### 2. 本地生产模拟验证
 
@@ -288,7 +288,7 @@ SIM_RUN_PROD_SMOKE=true SIM_CLEANUP=true bash scripts/deploy.sh simulate
 默认模拟参数：
 
 ```bash
-SIM_VERSION=2.1.2
+SIM_VERSION=2.1.3
 SIM_IMAGE_REPOSITORY_PREFIX=shuhao07
 SIM_WEB_PORT=16608
 SIM_RUN_PROD_SMOKE=false
@@ -350,9 +350,9 @@ bash scripts/deploy.sh push
 
 ```bash
 # 确认 .env 使用生产配置
-APP_VERSION=2.1.2
-IMAGE_TAG=2.1.2
-REACT_APP_VERSION=2.1.2
+APP_VERSION=2.1.3
+IMAGE_TAG=2.1.3
+REACT_APP_VERSION=2.1.3
 IMAGE_REPOSITORY_PREFIX=shuhao07
 
 # 将发布 workflow 生成的 release-set.txt 放到仓库根目录。
@@ -446,9 +446,9 @@ docker compose -f docker-compose.dev.yml down
 
 ### 版本配置
 ```bash
-APP_VERSION=2.1.2          # 应用版本号
-IMAGE_TAG=2.1.2             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
-REACT_APP_VERSION=2.1.2     # 前端版本号
+APP_VERSION=2.1.3          # 应用版本号
+IMAGE_TAG=2.1.3             # Docker 镜像标签（完整 SemVer，与 package.json 完全一致）
+REACT_APP_VERSION=2.1.3     # 前端版本号
 IMAGE_REPOSITORY_PREFIX=shuhao07  # Docker Hub 镜像命名空间
 ```
 
@@ -470,6 +470,53 @@ BACKEND_RELOAD=false         # 生产环境必须为 false
 SSE_REDIS_PUBSUB_ENABLED=true # 多 worker SSE 必须开启并保证 Redis 可用
 IT_GAME_MAX_UPLOAD_BYTES=524288000 # IT 游戏安装包上传上限（字节）
 ```
+
+### AI伙伴临时共享榜单配置（未发布）
+
+| 后端配置项 | 默认值 | 说明 |
+|---|---|---|
+| `AI_PARTNER_LEADERBOARD_ROUND_ID` | `classroom` | 当前课堂轮次；新一课更换为新的 `round_id`，不复用已结束轮次 |
+| `AI_PARTNER_LEADERBOARD_DURATION_SECONDS` | `3600` | 正整数固定时长窗口，从首个有效榜单提交原子开启，不随评分或提交续期 |
+| `AI_PARTNER_SCORING_AGENT_ID` | 未设置（`None`） | 可选正整数，指定平台现有且启用的评分智能体；未设置时明确不可评分，`evaluate` 返回 `503` |
+
+**模型配置与凭据边界：**
+
+- 在平台已有智能体管理能力中维护评分智能体，将其 ID 注入后端有效配置；不新增榜单管理页。
+  每次评分按 ID 读取现有配置（不使用 agent 缓存）；需启用该智能体并填写显式 API URL，
+  非 Dify 智能体还必须填写模型名称。Dify 使用已配置应用及其 provider 适配，不要求该模型字段。
+- 凭据复用平台解析逻辑：优先解密 `api_key_encrypted`，其次兼容已有 `api_key`；
+  非 Dify 且按平台既有逻辑识别为 OpenRouter 端点时，缺失 key 可回退 `OPENROUTER_API_KEY`。
+  评分接口仍要求智能体自己的 URL，不能仅靠全局默认 URL；无可用 key 返回 `503`。
+  不把密钥写入前端、报告、截图或公开示例，也不为了验收新增明文 key。
+- 模型端点执行已有 SSRF 校验；此评分路径不放行本地 Ollama 例外，内网/环回等地址会被拒绝。
+  URL 不得含用户名密码、query 或 fragment；请求不跟随重定向、不继承 HTTP 代理环境。
+  不应为联调绕过端点校验。
+- 评分使用后端固定四维提示词，不采用普通聊天的调试 stub、重试或备用模型降级。
+  模型调用总时限 `25` 秒，非 Dify 请求 `max_tokens=2400`；响应体上限 `65536` 字节，
+  提取后的模型文本上限 `20000` 字符。超时或结构化输出不合格均失败，不返回替代分数。
+- 请求包含后端目录参考数据及学生提交的名称、任务、取舍、测试和风险记录，会发送给所配供应商。
+  课堂记录应避免包含凭据或其他不必要的个人敏感信息；参考价不是实时采购报价。
+
+**运行配置与 Redis：**
+
+- 生产 `docker-compose.yml` 已显式透传上述三个 `AI_PARTNER_*` 变量。部署前在服务器 `.env`
+  设置唯一的新课堂轮次与固定时长，并将 `AI_PARTNER_SCORING_AGENT_ID` 绑定到平台中已启用且配置完整的
+  评分智能体；留空时评分接口按设计返回 `503`，不得用前端规则分数或固定分数替代。
+- 依赖共享 Redis，不新增 DB migration。Redis 故障返回 `503`，不以进程内榜单或评分结果替代共享状态。
+  模型成功但凭证存储失败同样不可提交；不能将供应商成功响应单独当作业务闭环成功。
+- 评分凭证最多保留 `600` 秒，签发时若轮次已启动则不超过截止时间；绑定用户、轮次、作品名并在
+  有效榜单提交时一次性消费。评分不启动课堂计时，过期后应重新评分，不能由浏览器自行补分。
+- 到期清除榜单姓名、成绩，只保留 deadline-only metadata 防止同轮次复活；不得删除该 metadata
+  重开旧轮次。Redis 清空、淘汰或丢失这些键会破坏防重开保证，不应当作持久考试存储。
+- 评分目录由后端自带 `backend/app/services/ai_partner_catalog.json` 提供，运行时不读取前端目录。
+  部件目录变更时需核对前后端目录及计价规则一致，特别是 RTX 4060 计算模块与其显存整卡条目不重复计价。
+
+**验收与发布限制：** 未配置 AI 时必须实测不可评分提示；有配置时再单独验证真实供应商、四维结构化结果、
+凭证提交及错误路径。mock / monkeypatch、规则检查、jsdom 或 Redis 测试均不能证明真实模型已验收。
+本轮桌面优先、不测手机；实际测试事实仅写入 [TEST_STATUS](../testing/TEST_STATUS.md)。
+完整接口、限流与错误码见 [API owner](../../development/API.md#ai伙伴临时共享榜单未发布)。
+
+以上为未发布配置说明，不表示本轮已构建镜像、push 或部署；不据此执行发布操作。
 
 ### 业务时区
 
@@ -549,6 +596,14 @@ docker compose exec -T pythonlab-worker docker --version
 对 `/games/ai-partner/*` 只提供真实存在的文件，缺失时返回 `404`，不能返回主站 HTML；
 入口 HTML 不长期缓存。SPA 回退使用 `{path}/index.html` 而非目录候选 `{path}/`，
 避免 `/games` 与同名静态目录冲突导致 404。
+
+未发布的源码构建调整：`frontend/ai-partner/` 由 `frontend/vite.ai-partner.config.ts`
+独立构建；主站构建后再输出到 `frontend/build/games/ai-partner/`，访问路径不变。
+旧 `frontend/public/games/ai-partner/` 仅移除旧 `index.html` 和两份已打包 JS/CSS，
+为保留静态白名单，`frontend/public/games/ai-partner/favicon.svg` 留在原处，不迁移。
+独立 Vite 的 `publicDir` 复用该目录，将 favicon 复制到 `build/games/ai-partner/`；
+命令入口见 [前端脚本说明](../../../frontend/scripts/README.md#ai伙伴独立源码入口未发布)。
+此调整仍为未发布变更，不表示下述模拟、镜像构建、推送或部署已执行。
 
 本地先在隔离 `simulate` 环境验收 `/games`、`/games/ai-partner/index.html`、
 `/games/lock-cracker` 及静态资源 MIME/404。模拟通过不等于发布授权：

@@ -3,9 +3,92 @@
 > 状态：active
 > Owner：testing
 > 当前版本：2.1.2
-> 最近更新：2026-09-27
+> 最近更新：2026-09-28
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
+
+## 2026-09-28 AI伙伴页面文案精简（未发布）
+
+- **范围：** 删除重复介绍、英文装饰标题与“本地交互模式”字样；缩短任务引导和检查说明，
+  选型规则默认折叠。保留按钮、表单、校验、关键风险提示及评分数据发送说明，不改业务逻辑。
+- **自动化：** `npm run type-check`、`npm run build:ai-partner` 通过；AI伙伴测试
+  4 文件 / 55 passed。新增文案与操作保留回归，首次断言发现状态栏会被身份通知覆盖，
+  将数据发送说明保留在可展开的数据说明中后复跑通过。构建仍有既有 chunk 大小提醒。
+- **桌面交互：** 系统 Chrome + Playwright，1440×1000、1280×800，10 组检查通过。
+  覆盖页面/canvas、精简文案、规则展开、三维工具、左上角榜单、评分与凭证上榜、
+  修改作废/迟到响应、搜索重置、草稿保存恢复、报告与JSON下载；无相关console/pageerror。
+  评分使用隔离接口夹具，不代表真实模型验收；本轮不测手机。
+- **证据：** 外部可视化目录 `ai-partner-copy-simplified/`，含 `ui-results.json`、
+  `desktop-simplified.png` 和实际导出文件；临时脚本与构建日志位于
+  `/tmp/ai-partner-copy-20260928/`。预览保持 `127.0.0.1:16610`。
+- **边界：** 不修改后端、模型配置、教学原源或发布文件；未打包Docker镜像、commit、push或部署。
+
+## 2026-09-28 AI伙伴智能评分与左上角榜单（未发布，桌面隔离验证）
+
+- **范围：** 在前轮临时榜单基础上，改为后台模型 API 四维评分（价格性价比、任务完成度、
+  选择合理性、设计验证与风险，各 25 分）；榜单移至左上角、简化文案并避让标题。客户端只提交
+  部件 ID 与设计材料，使用服务器一次性评分凭证上榜；修改方案/换号作废旧结果。
+- **前端：** 完整 `npm run build` 通过（主站与独立页类型检查及静态构建）；
+  `npm run test:ai-partner` 为 4 文件、54 passed，共享 `api.auth-race.test.ts` 为 52 passed。
+  既有 Browserslist、PDF.js eval、较大 chunk 警告不影响构建通过。
+- **后端：** 整个 `backend/tests/ai_partner` 收集 evaluation 61 项与 leaderboard 58 项。
+  fakeredis 模式 118 passed / 1 skipped（仅真实 Redis 用例），独立真实 Redis 模式
+  119 passed / 0 skipped；均无失败，6 条既有 Pydantic 弃用警告。覆盖任务 ID/目录计价、
+  模型结构验证、超时/限流/并发、轮次/身份、凭证过期/盗用/重放、伪造分数、无配置/存储故障。
+- **桌面浏览器：** 使用系统 Google Chrome + Playwright，在 1440×1000、1280×800 验证。
+  UI/API 夹具 8 组通过；真实产品路由＋独立 Redis、模拟身份/模型的联调 7 组通过。
+  后者覆盖签发评分、双用户互见、盗用/重放拒绝、伪造分数 422 及同名用户分离。
+  上述均无相关 console error/pageerror；本轮不做手机模拟。
+- **未配置模式：** 本地预览恢复真实未配置路径，评分返回 503 且 `Cache-Control: no-store`，
+  不显示替代分数，上榜按钮禁用，独立轮次榜单为空；左上按钮不遮挡标题。
+  预期存在一条 HTTP 503 资源日志，不存在 pageerror。
+- **证据与边界：** 本轮证据位于外部可视化目录 `ai-partner-ai-scoring/` 的
+  `ui-results.json`、`live-results.json`、`unconfigured-results.json` 及桌面截图；后端两模式
+  runner/日志位于 `/tmp/ai-partner-llm-backend/`。预览为 `127.0.0.1:16610`，隔离后端
+  `51641`、专用 Redis `51640`。**真实供应商模型 API 与真实 JWT 登录尚未验收**；
+  模型 fixture 仅验证接口联动，不能代表智能评分质量。不访问生产数据库或模型。
+- **合同门禁：** 构建/工作流合同合计 68 passed；Markdown 派生摘要为
+  `114 files / 453 links / 0 missing`，Markdown 合同 10 passed，`git diff --check` 通过。
+- **发布边界：** 未打包 Docker 镜像、未 commit/push、未部署；真实模型需要后台配置并绑定
+  `AI_PARTNER_SCORING_AGENT_ID`，生产 Compose 透传等发布准备仍按部署文档另行验收。
+
+## 2026-09-28 AI伙伴临时互动榜（未发布，本地隔离验证）
+
+- **范围：** 集成新版三维教学源码与浮动共享榜单，保留五维评分与课堂记录门槛；使用平台
+  身份、每人最高分、同分并列及 Redis 固定期限，不新增 DB 表、migration 或管理员页面。
+- **前端：** `npm run type-check` 通过；`npm run test:ai-partner` 为 4 文件、42 passed；
+  既有 `api.auth-race.test.ts` 为 52 passed。未将这些限定测试表述为主站全量测试。
+- **后端：** 同一套 58 项测试分别在 fakeredis Lua 和独立真实 Redis 模式通过，不是
+  116 项独立测试；覆盖认证/guest拒绝、严格参数、身份与轮次冲突、最高分、并列排名、
+  固定到期及 deadline tombstone、限流、no-store 与 Redis 故障关闭。复审补齐
+  未捕获路由/认证依赖异常的统一 500 no-store 响应，新增 4 项用例并在两模式重跑通过。
+- **源码与构建：** 教学原目录 11 项源文件哈希与导入清单一致；7 项未改视觉/规则文件
+  与源文件逐字节一致。完整 `npm run build`（双类型检查、主站、独立页）通过；构建路径
+  核验 258 个文件，两份入口及依赖资源共 8 项临时 HTTP 检查均为 200、内容匹配。
+  已知非阻塞 warning：Browserslist 数据较旧、既有 PDF.js `eval`、较大 chunk；AI伙伴 JS
+  约 692.4 kB。未通过放宽阈值或改依赖掩盖 warning。
+- **真实浏览器：** 系统 Google Chrome + Playwright，桌面 1440×1000、手机 390×844，
+  共 14 组检查通过；页面标题/三维 canvas/非空/无错误覆盖层、真实点击选型→测试→课堂
+  记录→评分→提交、独立用户互见与自动刷新、同名不同ID分离、真实同分 `1,1,3`、
+  低分不覆盖、关闭停止轮询、手机浮窗不越界及 Escape 恢复焦点、换号清空和草稿隔离、
+  匿名不读取实名榜均通过；已认证会话无 console error 或 pageerror。
+- **构建产物浏览器复验：** 在 `127.0.0.1:16610` 用 `vite preview` 提供本次正式静态
+  构建产物，重复同一套 14 组 Chrome 桌面/手机检查全部通过、无已认证会话运行时错误；
+  已加载最终 no-store 补丁的隔离后端再次复验通过。
+  这是相同场景的第二运行模式，不计为额外 14 个独立场景。证据为同一外部目录下的
+  `ai-partner-production-smoke/verification.json` 及桌面/手机截图；并非 Docker 或生产验收。
+- **隔离边界：** 预览 `http://127.0.0.1:16608/games/ai-partner/index.html` → 本地后端
+  `51641` → 专用 Redis `51640`；使用模拟身份及真实榜单 API/Redis，**未验证真实 JWT
+  登录全链路**，不访问生产 DB/Redis。Browser plugin 不可用，按测试 skill 使用 Playwright。
+  未测其他浏览器、生产容器、真实全班负载；到期/故障在后端测试验证，不冒称浏览器验收。
+- **证据：** 外部 `ai-partner-verification/verification.json`、`desktop.png`、`mobile.png`，
+  位于 `/Users/wsh/.codex/visualizations/2026/09/27/01a0e238-eeb8-7632-be78-1af588c3909e/`。
+  初次 UI 脚本因错误选择器超时，修正脚本后重跑通过，未为此修改产品逻辑。
+- **构建合同：** `frontend/scripts/docker-build-context.test.mjs` 的 8 项及
+  `scripts/workflow-contracts.test.mjs` 的 60 项，合并运行 68 passed；未执行镜像构建。
+- **文档门禁：** 本批 Markdown 派生摘要为 `114 files / 452 links / 0 missing`，合同测试 10 passed；
+  首次因当前摘要过期失败，同步真实统计后复跑通过，不改历史批次统计。
+- **发布边界：** 未打包 Docker 镜像、未 commit/push、未部署，原 `2.1.2` 发布记录不变。
 
 ## 2026-09-27 公开课静态页 v2.1.2 发布与生产验收（当前工作区）
 

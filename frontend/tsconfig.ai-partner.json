@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "ai-partner/src/**/*.ts",
+    "src/vite-env.d.ts",
+    "vite.ai-partner.config.ts"
+  ],
+  "exclude": [
+    "ai-partner/src/**/*.test.ts"
+  ]
+}

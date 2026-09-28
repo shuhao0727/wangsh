@@ -3,6 +3,7 @@ API 路由注册
 """
 
 from fastapi import APIRouter
+from app.api.endpoints.ai_partner import router as ai_partner_router
 from app.api.endpoints.system import router as system_router
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.content.articles import router as articles_router
@@ -49,3 +50,5 @@ api_router.include_router(learning_router, tags=["learning"])
 api_router.include_router(ml_router, tags=["ml-book"])
 api_router.include_router(it_games_router, tags=["it-games"])
 api_router.include_router(it_games_admin_router, tags=["admin-it-games"])
+
+api_router.include_router(ai_partner_router, tags=["ai-partner"], prefix="/ai-partner")
