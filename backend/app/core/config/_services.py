@@ -19,6 +19,13 @@ class ServicesSettingsMixin:
     AGENT_API_KEY: Optional[str] = Field(default=None)
     AI_AGENT_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=256, le=65536)
 
+    # Dify 长连接并发保护：跨 worker 使用 Redis 分布式租约。
+    # 该值是保护阈值而非 Dify 官方容量承诺，应按上游配额和压测结果调整。
+    DIFY_CONCURRENCY_ENABLED: bool = Field(default=True)
+    DIFY_MAX_CONCURRENCY: int = Field(default=20, ge=1, le=10000)
+    DIFY_CONCURRENCY_WAIT_SECONDS: float = Field(default=2.0, ge=0, le=60)
+    DIFY_CONCURRENCY_LEASE_SECONDS: int = Field(default=180, ge=5, le=3600)
+
     # ==================== 单节课临时浮动榜单 ====================
     AI_PARTNER_LEADERBOARD_ROUND_ID: str = Field(
         default="classroom", min_length=1, max_length=128, pattern=r".*\S.*"

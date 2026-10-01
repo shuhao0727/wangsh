@@ -19,12 +19,14 @@ class RedisCache:
     _client: Optional[redis.Redis] = None
     _initialized: bool = False
     _loop: Optional[asyncio.AbstractEventLoop] = None
+    _initialize_locks: dict[int, asyncio.Lock] = {}
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._client = None
             cls._instance._initialized = False
+            cls._instance._initialize_locks = {}
         return cls._instance
     
     def __init__(self):
@@ -112,29 +114,28 @@ class RedisCache:
             raise
     
     async def get_client(self) -> redis.Redis:
-        """获取Redis客户端实例"""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        if self._loop is not None and getattr(self._loop, "is_closed", lambda: False)():
-            self._client = None
-            self._initialized = False
-            self._loop = None
-        if loop is not None and self._loop is not None and loop is not self._loop:
-            try:
-                if self._client:
-                    await self._client.aclose()
-            except Exception:
-                pass
-            self._client = None
-            self._initialized = False
-            self._loop = None
-        if not self._initialized or self._client is None:
-            await self.initialize()
-        if self._client is None:
-            raise RuntimeError("Redis客户端初始化失败")
-        return self._client
+        """获取 Redis 客户端实例，并在同一事件循环内串行初始化。"""
+        loop = asyncio.get_running_loop()
+        lock = self._initialize_locks.setdefault(id(loop), asyncio.Lock())
+        async with lock:
+            if self._loop is not None and getattr(self._loop, "is_closed", lambda: False)():
+                self._client = None
+                self._initialized = False
+                self._loop = None
+            if self._loop is not None and loop is not self._loop:
+                try:
+                    if self._client:
+                        await self._client.aclose()
+                except Exception:
+                    pass
+                self._client = None
+                self._initialized = False
+                self._loop = None
+            if not self._initialized or self._client is None:
+                await self.initialize()
+            if self._client is None:
+                raise RuntimeError("Redis客户端初始化失败")
+            return self._client
     
     async def close(self) -> None:
         """关闭Redis连接"""
@@ -146,6 +147,7 @@ class RedisCache:
             finally:
                 self._client = None
                 self._initialized = False
+                self._loop = None
                 logger.info("Redis缓存客户端已关闭")
     
     async def get(self, key: str) -> Optional[Any]:

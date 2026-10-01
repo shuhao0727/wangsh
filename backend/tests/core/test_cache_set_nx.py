@@ -27,3 +27,31 @@ def test_cache_set_passes_nx_and_expire_to_redis_client(monkeypatch):
     assert captured["key"] == "unit:test:key"
     assert captured["ex"] == 7
     assert captured["nx"] is True
+
+
+def test_cache_initialization_is_single_flight(monkeypatch):
+    """Concurrent Dify requests must not create one Redis pool per coroutine."""
+    cache = RedisCache()
+    state = (cache._client, cache._initialized, cache._loop, cache._initialize_locks)
+    calls = 0
+    fake_client = object()
+
+    async def fake_initialize():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        cache._loop = asyncio.get_running_loop()
+        cache._client = fake_client
+        cache._initialized = True
+
+    monkeypatch.setattr(cache, "initialize", fake_initialize)
+
+    async def run():
+        return await asyncio.gather(*(cache.get_client() for _ in range(60)))
+
+    try:
+        clients = asyncio.run(run())
+        assert calls == 1
+        assert all(client is fake_client for client in clients)
+    finally:
+        cache._client, cache._initialized, cache._loop, cache._initialize_locks = state
