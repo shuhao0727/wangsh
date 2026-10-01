@@ -208,7 +208,7 @@ async def _collect_chat_events():
     return "".join(chunks)
 
 
-def test_stream_chat_emits_message_end_even_when_upstream_has_no_text(monkeypatch):
+def test_stream_chat_rejects_empty_upstream_answer(monkeypatch):
     async def fake_get_agent(_db, _agent_id):
         return SimpleNamespace(
             agent_type="openai",
@@ -245,11 +245,10 @@ def test_stream_chat_emits_message_end_even_when_upstream_has_no_text(monkeypatc
 
     output = asyncio.run(collect_events())
 
-    assert "event: message_end" in output
-    assert "\"answer\": \"\"" in output
-    assert "event: error" not in output
-    assert calls["success"] == ["_FakeProvider:agent:1"]
-    assert calls["failure"] == []
+    assert '"error": "provider_empty_answer"' in output
+    assert "event: message_end" not in output
+    assert calls["success"] == []
+    assert calls["failure"] == ["_FakeProvider:agent:1"]
 
 
 def test_stream_chat_does_not_cut_off_a_long_stream_that_keeps_progressing(monkeypatch):
@@ -626,6 +625,77 @@ def test_dify_filters_reasoning_blocks_and_agent_thought_events(monkeypatch):
     assert '"event":"message_end"' in output
 
 
+def test_dify_workflow_finished_outputs_answer_completes(monkeypatch):
+    class _DifyWorkflowResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"workflow_started","workflow_run_id":"run-1"}\n\n'
+            yield 'data: {\"event\":\"workflow_finished\",\"data\":{\"outputs\":{\"answer\":\"最终答案\"}}}\n\n'.encode('utf-8')
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyWorkflowResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+    calls = {"success": [], "failure": []}
+    monkeypatch.setattr(chat_stream.breaker, "record_success", lambda key: calls["success"].append(key))
+    monkeypatch.setattr(chat_stream.breaker, "record_failure", lambda key: calls["failure"].append(key))
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+            circuit_key="DifyProvider:agent:8",
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert '"answer":"最终答案"' in output
+    assert '"error": "dify_empty_answer"' not in output
+    assert calls["success"] == ["DifyProvider:agent:8"]
+    assert calls["failure"] == []
+
+
+def test_dify_message_end_answer_completes_without_reasoning_leak(monkeypatch):
+    class _DifyMessageEndResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield 'data: {\"event\":\"message_end\",\"data\":{\"answer\":\"最终答案\"}}\n\n'.encode('utf-8')
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyMessageEndResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider,
+            [{"role": "user", "content": "hello"}],
+            "",
+            "tester",
+            {},
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert '"answer":"最终答案"' in output
+    assert '"error": "dify_empty_answer"' not in output
+
+
 def test_dify_drops_unparseable_trailing_data_that_may_contain_reasoning(monkeypatch):
     class _DifyTruncatedReasoningResponse:
         status_code = 200
@@ -732,3 +802,65 @@ def test_dify_filters_reasoning_split_across_message_delta_events(monkeypatch):
     assert "<think>" not in output
     assert '"answer":"safe"' in output
     assert '"event":"message_end"' in output
+
+
+def test_dify_empty_message_end_is_an_explicit_error(monkeypatch):
+    class _DifyEmptyResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"message_end"}\n\n'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyEmptyResponse())
+
+    calls = {"success": 0, "failure": 0}
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream.breaker, "record_success", lambda _key: calls.__setitem__("success", calls["success"] + 1))
+    monkeypatch.setattr(chat_stream.breaker, "record_failure", lambda _key: calls.__setitem__("failure", calls["failure"] + 1))
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider, [{"role": "user", "content": "hello"}], "", "tester", {}, circuit_key="dify:test"
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert '"error": "dify_empty_answer"' in output
+    assert calls == {"success": 0, "failure": 1}
+
+
+def test_dify_reasoning_only_message_end_is_not_success(monkeypatch):
+    class _DifyReasoningOnlyResponse:
+        status_code = 200
+
+        async def aiter_bytes(self):
+            yield b'data: {"event":"agent_thought","thought":"private"}\n\n'
+            yield b'data: {"event":"message","answer":"<think>hidden</think>"}\n\n'
+            yield b'data: {"event":"message_end"}\n\n'
+
+    class _DifyClient:
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamContext(_DifyReasoningOnlyResponse())
+
+    monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    provider = DifyProvider("https://dify.example/v1", "app-key")
+
+    async def collect_events():
+        chunks = []
+        async for chunk in chat_stream._stream_dify(
+            provider, [{"role": "user", "content": "hello"}], "", "tester", {}
+        ):
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    output = asyncio.run(collect_events())
+
+    assert '"error": "dify_empty_answer"' in output
+    assert "private" not in output
+    assert "hidden" not in output

@@ -2,6 +2,7 @@
 import asyncio
 import importlib
 import inspect
+import json
 
 import pytest
 from starlette.requests import Request
@@ -15,6 +16,14 @@ ENDPOINTS = [
     ('app.api.endpoints.classroom.admin', 'admin_stream'),
     ('app.api.endpoints.classroom.student', 'student_stream'),
 ]
+
+
+def assert_session_error(frame, expected_code):
+    text = frame.decode("utf-8") if isinstance(frame, bytes) else str(frame)
+    assert "event: error" in text
+    data_line = next(line for line in text.splitlines() if line.startswith("data: "))
+    payload = json.loads(data_line.removeprefix("data: "))
+    assert payload["error"] == expected_code
 
 
 async def open_stream(h, monkeypatch, module_name, function_name, *, cookie=False):
@@ -55,8 +64,9 @@ def test_sse_logout_stops_next_private_event(isolated, monkeypatch, module_name,
                 assert 'before_logout' in await anext(stream)
                 await h.logout(token=pair['access_token'], cookies={})
                 queue.put_nowait({'type': 'private_after_logout'})
-                with pytest.raises(StopAsyncIteration):
-                    await asyncio.wait_for(anext(stream), 3)
+                frame = await asyncio.wait_for(anext(stream), 3)
+                assert_session_error(frame, "session_invalid")
+                await stream.aclose()
                 assert len(removed) == 1
             finally:
                 await stream.aclose()
@@ -74,8 +84,9 @@ def test_sse_idle_failure_and_cleanup(isolated, monkeypatch, module_name, functi
             stream, queue, removed, pair = await open_stream(h, monkeypatch, module_name, function_name)
             if failure == 'logout_before_subscribe':
                 await h.logout(token=pair['access_token'], cookies={})
-                with pytest.raises(StopAsyncIteration):
-                    await anext(stream)
+                frame = await anext(stream)
+                assert_session_error(frame, "session_invalid")
+                await stream.aclose()
                 assert not removed  # No subscription was ever opened.
                 return
             assert 'connected' in await anext(stream)
@@ -91,9 +102,14 @@ def test_sse_idle_failure_and_cleanup(isolated, monkeypatch, module_name, functi
                 monkeypatch.setattr(stream_session, 'verify_request_session_detail', fail)
             elif failure == 'cancel':
                 consumer.cancel()
-            expected = asyncio.CancelledError if failure == 'cancel' else StopAsyncIteration
-            with pytest.raises(expected):
-                await asyncio.wait_for(consumer, 1)
+            if failure == "cancel":
+                with pytest.raises(asyncio.CancelledError):
+                    await asyncio.wait_for(consumer, 1)
+            else:
+                frame = await asyncio.wait_for(consumer, 1)
+                expected_code = "session_invalid" if failure == "idle_logout" else "session_revalidation_unavailable"
+                assert_session_error(frame, expected_code)
+                await stream.aclose()
             assert len(removed) == 1
             assert queue.empty()
             await stream.aclose()
@@ -113,8 +129,8 @@ def test_sse_expired_jwt_and_missing_context_fail_closed(monkeypatch):
         for context in [None, (1, create_access_token({'sub': 'a', 'sn': 'n'}, expires_delta=timedelta(seconds=-1)))]:
             request.state.accepted_stream_session = context
             stream = stream_session.session_checked_stream(source(), request)
-            with pytest.raises(StopAsyncIteration):
-                await anext(stream)
+            frame = await anext(stream)
+            assert_session_error(frame, "session_invalid")
         assert calls == []
     asyncio.run(run())
 
@@ -139,4 +155,25 @@ def test_sse_source_error_and_finite_end_close(monkeypatch):
             with pytest.raises(ValueError if failure else StopAsyncIteration):
                 await anext(stream)
             assert closed == [True]
+    asyncio.run(run())
+
+
+def test_sse_direct_generator_without_request_keeps_compatibility():
+    from app.core import stream_session
+
+    async def run():
+        closed = []
+
+        async def source():
+            try:
+                yield "first"
+            finally:
+                closed.append(True)
+
+        stream = stream_session.session_checked_stream(source(), None)
+        assert await anext(stream) == "first"
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+        assert closed == [True]
+
     asyncio.run(run())

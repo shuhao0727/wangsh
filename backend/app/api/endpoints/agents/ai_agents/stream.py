@@ -21,20 +21,55 @@ async def stream_agent_chat_endpoint(
     current_user: UserInfo = Depends(require_registered_user),
 ):
     try:
-        from app.services.agents.chat_stream import stream_agent_chat
+        from app.services.agents.chat_stream import (
+            _StreamSetupError,
+            _sse_error,
+            prepare_agent_stream,
+            stream_agent_chat,
+        )
 
         # 构建对话历史：优先使用 messages 字段，否则用单条 message 兼容旧版
         history: Optional[List[Dict[str, str]]] = None
         if body.messages:
             history = [{"role": m.role, "content": m.content} for m in body.messages]
 
+        # Prepare every DB-backed value before opening the long-lived response.
+        # The generator receives only immutable provider/request state, so this
+        # request-scoped session can be returned to the pool immediately.
+        try:
+            prepared = await prepare_agent_stream(
+                db,
+                body.agent_id,
+                body.message,
+                history=history,
+            )
+        except _StreamSetupError as exc:
+            await db.close()
+            setup_error = exc.err
+
+            async def setup_error_stream():
+                yield _sse_error(setup_error)
+
+            return StreamingResponse(
+                setup_error_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache, no-transform",
+                    "X-Accel-Buffering": "no",
+                    "Connection": "keep-alive",
+                },
+            )
+
+        await db.close()
+        dify_user = f"wangsh:user:{int(current_user['id'])}:agent:{body.agent_id}"
         gen = stream_agent_chat(
-            db,
+            None,
             body.agent_id,
             body.message,
-            body.user,
+            dify_user,
             body.inputs,
             history=history,
+            prepared=prepared,
         )
         return StreamingResponse(
             session_checked_stream(gen, request),
@@ -50,4 +85,3 @@ async def stream_agent_chat_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail("流式对话失败", e),
         )
-

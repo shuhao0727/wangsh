@@ -106,6 +106,9 @@ def test_registered_user_can_use_core_ai_routes(isolated, monkeypatch):
                 public_config,
             )
             monkeypatch.setattr(chat_stream, "stream_agent_chat", provider)
+            async def prepare(*args, **kwargs):
+                return object()
+            monkeypatch.setattr(chat_stream, "prepare_agent_stream", prepare)
 
             pair = await h.login()
             headers = {"Authorization": f"Bearer {pair['access_token']}"}

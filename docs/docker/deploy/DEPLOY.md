@@ -97,6 +97,21 @@
 - 沙箱 CAS 要求 Redis 支持并授权 `EVAL` 及脚本内 GET/SET；DAP 断连清理还需脚本内 DEL 与 SET KEEPTTL（Redis 6.0+），在同一原子上下文中比较元信息和连接租约，缺失能力时保守失败而不盲写；认证旧 IP owner 条件旋转要求同一 Redis 原子上下文中的 `WATCH`、`MGET`、`MULTI`、`SET`、`EXEC` 及清理事务权限。应用账号 ACL 必须受控验证，不能通过扩大到全权限来规避失败。多 key 的 Redis Cluster slot、Sentinel 故障切换及 TLS/代理部署未由本批证明。
 - 存量 terminal/DAP WS 和管理/课堂 SSE 增加周期/逐帧会话检查，部署时评估 Redis 请求量、连接数与背压；不是每秒必定断开的网络 SLA，也不补足 AUTH-01 双存储原子撤销。DB 提交失败仍可留下有效 refresh；Redis 写失败仍可留下旧 access，禁止据此宣布安全发布完成。
 
+### AI 智能体流式并发发布门槛（2026-09-28）
+
+本轮已修复 Dify 推理泄露、空回答静默成功、长 SSE 持有请求数据库会话、客户端断开资源
+未释放和会话失效静默关闭等问题。发布时必须确认后端与前端版本同时更新，并验证：
+
+- Dify `message_end` / `workflow_finished` 至少有可见答案，否则客户端收到结构化 error event；
+- 推理字段和 `agent_thought` 不出现在 SSE、页面、usage 或历史记录；
+- 长流期间数据库连接池不随连接数线性耗尽；
+- `session_invalid`、`session_revalidation_unavailable`、上游 429/5xx 能被前端识别；
+- Docker 开发栈热更新后 `/health` 正常，日志无 `DB pool timeout`、未捕获 `NameError` 或 SSE 清理异常。
+
+**容量边界：**Dify 流式对话已增加 Redis 分布式并发租约：通过 `DIFY_MAX_CONCURRENCY`、`DIFY_CONCURRENCY_WAIT_SECONDS`、`DIFY_CONCURRENCY_LEASE_SECONDS` 和 `DIFY_CONCURRENCY_ENABLED` 配置；超限返回 `provider_busy`/`retry_after`，Redis 不可用返回 `concurrency_unavailable`。这些参数用于避免长 SSE 把上游配额、HTTP 连接和应用资源耗尽，不代表 Dify 官方容量。生产上线前仍需结合真实 Dify 配额、响应时长、网关超时和 60 人压测验收，不能把 `HTTPX_MAX_CONNECTIONS` 或数据库连接池扩大解释为“60 人容量已保证”。
+在启用多 worker 前必须完成 Mock Dify 长流压测，至少记录并验收 active streams、first byte、
+first visible answer、terminal/error、上游取消和 cleanup latency。
+
 
 ## 📑 目录
 

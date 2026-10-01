@@ -1,8 +1,11 @@
 """流式对话 — 使用 Provider 策略模式"""
 
+import asyncio
 import codecs
 import json
+from contextlib import suppress
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import AsyncGenerator, Optional, Dict, Any
 
 import httpx
@@ -24,6 +27,11 @@ from app.services.agents.providers import (
 )
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.agents.providers.circuit_breaker import breaker
+from app.services.agents.dify_concurrency import (
+    DifyConcurrencyBusy,
+    DifyConcurrencyLease,
+    DifyConcurrencyUnavailable,
+)
 from app.core.config import settings
 from app.core.http_client import get_http_client
 
@@ -42,6 +50,16 @@ class _StreamSetupError(Exception):
     def __init__(self, err: dict):
         super().__init__(err)
         self.err = err
+
+
+@dataclass(frozen=True)
+class PreparedAgentStream:
+    """Provider and immutable request data prepared before a long SSE response."""
+
+    provider: Any
+    circuit_key: str
+    chat_messages: list[dict[str, str]]
+    model: str
 
 
 async def _prepare_stream(db, agent_id: int, message: str, history):
@@ -90,7 +108,17 @@ async def _prepare_stream(db, agent_id: int, message: str, history):
             {"error": "circuit_open", "message": "该服务暂时不可用（连续失败过多），请稍后重试"}
         )
 
-    return provider, circuit_key, chat_messages, model
+    return PreparedAgentStream(
+        provider=provider,
+        circuit_key=circuit_key,
+        chat_messages=chat_messages,
+        model=model,
+    )
+
+
+async def prepare_agent_stream(db, agent_id: int, message: str, *, history: Optional[list] = None) -> PreparedAgentStream:
+    """Prepare all DB-backed stream state before the response starts."""
+    return await _prepare_stream(db, agent_id, message, history)
 
 
 def _finish_reason_error(finish_reason):
@@ -141,12 +169,27 @@ async def _iter_stream_events(provider, resp):
             return
 
 
-async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str] = None, inputs: Optional[Dict[str, Any]] = None, *, history: Optional[list] = None) -> AsyncGenerator[bytes, None]:
-    try:
-        provider, circuit_key, chat_messages, model = await _prepare_stream(db, agent_id, message, history)
-    except _StreamSetupError as exc:
-        yield _sse_error(exc.err)
-        return
+async def stream_agent_chat(
+    db,
+    agent_id: int,
+    message: str,
+    user: Optional[str] = None,
+    inputs: Optional[Dict[str, Any]] = None,
+    *,
+    history: Optional[list] = None,
+    prepared: Optional[PreparedAgentStream] = None,
+) -> AsyncGenerator[bytes, None]:
+    if prepared is None:
+        try:
+            prepared = await _prepare_stream(db, agent_id, message, history)
+        except _StreamSetupError as exc:
+            yield _sse_error(exc.err)
+            return
+
+    provider = prepared.provider
+    circuit_key = prepared.circuit_key
+    chat_messages = prepared.chat_messages
+    model = prepared.model
 
     # Dify: 特殊处理（多候选 URL + SSE 透传）
     if isinstance(provider, DifyProvider):
@@ -220,14 +263,23 @@ async def stream_agent_chat(db, agent_id: int, message: str, user: Optional[str]
                     yield _sse_error(err)
                     return
 
-                breaker.record_success(circuit_key)
                 finish_error = _finish_reason_error(finish_reason)
                 if finish_error is not None:
+                    breaker.record_failure(circuit_key)
                     error_code, error_message = finish_error
                     err = {"error": error_code, "message": error_message, "finish_reason": finish_reason}
                     yield _sse_error(err)
                     return
 
+                if not final_text.strip():
+                    breaker.record_failure(circuit_key)
+                    yield _sse_error({
+                        "error": "provider_empty_answer",
+                        "message": "模型未返回可见内容，请稍后重试",
+                    })
+                    return
+
+                breaker.record_success(circuit_key)
                 end_payload = {"answer": final_text}
                 if candidate_model != model:
                     end_payload["fallback_model_used"] = candidate_model
@@ -309,42 +361,53 @@ def _replace_dify_event_payload(event_block: str, payload: dict) -> str:
     return "\n".join(kept_lines)
 
 
-def _set_dify_text_delta(payload: dict, event_type: Optional[str], value: str) -> bool:
+def _dify_answer_locations(payload: dict, event_type: Optional[str]) -> list[tuple[dict, str]]:
+    """Return known user-visible answer fields in Dify event payloads.
+
+    Chat messages normally use ``answer``/``data.answer`` while workflow
+    completion events commonly put the final value under
+    ``data.outputs.answer``. Keep this allow-list narrow so internal
+    ``thought``/``reasoning`` fields can never become an answer by accident.
+    """
+    locations: list[tuple[dict, str]] = []
     if event_type == "text_chunk":
         data = payload.get("data")
         if isinstance(data, dict) and isinstance(data.get("text"), str):
-            data["text"] = value
-            return True
+            locations.append((data, "text"))
         if isinstance(payload.get("text"), str):
-            payload["text"] = value
-            return True
-        return False
+            locations.append((payload, "text"))
+        return locations
 
     if isinstance(payload.get("answer"), str):
-        payload["answer"] = value
-        return True
+        locations.append((payload, "answer"))
     data = payload.get("data")
-    if isinstance(data, dict) and isinstance(data.get("answer"), str):
-        data["answer"] = value
-        return True
-    return False
+    if isinstance(data, dict):
+        if isinstance(data.get("answer"), str):
+            locations.append((data, "answer"))
+        outputs = data.get("outputs")
+        if isinstance(outputs, dict) and isinstance(outputs.get("answer"), str):
+            locations.append((outputs, "answer"))
+    outputs = payload.get("outputs")
+    if isinstance(outputs, dict) and isinstance(outputs.get("answer"), str):
+        locations.append((outputs, "answer"))
+    return locations
+
+
+def _set_dify_text_delta(payload: dict, event_type: Optional[str], value: str) -> bool:
+    locations = _dify_answer_locations(payload, event_type)
+    if not locations:
+        return False
+    for container, key in locations:
+        container[key] = value
+    return True
 
 
 def _get_dify_text_delta(payload: dict, event_type: Optional[str]) -> Optional[str]:
-    if event_type == "text_chunk":
-        data = payload.get("data")
-        if isinstance(data, dict) and isinstance(data.get("text"), str):
-            return data["text"]
-        value = payload.get("text")
-        return value if isinstance(value, str) else None
-
-    value = payload.get("answer")
-    if isinstance(value, str):
-        return value
-    data = payload.get("data")
-    if isinstance(data, dict) and isinstance(data.get("answer"), str):
-        return data["answer"]
-    return None
+    locations = _dify_answer_locations(payload, event_type)
+    if not locations:
+        return None
+    return next((value for container, key in locations
+                 if isinstance((value := container.get(key)), str)), None)
 
 
 def _sanitize_dify_event_block(
@@ -383,17 +446,84 @@ def _is_dify_terminal(event_type) -> bool:
     return event_type in {"message_end", "workflow_finished", "error"}
 
 
+def _update_dify_answer_state(event_block: str, state: Dict[str, Any]) -> None:
+    """Track visible answer text only; transport bytes/reasoning are not success."""
+    event_type = _dify_event_type(event_block)
+    if event_type:
+        state["saw_event"] = True
+    if event_type == "error":
+        state["saw_provider_error"] = True
+        payload = _dify_event_payload(event_block) or {}
+        state["provider_error"] = str(
+            payload.get("message") or payload.get("code") or payload.get("error") or "Dify 上游返回错误"
+        )
+        return
+
+    payload = _dify_event_payload(event_block)
+    if payload is None:
+        return
+    text = _get_dify_text_delta(payload, event_type)
+    if isinstance(text, str) and text.strip():
+        state["saw_answer_delta"] = True
+        state["visible_answer_chars"] += len(text.strip())
+
+
 def _update_dify_terminal_state(event_block: str, state: Dict[str, Any]) -> None:
     event_type = _dify_event_type(event_block)
+    if event_type:
+        state["saw_event"] = True
+    if event_type == "error":
+        state["saw_provider_error"] = True
+        payload = _dify_event_payload(event_block) or {}
+        state["provider_error"] = str(
+            payload.get("message") or payload.get("code") or payload.get("error") or "Dify 上游返回错误"
+        )
     if _is_dify_terminal(event_type):
-        state["completed"] = True
-        state["event_type"] = event_type
+        state["saw_terminal_event"] = True
+        state["terminal_event_type"] = event_type
 
 
 async def _nonempty_chunks(chunks):
     async for chunk in chunks:
         if chunk:
             yield chunk
+
+
+async def _lease_checked_chunks(chunks, lease):
+    """Read upstream bytes while stopping promptly if Redis lease is lost."""
+    iterator = chunks.__aiter__()
+    while True:
+        if not lease.is_held():
+            raise DifyConcurrencyUnavailable("Dify concurrency lease lost")
+        next_task = asyncio.create_task(anext(iterator))
+        lost_task = asyncio.create_task(lease.wait_lost())
+        try:
+            done, _ = await asyncio.wait(
+                {next_task, lost_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if lost_task in done and lost_task.result():
+                next_task.cancel()
+                with suppress(asyncio.CancelledError, StopAsyncIteration):
+                    await next_task
+                raise DifyConcurrencyUnavailable("Dify concurrency lease lost")
+            lost_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await lost_task
+            try:
+                chunk = next_task.result()
+            except StopAsyncIteration:
+                return
+            if chunk:
+                yield chunk
+        finally:
+            for task in (next_task, lost_task):
+                if not task.done():
+                    task.cancel()
+            for task in (next_task, lost_task):
+                if task.done():
+                    with suppress(asyncio.CancelledError, StopAsyncIteration):
+                        task.result()
 
 
 def _record_dify_result(terminal_event_type, circuit_key) -> None:
@@ -420,17 +550,63 @@ def _dify_payload_for_url(payload_primary, payload_fallback, url) -> dict:
     return payload_primary if "/chat-messages" in url else payload_fallback
 
 
-def _dify_final_error(last_error, emitted_any) -> dict:
-    if emitted_any:
+def _dify_error_from_payload(payload: Optional[dict]) -> dict:
+    payload = payload or {}
+    raw = str(payload.get("code") or payload.get("error") or payload.get("message") or "")
+    normalized = raw.lower()
+    error_code = (
+        "dify_rate_limited"
+        if "429" in normalized or "rate" in normalized or "limit" in normalized
+        else "dify_upstream_error"
+    )
+    return {
+        "error": error_code,
+        "message": str(payload.get("message") or payload.get("error") or "Dify 上游返回错误")[:500],
+        "detail": raw[:500],
+    }
+
+
+def _dify_final_error(last_error, state: Dict[str, Any], status_code: Optional[int] = None) -> dict:
+    if state.get("saw_provider_error"):
+        return {
+            "error": "dify_upstream_error",
+            "message": state.get("provider_error") or "Dify 上游返回错误",
+        }
+    if status_code == 429 or last_error == "rate_limited":
+        return {
+            "error": "dify_rate_limited",
+            "message": "Dify 当前并发或调用额度已满，请稍后重试",
+            "provider_status": 429,
+        }
+    if status_code is not None and status_code >= 500:
+        return {
+            "error": "dify_upstream_error",
+            "message": "Dify 服务暂时不可用，请稍后重试",
+            "provider_status": status_code,
+        }
+    if state.get("saw_answer_delta"):
         error_code = "dify_stream_incomplete" if last_error == "incomplete_stream" else "dify_stream_interrupted"
         return {
             "error": error_code,
             "message": "Dify 流式响应提前结束，已保留已生成内容",
             "detail": str(last_error)[:500],
         }
+    if state.get("saw_transport_bytes"):
+        return {
+            "error": "dify_stream_incomplete",
+            "message": "Dify 流式响应格式不完整，已拒绝空回答",
+            "detail": str(last_error)[:500],
+        }
+    if state.get("saw_event"):
+        return {
+            "error": "dify_empty_answer",
+            "message": "Dify 未返回可见回答，请稍后重试",
+            "detail": str(last_error)[:500],
+        }
     return {
-        "error": "dify_all_candidates_failed",
-        "message": f"Dify 所有候选地址均失败: {last_error}",
+        "error": "dify_upstream_error",
+        "message": "Dify 没有返回有效响应，请稍后重试",
+        "detail": str(last_error)[:500],
     }
 
 
@@ -443,68 +619,143 @@ async def _stream_dify(
     *,
     circuit_key: Optional[str] = None,
 ) -> AsyncGenerator[bytes, None]:
-    """Dify stream with event-level filtering and multi-candidate fallback."""
+    """Dify stream with strict answer validation and bounded fallback."""
     headers = provider.build_headers()
     payload_primary, payload_fallback = _build_dify_payloads(provider, messages, model, user, inputs)
     candidates = provider.candidate_urls()
     client = get_http_client()
     last_error = None
-    emitted_any = False
+    last_status = None
+    state = {}
+    lease = DifyConcurrencyLease(circuit_key or provider.api_endpoint)
 
-    for url in candidates:
-        candidate_emitted = False
-        terminal_state = {"completed": False, "event_type": None}
-        decoder = codecs.getincrementaldecoder("utf-8")()
-        event_buffer = ""
-        reasoning_filter = ReasoningContentFilter()
+    try:
         try:
-            try_payload = _dify_payload_for_url(payload_primary, payload_fallback, url)
+            await lease.acquire()
+        except DifyConcurrencyBusy as exc:
+            yield _sse_error({
+                "error": "provider_busy",
+                "message": "当前智能体正在处理较多请求，请稍后重试",
+                "retry_after": exc.retry_after,
+            })
+            return
+        except DifyConcurrencyUnavailable:
+            yield _sse_error({
+                "error": "concurrency_unavailable",
+                "message": "当前服务繁忙，暂时无法建立对话，请稍后重试",
+                "retry_after": max(1, int(settings.DIFY_CONCURRENCY_WAIT_SECONDS or 1)),
+            })
+            return
 
-            async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
-                if resp.status_code != 200:
-                    last_error = f"status_{resp.status_code}"
-                    continue
+        if not lease.is_held():
+            yield _sse_error({
+                "error": "concurrency_unavailable",
+                "message": "并发保护租约已失效，已拒绝发起上游请求，请稍后重试",
+                "retry_after": max(1, int(settings.DIFY_CONCURRENCY_WAIT_SECONDS or 1)),
+            })
+            return
 
-                async for chunk in _nonempty_chunks(resp.aiter_bytes()):
-                    candidate_emitted = True
-                    emitted_any = True
-                    event_buffer += decoder.decode(chunk)
-                    event_blocks, event_buffer = _consume_dify_events(event_buffer)
-                    for event_block in event_blocks:
-                        _update_dify_terminal_state(event_block, terminal_state)
-                        safe_block = _sanitize_dify_event_block(
-                            event_block, reasoning_filter
-                        )
+        for url in candidates:
+            state = {
+                "saw_answer_delta": False,
+                "visible_answer_chars": 0,
+                "saw_terminal_event": False,
+                "terminal_event_type": None,
+                "saw_provider_error": False,
+                "provider_error": None,
+                "saw_event": False,
+                "saw_transport_bytes": False,
+            }
+            decoder = codecs.getincrementaldecoder("utf-8")()
+            event_buffer = ""
+            reasoning_filter = ReasoningContentFilter()
+            try:
+                try_payload = _dify_payload_for_url(payload_primary, payload_fallback, url)
+
+                async with client.stream("POST", url, headers=headers, json=try_payload) as resp:
+                    if resp.status_code != 200:
+                        last_status = int(resp.status_code)
+                        last_error = "rate_limited" if last_status == 429 else f"status_{last_status}"
+                        continue
+
+                    async for chunk in _lease_checked_chunks(resp.aiter_bytes(), lease):
+                        state["saw_transport_bytes"] = True
+                        event_buffer += decoder.decode(chunk)
+                        event_blocks, event_buffer = _consume_dify_events(event_buffer)
+                        for event_block in event_blocks:
+                            event_type = _dify_event_type(event_block)
+                            _update_dify_terminal_state(event_block, state)
+                            safe_block = _sanitize_dify_event_block(event_block, reasoning_filter)
+                            if event_type == "error":
+                                _record_dify_result("error", circuit_key)
+                                yield _sse_error(_dify_error_from_payload(_dify_event_payload(event_block)))
+                                return
+                            if safe_block is not None:
+                                _update_dify_answer_state(safe_block, state)
+                                yield (safe_block + "\n\n").encode("utf-8")
+
+                    event_buffer += decoder.decode(b"", final=True)
+                    if event_buffer:
+                        event_type = _dify_event_type(event_buffer)
+                        _update_dify_terminal_state(event_buffer, state)
+                        safe_block = _sanitize_dify_event_block(event_buffer, reasoning_filter)
+                        if event_type == "error":
+                            _record_dify_result("error", circuit_key)
+                            yield _sse_error(_dify_error_from_payload(_dify_event_payload(event_buffer)))
+                            return
                         if safe_block is not None:
+                            _update_dify_answer_state(safe_block, state)
                             yield (safe_block + "\n\n").encode("utf-8")
+                    else:
+                        reasoning_filter.finish()
 
-                event_buffer += decoder.decode(b"", final=True)
-                if event_buffer:
-                    _update_dify_terminal_state(event_buffer, terminal_state)
-                    safe_block = _sanitize_dify_event_block(
-                        event_buffer, reasoning_filter
-                    )
-                    if safe_block is not None:
-                        yield (safe_block + "\n\n").encode("utf-8")
-                else:
-                    reasoning_filter.finish()
+                    if not lease.is_held():
+                        yield _sse_error({
+                            "error": "concurrency_unavailable",
+                            "message": "并发保护租约已失效，已拒绝把本次响应标记为成功，请稍后重试",
+                            "retry_after": max(1, int(settings.DIFY_CONCURRENCY_WAIT_SECONDS or 1)),
+                        })
+                        return
 
-                if terminal_state["completed"]:
-                    _record_dify_result(terminal_state["event_type"], circuit_key)
-                    return
-                if candidate_emitted:
-                    last_error = "incomplete_stream"
-                    break
-                last_error = "empty_stream"
-        except Exception as e:
-            last_error = str(e)
-            if terminal_state["completed"]:
-                _record_dify_result(terminal_state["event_type"], circuit_key)
+                    if state["saw_terminal_event"]:
+                        if state["terminal_event_type"] == "error":
+                            _record_dify_result("error", circuit_key)
+                            yield _sse_error(_dify_error_from_payload({"message": state.get("provider_error")}))
+                            return
+                        if state["visible_answer_chars"] > 0:
+                            _record_dify_result(state["terminal_event_type"], circuit_key)
+                            return
+                        _record_dify_result("error", circuit_key)
+                        yield _sse_error({
+                            "error": "dify_empty_answer",
+                            "message": "Dify 已结束但没有返回可见回答，请稍后重试",
+                        })
+                        return
+
+                    if state["saw_answer_delta"] or state["saw_event"]:
+                        last_error = "incomplete_stream"
+                        break
+                    last_error = "empty_stream"
+            except DifyConcurrencyUnavailable:
+                yield _sse_error({
+                    "error": "concurrency_unavailable",
+                    "message": "并发保护租约已失效，已停止本次上游请求，请稍后重试",
+                    "retry_after": max(1, int(settings.DIFY_CONCURRENCY_WAIT_SECONDS or 1)),
+                })
                 return
-            if emitted_any:
-                break
-            continue
+            except (httpx.TimeoutException, TimeoutError):
+                last_error = "timeout"
+                if state["saw_answer_delta"] or state["saw_event"]:
+                    break
+                continue
+            except Exception as exc:
+                last_error = str(exc)
+                if state["saw_answer_delta"] or state["saw_event"]:
+                    break
+                continue
 
-    err = _dify_final_error(last_error, emitted_any)
-    _record_dify_result("error", circuit_key)
-    yield _sse_error(err)
+        err = _dify_final_error(last_error, state, last_status)
+        _record_dify_result("error", circuit_key)
+        yield _sse_error(err)
+    finally:
+        await lease.release()

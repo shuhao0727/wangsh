@@ -138,6 +138,7 @@ describe("useStreamEngine long responses", () => {
     expect(callbacks.onError).toHaveBeenCalledWith(
       "请求超时（1秒）",
       "已经生成的内容",
+      undefined,
     );
   });
 
@@ -169,6 +170,7 @@ describe("useStreamEngine long responses", () => {
     expect(callbacks.onEnd).not.toHaveBeenCalled();
     expect(callbacks.onError).toHaveBeenCalledWith(
       "请求失败（HTTP 502）：上游网关失败",
+      undefined,
       undefined,
     );
   });
@@ -202,6 +204,7 @@ describe("useStreamEngine long responses", () => {
     expect(callbacks.onError).toHaveBeenCalledWith(
       "流式响应提前结束",
       "未完成回答",
+      "stream_incomplete",
     );
   });
 
@@ -234,6 +237,7 @@ describe("useStreamEngine long responses", () => {
     expect(callbacks.onError).toHaveBeenCalledWith(
       "已停止生成",
       "保留下来的内容",
+      undefined,
     );
   });
 
@@ -305,9 +309,44 @@ describe("useStreamEngine long responses", () => {
       expect(callbacks.onError).toHaveBeenCalledWith(
         "流式终止事件格式错误",
         "已经生成的内容",
+        undefined,
       );
     },
   );
+
+  it("forwards structured SSE error codes without exposing the code as the message", async () => {
+    const callbacks = {
+      onDelta: vi.fn(),
+      onEnd: vi.fn(),
+      onError: vi.fn(),
+    };
+    const { result } = renderHook(() => useStreamEngine());
+
+    let streamPromise!: Promise<void>;
+    act(() => {
+      streamPromise = result.current.startStream({
+        url: "/api/v1/ai-agents/stream",
+        body: { message: "dify" },
+        callbacks,
+      });
+    });
+
+    act(() => {
+      MockXMLHttpRequest.latest?.push(
+        `event: error\ndata: ${JSON.stringify({ error: "dify_rate_limited", message: "Dify 请求过于频繁" })}\n\n`,
+      );
+      MockXMLHttpRequest.latest?.finish();
+    });
+    await act(async () => {
+      await streamPromise;
+    });
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      "Dify 请求过于频繁",
+      undefined,
+      "dify_rate_limited",
+    );
+  });
 
   it("silently stops a stale stream during navigation", async () => {
     const callbacks = {

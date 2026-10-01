@@ -326,3 +326,36 @@ async def verify_request_session(user_id: int, token_payload: Dict[str, Any], re
     """验证请求中的令牌是否与当前有效会话匹配（nonce匹配，必要时IP匹配）"""
     result = await verify_request_session_detail(user_id, token_payload, request)
     return bool(result.get("ok"))
+
+
+async def verify_stream_session_detail(
+    user_id: int,
+    token_payload: Dict[str, Any],
+    request: Optional[Request] = None,
+) -> Dict[str, Literal[True] | Literal[False] | str]:
+    """Revalidate an admitted stream with Redis first and bounded DB fallback.
+
+    A healthy stream normally needs one Redis read per check. Missing or
+    inconsistent Redis evidence falls back to durable DB verification, while
+    the stream itself never keeps a request-scoped DB session open.
+    """
+    token_nonce = str(token_payload.get("sn", ""))
+    try:
+        stored = await get_user_session_strict(user_id)
+    except Exception:
+        return await verify_request_session_detail(user_id, token_payload, request)
+
+    if stored and token_nonce and token_nonce == str(stored.get("nonce", "")):
+        if settings.AUTH_ENFORCE_SAME_IP_PER_REQUEST and request is not None:
+            ip = extract_client_ip(request)
+            authoritative_ip = str(stored.get("ip", "") or "")
+            if ip and authoritative_ip and ip != authoritative_ip:
+                return {"ok": False, "reason": "ip_mismatch"}
+        # A matching Redis projection is only a fast admission hint. Durable
+        # logout/family revocation is intentionally DB-first and does not have
+        # to mutate Redis, so a stream must still verify the authority before
+        # delivering another frame. The request-scoped session is not retained;
+        # this check opens/closes its own short-lived session.
+        return await verify_request_session_detail(user_id, token_payload, request)
+
+    return await verify_request_session_detail(user_id, token_payload, request)

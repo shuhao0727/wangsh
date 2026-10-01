@@ -124,6 +124,10 @@ async def setup(h, monkeypatch, case):
     monkeypatch.setattr(analysis_streams, "_resolve_prompt_text", blocked_prompt)
     monkeypatch.setattr(analysis_streams, "stream_task_sheet_analysis", task_analysis)
     monkeypatch.setattr(chat_stream, "stream_agent_chat", chat)
+    if module is stream:
+        async def prepare(*args, **kwargs):
+            return SimpleNamespace()
+        monkeypatch.setattr(chat_stream, "prepare_agent_stream", prepare)
     async def allow(*args, **kwargs):
         pass
     monkeypatch.setattr(group_discussion, "_enforce_frontend_visibility", allow)
