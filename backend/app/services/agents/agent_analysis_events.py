@@ -500,8 +500,18 @@ async def load_conversation_events(
     start_at: datetime,
     end_at: datetime,
     class_name: Optional[str] = None,
+    include_archived: bool = False,
 ) -> List[ConversationEvent]:
-    """Load typed conversation events from the raw conversation table."""
+    """Load typed conversation events from the raw conversation table.
+
+    Args:
+        db: 数据库会话
+        agent_id: 智能体ID
+        start_at: 开始时间
+        end_at: 结束时间
+        class_name: 班级名称过滤（可选）
+        include_archived: 是否包含已归档数据，默认 False
+    """
     sql = text(
         """
         SELECT
@@ -524,6 +534,7 @@ async def load_conversation_events(
           AND c.content IS NOT NULL
           AND trim(c.content) != ''
           AND (CAST(:class_name AS TEXT) IS NULL OR u.class_name = CAST(:class_name AS TEXT))
+          AND (:include_archived = TRUE OR c.is_archived = FALSE)
         ORDER BY c.created_at ASC, c.id ASC
         """
     )
@@ -535,6 +546,7 @@ async def load_conversation_events(
                 "start_at": _ensure_aware(start_at),
                 "end_at": _ensure_aware(end_at),
                 "class_name": (class_name or "").strip() or None,
+                "include_archived": include_archived,
             },
         )
     ).mappings().all()

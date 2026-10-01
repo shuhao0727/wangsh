@@ -5,6 +5,7 @@ Celery 异步任务简化配置
 import logging
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import after_setup_logger, after_setup_task_logger
 
 from app.core.config import settings
@@ -51,6 +52,8 @@ celery_app.conf.update(
         "app.tasks.pythonlab",
         "app.tasks.informatics_sync",
         "app.tasks.classroom",
+        "app.tasks.data_archiving",
+        "app.tasks.agent_analysis",  # 深度分析异步任务
     ],
     task_routes={
         "app.tasks.typst_compile.compile_typst_note": {"queue": "typst"},
@@ -67,6 +70,18 @@ celery_app.conf.update(
         "pythonlab-cleanup-stale-sessions": {
             "task": "app.tasks.pythonlab.cleanup_stale_sessions",
             "schedule": 120.0,
+        },
+        # 每周日凌晨 2 点归档 90 天前的对话记录
+        "archive-old-conversations": {
+            "task": "app.tasks.data_archiving.archive_old_conversations",
+            "schedule": crontab(day_of_week="sunday", hour=2, minute=0),
+            "args": (90,),
+        },
+        # 每月 1 号凌晨 3 点归档 180 天前的分析记录
+        "archive-old-analyses": {
+            "task": "app.tasks.data_archiving.archive_old_analyses",
+            "schedule": crontab(day_of_month="1", hour=3, minute=0),
+            "args": (180,),
         },
     },
 )

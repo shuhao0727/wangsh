@@ -264,6 +264,7 @@ async def stream_task_sheet_analysis(
     bucket_seconds: int = 180,
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
     custom_prompt: Optional[str] = None,
+    include_archived: bool = False,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     now = datetime.now(timezone.utc)
     effective_end = end_at or now
@@ -272,8 +273,9 @@ async def stream_task_sheet_analysis(
     yield {"event": "analysis_started", "message": "开始任务分析", "progress": 0}
     yield {"event": "step_started", "step_id": "questions", "message": "正在提取学生提问数据", "progress": 8}
 
+    archived_filter = "" if include_archived else "AND c.is_archived = FALSE"
     question_sql = text(
-        """
+        f"""
         SELECT c.content, u.full_name, u.student_id, c.created_at
         FROM v_conversations_with_deleted c
         JOIN sys_users u ON u.id = c.user_id
@@ -284,6 +286,7 @@ async def stream_task_sheet_analysis(
           AND c.content IS NOT NULL
           AND trim(c.content) != ''
           AND (CAST(:class_name AS TEXT) IS NULL OR u.class_name = CAST(:class_name AS TEXT))
+          {archived_filter}
         ORDER BY c.created_at ASC
         """
     )
@@ -407,6 +410,7 @@ async def analyze_task_sheet(
     bucket_seconds: int = 180,
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
     custom_prompt: Optional[str] = None,
+    include_archived: bool = False,
 ) -> Dict[str, Any]:
     """分析任务单：提取关键词 + 对比学生提问"""
     now = datetime.now(timezone.utc)
@@ -414,8 +418,9 @@ async def analyze_task_sheet(
     effective_start = start_at or (effective_end - timedelta(hours=1))
 
     # Query all questions in range
+    archived_filter = "" if include_archived else "AND c.is_archived = FALSE"
     question_sql = text(
-        """
+        f"""
         SELECT c.content, u.full_name, u.student_id, c.created_at
         FROM v_conversations_with_deleted c
         JOIN sys_users u ON u.id = c.user_id
@@ -426,6 +431,7 @@ async def analyze_task_sheet(
           AND c.content IS NOT NULL
           AND trim(c.content) != ''
           AND (CAST(:class_name AS TEXT) IS NULL OR u.class_name = CAST(:class_name AS TEXT))
+          {archived_filter}
         ORDER BY c.created_at ASC
         """
     )
@@ -497,6 +503,7 @@ async def analyze_hot_questions(
     end_at: datetime,
     bucket_seconds: int = 60,
     top_n: int = 10,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
     if bucket_seconds <= 0:
         bucket_seconds = 60
@@ -505,8 +512,9 @@ async def analyze_hot_questions(
     if top_n > 50:
         top_n = 50
 
+    archived_filter = "" if include_archived else "AND is_archived = FALSE"
     bucket_sql = text(
-        """
+        f"""
         WITH q AS (
             SELECT
                 user_id,
@@ -518,6 +526,7 @@ async def analyze_hot_questions(
               AND message_type = 'question'
               AND created_at >= :start_at
               AND created_at < :end_at
+              {archived_filter}
         ),
         bucket_stats AS (
             SELECT
@@ -593,6 +602,7 @@ async def analyze_student_chains(
     start_at: datetime,
     end_at: datetime,
     limit_sessions: int = 5,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
     resolved_user_id: Optional[int] = user_id
     if resolved_user_id is None and student_id:
@@ -611,8 +621,9 @@ async def analyze_student_chains(
     class_name_value = (class_name or "").strip() or None
     class_name_like = f"%{class_name_value}%" if class_name_value else None
 
+    archived_filter = "" if include_archived else "AND c.is_archived = FALSE"
     sessions_sql = text(
-        """
+        f"""
         WITH top_sessions AS (
             SELECT
                 c.session_id,
@@ -629,6 +640,7 @@ async def analyze_student_chains(
               AND c.session_id IS NOT NULL
               AND c.created_at >= :start_at
               AND c.created_at < :end_at
+              {archived_filter}
             GROUP BY c.session_id
             ORDER BY last_at DESC
             LIMIT :limit_sessions
@@ -650,6 +662,7 @@ async def analyze_student_chains(
          AND c.agent_id = :agent_id
          AND c.created_at >= :start_at
          AND c.created_at < :end_at
+         {archived_filter}
         ORDER BY ts.last_at DESC, ts.session_id, c.created_at ASC, c.id ASC
         """
     )

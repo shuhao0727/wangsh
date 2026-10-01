@@ -67,6 +67,10 @@ class ZntConversation(Base):
     response_time_ms = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # 归档字段
+    is_archived = Column(Boolean, default=False, nullable=False, server_default=expression.false(), comment="是否已归档")
+    archived_at = Column(DateTime(timezone=True), nullable=True, comment="归档时间")
+
     agent = relationship("AIAgent")
 
 
@@ -91,6 +95,10 @@ class TaskAnalysis(Base):
     created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # 归档字段
+    is_archived = Column(Boolean, default=False, nullable=False, server_default=expression.false(), comment="是否已归档")
+    archived_at = Column(DateTime(timezone=True), nullable=True, comment="归档时间")
+
 
 class HotQuestionAnalysis(Base):
     """热点问题分析记录表 — 全班生发性问题发现"""
@@ -112,6 +120,10 @@ class HotQuestionAnalysis(Base):
     created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # 归档字段
+    is_archived = Column(Boolean, default=False, nullable=False, server_default=expression.false(), comment="是否已归档")
+    archived_at = Column(DateTime(timezone=True), nullable=True, comment="归档时间")
+
 
 class StudentChainAnalysis(Base):
     """学生问题链分析记录表 — 个体思维链条追踪"""
@@ -129,6 +141,10 @@ class StudentChainAnalysis(Base):
     result = Column(JSON, nullable=False, default=dict)
     created_by = Column(Integer, ForeignKey("sys_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # 归档字段
+    is_archived = Column(Boolean, default=False, nullable=False, server_default=expression.false(), comment="是否已归档")
+    archived_at = Column(DateTime(timezone=True), nullable=True, comment="归档时间")
 
 
 class AgentAnalysisPromptTemplate(Base):

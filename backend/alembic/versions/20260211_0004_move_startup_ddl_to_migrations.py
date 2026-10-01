@@ -73,6 +73,8 @@ def upgrade() -> None:
                     c.content,
                     c.response_time_ms,
                     c.created_at,
+                    c.is_archived,
+                    c.archived_at,
                     CASE
                         WHEN u.id IS NULL OR u.is_deleted = true THEN true
                         ELSE false

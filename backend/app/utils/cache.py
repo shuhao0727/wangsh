@@ -502,6 +502,78 @@ async def clear_all_article_cache() -> None:
         logger.info(f"清除了 {deleted_total} 个文章缓存")
 
 
+class AnalysisCacheKeys:
+    """分析相关缓存键生成器"""
+
+    @staticmethod
+    def hot_analysis_detail(analysis_id: int) -> str:
+        """热点问题分析详情缓存键"""
+        return f"analysis:hot:{analysis_id}"
+
+    @staticmethod
+    def chain_analysis_detail(analysis_id: int) -> str:
+        """学生问题链分析详情缓存键"""
+        return f"analysis:chain:{analysis_id}"
+
+    @staticmethod
+    def task_analysis_detail(analysis_id: int) -> str:
+        """任务分析详情缓存键"""
+        return f"analysis:task:{analysis_id}"
+
+    @staticmethod
+    def hot_analysis_list(skip: int = 0, limit: int = 50) -> str:
+        """热点问题分析列表缓存键"""
+        return f"analysis:hot:list:{skip}:{limit}"
+
+    @staticmethod
+    def chain_analysis_list(skip: int = 0, limit: int = 50) -> str:
+        """学生问题链分析列表缓存键"""
+        return f"analysis:chain:list:{skip}:{limit}"
+
+    @staticmethod
+    def task_analysis_list(skip: int = 0, limit: int = 20) -> str:
+        """任务分析列表缓存键"""
+        return f"analysis:task:list:{skip}:{limit}"
+
+    @staticmethod
+    def trends_summary(agent_id: int, analysis_type: str, limit: int = 10) -> str:
+        """趋势摘要缓存键"""
+        return f"analysis:trends:{agent_id}:{analysis_type}:{limit}"
+
+
+async def clear_analysis_cache(
+    analysis_type: Optional[str] = None,
+    analysis_id: Optional[int] = None
+) -> None:
+    """清除分析相关缓存
+
+    Args:
+        analysis_type: 分析类型 (hot/chain/task)，None 表示清除所有
+        analysis_id: 分析记录ID，None 表示清除该类型所有缓存
+    """
+    patterns = []
+
+    if analysis_type is None:
+        # 清除所有分析缓存
+        patterns.append("analysis:*")
+    else:
+        if analysis_id:
+            # 清除特定分析记录的缓存
+            patterns.append(f"analysis:{analysis_type}:{analysis_id}")
+
+        # 清除该类型的列表缓存和趋势缓存
+        patterns.append(f"analysis:{analysis_type}:list:*")
+        patterns.append(f"analysis:trends:*:{analysis_type}:*")
+
+    deleted_total = 0
+    for pattern in patterns:
+        deleted = await cache.clear_pattern(pattern)
+        deleted_total += deleted
+
+    if deleted_total > 0:
+        logger.info(f"清除了 {deleted_total} 个分析相关缓存")
+
+
 # FastAPI生命周期事件
 async def startup_cache():
     """应用启动时初始化缓存"""

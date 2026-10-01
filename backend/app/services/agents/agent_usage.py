@@ -7,10 +7,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
+from loguru import logger
 
 from app.models.agents import AIAgent, ZntConversation
 from app.models.core import User
 from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
+from app.utils.cache import cache
 
 
 def _parse_usage_datetime(value: Optional[str], is_end: bool = False) -> Optional[datetime]:
@@ -126,6 +128,18 @@ async def create_agent_usage(
         db.add(answer_row)
 
     await db.commit()
+
+    # 清除该用户的会话列表缓存
+    if user_id is not None:
+        try:
+            # 清除所有该用户的会话列表缓存（不同 agent_id 和 limit 组合）
+            pattern = f"conversations:user:{user_id}:*"
+            deleted = await cache.clear_pattern(pattern)
+            if deleted > 0:
+                logger.debug(f"清除了 {deleted} 个用户 {user_id} 的会话列表缓存")
+        except Exception as e:
+            logger.warning(f"清除会话列表缓存失败: {e}")
+
     if answer_row:
         await db.refresh(answer_row)
     elif question_row:
@@ -190,11 +204,14 @@ async def get_agent_usage_list(
     page_size: int = 20,
     skip: Optional[int] = None,
     limit: Optional[int] = None,
+    include_archived: bool = False,
 ) -> Dict[str, Any]:
     start_dt = _parse_usage_datetime(start_date)
     end_dt = _parse_usage_datetime(end_date, is_end=True)
 
     cte_where: List[str] = ["session_id IS NOT NULL"]
+    if not include_archived:
+        cte_where.append("is_archived = FALSE")
     cte_having: List[str] = []
     outer_where: List[str] = ["1=1"]
     params: Dict[str, Any] = {}
@@ -314,6 +331,7 @@ async def get_agent_usage_statistics(
     agent_name: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    include_archived: bool = False,
 ) -> Dict[str, int]:
     start_dt = _parse_usage_datetime(start_date)
     end_dt = _parse_usage_datetime(end_date, is_end=True)
@@ -324,6 +342,8 @@ async def get_agent_usage_statistics(
     month_start = today_start - timedelta(days=30)
 
     cte_where: List[str] = ["session_id IS NOT NULL"]
+    if not include_archived:
+        cte_where.append("is_archived = FALSE")
     cte_having: List[str] = []
     outer_where: List[str] = ["1=1"]
     params: Dict[str, Any] = {}

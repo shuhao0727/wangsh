@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db, require_admin
 from app.models.agents import AIAgent, HotQuestionAnalysis, StudentChainAnalysis
 from app.models.agents import TaskAnalysis as TaskAnalysisModel
+from app.utils.cache import cache, AnalysisCacheKeys, clear_analysis_cache
 from app.schemas.agents import (
     HotQuestionBucket,
     StudentChainSession,
@@ -172,10 +173,23 @@ async def get_task_analysis(
     current_user: Dict[str, Any] = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    # 尝试从缓存读取
+    cache_key = AnalysisCacheKeys.task_analysis_detail(analysis_id)
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # 缓存未命中，查询数据库
     row = await _find_legacy_task_analysis(db, analysis_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
-    return _task_analysis_payload(row)
+
+    result = _task_analysis_payload(row)
+
+    # 写入缓存（TTL 1小时）
+    await cache.set(cache_key, result, expire_seconds=3600)
+
+    return result
 
 
 @router.post("/analysis/task-analyses", response_model=TaskAnalysisRecord)
@@ -245,6 +259,14 @@ async def save_task_analysis(
     await db.commit()
     await db.refresh(record)
     await db.refresh(legacy)
+
+    # 清除列表缓存和趋势缓存
+    if is_hot:
+        await clear_analysis_cache(analysis_type="hot")
+    else:
+        await clear_analysis_cache(analysis_type="chain")
+    await clear_analysis_cache(analysis_type="task")
+
     return legacy
 
 
@@ -259,6 +281,10 @@ async def delete_task_analysis(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
     await db.delete(row)
     await db.commit()
+
+    # 清除相关缓存
+    await clear_analysis_cache(analysis_type="task", analysis_id=analysis_id)
+
     return {"ok": True}
 
 
@@ -372,9 +398,20 @@ async def get_hot_analysis(
     db: AsyncSession = Depends(get_db),
     current_user: Dict[str, Any] = Depends(require_admin),
 ):
+    # 尝试从缓存读取
+    cache_key = AnalysisCacheKeys.hot_analysis_detail(analysis_id)
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # 缓存未命中，查询数据库
     r = (await db.execute(select(HotQuestionAnalysis).where(HotQuestionAnalysis.id == analysis_id))).scalar_one_or_none()
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")
+
+    # 写入缓存（TTL 1小时）
+    await cache.set(cache_key, r, expire_seconds=3600)
+
     return r
 
 
@@ -390,6 +427,10 @@ async def delete_hot_analysis(
     await db.delete(r)
     await _delete_compatible_siblings(db, r)
     await db.commit()
+
+    # 清除相关缓存
+    await clear_analysis_cache(analysis_type="hot", analysis_id=analysis_id)
+
     return {"message": "已删除"}
 
 
@@ -417,9 +458,20 @@ async def get_chain_analysis(
     db: AsyncSession = Depends(get_db),
     current_user: Dict[str, Any] = Depends(require_admin),
 ):
+    # 尝试从缓存读取
+    cache_key = AnalysisCacheKeys.chain_analysis_detail(analysis_id)
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # 缓存未命中，查询数据库
     r = (await db.execute(select(StudentChainAnalysis).where(StudentChainAnalysis.id == analysis_id))).scalar_one_or_none()
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")
+
+    # 写入缓存（TTL 1小时）
+    await cache.set(cache_key, r, expire_seconds=3600)
+
     return r
 
 
@@ -435,6 +487,10 @@ async def delete_chain_analysis(
     await db.delete(r)
     await _delete_compatible_siblings(db, r)
     await db.commit()
+
+    # 清除相关缓存
+    await clear_analysis_cache(analysis_type="chain", analysis_id=analysis_id)
+
     return {"message": "已删除"}
 
 

@@ -169,8 +169,16 @@ async def analyze_hot_questions_v2(
     bucket_seconds: int = 180,
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
     custom_prompt: Optional[str] = None,
+    include_archived: bool = False,
 ) -> Dict[str, Any]:
-    events = await load_conversation_events(db, agent_id=agent_id, start_at=start_at, end_at=end_at, class_name=class_name)
+    events = await load_conversation_events(
+        db,
+        agent_id=agent_id,
+        start_at=start_at,
+        end_at=end_at,
+        class_name=class_name,
+        include_archived=include_archived,
+    )
 
     # 限制单次分析最多 500 条数据,避免 O(n²) 聚类超时
     MAX_EVENTS = 500
@@ -338,8 +346,16 @@ async def analyze_student_chains_v2(
     teacher_marks: Optional[List[Dict[str, Any]]] = None,
     custom_prompt: Optional[str] = None,
     merge_threshold: float = 0.30,
+    include_archived: bool = False,
 ) -> Dict[str, Any]:
-    events = await load_conversation_events(db, agent_id=agent_id, start_at=start_at, end_at=end_at, class_name=class_name)
+    events = await load_conversation_events(
+        db,
+        agent_id=agent_id,
+        start_at=start_at,
+        end_at=end_at,
+        class_name=class_name,
+        include_archived=include_archived,
+    )
     student_questions = _dedupe_student_questions(events, task_sheet=task_sheet or "")
     teacher_questions = build_teacher_questions(events, teacher_marks)
     themes = _cluster_questions(student_questions, max_clusters=10)

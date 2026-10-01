@@ -262,6 +262,7 @@ async def _ensure_views(conn) -> None:
                 c.agent_id,
                 COALESCE(c.agent_name, a.name, '未知智能体') AS display_agent_name,
                 c.session_id, c.message_type, c.content, c.response_time_ms, c.created_at,
+                c.is_archived, c.archived_at,
                 CASE WHEN u.id IS NULL OR u.is_deleted = true THEN true ELSE false END AS is_user_deleted,
                 CASE WHEN a.id IS NULL OR a.is_deleted = true THEN true ELSE false END AS is_agent_deleted
             FROM znt_conversations c

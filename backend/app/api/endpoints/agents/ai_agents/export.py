@@ -37,8 +37,11 @@ async def export_selected_conversations_excel(
     if len(session_ids) > 200:
         raise HTTPException(status_code=400, detail="一次最多导出 200 个会话")
 
+    # 管理员导出时默认包含已归档数据，除非明确要求排除
+    include_archived = getattr(payload, 'include_archived', True)
+    archived_filter = "" if include_archived else "AND v.is_archived = FALSE"
     sql = text(
-        """
+        f"""
         SELECT
             v.id,
             v.session_id,
@@ -56,6 +59,7 @@ async def export_selected_conversations_excel(
         FROM v_conversations_with_deleted v
         LEFT JOIN sys_users u ON v.user_id = u.id
         WHERE session_id = ANY(:session_ids)
+          {archived_filter}
         ORDER BY v.session_id ASC, v.created_at ASC, v.id ASC
         """
     )

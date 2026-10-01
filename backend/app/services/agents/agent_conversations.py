@@ -17,6 +17,7 @@ async def list_user_conversations(
     user_id: int,
     agent_id: int | None = None,
     limit: int = 5,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
     # A session has the same identity here and in the detail endpoint. Filter
     # session membership after aggregation so another agent's (or NULL-agent)
@@ -25,6 +26,8 @@ async def list_user_conversations(
         "HAVING sum(CASE WHEN agent_id = :agent_id THEN 1 ELSE 0 END) > 0"
         if agent_id is not None else ""
     )
+    # 归档过滤条件
+    archived_filter = "" if include_archived else "AND is_archived = FALSE"
     # Rank within each message type using the reverse of detail's (created_at, id)
     # order. Keep all ranked rows for counts and agent membership; only preview
     # takes rank 1, preserving answer-first/blank fallback below.
@@ -39,6 +42,7 @@ async def list_user_conversations(
             FROM v_conversations_with_deleted
             WHERE user_id = :user_id
               AND session_id IS NOT NULL
+              {archived_filter}
         ), sessions AS (
             SELECT
                 session_id,
@@ -92,9 +96,11 @@ async def get_conversation_messages(
     *,
     user_id: int,
     session_id: str,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
+    archived_filter = "" if include_archived else "AND is_archived = FALSE"
     sql = text(
-        """
+        f"""
         SELECT
             id,
             user_id,
@@ -109,6 +115,7 @@ async def get_conversation_messages(
         FROM v_conversations_with_deleted
         WHERE user_id = :user_id
           AND session_id = :session_id
+          {archived_filter}
         ORDER BY created_at ASC, id ASC
         """
     )
@@ -128,9 +135,11 @@ async def get_conversation_messages_admin(
     db: AsyncSession,
     *,
     session_id: str,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
+    archived_filter = "" if include_archived else "AND is_archived = FALSE"
     sql = text(
-        """
+        f"""
         SELECT
             id,
             user_id,
@@ -144,6 +153,7 @@ async def get_conversation_messages_admin(
             created_at
         FROM v_conversations_with_deleted
         WHERE session_id = :session_id
+          {archived_filter}
         ORDER BY created_at ASC, id ASC
         """
     )
