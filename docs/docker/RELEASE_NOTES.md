@@ -12,6 +12,39 @@
 
 ---
 
+## 未发布修复：热点问题分析数据质量基线（2026-09-29）
+
+- `hot_v2` 热点主统计增加确定性质量筛选：整段任务单/代码题回声、短时间重复、明显闲聊和过短内容不再进入主题、词云和时间线；原始学生消息仍保留在证据索引中，并附带质量标签和原因。
+- 结果新增 `raw_count`、`valid_question_count`、`prompt_echo_count`、`noise_count`、`duplicate_count`、`active_interval_count` 和 `data_quality`，避免把消息回声数量直接解释为共同学习困难。
+- 深度分析提示只接收有效问题，噪声作为单独证据传入；本轮不调整原有爆发阈值，也未引入数据库迁移。
+- 有效问题新增可解释的意图标签和语义词归一化，主题聚类与教师锚点关联会同时使用语义信号和去噪后的词法信号；词云只用学生原始用词，避免出现原文没有的派生别名。原文、原始词和 evidence 索引保持不变。
+- 主题新增 `commonness_score`、`difficulty_signal_score`、`persistence_score`、`hotness_score` 和 `heat_profile`，综合权重为 45% 共性、30% 可观察困难信号、25% 跨时间桶持续度，避免用消息数量单独定义热点。
+- 时间桶新增 `volume_signal`、`growth_signal`、`student_diversity_signal`、`burst_score`、`burst_reasons`；保留 180 秒分桶、1.8 倍增长阈值和 `is_burst` 旧字段，并修复课程热点阶段跨空档合并的问题。
+- 教师锚点关联改为时间、语义、会话三信号加权，输出分数、置信度、匹配类型和原因；低置信度关联必须回到学生原话和证据索引复核，覆盖率不作为教学效果指标。
+- 主题输出 `hotness_components`、`hotness_explanation`、`score_basis`，并清理对外教师问题结果中的内部匹配词项；本轮仍无数据库迁移，前端视觉展示留到后续阶段。
+- 新增 `analysis_audit` 统计口径审计信息，显式记录原始事件、有效问题、排除事件和教师锚点分母；异常时输出 warning，旧记录缺字段不补造结论。
+- 前端数据质量面板展示审计状态与复核原因；新增审计自洽、异常告警和旧记录兼容测试。
+- 新增评分、时间线空档、质量排除和教师锚点解释回归测试。
+- 修复语义聚类的信噪比问题：新增 `jieba` 分词依赖（缺失时会退化到字符 n-gram 兜底路径，
+  产生噪声词并稀释语义相似度）；聚类相似度改为「语义别名 + 去除通用提问词后的词法词」
+  分别计算再加权，解决“同义问法聚不到一起”与“共享报错/调试等通用词的不同知识点被误并”
+  两类问题；教师锚点相似度同步改用去噪知识词，覆盖率不再被 `anchor-unassigned` 占位符顶为 1.0。
+- 新增四组回归测试：跨主题假合并、词云派生别名、chain 占位锚点覆盖率、时间桶内部字段泄漏。
+
+## 未发布修复：Dify 对话稳定性与 SSE 生命周期（2026-09-28）
+
+- Dify SSE 改为严格答案状态机：支持 `answer`、`data.answer`、`outputs.answer`、
+  `data.outputs.answer`，只在可见答案和合法终止事件同时存在时成功；空回答、推理-only、429、
+  5xx、提前断流均返回结构化错误，不再出现 HTTP 200 静默空回答。
+- `agent_thought`、`thought`、`reasoning` 和 `<think>` 内容不再透传到浏览器、页面、usage 或历史。
+- 长 SSE 在响应前完成数据库读取，流期间不持有 request-scoped DB Session；使用稳定 Dify user 标识，
+  客户端断开和会话失效时释放上游资源，并发送 `session_invalid` 或
+  `session_revalidation_unavailable`。
+- 前端透传错误码并给出明确提示。新增后端 Dify 终止字段回归和 SSE 会话错误帧回归。
+- 新增 Redis 分布式 Dify 并发租约：默认每个智能体最多 20 条活动流，最多等待 2 秒；超限返回 `provider_busy`/`retry_after`，Redis 不可用返回 `concurrency_unavailable`。租约使用 TTL、续期和 finally 释放，worker 崩溃后可自动回收。该阈值用于保护上游和应用资源，不等于 Dify 官方容量；60 人真实压测仍需在发布前完成。
+- 修复 Redis 客户端的并发初始化竞态：60 条并发请求共享同一个连接池，不会因同时首次访问而重复创建几十个 Redis 客户端；增加 single-flight 回归测试。
+- 并发租约续期失败时现在 fail-closed：停止读取上游并返回 `concurrency_unavailable`，避免 Redis 短暂故障导致活动流数量失去保护。
+
 ## v2.1.3 发布候选：AI伙伴源码集成与课堂临时互动榜（2026-09-28）
 
 - 公开课地址不变，改为仓库内独立源码构建；保留三维部件展示与课堂记录门槛。

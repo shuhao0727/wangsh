@@ -10,7 +10,7 @@
 
 ```json
 {
-  "meta": {"course_name": "AI智能体名称", "time_range": "数据时间范围", "total_questions": 272, "unique_students": 64, "classes": ["班级列表"], "note": "时间标注说明"},
+  "meta": {"course_name": "AI智能体名称", "time_range": "数据时间范围", "total_questions": 272, "raw_count": 300, "valid_question_count": 272, "prompt_echo_count": 18, "noise_count": 7, "duplicate_count": 3, "active_interval_count": 2, "top_hotness_score": 78.5, "heat_profile_distribution": {"共性热点": 2}, "unique_students": 64, "classes": ["班级列表"], "note": "时间标注说明"},
   "task_sheet": "教师任务单原文（可能为空）",
   "topic_distribution": {"主题A": 36, "主题B": 20},
   "student_questions": [
@@ -18,10 +18,14 @@
       "student_name": "姓名", "class_name": "班级", "time": "时间",
       "question": "提问原文", "question_type": "类型代码",
       "question_type_label": "中文标签", "bloom_level": "Bloom层级",
-      "terms": ["关键词"]
+      "intent_code": "boundary_condition", "intent_label": "边界条件",
+      "terms": ["关键词"], "semantic_terms": ["range", "边界"]
     }
   ],
   "noise_questions": ["噪音问题列表"],
+  "teacher_questions": [
+    {"id": "teacher-123", "message_id": 123, "time": "时间", "question": "教师提问原文", "source": "auto", "user_name": "教师姓名"}
+  ],
   "custom_instruction": "教师自定义指令"
 }
 ```
@@ -56,15 +60,42 @@
 
 逐项完成：
 1. 阅读 meta 信息，形成课程全局认知
-2. 统计噪音：噪音占比，噪音类型（乱码/测试/无关），噪音集中时段
-3. 检查时间分布：均匀分布 vs 集中爆发？质量和数量峰值在什么时刻？
-4. **输出 200 字数据画像**，包含：参与度特征 + 噪音概况 + 时间分布特征
+2. 先区分原始问题、有效问题、任务单回声、短时间重复和明显无关/过短内容；原始消息只用于追溯，热点主统计只使用 `valid_question_count`
+3. 统计噪音：噪音占比，噪音类型（任务单回声/乱码或过短/测试/无关/重复），噪音集中时段
+4. 先读取每个问题的 `intent_code` / `intent_label` 和 `semantic_terms`。同一知识点的不同表述应优先归并到同一主题；仅意图相同但知识对象不同的问题不得强行合并。
+5. 检查时间分布：均匀分布 vs 集中爆发？质量和数量峰值在什么时刻？同时说明 `active_interval_count`，不要跨越空档拼成一条课堂热点
+6. **输出 200 字数据画像**，包含：参与度特征 + 数据质量概况 + 时间分布特征
+
+### 热点评分口径（确定性基线）
+
+对每个有效主题同时读取以下三个分量，全部归一化到 0–1：
+
+- `commonness_score`：该主题覆盖的不同学生数 ÷ 当前窗口全部有效学生数；不能用问题条数替代。
+- `difficulty_signal_score`：`debug` 最高，`clarify` / `challenge` 次之，普通 `follow_up`、`apply`、`transfer`、`extend` 只提供较弱信号；它表示可观察的提问形态，不是学习困难真值。
+- `persistence_score`：主题出现的非空时间桶数 ÷ 当前窗口非空时间桶数；出现跨空档时要结合 `active_interval_count` 解释。
+
+综合 `hotness_score = (0.45 × commonness_score + 0.30 × difficulty_signal_score + 0.25 × persistence_score) × 100`。`heat_profile` 只用于快速分组（共性热点、困难信号、持续关注、局部热点），关键判断必须回到学生原话和质量标签。时间桶的 `burst_score` 是观察指标，不会替换原有 `is_burst` 判定。
+
+> 约束：`raw_count` 不能直接作为学习困难人数；`prompt_echo_count`、`noise_count`、`duplicate_count` 不得被当作独立学生数。关键诊断必须引用有效问题的证据，并明确事实、推断和待验证原因。
+
+### 教师提问锚点与关联置信度
+
+学生问题中的 `teacher_anchor_*` 字段表示“最可信的关联教师提问”，不是教师提问导致学生困难的因果证明。关联分数固定由以下可解释信号组成：时间接近 `0.55`、语义词重合 `0.30`、同一会话 `0.15`。学生问题早于教师提问最多 120 秒时允许作为时钟误差容错，但时间分会折半。
+
+- `high`：`teacher_anchor_score >= 0.70`；可作为较强的课堂上下文线索，但仍需回看原话。
+- `medium`：`0.45 <= teacher_anchor_score < 0.70`；可用于辅助解释，不得单独支撑根因判断。
+- `low`：低于 `0.45`；只作为候选关联，必须回到学生原话、时间线和证据索引复核。
+- `teacher_anchor_match_type` 用于区分 `same_session_semantic`、`semantic_time`、`same_session_time`、`time_only`；`teacher_anchor_reason` 说明命中的信号。
+- `teacher_anchor_match_count`、`teacher_anchor_coverage` 和 `teacher_anchor_confidence_distribution` 只在 `included_in_analysis=true` 的有效学生问题集合上计算；被质量筛选排除的原始事件仍可保留候选锚点用于追溯，但不能进入这些统计。`teacher_anchor_coverage` 只是有效问题中成功关联教师提问的比例，不是教学效果评价。没有教师锚点时，应明确写“缺少教师提问上下文”，不要臆造课堂因果。
+- 新生成结果还应读取 `analysis_audit` 作为统计合同：`teacher_anchor_denominator` 应等于 `valid_question_count`，置信度分布总数应等于教师锚点匹配数，且匹配数不得超过有效问题数。若 `warnings` 非空或 `teacher_anchor_statistics_consistent=false`，输出“统计口径需复核”，不能由前端或模型自行补算；旧数据缺少该字段时明确标记审计信息未记录。
+
+主题的 `hotness_components` 和 `hotness_explanation` 必须逐项解释共性、可观察困难信号、持续性的分数贡献；`score_basis` 已明确这是确定性排序信号，不等同于真实学习困难。
 
 ### 步骤 2：主题聚类深度解读
 
 对 topic_distribution 中问题量 ≥ 3 的每个主题：
 
-**2.1 主题命名优化**：用教学专业术语重新命名，要求精确到"教师一看就懂"的程度
+**2.1 主题命名优化**：结合主题的 `intent_label` 和语义词，用教学专业术语重新命名，要求精确到"教师一看就懂"的程度
 - ✅ "range参数边界问题" ✅ "递归与迭代的适用场景对比"
 - ❌ "range" ❌ "循环学习"
 
@@ -176,7 +207,8 @@
 9. **术语过多**：最终读者是教师，不是数据科学家。用教学语言
 10. **无证据**：每条关键诊断必须有 ≥ 2个学生原话支撑
 11. **相关性≠因果性**：明确标注"此结论基于时间相关性推断，非严格因果"
-12. **AI天真乐观**：对数据不足的判断标注"低置信度"。备选解释优于单一叙事
+12. **教师锚点过度解释**：低置信度或 `time_only` 关联只能作为线索，不能写成“教师提问导致了学生困难”；优先引用 `teacher_anchor_reason` 和学生原话。
+13. **AI天真乐观**：对数据不足的判断标注"低置信度"。备选解释优于单一叙事
 
 ---
 

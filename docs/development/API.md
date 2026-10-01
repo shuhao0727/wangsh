@@ -364,6 +364,22 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 - 未携带有效登录凭据返回 `401`；有效会话但角色为 `guest` 返回 `403`。准入失败时不得进入智能体业务服务、会话读写或外部模型调用。
 - 前端 `/ai-agents` 同步使用登录守卫并保留安全的站内 `redirect`，但前端守卫不替代上述 API 权限。
 
+### `POST /ai-agents/stream` SSE 合同（2026-09-28）
+
+- 响应为 `text/event-stream`；正常成功必须包含可见答案正文，并以合法终止事件结束。
+- Dify 的 `message`、`message_delta`、`agent_message`、`text_chunk` 只输出经过推理过滤的正文；
+  `agent_thought`、`thought`、`reasoning` 及不在 allow-list 的字段不得透传。
+- Dify 最终答案支持 `answer`、`data.answer`、`outputs.answer`、`data.outputs.answer`。
+  空终止事件不再发送成功的空答案。
+- 失败通过 `event: error` 返回 JSON：
+  `dify_empty_answer`、`dify_rate_limited`、`dify_upstream_error`、`dify_stream_incomplete`、
+  `dify_stream_interrupted`、`session_invalid`、`session_revalidation_unavailable`。客户端应按
+  `error` 字段处理，不应仅依据 HTTP 200 判断成功。
+- 后端在建立长流前完成数据库读取；流期间不持有 request-scoped DB Session。客户端断开、
+  上游异常或会话失败时关闭上游资源。
+- Dify 长流使用 Redis 分布式租约按智能体限制活动流数量。超出 `DIFY_MAX_CONCURRENCY` 且等待窗口耗尽时，返回 `event: error`，错误码为 `provider_busy`，并带 `retry_after` 秒数；Redis 无法执行租约时返回 `concurrency_unavailable`。租约使用 TTL、续期和 finally 释放，客户端断开也会触发清理；续租丢失时返回 `concurrency_unavailable`，不会继续把该流当作已受保护请求。
+- `DIFY_MAX_CONCURRENCY` 只是保护阈值，不是固定容量承诺；60 人同时使用仍需结合真实 Dify 配额、响应时长和压测验收。
+
 流式回答与持久化边界（2026-09-20）：
 - `POST /ai-agents/stream` 对 Dify 仍保持事件级实时流式转发，但会丢弃 `agent_thought`，并从
   文本增量和终止事件中删除 `<think>…</think>` 与 Dify DeepSeek reasoning 标记；客户端不得
@@ -402,6 +418,10 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
   归属和客户端时钟错误。
 - 小组讨论组号锁在加入成功后才会生效；失败请求（如组号格式错误）不会写入锁，避免“失败后被锁组号”。
 - 热点问题与学生问题链已拆分为两个深度分析流。热点结果使用 `analysis_version=hot_v2`，包含 `word_cloud`、`themes`、`timeline_buckets`、`teacher_questions`、`course_hotspot_sequence` 和 `evidence_index`。学生问题链结果使用 `analysis_version=chain_v2`，包含 `teacher_mainline`、`ai_main_question_chain`、`student_question_chains`、`beam_nodes`、`beam_edges`、`lanes` 和 `evidence_index`。
+- `hot_v2.themes` 的主题输出 `commonness_score`、`difficulty_signal_score`、`persistence_score`、`hotness_score` 和 `heat_profile`；`timeline_buckets` 额外输出 `volume_signal`、`growth_signal`、`student_diversity_signal`、`burst_score` 和 `burst_reasons`。这些字段是可解释排序信号，旧的 `is_burst`、180 秒分桶和 1.8 倍爆发阈值保持兼容。
+- `hot_v2` 的学生事件输出 `teacher_anchor_id`、`teacher_anchor_question`、`teacher_anchor_score`、`teacher_anchor_confidence`、`teacher_anchor_match_type`、`teacher_anchor_reason` 和 `trigger_delay_seconds`。关联分数固定按时间接近 `0.55`、语义词重合 `0.30`、同一会话 `0.15` 计算，置信度阈值为 `high >= 0.70`、`medium >= 0.45`；最多容忍学生问题早于教师问题 120 秒，但会降低时间分。`summary.teacher_anchor_coverage` 是关联覆盖率，不是教学效果或因果证明。
+- `hot_v2.analysis_audit` 是结构化统计口径审计信息，包含 `audit_version`、`raw_event_count`、`raw_student_event_count`、`valid_question_count`、`excluded_event_count`、`teacher_anchor_denominator`、`teacher_anchor_match_count`、`teacher_anchor_coverage`、`teacher_anchor_confidence_total`、`teacher_anchor_statistics_consistent` 和 `warnings`。新结果应以该字段为准判断统计是否自洽；旧结果可能缺少该字段，客户端必须显示“未记录”而不能伪造审计结论。
+- `themes` 额外返回 `hotness_components`、`hotness_explanation` 和 `score_basis`；`timeline_buckets`、`course_hotspot_sequence` 保存最可信教师锚点的 ID、分数、置信度和原因。对外的 `teacher_questions` / `teacher_mainline` 只保留稳定字段 `id`、`message_id`、`time`、`question`、`source`、`user_name`，不暴露匹配用的内部词项。
 - `POST /ai-agents/analysis/hot-questions/stream` 与 `POST /ai-agents/analysis/student-chains/stream` 支持 `analysis_agent_id` 与 `prompt_template_id`。后端会先生成确定性结构化证据，再调用所选分析诊断智能体生成并保存 `deep_analysis`；同时返回 `analysis_agent` 与 `deep_analysis_status` 标记智能体名称、模型、完成或跳过原因。未配置 API Endpoint/API Key 时不会丢失基础结构化结果。
 - legacy `GET/DELETE /ai-agents/task-analysis/{analysis_id}` 只接受
   `task_analyses.id`，不会再用裸整数 ID 跨热点/问题链表猜测记录。热点和学生问题链

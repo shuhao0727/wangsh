@@ -53,6 +53,10 @@ def _student_chain_node(
         "bloom_level": event.bloom_level,
         "teacher_anchor_id": anchor.get("id"),
         "teacher_anchor_question": anchor.get("question"),
+        "teacher_anchor_score": anchor.get("anchor_score"),
+        "teacher_anchor_confidence": anchor.get("anchor_confidence"),
+        "teacher_anchor_match_type": anchor.get("anchor_match_type"),
+        "teacher_anchor_reason": anchor.get("anchor_reason") or [],
         "delay_seconds": anchor.get("delay_seconds"),
         "terms": list(event.terms),
         "evidence_ids": [event.message_id],
@@ -246,6 +250,9 @@ def _build_beam(
                     "question_type_label": item.get("question_type_label"),
                     "bloom_level": item.get("bloom_level"),
                     "teacher_anchor_id": item.get("teacher_anchor_id"),
+                    "teacher_anchor_score": item.get("teacher_anchor_score"),
+                    "teacher_anchor_confidence": item.get("teacher_anchor_confidence"),
+                    "teacher_anchor_reason": item.get("teacher_anchor_reason", []),
                     "evidence_ids": item.get("evidence_ids", []),
                 }
             )

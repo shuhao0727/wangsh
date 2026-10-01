@@ -242,7 +242,17 @@ class TimelineBucket(BaseModel):
     top_questions: List[HotQuestionExample] = []
     is_burst: bool = Field(False, description="是否为爆发点")
     near_teacher_mark: Optional[str] = Field(None, description="关联的教师提问内容")
+    teacher_anchor_id: Optional[str] = Field(None, description="最可信教师提问锚点 ID")
+    teacher_anchor_score: Optional[float] = Field(None, ge=0, le=1, description="教师提问关联分数")
+    teacher_anchor_confidence: Optional[str] = Field(None, description="教师提问关联置信度：high/medium/low")
+    teacher_anchor_reason: List[str] = Field(default_factory=list, description="教师提问关联原因")
     bloom_distribution: Dict[str, int] = Field(default_factory=dict, description="该桶内 Bloom 认知层级分布")
+    growth_rate: float = Field(0.0, description="相对上一非空时间桶的问题量变化率")
+    volume_signal: float = Field(0.0, ge=0, le=1, description="相对窗口最高问题量的归一化信号")
+    growth_signal: float = Field(0.0, ge=0, le=1, description="增长信号，归一化到0-1")
+    student_diversity_signal: float = Field(0.0, ge=0, le=1, description="不同学生占该桶问题量的比例")
+    burst_score: float = Field(0.0, ge=0, le=100, description="综合时间桶热度分数，不改变旧爆发规则")
+    burst_reasons: List[str] = Field(default_factory=list, description="可解释的时间桶热度原因")
 
 
 class StudentChainMessage(BaseModel):

@@ -41,6 +41,7 @@ _HOT_AGENT_SYSTEM_PROMPT = """你是一位课堂教学诊断专家，拥有 15 �
 5. 至少提及一次沉默学生/无提问记录学生的情况
 6. 使用教学语言，不堆砌数据科学术语
 7. 覆盖课前准备/课堂讲授/AI使用规范/课后巩固四个维度
+8. 主题归并优先参考 `intent_code`、`intent_label` 和 `semantic_terms`：同一知识点的不同措辞可以归并，但不要仅因意图相同就把不同知识点合并；每个诊断结论仍须回到学生原始问题证据。
 
 ## 数据清洗与归一化
 
@@ -110,6 +111,8 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
     student_questions = data.get("student_questions") or []
     meta = data.get("meta") or {}
     topic_dist = data.get("topic_distribution") or {}
+    intent_dist = data.get("intent_distribution") or {}
+    themes = data.get("themes") or []
     noise = data.get("noise_questions") or []
     task_sheet = data.get("task_sheet") or ""
     teacher_questions = data.get("teacher_questions") or []
@@ -121,6 +124,20 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
         "meta": meta,
         "task_sheet": task_sheet[:2000],  # 截断过长的任务单
         "topic_distribution": topic_dist,
+        "intent_distribution": intent_dist,
+        "themes": [
+            {
+                "theme_id": item.get("theme_id"),
+                "topic": item.get("topic"),
+                "count": item.get("count", 0),
+                "unique_students": item.get("unique_students", 0),
+                "intent_code": item.get("intent_code", "other"),
+                "intent_label": item.get("intent_label", "其他问题"),
+                "keywords": item.get("keywords", [])[:8],
+                "representative_question": item.get("representative_question", ""),
+            }
+            for item in themes[:30]
+        ],
         "teacher_questions": [
             {
                 "id": item.get("id"),
@@ -138,6 +155,7 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
                 "is_burst": bool(item.get("is_burst")),
                 "near_teacher_mark": item.get("near_teacher_mark"),
                 "dominant_themes": list((item.get("theme_distribution") or {}).keys())[:4],
+                "dominant_intent": item.get("dominant_intent"),
                 "top_questions": [
                     q.get("question", "") for q in (item.get("top_questions") or [])[:3]
                 ],
@@ -178,6 +196,7 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
                 "time": q.get("time", "")[:19],
                 "question": q.get("question", ""),
                 "question_type": q.get("question_type_label", ""),
+                "intent": q.get("intent_label", ""),
                 "bloom_level": q.get("bloom_level", ""),
             })
     input_data["question_examples_by_topic"] = examples_by_topic

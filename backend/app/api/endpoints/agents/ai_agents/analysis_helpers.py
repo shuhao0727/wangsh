@@ -224,12 +224,25 @@ def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[st
             "question_type_label": item.get("question_type_label"),
             "bloom_level": item.get("bloom_level"),
             "terms": item.get("terms") or [],
+            "semantic_terms": item.get("semantic_terms") or [],
+            "intent_code": item.get("intent_code"),
+            "intent_label": item.get("intent_label"),
             "theme": item.get("theme"),
+            "teacher_anchor_id": item.get("teacher_anchor_id"),
             "teacher_anchor_question": item.get("teacher_anchor_question"),
+            "teacher_anchor_score": item.get("teacher_anchor_score"),
+            "teacher_anchor_confidence": item.get("teacher_anchor_confidence"),
+            "teacher_anchor_match_type": item.get("teacher_anchor_match_type"),
+            "teacher_anchor_reason": item.get("teacher_anchor_reason") or [],
             "evidence_id": item.get("message_id"),
+            "quality_label": item.get("quality_label"),
+            "quality_reason": item.get("quality_reason"),
+            "quality_flags": item.get("quality_flags") or [],
         }
-        student_questions.append(compact)
-        if item.get("question_type") == "off_track":
+        is_included = item.get("included_in_analysis", True) and item.get("quality_label", "valid_question") == "valid_question"
+        if is_included:
+            student_questions.append(compact)
+        else:
             noise_questions.append(compact)
 
     return {
@@ -237,11 +250,23 @@ def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[st
             "analysis_version": analysis_result.get("analysis_version"),
             "analysis_type": analysis_result.get("analysis_type"),
             "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
-            "total_questions": summary.get("question_count", len(student_questions)),
+            "total_questions": summary.get("valid_question_count", summary.get("question_count", len(student_questions))),
+            "raw_count": summary.get("raw_count"),
+            "valid_question_count": summary.get("valid_question_count", len(student_questions)),
+            "prompt_echo_count": summary.get("prompt_echo_count"),
+            "noise_count": summary.get("noise_count"),
+            "duplicate_count": summary.get("duplicate_count"),
+            "active_interval_count": summary.get("active_interval_count"),
             "unique_students": summary.get("unique_students"),
             "teacher_anchor_count": summary.get("teacher_anchor_count"),
+            "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
+            "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
+            "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
             "theme_count": summary.get("theme_count", len(themes)),
+            "intent_distribution": summary.get("intent_distribution"),
             "burst_count": summary.get("burst_count"),
+            "top_hotness_score": summary.get("top_hotness_score"),
+            "heat_profile_distribution": summary.get("heat_profile_distribution") or {},
             "classes": classes,
             "class_name": filters.get("class_name"),
             "bucket_seconds": filters.get("bucket_seconds"),
@@ -251,6 +276,29 @@ def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[st
             str(theme.get("topic") or f"主题{index + 1}"): int(theme.get("count") or 0)
             for index, theme in enumerate(themes)
         },
+        "themes": [
+            {
+                "theme_id": theme.get("theme_id"),
+                "topic": theme.get("topic"),
+                "count": int(theme.get("count") or 0),
+                "unique_students": int(theme.get("unique_students") or 0),
+                "intent_code": theme.get("intent_code") or "other",
+                "intent_label": theme.get("intent_label") or "其他问题",
+                "keywords": theme.get("keywords") or [],
+                "representative_question": theme.get("representative_question"),
+                "active_bucket_count": theme.get("active_bucket_count"),
+                "commonness_score": theme.get("commonness_score"),
+                "difficulty_signal_score": theme.get("difficulty_signal_score"),
+                "persistence_score": theme.get("persistence_score"),
+                "hotness_score": theme.get("hotness_score"),
+                "hotness_components": theme.get("hotness_components") or {},
+                "hotness_explanation": theme.get("hotness_explanation") or [],
+                "score_basis": theme.get("score_basis"),
+                "heat_profile": theme.get("heat_profile"),
+            }
+            for theme in themes[:30]
+        ],
+        "intent_distribution": summary.get("intent_distribution") or {},
         "student_questions": student_questions,
         "noise_questions": noise_questions,
         "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_questions") or []),
@@ -290,6 +338,9 @@ def _prepare_chain_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[
                         "bloom_level": node.get("bloom_level"),
                         "teacher_anchor_id": node.get("teacher_anchor_id"),
                         "teacher_anchor_question": node.get("teacher_anchor_question"),
+                        "teacher_anchor_score": node.get("teacher_anchor_score"),
+                        "teacher_anchor_confidence": node.get("teacher_anchor_confidence"),
+                        "teacher_anchor_reason": node.get("teacher_anchor_reason") or [],
                         "evidence_ids": node.get("evidence_ids") or [],
                     }
                     for node in nodes
@@ -306,6 +357,9 @@ def _prepare_chain_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[
             "total_questions": summary.get("question_count"),
             "unique_students": summary.get("unique_students"),
             "teacher_anchor_count": summary.get("teacher_anchor_count"),
+            "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
+            "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
+            "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
             "chain_count": summary.get("chain_count", len(student_chains)),
             "ai_chain_node_count": summary.get("ai_chain_node_count"),
             "dominant_question_type": summary.get("dominant_question_type"),

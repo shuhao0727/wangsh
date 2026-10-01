@@ -1,6 +1,6 @@
 # AI 智能体系统文档
 
-> 最后更新：2026-09-28
+> 最后更新：2026-09-29
 > 
 > **注意**：SSE流式输出修复已于2026-03-23完成，Dify集成已支持完整流式效果。
 
@@ -146,6 +146,26 @@ Dify 的 DeepSeek 插件可能把 `reasoning_content` 编入同一文本流，�
 - 未闭合的 `<think>` 区块按失败关闭处理：区块开始后的剩余内容不展示、不持久化。该策略优先
   防止推理泄露；历史数据库本身不会由应用启动或读取接口自动批量改写。
 
+### Dify 完整回答与失败合同（2026-09-28）
+
+Dify 流式响应只有在“出现可见正文 + 收到合法终止事件”时才算成功。后端允许从以下位置提取最终答案：
+`answer`、`data.answer`、`outputs.answer`、`data.outputs.answer`；`thought`、`reasoning`、
+`agent_thought` 等字段永远不作为用户正文。`message_end` 或 `workflow_finished` 为空、只有推理内容、
+HTTP 200 后无有效 SSE，均返回结构化错误而不是成功的空 `message_end`。
+
+当前 Dify 失败码包括：`dify_empty_answer`、`dify_rate_limited`、`dify_upstream_error`、
+`dify_stream_incomplete`、`dify_stream_interrupted`。前端会透传并转换为用户可理解的提示，
+不再把错误码或“模型未返回内容”混在正常回答中。
+
+智能体长 SSE 在返回响应前已完成智能体、Provider、配置和历史加载，并释放 request-scoped 数据库会话；
+流期间只使用内存中的 prepared provider/config。Dify user 标识使用稳定的
+`wangsh:user:{user_id}:agent:{agent_id}`，不使用显示名或 `guest`。会话失效或无法复核时，SSE
+会发送 `session_invalid` 或 `session_revalidation_unavailable` 错误事件，并在 finally 中关闭上游流。
+
+以上修复消除了已识别的空回答、推理泄露和长流持有请求数据库会话问题。2026-09-28 起，Dify 长流还会通过 Redis 分布式租约执行跨 worker 的智能体级并发保护：默认每个智能体最多 20 条活动 Dify 流，最多等待 2 秒；超限返回 `provider_busy` 和 `retry_after`，Redis 不可用时返回 `concurrency_unavailable`，不再无限排队或把连接池耗尽。租约带 TTL、定期续期，并在成功、异常、客户端断开时释放；worker 崩溃后由 TTL 回收。续租失败会立即把租约标记为失效，停止继续读取上游或把响应标记为成功，避免 Redis 故障时保护阈值失效。
+
+另外，Redis 客户端初始化采用 single-flight 保护，60 条并发请求不会在首次访问时重复创建 Redis 连接池。`DIFY_MAX_CONCURRENCY` 是保护阈值，不是 Dify 官方容量承诺。60 人同时使用是否能全部成功，仍需结合真实 Dify 配额、响应时长和压测结果验收；并发保护的目标是把超载转换为可重试的明确失败，避免空回答和级联资源耗尽。
+
 ### 长回答与截断处理（2026-07-23）
 
 - 前后端不再使用固定的 120 秒总时长截断；前端 120 秒、后端 `HTTPX_TIMEOUT`
@@ -274,6 +294,14 @@ Dify 的 DeepSeek 插件可能把 `reasoning_content` 编入同一文本流，�
 热点问题与学生问题链不再共用一套任务单分析逻辑：
 
 - 热点问题分析生成 `hot_v2` 结果，先从 `znt_conversations` 联表 `sys_users` 构建事件，再区分教师/admin/super_admin 提问和学生问题，输出词云、热点主题、时序桶、教师锚点、爆发点、完整课程热点序列和证据索引。
+- `hot_v2` 的热点主统计使用质量筛选后的学生问题：原始问题保留在 `student_question_events` 和 `evidence_index` 中，并通过 `quality_label` / `quality_reason` 标记 `valid_question`、`prompt_echo`、`duplicate`、`off_track`、`too_short` 等状态；任务单回声、短时间重复、明显闲聊不会进入主题、词云和时间线。
+- 有效问题同时生成可解释的 `intent_code` / `intent_label`（如概念定义、原理原因、边界条件、运行调试、对比选择、迁移应用）和 `semantic_terms`；主题聚类、时间桶和深度分析优先使用语义词，原始 `terms` 与原文仍保留用于证据追溯，避免把同一知识点的换说法拆成多个热点。
+- 热点结果的 `summary` / `data_quality` 同时记录 `raw_count`、`valid_question_count`、`prompt_echo_count`、`noise_count`、`duplicate_count` 和 `active_interval_count`。这些字段用于区分“原始消息很多”和“多个学生共同提出有效问题”，不能把回声数量直接解释成学习困难。
+- `hot_v2` 的主题增加确定性评分：`commonness_score`（有效学生覆盖率）、`difficulty_signal_score`（调试/澄清/质疑等可观察卡点信号）、`persistence_score`（跨非空时间桶持续度）和 0–100 的 `hotness_score`。综合分固定为 `0.45 × 共性 + 0.30 × 困难信号 + 0.25 × 持续度`，并输出 `heat_profile`；这些是排序和人工复核信号，不等同于真实学习困难。
+- 时间桶保留原有 180 秒分桶、1.8 倍增长和 `is_burst` 语义，同时补充 `volume_signal`、`growth_signal`、`student_diversity_signal`、`burst_score` 和 `burst_reasons`。课程热点阶段不会跨越空档时间桶合并，避免把间断提问误读为连续课堂热点。
+- 学生问题的教师锚点不再只按最近时间匹配：关联分数由时间接近 `0.55`、语义词重合 `0.30`、同一会话 `0.15` 组成；允许学生问题早于教师问题最多 120 秒作为时钟误差容错，但会降低时间分。结果附带 `teacher_anchor_score`、`teacher_anchor_confidence`、`teacher_anchor_match_type` 和 `teacher_anchor_reason`。置信度阈值为 `high >= 0.70`、`medium >= 0.45`，低置信度只能作为待复核线索。
+- 主题附带 `hotness_components`、`hotness_explanation` 和 `score_basis`，时间桶/课程阶段保留教师锚点 ID、分数、置信度和原因。`teacher_anchor_match_count`、`teacher_anchor_coverage` 和 `teacher_anchor_confidence_distribution` 统一只基于 `included_in_analysis=true` 的有效学生事件计算；被质量筛选排除的事件仍保留在证据中，但不进入热点锚点统计。`teacher_anchor_coverage` 只表示可解释关联覆盖率，不代表教师教学效果或因果关系；对外保存的 `teacher_questions` / `teacher_mainline` 不包含用于匹配的内部词项。
+- 新生成的 `hot_v2` 结果额外保存 `analysis_audit`：明确记录分析原始事件数、原始学生事件数、有效问题数、排除事件数、教师锚点统计分母、匹配数、置信度统计总数和 `warnings`。`teacher_anchor_statistics_consistent=false` 或存在 warning 时，前端只提示复核，不自行修正后端口径；旧记录没有该字段时标记为“未记录”，不伪造审计结论。
 - 学生问题链分析生成 `chain_v2` 结果，以教师提问为主线锚点，按时间邻近、同会话顺序和术语相似度把学生问题归属到澄清、跟进、应用、调试、质疑、迁移、延伸、偏离等关系，输出 AI 主问题链、逐学生链路摘要、语义光束图节点/边/泳道和证据索引。
 - 分析提示词模板存放在 `agent_analysis_prompt_templates`，按 `hot_questions` / `student_chains` 分类管理，管理员可以新增、编辑、删除模板。
 - v1 不引入向量数据库；当前以 SQL 结构化提取、规则聚类、时间关系和可追溯 evidence 为主，后续可在不改变结果契约的前提下增加 embedding 缓存。
