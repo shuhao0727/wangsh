@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, AnyHttpUrl
 
 # 有意回导（legacy 兼容），非未使用导入；test_agent_conversations.py 依赖此回导
 from .conversation import ConversationMessage, ConversationSummary, UsageFilterOptions  # noqa: F401  有意回导，非未使用导入
+from app.utils.input_sanitizer import sanitize_html, check_prompt_injection
 
 
 # 智能体类型定义
@@ -27,14 +28,30 @@ class AIAgentBase(BaseModel):
     api_key: Optional[str] = Field(None, max_length=200, description="API密钥")
     system_prompt: Optional[str] = Field(None, max_length=8000, description="系统提示词（智能体人设/角色设定）")
     is_active: bool = Field(True, description="是否启用")
-    
-    @field_validator("name")
+
+    @field_validator("name", mode="after")
     @classmethod
-    def validate_name_not_empty(cls, v: str):
-        """验证名称非空"""
-        if not v.strip():
+    def validate_name(cls, v: str):
+        """验证名称非空并转义 HTML"""
+        if not v or not v.strip():
             raise ValueError("智能体名称不能为空")
-        return v.strip()
+        return sanitize_html(v.strip())
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def sanitize_description(cls, v):
+        """转义 HTML 字符防止 XSS"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("system_prompt", mode="after")
+    @classmethod
+    def validate_system_prompt(cls, v):
+        """验证 system_prompt 无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class AIAgentCreate(AIAgentBase):
@@ -54,14 +71,30 @@ class AIAgentUpdate(BaseModel):
     clear_api_key: Optional[bool] = Field(False, description="是否清除已保存的API密钥")
     is_active: Optional[bool] = Field(None, description="是否启用")
 
-    @field_validator("name")
+    @field_validator("name", mode="after")
     @classmethod
-    def validate_name_not_empty(cls, v: Optional[str]):
-        """验证名称非空（如果提供）"""
+    def validate_name(cls, v: Optional[str]):
+        """验证名称非空（如果提供）并转义 HTML"""
         if v is not None:
             if not v.strip():
                 raise ValueError("智能体名称不能为空")
-            return v.strip()
+            return sanitize_html(v.strip())
+        return v
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def sanitize_description(cls, v):
+        """转义 HTML 字符防止 XSS"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("system_prompt", mode="after")
+    @classmethod
+    def validate_system_prompt(cls, v):
+        """验证 system_prompt 无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
         return v
 
     @field_validator("model_name", mode="before")
@@ -117,6 +150,14 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"] = Field(..., description="消息角色")
     content: str = Field(..., min_length=1, max_length=16000, description="消息内容")
 
+    @field_validator("content", mode="after")
+    @classmethod
+    def validate_content(cls, v):
+        """验证消息内容无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
+
 
 class AgentChatRequest(BaseModel):
     agent_id: int = Field(..., description="智能体ID")
@@ -128,6 +169,14 @@ class AgentChatRequest(BaseModel):
     )
     user: Optional[str] = Field(None, description="用户标识")
     inputs: Optional[Dict[str, Any]] = Field(default_factory=dict, description="附加输入")
+
+    @field_validator("message", mode="after")
+    @classmethod
+    def validate_message(cls, v):
+        """验证消息内容无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class AgentTestResponse(BaseModel):
@@ -334,6 +383,22 @@ class TaskAnalysisSaveRequest(BaseModel):
     custom_prompt: Optional[str] = Field(None, max_length=2000, description="自定义AI分析提示词")
     teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list, description="教师提问时间点")
 
+    @field_validator("title", mode="after")
+    @classmethod
+    def sanitize_title(cls, v):
+        """转义标题中的 HTML"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("custom_prompt", mode="after")
+    @classmethod
+    def validate_custom_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
+
 
 class TaskAnalysisRecord(BaseModel):
     id: int
@@ -375,6 +440,22 @@ class HotQuestionAnalysisSaveRequest(BaseModel):
     bucket_seconds: int = Field(180, ge=60, le=600)
     custom_prompt: Optional[str] = Field(None, max_length=2000)
     teacher_marks: List[TeacherQuestionMark] = Field(default_factory=list)
+
+    @field_validator("title", mode="after")
+    @classmethod
+    def sanitize_title(cls, v):
+        """转义标题中的 HTML"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("custom_prompt", mode="after")
+    @classmethod
+    def validate_custom_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class HotQuestionAnalysisRecord(BaseModel):
@@ -419,6 +500,22 @@ class StudentChainAnalysisSaveRequest(BaseModel):
     class_name: Optional[str] = None
     task_sheet: Optional[str] = Field(None, description="任务单（可选）")
     custom_prompt: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("title", mode="after")
+    @classmethod
+    def sanitize_title(cls, v):
+        """转义标题中的 HTML"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("custom_prompt", mode="after")
+    @classmethod
+    def validate_custom_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class StudentChainAnalysisRecord(BaseModel):

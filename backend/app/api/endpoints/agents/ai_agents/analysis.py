@@ -177,9 +177,19 @@ async def get_task_analysis(
     cache_key = AnalysisCacheKeys.task_analysis_detail(analysis_id)
     cached = await cache.get(cache_key)
     if cached is not None:
+        # 记录缓存命中
+        try:
+            await cache.increment("analysis:cache:hit")
+        except Exception:
+            pass
         return cached
 
     # 缓存未命中，查询数据库
+    try:
+        await cache.increment("analysis:cache:miss")
+    except Exception:
+        pass
+
     row = await _find_legacy_task_analysis(db, analysis_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
@@ -402,9 +412,19 @@ async def get_hot_analysis(
     cache_key = AnalysisCacheKeys.hot_analysis_detail(analysis_id)
     cached = await cache.get(cache_key)
     if cached is not None:
+        # 记录缓存命中
+        try:
+            await cache.increment("analysis:cache:hit")
+        except Exception:
+            pass
         return cached
 
     # 缓存未命中，查询数据库
+    try:
+        await cache.increment("analysis:cache:miss")
+    except Exception:
+        pass
+
     r = (await db.execute(select(HotQuestionAnalysis).where(HotQuestionAnalysis.id == analysis_id))).scalar_one_or_none()
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -462,9 +482,19 @@ async def get_chain_analysis(
     cache_key = AnalysisCacheKeys.chain_analysis_detail(analysis_id)
     cached = await cache.get(cache_key)
     if cached is not None:
+        # 记录缓存命中
+        try:
+            await cache.increment("analysis:cache:hit")
+        except Exception:
+            pass
         return cached
 
     # 缓存未命中，查询数据库
+    try:
+        await cache.increment("analysis:cache:miss")
+    except Exception:
+        pass
+
     r = (await db.execute(select(StudentChainAnalysis).where(StudentChainAnalysis.id == analysis_id))).scalar_one_or_none()
     if not r:
         raise HTTPException(status_code=404, detail="记录不存在")

@@ -2,7 +2,9 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from app.utils.input_sanitizer import sanitize_html, check_prompt_injection
 
 
 # ── 基础数据结构 ──
@@ -100,6 +102,22 @@ class BaseAnalysisSaveRequest(BaseModel):
     end_at: Optional[datetime] = None
     class_name: Optional[str] = None
     custom_prompt: Optional[str] = Field(None, max_length=8000, description="自定义AI分析提示词")
+
+    @field_validator("title", mode="after")
+    @classmethod
+    def sanitize_title(cls, v):
+        """转义标题中的 HTML"""
+        if v:
+            return sanitize_html(v)
+        return v
+
+    @field_validator("custom_prompt", mode="after")
+    @classmethod
+    def validate_custom_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class TaskAnalysisSaveRequest(BaseAnalysisSaveRequest):

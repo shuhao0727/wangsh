@@ -1,13 +1,23 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.utils.input_sanitizer import sanitize_html, check_prompt_injection
 
 
 class GroupDiscussionJoinRequest(BaseModel):
     group_no: str = Field(..., min_length=1, max_length=16, description="组号（学生输入）")
     class_name: Optional[str] = Field(None, min_length=1, max_length=64, description="可选：班级（管理员可指定）")
     group_name: Optional[str] = Field(None, min_length=1, max_length=64, description="可选：组名（仅创建者可设置/修改）")
+
+    @field_validator("group_name", mode="after")
+    @classmethod
+    def sanitize_group_name(cls, v):
+        """转义组名中的 HTML"""
+        if v:
+            return sanitize_html(v)
+        return v
 
 
 class GroupDiscussionJoinResponse(BaseModel):
@@ -37,6 +47,14 @@ class GroupDiscussionMessageListResponse(BaseModel):
 class GroupDiscussionSendRequest(BaseModel):
     session_id: int
     content: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("content", mode="after")
+    @classmethod
+    def validate_content(cls, v):
+        """验证消息内容无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class GroupDiscussionMuteRequest(BaseModel):
@@ -114,6 +132,14 @@ class GroupDiscussionAdminAnalyzeRequest(BaseModel):
     analysis_type: str = Field("summary", min_length=1, max_length=32)
     prompt: Optional[str] = Field(None, description="可选：自定义prompt，未提供则使用默认模板")
 
+    @field_validator("prompt", mode="after")
+    @classmethod
+    def validate_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
+
 
 class GroupDiscussionAdminAnalyzeResponse(BaseModel):
     analysis_id: int
@@ -128,6 +154,14 @@ class GroupDiscussionAdminCompareAnalyzeRequest(BaseModel):
     analysis_type: str = Field("learning_compare", min_length=1, max_length=32)
     prompt: Optional[str] = Field(None, description="可选：自定义prompt，未提供则使用默认模板")
     use_cache: bool = Field(True, description="是否使用缓存（命中则直接返回历史分析）")
+
+    @field_validator("prompt", mode="after")
+    @classmethod
+    def validate_prompt(cls, v):
+        """验证自定义提示词无恶意注入"""
+        if v and check_prompt_injection(v):
+            raise ValueError("检测到潜在的恶意指令，请修改后重试")
+        return v
 
 
 class GroupDiscussionAdminAnalysisOut(BaseModel):

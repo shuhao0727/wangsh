@@ -7,7 +7,7 @@ from app.db.database import Base
 
 # 从模块化结构导入模型
 # 核心系统模型 (sys_ 前缀)
-from .core import User, RefreshToken, FeatureFlag
+from .core import User, RefreshToken, FeatureFlag, AuditLog, UserConsent
 from .auth import AuthSessionState, AuthAuthority
 
 # 文章系统模型 (wz_ 前缀)
@@ -65,11 +65,13 @@ from .ml import MLBook, MLBookChapter  # noqa: F401
 from .it import GameResource, GameDownloadLog
 
 __all__ = [
-    "Base", 
-    "User", 
+    "Base",
+    "User",
     "RefreshToken",
     "AuthSessionState", "AuthAuthority",
     "FeatureFlag",
+    "AuditLog",
+    "UserConsent",
     "Article",
     "Category",
     "MarkdownStyle",

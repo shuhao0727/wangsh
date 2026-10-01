@@ -222,7 +222,8 @@ async def collect_ai_agents_metrics() -> dict:
                 "api_duration_ms": {"n": int, "p50": int, "p90": int, "p95": int, "max": int}
             },
             "analysis": {
-                "total": int, "duration_ms": {...}
+                "total": int, "duration_ms": {...},
+                "cache_hit": int, "cache_miss": int, "cache_hit_rate": float
             },
             "dify": {
                 "active_leases": int, "lease_limit": int
@@ -230,6 +231,7 @@ async def collect_ai_agents_metrics() -> dict:
         }
     """
     conv_hit = conv_miss = analysis_total = 0
+    analysis_cache_hit = analysis_cache_miss = 0
     dify_active = dify_limit = 20  # 默认限制
     conv_dur_ms: List[int] = []
     analysis_dur_ms: List[int] = []
@@ -242,12 +244,16 @@ async def collect_ai_agents_metrics() -> dict:
             "ai_agents:analysis:total",
             "ai_agents:dify:active_leases",
             "ai_agents:dify:lease_limit",
+            "analysis:cache:hit",
+            "analysis:cache:miss",
         )
         conv_hit = int(vals[0] or 0)
         conv_miss = int(vals[1] or 0)
         analysis_total = int(vals[2] or 0)
         dify_active = int(vals[3] or 0)
         dify_limit = int(vals[4] or 20)
+        analysis_cache_hit = int(vals[5] or 0)
+        analysis_cache_miss = int(vals[6] or 0)
 
         sample_size = max(0, settings.HTTP_METRICS_SAMPLE_SIZE - 1)
         raw_conv_dur = await client.lrange("ai_agents:conversations:dur_ms", 0, sample_size)  # type: ignore[misc]
@@ -260,6 +266,10 @@ async def collect_ai_agents_metrics() -> dict:
     cache_hit_rate = 0.0
     if conv_hit + conv_miss > 0:
         cache_hit_rate = float(conv_hit) / float(conv_hit + conv_miss)
+
+    analysis_cache_hit_rate = 0.0
+    if analysis_cache_hit + analysis_cache_miss > 0:
+        analysis_cache_hit_rate = float(analysis_cache_hit) / float(analysis_cache_hit + analysis_cache_miss)
 
     return {
         "conversations": {
@@ -283,6 +293,9 @@ async def collect_ai_agents_metrics() -> dict:
                 "p95": percentile(analysis_dur_ms, 0.95),
                 "max": max(analysis_dur_ms) if analysis_dur_ms else 0,
             },
+            "cache_hit": analysis_cache_hit,
+            "cache_miss": analysis_cache_miss,
+            "cache_hit_rate": analysis_cache_hit_rate,
         },
         "dify": {
             "active_leases": dify_active,

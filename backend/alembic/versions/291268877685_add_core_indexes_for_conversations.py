@@ -19,47 +19,54 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # 注意：生产环境建议使用 CONCURRENTLY 避免锁表
+    # 但 CONCURRENTLY 不能在 Alembic 事务中使用，需手动执行
+
     # 1. 会话历史查询优化（最高优先级）
-    # 优化: GET /api/conversations/session/{session_id} 按会话查询对话历史
-    op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_conversations_session_created "
-        "ON znt_conversations(session_id, created_at DESC, id DESC)"
+    op.create_index(
+        'ix_conversations_session_created',
+        'znt_conversations',
+        ['session_id', sa.text('created_at DESC'), sa.text('id DESC')],
+        unique=False,
+        if_not_exists=True
     )
 
-    # 2. 深度分析时间范围扫描
-    # 优化: 热点分析等功能需要按 agent 和时间范围扫描有效内容
+    # 2. 深度分析时间范围扫描（部分索引）
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_conversations_agent_time "
+        "CREATE INDEX IF NOT EXISTS ix_conversations_agent_time "
         "ON znt_conversations(agent_id, created_at, id) "
         "WHERE content IS NOT NULL AND trim(content) != ''"
     )
 
     # 3. 小组讨论消息分页
-    # 优化: GET /api/group_discussions/sessions/{session_id}/messages 消息列表查询
-    op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_group_messages_session_created "
-        "ON znt_group_discussion_messages(session_id, created_at DESC)"
+    op.create_index(
+        'ix_group_messages_session_created',
+        'znt_group_discussion_messages',
+        ['session_id', sa.text('created_at DESC')],
+        unique=False,
+        if_not_exists=True
     )
 
     # 4. 用户会话列表
-    # 优化: GET /api/conversations/sessions 按用户和 agent 筛选会话
-    op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_conversations_user_agent_time "
-        "ON znt_conversations(user_id, agent_id, created_at DESC)"
+    op.create_index(
+        'ix_conversations_user_agent_time',
+        'znt_conversations',
+        ['user_id', 'agent_id', sa.text('created_at DESC')],
+        unique=False,
+        if_not_exists=True
     )
 
-    # 5. class_name 过滤优化
-    # 优化: 后台管理按班级筛选用户列表
+    # 5. class_name 过滤优化（部分索引）
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_users_class_name "
+        "CREATE INDEX IF NOT EXISTS ix_users_class_name "
         "ON sys_users(class_name) WHERE class_name IS NOT NULL"
     )
 
 
 def downgrade() -> None:
     # 按创建顺序逆序删除索引
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_users_class_name")
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_conversations_user_agent_time")
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_group_messages_session_created")
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_conversations_agent_time")
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_conversations_session_created")
+    op.execute("DROP INDEX IF EXISTS ix_users_class_name")
+    op.drop_index('ix_conversations_user_agent_time', table_name='znt_conversations', if_exists=True)
+    op.drop_index('ix_group_messages_session_created', table_name='znt_group_discussion_messages', if_exists=True)
+    op.execute("DROP INDEX IF EXISTS ix_conversations_agent_time")
+    op.drop_index('ix_conversations_session_created', table_name='znt_conversations', if_exists=True)
