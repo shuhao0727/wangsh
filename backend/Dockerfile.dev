@@ -46,9 +46,13 @@ RUN env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u all_proxy -
     pip install -r requirements.txt
 
 ARG TYPST_VERSION=0.14.2
+# apt 镜像源可配置：留空则使用 Debian 官方源。
+# 某些网络环境下第三方镜像（如 mirrors.aliyun.com）对部分大字体包返回 502，
+# 此时改用官方源更稳妥，因此这里默认不替换。
+ARG DEBIAN_MIRROR=
 
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true; \
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR:-deb.debian.org}|g" /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    sed -i "s|deb.debian.org|${DEBIAN_MIRROR:-deb.debian.org}|g" /etc/apt/sources.list 2>/dev/null || true; \
     apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
     ca-certificates curl xz-utils fontconfig \
@@ -178,9 +182,10 @@ ENV NO_PROXY=
 
 ARG TYPST_VERSION=0.14.2
 ARG DOCKER_CLI_VERSION=26.1.4
+ARG DEBIAN_MIRROR=
 
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true; \
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR:-deb.debian.org}|g" /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    sed -i "s|deb.debian.org|${DEBIAN_MIRROR:-deb.debian.org}|g" /etc/apt/sources.list 2>/dev/null || true; \
     apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false update \
     && apt-get -o Acquire::http::Proxy=false -o Acquire::https::Proxy=false install -y --no-install-recommends \
     ca-certificates curl xz-utils fontconfig \
