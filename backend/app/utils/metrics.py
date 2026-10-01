@@ -210,3 +210,82 @@ def collect_db_pool_metrics() -> dict:
         "capacity_total": int(settings.POSTGRES_MAX_CONNECTIONS)
         + int(settings.DB_MAX_OVERFLOW),
     }
+
+
+async def collect_ai_agents_metrics() -> dict:
+    """采集 AI 智能体指标（从 Redis）
+
+    Returns:
+        {
+            "conversations": {
+                "cache_hit": int, "cache_miss": int, "cache_hit_rate": float,
+                "api_duration_ms": {"n": int, "p50": int, "p90": int, "p95": int, "max": int}
+            },
+            "analysis": {
+                "total": int, "duration_ms": {...}
+            },
+            "dify": {
+                "active_leases": int, "lease_limit": int
+            }
+        }
+    """
+    conv_hit = conv_miss = analysis_total = 0
+    dify_active = dify_limit = 20  # 默认限制
+    conv_dur_ms: List[int] = []
+    analysis_dur_ms: List[int] = []
+
+    try:
+        client = await cache.get_client()
+        vals = await client.mget(
+            "ai_agents:conversations:cache_hit",
+            "ai_agents:conversations:cache_miss",
+            "ai_agents:analysis:total",
+            "ai_agents:dify:active_leases",
+            "ai_agents:dify:lease_limit",
+        )
+        conv_hit = int(vals[0] or 0)
+        conv_miss = int(vals[1] or 0)
+        analysis_total = int(vals[2] or 0)
+        dify_active = int(vals[3] or 0)
+        dify_limit = int(vals[4] or 20)
+
+        sample_size = max(0, settings.HTTP_METRICS_SAMPLE_SIZE - 1)
+        raw_conv_dur = await client.lrange("ai_agents:conversations:dur_ms", 0, sample_size)  # type: ignore[misc]
+        raw_analysis_dur = await client.lrange("ai_agents:analysis:dur_ms", 0, sample_size)  # type: ignore[misc]
+        conv_dur_ms = [int(x) for x in raw_conv_dur if str(x).isdigit()]
+        analysis_dur_ms = [int(x) for x in raw_analysis_dur if str(x).isdigit()]
+    except Exception:
+        _warn_metrics_failure("ai_agents")
+
+    cache_hit_rate = 0.0
+    if conv_hit + conv_miss > 0:
+        cache_hit_rate = float(conv_hit) / float(conv_hit + conv_miss)
+
+    return {
+        "conversations": {
+            "cache_hit": conv_hit,
+            "cache_miss": conv_miss,
+            "cache_hit_rate": cache_hit_rate,
+            "api_duration_ms": {
+                "n": len(conv_dur_ms),
+                "p50": percentile(conv_dur_ms, 0.50),
+                "p90": percentile(conv_dur_ms, 0.90),
+                "p95": percentile(conv_dur_ms, 0.95),
+                "max": max(conv_dur_ms) if conv_dur_ms else 0,
+            },
+        },
+        "analysis": {
+            "total": analysis_total,
+            "duration_ms": {
+                "n": len(analysis_dur_ms),
+                "p50": percentile(analysis_dur_ms, 0.50),
+                "p90": percentile(analysis_dur_ms, 0.90),
+                "p95": percentile(analysis_dur_ms, 0.95),
+                "max": max(analysis_dur_ms) if analysis_dur_ms else 0,
+            },
+        },
+        "dify": {
+            "active_leases": dify_active,
+            "lease_limit": dify_limit,
+        },
+    }

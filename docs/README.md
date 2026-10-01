@@ -64,6 +64,11 @@
 
 - [development/API.md](development/API.md) - API 接口文档
 
+## 运维监控 (`operations/`)
+
+- [operations/MONITORING_QUICKSTART.md](operations/MONITORING_QUICKSTART.md) - AI 智能体监控快速开始
+- [operations/MONITORING.md](operations/MONITORING.md) - AI 智能体监控与告警完整指南
+
 ## 脚本与测试文档 (`scripts/`)
 
 ### 脚本文档中心

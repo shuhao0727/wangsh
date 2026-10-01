@@ -1,4 +1,5 @@
 from typing import Optional, List, Dict, Any
+import time
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,7 @@ async def list_conversations(
     current_user: Dict[str, Any] = Depends(require_registered_user),
     db: AsyncSession = Depends(get_db),
 ):
+    start_time = time.time()
     user_id = int(current_user["id"])
 
     # 构造缓存键（包含所有查询参数）
@@ -34,23 +36,42 @@ async def list_conversations(
     )
 
     # 尝试从缓存读取
+    cache_hit = False
     try:
         cached = await cache.get(cache_key)
         if cached is not None:
+            cache_hit = True
             logger.debug(f"会话列表缓存命中: user_id={user_id}, agent_id={agent_id}, limit={limit}")
-            return cached
+            result = cached
+        else:
+            # 缓存未命中，查询数据库
+            result = await list_user_conversations(db, user_id=user_id, agent_id=agent_id, limit=limit)
+
+            # 写入缓存（TTL 60 秒）
+            try:
+                await cache.set(cache_key, result, expire_seconds=60)
+                logger.debug(f"会话列表已缓存: user_id={user_id}, agent_id={agent_id}, limit={limit}")
+            except Exception as e:
+                logger.warning(f"Redis 缓存写入失败: {e}")
     except Exception as e:
         logger.warning(f"Redis 缓存读取失败，降级到数据库查询: {e}")
+        result = await list_user_conversations(db, user_id=user_id, agent_id=agent_id, limit=limit)
 
-    # 缓存未命中，查询数据库
-    result = await list_user_conversations(db, user_id=user_id, agent_id=agent_id, limit=limit)
-
-    # 写入缓存（TTL 60 秒）
+    # 记录监控指标
+    duration_ms = int((time.time() - start_time) * 1000)
     try:
-        await cache.set(cache_key, result, expire_seconds=60)
-        logger.debug(f"会话列表已缓存: user_id={user_id}, agent_id={agent_id}, limit={limit}")
-    except Exception as e:
-        logger.warning(f"Redis 缓存写入失败: {e}")
+        client = await cache.get_client()
+        # 记录缓存命中/未命中
+        if cache_hit:
+            await client.incr("ai_agents:conversations:cache_hit")
+        else:
+            await client.incr("ai_agents:conversations:cache_miss")
+
+        # 记录响应时间（保留最近 500 个样本）
+        await client.lpush("ai_agents:conversations:dur_ms", duration_ms)
+        await client.ltrim("ai_agents:conversations:dur_ms", 0, 499)
+    except Exception:
+        pass  # 监控指标失败不影响主业务
 
     return result
 

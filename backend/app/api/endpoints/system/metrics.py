@@ -11,12 +11,13 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, require_super_admin
+from app.core.deps import get_db, require_super_admin, require_admin
 from app.services.informatics.typst_pdf_cleanup import cleanup_unreferenced_pdfs
 from app.utils.metrics import (
     collect_db_pool_metrics,
     collect_http_metrics,
     collect_typst_metrics,
+    collect_ai_agents_metrics,
 )
 
 router = APIRouter(prefix="/system")
@@ -51,6 +52,23 @@ async def typst_pdf_cleanup(
     return await cleanup_unreferenced_pdfs(db=db, retention_days=days, dry_run=bool(dry_run))
 
 
+@router.get("/ai-agents-metrics")
+async def ai_agents_metrics(
+    _: Dict[str, Any] = Depends(require_admin),
+) -> Dict[str, Any]:
+    """AI 智能体监控指标端点（JSON 格式）
+
+    返回会话列表性能、分析任务、Dify 租约等关键指标。
+    仅管理员可访问。
+    """
+    metrics = await collect_ai_agents_metrics()
+    return {
+        "conversations": metrics["conversations"],
+        "analysis": metrics["analysis"],
+        "dify": metrics["dify"],
+    }
+
+
 @router.get("/metrics")
 async def prometheus_metrics(
     _: Dict[str, Any] = Depends(require_super_admin),
@@ -63,6 +81,7 @@ async def prometheus_metrics(
     http = await collect_http_metrics()
     typst = await collect_typst_metrics()
     db_pool = collect_db_pool_metrics()
+    ai_agents = await collect_ai_agents_metrics()
     # 从 typst 结构中提取原始值列表用于 percentile 计算已在 collect 函数中完成
     # 这里直接使用已计算好的值
 
@@ -170,5 +189,36 @@ async def prometheus_metrics(
         "# HELP ws_db_pool_capacity_total Total configured capacity (pool_size + max_overflow)",
         "# TYPE ws_db_pool_capacity_total gauge",
         f"ws_db_pool_capacity_total {db_pool['capacity_total']}",
+        # AI Agents metrics
+        "# HELP ai_agents_conversations_cache_hit_total Conversations cache hits",
+        "# TYPE ai_agents_conversations_cache_hit_total counter",
+        f"ai_agents_conversations_cache_hit_total {ai_agents['conversations']['cache_hit']}",
+        "# HELP ai_agents_conversations_cache_miss_total Conversations cache misses",
+        "# TYPE ai_agents_conversations_cache_miss_total counter",
+        f"ai_agents_conversations_cache_miss_total {ai_agents['conversations']['cache_miss']}",
+        "# HELP ai_agents_conversations_cache_hit_rate Recent cache hit rate (0-1)",
+        "# TYPE ai_agents_conversations_cache_hit_rate gauge",
+        f"ai_agents_conversations_cache_hit_rate {ai_agents['conversations']['cache_hit_rate']}",
+        "# HELP ai_agents_conversations_duration_ms API response time quantiles (ms)",
+        "# TYPE ai_agents_conversations_duration_ms gauge",
+        f'ai_agents_conversations_duration_ms{{quantile="0.5"}} {ai_agents["conversations"]["api_duration_ms"]["p50"]}',
+        f'ai_agents_conversations_duration_ms{{quantile="0.9"}} {ai_agents["conversations"]["api_duration_ms"]["p90"]}',
+        f'ai_agents_conversations_duration_ms{{quantile="0.95"}} {ai_agents["conversations"]["api_duration_ms"]["p95"]}',
+        f'ai_agents_conversations_duration_ms{{quantile="1"}} {ai_agents["conversations"]["api_duration_ms"]["max"]}',
+        "# HELP ai_agents_analysis_total Total analysis requests",
+        "# TYPE ai_agents_analysis_total counter",
+        f"ai_agents_analysis_total {ai_agents['analysis']['total']}",
+        "# HELP ai_agents_analysis_duration_ms Analysis duration quantiles (ms)",
+        "# TYPE ai_agents_analysis_duration_ms gauge",
+        f'ai_agents_analysis_duration_ms{{quantile="0.5"}} {ai_agents["analysis"]["duration_ms"]["p50"]}',
+        f'ai_agents_analysis_duration_ms{{quantile="0.9"}} {ai_agents["analysis"]["duration_ms"]["p90"]}',
+        f'ai_agents_analysis_duration_ms{{quantile="0.95"}} {ai_agents["analysis"]["duration_ms"]["p95"]}',
+        f'ai_agents_analysis_duration_ms{{quantile="1"}} {ai_agents["analysis"]["duration_ms"]["max"]}',
+        "# HELP ai_agents_dify_active_leases Active Dify leases",
+        "# TYPE ai_agents_dify_active_leases gauge",
+        f"ai_agents_dify_active_leases {ai_agents['dify']['active_leases']}",
+        "# HELP ai_agents_dify_lease_limit Total Dify lease limit",
+        "# TYPE ai_agents_dify_lease_limit gauge",
+        f"ai_agents_dify_lease_limit {ai_agents['dify']['lease_limit']}",
     ]
     return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
