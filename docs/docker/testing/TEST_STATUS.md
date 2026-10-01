@@ -48,7 +48,7 @@
   `51641`、专用 Redis `51640`。**真实供应商模型 API 与真实 JWT 登录尚未验收**；
   模型 fixture 仅验证接口联动，不能代表智能评分质量。不访问生产数据库或模型。
 - **合同门禁：** 构建/工作流合同合计 68 passed；Markdown 派生摘要为
-  `114 files / 453 links / 0 missing`，Markdown 合同 10 passed，`git diff --check` 通过。
+  `113 files / 448 links / 0 missing`，Markdown 合同 10 passed，`git diff --check` 通过。
 - **发布边界：** 未打包 Docker 镜像、未 commit/push、未部署；真实模型需要后台配置并绑定
   `AI_PARTNER_SCORING_AGENT_ID`，生产 Compose 透传等发布准备仍按部署文档另行验收。
 
