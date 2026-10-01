@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -10,6 +11,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 
 TEACHER_ROLES = {"teacher", "admin", "super_admin"}
@@ -152,7 +155,8 @@ def _extract_terms(text_value: str, *, limit: int = 12) -> Tuple[str, ...]:
 
     try:
         terms.extend(_jieba_terms(chinese_text))
-    except Exception:
+    except Exception as e:
+        logger.warning(f"jieba 分词失败，降级到滑动窗口: {e}")
         terms.extend(_fallback_terms(chinese_text))
 
     return _dedupe_terms(terms, limit)

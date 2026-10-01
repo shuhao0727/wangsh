@@ -65,7 +65,11 @@ def _term_counts_for_items(items: Sequence[ConversationEvent]) -> Dict[str, int]
 
 
 def _top_terms_label(top_terms: List[Tuple[str, int]], items: Sequence[ConversationEvent]) -> str:
-    return " / ".join(term for term, _ in top_terms[:3]) or items[0].content[:18]
+    label = " / ".join(term for term, _ in top_terms[:3])
+    if label:
+        return label
+    # 降级：从第一个事件提取标题（若 items 为空则返回占位符）
+    return items[0].content[:18] if items else "未知主题"
 
 
 def _greedy_cluster(events: Sequence[ConversationEvent]) -> List[Dict[str, Any]]:
