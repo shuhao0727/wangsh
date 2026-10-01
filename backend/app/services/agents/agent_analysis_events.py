@@ -41,7 +41,7 @@ QUESTION_INTENT_LABELS = {
 }
 BLOOM_LEVELS = ("记忆", "理解", "应用", "分析", "评价", "创造")
 
-# 质量标签只描述“是否进入热点主统计”，不会删除原始消息。
+# 质量标签只描述"是否进入热点主统计"，不会删除原始消息。
 QUALITY_RAW = "raw"
 QUALITY_VALID = "valid_question"
 QUALITY_PROMPT_ECHO = "prompt_echo"
@@ -143,6 +143,10 @@ def _dedupe_terms(terms: Iterable[str], limit: int) -> Tuple[str, ...]:
 
 
 def _extract_terms(text_value: str, *, limit: int = 12) -> Tuple[str, ...]:
+    # 截断超长文本避免分词超时（保留前 2000 字符足够提取关键词）
+    if len(text_value) > 2000:
+        text_value = text_value[:2000]
+
     normalized = _normalize_text(text_value)
     latin = re.findall(r"[a-zA-Z][a-zA-Z0-9_+#-]{1,}", normalized)
     chinese_text = re.sub(r"[a-zA-Z0-9_+#-]+", " ", normalized)
@@ -170,11 +174,15 @@ def _term_similarity(left: Iterable[str], right: Iterable[str]) -> float:
     return len(a & b) / max(1, min(len(a), len(b)))
 
 
-# 提问方式类通用词：它们表达“怎么问”而不是“问什么”，不区分知识点。
-# 若参与聚类，会把“循环报错怎么调试”和“递归报错怎么调试”这类不同主题合并，
+# 提问方式类通用词：它们表达"怎么问"而不是"问什么"，不区分知识点。
+# 若参与聚类，会把"循环报错怎么调试"和"递归报错怎么调试"这类不同主题合并，
 # 因此聚类时剔除；展示/词云仍保留原始词。
+#
+# 注意："错误"已从通用词中移除，因为在"错误处理"课程中它是核心主题词，
+# 需要参与区分"语法错误"、"运行时错误"、"逻辑错误"等不同子话题。
+# "报错"(动作/状态)和"异常"(技术术语)保留为通用词。
 _CLUSTER_GENERIC_TERMS = frozenset({
-    "报错", "错误", "异常", "调试", "怎么", "怎样", "如何", "为什么", "什么",
+    "报错", "异常", "调试", "怎么", "怎样", "如何", "为什么", "什么",
     "哪里", "哪些", "哪个", "可以", "能不能", "是否", "应该", "需要", "必须",
     "区别", "关系", "原理", "本质", "对比", "更好", "合理", "判断", "评价",
     "帮我", "请", "一下", "还是", "或者", "以及", "关于", "这个", "那个",
@@ -193,7 +201,7 @@ def cluster_terms(event: "ConversationEvent") -> Tuple[str, ...]:
 
 
 def _semantic_labels(event: "ConversationEvent") -> Tuple[str, ...]:
-    """取事件命中的语义别名，并剔除通用词（如“错误”本身不区分知识点）。"""
+    """取事件命中的语义别名，并剔除通用词（如"错误"本身不区分知识点）。"""
     aliases = tuple(term for term in (event.semantic_terms or ()) if term not in event.terms)
     return tuple(term for term in aliases if term not in _CLUSTER_GENERIC_TERMS)
 
@@ -212,7 +220,7 @@ def cluster_similarity(left_event: "ConversationEvent", right_event: "Conversati
 
     语义别名若与词法词并入同一集合，会被大量词法词稀释（overlap coefficient
     的分母取较小集合大小）。这里分开计算再加权，使语义信号不被稀释：
-      - 语义分：同义问法（如“取不到”与“不包含最后”都命中“边界”）
+      - 语义分：同义问法（如"取不到"与"不包含最后"都命中"边界"）
       - 词法分：共享知识点词（如 range、递归）
     权重 0.5/0.5：任一维度强匹配即可跨过阈值，同时要求两者都不弱；
     不同主题的报错问题因通用词（报错/调试）被剔除，词法分归零，不再误并。
@@ -353,7 +361,7 @@ def _looks_like_prompt_echo(event: ConversationEvent, task_sheet: str) -> bool:
     if len(compact) < 30:
         return False
     if task_sheet and _prompt_echo_score(text_value, task_sheet) >= 0.55:
-        # 带有明确疑问/报错信号的长文本通常是“引用任务单后提问”，仍保留为有效问题。
+        # 带有明确疑问/报错信号的长文本通常是"引用任务单后提问"，仍保留为有效问题。
         if not _has_question_signal(text_value):
             return True
         # 任务单几乎原样粘贴，且问题信号只出现在复制的题干中，也按回声处理。
@@ -372,7 +380,7 @@ def _looks_off_track(event: ConversationEvent, task_sheet: str) -> bool:
         return True
     if event.is_code_related or event.is_error_related:
         return False
-    # 关键词不重合只能作为弱信号，不能单独把“range 结束值为什么取不到”这类
+    # 关键词不重合只能作为弱信号，不能单独把"range 结束值为什么取不到"这类
     # 同主题但换了说法的问题过滤掉。这里仅对明显闲聊/跨课题词做保守标记。
     if not task_sheet:
         return False
@@ -661,9 +669,9 @@ def _teacher_anchor_candidate(
         time_score *= 0.5
 
     # 相似度用「知识词」= 词法词 ∪ 语义别名，并剔除通用词：
-    # 直接把 semantic_terms 整体比较会被词法词稀释，且“报错/调试”等通用词
-    # 会让不同知识点的提问伪装成强关联（如“循环报错”误配“递归报错”）。
-    # 并入并集可避免 jieba 分词差异导致的跨边界丢失（如“递归”与“递归函数”）。
+    # 直接把 semantic_terms 整体比较会被词法词稀释，且"报错/调试"等通用词
+    # 会让不同知识点的提问伪装成强关联（如"循环报错"误配"递归报错"）。
+    # 并入并集可避免 jieba 分词差异导致的跨边界丢失（如"递归"与"递归函数"）。
     event_lexical = tuple(t for t in event.terms if t not in _CLUSTER_GENERIC_TERMS)
     teacher_lexical = tuple(
         t

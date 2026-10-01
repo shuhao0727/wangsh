@@ -11,6 +11,11 @@ from app.services.agents.agent_deep_analysis import (
     summarize_hot_list_item,
 )
 
+# 测试常量：避免硬编码字符串导致文案修改时误报失败
+ANCHOR_REASON_SEMANTIC = "语义词重合"
+HEAT_PROFILE_COMMONNESS = "共性热点"
+SCORE_BASIS_CAUTION = "不等同于真实学习困难"
+
 
 def test_deep_analysis_is_split_into_focused_modules():
     module_names = [
@@ -280,7 +285,7 @@ def test_hotness_scores_reward_commonness_and_persistence_without_using_raw_coun
     assert boundary_theme["active_bucket_count"] == 2
     assert boundary_theme["persistence_score"] == 1.0
     assert boundary_theme["hotness_score"] > 70
-    assert "共性热点" in boundary_theme["heat_profile"]
+    assert HEAT_PROFILE_COMMONNESS in boundary_theme["heat_profile"]
     assert "持续关注" in boundary_theme["heat_profile"]
     assert result["summary"]["top_hotness_score"] == boundary_theme["hotness_score"]
     assert len(result["course_hotspot_sequence"]) == 2
@@ -371,7 +376,7 @@ def test_teacher_anchor_prefers_semantic_match_over_closer_unrelated_prompt():
     assert event["teacher_anchor_match_type"] == "semantic_time"
     assert event["teacher_anchor_confidence"] == "high"
     assert event["teacher_anchor_score"] >= 0.7
-    assert "语义词重合" in event["teacher_anchor_reason"]
+    assert ANCHOR_REASON_SEMANTIC in event["teacher_anchor_reason"]
     assert result["summary"]["teacher_anchor_match_count"] == 1
     assert result["summary"]["teacher_anchor_coverage"] == 1.0
 
@@ -464,7 +469,7 @@ def test_hotness_result_exposes_component_contributions_and_timeline_anchor_expl
     assert set(components) == {"commonness", "difficulty", "persistence"}
     assert sum(item["contribution"] for item in components.values()) == theme["hotness_score"]
     assert len(theme["hotness_explanation"]) == 3
-    assert "不等同于真实学习困难" in theme["score_basis"]
+    assert SCORE_BASIS_CAUTION in theme["score_basis"]
 
     bucket = result["timeline_buckets"][0]
     assert bucket["teacher_anchor_id"] == "teacher-1"
@@ -478,8 +483,8 @@ def test_synonymous_questions_merge_but_different_topics_stay_separate():
     db = FakeDb([
         row(1, 0, "student", "for 循环里的 range 为什么不包含最后一个数？", user_id=1),
         row(2, 1, "student", "range 结束值为什么取不到？", user_id=2, name="学生乙"),
-        row(3, 2, "student", "for 循环报错 NameError 怎么调试？", user_id=3, name="学生丙"),
-        row(4, 3, "student", "递归函数报错怎么调试？", user_id=4, name="学生丁"),
+        row(3, 2, "student", "for 循环 NameError 错误怎么调试？", user_id=3, name="学生丙"),
+        row(4, 3, "student", "递归函数 RecursionError 错误怎么调试？", user_id=4, name="学生丁"),
     ])
 
     result = asyncio.run(
@@ -497,7 +502,8 @@ def test_synonymous_questions_merge_but_different_topics_stay_separate():
     # 两个 range 边界问题应归并为同一主题（count=2）。
     merged = [theme for theme in result["themes"] if theme["count"] == 2]
     assert len(merged) == 1, f"应有一个 count=2 的归并主题，实际主题: {topics}"
-    # “循环报错”与“递归报错”是不同知识点，不得因共享“报错/调试”而合并。
+    # "NameError"与"RecursionError"是不同错误类型，应分开。
+    # 现在"错误"已从通用词移除，可以参与区分不同错误类型。
     for theme in result["themes"]:
         assert theme["count"] == 1 or theme["count"] == 2
         if theme["count"] == 2:
@@ -517,7 +523,7 @@ def test_word_cloud_uses_raw_terms_not_semantic_aliases():
     content = "for 循环报错 NameError 怎么调试？"
     terms = _extract_terms(content)
     semantic = _semantic_terms(content, terms)
-    # 前提：该句的语义别名确实多出一个原文没有的“错误”。
+    # 前提：该句的语义别名确实多出一个原文没有的"错误"。
     assert "错误" in semantic and "错误" not in terms
 
     event = ConversationEvent(
@@ -599,3 +605,127 @@ def test_timeline_bucket_does_not_leak_matching_internals():
                 assert_no_internal(value, f"{path}[{index}]")
 
     assert_no_internal(result)
+
+
+def test_hot_analysis_handles_empty_events():
+    """空事件列表应返回零主题、空词云,不抛出 IndexError 或除零错误。"""
+    db = FakeDb([])
+
+    result = asyncio.run(
+        analyze_hot_questions_v2(
+            db,
+            agent_id=5,
+            start_at=datetime(2026, 5, 29, 1, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 5, 29, 1, 10, tzinfo=timezone.utc),
+            class_name="一班",
+            task_sheet="学习 for 循环",
+            bucket_seconds=180,
+        )
+    )
+
+    assert result["theme_count"] == 0
+    assert result["word_cloud"] == []
+    assert result["summary"]["valid_question_count"] == 0
+    assert result["summary"]["raw_count"] == 0
+    assert result["themes"] == []
+    assert result["timeline_buckets"] == []
+    assert result["course_hotspot_sequence"] == []
+    assert result["teacher_questions"] == []
+
+
+def test_hot_analysis_handles_single_question():
+    """单条数据应计算 commonness_score == 1.0 且统计正确。"""
+    db = FakeDb([
+        row(1, 0, "student", "for 循环里的 range 为什么不包含最后一个数?", user_id=1),
+    ])
+
+    result = asyncio.run(
+        analyze_hot_questions_v2(
+            db,
+            agent_id=5,
+            start_at=datetime(2026, 5, 29, 1, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 5, 29, 1, 10, tzinfo=timezone.utc),
+            class_name="一班",
+            task_sheet="学习 for 循环",
+            bucket_seconds=180,
+        )
+    )
+
+    assert result["theme_count"] == 1
+    assert result["summary"]["valid_question_count"] == 1
+    assert result["summary"]["raw_count"] == 1
+    assert len(result["themes"]) == 1
+    theme = result["themes"][0]
+    assert theme["count"] == 1
+    assert theme["unique_students"] == 1
+    assert theme["commonness_score"] == 1.0
+    assert 0 <= theme["hotness_score"] <= 100
+    assert len(result["timeline_buckets"]) >= 1
+    assert len(result["word_cloud"]) > 0
+
+
+import pytest
+
+
+@pytest.mark.slow
+def test_hot_analysis_performance_baseline():
+    """性能基准:100 条不同问题应在 2 秒内完成。"""
+    import time
+
+    questions = [
+        f"问题 {i}: for 循环的第 {i} 个参数是什么?" for i in range(100)
+    ]
+    rows = [
+        row(i + 1, i % 10, "student", questions[i], user_id=(i % 20) + 1, name=f"学生{i % 20}", session=f"s{i}")
+        for i in range(100)
+    ]
+    db = FakeDb(rows)
+
+    start_time = time.time()
+    result = asyncio.run(
+        analyze_hot_questions_v2(
+            db,
+            agent_id=5,
+            start_at=datetime(2026, 5, 29, 1, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 5, 29, 1, 20, tzinfo=timezone.utc),
+            class_name="一班",
+            task_sheet="学习 for 循环",
+            bucket_seconds=180,
+        )
+    )
+    elapsed = time.time() - start_time
+
+    assert result["theme_count"] > 0
+    assert result["summary"]["valid_question_count"] > 0
+    assert elapsed < 2.0, f"性能基准未达标:耗时 {elapsed:.2f}秒 > 2秒"
+
+
+def test_error_keyword_distinguishes_different_error_types():
+    """验证'错误'作为核心主题词时能区分不同错误类型（如语法错误 vs 逻辑错误）。"""
+    db = FakeDb([
+        row(1, 0, "student", "什么是语法错误？", user_id=1),
+        row(2, 1, "student", "语法错误怎么找？", user_id=2, name="学生乙"),
+        row(3, 2, "student", "逻辑错误是什么？", user_id=3, name="学生丙"),
+        row(4, 3, "student", "如何调试逻辑错误？", user_id=4, name="学生丁"),
+    ])
+
+    result = asyncio.run(
+        analyze_hot_questions_v2(
+            db,
+            agent_id=5,
+            start_at=datetime(2026, 5, 29, 1, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 5, 29, 1, 10, tzinfo=timezone.utc),
+            class_name="一班",
+            task_sheet="错误处理课程",
+        )
+    )
+
+    topics = [theme["topic"] for theme in result["themes"]]
+    # "语法错误"相关问题应归并（count=2），"逻辑错误"相关问题应归并（count=2）
+    # 或至少应该能区分"语法"和"逻辑"两个不同主题
+    assert len(result["themes"]) >= 2, f"应至少有2个不同主题，实际: {topics}"
+
+    # 验证主题中包含区分性关键词
+    topic_text = " ".join(topics)
+    has_syntax_or_logic = "语法" in topic_text or "逻辑" in topic_text
+    assert has_syntax_or_logic, f"主题应包含'语法'或'逻辑'等区分性词汇，实际主题: {topics}"

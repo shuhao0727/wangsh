@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
@@ -477,7 +478,7 @@ def _compute_word_cloud(themes: Sequence[Dict[str, Any]], events: Sequence[Conve
     for word, count in count_by_word.items():
         unique_students = len(student_by_word.get(word, set()))
         score = count * 1.0 + unique_students * 1.7 + burst_bonus.get(word, 0.0)
-        items.append({"word": word, "count": count, "unique_students": unique_students, "weight": round(score, 2)})
+        items.append({"word": html.escape(word), "count": count, "unique_students": unique_students, "weight": round(score, 2)})
     items.sort(key=lambda item: (item["weight"], item["count"]), reverse=True)
     return items[:60]
 

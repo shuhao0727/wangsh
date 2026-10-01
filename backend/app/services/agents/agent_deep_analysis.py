@@ -6,10 +6,13 @@ evidence from database events before optionally layering AI summaries later.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from .agent_analysis_events import (  # noqa: F401  有意回导，非未使用导入
     BLOOM_LEVELS,
@@ -168,6 +171,14 @@ async def analyze_hot_questions_v2(
     custom_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     events = await load_conversation_events(db, agent_id=agent_id, start_at=start_at, end_at=end_at, class_name=class_name)
+
+    # 限制单次分析最多 500 条数据,避免 O(n²) 聚类超时
+    MAX_EVENTS = 500
+    if len(events) > MAX_EVENTS:
+        logger.warning(f"事件数 {len(events)} 超过限制 {MAX_EVENTS},按时间采样")
+        # 按时间均匀采样(保留最新的,按时间倒序取前 500)
+        events = sorted(events, key=lambda e: e.created_at, reverse=True)[:MAX_EVENTS]
+
     student_questions, all_student_events, quality_counts = prepare_student_questions(
         events,
         task_sheet=task_sheet,
