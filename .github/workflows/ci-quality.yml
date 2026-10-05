@@ -295,6 +295,33 @@ jobs:
         run: npm run -s lint
       - name: ui-audit-gate
         run: npm run -s ui:audit:ci
+      # 死类门禁：Tailwind 不会为「看着存在但其实没有颜色」的类生成任何 CSS
+      #（如 border-border-secondary），静默失效。约 270ms，可每次运行。
+      - name: ui-alpha-dead-classes-gate
+        run: npm run -s ui:alpha:dead-classes:ci
+      # 布局/助手类死类门禁（2026-10-05 新增）。与上面那条**互补**：
+      # 上面走 findDeadColorClasses() 只看**颜色类**，看不见 index.css 里的
+      # 布局/排版/助手类。该盲区真实存在过——2026-08-06 诊断报告点名的 6 个死定义
+      # 两个月无人处理，就因为没门禁看着它们。已一次清理 30 个死类。
+      - name: ui-dead-layout-gate
+        run: npm run -s ui:dead-layout:ci
+      # 透明度修饰符门禁（G9）：Tailwind v3 对 var(--ws-color-*) 不生成 /N 规则，
+      # bg-primary/10 这类写法会**静默退化为默认值**。已靠并列 -rgb 三元组修复。
+      # 注意门禁名是 ui:alpha:**ci**（`ui:alpha` 无 --ci 是恒 0 的人读报告）。
+      - name: ui-alpha-modifiers-gate
+        run: npm run -s ui:alpha:ci
+      # 间距迁移 ratchet（B5 验收口径）。原以为它在 CI 里，实际一直没接——
+      # 本地 1382 基线的门禁若不在 CI 跑，B5 的迁移收益就无法被守住。
+      - name: ui-spacing-gate
+        run: npm run -s ui:spacing:ci
+      # 颜色 token **值**校验（G6，2026-10-05 新增）。token:check:ci 只证「名字有定义」，
+      # 完全不校验值——把 --ws-color-success 改成 #FF0000 它也 exit 0。本门禁补上值快照 +
+      # -rgb 三元组一致性 + WCAG 对比度回归。任何改色都会红，须显式 --adopt。
+      - name: ui-token-values-gate
+        run: npm run -s ui:token-values:ci
+      # 报告合法性门禁（B13）：防「没有浏览器却声称通过」（计划 §5.2 六条硬规则）。
+      - name: ui-verify-gate
+        run: npm run -s ui:verify:ci
       - name: production build
         run: npm run build:check
       # 浏览器 smoke（auth-replaced-login-smoke / prod-smoke-ui）需完整
