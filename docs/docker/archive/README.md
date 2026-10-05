@@ -113,3 +113,38 @@
 - [2026-07-14-project-file-consolidation-plan.md](2026-07-14-project-file-consolidation-plan.md)
   保留项目整理批次的删除边界、引用核对与可恢复清理策略；后续动态清理由
   [TEST_STATUS.md](../testing/TEST_STATUS.md) 记录。
+
+### 2026-10 UI 文档重制
+
+- [2026-10-01-p0-p1-optimization-verification.md](2026-10-01-p0-p1-optimization-verification.md)
+  P0+P1 优化的最终验证报告（原文 321 行，2026-10-02 生成）。保留原因是它含 6 个对话域索引的
+  **完整 DDL**、实测健康检查 JSON、横向越权与 XSS/GDPR 验证结论，属数据库/安全类资料，
+  按 [DOCUMENTATION_RULES.md](../../DOCUMENTATION_RULES.md) §七 从严处理，**不予直接删除**。
+  当前索引事实以 [DATABASE_PERFORMANCE_GUIDE.md](../../DATABASE_PERFORMANCE_GUIDE.md) §2.5.1 为准；
+  **注意**该报告 §二.1 的 `ix_conversations_is_archived` 是错值（已在该归档件头部标注）。
+- [ui-improvement-plan-2026-10-03-superseded.md](ui-improvement-plan-2026-10-03-superseded.md)
+  2026-10 的 UI 提升计划（统一版），现由
+  [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md) 取代。
+  保留它是因它最早逐条核实并记录了一批报表失真（间距统一度宣称 95%、实测 4.6% 等），
+  有溯源价值。
+
+  同批从工作区移除的 UI 失真报告共 20 份（约 11,878 行）：
+  - **删除**（纯 UI 报告／未执行计划，无唯一价值）：根目录 `UI_DIAGNOSTIC_REPORT.md`、
+    `UI_FINAL_REPORT.md`、`UI_FIX_SUMMARY.md`、`UI_OPTIMIZATION_VERIFICATION_REPORT.md`；
+    `docs/UI_OPTIMIZATION_EXECUTION_STATUS.md`；`docs/design/` 5 份；
+    `docs/verification/` 4 份；`docs/operations/STAGE1_VERIFICATION_REPORT.md`。
+  - **内容沉淀**：P0/P1 的 6 个对话域索引已沉淀到
+    [DATABASE_PERFORMANCE_GUIDE.md](../../DATABASE_PERFORMANCE_GUIDE.md) §2.5.1
+    （来源为 `P0_P1_OPTIMIZATION_VERIFICATION.md`；`FINAL_VERIFICATION_REPORT.md` 的对应条目
+    `ix_conversations_is_archived` 是错值，已弃用）。
+    `FINAL_VERIFICATION_REPORT.md` 已单独归档为
+    [2026-10-01-p0-p1-optimization-verification.md](2026-10-01-p0-p1-optimization-verification.md)。
+  - **含明文凭据而删除**：`docs/operations/SERVICE_STARTUP_REPORT.md`、
+    `P0_P1_OPTIMIZATION_VERIFICATION.md`（均含数据库口令，**已提示轮换**；
+    本文不复述口令值）。
+  - 上述文件在移除前**全部为 git untracked**（`git log --all` 对这些路径 0 条提交），
+    因此删除不可由 git 恢复。
+  - **快照已按用户指示删除**：移除前曾做仓库外快照
+    `~/wangsh-ui-docs-snapshot-20261003.tar.gz`（sha256 `e3a08786…28a4`，20 文档 + 1 脚本），
+    经用户确认**不再保留备份**，该 tar 已删除。本索引与各 owner 文档中的抢救内容
+    是这批文档**唯一留存的信息**。

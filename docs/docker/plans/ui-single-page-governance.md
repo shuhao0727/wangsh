@@ -129,7 +129,14 @@ Canvas、媒体视口、拖拽手柄等确需固定尺寸时：
 
 ### Dialog、Sheet 与浮层
 
+> **按钮顺序合同**（2026-10-04 抢救自已删除的 `DIALOG_BUTTON_ORDER_REPORT.md`，与代码一致）：
+> `DialogFooter` 使用 `flex flex-col-reverse sm:flex-row sm:justify-end gap-button-gap`
+> （见 `frontend/src/components/ui/dialog.tsx`）。即：**次要/取消按钮在前，主要按钮在后**；
+> 移动端通过 `flex-col-reverse` 让主按钮显示在上方。危险操作按钮与常规按钮分离，
+> 不与主按钮相邻。只有一个按钮的对话框（如纯提示）不受此约束。
+
 - [ ] 打开、关闭、ESC、遮罩和焦点恢复正常。
+- [ ] 底部按钮顺序为「次要在前、主要在后」，移动端主按钮在上。
 - [ ] 移动端内容可滚动且不溢出。
 - [ ] 删除、批量操作和 Toast 反馈完整。
 - [ ] PythonLab 调试控制使用真实 pointer click 验证。

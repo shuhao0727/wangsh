@@ -33,6 +33,21 @@
 - 提交失败后把焦点移动到错误摘要或第一个无效字段。
 - placeholder 不能替代标签。
 
+#### 输入框清除按钮契约（`Input` `clearable`）
+
+2026-10-04 抢救自已删除的 `INPUT_CLEAR_BUTTON_REPORT.md`，**按 `frontend/src/components/ui/input.tsx`
+实际实现撰写**：
+
+- `clearable?: boolean` + `onClear?: () => void`；仅 `clearable === true` 且有值时渲染清除按钮。
+- 仅「非受控 + clearable」才跟踪内部状态，避免给其余输入框增加无谓渲染。
+- clearable 时额外渲染一层 `relative` wrapper，`className` 会被拆分为布局类（留在 wrapper）
+  与外观类（给 input），input 侧加 `pr-9` 给按钮留位。
+- 清除按钮使用 `onMouseDown` + `preventDefault()`，避免抢走输入框焦点导致失焦提交。
+- ⚠️ `pr-9` **必须排在调用方 className 之后**：`tailwind-merge` 是「后者覆盖前者」，
+  调用方常见的 `px-3` 会把先出现的 `pr-9` 整个吃掉，导致清除按钮压住文字。
+- 按钮为 `tabIndex={-1}`，不进入 Tab 序列（清除是次要操作，键盘用户可直接全选删除）。
+- 无障碍名称为英语 `aria-label="Clear input"`（与代码一致，勿照抄旧报告的「清除输入」）。
+
 ### Dialog、Sheet 与浮动面板
 
 - 优先使用 `frontend/src/components/ui` 中已有组件。

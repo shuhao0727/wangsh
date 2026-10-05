@@ -142,8 +142,21 @@ WangSh 项目使用 GitHub Actions 进行持续集成，使用 Docker Compose + 
     T-2 / 治理 §4.3）。该门禁本阶段 `continue-on-error: true` 只出报告，
     下一阶段按治理收紧为阻断。
   - 前端：脚本测试、CSS token 完整性、Vitest 默认范围（components、AIAgents、
-    PythonLab、queries、lib、services）、type-check、lint、UI audit、生产构建和
-    bundle budget
+    PythonLab、queries、lib、services）、type-check、lint、生产构建和 bundle budget。
+    **UI 治理门禁共 8 条**（2026-10-05 补齐）：`ui:audit:ci`（静态 px 债务 ratchet）、
+    `ui:alpha:dead-classes:ci`（**颜色类**死类）、`ui:dead-layout:ci`（**布局/助手类**死类，
+    与前者互补，补上颜色类之外的盲区）、`ui:alpha:ci`（Tailwind 对 `var(--ws-*)` 的
+    透明度修饰符静默失效）、`ui:spacing:ci`（B5 间距迁移 ratchet）、`token:check:ci`、
+    `ui:token-values:ci`（**G6，2026-10-05 新增**：token **值**快照 + `-rgb` 三元组一致性 +
+    WCAG 对比度回归。补 `token:check:ci` 只证「名字有定义」、不校验值的盲区——
+    把 `--ws-color-success` 改成 `#FF0000`，旧门禁仍 exit 0，本门禁 exit 1）、
+    `ui:verify:ci`（**B13，2026-10-05 新增**：报告合法性，把计划 §5.2 六条硬规则
+    固化为可执行契约，防「没有浏览器却声称通过」）。
+    > **历史缺口**：在 2026-10-05 之前，`ui:spacing:ci` / `ui:alpha:ci` / `ui:dead-layout:ci`
+    > 三条**从未接入 CI**——本地有基线、有门禁，但 CI 不跑，等于 B5 的迁移收益无人守。
+    > 同批补齐的还有 `ui:token-values:ci` 与 `ui:verify:ci`（此前只存在于本地）。
+    > `ui:dead-layout:ci` 为新门禁，其存在的直接原因是 2026-08-06 诊断报告点名的死定义
+    > 两个月无人处理（没有门禁看着布局类，`ui:alpha` 只查颜色类）。
 - **测试环境合同**：
   - PostgreSQL 连接和四项测试专用安全配置统一声明在 `backend-pytest` job 的
     `env`，迁移、bootstrap 和 pytest 使用同一套配置。

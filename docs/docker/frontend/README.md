@@ -12,6 +12,7 @@
 |------|------|
 | [UI-PAGES.md](UI-PAGES.md) | 核心页面和重点浮层清单 |
 | [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) | WCAG 2.1 AA 无障碍改进指南 |
+| [DIALOG-AND-BREAKPOINT-GUIDE.md](DIALOG-AND-BREAKPOINT-GUIDE.md) | 对话框宽度档位与响应式断点规范 |
 | [../plans/ui-single-page-governance.md](../plans/ui-single-page-governance.md) | 样式护栏、单页体检和最终回归基线 |
 
 ## 前端架构概览

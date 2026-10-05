@@ -7,6 +7,36 @@
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
 
+## 2026-10-04 UI 文档重制与门禁转绿（未提交）
+
+- **范围：** 移除 18 份失真 UI/运维文档（11,640 行；另 1 份归档、1 份迁入 plans 保留。
+  全部为 git untracked，删除不可由 git 恢复；按用户指示**不留备份**）；
+  抢救 7 项唯一内容到 owner 文档
+  （字号/圆角/阴影 token、间距 per-class 分布、按钮顺序、Input clearable 契约、对话框宽度与断点、
+  6 个对话域索引、视图列序规则）；新增
+  [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md) 作为唯一执行计划。
+- **门禁：** `npm run -s ui:audit:ci` 由 **exit 1 转 exit 0**（总命中 824→**822**）。
+  根因是 `Articles` 把 `w-40` 改为 `w-[120px]` 触发 `/admin/articles` 46>45；
+  已删除该处与 `CategoryManageModal` 的冗余 `meta.className` 宽度（`columnDef.size` 已通过
+  `style={{width: header.getSize()}}` 生效），未放宽任何阈值。
+- **类型检查：** `npm run type-check` **exit 0**。
+- **Markdown 合同：** `node scripts/check-markdown-contracts.mjs` **exit 0** —
+  `165 files / 489 links / 0 missing`。此前 11 条错误已全部清零：
+  3 条 `docs/design` 失效锚点随文档移除消失；1 条 `backend/.pytest_cache` 生成物残留清理；
+  6 条既有断链已修复（见下）；派生摘要同步为本轮实测值。
+- **既有断链修复（6 条 → 0）：** 经 `git log --all` 查证，这 6 个目标路径
+  `docs/database/`、`docs/architecture/`、`docs/development/DATABASE.md`、`docs/docker/CELERY.md`、
+  `docs/docker/deploy/MONITORING.md`、`.../CACHE_IMPLEMENTATION.md` **历史提交数均为 0**，
+  即**从未存在过**（文档写作时的臆想路径），并非被删除。修法是改指真实且主题相符的文档，
+  未新建占位文件：
+  - `DATA_ARCHIVING.md`：Celery→`analysis/ASYNC_ANALYSIS.md`、数据库→`DATABASE_PERFORMANCE_GUIDE.md`、
+    监控→`operations/MONITORING.md`，并补 `docker/deploy/DEPLOY.md`
+  - `MONITORING.md`：缓存说明→`features/AI_AGENTS.md`；「系统架构文档」因项目**确无**架构文档
+    而删除该条目（不造假链接）
+  - `IMPLEMENTATION_SUMMARY.md`：数据库→`DATABASE_PERFORMANCE_GUIDE.md`
+- **安全：** 已删除的两份运维报告含明文数据库口令，**凭据轮换待用户执行**。
+- **边界：** 未 commit、未 push；后端与前端业务源码未因本批文档整理而改动（除上述 2 处冗余类名）。
+
 ## 2026-09-28 AI伙伴页面文案精简（未发布）
 
 - **范围：** 删除重复介绍、英文装饰标题与“本地交互模式”字样；缩短任务引导和检查说明，

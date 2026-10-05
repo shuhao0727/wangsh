@@ -11,7 +11,9 @@
 
 | 文件 | 状态 | 描述 |
 |------|------|------|
-| [ui-single-page-governance.md](ui-single-page-governance.md) | `reference` | UI 样式、单页体检和最终回归唯一参考 |
+| [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) | `active` | **UI 改造唯一执行计划**（实测基线、批次、门禁加固与旧文档处置） |
+| [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) | `active` | 后端视图静默失败修复与 PythonLab 原生按钮核查 |
+| [ui-single-page-governance.md](ui-single-page-governance.md) | `reference` | UI 样式护栏、单页体检和回归清单（含 Dialog 按钮顺序合同） |
 | [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) | `active` | 30/60/90 天详细任务、依赖、验证命令和退出标准 |
 | [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) | `active` | 本地全项目审查执行入口（XBK 优先、证据分级、隔离验证与修复检查点） |
 | [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) | `active` | 首轮候选与准确性复核唯一台账（确认/降级/待复核、业务反证、覆盖缺口与修复决策） |
