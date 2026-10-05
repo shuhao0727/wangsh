@@ -1,7 +1,7 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import { xbkDataApi } from "@services";
-import { Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { formatXbkClassName } from "../className";
 
+import { Spinner } from "@/components/ui/spinner";
 interface XbkDeleteModalProps {
   open: boolean;
   onCancel: () => void;
@@ -123,7 +124,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({
             根据当前筛选条件执行不可恢复的物理删除，请确认删除范围后再提交。
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-item-gap">
           <Alert className="border border-[var(--ws-color-warning)]/20 bg-[var(--ws-color-warning-soft)] text-[var(--ws-color-warning)] [&>svg]:text-[var(--ws-color-warning)]">
             <AlertTitle>该操作为物理删除，不可恢复</AlertTitle>
             <AlertDescription>
@@ -224,7 +225,7 @@ export const XbkDeleteModal: React.FC<XbkDeleteModalProps> = ({
             onClick={handleDelete}
             disabled={!canDelete}
           >
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {deleting ? <Spinner size="xs" /> : null}
             确认删除
           </Button>
         </DialogFooter>

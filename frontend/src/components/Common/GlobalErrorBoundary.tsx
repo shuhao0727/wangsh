@@ -44,7 +44,7 @@ class GlobalErrorBoundary extends Component<Props, State> {
         <div className="flex items-center justify-center min-h-screen p-5 bg-surface">
           <div className="text-center max-w-lg">
             <AlertTriangle className="h-16 w-16 text-error mx-auto mb-4" />
-            <div className="text-2xl font-bold text-text-base mb-2">页面遇到了一些问题</div>
+            <div className="text-2xl font-bold text-text-base mb-xs">页面遇到了一些问题</div>
             <div className="text-base text-text-secondary mb-6">抱歉，应用程序发生了一个意外错误。我们已经记录了这个问题。</div>
             <Button onClick={this.handleReload}>
               <RefreshCw className="h-4 w-4" />
@@ -55,7 +55,7 @@ class GlobalErrorBoundary extends Component<Props, State> {
                 <p><span className="text-base font-semibold">错误详情:</span></p>
                 <p><span className="text-error">{this.state.error.toString()}</span></p>
                 {this.state.errorInfo && (
-                  <pre className="max-w-2xl overflow-auto p-4 rounded text-xs bg-black/5 mt-2">
+                  <pre className="max-w-2xl overflow-auto p-4 rounded text-xs bg-black/5 mt-xs">
                     {this.state.errorInfo.componentStack}
                   </pre>
                 )}

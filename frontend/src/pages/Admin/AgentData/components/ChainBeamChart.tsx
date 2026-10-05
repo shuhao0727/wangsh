@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
-import { getAgentChartTheme } from "./chartTheme";
+import { alphaColor, getAgentChartTheme } from "./chartTheme";
 import { escapeHtml, shortText } from "../normalize";
 
 /* ─── 类型 ─── */
@@ -43,11 +43,21 @@ interface ChainBeamChartProps {
 }
 
 /* ─── 颜色 ─── */
-const BEAM_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
-  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#65a30d",
-];
+/* 学生 / 分组分类色统一取自 --ws-tag-* 数据标签色板（经 chartTheme 解析成实际色值），
+ * 保证「可区分」的同时不硬编码色值。ECharts canvas 不认 var()，故不能直接传变量串。 */
+
+/* 共享汇聚点的中性色（灰语义），解析后喂给 ECharts */
+const SHARED_POINT_NEUTRAL = "var(--ws-tag-gray)";
+const SHARED_POINT_NEUTRAL_FALLBACK = "#5B6B7F";
+const SHARED_POINT_BORDER = "var(--ws-color-text-secondary)";
+const SHARED_POINT_BORDER_FALLBACK = "#475569";
+
+/* ECharts 无法解析 CSS 变量，这里把 token 串解析成实际色值 */
+const resolveVar = (value: string, fallback: string) => {
+  if (!value.startsWith("var(") || typeof document === "undefined") return value;
+  const name = value.slice(4, -1).trim();
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+};
 
 /* ─── 学生数量上限（60人班级取 Top 25 活跃学生，避免卡顿）─── */
 const MAX_STUDENTS = 25;
@@ -120,6 +130,10 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     if (!ref.current || students.length === 0) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
     const theme = getAgentChartTheme();
+    // 分类色在渲染时解析，确保读得到已加载的 :root token 值
+    const beamColors = theme.beamColors;
+    const sharedNeutral = resolveVar(SHARED_POINT_NEUTRAL, SHARED_POINT_NEUTRAL_FALLBACK);
+    const sharedBorder = resolveVar(SHARED_POINT_BORDER, SHARED_POINT_BORDER_FALLBACK);
     const toMinute = (iso: string) =>
       Math.round((dayjs(iso).valueOf() - baseTime) / 60000);
 
@@ -130,15 +144,15 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
     // 教师提问竖线
     const teacherLines = teacherMarks.map((m, i) => ({
       xAxis: toMinute(m.time),
-      label: { formatter: `T${i + 1}`, position: "start" as const, fontSize: 10, color: theme.teacher || "#ef4444", fontWeight: 700 },
-      lineStyle: { color: theme.teacher || "#ef4444", width: 1.5, type: "dashed" as const, opacity: 0.5 },
+      label: { formatter: `T${i + 1}`, position: "start" as const, fontSize: 10, color: theme.teacher, fontWeight: 700 },
+      lineStyle: { color: theme.teacher, width: 1.5, type: "dashed" as const, opacity: 0.5 },
     }));
 
     // 为每个学生生成 series
     const series: any[] = [];
 
     students.forEach((student, sIdx) => {
-      const color = BEAM_COLORS[sIdx % BEAM_COLORS.length];
+      const color = beamColors[sIdx % beamColors.length];
       const chain = studentChains.find((sc) => sc.user_id === student.id);
       if (!chain || chain.questions.length === 0) return;
 
@@ -162,7 +176,7 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
           return p?.group && p.group.member_count > 1 ? 8 + p.group.member_count : 6;
         },
         lineStyle: { color, width: 2, opacity: 0.6 },
-        itemStyle: { color, borderColor: "#fff", borderWidth: 1.5 },
+        itemStyle: { color, borderColor: theme.surface, borderWidth: 1.5 },
         emphasis: {
           lineStyle: { width: 3.5, opacity: 1 },
           itemStyle: { borderWidth: 2, shadowBlur: 8, shadowColor: color },
@@ -189,8 +203,8 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
       type: "scatter",
       symbol: "circle",
       symbolSize: (val: any, params: any) => params.data.symbolSize,
-      itemStyle: { color: "rgba(100,116,139,0.12)", borderColor: "rgba(100,116,139,0.4)", borderWidth: 1.5 },
-      emphasis: { itemStyle: { borderColor: "#475569", borderWidth: 2, shadowBlur: 12 } },
+      itemStyle: { color: alphaColor(sharedNeutral, 0.12), borderColor: alphaColor(sharedBorder, 0.4), borderWidth: 1.5 },
+      emphasis: { itemStyle: { borderColor: sharedBorder, borderWidth: 2, shadowBlur: 12 } },
       data: sharedData,
       z: 3,
     });
@@ -205,8 +219,8 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
       animationEasing: "cubicOut",
       tooltip: {
         trigger: "item", confine: true,
-        backgroundColor: theme.surfaceElevated || "#fff", borderColor: theme.border || "#e2e8f0",
-        textStyle: { color: theme.textBase || "#1e293b", fontSize: 12 },
+        backgroundColor: theme.surfaceElevated, borderColor: theme.border,
+        textStyle: { color: theme.textBase, fontSize: 12 },
         formatter: (params: any) => {
           const d = params.data;
           if (!d) return "";
@@ -214,32 +228,32 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
           if (g && g.member_count > 1) {
             const names = g.student_ids.map((sid) => students.find((s) => s.id === sid)?.name || "未知").join("、");
             return `<b>${escapeHtml(g.topic_label)}</b> · 第${toMinute(g.merged_time)}分钟` +
-              `<br/><span style="color:#8b5cf6;font-weight:600">🔗 ${g.member_count}人汇聚</span>` +
-              `<br/><span style="color:#64748b">学生：${escapeHtml(names)}</span>` +
+              `<br/><span style="color:${theme.accent};font-weight:600">🔗 ${g.member_count}人汇聚</span>` +
+              `<br/><span style="color:${theme.textSecondary}">学生：${escapeHtml(names)}</span>` +
               `<br/>「${escapeHtml(shortText(g.representative_question, 40))}」`;
           }
           const name = d.studentName || params.seriesName || "";
           const q = d.question || "";
           const min = Array.isArray(d.value) ? d.value[0] : 0;
           return `<b style="color:${params.color}">${escapeHtml(name)}</b>` +
-            `<br/><span style="color:#64748b">第 ${min} 分钟</span>` +
+            `<br/><span style="color:${theme.textSecondary}">第 ${min} 分钟</span>` +
             (q ? `<br/>「${escapeHtml(shortText(q, 40))}」` : "");
         },
       },
       legend: {
         type: "scroll", top: 4, left: 80, right: 40,
         itemWidth: 14, itemHeight: 8,
-        textStyle: { color: theme.textSecondary || "#64748b", fontSize: 11 },
+        textStyle: { color: theme.textSecondary, fontSize: 11 },
       },
       grid: { left: 50, right: 30, top: 50, bottom: 40 },
       xAxis: {
         type: "value", name: "时间（分钟）", nameLocation: "middle", nameGap: 28,
-        nameTextStyle: { color: theme.textSecondary || "#64748b", fontSize: 11 },
+        nameTextStyle: { color: theme.textSecondary, fontSize: 11 },
         min: 0, max: maxMinute, interval: 5,
-        axisLabel: { color: theme.textSecondary || "#94a3b8", fontSize: 11, formatter: "{value}'" },
-        axisLine: { lineStyle: { color: theme.border || "#e2e8f0" } },
+        axisLabel: { color: theme.textMuted, fontSize: 11, formatter: "{value}'" },
+        axisLine: { lineStyle: { color: theme.border } },
         axisTick: { show: false },
-        splitLine: { lineStyle: { type: "dashed", color: theme.grid || "#f1f5f9" } },
+        splitLine: { lineStyle: { type: "dashed", color: theme.grid } },
       },
       yAxis: {
         type: "value", show: false,
@@ -257,7 +271,7 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
   }, []);
 
   if (students.length === 0) {
-    return <section className="rounded-2xl border border-dashed border-border-secondary bg-surface/80 p-6 text-center text-sm text-text-tertiary">暂无问题链数据</section>;
+    return <section className="rounded-2xl border border-dashed border-border-secondary bg-surface/80 p-panel-padding text-center text-sm text-text-tertiary">暂无问题链数据</section>;
   }
 
   return (
@@ -265,24 +279,24 @@ const ChainBeamChart: React.FC<ChainBeamChartProps> = ({ mergedGroups, studentCh
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-text-base">学生问题链光束图</h2>
-          <p className="mt-1 text-xs text-text-tertiary">
+          <p className="mt-2xs text-xs text-text-tertiary">
             每条线=一个学生的思考路径，汇聚点=多个学生问了相似问题
           </p>
         </div>
-        <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">
+        <span className="rounded-full bg-primary-soft px-2.5 py-2xs text-xs font-semibold text-primary">
           {students.length} 学生 · {sharedCount} 汇聚点
         </span>
       </div>
       <div ref={ref} className="h-[520px] w-full" aria-label="学生问题链光束图" />
-      <div className="mt-3 grid gap-2 rounded-xl border border-primary/10 bg-primary-soft/20 p-2 text-sm sm:grid-cols-4">
+      <div className="mt-3 grid gap-xs rounded-xl border border-primary/10 bg-primary-soft p-xs text-sm sm:grid-cols-4">
         {[
           { label: "参与学生", value: `${students.length} 人` },
           { label: "总提问数", value: `${totalQuestions} 次` },
           { label: "共享汇聚点", value: `${sharedCount} 个` },
           { label: "教师提问", value: `${teacherMarks.length} 个` },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg border border-border-secondary bg-surface/85 px-3 py-2">
-            <div className="text-[11px] text-text-tertiary">{s.label}</div>
+          <div key={s.label} className="rounded-lg border border-border-secondary bg-surface/85 px-3 py-xs">
+            <div className="text-2xs text-text-tertiary">{s.label}</div>
             <div className="mt-0.5 text-lg font-semibold text-primary">{s.value}</div>
           </div>
         ))}

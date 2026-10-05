@@ -1,6 +1,6 @@
-/* Class Selector hover */
+/* Class Selector hover — 用 primary token 的 6% 透明态，避免残留旧 info 硬编码色 */
 .it-class-card:hover {
-  background: rgba(14, 165, 233, 0.06) !important;
+  background: color-mix(in srgb, var(--ws-color-primary) 6%, transparent) !important;
 }
 
 /* Roll Call Player — 全屏点名界面 */
@@ -22,7 +22,7 @@
   color: var(--ws-color-surface);
   letter-spacing: -0.02em;
   text-align: center;
-  text-shadow: 0 0 60px rgba(14, 165, 233, 0.6);
+  text-shadow: 0 0 60px color-mix(in srgb, var(--ws-color-primary) 60%, transparent);
   line-height: 1;
   padding: 0 32px;
   transition: all 0.1s ease;
@@ -49,7 +49,7 @@
   padding: 0 48px !important;
   font-size: var(--ws-text-lg) !important;
   border-radius: 32px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--ws-shadow-floating);
   border: none !important;
   display: flex;
   align-items: center;

@@ -110,7 +110,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
           }}
           style={style}
         >
-          <User className="mr-2 h-4 w-4" />
+          <User className="mr-xs h-4 w-4" />
           {isGuest ? guestLabel : loginLabel}
         </Button>
       );
@@ -132,7 +132,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
         }}
         title={isGuest ? "访客模式" : "点击登录"}
       >
-        <Avatar className={`${showName ? "mr-2" : ""} h-8 w-8`}>
+        <Avatar className={`${showName ? "mr-xs" : ""} h-8 w-8`}>
           <AvatarFallback className="bg-muted">
             <User className="h-4 w-4 text-muted-foreground" />
           </AvatarFallback>
@@ -145,7 +145,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
   // 用户已登录，显示用户菜单
   const userInfo = (
     <div className="flex items-center">
-      <Avatar className={`${showName ? "mr-2" : ""} ${mode === "button" ? "h-6 w-6" : "h-8 w-8"}`}>
+      <Avatar className={`${showName ? "mr-xs" : ""} ${mode === "button" ? "h-6 w-6" : "h-8 w-8"}`}>
         <AvatarFallback className={`${getAvatarColor()} text-white text-xs`}>
           {getInitials()}
         </AvatarFallback>
@@ -163,7 +163,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {mode === "button" ? (
-          <Button variant="ghost" className="px-2 py-1 h-auto" style={style}>
+          <Button variant="ghost" className="px-xs py-2xs h-auto" style={style}>
             {userInfo}
           </Button>
         ) : (
@@ -179,7 +179,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
               window.open(adminUrl, "_blank", "noopener,noreferrer");
             }}
           >
-            <LayoutDashboard className="mr-2 h-4 w-4" />
+            <LayoutDashboard className="mr-xs h-4 w-4" />
             后端管理
           </DropdownMenuItem>
         ) : auth.isLoggedIn() ? (
@@ -189,7 +189,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
               void navigate("/ai-agents");
             }}
           >
-            <Bot className="mr-2 h-4 w-4" />
+            <Bot className="mr-xs h-4 w-4" />
             我的AI助手
           </DropdownMenuItem>
         ) : null}
@@ -202,7 +202,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
             void navigate("/home");
           }}
         >
-          <Home className="mr-2 h-4 w-4" />
+          <Home className="mr-xs h-4 w-4" />
           返回首页
         </DropdownMenuItem>
 
@@ -217,7 +217,7 @@ const UserMenu: React.FC<UserMenuProps> = ({
             void navigate("/login", { replace: true });
           }}
         >
-          <LogOut className="mr-2 h-4 w-4" />
+          <LogOut className="mr-xs h-4 w-4" />
           退出登录
         </DropdownMenuItem>
       </DropdownMenuContent>

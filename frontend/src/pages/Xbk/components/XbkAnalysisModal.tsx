@@ -18,7 +18,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
 import { xbkDataApi } from "@services";
 import type {
   XbkSummary,
@@ -29,6 +28,7 @@ import type {
 import { cn } from "@/lib/utils";
 import { formatXbkClassName } from "../className";
 
+import { LoadingState } from "@/components/ui/loading-state";
 interface XbkAnalysisModalProps {
   open: boolean;
   onCancel: () => void;
@@ -45,7 +45,7 @@ const StatCard: React.FC<{ title: string; value: number; valueClassName?: string
   value,
   valueClassName,
 }) => (
-  <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2">
+  <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-xs">
     <div className="text-sm text-text-tertiary">{title}：</div>
     <div className={`text-2xl font-semibold leading-none ${valueClassName || ""}`}>{value}</div>
   </div>
@@ -283,18 +283,16 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
         </DialogHeader>
 
         {loading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
-          </div>
+          <LoadingState label="正在分析试卷…" size="xl" className="min-h-0 flex-1" />
         ) : error ? (
           <div role="alert" className="text-sm text-text-secondary">{error}</div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-item-gap overflow-hidden">
             <div className="ws-modal-filter-info flex flex-wrap items-center gap-x-2 gap-y-1">
               当前筛选：{filters.year || "全部学年"} · {filters.term || "全部学期"} · {filters.grade || "全部年级"}
               {filters.class_name ? ` · ${formatXbkClassName(filters.grade, filters.class_name)}` : ""}
               <span>·</span>
-              <span className="font-medium text-text">学生数：{summary?.students ?? 0}</span>
+              <span className="font-medium text-text-base">学生数：{summary?.students ?? 0}</span>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
@@ -336,11 +334,11 @@ export const XbkAnalysisModal: React.FC<XbkAnalysisModalProps> = ({ open, onCanc
                 className="mt-3 min-h-0 flex-1 data-[state=inactive]:hidden data-[state=active]:flex data-[state=active]:flex-col"
               >
                 <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-2">
-                  <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
+                  <div className="flex min-h-0 flex-1 flex-col space-y-xs overflow-hidden">
                     <div className="ws-section-title flex-shrink-0 font-semibold">课程统计（按课程代码）</div>
                     <CourseTable data={courseStats} className="min-h-0 flex-1" />
                   </div>
-                  <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
+                  <div className="flex min-h-0 flex-1 flex-col space-y-xs overflow-hidden">
                     <div className="ws-section-title flex-shrink-0 font-semibold">班级统计</div>
                     <ClassTable data={classStats} className="min-h-0 flex-1" />
                   </div>

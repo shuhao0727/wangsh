@@ -62,7 +62,7 @@ const AppLauncherCard: React.FC<Props> = ({
         </Badge>
       ) : null}
 
-      <div className="it-app-icon mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--app-bg)] text-base text-[var(--app-color)]">
+      <div className="it-app-icon mb-xs flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--app-bg)] text-base text-[var(--app-color)]">
         {icon}
       </div>
 
@@ -72,7 +72,7 @@ const AppLauncherCard: React.FC<Props> = ({
       {stats && stats.length > 0 ? (
         <div className="mb-2.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
           {stats.map((s, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded-md bg-[var(--app-bg)] px-1.5 py-0.5 text-[11px] text-text-tertiary">
+            <span key={i} className="inline-flex items-center gap-2xs rounded-md bg-[var(--app-bg)] px-1.5 py-0.5 text-2xs text-text-tertiary">
               <span className="font-semibold text-[var(--app-color)]">{s.value}</span>
               {s.label}
             </span>
@@ -81,8 +81,8 @@ const AppLauncherCard: React.FC<Props> = ({
       ) : null}
 
       {progress !== undefined && progress >= 0 ? (
-        <div className="mb-2 w-full space-y-1">
-          <div className="flex items-center justify-between text-[11px]">
+        <div className="mb-xs w-full space-y-2xs">
+          <div className="flex items-center justify-between text-2xs">
             <span className="text-text-tertiary">{progressLabel || "学习进度"}</span>
             <span className="font-medium text-[var(--app-color)]">{Math.round(progress)}%</span>
           </div>
@@ -98,7 +98,7 @@ const AppLauncherCard: React.FC<Props> = ({
       {disabled ? (
         <div className="text-sm text-text-tertiary">{disabledLabel}</div>
       ) : (
-        <div className="flex items-center gap-1 text-sm font-medium text-[var(--app-color)]">
+        <div className="flex items-center gap-2xs text-sm font-medium text-[var(--app-color)]">
           {actionLabel}
           <ArrowRight className="it-app-arrow h-4 w-4 text-xs" />
         </div>

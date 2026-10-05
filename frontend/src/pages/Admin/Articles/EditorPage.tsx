@@ -1,7 +1,7 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading-state";
 import ArticleEditForm from "./EditForm";
 import { articleApi, categoryApi } from "@services";
 import type { ArticleWithRelations } from "@services";
@@ -65,10 +65,12 @@ const ArticleEditorPage: React.FC = () => {
   };
 
   if (loading) {
+    // 原写法有可见文案「加载中...」，但它**不是** role="status" 的可访问名称
+    // （status 不是 name-from-content 角色，实测无障碍树里 Name 为空 → 屏幕阅读器静默）。
+    // LoadingState 显式 aria-label + showLabel，兼顾视觉文案与语义播报。
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-28 text-text-secondary">
-        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
-        <div>加载中...</div>
+        <LoadingState label="正在加载文章…" size="xl" showLabel />
       </div>
     );
   }

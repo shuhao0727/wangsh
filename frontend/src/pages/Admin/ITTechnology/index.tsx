@@ -128,7 +128,7 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'dianming-manager') {
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+      <AdminPage scrollable={false}>
         <div className="mb-4 shrink-0">
           <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
@@ -149,17 +149,17 @@ const AdminITTechnology: React.FC = () => {
       { icon: <Wrench className="h-5 w-5" />, label: '工具箱', href: '/admin/it-technology/learning/ml/tools' },
     ];
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
+      <AdminPage scrollable={true}>
         <div className="mb-4">
           <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
         <h2 className="text-lg font-bold mb-4">机器学习 · 内容管理</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {links.map(l => (
             <a key={l.href} href={l.href} target="_blank"
-              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline">
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <span className="text-primary">{l.icon}</span>
               <span className="text-sm font-medium text-text-base">{l.label}</span>
             </a>
@@ -179,17 +179,17 @@ const AdminITTechnology: React.FC = () => {
       { icon: <Wrench className="h-5 w-5" />, label: '工具箱', href: `/admin/it-technology/learning/${mod}/tools` },
     ];
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={true}>
+      <AdminPage scrollable={true}>
         <div className="mb-4">
           <Button variant="link" onClick={() => setView('dashboard')} className="!p-0 text-text-secondary">
             ← 返回 IT 应用管理
           </Button>
         </div>
         <h2 className="text-lg font-bold mb-4">{label} · 内容管理</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {links.map(l => (
             <a key={l.href} href={l.href} target="_blank"
-              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline">
+              className="flex items-center gap-3 rounded-lg border border-border p-4 hover:bg-[var(--ws-color-primary-muted)] transition-colors no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <span className="text-primary">{l.icon}</span>
               <span className="text-sm font-medium text-text-base">{l.label}</span>
             </a>
@@ -201,14 +201,14 @@ const AdminITTechnology: React.FC = () => {
 
   if (view === 'mindmap-manager') {
     return (
-      <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+      <AdminPage scrollable={false}>
         <MindMapManager />
       </AdminPage>
     );
   }
 
   return (
-    <AdminPage padding="var(--ws-panel-padding)">
+    <AdminPage>
       {flagLoadError && (
         <div role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {flagLoadError}
@@ -216,7 +216,7 @@ const AdminITTechnology: React.FC = () => {
       )}
       {categories.map(cat => (
         <div key={cat} className="mb-5">
-          <h3 className="mb-2 text-sm font-semibold text-text-tertiary">{cat}</h3>
+          <h3 className="mb-xs text-sm font-semibold text-text-tertiary">{cat}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
             {appConfigs.filter(a => a.category === cat).map(app => {
               const showManagerAction =

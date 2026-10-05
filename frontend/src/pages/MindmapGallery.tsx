@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Globe, BookOpen, Plus, Pencil, Eye, Trash2 } from "lucide-react";
+import { Globe, BookOpen, Plus, Pencil, Eye, Trash2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading-state";
 import { showMessage } from "@/lib/toast";
 import {
   isMindmapEditorRuntimeAvailable,
@@ -212,16 +213,16 @@ const MindmapGallery: React.FC = () => {
 
   const renderCard = (item: MindmapItem, isMine: boolean) => (
     <div key={item.id} className="group relative rounded-lg border border-border bg-surface transition-shadow hover:shadow-md">
-      <div className="h-40 w-full cursor-pointer overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
+      <div className="h-40 w-full cursor-pointer overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-xs"
         onClick={() => handlePreview(item)}>
         <MindMapViewer compact markdown={item.content?.markdown || `# ${item.title}`} />
       </div>
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between px-3 py-xs">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.title}</p>
           <p className="text-xs text-text-tertiary">{new Date(item.updated_at).toLocaleDateString("zh-CN")}</p>
         </div>
-        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex shrink-0 gap-2xs opacity-0 transition-opacity group-hover:opacity-100">
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
             onClick={(e) => { e.stopPropagation(); handlePreview(item); }} title="预览">
             <Eye className="h-3.5 w-3.5" />
@@ -246,7 +247,7 @@ const MindmapGallery: React.FC = () => {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">思维导图</h1>
-          <p className="mt-1 text-sm text-text-secondary">浏览导图广场或创作个人导图</p>
+          <p className="mt-2xs text-sm text-text-secondary">浏览导图广场或创作个人导图</p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={requestCreate}>
           <Plus className="h-4 w-4" />新建导图
@@ -260,14 +261,14 @@ const MindmapGallery: React.FC = () => {
         </TabsList>
 
         <TabsContent value="pub" className="flex-1 overflow-auto outline-none">
-          {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-text-tertiary" /></div>
+          {loading ? <LoadingState label="正在加载导图…" size="lg" className="h-40" />
           : pubError ? <LoadError message={pubError} onRetry={() => void refreshMaps(true)} />
           : pubMaps.length === 0 ? <Empty icon={<Globe className="h-12 w-12" />} text="导图广场暂无内容" />
           : <Grid>{pubMaps.map(m => renderCard(m, false))}</Grid>}
         </TabsContent>
 
         <TabsContent value="my" className="flex-1 overflow-auto outline-none">
-          {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-text-tertiary" /></div>
+          {loading ? <LoadingState label="正在加载导图…" size="lg" className="h-40" />
           : myError ? <LoadError message={myError} onRetry={() => void refreshMaps(true)} />
           : !authenticated ? <Empty icon={<BookOpen className="h-12 w-12" />} text="登录后查看我的导图" />
           : myMaps.length === 0 ? <Empty icon={<BookOpen className="h-12 w-12" />} text="还没有导图" action="创建第一个导图" onAction={requestCreate} />
@@ -278,7 +279,7 @@ const MindmapGallery: React.FC = () => {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader><DialogTitle>新建思维导图</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-xs">
             <Label htmlFor="mm-title">导图标题</Label>
             <Input id="mm-title" placeholder="例如：机器学习知识体系"
               value={newTitle} onChange={e => setNewTitle(e.target.value)}
@@ -297,7 +298,7 @@ const MindmapGallery: React.FC = () => {
 };
 
 const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+  <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
 );
 
 const LoadError: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
@@ -311,7 +312,7 @@ const Empty: React.FC<{ icon: React.ReactNode; text: string; action?: string; on
   <div className="flex h-40 flex-col items-center justify-center text-text-tertiary">
     {icon}
     <p className="mt-3 text-sm">{text}</p>
-    {action && <Button variant="link" size="sm" className="mt-2" onClick={onAction}>{action}</Button>}
+    {action && <Button variant="link" size="sm" className="mt-xs" onClick={onAction}>{action}</Button>}
   </div>
 );
 

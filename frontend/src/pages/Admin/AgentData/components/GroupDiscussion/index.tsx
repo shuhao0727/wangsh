@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Download, Loader2 } from "lucide-react";
+import { Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import dayjs from "dayjs";
@@ -56,6 +56,8 @@ import {
 } from "@hooks/queries/useAgentDataQuery";
 import { queryKeys } from "@hooks/queries/queryKeys";
 
+import { LoadingState } from "@/components/ui/loading-state";
+import { Spinner } from "@/components/ui/spinner";
 type SessionRow = {
   id: number;
   session_date: string;
@@ -623,10 +625,18 @@ const GroupDiscussionAdminTab: React.FC = () => {
     {
       id: "actions",
       header: "操作",
-      size: 260,
-      meta: { className: "w-[260px]" },
+      // 该表格未开启 enableColumnResizing，列宽是硬约束。
+      // 按真实渲染实测（非推算）：三个按钮单行约 183px，加单元格 px-3 左右内边距后约 207px 为下限。
+      // 注意本表是 table-layout: auto（Table 组件只有 w-full，没有 table-fixed），
+      // 声明宽度只是建议值，浏览器会按内容重新分配，所以不能按「等比压缩」估算。
+      // 实测对照（1280 / 1366 / 1440 视口）：
+      //   340px → 操作列虽单行，但挤得「最后消息」「创建时间」断成 2 行，整表行高 47px 涨到 63px（+34%）；
+      //   280px → 操作列仍单行，其它列不再换行，行高保持 47px。
+      // 因此取 280px：够容纳按钮内容，又不侵占相邻列。
+      size: 280,
+      meta: { className: "w-[280px]" },
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-xs">
           <Button size="sm" variant="outline" onClick={() => openSessionModal(row.original, "messages")}>
             查看消息
           </Button>
@@ -641,7 +651,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               setConfirmState({ message: "确认删除该会话吗？将同时删除消息、成员和分析记录，且不可恢复。", onOk: () => { void handleDeleteSession(row.original); } });
             }}
           >
-            {deletingSessionId === row.original.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {deletingSessionId === row.original.id ? <Spinner size="sm" /> : null}
             删除
           </Button>
         </div>
@@ -722,8 +732,14 @@ const GroupDiscussionAdminTab: React.FC = () => {
     {
       id: "actions",
       header: "操作",
-      size: 280,
-      meta: { className: "w-[280px]" },
+      // 同上，未开启 enableColumnResizing，宽度是硬约束。最宽分支为
+      // 「画像 + 解除禁言 + 移除」：常规约 183px，画像转圈时约 205px，
+      // 加单元格 px-3 左右各 12px 后最坏需约 229px。
+      // 本表声明宽度合计 740px、表格 min-w-[860px]，容器为弹窗内容区（约 942–1058px），
+      // 实测设定 260px 时实得 240–275px，转圈状态下仍保持单行；
+      // 设定 240px 在 900px 以下的内容区会退回两行。
+      size: 260,
+      meta: { className: "w-[260px]" },
       cell: ({ row }) => {
         const member = row.original;
         const isMuted = Boolean(member.muted_until && dayjs(member.muted_until).isAfter(dayjs()));
@@ -735,7 +751,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               disabled={profileLoadingUserId === member.user_id}
               onClick={() => void handleGenerateProfile(member)}
             >
-              {profileLoadingUserId === member.user_id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {profileLoadingUserId === member.user_id ? <Spinner size="sm" /> : null}
               画像
             </Button>
             {isMuted ? (
@@ -796,7 +812,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <AdminCard size="small" className="mb-4" styles={{ body: { padding: 12 } }}>
-        <div className="space-y-2">
+        <div className="space-y-xs">
           <div className="flex flex-wrap items-center gap-1.5">
             <Input
               type="date"
@@ -832,7 +848,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                 void refetchSessions();
               }}
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isLoading ? <Spinner size="sm" /> : null}
               查询
             </Button>
           </div>
@@ -893,7 +909,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                 setBatchDeleteOpen(true);
               }}
             >
-              {batchDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {batchDeleting ? <Spinner size="sm" /> : null}
               批量删除（{selectedSessionIds.length}）
             </Button>
 
@@ -914,11 +930,11 @@ const GroupDiscussionAdminTab: React.FC = () => {
               disabled={exportLoading}
               onClick={handleExportExcel}
             >
-              {exportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exportLoading ? <Spinner size="sm" /> : <Download className="h-4 w-4" />}
               导出
             </Button>
 
-            <div className="flex h-8 items-center gap-1.5 rounded-md border border-border-secondary bg-surface-2 px-2 shrink-0">
+            <div className="flex h-8 items-center gap-1.5 rounded-md border border-border-secondary bg-surface-2 px-xs shrink-0">
               <span className="text-xs text-text-secondary">弹窗</span>
               <Switch
                 aria-label="切换学生端弹窗可见性"
@@ -939,7 +955,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   }
                 }}
               />
-              {frontendVisibleLoading ? <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" /> : null}
+              {frontendVisibleLoading ? <Spinner size="sm" className="text-text-tertiary" /> : null}
             </div>
           </div>
         </div>
@@ -989,8 +1005,10 @@ const GroupDiscussionAdminTab: React.FC = () => {
               <TabsContent value="messages" className="mt-3 flex-1 overflow-hidden">
                 <div className="h-full overflow-auto rounded-[10px] border border-border bg-surface p-3">
                   {messagesLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-text-tertiary">
-                      <Loader2 className="h-4 w-4 animate-spin" />加载中...
+                    <div className="flex items-center gap-xs text-sm text-text-tertiary">
+                      {/* 可见文案「加载中...」不构成 role="status" 的可访问名称，需显式 label */}
+                      <LoadingState label="正在加载消息" size="sm" variant="inline" />
+                      <span aria-hidden="true">加载中...</span>
                     </div>
                   ) : safeMessages.length === 0 ? (
                     <p className="text-sm text-text-tertiary">暂无消息</p>
@@ -999,13 +1017,13 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       {safeMessages.map((message) => (
                         <div key={message.id} className="flex justify-start">
                           <div className="max-w-[92%]">
-                            <div className="mb-1 flex justify-between gap-2.5">
+                            <div className="mb-2xs flex justify-between gap-2.5">
                               <span className="text-xs font-semibold">{message.user_display_name}</span>
                               <span className="text-xs text-text-tertiary">
                                 {dayjs(message.created_at).format("HH:mm:ss")}
                               </span>
                             </div>
-                            <div className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface px-2.5 py-2 text-sm">
+                            <div className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface px-2.5 py-xs text-sm">
                               {message.content}
                             </div>
                           </div>
@@ -1039,8 +1057,8 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       emptyState={
                         membersLoading ? (
                           <div className="flex items-center justify-center py-6 text-sm text-text-tertiary">
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            加载中...
+                            <LoadingState label="正在加载成员" size="sm" variant="inline" />
+                            <span aria-hidden="true" className="ml-xs">加载中...</span>
                           </div>
                         ) : (
                           <div className="py-6 text-center text-sm text-text-tertiary">暂无成员</div>
@@ -1095,7 +1113,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mb-2 mt-3 flex flex-wrap gap-2">
+                    <div className="mb-xs mt-3 flex flex-wrap gap-xs">
                       <Button
                         size="sm"
                         variant="outline"
@@ -1158,7 +1176,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   </div>
 
                   <div className="rounded-lg border border-border bg-surface p-3">
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className="mb-xs flex items-center justify-between">
                       <h4 className="text-sm font-semibold">分析结果</h4>
                       <Button
                         size="sm"
@@ -1187,15 +1205,16 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   </div>
 
                   <div className="rounded-lg border border-border bg-surface p-3">
-                    <h4 className="mb-2 text-sm font-semibold">历史分析</h4>
+                    <h4 className="mb-xs text-sm font-semibold">历史分析</h4>
                     {analysesLoading ? (
-                      <div className="flex items-center gap-2 text-sm text-text-tertiary">
-                        <Loader2 className="h-4 w-4 animate-spin" />加载中...
+                      <div className="flex items-center gap-xs text-sm text-text-tertiary">
+                        <LoadingState label="正在加载历史分析" size="sm" variant="inline" />
+                        <span aria-hidden="true">加载中...</span>
                       </div>
                     ) : safeAnalyses.length === 0 ? (
                       <p className="text-sm text-text-tertiary">暂无历史记录</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-xs">
                         {safeAnalyses.map((analysis) => (
                           <div
                             key={analysis.id}
@@ -1226,7 +1245,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               关闭
             </Button>
             <Button disabled={analysisLoading || sessionModalTab !== "analysis"} onClick={handleAnalyze}>
-              {analysisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {analysisLoading ? <Spinner size="sm" /> : null}
               开始分析
             </Button>
           </DialogFooter>
@@ -1299,7 +1318,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mb-2 mt-3 flex flex-wrap gap-2">
+                <div className="mb-xs mt-3 flex flex-wrap gap-xs">
                   <Button
                     size="sm"
                     variant={compareState.useCache ? "default" : "outline"}
@@ -1309,7 +1328,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="mb-2">
+                <div className="mb-xs">
                   <p className="mb-1.5 text-xs text-text-tertiary">预设 Prompt 模板（点击填入）：</p>
                   <div className="flex flex-wrap gap-1.5">
                     <Button
@@ -1379,15 +1398,21 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
               {compareState.loading ? (
                 <div className="rounded-lg border border-border bg-surface p-4">
-                  <div className="flex flex-col items-center justify-center gap-2 py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
-                    <p className="text-sm text-text-tertiary">正在调用智能体分析，请耐心等待（可能需要 30-120 秒）...</p>
+                  <div className="flex flex-col items-center justify-center gap-xs py-4">
+                    <LoadingState
+                      label="正在调用智能体分析，请耐心等待（可能需要 30-120 秒）"
+                      size="md"
+                      variant="inline"
+                    />
+                    <p className="text-sm text-text-tertiary" aria-hidden="true">
+                      正在调用智能体分析，请耐心等待（可能需要 30-120 秒）...
+                    </p>
                   </div>
                 </div>
               ) : null}
 
               <div className="rounded-lg border border-border bg-surface p-3">
-                <h4 className="mb-2 text-sm font-semibold">分析结果</h4>
+                <h4 className="mb-xs text-sm font-semibold">分析结果</h4>
                 {compareState.result ? (
                   <div className="prose prose-sm max-w-none overflow-x-auto">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{compareState.result}</ReactMarkdown>
@@ -1404,7 +1429,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               取消
             </Button>
             <Button onClick={handleStartCompare} disabled={compareState.loading}>
-              {compareState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {compareState.loading ? <Spinner size="sm" /> : null}
               开始分析
             </Button>
           </DialogFooter>
@@ -1420,16 +1445,16 @@ const GroupDiscussionAdminTab: React.FC = () => {
             <DialogTitle>禁言成员：{muteState.target?.full_name || muteState.target?.username}</DialogTitle>
           </DialogHeader>
 
-          <div className="py-1">
+          <div className="py-2xs">
             <p className="mb-3 text-sm">请选择禁言时长：</p>
-            <div className="space-y-2">
+            <div className="space-y-xs">
               {[
                 { label: "10分钟", value: "10m" as const },
                 { label: "1小时", value: "1h" as const },
                 { label: "24小时", value: "24h" as const },
                 { label: "自定义时长", value: "custom" as const },
               ].map((option) => (
-                <label key={option.value} className="flex items-center gap-2 text-sm">
+                <label key={option.value} className="flex items-center gap-xs text-sm">
                   <input
                     type="radio"
                     name="mute-duration"
@@ -1447,7 +1472,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             </div>
 
             {muteState.durationType === "custom" ? (
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex items-center gap-xs">
                 <Input
                   type="number"
                   className="w-28"
@@ -1468,7 +1493,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               取消
             </Button>
             <Button onClick={handleConfirmMute} disabled={muteState.loading}>
-              {muteState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {muteState.loading ? <Spinner size="sm" /> : null}
               确认
             </Button>
           </DialogFooter>
@@ -1481,7 +1506,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
             <DialogTitle>添加成员</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 py-1">
+          <div className="space-y-3 py-2xs">
             <div className="space-y-1.5">
               <p className="text-sm text-text-tertiary">搜索用户（姓名/学号）</p>
               <Input
@@ -1493,8 +1518,9 @@ const GroupDiscussionAdminTab: React.FC = () => {
 
             <div className="max-h-[280px] overflow-auto rounded-md border border-border">
               {userSearchLoading ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-sm text-text-tertiary">
-                  <Loader2 className="h-4 w-4 animate-spin" />搜索中...
+                <div className="flex items-center justify-center gap-xs py-6 text-sm text-text-tertiary">
+                  <LoadingState label="正在搜索用户" size="sm" variant="inline" />
+                  <span aria-hidden="true">搜索中...</span>
                 </div>
               ) : searchedUsers.length === 0 ? (
                 <div className="py-6 text-center text-sm text-text-tertiary">
@@ -1508,7 +1534,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
                       key={user.id}
                       type="button"
                       className={cn(
-                        "flex w-full items-center justify-between border-b border-border-secondary px-3 py-2 text-left text-sm last:border-b-0",
+                        "flex w-full items-center justify-between border-b border-border-secondary px-3 py-xs text-left text-sm last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         selected ? "bg-[var(--ws-color-hover-bg)]" : "hover:bg-[var(--ws-color-hover-bg)]",
                       )}
                       onClick={() => setSelectedUserId(user.id)}
@@ -1527,7 +1553,7 @@ const GroupDiscussionAdminTab: React.FC = () => {
               取消
             </Button>
             <Button onClick={handleAddMember} disabled={!selectedUserId || addMemberLoading}>
-              {addMemberLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {addMemberLoading ? <Spinner size="sm" /> : null}
               添加
             </Button>
           </DialogFooter>

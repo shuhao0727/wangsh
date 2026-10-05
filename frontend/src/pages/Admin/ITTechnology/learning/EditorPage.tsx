@@ -107,15 +107,15 @@ const LearningEditorPage: React.FC = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
-        <Button variant="ghost" size="sm" onClick={() => window.close()} className="gap-1 h-7 text-xs">
+      <div className="flex shrink-0 items-center gap-xs border-b border-border bg-surface px-3 py-1.5">
+        <Button variant="ghost" size="sm" onClick={() => window.close()} className="gap-2xs h-7 text-xs">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <span className="text-xs font-medium text-text-base">{moduleTitle} · 内容管理</span>
-        <span className="text-[10px] text-text-tertiary ml-1">{activeChapter?.title}</span>
+        <span className="text-3xs text-text-tertiary ml-2xs">{activeChapter?.title}</span>
 
         {/* Markdown quick-insert */}
-        <div className="mx-2 h-4 w-px bg-border" />
+        <div className="mx-xs h-4 w-px bg-border" />
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="粗体" onClick={() => insertAtCursor("**", "**")}><Bold className="h-3 w-3" /></Button>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="斜体" onClick={() => insertAtCursor("*", "*")}><Italic className="h-3 w-3" /></Button>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="代码" onClick={() => insertAtCursor("`", "`")}><Code className="h-3 w-3" /></Button>
@@ -124,11 +124,11 @@ const LearningEditorPage: React.FC = () => {
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="有序列表" onClick={() => insertAtCursor("\n1. ")}><ListOrdered className="h-3 w-3" /></Button>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="图片" onClick={() => insertAtCursor("![alt](", ")")}><Image className="h-3 w-3" /></Button>
 
-        <div className="ml-auto flex items-center gap-1">
-          <Button size="sm" variant={view === "edit" ? "secondary" : "ghost"} onClick={() => setView("edit")} className="h-7 text-xs gap-1"><Edit3 className="h-3 w-3" />编辑</Button>
-          <Button size="sm" variant={view === "preview" ? "secondary" : "ghost"} onClick={() => setView("preview")} className="h-7 text-xs gap-1"><Eye className="h-3 w-3" />预览</Button>
-          <Button size="sm" variant={view === "split" ? "secondary" : "ghost"} onClick={() => setView("split")} className="h-7 text-xs gap-1">分屏</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-1"><Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}</Button>
+        <div className="ml-auto flex items-center gap-2xs">
+          <Button size="sm" variant={view === "edit" ? "secondary" : "ghost"} onClick={() => setView("edit")} className="h-7 text-xs gap-2xs"><Edit3 className="h-3 w-3" />编辑</Button>
+          <Button size="sm" variant={view === "preview" ? "secondary" : "ghost"} onClick={() => setView("preview")} className="h-7 text-xs gap-2xs"><Eye className="h-3 w-3" />预览</Button>
+          <Button size="sm" variant={view === "split" ? "secondary" : "ghost"} onClick={() => setView("split")} className="h-7 text-xs gap-2xs">分屏</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-2xs"><Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}</Button>
         </div>
       </div>
 
@@ -136,8 +136,8 @@ const LearningEditorPage: React.FC = () => {
       <div className="flex flex-1 min-h-0">
         {/* Chapter list */}
         <aside className="hidden w-[200px] shrink-0 border-r border-border lg:flex lg:flex-col bg-surface-2">
-          <div className="shrink-0 border-b border-border px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+          <div className="shrink-0 border-b border-border px-3 py-xs">
+            <div className="flex items-center gap-1.5 text-2xs font-semibold text-text-secondary">
               <BookOpen className="h-3 w-3 text-primary" />{book.title}
             </div>
           </div>
@@ -145,7 +145,7 @@ const LearningEditorPage: React.FC = () => {
             <div className="p-1.5">
               {book.chapters.map((ch, i) => (
                 <button key={ch.slug} type="button" onClick={() => handleSelectChapter(ch.slug)}
-                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-[11px] transition-colors ${
+                  className={`flex w-full items-center gap-1.5 rounded px-xs py-1.5 text-left text-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-text-secondary"
                   }`}>
                   <span className="text-muted-foreground tabular-nums w-4 text-right">{i + 1}</span>
@@ -184,7 +184,7 @@ const LearningEditorPage: React.FC = () => {
                   ref={textareaRef}
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="h-full w-full resize-none border-0 bg-surface p-4 font-mono text-[13px] leading-relaxed outline-none text-text-base"
+                  className="h-full w-full resize-none border-0 bg-surface p-4 font-mono text-xs leading-relaxed outline-none text-text-base"
                   placeholder="在此编辑..."
                   spellCheck={false}
                 />

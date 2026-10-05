@@ -27,7 +27,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Edit,
   GripVertical,
-  Loader2,
   Play,
   Plus,
   RefreshCw,
@@ -75,6 +74,8 @@ import {
 } from "@hooks/queries/useClassroomPlanQuery";
 import { queryKeys } from "@hooks/queries/queryKeys";
 
+import { LoadingState } from "@/components/ui/loading-state";
+import { Spinner } from "@/components/ui/spinner";
 const ACTIVITY_FETCH_BATCH_SIZE = 100;
 const PLAN_NOT_FOUND_MESSAGE = "该计划已被删除或不存在，列表已刷新";
 
@@ -132,7 +133,7 @@ type PlanFormSubmitPayload = {
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const item = STATUS_MAP[status] || { label: status, dot: "bg-text-tertiary" };
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
+    <span className="inline-flex items-center gap-2xs rounded-full bg-surface-2 px-xs py-0.5 text-xs text-text-secondary">
       <span className={cn("h-1.5 w-1.5 rounded-full", item.dot)} />
       {item.label}
     </span>
@@ -160,7 +161,7 @@ const SortableItem: React.FC<{
     <div
       ref={setNodeRef}
       className={cn(
-        "flex items-center gap-2 border-b border-border px-3 py-2",
+        "flex items-center gap-xs border-b border-border px-3 py-xs",
         isDragging ? "bg-primary-soft" : "bg-surface",
       )}
       style={{
@@ -173,7 +174,7 @@ const SortableItem: React.FC<{
         {...attributes}
         {...listeners}
         type="button"
-        className="inline-flex h-6 w-6 appearance-none items-center justify-center rounded border-0 bg-transparent text-text-tertiary hover:bg-[var(--ws-color-hover-bg)]"
+        className="inline-flex h-6 w-6 appearance-none items-center justify-center rounded border-0 bg-transparent text-text-tertiary hover:bg-[var(--ws-color-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-label="拖动排序"
       >
         <GripVertical className="h-4 w-4" />
@@ -289,7 +290,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div>
-        <div className="mb-1 text-sm font-medium">计划标题</div>
+        <div className="mb-2xs text-sm font-medium">计划标题</div>
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -303,7 +304,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
           <div className="mb-1.5 text-sm font-semibold">
             选择活动 <span className="text-xs font-normal text-text-tertiary">（点击勾选）</span>
           </div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="mb-xs flex flex-wrap items-center gap-xs">
             <Input
               placeholder="搜索"
               value={search}
@@ -341,9 +342,10 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
 
           <div className="min-h-[180px] flex-1 overflow-auto rounded-lg border border-border bg-surface">
             {loadingActivities ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-sm text-text-tertiary">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                正在加载活动...
+              <div className="flex items-center justify-center gap-xs py-10 text-sm text-text-tertiary">
+                {/* 可见文案「正在加载活动...」不构成 status 的可访问名称，需显式 label */}
+                <LoadingState label="正在加载活动…" size="sm" variant="inline" />
+                <span aria-hidden="true">正在加载活动...</span>
               </div>
             ) : filtered.length === 0 ? (
               <div className="py-10 text-center text-sm text-text-tertiary">暂无活动</div>
@@ -363,7 +365,7 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
                       );
                     }}
                     className={cn(
-                      "flex cursor-pointer items-center gap-2 border-b border-border-secondary px-2.5 py-1.5 transition-colors last:border-b-0",
+                      "flex cursor-pointer items-center gap-xs border-b border-border-secondary px-2.5 py-1.5 transition-colors last:border-b-0",
                       isActive && "cursor-not-allowed opacity-60",
                       checked ? "bg-primary-soft" : "hover:bg-[var(--ws-color-hover-bg)]",
                     )}
@@ -414,12 +416,12 @@ const PlanFormPanel: React.FC<PlanFormPanelProps> = ({
         </div>
       </div>
 
-      <div className="mt-auto flex justify-end gap-2 border-t border-border-secondary pt-3">
+      <div className="mt-auto flex justify-end gap-xs border-t border-border-secondary pt-3">
         <Button variant="outline" onClick={onCancel}>
           取消
         </Button>
         <Button onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {submitting ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
           {editing ? "保存" : "创建计划"}
         </Button>
       </div>
@@ -532,7 +534,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
             onClick={() => confirmRun("启动计划？", "start-plan", () => onStartPlan(plan.id))}
             disabled={loading !== null}
           >
-            {loading === "start-plan" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {loading === "start-plan" ? <Spinner size="xs" /> : <Play className="h-3.5 w-3.5" />}
             启动计划
           </Button>
         )}
@@ -544,7 +546,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
             onClick={() => confirmRun("强制结束整个计划？", "end-plan", () => onEndPlan(plan.id))}
             disabled={loading !== null}
           >
-            {loading === "end-plan" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+            {loading === "end-plan" ? <Spinner size="xs" /> : <Square className="h-3.5 w-3.5" />}
             结束计划
           </Button>
         )}
@@ -562,7 +564,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
             }
             disabled={loading !== null}
           >
-            {loading === "reset-plan" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            {loading === "reset-plan" ? <Spinner size="xs" /> : <RotateCcw className="h-3.5 w-3.5" />}
             重置计划
           </Button>
         )}
@@ -575,7 +577,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
           }}
           disabled={loading !== null}
         >
-          {loading === "refresh-plan" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {loading === "refresh-plan" ? <Spinner size="xs" /> : <RefreshCw className="h-3.5 w-3.5" />}
           刷新
         </Button>
       </div>
@@ -598,11 +600,11 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
             <div
               key={item.id}
               className={cn(
-                "border-b border-border px-3 py-2 last:border-b-0",
+                "border-b border-border px-3 py-xs last:border-b-0",
                 STATUS_MAP[item.status]?.softBg || (idx % 2 === 0 ? "bg-surface-2" : "bg-surface"),
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-xs">
                 <span className="min-w-[24px] text-xs text-text-tertiary">{idx + 1}.</span>
                 <ActivityTypeTag type={item.activity?.activity_type} />
                 <span className={cn("flex-1 truncate text-sm", isActive && "font-semibold")}>
@@ -616,7 +618,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-xs text-purple"
+                  className="h-7 px-xs text-xs text-purple"
                   onClick={() => {
                     if (!item.activity_id) return;
                     void openDetail(item);
@@ -639,7 +641,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
                     }
                     disabled={loading !== null}
                   >
-                    {loading === startKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    {loading === startKey ? <Spinner size="xs" /> : <Play className="h-3.5 w-3.5" />}
                     开始
                   </Button>
                 )}
@@ -653,7 +655,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
                     }
                     disabled={loading !== null}
                   >
-                    {loading === endKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                    {loading === endKey ? <Spinner size="xs" /> : <Square className="h-3.5 w-3.5" />}
                     结束
                   </Button>
                 )}
@@ -667,7 +669,7 @@ const PlanConsolePanel: React.FC<ConsolePanelProps> = ({
                     }
                     disabled={loading !== null}
                   >
-                    {loading === restartKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                    {loading === restartKey ? <Spinner size="xs" /> : <RotateCcw className="h-3.5 w-3.5" />}
                     重新开始
                   </Button>
                 )}
@@ -1097,7 +1099,7 @@ const ClassroomPlanPage: React.FC = () => {
         meta: { className: "w-[120px]" },
         cell: ({ row }) => (
           <div
-            className="flex items-center gap-1"
+            className="flex items-center gap-2xs"
             onClick={(event) => event.stopPropagation()}
           >
             {row.original.status !== "active" && (
@@ -1159,7 +1161,7 @@ const ClassroomPlanPage: React.FC = () => {
           )}
         >
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border border-border bg-surface">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <div className="flex items-center justify-between border-b border-border px-3 py-xs">
               <div className="text-sm font-semibold">计划列表</div>
               <div className="flex items-center gap-1.5">
                 <Button
@@ -1172,7 +1174,7 @@ const ClassroomPlanPage: React.FC = () => {
                   }}
                   disabled={listLoading}
                 >
-                  {listLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  {listLoading ? <Spinner size="xs" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   刷新
                 </Button>
                 <Button size="sm" onClick={openCreate}>
@@ -1201,7 +1203,7 @@ const ClassroomPlanPage: React.FC = () => {
               />
             </div>
           </Card>
-          <div className="mt-2 flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
+          <div className="mt-xs flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
             <DataTablePagination
               currentPage={Math.max(1, page)}
               totalPages={Math.max(1, totalPages)}
@@ -1223,7 +1225,7 @@ const ClassroomPlanPage: React.FC = () => {
         {rightView.type !== "none" && (
           <div className="flex w-full min-h-0 flex-col lg:w-[64%]">
             <Card className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-surface">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <div className="flex items-center justify-between border-b border-border px-3 py-xs">
                 <div className="truncate pr-4 text-sm font-semibold">{rightTitle}</div>
                 <Button size="sm" variant="outline" onClick={() => setRightView({ type: "none" })}>
                   收起

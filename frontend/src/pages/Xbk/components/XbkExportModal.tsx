@@ -2,7 +2,7 @@ import { showMessage } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import { xbkDataApi } from "@services";
 import type { XbkExportType } from "@services";
-import { Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatXbkClassName } from "../className";
 
+import { Spinner } from "@/components/ui/spinner";
 interface XbkExportModalProps {
   open: boolean;
   onCancel: () => void;
@@ -144,7 +145,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-item-gap">
           {!hasRequiredFilters ? (
             <Alert variant="warning">
               <AlertTitle>请选择具体的学年和学期</AlertTitle>
@@ -202,7 +203,7 @@ export const XbkExportModal: React.FC<XbkExportModalProps> = ({
             onClick={handleExport}
             disabled={exporting || !hasRequiredFilters}
           >
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {exporting ? <Spinner size="xs" /> : null}
             导出
           </Button>
         </DialogFooter>

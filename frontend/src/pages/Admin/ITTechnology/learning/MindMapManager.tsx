@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Eye, Trash2, Globe, ArrowLeft, BookOpen } from "lucide-react";
+import { Plus, Pencil, Eye, Trash2, Globe, ArrowLeft, BookOpen } from "lucide-react";
 import { showMessage } from "@/lib/toast";
 import {
   isMindmapEditorRuntimeAvailable,
@@ -22,6 +22,7 @@ import {
 import MindMapViewer from "./MindMapViewer";
 import MindMapEditorLib from "./MindMapEditorLib";
 
+import { LoadingState } from "@/components/ui/loading-state";
 type MindmapItem = {
   id: number;
   title: string;
@@ -176,7 +177,7 @@ const MindMapManager: React.FC = () => {
     >
       {/* 缩略预览 */}
       <div
-        className="h-40 w-full overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-2"
+        className="h-40 w-full overflow-hidden rounded-t-lg border-b border-border bg-surface-2 p-xs"
         onClick={() => openMindmap(item)}
         style={{ cursor: "pointer" }}
       >
@@ -184,7 +185,7 @@ const MindMapManager: React.FC = () => {
       </div>
 
       {/* 底部信息 */}
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between px-3 py-xs">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium" title={item.title}>{item.title}</p>
           <p className="text-xs text-text-tertiary">
@@ -192,7 +193,7 @@ const MindMapManager: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex shrink-0 gap-2xs opacity-0 transition-opacity group-hover:opacity-100">
           {isMine && (
             <>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
@@ -222,13 +223,13 @@ const MindMapManager: React.FC = () => {
   return (
     <div className="flex h-full flex-col bg-surface">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => window.history.back()}>
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-xs">
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-2xs" onClick={() => window.history.back()}>
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <h2 className="text-sm font-semibold">思维导图管理</h2>
         <div className="ml-auto">
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={requestCreate}>
+          <Button size="sm" className="h-7 text-xs gap-2xs" onClick={requestCreate}>
             <Plus className="h-3.5 w-3.5" />新建导图
           </Button>
         </div>
@@ -247,16 +248,14 @@ const MindMapManager: React.FC = () => {
 
         <TabsContent value="my" className="flex-1 overflow-auto px-4 pb-4 pt-3 outline-none">
           {loading ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
-            </div>
+            <LoadingState label="正在加载我的导图…" size="lg" className="h-40" />
           ) : myMaps.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center text-text-tertiary">
-              <BookOpen className="mb-2 h-8 w-8" />
+              <BookOpen className="mb-xs h-8 w-8" />
               <p className="text-sm">还没有导图，点击右上角「新建导图」开始创作</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {myMaps.map((m) => renderCard(m, true))}
             </div>
           )}
@@ -264,16 +263,14 @@ const MindMapManager: React.FC = () => {
 
         <TabsContent value="pub" className="flex-1 overflow-auto px-4 pb-4 pt-3 outline-none">
           {loading ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
-            </div>
+            <LoadingState label="正在加载导图广场…" size="lg" className="h-40" />
           ) : pubMaps.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center text-text-tertiary">
-              <Globe className="mb-2 h-8 w-8" />
+              <Globe className="mb-xs h-8 w-8" />
               <p className="text-sm">导图广场暂无内容</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {pubMaps.map((m) => renderCard(m, false))}
             </div>
           )}
@@ -286,7 +283,7 @@ const MindMapManager: React.FC = () => {
           <DialogHeader>
             <DialogTitle>新建思维导图</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-xs">
             <Label htmlFor="mm-title">导图标题</Label>
             <Input
               id="mm-title"

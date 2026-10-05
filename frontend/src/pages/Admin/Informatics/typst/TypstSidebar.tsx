@@ -81,14 +81,14 @@ function PanelCard({ title, children }: { title: string; children: React.ReactNo
         </div>
       </div>
       <div className="typst-card-body">
-        <div className="flex flex-col gap-2">{children}</div>
+        <div className="flex flex-col gap-xs">{children}</div>
       </div>
     </div>
   );
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-1 text-xs font-medium text-text-tertiary">{children}</p>;
+  return <p className="mb-2xs text-xs font-medium text-text-tertiary">{children}</p>;
 }
 
 export default function TypstSidebar({
@@ -144,7 +144,7 @@ export default function TypstSidebar({
   return (
     <TooltipProvider delayDuration={120}>
       <div className={`typst-editor-side ${sideCollapsed ? "typst-editor-side-collapsed" : ""}`}>
-        <div className={`typst-editor-side-toolbar ${sideCollapsed ? "justify-center py-1" : ""}`}>
+        <div className={`typst-editor-side-toolbar ${sideCollapsed ? "justify-center py-2xs" : ""}`}>
           {!sideCollapsed && (
             <div className="flex items-center">
               <Tooltip>
@@ -223,7 +223,7 @@ export default function TypstSidebar({
                     <option key={c.path} value={c.path} />
                   ))}
                 </datalist>
-                <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="mt-xs flex items-center justify-between gap-xs">
                   <Button variant="outline" onClick={onOpenCategoryManage} size="sm" className="h-8">
                     <Settings className="h-4 w-4" /> 管理分类
                   </Button>
@@ -235,7 +235,7 @@ export default function TypstSidebar({
 
               <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
                 <p className="text-sm text-text-tertiary">发布</p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-xs">
                   <span className="text-xs text-text-tertiary">
                     {published ? "已发布" : "未发布"}
                   </span>
@@ -245,7 +245,7 @@ export default function TypstSidebar({
 
               <div>
                 <FieldLabel>样式</FieldLabel>
-                <div className="flex gap-2">
+                <div className="flex gap-xs">
                   <Select
                     value={styleKey || "__none__"}
                     onValueChange={(v) => onSetStyleKey(v === "__none__" ? "" : v)}
@@ -305,7 +305,7 @@ export default function TypstSidebar({
               </div>
               <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
                 <span className="text-sm text-text-tertiary">自动预览</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-xs">
                   <span className="text-xs text-text-tertiary">
                     {autoPreview ? "开" : "关"}
                   </span>
@@ -320,7 +320,7 @@ export default function TypstSidebar({
                 <Input value={assetPrefix} onChange={(e) => onSetAssetPrefix(e.target.value)} placeholder="images" />
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-xs">
                 <Button variant="outline" onClick={onUploadClick} disabled={submitting} className="h-8">
                   <Upload className="h-4 w-4" /> 上传资源
                 </Button>
@@ -350,17 +350,17 @@ export default function TypstSidebar({
                   assetsShown.map((a) => (
                     <div
                       key={a.id}
-                      className="flex items-center justify-between gap-[var(--ws-space-1)] border-b border-border-secondary px-[10px] py-2 last:border-b-0"
+                      className="flex items-center justify-between gap-[var(--ws-space-1)] border-b border-border-secondary px-[10px] py-xs last:border-b-0"
                     >
                       <div className="min-w-0">
                         <p className="max-w-[220px] truncate text-sm">{a.path}</p>
                         <div className="text-xs text-text-tertiary">
                           <span>{a.mime}</span>
-                          <span className="ml-2">
+                          <span className="ml-xs">
                             {(a.size_bytes ? `${a.size_bytes}B` : "-") + (a.uploaded_by_id ? ` · u${a.uploaded_by_id}` : "")}
                           </span>
                           {a.sha256 ? (
-                            <span className="ml-2">
+                            <span className="ml-xs">
                               {a.sha256.slice(0, 10)}
                             </span>
                           ) : null}

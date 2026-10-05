@@ -43,7 +43,7 @@ export function PipelineTab(props: {
       <div style={{ height: "100%", overflow: "auto", padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexShrink: 0 }}>
           <div className="font-semibold">完整流程图参考</div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-xs">
             <Button variant="outline" size="sm" onClick={() => onRefreshBeautify?.()}>
               刷新
             </Button>
@@ -95,7 +95,7 @@ export function PipelineTab(props: {
               flexShrink: 0,
             }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-xs">
               <Button variant="outline" size="sm" onClick={() => setViewerScale((s) => Math.max(0.02, Number((s - 0.1).toFixed(2))))}>
                 -
               </Button>

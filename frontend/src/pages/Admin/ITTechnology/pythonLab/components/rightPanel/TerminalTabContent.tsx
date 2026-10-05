@@ -15,7 +15,7 @@ export function TerminalTabContent({ active, keepConnected, children }: {
       forceMount={keepConnected ? true : undefined}
       aria-hidden={!active}
       inert={!active}
-      className={`absolute inset-0 mt-0 min-h-0 overflow-hidden p-1 ${active ? "" : "invisible pointer-events-none"}`}
+      className={`absolute inset-0 mt-0 min-h-0 overflow-hidden p-2xs ${active ? "" : "invisible pointer-events-none"}`}
     >
       {children}
     </TabsContent>

@@ -238,14 +238,14 @@ const ChapterSidebar: React.FC<{
         <button
           type="button"
           onClick={() => setTab("chapters")}
-          className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             tab === "chapters" ? "text-primary border-b-2 border-primary" : "text-text-tertiary hover:text-text-secondary"
           }`}
         >章节目录</button>
         <button
           type="button"
           onClick={() => setTab("toc")}
-          className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             tab === "toc" ? "text-primary border-b-2 border-primary" : "text-text-tertiary hover:text-text-secondary"
           }`}
         >内容大纲</button>
@@ -254,21 +254,21 @@ const ChapterSidebar: React.FC<{
       {/* Tab content */}
       <ScrollArea className="flex-1">
         {tab === "chapters" ? (
-          <div className="p-2">
+          <div className="p-xs">
             {groups.map((group) => {
               const isOpen = !collapsed[group.name];
               const done = groupCompleted(group);
               return (
                 <div key={group.name}>
                   <button type="button" onClick={() => toggleGroup(group.name)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary hover:bg-accent transition-colors">
+                    className="flex w-full items-center gap-xs rounded-md px-xs py-xs text-left text-xs font-semibold uppercase tracking-wide text-text-secondary hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
                     <span className="flex-1">{group.name}</span>
-                    <span className="text-[10px] tabular-nums font-normal normal-case text-text-tertiary">{done}/{group.chapters.length}</span>
+                    <span className="text-3xs tabular-nums font-normal normal-case text-text-tertiary">{done}/{group.chapters.length}</span>
                   </button>
                   {isOpen && group.chapters.map((ch) => (
                     <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
-                      className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-xs transition-colors ${
+                      className={`flex w-full items-center gap-xs rounded-md py-1.5 pl-8 pr-3 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
                       }`}>
                       {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -280,7 +280,7 @@ const ChapterSidebar: React.FC<{
             })}
             {standalone.map((ch) => (
               <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
-                className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-3 text-left text-xs transition-colors ${
+                className={`flex w-full items-center gap-xs rounded-md py-1.5 pl-3 pr-3 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
                 }`}>
                 {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -289,14 +289,14 @@ const ChapterSidebar: React.FC<{
             ))}
           </div>
         ) : (
-          <div className="p-2">
+          <div className="p-xs">
             {tocItems.length === 0 ? (
-              <p className="px-2 py-4 text-xs text-text-tertiary">暂无大纲</p>
+              <p className="px-xs py-4 text-xs text-text-tertiary">暂无大纲</p>
             ) : (
               tocItems.map((item) => (
                 <button key={item.id} type="button" onClick={() => onTocClick(item.id)}
-                  className={`block w-full rounded-md py-1.5 text-left text-xs transition-colors hover:bg-accent ${
-                    item.level === 2 ? "pl-2" : "pl-5"
+                  className={`block w-full rounded-md py-1.5 text-left text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    item.level === 2 ? "pl-xs" : "pl-5"
                   } ${item.id === activeHeading ? "text-primary font-medium" : "text-text-secondary"}`}>
                   {item.text}
                 </button>
@@ -425,7 +425,7 @@ export const BookReader: React.FC<BookReaderProps> = ({
 
         {/* Back to top */}
         <button type="button" onClick={scrollToTop}
-          className={`fixed bottom-8 right-8 z-10 rounded-full p-3 shadow-lg bg-primary text-primary-foreground transition-all duration-300 ${
+          className={`fixed bottom-8 right-8 z-10 rounded-full p-3 shadow-lg bg-primary text-primary-foreground transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             showScrollTop ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"}`}
           aria-label="回到顶部">
           <ArrowUp className="h-5 w-5" />

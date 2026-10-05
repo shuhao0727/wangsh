@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -57,9 +57,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 : ""
             }
           >
-            {loading ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : null}
+            {/* 装饰性：按钮已有文案（确认/删除），spinner 不重复播报，
+                故不传 label（保持 aria-hidden）。尺寸 sm=h-4 与原一致。 */}
+            {loading ? <Spinner size="sm" className="mr-2xs" /> : null}
             {confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>

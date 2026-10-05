@@ -172,19 +172,19 @@ const TabEditorPage: React.FC = () => {
   return (
     <div className="flex h-screen flex-col bg-surface">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
-        <Button variant="ghost" size="sm" onClick={() => window.close()} className="h-7 text-xs gap-1">
+      <div className="flex shrink-0 items-center gap-xs border-b border-border bg-surface px-3 py-1.5">
+        <Button variant="ghost" size="sm" onClick={() => window.close()} className="h-7 text-xs gap-2xs">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <span className="text-xs font-medium">{moduleLabel} · {sectionLabel} 管理</span>
-        <span className="text-[10px] text-text-tertiary">{items.length} 项</span>
+        <span className="text-3xs text-text-tertiary">{items.length} 项</span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2xs">
           <Button size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("edit")} className="h-7 text-xs gap-1"><Code className="h-3 w-3" />编辑</Button>
+            onClick={() => setViewMode("edit")} className="h-7 text-xs gap-2xs"><Code className="h-3 w-3" />编辑</Button>
           <Button size="sm" variant={viewMode === "preview" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("preview")} className="h-7 text-xs gap-1"><Eye className="h-3 w-3" />预览</Button>
-          <Button size="sm" onClick={saveItem} disabled={saving || !!jsonError} className="h-7 text-xs gap-1">
+            onClick={() => setViewMode("preview")} className="h-7 text-xs gap-2xs"><Eye className="h-3 w-3" />预览</Button>
+          <Button size="sm" onClick={saveItem} disabled={saving || !!jsonError} className="h-7 text-xs gap-2xs">
             <Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}
           </Button>
         </div>
@@ -201,8 +201,8 @@ const TabEditorPage: React.FC = () => {
         <div className="flex flex-1 min-h-0">
           {/* Item list */}
           <aside className="w-[200px] shrink-0 border-r border-border flex flex-col bg-surface-2">
-            <div className="shrink-0 border-b border-border p-2">
-              <Button variant="ghost" size="sm" onClick={addItem} className="w-full h-7 text-xs gap-1">
+            <div className="shrink-0 border-b border-border p-xs">
+              <Button variant="ghost" size="sm" onClick={addItem} className="w-full h-7 text-xs gap-2xs">
                 <Plus className="h-3 w-3" />新建
               </Button>
             </div>
@@ -213,14 +213,14 @@ const TabEditorPage: React.FC = () => {
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") selectItem(i);
                   }}
-                  className={`flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors ${
+                  className={`flex w-full items-center gap-1.5 px-xs py-1.5 text-left text-2xs transition-colors ${
                     i === selectedIdx ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-text-secondary"
                   }`}>
                   <GripVertical className="h-3 w-3 shrink-0 text-text-tertiary" />
                   <span className="truncate flex-1">{item.title}</span>
                   <button type="button" aria-label={`删除 ${item.title}`}
                     onClick={(e) => { e.stopPropagation(); void deleteItem(i); }}
-                    className="shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive">
+                    className="shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
@@ -236,15 +236,15 @@ const TabEditorPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="shrink-0 border-b border-border px-3 py-1.5 flex items-center gap-2">
-                  <span className="text-[10px] text-text-tertiary">item_key:</span>
+                <div className="shrink-0 border-b border-border px-3 py-1.5 flex items-center gap-xs">
+                  <span className="text-3xs text-text-tertiary">item_key:</span>
                   <span className="text-xs font-mono">{items[selectedIdx]?.item_key || "—"}</span>
-                  {jsonError && <span className="text-[10px] text-destructive ml-auto">{jsonError}</span>}
+                  {jsonError && <span className="text-3xs text-destructive ml-auto">{jsonError}</span>}
                 </div>
                 <textarea
                   value={editJson}
                   onChange={(e) => handleJsonChange(e.target.value)}
-                  className="flex-1 w-full resize-none border-0 bg-surface p-4 font-mono text-[13px] leading-relaxed outline-none text-text-base"
+                  className="flex-1 w-full resize-none border-0 bg-surface p-4 font-mono text-xs leading-relaxed outline-none text-text-base"
                   placeholder='{ "name": "项目名称", ... }'
                   spellCheck={false}
                 />

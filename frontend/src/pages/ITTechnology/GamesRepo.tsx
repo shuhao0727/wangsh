@@ -7,13 +7,7 @@
  */
 
 import React, { useState } from "react";
-import {
-  ArrowLeft,
-  Gamepad2,
-  Loader2,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { ArrowLeft, Gamepad2, RefreshCw, Search,  } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +28,7 @@ import {
   useITGamesQuery,
 } from "@hooks/queries/useITGamesQuery";
 
+import { Spinner } from "@/components/ui/spinner";
 // 预设分类：与 GameUploadModal 的 PRESET_CATEGORIES 保持一致，
 // 确保 DB 为空时下拉仍能看到全部分类，方便浏览
 const PRESET_CATEGORIES = ["益智", "动作", "冒险", "模拟", "策略", "竞速", "工具", "其它"];
@@ -75,26 +70,26 @@ const GamesRepoPage: React.FC = () => {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
-            <ArrowLeft className="h-4 w-4 mr-1" />返回
+            <ArrowLeft className="h-4 w-4 mr-2xs" />返回
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-xs">
             <Gamepad2 className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold text-text">游戏资源库</h1>
+            <h1 className="text-lg font-semibold text-text-base">游戏资源库</h1>
           </div>
         </div>
         {/* 刷新按钮：给所有用户，纯刷新数据 */}
         <Button variant="outline" size="sm" disabled={listQuery.isFetching} onClick={() => void listQuery.refetch()}>
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+            <Spinner size="xs" className="mr-2xs" />
           ) : (
-            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            <RefreshCw className="h-3.5 w-3.5 mr-2xs" />
           )}
           刷新
         </Button>
       </div>
 
       {/* 筛选栏 */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-xs mb-4">
         <div className="relative flex-1 min-w-44 max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
           <Input
@@ -168,7 +163,7 @@ const GamesRepoPage: React.FC = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
               <span className="text-xs text-text-tertiary">共 {total} 个游戏</span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-xs">
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                   上一页
                 </Button>

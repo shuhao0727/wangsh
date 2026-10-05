@@ -27,7 +27,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   searchKeyword, selectedType, selectedRowKeys,
   onSearchChange, onSearch, onTypeChange, onReset, onBatchDelete, onAddAgent,
 }) => (
-  <div className="flex flex-wrap items-center gap-2 mb-4 ws-responsive-toolbar">
+  <div className="flex items-center gap-xs mb-4 ws-responsive-toolbar">
     <div className="relative w-[220px] max-w-full">
       <Input
         placeholder="搜索智能体..."

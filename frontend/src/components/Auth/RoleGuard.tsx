@@ -1,8 +1,9 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { Loader2, ShieldX } from "lucide-react";
+import { ShieldX } from "lucide-react";
 import useAuth from "@hooks/useAuth";
 import { canAccessRoles, type AppRole } from "./roleAccess";
+import { LoadingState } from "@/components/ui/loading-state";
 
 const RoleGuard: React.FC<{
   children: React.ReactNode;
@@ -14,7 +15,7 @@ const RoleGuard: React.FC<{
   if (auth.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-9 w-9 animate-spin text-primary" />
+        <LoadingState label="正在校验访问权限…" size="2xl" />
       </div>
     );
   }
@@ -29,7 +30,7 @@ const RoleGuard: React.FC<{
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <ShieldX className="mx-auto mb-4 h-16 w-16 text-error" />
-          <div className="mb-2 text-2xl font-bold text-text-base">权限不足</div>
+          <div className="mb-xs text-2xl font-bold text-text-base">权限不足</div>
           <div className="text-base text-text-secondary">当前角色无权访问此页面</div>
         </div>
       </div>

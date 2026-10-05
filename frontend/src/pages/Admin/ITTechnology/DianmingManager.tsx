@@ -1,6 +1,6 @@
 import { showMessage } from '@/lib/toast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 
 import { AdminTablePanel } from '@/components/Admin';
@@ -30,6 +30,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Spinner } from "@/components/ui/spinner";
 const formSchema = z.object({
   year: z.string().trim().min(1, '请输入年份，如 2024级'),
   class_name: z.string().trim().min(1, '请输入班级名称'),
@@ -194,7 +195,7 @@ const DianmingManager: React.FC = () => {
     <>
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4 flex flex-wrap justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-xs">
           <Input
             value={keyword}
             placeholder="搜索年份或班级名称..."
@@ -203,11 +204,16 @@ const DianmingManager: React.FC = () => {
               setKeyword(event.target.value);
               setPage(1);
             }}
+            clearable
+            onClear={() => {
+              setKeyword("");
+              setPage(1);
+            }}
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-xs">
           <Button type="button" variant="outline" onClick={() => void fetchData()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
             刷新
           </Button>
           <Button type="button" onClick={openCreateEditor}>
@@ -256,7 +262,7 @@ const DianmingManager: React.FC = () => {
                   <div className="truncate">{row.year}</div>
                   <div className="truncate">{row.class_name}</div>
                   <div>{row.count}</div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-xs">
                     <Button type="button" size="sm" variant="outline" onClick={() => openEditEditor(row)}>
                       <Pencil className="h-3.5 w-3.5" />
                       编辑
@@ -294,8 +300,8 @@ const DianmingManager: React.FC = () => {
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleImport)} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+            <form onSubmit={form.handleSubmit(handleImport)} className="space-y-form-field-gap">
+              <div className="grid gap-item-gap md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="year"
@@ -339,8 +345,8 @@ const DianmingManager: React.FC = () => {
                       />
                     </FormControl>
                     {formLoading ? (
-                      <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <div className="flex items-center gap-xs text-xs text-text-tertiary">
+                        <Spinner size="xs" />
                         正在加载班级名单...
                       </div>
                     ) : null}
@@ -349,12 +355,12 @@ const DianmingManager: React.FC = () => {
                 )}
               />
 
-              <DialogFooter className="gap-2 sm:gap-2">
+              <DialogFooter className="gap-button-gap">
                 <Button type="button" variant="outline" onClick={closeEditor}>
                   取消
                 </Button>
                 <Button type="submit" disabled={form.formState.isSubmitting || formLoading}>
-                  {form.formState.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {form.formState.isSubmitting ? <Spinner size="sm" /> : null}
                   保存
                 </Button>
               </DialogFooter>

@@ -2,7 +2,7 @@
  * 热点问题分析结果页 — 精简版：基本信息、核心图表、词云、LLM 总结
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, Hash, Info, Lightbulb, Link2, Loader2, Target, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, Hash, Info, Lightbulb, Link2, Target, Users } from "lucide-react";
 import * as echarts from "echarts";
 import "echarts-wordcloud";
 import SharedResultLayout from "./SharedResultLayout";
@@ -22,6 +22,7 @@ import {
 import { getAgentChartTheme } from "../components/chartTheme";
 import type { HotAnalysisAudit, HotDataQuality, HotDeepAnalysis, HotStudentQuestionEvent, TaskAnalysisResult, TopicItem, WordCloudItem } from "../types";
 
+import { Spinner } from "@/components/ui/spinner";
 type HotTimelineBucket = ReturnType<typeof normalizeTimelineBuckets>[number];
 type HotTimelineTeacherMark = ReturnType<typeof normalizeTimelineTeacherMarks>[number];
 type HotDiagnosisTheme = TopicItem & { diagnosis?: string; overall_bloom_level?: string };
@@ -127,7 +128,7 @@ const DataQualityPanel: React.FC<{
   ];
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-surface/90 p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface/90 p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -135,41 +136,41 @@ const DataQualityPanel: React.FC<{
           </span>
           <div>
             <h2 className="text-base font-semibold text-text-base">数据质量与统计口径</h2>
-            <p className="mt-1 text-xs leading-relaxed text-text-tertiary">
+            <p className="mt-2xs text-xs leading-relaxed text-text-tertiary">
               原始问题不会被删除；只有通过质量筛选的问题进入热点识别，避免把复制、重复或偏题消息直接当成学习困难。
             </p>
           </div>
         </div>
         {analysisVersion && (
-          <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">规则 {analysisVersion}</span>
+          <span className="rounded-full bg-primary-soft px-2.5 py-2xs text-xs font-semibold text-primary">规则 {analysisVersion}</span>
         )}
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-xs sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((card) => (
           <div key={card.label} className="rounded-xl border border-border-secondary bg-surface-2/70 px-3 py-2.5">
-            <div className="text-[11px] text-text-tertiary">{card.label}</div>
-            <div className="mt-1 text-xl font-bold tabular-nums text-text-base">{card.value}</div>
-            <div className="mt-0.5 text-[11px] text-text-tertiary">{card.hint}</div>
+            <div className="text-2xs text-text-tertiary">{card.label}</div>
+            <div className="mt-2xs text-xl font-bold tabular-nums text-text-base">{card.value}</div>
+            <div className="mt-0.5 text-2xs text-text-tertiary">{card.hint}</div>
           </div>
         ))}
       </div>
       {(noiseCount > 0 || offTrackCount > 0 || tooShortCount > 0) && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+        <div className="mt-3 flex flex-wrap items-center gap-xs text-xs text-text-secondary">
           <span className="font-medium text-text-base">噪声拆分：</span>
-          {noiseCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-2 py-1">噪声 {noiseCount}</span>}
-          {offTrackCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-2 py-1">偏离任务 {offTrackCount}</span>}
-          {tooShortCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-2 py-1">过短 {tooShortCount}</span>}
+          {noiseCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-xs py-2xs">噪声 {noiseCount}</span>}
+          {offTrackCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-xs py-2xs">偏离任务 {offTrackCount}</span>}
+          {tooShortCount > 0 && <span className="rounded-full border border-border-secondary bg-surface-2 px-xs py-2xs">过短 {tooShortCount}</span>}
         </div>
       )}
       {hasAudit ? (
         <div className="mt-4 rounded-xl border border-border-secondary bg-surface-2/40 p-3">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="mb-xs flex flex-wrap items-center justify-between gap-xs">
             <span className="text-xs font-semibold text-text-base">统计口径审计</span>
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${analysisAudit?.teacher_anchor_statistics_consistent === false || auditWarnings.length > 0 ? "border-warning/30 bg-warning-soft text-warning" : "border-primary/20 bg-primary-soft text-primary"}`}>
+            <span className={`rounded-full border px-xs py-0.5 text-2xs ${analysisAudit?.teacher_anchor_statistics_consistent === false || auditWarnings.length > 0 ? "border-warning/30 bg-warning-soft text-warning" : "border-primary/20 bg-primary-soft text-primary"}`}>
               {analysisAudit?.teacher_anchor_statistics_consistent === false || auditWarnings.length > 0 ? "需复核" : "自洽"}
             </span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-xs sm:grid-cols-2 lg:grid-cols-5">
             {[
               ["分析原始事件", analysisAudit?.raw_event_count],
               ["原始学生事件", analysisAudit?.raw_student_event_count],
@@ -178,22 +179,22 @@ const DataQualityPanel: React.FC<{
               ["锚点统计分母", analysisAudit?.teacher_anchor_denominator],
             ].map(([label, value]) => (
               <div key={String(label)}>
-                <div className="text-[10px] text-text-tertiary">{label}</div>
+                <div className="text-3xs text-text-tertiary">{label}</div>
                 <div className="mt-0.5 text-sm font-semibold tabular-nums text-text-base">{value == null ? "未记录" : String(value)}</div>
               </div>
             ))}
           </div>
-          <div className="mt-2 text-[11px] leading-relaxed text-text-tertiary">
+          <div className="mt-xs text-2xs leading-relaxed text-text-tertiary">
             教师锚点匹配 {analysisAudit?.teacher_anchor_match_count ?? "未记录"} 条，置信度统计 {analysisAudit?.teacher_anchor_confidence_total ?? "未记录"} 条；该关联是统计复盘线索，不代表因果关系。
           </div>
           {auditWarnings.length > 0 && (
-            <div className="mt-2 space-y-1 text-[11px] text-warning">
+            <div className="mt-xs space-y-2xs text-2xs text-warning">
               {auditWarnings.map((warning) => <div key={warning}>• {warningLabel[warning] || warning}</div>)}
             </div>
           )}
         </div>
       ) : (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
+        <div className="mt-4 flex items-start gap-xs rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>本记录未保存结构化统计口径审计信息；上方兼容展示可能来自旧字段或前端回退，不视为后端审计结论。建议重新生成 hot_v2。</span>
         </div>
@@ -225,20 +226,20 @@ const HotnessRankingPanel: React.FC<{ themes: HotDiagnosisTheme[]; analysisVersi
           </span>
           <div>
             <h2 className="text-base font-semibold text-text-base">热点形成解释</h2>
-            <p className="mt-1 text-xs leading-relaxed text-text-tertiary">
+            <p className="mt-2xs text-xs leading-relaxed text-text-tertiary">
               当前记录识别到了主题，但没有保存可解释热点分数，不能把“提问次数多”直接解释为“学习困难严重”。
             </p>
           </div>
           {analysisVersion && (
-            <span className="ml-auto rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">规则 {analysisVersion}</span>
+            <span className="ml-auto rounded-full bg-warning-soft px-2.5 py-2xs text-xs font-semibold text-warning">规则 {analysisVersion}</span>
           )}
         </div>
-        <div className="rounded-xl border border-warning/20 bg-warning-soft/50 px-3 py-2.5 text-xs leading-relaxed text-warning">
+        <div className="rounded-xl border border-warning/20 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
           这是旧记录或不完整结果：下面只保留主题和问题数量作为原始证据，不参与热点困难度排序。请重新生成分析后查看“共性覆盖、困难信号、持续性”三项评分。
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-xs">
           {themes.slice(0, 8).map((theme, index) => (
-            <span key={`${theme.topic}-${index}`} className="rounded-full border border-border-secondary bg-surface-2 px-2.5 py-1 text-xs text-text-secondary">
+            <span key={`${theme.topic}-${index}`} className="rounded-full border border-border-secondary bg-surface-2 px-2.5 py-2xs text-xs text-text-secondary">
               {theme.topic} · {theme.count || 0} 问
             </span>
           ))}
@@ -254,19 +255,19 @@ const HotnessRankingPanel: React.FC<{ themes: HotDiagnosisTheme[]; analysisVersi
   ] as const;
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-surface/90 p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface/90 p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
           <Target className="h-4 w-4" />
         </span>
         <div>
           <h2 className="text-base font-semibold text-text-base">热点形成解释</h2>
-          <p className="mt-1 text-xs leading-relaxed text-text-tertiary">
+          <p className="mt-2xs text-xs leading-relaxed text-text-tertiary">
             排名不是“提问越多就越困难”，而是综合共性覆盖、困难信号和持续性；分数用于确定性排序，不等同于真实学习困难。
           </p>
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-xs">
         {rankedThemes.map((theme, index) => {
           const components = theme.hotness_components || {};
           return (
@@ -274,33 +275,33 @@ const HotnessRankingPanel: React.FC<{ themes: HotDiagnosisTheme[]; analysisVersi
               <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-xs font-bold text-primary">{index + 1}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-xs">
                     <span className="truncate text-sm font-semibold text-text-base">{theme.topic}</span>
-                    {theme.heat_profile && <span className="rounded-full border border-primary/15 bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">{theme.heat_profile}</span>}
+                    {theme.heat_profile && <span className="rounded-full border border-primary/15 bg-primary-soft px-xs py-0.5 text-2xs font-medium text-primary">{theme.heat_profile}</span>}
                   </div>
-                  <div className="mt-1 text-[11px] text-text-tertiary">{theme.count || 0} 个问题 · {theme.unique_students || 0} 位有效学生</div>
+                  <div className="mt-2xs text-2xs text-text-tertiary">{theme.count || 0} 个问题 · {theme.unique_students || 0} 位有效学生</div>
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-lg font-bold tabular-nums text-primary">{scoreText(theme.hotness_score)}</div>
-                  <div className="text-[10px] text-text-tertiary">热点分 / 100</div>
+                  <div className="text-3xs text-text-tertiary">热点分 / 100</div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-text-tertiary transition-transform group-open:rotate-90" />
               </summary>
               <div className="border-t border-border-secondary px-3 pb-3 pt-3">
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid gap-xs md:grid-cols-3">
                   {componentDefinitions.map((definition) => {
                     const component = components[definition.key];
                     const signal = component?.score ?? definition.fallback(theme);
                     return (
-                      <div key={definition.key} className="rounded-lg border border-border-secondary bg-surface/80 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2 text-xs">
+                      <div key={definition.key} className="rounded-lg border border-border-secondary bg-surface/80 px-3 py-xs">
+                        <div className="flex items-center justify-between gap-xs text-xs">
                           <span className="font-medium text-text-base">{definition.label}</span>
                           <span className="font-semibold text-primary">{signalPercent(signal)}</span>
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-primary-soft">
                           <div className="h-full rounded-full bg-primary" style={{ width: signalPercent(signal) }} />
                         </div>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-text-tertiary">
+                        <div className="mt-2xs flex items-center justify-between gap-xs text-3xs text-text-tertiary">
                           <span>{definition.hint}</span>
                           <span>贡献 {scoreText(component?.contribution)} 分</span>
                         </div>
@@ -309,12 +310,12 @@ const HotnessRankingPanel: React.FC<{ themes: HotDiagnosisTheme[]; analysisVersi
                   })}
                 </div>
                 {theme.hotness_explanation && theme.hotness_explanation.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-xs leading-relaxed text-text-secondary">
+                  <ul className="mt-3 space-y-2xs text-xs leading-relaxed text-text-secondary">
                     {theme.hotness_explanation.slice(0, 3).map((explanation) => <li key={explanation}>· {explanation}</li>)}
                   </ul>
                 )}
                 {theme.score_basis && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/10 bg-primary-soft/20 px-3 py-2 text-[11px] leading-relaxed text-text-tertiary">
+                  <div className="mt-3 flex items-start gap-xs rounded-lg border border-primary/10 bg-primary-soft px-3 py-xs text-2xs leading-relaxed text-text-tertiary">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                     <span>{theme.score_basis}</span>
                   </div>
@@ -377,7 +378,7 @@ const TeacherAnchorEvidencePanel: React.FC<{
   if (events.length === 0 && matchedCount === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-surface/90 p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface/90 p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -385,59 +386,59 @@ const TeacherAnchorEvidencePanel: React.FC<{
           </span>
           <div>
             <h2 className="text-base font-semibold text-text-base">教师提问关联证据</h2>
-            <p className="mt-1 text-xs leading-relaxed text-text-tertiary">
+            <p className="mt-2xs text-xs leading-relaxed text-text-tertiary">
               关联用于定位“哪个教学区间值得复盘”，不是教师提问导致学生困难的因果证明。
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={`rounded-full border px-2.5 py-1 text-text-secondary ${coverageDataInconsistent ? "border-warning/30 bg-warning-soft text-warning" : "border-border-secondary bg-surface-2"}`}>
+        <div className="flex flex-wrap items-center gap-xs text-xs">
+          <span className={`rounded-full border px-2.5 py-2xs text-text-secondary ${coverageDataInconsistent ? "border-warning/30 bg-warning-soft text-warning" : "border-border-secondary bg-surface-2"}`}>
             覆盖 {coverage == null ? "未记录" : `${Math.round(coverage * 100)}%`}
           </span>
-          <span className="rounded-full border border-border-secondary bg-surface-2 px-2.5 py-1 text-text-secondary">匹配 {matchedCount} 条</span>
-          {lowConfidenceCount > 0 && <span className="rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 font-medium text-warning">低置信度 {lowConfidenceCount}</span>}
-          {confidenceDataMissing && <span className="rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 font-medium text-warning">置信度 未知</span>}
+          <span className="rounded-full border border-border-secondary bg-surface-2 px-2.5 py-2xs text-text-secondary">匹配 {matchedCount} 条</span>
+          {lowConfidenceCount > 0 && <span className="rounded-full border border-warning/30 bg-warning-soft px-2.5 py-2xs font-medium text-warning">低置信度 {lowConfidenceCount}</span>}
+          {confidenceDataMissing && <span className="rounded-full border border-warning/30 bg-warning-soft px-2.5 py-2xs font-medium text-warning">置信度 未知</span>}
         </div>
       </div>
       {lowConfidenceCount > 0 && (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
+        <div className="mb-3 flex items-start gap-xs rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>低置信度关联必须回到学生原话和证据索引复核；页面不会把它渲染成“教师提问引发了困难”的确定结论。</span>
         </div>
       )}
       {confidenceDataMissing && (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
+        <div className="mb-3 flex items-start gap-xs rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>该记录没有保存教师关联置信度分布；“未知”不代表高或低，当前匹配只能作为复盘线索，需回到证据索引人工复核。</span>
         </div>
       )}
       {coverageDataInconsistent && (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
+        <div className="mb-3 flex items-start gap-xs rounded-xl border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-relaxed text-warning">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>该记录的匹配条数与覆盖率字段不一致；页面不自动把它推算成可靠比例，请重新生成分析或核对原始证据。</span>
         </div>
       )}
-      <div className="space-y-2">
+      <div className="space-y-xs">
         {events.map((event, index) => {
           const confidence = event.teacher_anchor_confidence || "unknown";
           const question = String(event.content || event.question || "").trim();
           const reasons = (event.teacher_anchor_reason || []).filter(Boolean);
           return (
             <div key={`${event.message_id || event.created_at || "anchor"}-${index}`} className="rounded-xl border border-border-secondary bg-surface-2/50 p-3">
-              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <div className="flex flex-wrap items-center gap-xs text-2xs">
                 <span className="text-text-tertiary">学生原话</span>
                 {event.created_at && <span className="text-text-tertiary">{dayjs(event.created_at).format("HH:mm:ss")}</span>}
-                {event.theme && <span className="rounded-full bg-primary-soft px-2 py-0.5 text-primary">{event.theme}</span>}
-                <span className={`rounded-full border px-2 py-0.5 font-medium ${confidenceClass(confidence)}`}>置信度 {confidenceLabel(confidence)}</span>
+                {event.theme && <span className="rounded-full bg-primary-soft px-xs py-0.5 text-primary">{event.theme}</span>}
+                <span className={`rounded-full border px-xs py-0.5 font-medium ${confidenceClass(confidence)}`}>置信度 {confidenceLabel(confidence)}</span>
               </div>
               <p className="mt-1.5 text-sm leading-relaxed text-text-base">{question || "未保存学生原话"}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-secondary">
+              <div className="mt-xs flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-text-secondary">
                 <span>教师关联：{shortText(event.teacher_anchor_question || "未匹配", 54)}</span>
                 <span>匹配方式：{matchTypeLabel(event.teacher_anchor_match_type)}</span>
                 {event.teacher_anchor_score != null && <span>分数：{signalPercent(event.teacher_anchor_score)}</span>}
                 <span>{formatTriggerDelay(event.trigger_delay_seconds)}</span>
               </div>
-              {reasons.length > 0 && <div className="mt-1 text-[11px] text-text-tertiary">依据：{reasons.join("、")}</div>}
+              {reasons.length > 0 && <div className="mt-2xs text-2xs text-text-tertiary">依据：{reasons.join("、")}</div>}
             </div>
           );
         })}
@@ -468,11 +469,11 @@ const BasicInfoBar: React.FC<{
   ];
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-surface/90 p-4 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface/90 p-4 shadow-sm">
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-5">
         {items.map((item) => (
           <div key={item.label}>
-            <div className="text-[11px] text-text-tertiary">{item.label}</div>
+            <div className="text-2xs text-text-tertiary">{item.label}</div>
             <div className="mt-0.5 truncate text-sm font-medium text-text-base">{item.value}</div>
           </div>
         ))}
@@ -779,7 +780,7 @@ const HotCoreChart: React.FC<{
   }, []);
 
   if (!hasTimeline && rankedThemes.length === 0) {
-    return <section className="rounded-2xl border border-dashed border-border-secondary bg-surface/80 p-6 text-center text-sm text-text-tertiary">暂无课堂数据</section>;
+    return <section className="rounded-2xl border border-dashed border-border-secondary bg-surface/80 p-panel-padding text-center text-sm text-text-tertiary">暂无课堂数据</section>;
   }
 
   return (
@@ -787,18 +788,18 @@ const HotCoreChart: React.FC<{
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-text-base">课堂提问时序分析</h2>
-          <p className="mt-1 text-xs text-text-tertiary">
+          <p className="mt-2xs text-xs text-text-tertiary">
             {hasTimeline ? "教师提问作为时间/语义锚点用于复盘定位；柱状图为学生提问分布，曲线为提问趋势，不代表因果关系。" : "按可解释热点分数排序，直观看出哪些主题值得优先复核。"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-xs">
           {hasTimeline && (
             <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5">
               {BUCKET_OPTIONS.map((m) => (
                 <button
                   key={m}
                   onClick={() => setBucketMin(m)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-md px-2.5 py-2xs text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     bucketMin === m
                       ? "bg-primary text-white shadow-sm"
                       : "text-text-secondary hover:text-text-base"
@@ -809,14 +810,14 @@ const HotCoreChart: React.FC<{
               ))}
             </div>
           )}
-          <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">
+          <span className="rounded-full bg-primary-soft px-2.5 py-2xs text-xs font-semibold text-primary">
             {hasTimeline ? `${timeline.length} 桶` : `Top ${rankedThemes.length}`}
           </span>
         </div>
       </div>
       <div ref={ref} className="h-[400px] w-full" aria-label="课堂提问时序分析图表" />
       {/* 底部统计摘要 */}
-      <div className="mt-3 grid gap-2 rounded-xl border border-primary/10 bg-primary-soft/20 p-2 text-sm sm:grid-cols-5">
+      <div className="mt-3 grid gap-xs rounded-xl border border-primary/10 bg-primary-soft p-xs text-sm sm:grid-cols-5">
         {[
           { label: "全程问题数", value: `${totalQuestions || 0} 次` },
           { label: "生成性问题", value: totalGenerative > 0 ? `${totalGenerative} 次` : "—" },
@@ -824,8 +825,8 @@ const HotCoreChart: React.FC<{
           { label: "热点脉冲", value: `${totalBursts || 0} 个` },
           { label: hasTimeline ? "教师锚点" : "热点主题", value: hasTimeline ? `${teacherMarks.length} 个` : `${rankedThemes.length} 个` },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg border border-border-secondary bg-surface/85 px-3 py-2">
-            <div className="text-[11px] text-text-tertiary">{s.label}</div>
+          <div key={s.label} className="rounded-lg border border-border-secondary bg-surface/85 px-3 py-xs">
+            <div className="text-2xs text-text-tertiary">{s.label}</div>
             <div className="mt-0.5 text-lg font-semibold text-primary">{s.value}</div>
           </div>
         ))}
@@ -895,11 +896,11 @@ const LLMSummary: React.FC<{
   if (!executive && suggestions.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-border/70 bg-surface/90 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface/90 shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-5 py-4 text-left"
+        className="flex w-full items-center gap-xs px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {open ? <ChevronDown className="h-4 w-4 text-text-tertiary" /> : <ChevronRight className="h-4 w-4 text-text-tertiary" />}
         <h2 className="text-base font-semibold text-text-base">LLM 教学建议</h2>
@@ -908,15 +909,15 @@ const LLMSummary: React.FC<{
         </span>
       </button>
       {open && (
-        <div className="border-t border-border-secondary px-5 pb-5 pt-4 space-y-4">
+        <div className="border-t border-border-secondary px-5 pb-5 pt-4 space-y-item-gap">
           {executive && (
-            <div className="rounded-xl bg-primary-soft/30 px-4 py-3">
-              <div className="mb-1 text-xs font-semibold text-primary">总体摘要</div>
+            <div className="rounded-xl bg-primary-soft px-4 py-3">
+              <div className="mb-2xs text-xs font-semibold text-primary">总体摘要</div>
               <p className="text-sm leading-relaxed text-text-secondary">{executive}</p>
             </div>
           )}
           {suggestions.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-xs">
               {suggestions.map((item, index) => {
                 // 兼容 deep suggestions 和普通 suggestions 的不同字段
                 const action = (item as any).suggested_action || (item as any).suggestion || "";
@@ -925,8 +926,8 @@ const LLMSummary: React.FC<{
                 const observation = (item as any).observation || (item as any).reason || "";
                 return (
                   <div key={`sug-${index}`} className="rounded-xl border border-border-secondary bg-surface-2/70 p-3">
-                    <div className="flex items-center gap-2 text-xs">
-                      {priority && <span className="rounded-full bg-primary-soft px-2 py-0.5 font-semibold text-primary">{priority}</span>}
+                    <div className="flex items-center gap-xs text-xs">
+                      {priority && <span className="rounded-full bg-primary-soft px-xs py-0.5 font-semibold text-primary">{priority}</span>}
                       {category && <span className="text-text-tertiary">{category}</span>}
                     </div>
                     {observation && <p className="mt-1.5 text-xs text-text-tertiary">{observation}</p>}
@@ -1043,18 +1044,18 @@ const HotAnalysisResultPage: React.FC = () => {
     ];
   }, [detail, wc, covered, uncovered]);
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center"><Spinner size="xl" className="text-primary" /></div>;
   if (!detail) return <div className="flex min-h-screen items-center justify-center text-sm text-text-tertiary">记录不存在</div>;
 
   const summaryCards = (
-    <div className="flex items-center gap-6 rounded-xl border border-border/50 bg-surface/80 px-5 py-3">
+    <div className="flex items-center gap-6 rounded-xl border border-border-secondary bg-surface/80 px-5 py-3">
       {[
         { icon: <Hash className="h-3.5 w-3.5" />, label: "学生提问", value: hotQuestionCount || 0 },
         { icon: <Users className="h-3.5 w-3.5" />, label: "参与学生", value: hotStudentCount || 0 },
         { icon: <Lightbulb className="h-3.5 w-3.5" />, label: "教师提问", value: teacherQuestions.length },
         { icon: <Target className="h-3.5 w-3.5" />, label: "热点脉冲", value: burstCount || 0 },
       ].map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
+        <div key={item.label} className="flex items-center gap-xs">
           <span className="text-primary">{item.icon}</span>
           <span className="text-xs text-text-tertiary">{item.label}</span>
           <span className="text-base font-bold tabular-nums text-text-base">{item.value}</span>
@@ -1098,13 +1099,13 @@ const HotAnalysisResultPage: React.FC = () => {
         />
 
         {/* 3. Word Cloud */}
-        <section className="rounded-2xl border border-border/70 bg-surface/90 p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-surface/90 p-5 shadow-sm">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-text-base">学生关注点词云</h2>
-              <p className="mt-1 text-xs text-text-tertiary">词越大，代表学生关注度越高，需回到原问确认是否为全班共性问题。</p>
+              <p className="mt-2xs text-xs text-text-tertiary">词越大，代表学生关注度越高，需回到原问确认是否为全班共性问题。</p>
             </div>
-            <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">{wc.length} 词</span>
+            <span className="rounded-full bg-primary-soft px-2.5 py-2xs text-xs font-semibold text-primary">{wc.length} 词</span>
           </div>
           <WordCloudChart data={wc} />
         </section>

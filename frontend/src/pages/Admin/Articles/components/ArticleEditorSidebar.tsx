@@ -61,7 +61,7 @@ export default function ArticleEditorSidebar({
                 control={control}
                 name="published"
                 render={({ field }) => (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
+                  <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-xs">
                     <span className="text-sm text-text-secondary">
                       {field.value ? "发布" : "草稿"}
                     </span>
@@ -113,7 +113,7 @@ export default function ArticleEditorSidebar({
               placeholder="请输入文章摘要"
               {...register("summary")}
             />
-            <div className="mt-1 flex items-center justify-between">
+            <div className="mt-2xs flex items-center justify-between">
               {errors.summary?.message ? (
                 <p className="article-form-error">{String(errors.summary.message)}</p>
               ) : (

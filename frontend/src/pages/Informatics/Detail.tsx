@@ -1,7 +1,8 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams } from "react-router-dom";
 import { publicTypstNotesApi } from "@services";
@@ -109,9 +110,9 @@ const InformaticsDetailPage: React.FC = () => {
 
       <div className="informatics-content">
         {loading ? (
-          <div className="text-center p-8">
-            <Loader2 className="mx-auto h-7 w-7 animate-spin text-primary" />
-          </div>
+          /* 原为无 aria 的裸 Loader2；LoadingState 自带 role="status" + 可访问名称。
+             尺寸 xl(=h-8) 与原 h-7 视觉接近。 */
+          <LoadingState label="正在加载笔记…" size="1.5x" className="py-panel-padding" />
         ) : (
           <PanelCard>
             {note?.summary ? (
@@ -126,7 +127,7 @@ const InformaticsDetailPage: React.FC = () => {
             </div>
             {note?.toc?.length ? (
               <Card className="mb-3 rounded-xl border-border bg-surface-2">
-                <CardHeader className="pb-2 pt-3">
+                <CardHeader className="pb-xs pt-3">
                   <CardTitle className="text-sm font-semibold">目录</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -146,9 +147,7 @@ const InformaticsDetailPage: React.FC = () => {
               style={{ userSelect: "none", WebkitUserSelect: "none" } as any}
             >
               {pdfLoading ? (
-                <div className="text-center p-6">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
-                </div>
+                <LoadingState label="正在加载 PDF…" size="md" className="py-panel-padding" />
               ) : null}
               <PdfCanvasVirtualViewer data={pdfData} />
             </div>

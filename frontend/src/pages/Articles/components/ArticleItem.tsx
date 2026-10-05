@@ -22,7 +22,7 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
       onClick={() => slug && onClick(slug)}
       className="group px-3 py-3 rounded-lg cursor-pointer article-item-hover border-b"
     >
-      <div className="font-semibold text-sm leading-snug mb-1 text-text-base">
+      <div className="font-semibold text-sm leading-snug mb-2xs text-text-base">
         {title}
       </div>
       <div className="flex items-center gap-3">
@@ -31,9 +31,9 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
             {summary}
           </div>
         )}
-        <div className="flex items-center gap-2 flex-shrink-0 text-xs text-text-tertiary">
+        <div className="flex items-center gap-xs flex-shrink-0 text-xs text-text-tertiary">
           {date && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-2xs">
               <Calendar className="h-3 w-3" />{date}
             </span>
           )}

@@ -48,8 +48,8 @@ const HomePage: React.FC = () => {
 
       {/* Main content */}
       <div className="relative z-10 w-full min-w-0 text-center px-6 max-w-2xl mx-auto flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-white/10 backdrop-blur text-white/80 text-sm">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+        <div className="inline-flex items-center gap-xs mb-6 px-4 py-xs rounded-full bg-white/10 backdrop-blur text-white/80 text-sm">
+          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
           探索 · 学习 · 创造
         </div>
 
@@ -60,7 +60,7 @@ const HomePage: React.FC = () => {
         {auth.isLoggedIn() ? (
           <div className="text-white/70 text-lg mb-8">
             {greeting}，{auth.getDisplayName() || "同学"}
-            {roleLabel && <Badge variant="outline" className="ml-2 text-white/80 border-white/30">{roleLabel}</Badge>}
+            {roleLabel && <Badge variant="outline" className="ml-xs text-white/80 border-white/30">{roleLabel}</Badge>}
           </div>
         ) : (
           <p className="text-white/60 text-lg mb-8 max-w-lg leading-relaxed">
@@ -69,14 +69,14 @@ const HomePage: React.FC = () => {
         )}
 
         {/* Module pills */}
-        <div className="flex w-full flex-wrap items-center justify-center gap-2 mb-10">
+        <div className="flex w-full flex-wrap items-center justify-center gap-xs mb-10">
           {MODULES.map((mod) => {
             const Icon = mod.icon;
             return (
               <button
                 key={mod.id}
                 onClick={() => navigate(mod.path)}
-                className="home-hero-module-pill"
+                className="home-hero-module-pill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Icon className="h-3.5 w-3.5" style={{ color: mod.color }} />
                 {mod.title}
@@ -93,7 +93,7 @@ const HomePage: React.FC = () => {
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="home-hero-tool-link"
+              className="home-hero-tool-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <link.icon className="h-5 w-5" style={{ color: link.color }} />
               {link.title}

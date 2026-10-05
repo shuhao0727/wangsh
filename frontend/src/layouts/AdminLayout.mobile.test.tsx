@@ -49,7 +49,12 @@ const openMobile = (container: HTMLElement) => {
   expect(overlay(container)).toBeDefined();
 };
 
-beforeEach(() => { viewport.md = false; });
+beforeEach(() => {
+  viewport.md = false;
+  // AdminLayout 会把用户手动选择的折叠状态持久化到 localStorage。
+  // 用例间必须清理，否则"点击折叠侧栏"的用例会污染后续用例的初始态。
+  window.localStorage.clear();
+});
 afterEach(cleanup);
 
 describe("AdminLayout mobile sidebar", () => {

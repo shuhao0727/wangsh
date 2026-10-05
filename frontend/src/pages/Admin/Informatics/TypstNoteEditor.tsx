@@ -584,7 +584,7 @@ const TypstNoteEditorInner: React.FC<{
   const renderPreviewCanvas = () => (
     <div className="typst-preview-box">
       {renderLoading ? (
-        <div className="flex items-center justify-center p-6">
+        <div className="flex items-center justify-center p-panel-padding">
           <RefreshCw className="h-5 w-5 animate-spin text-text-tertiary" />
         </div>
       ) : null}
@@ -601,7 +601,7 @@ const TypstNoteEditorInner: React.FC<{
       <PdfCanvasVirtualViewer data={previewPdfData} />
       {!renderLoading && !renderError && !previewPdfData ? (
         <div className="p-3">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-xs">
             <span className="text-sm text-text-tertiary">暂无预览</span>
             <Button variant="outline" onClick={() => queuePreviewRefresh(note?.id, { force: true })} disabled={!note?.id}>
               <RefreshCw className="h-4 w-4" /> 刷新预览
@@ -687,10 +687,10 @@ const TypstNoteEditorInner: React.FC<{
                           <button
                             type="button"
                             className={cn(
-                              "rounded px-2.5 py-1 text-xs transition-colors",
+                              "rounded px-2.5 py-2xs text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                               viewMode === "split"
-                                ? "bg-surface text-text shadow-sm"
-                                : "text-text-tertiary hover:text-text",
+                                ? "bg-surface text-text-base shadow-sm"
+                                : "text-text-tertiary hover:text-text-base",
                             )}
                             onClick={() => switchViewMode("split")}
                           >
@@ -700,10 +700,10 @@ const TypstNoteEditorInner: React.FC<{
                         <button
                           type="button"
                           className={cn(
-                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            "rounded px-2.5 py-2xs text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             viewMode === "edit"
-                              ? "bg-surface text-text shadow-sm"
-                              : "text-text-tertiary hover:text-text",
+                              ? "bg-surface text-text-base shadow-sm"
+                              : "text-text-tertiary hover:text-text-base",
                           )}
                           onClick={() => switchViewMode("edit")}
                         >
@@ -712,10 +712,10 @@ const TypstNoteEditorInner: React.FC<{
                         <button
                           type="button"
                           className={cn(
-                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            "rounded px-2.5 py-2xs text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             viewMode === "preview"
-                              ? "bg-surface text-text shadow-sm"
-                              : "text-text-tertiary hover:text-text",
+                              ? "bg-surface text-text-base shadow-sm"
+                              : "text-text-tertiary hover:text-text-base",
                           )}
                           onClick={() => switchViewMode("preview")}
                         >
@@ -750,11 +750,11 @@ const TypstNoteEditorInner: React.FC<{
 
             <div className="typst-editor-card typst-card typst-editor-footer">
               <div className="typst-card-body">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-xs">
                   <Button variant="outline" onClick={onBack}>
                     返回列表
                   </Button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-xs">
                     <Button
                       variant="outline"
                       onClick={() => queuePreviewRefresh(note?.id, { force: true })}
@@ -789,7 +789,7 @@ const TypstNoteEditorInner: React.FC<{
           <Button variant="outline" onClick={refreshCategories}>
             <RefreshCw className="h-4 w-4" /> 刷新
           </Button>
-          <div className="flex gap-2">
+          <div className="flex gap-xs">
             <Input value={newCategoryPath} onChange={(e) => setNewCategoryPath(e.target.value)} placeholder="例如：竞赛/CSP/基础" />
             <Button
               onClick={async () => {
@@ -812,7 +812,7 @@ const TypstNoteEditorInner: React.FC<{
         </div>
         <div className="flex flex-col gap-2.5">
           {categoryDrafts.map((c, idx) => (
-            <div key={c.id} className="flex gap-2 items-center">
+            <div key={c.id} className="flex gap-xs items-center">
               <Input
                 value={c.path}
                 onChange={(e) =>

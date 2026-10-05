@@ -81,14 +81,14 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
 
   return (
     <div className="article-editor-card rounded-lg border border-border-secondary bg-surface">
-      <div className="flex items-center gap-2 border-b border-border-secondary px-3 py-2">
+      <div className="flex items-center gap-xs border-b border-border-secondary px-3 py-xs">
         <Pencil className="h-4 w-4 text-primary" />
         <span className="text-text-base font-semibold">编辑</span>
       </div>
 
       <div className="article-editor-toolbar">
         <span className="article-editor-toolbar-label text-text-tertiary">快捷工具</span>
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-2xs">
           {tools.map((tool, index) => (
             <Tooltip key={index}>
               <TooltipTrigger asChild>
@@ -116,17 +116,18 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
                 type="button"
                 onClick={() => onViewModeChange(item.value)}
                 className={cn(
-                  "rounded px-2.5 py-1 text-xs transition-colors",
+                  "rounded px-2.5 py-2xs text-xs transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   viewMode === item.value
-                    ? "bg-surface text-text shadow-sm"
-                    : "text-text-tertiary hover:text-text",
+                    ? "bg-surface text-text-base shadow-sm"
+                    : "text-text-tertiary hover:text-text-base",
                 )}
               >
                 {item.label}
               </button>
             ))}
         </div>
-        <Badge variant="warning" className="text-[11px]">Markdown</Badge>
+        <Badge variant="warning" className="text-2xs">Markdown</Badge>
       </div>
 
       <div className="article-editor-body">
@@ -139,15 +140,15 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
           }
         />
         {errors.content?.message ? (
-          <p className="mt-2 text-xs text-destructive">{String(errors.content.message)}</p>
+          <p className="mt-xs text-xs text-destructive">{String(errors.content.message)}</p>
         ) : null}
       </div>
 
       <div className="article-editor-footer">
-        <Badge variant="info" className="text-[11px]">
+        <Badge variant="info" className="text-2xs">
           <BarChart2 className="mr-0.5 inline h-3 w-3" /> 字数: {content.length} 字符
         </Badge>
-        <Badge variant="success" className="text-[11px]">
+        <Badge variant="success" className="text-2xs">
           <Clock className="mr-0.5 inline h-3 w-3" /> 预计 {estimatedMinutes} 分钟阅读
         </Badge>
       </div>

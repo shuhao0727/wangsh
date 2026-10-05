@@ -128,8 +128,8 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
   if (!runtimeAvailable) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-surface">
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-          <Button variant="ghost" size="sm" onClick={onBack} className="h-7 gap-1 text-xs">
+        <div className="flex shrink-0 items-center gap-xs border-b border-border px-3 py-1.5">
+          <Button variant="ghost" size="sm" onClick={onBack} className="h-7 gap-2xs text-xs">
             <ArrowLeft className="h-3.5 w-3.5" />返回
           </Button>
           <span className="text-sm font-medium">{title}</span>
@@ -146,20 +146,20 @@ const MindMapEditorLib: React.FC<Props> = ({ mindmapId, initialTitle, initialMar
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "#fff", display: "flex", flexDirection: "column" }}>
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
-        <Button variant="ghost" size="sm" onClick={onBack} className="h-7 text-xs gap-1">
+      <div className="flex shrink-0 items-center gap-xs border-b border-border bg-surface px-3 py-1.5">
+        <Button variant="ghost" size="sm" onClick={onBack} className="h-7 text-xs gap-2xs">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <Input value={title} onChange={(e) => setTitle(e.target.value)}
-          className="h-7 w-36 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-1" />
-        <span className="text-[10px] text-text-tertiary">Ctrl+S 保存</span>
-        <div className="ml-auto flex items-center gap-1">
+          className="h-7 w-36 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-2xs" />
+        <span className="text-3xs text-text-tertiary">Ctrl+S 保存</span>
+        <div className="ml-auto flex items-center gap-2xs">
           <a href="/mindmap-demo/index.html" target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-2xs">
               <ExternalLink className="h-3 w-3" />新窗口
             </Button>
           </a>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-1">
+          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-2xs">
             <Save className="h-3 w-3" />{saving ? "..." : "保存"}
           </Button>
         </div>

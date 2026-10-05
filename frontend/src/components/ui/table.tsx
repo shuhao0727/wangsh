@@ -86,7 +86,7 @@ const TableRow = React.forwardRef<
       className={cn(
         "border-b border-border-secondary transition-colors hover:bg-surface-2 data-[state=selected]:bg-surface-2",
         isInteractive &&
-          "cursor-pointer focus-visible:outline-none focus-visible:bg-primary-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ws-color-focus-ring)]",
+          "cursor-pointer focus-visible:outline-none focus-visible:bg-primary-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         className
       )}
       {...props}

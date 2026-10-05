@@ -56,7 +56,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       className={`flex flex-col items-center justify-center py-12 px-4 ${className}`}
     >
       <div className="mb-3">{icon ?? d.icon}</div>
-      <div className="text-sm font-medium text-text-secondary mb-1">{title ?? d.title}</div>
+      <div className="text-sm font-medium text-text-secondary mb-2xs">{title ?? d.title}</div>
       <div className="text-xs text-text-tertiary mb-4">{description ?? d.description}</div>
       {actionLabel && onAction && (
         <div className="mb-3">

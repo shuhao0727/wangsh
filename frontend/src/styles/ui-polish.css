@@ -1,54 +1,24 @@
 /* ============================================
- * UI Polish — 全局组件微调
- * 风格：无阴影、无边框、无缝融合
+ * UI Polish — 组件级工具类
+ * ============================================
+ * 只承载「已被调用方使用、但无法用 Tailwind 工具类一次表达」的少量语义类。
+ * 不再承担页面级/响应式职责（那些已归 index.css 与 responsive-audit.css）。
+ *
+ * 本轮清理（消除与 index.css / responsive-audit.css 的重叠）：
+ *   - html, body 背景     → 与 index.css body 重复，删除
+ *   - .ws-admin-page 内边距 → 与 responsive-audit.css 冲突，统一到后者
+ *   - .ws-admin-page 的 576/430 断点 → 同上，删除
+ *   - @keyframes ws-fade-in / ws-fade-in-up 与 .ws-animate-in
+ *                          → tailwind.config.js 已提供同名 animate-ws-fade-in(-up)，
+ *                            且 .ws-animate-in 零调用，删除
+ *   - .ws-page-card / .ws-stat-card / .ws-section-alt / .ws-table-header /
+ *     .ws-empty-state / .ws-accent-strip / .ws-modal-loading → 全仓零引用，删除
+ *
+ * 约定：与 Tailwind 同权重时依赖「本文件在 index.css 之后导入」取胜，
+ * 不使用 !important。本文件必须保持在 src/index.tsx 中 index.css 之后导入。
  * ============================================ */
 
-html, body {
-  background: var(--ws-color-bg);
-}
-
-/* Admin 页面容器 */
-.ws-admin-page {
-  padding: var(--ws-panel-padding);
-}
-
-@media (max-width: 768px) {
-  .ws-admin-page {
-    padding: var(--ws-panel-padding-sm);
-  }
-}
-
-.ws-page-card {
-  margin-bottom: var(--ws-space-3);
-}
-
-/* 全局动画 */
-@keyframes ws-fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes ws-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.ws-animate-in {
-  animation: ws-fade-in-up 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-/* Modal 内部工具类 */
-.ws-modal-loading {
-  padding: var(--ws-space-5) 0;
-  text-align: center;
-}
-
+/* Modal 内文案 */
 .ws-modal-hint {
   color: var(--ws-color-text-secondary);
   font-size: var(--ws-text-sm);
@@ -64,69 +34,14 @@ html, body {
   font-size: var(--ws-text-sm);
 }
 
-/* 分析弹窗统计卡片 */
-.ws-stat-card {
-  background: var(--ws-color-surface-2);
-  border-radius: var(--ws-radius-md);
-  border: none;
-}
-
 .ws-section-title {
   display: block;
   margin-bottom: var(--ws-space-2);
 }
 
-/* ── 色彩层次增强工具 ── */
-
-/* Section 背景交替 */
-.ws-section-alt {
-  background: var(--ws-color-surface-2);
-}
-
-/* 表格表头 */
-.ws-table-header {
-  background: var(--ws-color-primary-muted);
-}
-.ws-table-header th {
-  color: var(--ws-color-primary);
-  font-weight: 600;
-}
-
-/* 空状态 */
-.ws-empty-state {
-  background: var(--ws-color-primary-muted);
-  border: 2px dashed var(--ws-color-accent);
-  border-radius: var(--ws-radius-lg);
-}
-
-/* 卡片左侧彩色点缀条 */
-.ws-accent-strip {
-  position: relative;
-  overflow: hidden;
-}
-.ws-accent-strip::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--ws-gradient-primary);
-  opacity: 0.85;
-}
-
-/* PanelCard 头部 — accent 色分割线 */
+/* PanelCard 头部 — accent 色分割线。
+ * 调用方在元素上写了 border-[var(--ws-color-border-secondary)]（权重 0,1,0），
+ * 本类同为 0,1,0 且在其后导入，故可直接覆盖，无需 !important。 */
 .panel-card-header {
-  border-bottom-color: var(--ws-color-accent) !important;
-}
-
-/* 576px 小屏适配 — 管理后台表格 */
-@media (max-width: 576px) {
-  .ws-admin-page {
-    padding: 10px;
-  }
-}
-
-@media (max-width: 430px) {
-  .ws-admin-page {
-    padding: var(--ws-space-2);
-  }
+  border-bottom-color: var(--ws-color-accent);
 }

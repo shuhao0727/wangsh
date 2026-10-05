@@ -7,7 +7,6 @@ import {
   Bot,
   Calendar,
   Clock3,
-  Loader2,
   MessageSquare,
   User,
   Zap,
@@ -27,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import { LoadingState } from "@/components/ui/loading-state";
 interface DetailModalProps {
   visible: boolean;
   record: AgentUsageData | null;
@@ -56,8 +56,8 @@ const agentTypeConfig: Record<string, { text: string; variant: "info" | "purple"
 const InfoTile: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({
   label, children, className,
 }) => (
-  <div className={`flex items-center gap-2 rounded-md border border-border-secondary bg-surface px-2.5 py-1.5 ${className || ""}`}>
-    <span className="shrink-0 text-[11px] text-text-tertiary">{label}</span>
+  <div className={`flex items-center gap-xs rounded-md border border-border-secondary bg-surface px-2.5 py-1.5 ${className || ""}`}>
+    <span className="shrink-0 text-2xs text-text-tertiary">{label}</span>
     <span className="min-w-0 truncate text-sm font-medium text-text-base">{children}</span>
   </div>
 );
@@ -76,7 +76,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
     <Dialog open={visible} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[780px]">
         <DialogHeader className="border-b border-border-secondary bg-surface-2 px-6 py-4">
-          <DialogTitle className="flex items-center gap-2 text-lg">
+          <DialogTitle className="flex items-center gap-xs text-lg">
             <Zap className="h-5 w-5 text-primary" />
             智能体使用记录详情
           </DialogTitle>
@@ -85,9 +85,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
+        <div className="min-h-0 flex-1 space-y-item-gap overflow-y-auto overscroll-contain px-6 py-4">
           {/* Metrics */}
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-item-gap text-sm">
             <span className="inline-flex items-center gap-1.5 text-text-secondary">
               <Calendar className="h-4 w-4 text-primary" />
               {formatDateTime(record.used_at)}
@@ -99,8 +99,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
           </div>
 
           {/* Student info */}
-          <section className="space-y-2 rounded-xl border border-border bg-surface-2 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-text-base">
+          <section className="space-y-xs rounded-xl border border-border bg-surface-2 p-4">
+            <div className="flex items-center gap-xs text-sm font-semibold text-text-base">
               <User className="h-4 w-4 text-primary" />
               学生信息
             </div>
@@ -119,8 +119,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
           </section>
 
           {/* Agent info */}
-          <section className="space-y-2 rounded-xl border border-border bg-surface-2 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-text-base">
+          <section className="space-y-xs rounded-xl border border-border bg-surface-2 p-4">
+            <div className="flex items-center gap-xs text-sm font-semibold text-text-base">
               <Bot className="h-4 w-4 text-primary" />
               智能体信息
             </div>
@@ -144,17 +144,15 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
           </section>
 
           {/* Conversation */}
-          <section className="space-y-2 rounded-xl border border-border bg-surface-2 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-text-base">
+          <section className="space-y-xs rounded-xl border border-border bg-surface-2 p-4">
+            <div className="flex items-center gap-xs text-sm font-semibold text-text-base">
               <MessageSquare className="h-4 w-4 text-primary" />
               对话内容
             </div>
             {conversationLoading ? (
-              <div className="flex h-24 items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
-              </div>
+              <LoadingState label="正在加载对话内容…" size="md" className="h-24" />
             ) : (conversationMessages ?? []).length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-xs">
                 {conversationMessages!.map((msg) => {
                   const isQ = msg.message_type === "question";
                   return (
@@ -166,8 +164,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
                           : "border-[var(--ws-color-success)]/30 bg-success-soft"
                       }`}
                     >
-                      <div className="mb-1.5 flex items-center gap-2">
-                        <Badge variant={isQ ? "info" : "success"} className="text-[10px]">
+                      <div className="mb-1.5 flex items-center gap-xs">
+                        <Badge variant={isQ ? "info" : "success"} className="text-3xs">
                           {isQ ? "问题" : "回答"}
                         </Badge>
                         <span className="text-xs text-text-tertiary">
@@ -182,15 +180,15 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, record, onClose }) =
                 })}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-xs">
                 <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2.5">
-                  <div className="mb-1 text-xs font-medium text-primary">问题</div>
+                  <div className="mb-2xs text-xs font-medium text-primary">问题</div>
                   <div className="whitespace-pre-wrap text-sm text-text-base">
                     {displayText(record.question)}
                   </div>
                 </div>
                 <div className="rounded-lg border border-[var(--ws-color-success)]/30 bg-success-soft px-3 py-2.5">
-                  <div className="mb-1 text-xs font-medium text-[var(--ws-color-success)]">回答</div>
+                  <div className="mb-2xs text-xs font-medium text-[var(--ws-color-success)]">回答</div>
                   <div className="whitespace-pre-wrap text-sm text-text-base">
                     {displayText(record.answer)}
                   </div>

@@ -4,13 +4,14 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import { Button } from "@/components/ui/button";
 import { showMessage } from "@/lib/toast";
 import { agentDataApi } from "@services/znt/api";
 
+import { LoadingState } from "@/components/ui/loading-state";
 type AnalysisRecord = {
   id: number;
   title: string;
@@ -30,7 +31,13 @@ const normalizeRecord = (record: AnalysisRecord, index: number): NormalizedAnaly
   compareKey: `${record.id}-${index}`,
 });
 
-const COLORS = ["#0D9488", "#7C3AED", "#3B82F6", "#F59E0B", "#EC4899"];
+const COLORS = [
+  "var(--ws-tag-teal)",
+  "var(--ws-tag-purple)",
+  "var(--ws-tag-blue)",
+  "var(--ws-tag-amber)",
+  "var(--ws-tag-pink)",
+];
 const BLOOM_KEYS = ["记忆", "理解", "应用", "分析", "评价", "创造"];
 
 const TaskAnalysisComparePage: React.FC = () => {
@@ -170,13 +177,16 @@ const TaskAnalysisComparePage: React.FC = () => {
   return (
     <div className="flex h-screen flex-col bg-[var(--ws-color-bg)]">
       <header className="shrink-0 border-b border-border-secondary bg-surface px-6 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-1" />关闭</Button>
+        <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-2xs" />关闭</Button>
         <span className="text-sm font-semibold">多课时对比分析</span>
         <span className="text-xs text-text-tertiary">({ids.length} 条记录)</span>
       </header>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        /* 整区域加载态：原为裸 <Loader2>（无 aria，屏幕阅读器读到空白）。xl = h-8 与原一致。 */
+        <div className="flex-1 flex items-center justify-center">
+          <LoadingState label="正在加载对比分析数据…" size="xl" />
+        </div>
       ) : loadError ? (
         <div className="flex flex-1 items-center justify-center px-6">
           <div role="alert" className="max-w-xl rounded-xl border border-destructive/30 bg-surface p-5 text-center">
@@ -184,7 +194,7 @@ const TaskAnalysisComparePage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 max-w-6xl mx-auto w-full">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-section-gap max-w-6xl mx-auto w-full">
           {/* ① 对比概览表格 */}
           <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
             <h2 className="text-base font-semibold mb-3">对比概览</h2>
@@ -192,28 +202,28 @@ const TaskAnalysisComparePage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-text-tertiary border-b border-border-secondary">
-                    <th className="py-2 px-3 font-medium">指标</th>
+                    <th className="py-xs px-3 font-medium">指标</th>
                     {records.map((r) => (
-                      <th key={r.compareKey} className="py-2 px-3 font-medium">{r.title.slice(0, 15)}<br/><span className="text-[10px] font-normal">{dayjs(r.created_at).format("MM-DD")}</span></th>
+                      <th key={r.compareKey} className="py-xs px-3 font-medium">{r.title.slice(0, 15)}<br/><span className="text-3xs font-normal">{dayjs(r.created_at).format("MM-DD")}</span></th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-secondary">
                   <tr>
-                    <td className="py-2 px-3 text-text-secondary">提问总数</td>
-                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold">{(r.normalizedResult?.timeline_buckets || []).reduce((s: number, b: any) => s + (b.question_count || 0), 0)}</td>)}
+                    <td className="py-xs px-3 text-text-secondary">提问总数</td>
+                    {records.map((r) => <td key={r.compareKey} className="py-xs px-3 font-semibold">{(r.normalizedResult?.timeline_buckets || []).reduce((s: number, b: any) => s + (b.question_count || 0), 0)}</td>)}
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-text-secondary">生发问题</td>
-                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold text-amber-600">{(r.normalizedResult?.uncovered || []).length}</td>)}
+                    <td className="py-xs px-3 text-text-secondary">生发问题</td>
+                    {records.map((r) => <td key={r.compareKey} className="py-xs px-3 font-semibold text-warning">{(r.normalizedResult?.uncovered || []).length}</td>)}
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-text-secondary">爆发点</td>
-                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3 font-semibold text-red-600">{(r.normalizedResult?.burst_points || []).length}</td>)}
+                    <td className="py-xs px-3 text-text-secondary">爆发点</td>
+                    {records.map((r) => <td key={r.compareKey} className="py-xs px-3 font-semibold text-destructive">{(r.normalizedResult?.burst_points || []).length}</td>)}
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-text-secondary">主问题链</td>
-                    {records.map((r) => <td key={r.compareKey} className="py-2 px-3">{(r.normalizedResult?.main_question_chain || []).length} 阶段</td>)}
+                    <td className="py-xs px-3 text-text-secondary">主问题链</td>
+                    {records.map((r) => <td key={r.compareKey} className="py-xs px-3">{(r.normalizedResult?.main_question_chain || []).length} 阶段</td>)}
                   </tr>
                 </tbody>
               </table>
@@ -222,27 +232,27 @@ const TaskAnalysisComparePage: React.FC = () => {
 
           {/* ② Bloom 认知层级对比 */}
           <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-            <h2 className="text-base font-semibold mb-1">Bloom 认知层级对比</h2>
+            <h2 className="text-base font-semibold mb-2xs">Bloom 认知层级对比</h2>
             <p className="text-xs text-text-tertiary mb-3">观察不同课时学生提问的认知层级分布差异</p>
             <div ref={bloomRef} style={{ width: "100%", height: 280 }} />
           </section>
 
           {/* ③ 时序热点叠加 */}
           <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-            <h2 className="text-base font-semibold mb-1">时序提问量对比</h2>
+            <h2 className="text-base font-semibold mb-2xs">时序提问量对比</h2>
             <p className="text-xs text-text-tertiary mb-3">X轴为课堂相对时间，观察哪节课的爆发点更早/更密集</p>
             <div ref={timelineRef} style={{ width: "100%", height: 280 }} />
           </section>
 
           {/* ④ 生发问题对比 */}
           <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-            <h2 className="text-base font-semibold mb-1">生发问题对比</h2>
+            <h2 className="text-base font-semibold mb-2xs">生发问题对比</h2>
             <p className="text-xs text-text-tertiary mb-3">跨课时重复出现的生发问题 = 任务单系统性盲区</p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-item-gap">
               {generativeComparison.shared.length > 0 && (
-                <div className="rounded-lg border border-red-200 bg-red-50/30 p-3">
-                  <div className="text-xs font-semibold text-red-700 mb-2">🔴 系统性盲区（多课时重复）</div>
-                  <div className="space-y-1">
+                <div className="rounded-lg border border-[var(--ws-color-error-light)] bg-error-soft p-3">
+                  <div className="text-xs font-semibold text-destructive mb-xs">🔴 系统性盲区（多课时重复）</div>
+                  <div className="space-y-2xs">
                     {generativeComparison.shared.map((t, i) => (
                       <div key={i} className="text-sm text-text-base">{t}</div>
                     ))}
@@ -251,8 +261,8 @@ const TaskAnalysisComparePage: React.FC = () => {
               )}
               {generativeComparison.unique.length > 0 && (
                 <div className="rounded-lg border border-border-secondary bg-surface-2 p-3">
-                  <div className="text-xs font-semibold text-text-secondary mb-2">⚪ 偶发性问题（仅出现一次）</div>
-                  <div className="space-y-1">
+                  <div className="text-xs font-semibold text-text-secondary mb-xs">⚪ 偶发性问题（仅出现一次）</div>
+                  <div className="space-y-2xs">
                     {generativeComparison.unique.slice(0, 8).map((t, i) => (
                       <div key={i} className="text-sm text-text-tertiary">{t}</div>
                     ))}
@@ -261,7 +271,7 @@ const TaskAnalysisComparePage: React.FC = () => {
               )}
             </div>
             {generativeComparison.shared.length > 0 && (
-              <div className="mt-3 rounded-lg bg-primary-soft/50 px-3 py-2 text-xs text-primary">
+              <div className="mt-3 rounded-lg bg-primary-soft px-3 py-xs text-xs text-primary">
                 💡 系统性盲区建议优先纳入下次任务单设计，偶发性问题可作为课堂即时回应。
               </div>
             )}

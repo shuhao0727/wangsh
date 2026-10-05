@@ -153,10 +153,10 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
   return (
     <div className="flex h-full flex-col bg-surface">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-xs border-b border-border bg-surface px-3 py-1.5">
         <Button variant="ghost" size="sm"
           onClick={() => (onBack ? onBack() : window.close())}
-          className="h-7 text-xs gap-1">
+          className="h-7 text-xs gap-2xs">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
 
@@ -164,7 +164,7 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="h-7 w-48 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-1"
+            className="h-7 w-48 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-2xs"
             placeholder="导图标题"
           />
         )}
@@ -172,12 +172,12 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
           {isPersonal ? "" : `${moduleKey === "ml" ? "机器学习" : moduleKey === "ai" ? "人工智能" : "智能体"} · 思维导图`}
         </span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2xs">
           <Button size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("edit")} className="h-7 text-xs gap-1"><Edit3 className="h-3 w-3" />编辑</Button>
+            onClick={() => setViewMode("edit")} className="h-7 text-xs gap-2xs"><Edit3 className="h-3 w-3" />编辑</Button>
           <Button size="sm" variant={viewMode === "preview" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("preview")} className="h-7 text-xs gap-1"><Eye className="h-3 w-3" />预览</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-1">
+            onClick={() => setViewMode("preview")} className="h-7 text-xs gap-2xs"><Eye className="h-3 w-3" />预览</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-2xs">
             <Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}
           </Button>
         </div>

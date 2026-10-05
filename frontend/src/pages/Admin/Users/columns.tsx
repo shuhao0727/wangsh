@@ -25,6 +25,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "学号",
       accessorKey: "student_id",
       size: 120,
+      enableHiding: true,
       meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
       cell: ({ row }) => row.original.student_id || "-",
     },
@@ -33,6 +34,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "姓名",
       accessorKey: "full_name",
       size: 120,
+      enableHiding: true,
       meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
       cell: ({ row }) => row.original.full_name || "-",
     },
@@ -41,6 +43,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "学年",
       accessorKey: "study_year",
       size: 120,
+      enableHiding: true,
       meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
       cell: ({ row }) =>
         row.original.study_year ? (
@@ -56,6 +59,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "班级",
       accessorKey: "class_name",
       size: 140,
+      enableHiding: true,
       meta: { headerClassName: "w-[140px]", cellClassName: "w-[140px] align-top" },
       cell: ({ row }) =>
         row.original.class_name ? (
@@ -71,6 +75,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "角色",
       accessorKey: "role_code",
       size: 100,
+      enableHiding: true,
       meta: { headerClassName: "w-[100px]", cellClassName: "w-[100px] align-top" },
       cell: ({ row }) => {
         const labels: Record<string, string> = {
@@ -91,6 +96,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "状态",
       accessorKey: "is_active",
       size: 90,
+      enableHiding: true,
       meta: { headerClassName: "w-[90px]", cellClassName: "w-[90px] align-top" },
       cell: ({ row }) => (
         <Badge
@@ -105,6 +111,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
       header: "更新时间",
       accessorKey: "updated_at",
       size: 160,
+      enableHiding: true,
       meta: { headerClassName: "w-[160px]", cellClassName: "w-[160px] align-top" },
       cell: ({ row }) =>
         row.original.updated_at
@@ -114,13 +121,13 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
     {
       id: "action",
       header: "操作",
-      size: 150,
-      meta: { headerClassName: "w-[150px]", cellClassName: "w-[150px] align-top" },
+      size: 120,
+      meta: { headerClassName: "w-[120px]", cellClassName: "w-[120px] align-top" },
       cell: ({ row }) => {
         const record = row.original;
         return (
           <TooltipProvider delayDuration={120}>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2xs">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="sm" onClick={() => handleView(record)}>
@@ -144,9 +151,10 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="text-text-tertiary hover:text-destructive"
                     onClick={() => handleDelete(record.id)}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>删除</TooltipContent>

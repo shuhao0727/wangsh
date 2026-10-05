@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/data-table";
 import { AdminTablePanel } from "@components/Admin";
+import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { Plus, Trash2, Search, Download, GitCompare } from "lucide-react";
 import dayjs from "dayjs";
 import { agentDataApi } from "@services/znt/api";
@@ -44,6 +45,9 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const loadRequestRef = useRef(0);
   const scopeGenerationRef = useRef(0);
+  // 删除确认：受控 state 持有待删 id，确认后才真正执行删除
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadRecords = useCallback(async () => {
     const requestId = ++loadRequestRef.current;
@@ -82,9 +86,15 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
     };
   }, [loadRecords]);
 
-  const handleDelete = useCallback(async (id: number) => {
-    if (!window.confirm("确定删除这条分析记录？")) return;
+  // 点击行内删除：只打开确认对话框，延迟到用户确认后才执行
+  const handleDelete = useCallback((id: number) => {
+    setPendingDeleteId(id);
+  }, []);
+
+  // 确认后执行删除。id 由调用方显式传入，避免异步过程中读到过期 state
+  const performDelete = useCallback(async (id: number) => {
     const scopeGeneration = scopeGenerationRef.current;
+    setDeleting(true);
     try {
       const res = isChain
         ? await agentDataApi.deleteChainAnalysis(id)
@@ -98,6 +108,8 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
       }
     } catch (error) {
       showMessage.error(error instanceof Error ? error.message : "删除失败");
+    } finally {
+      setDeleting(false);
     }
   }, [isChain, loadRecords]);
 
@@ -181,7 +193,7 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
       header: "发现",
       cell: ({ row }) => (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 font-medium"
+          <span className="inline-flex items-center rounded-full px-xs py-0.5 font-medium"
             style={{ background: "var(--ws-color-warning-soft)", color: "var(--ws-color-warning)" }}>
             {isChain
               ? `${row.original.chain_count || row.original.uncovered_count || 0} 条链`
@@ -200,17 +212,17 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
       id: "actions",
       header: "操作",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-xs">
           <a href={`/task-analysis/${row.original.id}?view=${resolvedView}&type=${isChain ? "chains" : "hot"}`} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            className="inline-flex items-center gap-2xs text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             {resolvedView === "beam" ? "光束图" : "时序"}
           </a>
           <button onClick={() => void handleDownload(row.original.id)} title="下载"
-            className="text-text-tertiary hover:text-primary transition-colors">
+            className="text-text-tertiary hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <Download className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => void handleDelete(row.original.id)}
-            className="text-text-tertiary hover:text-destructive transition-colors">
+          <button onClick={() => handleDelete(row.original.id)} aria-label="删除"
+            className="text-text-tertiary hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -226,7 +238,7 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-xs">
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-[340px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
@@ -235,12 +247,12 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
         {selectedIds.size >= 2 && (
           <Button size="sm" variant="outline" className="text-primary border-primary"
             onClick={() => window.open(`/task-analysis/compare?type=${isChain ? "chains" : "hot"}&ids=${[...selectedIds].join(",")}`, "_blank")}>
-            <GitCompare className="h-4 w-4 mr-1" />对比分析 ({selectedIds.size})
+            <GitCompare className="h-4 w-4 mr-2xs" />对比分析 ({selectedIds.size})
           </Button>
         )}
         <div className="flex-1" />
         <Button size="sm" onClick={() => window.open(newAnalysisUrl, "_blank")}>
-          <Plus className="h-4 w-4 mr-1" />{isChain ? "新建问题链分析" : "新建热点分析"}
+          <Plus className="h-4 w-4 mr-2xs" />{isChain ? "新建问题链分析" : "新建热点分析"}
         </Button>
       </div>
 
@@ -260,6 +272,24 @@ const TaskAnalysisListPanel: React.FC<{ analysisType?: "hot" | "chains"; detailV
           <DataTable table={table} className="h-full !overflow-visible !rounded-none !border-0" tableClassName="min-w-[800px] table-fixed" />
         </AdminTablePanel>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="确认删除"
+        description="确定删除这条分析记录？删除后不可恢复。"
+        confirmText="删除"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={() => {
+          const id = pendingDeleteId;
+          setPendingDeleteId(null);
+          if (id === null) return;
+          void performDelete(id);
+        }}
+      />
     </div>
   );
 };

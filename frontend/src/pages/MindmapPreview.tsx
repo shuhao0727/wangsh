@@ -50,15 +50,15 @@ const MindmapPreview: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-xs">
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-2xs"
           onClick={() => window.close()}>
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
         <h2 className="text-sm font-semibold">{title}</h2>
         {id && (
           <div className="ml-auto">
-            <Button variant="outline" size="sm" className="h-7 text-xs gap-1"
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-2xs"
               onClick={handleEdit}>
               <Pencil className="h-3 w-3" />编辑
             </Button>

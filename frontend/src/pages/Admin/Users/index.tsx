@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
+import { DataTableColumnToggle } from "@/components/ui/data-table-column-toggle";
 import {
   Select,
   SelectContent,
@@ -142,6 +143,8 @@ const AdminUsers: React.FC = () => {
     enableRowSelection: true,
     onRowSelectionChange: handleRowSelectionChange,
     getCoreRowModel: getCoreRowModel(),
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
   });
 
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
@@ -176,7 +179,7 @@ const AdminUsers: React.FC = () => {
             })}
           </div>
         )}
-        {stats && <div className="mx-1 h-6 w-px bg-border-secondary" />}
+        {stats && <div className="mx-2xs h-6 w-px bg-border-secondary" />}
         <div className="relative w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
@@ -189,6 +192,8 @@ const AdminUsers: React.FC = () => {
                 actions.handleSearch((e.target as HTMLInputElement).value);
               }
             }}
+            clearable
+            onClear={() => actions.handleSearch("")}
           />
         </div>
 
@@ -294,6 +299,8 @@ const AdminUsers: React.FC = () => {
           </Button>
         ) : null}
 
+        <DataTableColumnToggle table={table} />
+
         <Button onClick={actions.handleAddUser}>
           <Plus className="h-4 w-4" />
           添加用户
@@ -308,11 +315,11 @@ const AdminUsers: React.FC = () => {
             emptyDescription={state.searchKeyword ? "未找到匹配的用户" : "暂无用户数据"}
             emptyAction={<Button onClick={actions.handleAddUser}>添加第一个用户</Button>}
           >
-            <DataTable table={table} tableClassName="min-w-[980px]" />
+            <DataTable table={table} tableClassName="min-w-[980px]" stickyHeader />
           </AdminTablePanel>
         </div>
         {state.users.length > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={state.currentPage}
               totalPages={totalPages}
@@ -339,6 +346,8 @@ const AdminUsers: React.FC = () => {
         onEdit={actions.handleEdit}
       />
 
+      {/* 批量删除只保留工具栏（AdminFilterBar）中的「删除 (N)」入口，
+          不再使用页面底部的浮动批量操作栏，避免同一操作出现两个入口 */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}

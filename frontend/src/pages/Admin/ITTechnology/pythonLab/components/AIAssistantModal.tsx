@@ -1,6 +1,6 @@
 import { showMessage } from "@/lib/toast";
 import React, { useState, useRef, useEffect } from "react";
-import { Bot, Send, Code, Loader2 } from "lucide-react";
+import { Bot, Send, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { FloatingPopup } from "./FloatingPopup";
 import { cn } from "@/lib/utils";
 
+import { Spinner } from "@/components/ui/spinner";
 interface AIAssistantModalProps {
   open: boolean;
   onClose: () => void;
@@ -93,7 +94,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <p>开启上方“自动优化”开关，我将结合当前代码为你提供建议。</p>
           </div>
         )}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-xs">
           {messages.map((item, index) => (
             <div
               key={index}
@@ -101,7 +102,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             >
               <div
                 className={cn(
-                  "max-w-[85%] rounded-xl px-3 py-2 text-sm",
+                  "max-w-[85%] rounded-xl px-3 py-xs text-sm",
                   item.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "bg-surface-2 text-text-base",
@@ -120,7 +121,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         </div>
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex gap-2 p-3">
+      <div className="flex gap-xs p-3">
         <Textarea
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -136,7 +137,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             }}
           />
           <Button onClick={() => void handleSend()} disabled={loading} aria-label="发送消息">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {loading ? <Spinner size="sm" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
     </div>
@@ -159,8 +160,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
     >
       <div className="flex h-full flex-col">
         {/* Header / Toolbar */}
-        <div className="flex items-center justify-between border-b border-border-secondary bg-surface-2 px-3 py-2">
-          <div className="inline-flex items-center gap-2">
+        <div className="flex items-center justify-between border-b border-border-secondary bg-surface-2 px-3 py-xs">
+          <div className="inline-flex items-center gap-xs">
             <Code className={cn("h-4 w-4", autoOptimizeCode ? "text-primary" : "text-text-tertiary")} />
             <span className="text-xs">自动优化代码</span>
             <Switch checked={autoOptimizeCode} onCheckedChange={handleAutoOptimizeCodeChange} />

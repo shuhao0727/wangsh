@@ -10,17 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import dayjs from "dayjs";
-import {
-  FileText,
-  Filter,
-  FolderOpen,
-  Loader2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { FileText, Filter, FolderOpen, Pencil, Plus, RefreshCw, Search, Trash2,  } from "lucide-react";
 import { categoryApi } from "@services";
 import { logger } from "@services/logger";
 import type { CategoryWithUsage, CategoryFilterParams } from "@services";
@@ -56,6 +46,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
+import { Spinner } from "@/components/ui/spinner";
 type CategoryManageModalProps = {
   visible: boolean;
   onClose: () => void;
@@ -161,7 +152,7 @@ const CategoryEditDialog: React.FC<{
         </DialogHeader>
 
         <Form {...form}>
-          <form className="space-y-3" onSubmit={form.handleSubmit(handleSubmit)}>
+          <form className="space-y-form-field-gap" onSubmit={form.handleSubmit(handleSubmit)}>
             <FormField
               control={form.control}
               name="name"
@@ -181,13 +172,13 @@ const CategoryEditDialog: React.FC<{
               name="slug"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-xs">
                     <FormLabel>URL 标识 (slug)</FormLabel>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2"
+                      className="h-7 px-xs"
                       onClick={generateSlug}
                     >
                       从名称生成
@@ -215,7 +206,7 @@ const CategoryEditDialog: React.FC<{
                       {...field}
                     />
                   </FormControl>
-                  <div className="mt-1 flex items-center justify-between text-xs text-text-tertiary">
+                  <div className="mt-2xs flex items-center justify-between text-xs text-text-tertiary">
                     <FormMessage />
                     <span>{description.length}/200</span>
                   </div>
@@ -223,7 +214,7 @@ const CategoryEditDialog: React.FC<{
               )}
             />
 
-            <DialogFooter className="gap-2">
+            <DialogFooter className="gap-button-gap">
               <Button
                 type="button"
                 variant="outline"
@@ -234,7 +225,7 @@ const CategoryEditDialog: React.FC<{
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Spinner size="sm" />
                 ) : null}
                 {isCreateMode ? "创建分类" : "保存修改"}
               </Button>
@@ -528,7 +519,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         meta: { className: "w-[140px]" },
         cell: ({ row }) => (
           <Badge variant={(row.original.article_count || 0) > 0 ? "info" : "neutral"}>
-            <FileText className="mr-1 h-3 w-3" />
+            <FileText className="mr-2xs h-3 w-3" />
             {row.original.article_count || 0} 篇
           </Badge>
         ),
@@ -553,14 +544,14 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       {
         id: "action",
         header: "操作",
-        size: 170,
-        meta: { className: "w-[170px]" },
+        size: 120,
+        meta: { className: "" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2xs">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 px-2"
+              className="h-7 px-xs"
               onClick={() => handleEdit(row.original)}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -569,7 +560,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-destructive hover:text-destructive"
+              className="h-7 px-xs text-destructive hover:text-destructive"
               onClick={() => {
                 setConfirmState({ message: "确定要删除这个分类吗？删除后不可恢复。", onOk: () => { void handleDelete(row.original.id); } });
               }}
@@ -606,7 +597,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       >
         <DialogContent className="w-[95vw] p-0 sm:max-w-[1100px]">
           <DialogHeader className="border-b border-border px-6 py-4">
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-xs">
               <FolderOpen className="h-4 w-4" />
               分类管理
             </DialogTitle>
@@ -615,7 +606,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[calc(90vh-96px)] space-y-4 overflow-y-auto px-6 py-5">
+          <div className="max-h-[calc(90vh-96px)] space-y-item-gap overflow-y-auto px-6 py-5">
             <Card className="border border-border bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="relative w-full max-w-[320px]">
@@ -634,7 +625,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-xs">
                   <Button
                     variant={filterVisible ? "default" : "outline"}
                     aria-label="筛选"
@@ -644,7 +635,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     筛选
                   </Button>
                   <Button variant="outline" onClick={() => void loadCategories()} disabled={loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    {loading ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
                     刷新
                   </Button>
                   <Button onClick={handleAddCategory}>
@@ -657,12 +648,12 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
 
             {filterVisible ? (
               <Card className="border border-border bg-surface p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="mb-3 flex items-center justify-between gap-xs">
                   <h4 className="text-sm font-semibold">高级筛选</h4>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2"
+                    className="h-7 px-xs"
                     onClick={() => setFilterVisible(false)}
                   >
                     收起
@@ -704,7 +695,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                       }
                     />
                   </div>
-                  <div className="flex items-end gap-2">
+                  <div className="flex items-end gap-xs">
                     <Button variant="outline" onClick={handleFilterReset}>
                       重置
                     </Button>
@@ -716,7 +707,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
 
             {selectedRowKeys.length > 0 ? (
               <Card className="border border-primary/20 bg-primary-soft p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-xs">
                   <div className="text-sm">
                     已选择{" "}
                     <span className="font-semibold text-primary">
@@ -739,8 +730,8 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
             <Card className="border border-border bg-surface p-0">
               {loading ? (
                 <div className="py-14 text-center text-sm text-text-tertiary">
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="inline-flex items-center gap-xs">
+                    <Spinner size="sm" />
                     正在加载分类...
                   </span>
                 </div>
@@ -754,7 +745,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
               ) : (
                 <>
                   <DataTable table={table} tableClassName="min-w-[980px]" />
-                  <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+                  <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
                     <DataTablePagination
                       currentPage={currentPage}
                       totalPages={totalPages}

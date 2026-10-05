@@ -49,7 +49,7 @@ const CircleProgress: React.FC<{
         y="50%"
         dominantBaseline="middle"
         textAnchor="middle"
-        className="fill-text text-xs font-semibold"
+        className="fill-text-secondary text-xs font-semibold"
       >
         {clamped}%
       </text>
@@ -118,7 +118,7 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
   return (
     <div>
       {/* 得分概览 */}
-      <div className="flex items-center gap-4 mb-5 rounded-lg bg-surface-2 px-5 py-4">
+      <div className="flex items-center gap-item-gap mb-5 rounded-lg bg-surface-2 px-5 py-4">
         <CircleProgress percent={pct} size={64} color={pct >= 60 ? "var(--ws-color-success)" : "var(--ws-color-error)"} />
         <div className="flex-1 min-w-0">
           <div className="text-xl font-semibold">
@@ -128,8 +128,8 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
         </div>
         {weakPoints.length > 0 && (
           <div className="text-right flex-shrink-0">
-            <div className="text-xs text-text-tertiary mb-1">薄弱知识点</div>
-            <div className="flex flex-wrap gap-1 justify-end">
+            <div className="text-xs text-text-tertiary mb-2xs">薄弱知识点</div>
+            <div className="flex flex-wrap gap-2xs justify-end">
               {weakPoints.map(p => <Badge key={p} variant="warning" className="!m-0">{p}</Badge>)}
             </div>
           </div>
@@ -152,8 +152,8 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold mb-2">
-              <BookOpen className="h-4 w-4 mr-1 inline" />知识点得分
+            <div className="text-sm font-semibold mb-xs">
+              <BookOpen className="h-4 w-4 mr-2xs inline" />知识点得分
             </div>
             {kpDetails.map(kp => (
               <div key={kp.name} className="mb-1.5">
@@ -174,7 +174,7 @@ export const BasicProfileView: React.FC<BasicProfileViewProps> = ({ data }) => {
       {/* AI 评语 */}
       {data.ai_summary && (
         <div className="rounded-lg bg-surface-2 px-5 py-3.5" style={{ borderLeft: "3px solid var(--ws-color-primary)" }}>
-          <div className="text-xs text-text-tertiary mb-2">AI 评语</div>
+          <div className="text-xs text-text-tertiary mb-xs">AI 评语</div>
           <div className="text-sm leading-loose text-text-secondary">
             <ReactMarkdown>{data.ai_summary}</ReactMarkdown>
           </div>
@@ -220,8 +220,8 @@ export const AdvancedProfileView: React.FC<AdvancedProfileViewProps> = ({ profil
   return (
     <div>
       {/* 头部信息 */}
-      <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2">
-        <div className="flex gap-1 flex-wrap">
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-xs">
+        <div className="flex gap-2xs flex-wrap">
           {sources.map(s => {
             const m = DATA_SOURCE_MAP[s];
             return (

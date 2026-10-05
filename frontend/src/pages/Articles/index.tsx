@@ -427,6 +427,8 @@ const ArticlesPage: React.FC = () => {
                         value={searchKeyword}
                         onChange={handleSearchInputChange}
                         onKeyDown={handleSearchKeyDown}
+                        clearable
+                        onClear={() => setSearchKeyword("")}
                       />
                     </div>
                     <Button
@@ -444,7 +446,7 @@ const ArticlesPage: React.FC = () => {
                   <div className="articles-left-menu rounded-lg border border-[var(--ws-color-border-secondary)] bg-surface p-[var(--ws-space-1)]">
                     <button
                       type="button"
-                      className={`appearance-none border-0 articles-category-item ${!selectedCategory ? "articles-category-item-active" : ""}`}
+                      className={`appearance-none border-0 articles-category-item ${!selectedCategory ? "articles-category-item-active" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
                       onClick={() => handleCategorySelect(null)}
                     >
                       <span className="inline-flex items-center gap-1.5">
@@ -468,7 +470,7 @@ const ArticlesPage: React.FC = () => {
                             <button
                               type="button"
                               key={category.id}
-                              className={`appearance-none border-0 articles-category-item ${active ? "articles-category-item-active" : ""}`}
+                              className={`appearance-none border-0 articles-category-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active ? "articles-category-item-active" : ""}`}
                               onClick={() => handleCategorySelect(category.id)}
                             >
                               <span className="truncate">{category.name}</span>
@@ -550,7 +552,7 @@ const ArticlesPage: React.FC = () => {
                           value={pageSize}
                           onChange={(e) => handlePageChange(1, Number(e.target.value))}
                           aria-label="每页条数"
-                          className="h-8 rounded-md border border-[var(--ws-color-border)] bg-surface px-2 text-sm"
+                          className="h-8 rounded-md border border-[var(--ws-color-border)] bg-surface px-xs text-sm"
                         >
                           {PAGE_SIZE_OPTIONS.map((size) => (
                             <option key={size} value={size}>{size} / 页</option>

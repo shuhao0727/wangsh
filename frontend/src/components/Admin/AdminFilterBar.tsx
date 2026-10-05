@@ -30,16 +30,16 @@ export const AdminFilterBar: React.FC<AdminFilterBarProps> = ({
 
   return (
     <div
-      className={cn("mb-4 flex flex-wrap items-center gap-2", className)}
+      className={cn("mb-content-gap flex items-center gap-xs overflow-x-auto", className)}
       {...(hasSlots ? { role: "toolbar", "aria-label": "操作工具栏" } : {})}
     >
       {hasSlots ? (
         <>
           {searchSlot && <div className="flex-shrink-0">{searchSlot}</div>}
-          {filterSlot && <div className="flex flex-wrap items-center gap-2">{filterSlot}</div>}
+          {filterSlot && <div className="flex items-center gap-xs">{filterSlot}</div>}
           <div className="flex-1" />
-          {bulkSlot && <div className="flex flex-wrap items-center gap-2">{bulkSlot}</div>}
-          {actionSlot && <div className="flex flex-wrap items-center gap-2">{actionSlot}</div>}
+          {bulkSlot && <div className="flex items-center gap-xs">{bulkSlot}</div>}
+          {actionSlot && <div className="flex items-center gap-xs">{actionSlot}</div>}
         </>
       ) : (
         children

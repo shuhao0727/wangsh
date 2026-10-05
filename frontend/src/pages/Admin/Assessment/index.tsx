@@ -15,6 +15,7 @@ import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
+import { DataTableColumnToggle } from "@/components/ui/data-table-column-toggle";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Form,
   FormControl,
@@ -39,14 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  BarChart3,
-  Database,
-  Loader2,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { BarChart3, Database, Plus, Search, Trash2,  } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
@@ -64,6 +63,7 @@ import {
 } from "@hooks/queries/useAssessmentQuery";
 import { queryKeys } from "@hooks/queries/queryKeys";
 
+import { Spinner } from "@/components/ui/spinner";
 const GRADE_OPTIONS = [
   "高一",
   "高二",
@@ -115,7 +115,6 @@ const parseKnowledgePoints = (value: string | null | undefined): string[] => {
   }
   return value.split(/[,，、\n\s]+/).map((item) => item.trim()).filter(Boolean);
 };
-
 
 const AdminAssessment: React.FC = () => {
   const navigate = useNavigate();
@@ -236,6 +235,7 @@ const AdminAssessment: React.FC = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.assessment.all });
   };
 
+  // 全量重置：清空搜索 + 年级/状态筛选（页面上「清空」按钮使用）
   const handleClearSearch = () => {
     setSearchInput("");
     setGradeFilter("__all__");
@@ -247,6 +247,23 @@ const AdminAssessment: React.FC = () => {
       setCurrentPage(1);
     }
   };
+
+  // 仅清空搜索词：输入框里的 X 只负责搜索项，不动年级/状态筛选
+  // 同步清空 searchInput 与已提交的 search，并回到第 1 页，保证列表重新查询
+  const handleClearSearchInput = useCallback(() => {
+    const hadKeyword = searchInput !== "" || search !== "";
+    setSearchInput("");
+    if (search !== "") {
+      setSearch("");
+    }
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+    // 关键词本就为空时没有 query 变更，主动失效一次以刷新列表
+    if (!hadKeyword) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.assessment.all });
+    }
+  }, [searchInput, search, currentPage, queryClient]);
 
   const columns = useMemo<ColumnDef<AssessmentConfig>[]>(
     () => [
@@ -260,7 +277,7 @@ const AdminAssessment: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <div className="max-w-[220px] truncate font-medium">{row.original.title}</div>
             {row.original.id < 0 ? (
-              <Badge variant="outline" className="border-border bg-transparent text-[11px] text-text-tertiary">
+              <Badge variant="outline" className="border-border bg-transparent text-2xs text-text-tertiary">
                 模拟
               </Badge>
             ) : null}
@@ -272,6 +289,7 @@ const AdminAssessment: React.FC = () => {
         header: "年级",
         accessorKey: "grade",
         size: 90,
+        enableHiding: true,
         meta: { className: "w-[90px] align-top" },
         cell: ({ row }) => row.original.grade || "-",
       },
@@ -280,23 +298,52 @@ const AdminAssessment: React.FC = () => {
         header: "章节/知识点",
         accessorKey: "knowledge_points",
         size: 220,
+        enableHiding: true,
         meta: { className: "w-[220px] align-top" },
         cell: ({ row }) => {
-          const points = parseKnowledgePoints(row.original.knowledge_points).slice(0, 4);
-          if (points.length === 0) return <span className="text-text-tertiary">-</span>;
+          const allPoints = parseKnowledgePoints(row.original.knowledge_points);
+          const displayPoints = allPoints.slice(0, 2);
+          if (allPoints.length === 0) return <span className="text-text-tertiary">-</span>;
+
+          if (allPoints.length <= 2) {
+            return (
+              <div className="flex max-w-[210px] flex-wrap gap-2xs">
+                {displayPoints.map((point, i) => (
+                  <Badge key={i} variant="secondary" className="max-w-[96px] truncate px-1.5 py-0 text-2xs">
+                    {point}
+                  </Badge>
+                ))}
+              </div>
+            );
+          }
+
           return (
-            <div className="flex max-w-[210px] flex-wrap gap-1">
-              {points.map((point) => (
-                <Badge key={point} variant="secondary" className="max-w-[96px] truncate px-1.5 py-0 text-[11px]">
-                  {point}
-                </Badge>
-              ))}
-              {parseKnowledgePoints(row.original.knowledge_points).length > points.length ? (
-                <Badge variant="outline" className="border-border bg-transparent px-1.5 py-0 text-[11px] text-text-tertiary">
-                  +{parseKnowledgePoints(row.original.knowledge_points).length - points.length}
-                </Badge>
-              ) : null}
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex max-w-[210px] flex-wrap gap-2xs text-left hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  {displayPoints.map((point, i) => (
+                    <Badge key={i} variant="secondary" className="max-w-[96px] truncate px-1.5 py-0 text-2xs">
+                      {point}
+                    </Badge>
+                  ))}
+                  <Badge variant="outline" className="border-border bg-transparent px-1.5 py-0 text-2xs text-primary cursor-pointer hover:bg-primary-soft">
+                    +{allPoints.length - displayPoints.length}
+                  </Badge>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="start">
+                <div className="space-y-xs">
+                  <h4 className="font-medium text-sm text-text-base">所有知识点</h4>
+                  <div className="flex flex-wrap gap-xs">
+                    {allPoints.map((point, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {point}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           );
         },
       },
@@ -305,6 +352,7 @@ const AdminAssessment: React.FC = () => {
         header: "题目数",
         accessorKey: "question_count",
         size: 90,
+        enableHiding: true,
         meta: { className: "w-[90px] align-top" },
         cell: ({ row }) => (
           <Badge
@@ -320,6 +368,7 @@ const AdminAssessment: React.FC = () => {
         header: "答题人数",
         accessorKey: "session_count",
         size: 100,
+        enableHiding: true,
         meta: { className: "w-[100px] align-top" },
         cell: ({ row }) => (
           <Badge
@@ -352,16 +401,20 @@ const AdminAssessment: React.FC = () => {
         header: "创建时间",
         accessorKey: "created_at",
         size: 170,
+        enableHiding: true,
         meta: { className: "w-[170px] align-top" },
         cell: ({ row }) => new Date(row.original.created_at).toLocaleString("zh-CN"),
       },
       {
         id: "action",
         header: "操作",
-        size: 240,
-        meta: { className: "w-[240px] align-top" },
+        // 按实际内容测算：「管理」「统计」两个带文字按钮（各 ~70px）+ 删除图标按钮（~37px）
+        // + 按钮间距（gap-1，~4px）+ 单元格左右内边距（px-3，合计 ~22px）≈ 210px，
+        // 再留少量余量以兼容不同平台的中文字体回退，取 220px。
+        size: 220,
+        meta: { className: "w-[220px] align-top" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2xs">
             <Button
               variant="ghost"
               size="sm"
@@ -384,11 +437,14 @@ const AdminAssessment: React.FC = () => {
               variant="ghost"
               size="sm"
               disabled={row.original.id < 0}
-              className="text-destructive hover:text-destructive"
+              className="text-text-tertiary hover:text-destructive"
               onClick={() => handleDelete(row.original.id)}
+              /* 图标按钮必须有无障碍名：lucide 图标会自动加 aria-hidden，
+                 只留图标会让屏幕阅读器读到无名按钮 */
+              aria-label="删除"
+              title="删除"
             >
               <Trash2 className="h-4 w-4" />
-              删除
             </Button>
           </div>
         ),
@@ -401,6 +457,8 @@ const AdminAssessment: React.FC = () => {
     data: items,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -418,6 +476,8 @@ const AdminAssessment: React.FC = () => {
               handleSearchSubmit();
             }
           }}
+          clearable
+          onClear={handleClearSearchInput}
         />
         <Select
           value={gradeFilter}
@@ -462,6 +522,7 @@ const AdminAssessment: React.FC = () => {
           </Button>
         ) : null}
         <div className="flex-1" />
+        <DataTableColumnToggle table={table} />
         <Button onClick={openCreateModal}>
           <Plus className="h-4 w-4" />
           新建测评
@@ -476,11 +537,11 @@ const AdminAssessment: React.FC = () => {
             emptyDescription={search ? "未找到匹配的测评" : "暂无测评配置"}
             emptyAction={<Button onClick={openCreateModal}>创建第一个测评</Button>}
           >
-            <DataTable table={table} tableClassName="min-w-[1160px]" />
+            <DataTable table={table} tableClassName="min-w-[1160px]" stickyHeader />
           </AdminTablePanel>
         </div>
         {items.length > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -515,7 +576,7 @@ const AdminAssessment: React.FC = () => {
           </DialogHeader>
           <Form {...createForm}>
             <form
-              className="space-y-4"
+              className="space-y-form-field-gap"
               onSubmit={createForm.handleSubmit(handleCreate)}
             >
               <FormField
@@ -634,7 +695,7 @@ const AdminAssessment: React.FC = () => {
                 </Button>
                 <Button type="submit" disabled={createForm.formState.isSubmitting}>
                   {createForm.formState.isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Spinner size="sm" />
                   ) : null}
                   创建
                 </Button>

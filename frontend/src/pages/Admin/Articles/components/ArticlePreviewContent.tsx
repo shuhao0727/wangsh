@@ -29,7 +29,7 @@ export default function ArticlePreviewContent({ content, scopeId, styleCss, cust
         <span className="text-base text-text-secondary">
           开始输入内容，预览将在此处显示
         </span>
-        <span className="text-xs text-text-secondary mt-2">
+        <span className="text-xs text-text-secondary mt-xs">
           支持Markdown语法：标题、列表、代码块、链接等
         </span>
       </div>

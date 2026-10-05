@@ -42,7 +42,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           style={{ background: colors.accent }}
         />
         <div className="stat-card-body relative z-10">
-          <div className="stat-card-label mb-1 flex items-center gap-1.5 text-xs text-text-tertiary">
+          <div className="stat-card-label mb-2xs flex items-center gap-1.5 text-xs text-text-tertiary">
             {icon ? (
               <span className="stat-card-icon" style={{ color: colors.icon }}>
                 {icon}
@@ -66,7 +66,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           className,
         )}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-xs">
           {icon ? (
             <div
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -94,7 +94,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         className,
       )}
     >
-      <div className="mb-1 text-xs text-text-tertiary">{label}</div>
+      <div className="mb-2xs text-xs text-text-tertiary">{label}</div>
       <div className="text-xl font-bold text-text-base tabular-nums">{value}</div>
     </div>
   );
