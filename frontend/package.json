@@ -41,7 +41,9 @@
     "ui:page:report": "node scripts/ui-page-workflow.mjs",
     "ui:page:verify": "node scripts/ui-page-workflow.mjs --with-type-check",
     "ui:migration:metrics": "node scripts/ui-migration-metrics.mjs",
-    "ui:migration:gate": "npm run build:check && npm run ui:migration:metrics",
+    "ui:migration:ci": "node scripts/ui-migration-metrics.mjs --ci",
+    "ui:migration:adopt": "node scripts/ui-migration-metrics.mjs --adopt",
+    "ui:migration:gate": "npm run build:check && npm run ui:migration:ci",
     "build:ai-partner": "tsc --noEmit -p tsconfig.ai-partner.json && vite build --config vite.ai-partner.config.ts --mode production",
     "dev:ai-partner": "vite --config vite.ai-partner.config.ts --mode development",
     "test:ai-partner": "vitest run --config vitest.ai-partner.config.ts"

@@ -8,7 +8,7 @@
 
 - `copy-pyodide.js` - `predev` / `prebuild` 复制 Pyodide 资源；仅在目标目录包含
   当前依赖版本 marker 和全部非空核心文件时跳过
-- `bundle-budget.mjs` - `build:check` / `ui:migration:gate` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
+- `bundle-budget.mjs` - `build:check` 包体与最终产物门禁；读取 Vite `build/.vite/manifest.json`，递归扫描 `build/assets/`，将独立 Worker JS 和复制到 `build/pyodide/` 的生产运行时纳入总量，并确认 Mindmap 本地运行时缺失、favicon 与 KaTeX/Monaco 正式字体存在
 - `token-check.mjs` - `token:check:ci` CSS token 完整性门禁；检查 `src/` 中所有 `var(--ws-*)` 引用是否在 `src/styles/index.css` 定义
 - `auth-replaced-login-smoke.mjs` - 同账号二次登录踢下线提示专项生产烟测；先等待提示文案在页面正文可见，再判定 `PASS`，避免仅凭 storage/detail 回放通过而 UI 未渲染的误判
 - `pythonlab-debug-smoke.mjs` - PythonLab 运行/调试 UI 专项烟测
@@ -33,7 +33,14 @@
 - `ui-visual-routes.json` - UI 审计页面清单
 - `ui-page-workflow.mjs` - 单页治理工作流（G3 重写：产出即受 `ui-verify-gate` 契约约束，
   报告写入 `docs/docker/testing/ui-page-reports/`）
-- `ui-migration-metrics.mjs` - UI 迁移指标统计
+- `ui-migration-metrics.mjs` - UI 迁移指标 + **不变量门禁**（G7 改造，2026-10-05）。
+  门禁三项：`message_calls`（antd 的 `message.*`）、`antd_import_files`、
+  `ant_design_icons_import_files`，均须恒为 0。前者证明 Toast 全量走项目约定的
+  `showMessage`（当前 501 处映射、0 处绕过）；后两者是**哨兵** —— antd 迁移早已
+  完成且依赖已移除，一旦有人引回来计数立刻 > 0 并红灯。
+  `tsx_ts_files` 与 `show_message_calls` 是**观测值**，不设门禁（随代码量自然变化，
+  设门禁会让每次加页面都要 `--adopt`，门禁退化成噪音）。
+  用法：`ui:migration:metrics`（打印）/ `ui:migration:ci`（比对）/ `ui:migration:adopt`（采纳，拒绝放宽）。
 
 ## 对应 npm 命令
 

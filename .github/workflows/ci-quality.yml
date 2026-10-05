@@ -322,6 +322,11 @@ jobs:
       # 报告合法性门禁（B13）：防「没有浏览器却声称通过」（计划 §5.2 六条硬规则）。
       - name: ui-verify-gate
         run: npm run -s ui:verify:ci
+      # 迁移不变量门禁（G7 脚本改造）：message_calls 与 antd 引入数必须恒为 0。
+      # 前者证明 Toast 全量走项目约定的 showMessage（现 501 处映射、0 处绕过），
+      # 后者是哨兵——谁把 antd 引回来立刻红灯。
+      - name: ui-migration-gate
+        run: npm run -s ui:migration:ci
       - name: production build
         run: npm run build:check
       # 浏览器 smoke（auth-replaced-login-smoke / prod-smoke-ui）需完整

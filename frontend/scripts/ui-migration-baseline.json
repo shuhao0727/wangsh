@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-10-05T10:19:42.783Z",
+  "metrics": {
+    "message_calls": 0,
+    "antd_import_files": 0,
+    "ant_design_icons_import_files": 0
+  },
+  "note": "只对 §约定的不变量设门禁（message_calls / antd 引入数）。只允许收紧。"
+}
