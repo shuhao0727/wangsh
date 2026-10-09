@@ -54,12 +54,12 @@ async def typst_pdf_cleanup(
 
 @router.get("/ai-agents-metrics")
 async def ai_agents_metrics(
-    _: Dict[str, Any] = Depends(require_admin),
+    _: Dict[str, Any] = Depends(require_super_admin),
 ) -> Dict[str, Any]:
     """AI 智能体监控指标端点（JSON 格式）
 
     返回会话列表性能、分析任务、Dify 租约等关键指标。
-    仅管理员可访问。
+    仅超级管理员可访问。
     """
     metrics = await collect_ai_agents_metrics()
     return {

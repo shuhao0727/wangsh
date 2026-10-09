@@ -1,5 +1,10 @@
 # AI 智能体监控与告警指南
 
+> 状态：active
+> Owner：ops
+> 最近复核：2026-10-06
+> 归档条件：监控端点、告警和排障流程被新的 ops owner 文档完整替代后归档
+
 ## 概述
 
 本文档描述 AI 智能体板块的监控指标、告警规则和运维响应流程。
@@ -10,7 +15,7 @@
 
 **端点**: `GET /api/system/ai-agents-metrics`
 
-**权限**: 管理员
+**权限**: 超级管理员
 
 **返回示例**:
 ```json
@@ -332,8 +337,7 @@ panels:
 
 ## 相关文档
 
-- [缓存实现说明](../api/endpoints/agents/ai_agents/CACHE_IMPLEMENTATION.md)
-- [系统架构文档](../architecture/SYSTEM.md)
+- [AI 智能体系统说明](../features/AI_AGENTS.md) — 缓存与 SSE 流式的实现背景
 - [部署运维文档](../docker/deploy/DEPLOY.md)
 
 ## 变更记录
