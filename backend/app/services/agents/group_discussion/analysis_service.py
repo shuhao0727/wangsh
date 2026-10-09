@@ -58,12 +58,10 @@ async def admin_analyze_session(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
-        result_text = (
-            "fallback_analysis\n"
-            + f"error={msg}\n"
-            + f"session_id={int(session_id)}\n"
-            + f"analysis_type={analysis_type}\n"
-        ).strip()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"智能体分析失败: {msg}"
+        )
 
     analysis = GroupDiscussionAnalysis(
         session_id=session_id,
@@ -202,13 +200,10 @@ async def admin_compare_analyze_sessions(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"智能体分析失败: {msg}")
-        per_session = {int(s.id): int(getattr(s, "message_count", 0) or 0) for s in sessions}
-        result_text = (
-            "fallback_compare\n"
-            + f"error={msg}\n"
-            + f"sessions={json.dumps(ids, ensure_ascii=False)}\n"
-            + f"message_counts={json.dumps(per_session, ensure_ascii=False)}\n"
-        ).strip()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"智能体对比分析失败: {msg}"
+        )
 
     analysis = GroupDiscussionAnalysis(
         session_id=int(ids[0]),
@@ -282,7 +277,10 @@ async def admin_student_profile_analysis(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"分析失败: {msg}")
-        result_text = f"fallback_student_profile\nerror={msg}\nuser_id={user_id}"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"学生画像分析失败: {msg}"
+        )
 
     analysis = GroupDiscussionAnalysis(
         session_id=session_id,
@@ -401,7 +399,10 @@ async def admin_cross_system_analysis(
         msg = str(e)
         if msg.startswith("provider_status_429"):
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"分析失败: {msg}")
-        result_text = f"fallback_cross_system\nerror={msg}\nsessions={json.dumps(ids)}"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"跨系统分析失败: {msg}"
+        )
 
     analysis = GroupDiscussionAnalysis(
         session_id=int(ids[0]),

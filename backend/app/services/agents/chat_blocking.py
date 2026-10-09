@@ -3,13 +3,10 @@
 import asyncio
 from typing import Any, Dict, Optional
 
-from app.services.agents.ai_agent import get_agent
+from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.providers import (
-    get_provider,
     provider_error_message,
     extract_provider_detail,
-    resolve_credentials,
-    build_messages,
     openrouter_model_candidates,
     should_retry_openrouter_fallback,
 )
@@ -48,66 +45,44 @@ async def run_agent_chat_blocking(
     inputs: Optional[Dict[str, Any]] = None,
     history: Optional[list] = None,
 ) -> str:
-    agent = await get_agent(db, agent_id, use_cache=False)
-    if not agent:
-        raise ValueError(f"智能体(id={agent_id})不存在或已删除")
-    if not getattr(agent, "is_active", True):
-        raise ValueError(f"agent_inactive: 智能体(id={agent_id})已停用")
+    ctx = await prepare_chat_context(db, agent_id, message, history, use_cache=False)
 
-    api_endpoint, api_key = resolve_credentials(agent)
-
-    # Debug stub 模式
-    allow_stub = bool(settings.DEBUG) or str(getattr(settings, "REACT_APP_ENV", "") or "").lower() not in {
-        "production", "prod",
-    }
-    if allow_stub and (
-        not api_endpoint or not api_key or (agent.agent_type != "dify" and not agent.model_name)
-    ):
-        msg = (message or "").strip()
-        return f"debug_stub: {msg[:800]}"
-
-    if not api_endpoint or not api_key:
+    if not ctx.api_endpoint or not ctx.api_key:
         raise ValueError(f"智能体(id={agent_id})未配置API地址或密钥")
 
-    provider = get_provider(agent.agent_type, api_endpoint, api_key)
-    provider_name = type(provider).__name__
-    circuit_key = f"{provider_name}:agent:{agent_id}"
-    chat_messages = build_messages(agent, message, history)
-    model = agent.model_name or ""
-
     # 熔断检查
-    if breaker.is_open(circuit_key):
+    if breaker.is_open(ctx.circuit_key):
         raise ValueError("circuit_open: 该服务暂时不可用（连续失败过多），请稍后重试")
 
     # Dify 阻塞式
-    if isinstance(provider, DifyProvider):
+    if isinstance(ctx.provider, DifyProvider):
         try:
-            result = await _blocking_dify(provider, chat_messages, model, user, inputs)
+            result = await _blocking_dify(ctx.provider, ctx.chat_messages, ctx.model, user, inputs)
         except Exception:
-            breaker.record_failure(circuit_key)
+            breaker.record_failure(ctx.circuit_key)
             raise
-        breaker.record_success(circuit_key)
+        breaker.record_success(ctx.circuit_key)
         return result
 
     # 非 Dify
-    if not model:
+    if not ctx.model:
         raise ValueError("model_not_configured")
 
-    headers = provider.build_headers()
-    chat_url = provider.chat_url()
-    candidate_models = [model]
-    if getattr(provider, "is_openrouter", False):
-        candidate_models = openrouter_model_candidates(model) or [model]
+    headers = ctx.provider.build_headers()
+    chat_url = ctx.provider.chat_url()
+    candidate_models = [ctx.model]
+    if getattr(ctx.provider, "is_openrouter", False):
+        candidate_models = openrouter_model_candidates(ctx.model) or [ctx.model]
 
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
         last_error: Optional[str] = None
         for idx, candidate_model in enumerate(candidate_models):
-            payload = provider.build_blocking_payload(chat_messages, candidate_model)
+            payload = ctx.provider.build_blocking_payload(ctx.chat_messages, candidate_model)
             resp = await _post_with_retry(client, chat_url, headers, payload)
 
             if resp and resp.status_code == 200:
-                breaker.record_success(circuit_key)
-                return provider.parse_blocking_response(resp.json())
+                breaker.record_success(ctx.circuit_key)
+                return ctx.provider.parse_blocking_response(resp.json())
 
             status_code = int(resp.status_code) if resp else 0
             msg = provider_error_message(status_code)
@@ -128,7 +103,7 @@ async def run_agent_chat_blocking(
             last_error = f"provider_status_{status_code}: {msg}{suffix}"
             break
 
-        breaker.record_failure(circuit_key)
+        breaker.record_failure(ctx.circuit_key)
         raise ValueError(last_error or "provider_request_failed")
 
 
