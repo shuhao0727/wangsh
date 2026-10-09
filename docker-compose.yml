@@ -91,7 +91,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       TZ: ${TIMEZONE:-Asia/Shanghai}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # 2026-10-09 数据源统一：与 dev compose 共用宿主机目录（D-5）。
+      # 此前这里用 named volume（wangsh_postgres_data），与 dev 的 bind mount
+      # ./data/postgres 是两个不同的库 —— 切栈即静默换库。
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
@@ -118,7 +121,8 @@ services:
         max-file: "3"
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
-      - redis_data:/data
+      # 与 postgres 同理（D-5）：统一到与 dev 相同的宿主机目录
+      - ./data/redis:/data
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
       interval: 10s
@@ -177,6 +181,8 @@ services:
     depends_on:
       <<: *depends-infra
     healthcheck:
+      # /health 是 readiness gate，不是单纯进程存活检查；/ping 只用于 liveness。
+      # 只有顶层 status=healthy 才允许下游 worker 和 gateway 接收依赖流量。
       test: [ "CMD-SHELL", "for i in $(seq 1 30); do python -c \"import atexit,http.client,json,sys; JSONObject=type('JSONObject',(list,),{}); c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); atexit.register(c.close); c.request('GET','/health'); r=c.getresponse(); payload=json.loads(r.read(),object_pairs_hook=JSONObject); statuses=[value for key,value in payload if key == 'status'] if isinstance(payload,JSONObject) else []; sys.exit(0 if 200 <= r.status < 300 and len(statuses) == 1 and statuses[0] == 'healthy' else 1)\" && exit 0; sleep 1; done; exit 1" ]
       interval: 10s
       timeout: 25s
@@ -184,12 +190,13 @@ services:
     networks:
       - wangsh-network
       - dify_network  # 可选：仅在部署了 Dify 时需要；未部署时删除此行和底部 dify_network 定义
-    # 生产启动顺序：
-    # 1. 只读检查迁移状态，提前阻断 alembic_version 与真实 schema 漂移
-    # 2. 空库仅补 Alembic 历史之前的 legacy 基线表，不 stamp
-    # 3. 空库和已有库都通过正式 Alembic 迁移到唯一 head
-    # 4. 创建兼容视图/极少量历史兼容补丁
-    command: [ "sh", "-c", "python /app/scripts/check_migration_state.py && python /app/scripts/bootstrap_db.py --initial-only && alembic -c /app/alembic.ini upgrade head && python /app/scripts/bootstrap_db.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
+    # 生产启动顺序（本 Compose 项目内只允许这一条 migration runner）：
+    # 1. 只读检查迁移状态，提前阻断 alembic_version 与真实 schema 漂移；
+    # 2. 仅在真正空库补 Alembic 历史之前的 legacy baseline，不 stamp；
+    # 3. 由正式 Alembic runner 升级到唯一 head；
+    # 4. 执行普通 bootstrap 的兼容写入和视图重建；
+    # 5. 上述 runner/bootstrap 成功后启动 API；backend health 再作为下游流量门禁。
+    command: [ "sh", "-c", "python /app/scripts/check_migration_state.py && python /app/scripts/bootstrap_db.py --initial-only && alembic -c /app/alembic.ini upgrade head && python /app/scripts/bootstrap_db.py && exec python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}" ]
     volumes:
       - typst_pdfs:/app/data/typst_pdfs
       - uploads_data:/app/uploads
@@ -295,7 +302,7 @@ services:
       <<: *common-with-pythonlab-env
       PYTHONPATH: "/app"
     user: "0:0"
-    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab" ]
+    command: [ "sh", "-c", "celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab -B" ]
     healthcheck:
       test: [ "CMD-SHELL", "celery -A app.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1" ]
       interval: 30s
@@ -404,8 +411,10 @@ services:
       ALL_PROXY: ""
       NO_PROXY: "localhost,127.0.0.1,postgres,redis,backend,frontend"
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     networks:
       - wangsh-network
     healthcheck:
@@ -428,7 +437,7 @@ networks:
     name: docker_default
 
 volumes:
-  postgres_data:
-  redis_data:
+  # postgres_data / redis_data 已随 D-5 数据源统一移除（2026-10-09）：
+  # 两服务改用宿主机目录 ./data/postgres 与 ./data/redis（与 dev compose 一致）。
   typst_pdfs:
   uploads_data:

@@ -115,7 +115,7 @@ services:
       - TYPST_COMPILE_USE_CELERY=true
       - TYPST_STORE_PDF_IN_DB=false
       - PYTHONLAB_DEFAULT_MEMORY_MB=128
-      - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}
+      - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:2.1.3}
       - PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
       - PYTHONLAB_DEBUGPY_PORT=${PYTHONLAB_DEBUGPY_PORT:-5678}
       - PYTHONLAB_READINESS_TIMEOUT_SECONDS=${PYTHONLAB_READINESS_TIMEOUT_SECONDS:-60}
@@ -142,9 +142,13 @@ services:
       - dify_network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # 开发栈当前仍由 backend 的 startup lifespan 处理数据库初始化；在阶段 2
+    # 的 backend 实现收敛前，不把这里伪装成独立 migration runner。
+    # 生产部署不得复用开发栈或依赖 uvicorn --reload 执行迁移。
     command: >
       sh -c "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --timeout-keep-alive 2 --timeout-graceful-shutdown 2"
     healthcheck:
+      # /health 当前是 Compose 的 readiness gate；/ping 只表示进程可达。
       test: [ "CMD-SHELL", "python -c \"import atexit,http.client,json,sys; JSONObject=type('JSONObject',(list,),{}); c=http.client.HTTPConnection('127.0.0.1',8000,timeout=2); atexit.register(c.close); c.request('GET','/health'); r=c.getresponse(); payload=json.loads(r.read(),object_pairs_hook=JSONObject); statuses=[value for key,value in payload if key == 'status'] if isinstance(payload,JSONObject) else []; sys.exit(0 if 200 <= r.status < 300 and len(statuses) == 1 and statuses[0] == 'healthy' else 1)\"" ]
       interval: 10s
       timeout: 3s
@@ -187,8 +191,10 @@ services:
       - ./backend:/app
       - ./data/typst_pdfs:/app/data/typst_pdfs
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     networks:
       - wangsh-network
     command: >
@@ -220,7 +226,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       # PythonLab 调试会话相关
-      - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-pythonlab-sandbox:py311-arm64}
+      - PYTHONLAB_SANDBOX_IMAGE=${PYTHONLAB_SANDBOX_IMAGE:-shuhao07/pythonlab-sandbox:2.1.3}
       - PYTHONLAB_WORKSPACE_ROOT=/tmp/pythonlab/workspaces
       - PYTHONLAB_SESSION_TTL_SECONDS=${PYTHONLAB_SESSION_TTL_SECONDS:-3600}
       - PYTHONLAB_UNATTACHED_TTL_SECONDS=${PYTHONLAB_UNATTACHED_TTL_SECONDS:-600}
@@ -245,12 +251,14 @@ services:
         soft: 65535
         hard: 65535
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     networks:
       - wangsh-network
     command: >
-      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab"
+      sh -c "sleep 10 && celery -A app.celery_app:celery worker -l INFO -Q celery -c ${PYTHONLAB_WORKER_CONCURRENCY:-3} --include app.tasks.pythonlab -B"
 
   # 前端服务 (Vite dev server，热加载)
   frontend:
@@ -272,8 +280,15 @@ services:
     networks:
       - wangsh-network
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     command: ["sh", "-c", "npm config set registry https://registry.npmmirror.com && npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 6608"]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:6608/ >/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   # Caddy 服务 (仅用于生产/模拟生产，开发时可不启动)
   # 开发时直接访问 http://localhost:6608，API 通过 Vite proxy 转发
@@ -288,8 +303,10 @@ services:
     volumes:
       - ./gateway/Caddyfile.dev:/etc/caddy/Caddyfile
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - wangsh-network
       - dify_network

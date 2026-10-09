@@ -11,17 +11,14 @@ from typing import AsyncGenerator, Optional, Dict, Any
 import httpx
 from loguru import logger
 
-from app.services.agents.ai_agent import get_agent
+from app.services.agents.chat_common import prepare_chat_context
 from app.services.agents.assistant_answer_sanitizer import (
     ReasoningContentFilter,
     sanitize_reasoning_strings,
 )
 from app.services.agents.providers import (
-    get_provider,
     provider_error_message,
     extract_provider_detail,
-    resolve_credentials,
-    build_messages,
     openrouter_model_candidates,
     should_retry_openrouter_fallback,
 )
@@ -65,54 +62,42 @@ class PreparedAgentStream:
 async def _prepare_stream(db, agent_id: int, message: str, history):
     """加载智能体与 Provider 并完成前置校验；失败时抛出 _StreamSetupError。"""
     try:
-        agent = await get_agent(db, agent_id)
+        ctx = await prepare_chat_context(db, agent_id, message, history, use_cache=True)
+    except ValueError as e:
+        error_msg = str(e)
+        if "不存在或已删除" in error_msg:
+            raise _StreamSetupError({"error": "invalid_agent"})
+        if "agent_inactive" in error_msg:
+            raise _StreamSetupError({"error": "agent_inactive", "message": "该智能体已停用"})
+        # 其他 ValueError 是配置问题
+        raise _StreamSetupError(
+            {"error": "stream_setup_failed", "message": "初始化智能体请求失败，请稍后重试"}
+        )
     except Exception as e:
+        logger.exception("初始化智能体流失败: agent_id={}", agent_id)
+        # RuntimeError 或其他异常通常是基础设施问题（数据库、网络等）
         raise _StreamSetupError(
             {"error": "stream_failed", "message": "读取智能体配置失败", "detail": str(e)[:500]}
         )
-    if not agent:
-        raise _StreamSetupError({"error": "invalid_agent"})
-    if not getattr(agent, "is_active", True):
-        raise _StreamSetupError({"error": "agent_inactive", "message": "该智能体已停用"})
 
-    try:
-        api_endpoint, api_key = resolve_credentials(agent)
-    except Exception:
-        logger.exception("初始化智能体流失败: agent_id={}", agent_id)
-        raise _StreamSetupError(
-            {"error": "stream_setup_failed", "message": "初始化智能体请求失败，请稍后重试"}
-        )
-
-    try:
-        provider = get_provider(agent.agent_type, api_endpoint, api_key)
-        provider_name = type(provider).__name__
-        circuit_key = f"{provider_name}:agent:{agent_id}"
-        chat_messages = build_messages(agent, message, history)
-        model = agent.model_name or ""
-    except Exception:
-        logger.exception("构建智能体 Provider 失败: agent_id={}", agent_id)
-        raise _StreamSetupError(
-            {"error": "stream_setup_failed", "message": "初始化智能体请求失败，请稍后重试"}
-        )
-
-    if not api_endpoint:
+    if not ctx.api_endpoint:
         raise _StreamSetupError(
             {"error": "missing_endpoint", "message": "该智能体未配置API地址，请在管理后台设置"}
         )
-    if not api_key:
+    if not ctx.api_key:
         raise _StreamSetupError(
             {"error": "missing_api_key", "message": "该智能体未配置API密钥，请在管理后台设置"}
         )
-    if breaker.is_open(circuit_key):
+    if breaker.is_open(ctx.circuit_key):
         raise _StreamSetupError(
             {"error": "circuit_open", "message": "该服务暂时不可用（连续失败过多），请稍后重试"}
         )
 
     return PreparedAgentStream(
-        provider=provider,
-        circuit_key=circuit_key,
-        chat_messages=chat_messages,
-        model=model,
+        provider=ctx.provider,
+        circuit_key=ctx.circuit_key,
+        chat_messages=ctx.chat_messages,
+        model=ctx.model,
     )
 
 

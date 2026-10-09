@@ -4,11 +4,39 @@ from types import SimpleNamespace
 import httpx
 
 import app.services.agents.chat_stream as chat_stream
+import app.services.agents.chat_common as chat_common
 from app.core.config import settings
 from app.services.agents.providers.anthropic_provider import AnthropicProvider
 from app.services.agents.providers.dify_provider import DifyProvider
 from app.services.agents.providers.openai_provider import OpenAIProvider
 from app.services.agents.providers.registry import get_provider
+
+
+class _FakeDifyConcurrencyLease:
+    """Mock DifyConcurrencyLease that always succeeds without Redis."""
+    def __init__(self, *args, **kwargs):
+        self.acquired = False
+        self.lost = False
+
+    async def acquire(self):
+        self.acquired = True
+        return self
+
+    def is_held(self):
+        return self.acquired and not self.lost
+
+    async def release(self):
+        self.acquired = False
+
+    async def wait_lost(self):
+        return False
+
+    async def __aenter__(self):
+        await self.acquire()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.release()
 
 
 class _FakeProvider:
@@ -174,18 +202,18 @@ class _SingleResponseClient:
 
 
 def _configure_chat(monkeypatch, provider, response):
-    async def fake_get_agent(_db, _agent_id):
+    async def fake_get_agent(_db, _agent_id, use_cache=True):
         return SimpleNamespace(
             agent_type="openai",
             model_name="gpt-4o-mini",
             system_prompt="",
         )
 
-    monkeypatch.setattr(chat_stream, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_stream, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
-    monkeypatch.setattr(chat_stream, "get_provider", lambda *_args, **_kwargs: provider)
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
+    monkeypatch.setattr(chat_common, "get_provider", lambda *_args, **_kwargs: provider)
     monkeypatch.setattr(
-        chat_stream,
+        chat_common,
         "build_messages",
         lambda _agent, message, _history: [{"role": "user", "content": message}],
     )
@@ -209,18 +237,18 @@ async def _collect_chat_events():
 
 
 def test_stream_chat_rejects_empty_upstream_answer(monkeypatch):
-    async def fake_get_agent(_db, _agent_id):
+    async def fake_get_agent(_db, _agent_id, use_cache=True):
         return SimpleNamespace(
             agent_type="openai",
             model_name="gpt-4o-mini",
             system_prompt="",
         )
 
-    monkeypatch.setattr(chat_stream, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_stream, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
-    monkeypatch.setattr(chat_stream, "get_provider", lambda *_args, **_kwargs: _FakeProvider())
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
+    monkeypatch.setattr(chat_common, "get_provider", lambda *_args, **_kwargs: _FakeProvider())
     monkeypatch.setattr(
-        chat_stream,
+        chat_common,
         "build_messages",
         lambda _agent, message, _history: [{"role": "user", "content": message}],
     )
@@ -252,18 +280,18 @@ def test_stream_chat_rejects_empty_upstream_answer(monkeypatch):
 
 
 def test_stream_chat_does_not_cut_off_a_long_stream_that_keeps_progressing(monkeypatch):
-    async def fake_get_agent(_db, _agent_id):
+    async def fake_get_agent(_db, _agent_id, use_cache=True):
         return SimpleNamespace(
             agent_type="openai",
             model_name="gpt-4o-mini",
             system_prompt="",
         )
 
-    monkeypatch.setattr(chat_stream, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_stream, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
-    monkeypatch.setattr(chat_stream, "get_provider", lambda *_args, **_kwargs: _SlowTextProvider())
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "resolve_credentials", lambda _agent: ("https://api.openai.com/v1", "sk-test"))
+    monkeypatch.setattr(chat_common, "get_provider", lambda *_args, **_kwargs: _SlowTextProvider())
     monkeypatch.setattr(
-        chat_stream,
+        chat_common,
         "build_messages",
         lambda _agent, message, _history: [{"role": "user", "content": message}],
     )
@@ -387,7 +415,7 @@ def test_stream_chat_converts_agent_lookup_failure_to_sse_error(monkeypatch):
     async def fail_get_agent(_db, _agent_id):
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(chat_stream, "get_agent", fail_get_agent)
+    monkeypatch.setattr(chat_common, "get_agent", fail_get_agent)
 
     output = asyncio.run(_collect_chat_events())
 
@@ -396,7 +424,7 @@ def test_stream_chat_converts_agent_lookup_failure_to_sse_error(monkeypatch):
 
 
 def test_stream_chat_converts_setup_failure_to_sse_error(monkeypatch):
-    async def fake_get_agent(_db, _agent_id):
+    async def fake_get_agent(_db, _agent_id, use_cache=True):
         return SimpleNamespace(
             is_active=True,
             agent_type="openai",
@@ -407,8 +435,8 @@ def test_stream_chat_converts_setup_failure_to_sse_error(monkeypatch):
     def fail_resolve_credentials(_agent):
         raise RuntimeError("broken provider setup")
 
-    monkeypatch.setattr(chat_stream, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_stream, "resolve_credentials", fail_resolve_credentials)
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "resolve_credentials", fail_resolve_credentials)
 
     output = asyncio.run(_collect_chat_events())
 
@@ -443,6 +471,7 @@ def test_dify_does_not_retry_after_partial_output(monkeypatch):
 
     client = _DifyClient()
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: client)
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example", "app-key")
 
     async def collect_events():
@@ -466,7 +495,7 @@ def test_dify_does_not_retry_after_partial_output(monkeypatch):
 
 
 def test_stream_chat_rejects_inactive_agent_before_provider_call(monkeypatch):
-    async def fake_get_agent(_db, _agent_id):
+    async def fake_get_agent(_db, _agent_id, use_cache=True):
         return SimpleNamespace(
             is_active=False,
             agent_type="openai",
@@ -481,8 +510,8 @@ def test_stream_chat_rejects_inactive_agent_before_provider_call(monkeypatch):
         provider_called = True
         raise AssertionError("inactive agents must not call a provider")
 
-    monkeypatch.setattr(chat_stream, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_stream, "get_provider", fail_get_provider)
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "get_provider", fail_get_provider)
 
     output = asyncio.run(_collect_chat_events())
 
@@ -496,6 +525,7 @@ def test_dify_clean_eof_without_terminal_event_is_reported(monkeypatch):
             return _FakeStreamContext(_DifyIncompleteResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     calls = {"success": [], "failure": []}
@@ -536,6 +566,7 @@ def test_dify_terminal_event_split_across_chunks_completes(monkeypatch):
             return _FakeStreamContext(_DifyCompleteResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     calls = {"success": [], "failure": []}
@@ -601,6 +632,7 @@ def test_dify_filters_reasoning_blocks_and_agent_thought_events(monkeypatch):
             return _FakeStreamContext(_DifyReasoningResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
@@ -638,6 +670,7 @@ def test_dify_workflow_finished_outputs_answer_completes(monkeypatch):
             return _FakeStreamContext(_DifyWorkflowResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
     calls = {"success": [], "failure": []}
     monkeypatch.setattr(chat_stream.breaker, "record_success", lambda key: calls["success"].append(key))
@@ -676,6 +709,7 @@ def test_dify_message_end_answer_completes_without_reasoning_leak(monkeypatch):
             return _FakeStreamContext(_DifyMessageEndResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
@@ -708,6 +742,7 @@ def test_dify_drops_unparseable_trailing_data_that_may_contain_reasoning(monkeyp
             return _FakeStreamContext(_DifyTruncatedReasoningResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
@@ -745,6 +780,7 @@ def test_dify_preserves_event_fields_when_crlf_is_split_across_chunks(monkeypatc
             return _FakeStreamContext(_DifyCrLfResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
@@ -782,6 +818,7 @@ def test_dify_filters_reasoning_split_across_message_delta_events(monkeypatch):
             return _FakeStreamContext(_DifyMessageDeltaResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
@@ -817,6 +854,7 @@ def test_dify_empty_message_end_is_an_explicit_error(monkeypatch):
 
     calls = {"success": 0, "failure": 0}
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     monkeypatch.setattr(chat_stream.breaker, "record_success", lambda _key: calls.__setitem__("success", calls["success"] + 1))
     monkeypatch.setattr(chat_stream.breaker, "record_failure", lambda _key: calls.__setitem__("failure", calls["failure"] + 1))
     provider = DifyProvider("https://dify.example/v1", "app-key")
@@ -849,6 +887,7 @@ def test_dify_reasoning_only_message_end_is_not_success(monkeypatch):
             return _FakeStreamContext(_DifyReasoningOnlyResponse())
 
     monkeypatch.setattr(chat_stream, "get_http_client", lambda: _DifyClient())
+    monkeypatch.setattr(chat_stream, "DifyConcurrencyLease", _FakeDifyConcurrencyLease)
     provider = DifyProvider("https://dify.example/v1", "app-key")
 
     async def collect_events():
