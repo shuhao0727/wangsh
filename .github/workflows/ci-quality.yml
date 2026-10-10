@@ -29,6 +29,10 @@ jobs:
         run: node scripts/check-version-consistency.mjs
       - name: workflow contracts
         run: node --test scripts/workflow-contracts.test.mjs
+      - name: env consistency contracts
+        # .env / .env.dev 本身是 gitignored，CI 里只跑契约测试（用临时 fixture），
+        # 真正的两栈比对由 check-env-consistency.mjs 在本地/start-dev.sh 执行。
+        run: node --test scripts/env-consistency.test.mjs
       - name: shell syntax
         run: |
           for script in \
@@ -77,6 +81,9 @@ jobs:
       SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
       SUPER_ADMIN_PASSWORD: ci-admin-password
       AGENT_API_KEY_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      # test_conversation_list_isolated.py 要求 loopback Redis，缺省会直接抛
+      # RuntimeError 而非 skip，导致 63 项测试整块失败。CI 必须显式提供。
+      CONVERSATION_TEST_REDIS_URL: redis://127.0.0.1:56379/15
     services:
       postgres:
         image: postgres:16-alpine
@@ -88,6 +95,15 @@ jobs:
           - 55433:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d wangsh_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
@@ -116,21 +132,21 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           WORKFLOW_CALL_BASE_REF: origin/main
         run: |
-          python scripts/check_python_governance.py check
+          python backend/scripts/check_python_governance.py check
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            python scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"
+            python backend/scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            python scripts/check_python_governance.py check --base-ref "$PUSH_BEFORE_SHA"
+            python backend/scripts/check_python_governance.py check --base-ref "$PUSH_BEFORE_SHA"
           elif [ "$EVENT_NAME" = "workflow_call" ]; then
             git fetch --no-tags origin main
-            python scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
+            python backend/scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
           fi
       - name: migrate and bootstrap clean database
         run: |
-          python scripts/check_migration_state.py
-          python scripts/bootstrap_db.py --initial-only
+          python backend/scripts/check_migration_state.py
+          python backend/scripts/bootstrap_db.py --initial-only
           alembic upgrade head
-          python scripts/bootstrap_db.py
+          python backend/scripts/bootstrap_db.py
           python - <<'PY'
           import os
           import asyncio
@@ -221,7 +237,7 @@ jobs:
             git fetch --no-tags origin main
             BASE_REF="origin/main"
           fi
-          python scripts/check_changed_lines_coverage.py \
+          python backend/scripts/check_changed_lines_coverage.py \
             --coverage coverage.json --base-ref "$BASE_REF"
 
       # ── 核心业务 smoke 入 CI（评估落地，起步阶段）────────────────────
