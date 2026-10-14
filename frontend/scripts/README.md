@@ -285,3 +285,10 @@ Tailwind v3 只为静态色生成 `/N` 规则。项目把颜色映射到 `var(--
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。
 - 截图采集、手工调试、临时验证脚本统一清理，不回流到本目录。
 - PythonLab 调试控制区一旦涉及 `tooltip / hover / pointer / focus` 相关改动，必须补跑真实 Chrome channel 与 WebKit。
+
+## 前端静态独立入口合同
+
+`caddy-directory-entry.test.mjs` 由 `npm run test:scripts` 默认收集，检查独立
+AI Partner 的无尾斜线、目录和显式 HTML 入口匹配；目录只回到其自身 index，
+不存在的文件仍为 404，不能误回主站 SPA。它也约束 KaTeX CDN 字体源和未放宽
+的 object/base/form 边界。静态源码合同不替代实际 Caddy HTTP、浏览器或字体渲染。

@@ -1047,3 +1047,15 @@ degraded/unhealthy 返回 503；`/ping` 仅为 liveness。Compose/网关切换�
 
 实际执行范围和首败/复测见 [TEST_STATUS](../testing/TEST_STATUS.md)；
 本地提交不构成生产迁移、镜像发布或完整备份恢复的授权。
+
+## 前端独立 HTML 目录入口与字体源
+
+生产前端 Caddy 明确处理 `/games/ai-partner` 与 `/games/ai-partner/*`；
+`try_files {path} {path}/index.html =404` 仅允许该路径自己的目录 index。
+独立入口和 JS/静态资源缺失必须为 404，不得用主站 `/index.html` 刷出 200。
+独立 HTML 保持 `no-cache`，生产字体源允许已固定 KaTeX CSS 所用的
+`https://cdn.jsdelivr.net`；不扩大 object、base、form 边界，也不关闭 TLS 校验。
+
+验收须用同一候选配置及构建产物检查裸路径、目录、显式 HTML 与不存在资源；
+检查 MIME、CSP、cache header 和双引擎原生交互。只挂载静态产物的 Caddy
+运输验证不是全 production Dockerfile 构建、后台功能或真实字体渲染验收。
