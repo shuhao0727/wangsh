@@ -89,3 +89,16 @@ Run、Debug、Pause、Continue、Step、tooltip、hover、pointer 或 focus 时�
 直接游戏回归及 `build:check`，不能借当前工作区其他未提交代码证明兼容。
 安装脚本必须在无业务凭据的隔离副本执行；局测与真实浏览器/WebGL验收分开，
 当前动态结果与未验范围见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 共享工具与 hooks 直接回归
+
+默认组件门禁中的 `sharedUtilitiesHooks.test.tsx` 直接验证日期格式、未知错误
+对象的兜底、分页边界与分页读取、总量缩小后的上一页、独立预览返回及批量
+操作部分失败，含同步校验抛错时仍逐项结算。查询失效复用既有 `queryKeys`，不靠页面混合测试借后续实现。
+错误响应 `data` 为空或不为对象时返回未知错误，避免处理异常时再次抛错；分页
+状态与有效显示页同步，上一页/下一页从当前显示页导航。独立页关闭被拒时
+返回所属页面，成功关闭或卸载时不迟到导航。
+
+执行 `npm test -- src/components/sharedUtilitiesHooks.test.tsx`、`npm run type-check`
+和适用静态门禁。组件内存替身不等于真实浏览器关页或业务 API/数据库验收，
+动态证据与限制仍见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
