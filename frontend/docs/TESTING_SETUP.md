@@ -79,3 +79,13 @@ Run、Debug、Pause、Continue、Step、tooltip、hover、pointer 或 focus 时�
 - [前端脚本](../scripts/README.md)
 - [CI/CD](../../docs/docker/deploy/CICD.md)
 - [前端 UI 文档](../../docs/docker/frontend/README.md)
+
+## Three.js 依赖升级验证（未发布）
+
+`three` 与 `@types/three` 的依赖区间分别同步为 `^0.186.1` 与
+`^0.186.0`，类型包作为构建依赖与锁文件同批维护。依赖升级不代表应用版本发布；
+版本字段由最终封版批同步。AI Partner 改用受支持的 `PCFShadowMap`，
+避免新版运行时移除 `PCFSoftShadowMap` 后触发警告与隐式回退。验证从实际提交候选执行 `npm ci`、`type-check`、
+直接游戏回归及 `build:check`，不能借当前工作区其他未提交代码证明兼容。
+安装脚本必须在无业务凭据的隔离副本执行；局测与真实浏览器/WebGL验收分开，
+当前动态结果与未验范围见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
