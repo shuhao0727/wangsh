@@ -1,5 +1,15 @@
 # 发布与运维记录
 
+## 未发布基础：缓存叶子提取与 Redis 连接工厂（2026-10-14）
+
+- 提取 key、query decorator 与失效 helper，保留旧门面及调用方动态 patch 点。
+- 管理文章缓存键预留 trim 后搜索词分区，`clear_all_article_cache` 不依赖
+  单条 ID/slug；这不是本批已提交完整文章搜索功能的声明。
+- 连接工厂采用 redis-py 证书参数，Sentinel discovery/master 配置与自有
+  池关闭分离；缓存初始化失败或取消时释放候选客户端。
+- 直接回归见测试 owner，实际局测/容器证据与未验范围见
+  [TEST_STATUS](testing/TEST_STATUS.md)。没有发布或切换正式网站。
+
 ## 未发布基础：数据库查询与提交错误工具（2026-10-14）
 
 - 新增 `get_or_404` / `get_or_none`，复用既有 AsyncSession 查询与 HTTP 错误机制。

@@ -1,5 +1,18 @@
 # 后端测试说明
 
+## 缓存叶子与连接工厂回归
+
+缓存门面保持 `cache`、key formatter、logger 及失效函数的动态 patch 点；
+提取实现位于 `cache_keys.py`、`cache_query.py`、`cache_invalidation.py`。
+`core/test_cache_facade_leaf_isolated.py` 直接核这些叶子：搜索分区、调用方
+patch 点、ignore args、None 不写缓存、失效模式、初始化 single-flight 与
+失败/取消回收；不导入跨领域混合合同。组合既有 `test_cache_set_nx.py` 和
+`test_redis_client_factory.py` 只提供叶子直接证据，不代替后续业务调用方。
+
+遵守 collection 前隔离要求。TLS/Sentinel 参数与池归属的局测不等于
+证书握手或真实 Sentinel failover；TCP 实测、否定反例与源码绑定单列于
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。不扩大池刷绿。
+
 ## 共享数据库辅助工具离线回归
 
 `utils/test_db_helpers.py` 使用内存 SQLite 核对 `get_or_404` 的命中、缺失、

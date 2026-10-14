@@ -1,5 +1,19 @@
 # 部署指南
 
+## Redis 连接工厂基础（未发布）
+
+缓存客户端通过 redis-py 原生证书参数构造 TLS，不传 `ssl_context`。
+`REDIS_SSL_CERT_REQS` 默认 `required`，可选 CA/客户端证书通过
+`REDIS_SSL_CA_CERTS`、`REDIS_SSL_CA_DATA`、`REDIS_SSL_CERTFILE`、
+`REDIS_SSL_KEYFILE` 传入；不以关闭证书校验验收。Sentinel discovery
+与 master 数据连接分开：发现密码取 `REDIS_SENTINEL_PASSWORD`，
+`REDIS_SENTINEL_SSL` / `REDIS_SENTINEL_SSL_*` 可覆盖发现通道；master
+保留原密码/TLS 配置。客户端关闭要同时释放自有数据和 discovery 池。
+
+本批只提交工厂及缓存门面，不表示其他模块已接入、镜像已发布或运行栈
+已切换。参数合同、真实 TCP 与 TLS/Sentinel 验收不得混计，实际证据见
+[TEST_STATUS](../testing/TEST_STATUS.md)。
+
 > 最后更新：2026-09-27
 
 ---

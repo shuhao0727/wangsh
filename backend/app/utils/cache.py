@@ -3,13 +3,74 @@ Redis缓存工具
 为FastAPI应用提供简单的Redis缓存功能
 """
 
-import json
 import asyncio
-from typing import Any, Optional, List
+import json
+import os
+import sys
+from typing import Any, List, Optional
+
 import redis.asyncio as redis
 from app.core.config import settings
+from app.utils import cache_invalidation as _invalidation
+from app.utils.cache_keys import (
+    AnalysisCacheKeys,
+    cache_key_generator,
+    compact_cache_key_generator,
+)
+from app.utils.cache_query import query_cache_decorator
+from app.utils.redis_client import (
+    create_async_redis_client,
+    create_async_sentinel_client,
+)
 
 from loguru import logger
+
+
+def _optional_setting(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Read optional TLS settings without expanding the core config contract."""
+    value = getattr(settings, name, None)
+    if value not in (None, ""):
+        return str(value)
+    return os.getenv(name, default)
+
+
+def _parse_sentinel_hosts(raw_hosts: str) -> list[tuple[str, int]]:
+    hosts: list[tuple[str, int]] = []
+    for item in raw_hosts.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if ":" in item:
+            host, port = item.rsplit(":", 1)
+            hosts.append((host.strip(), int(port.strip())))
+        else:
+            hosts.append((item, 26379))
+    return hosts
+
+
+def _sentinel_connection_options() -> dict[str, Any]:
+    """Optional discovery overrides; absent values inherit the data TLS policy."""
+    options: dict[str, Any] = {}
+    for setting, option in (
+        ("REDIS_SENTINEL_SSL", "ssl_enabled"),
+        ("REDIS_SENTINEL_SSL_CERT_REQS", "ssl_cert_reqs"),
+        ("REDIS_SENTINEL_SSL_CA_CERTS", "ssl_ca_certs"),
+        ("REDIS_SENTINEL_SSL_CA_DATA", "ssl_ca_data"),
+        ("REDIS_SENTINEL_SSL_CHECK_HOSTNAME", "ssl_check_hostname"),
+        ("REDIS_SENTINEL_SSL_CERTFILE", "ssl_certfile"),
+        ("REDIS_SENTINEL_SSL_KEYFILE", "ssl_keyfile"),
+    ):
+        value = _optional_setting(setting)
+        if value is None:
+            continue
+        if option in {"ssl_enabled", "ssl_check_hostname"}:
+            normalized = value.lower()
+            if normalized not in {"true", "false", "1", "0"}:
+                raise ValueError(f"Invalid boolean for {setting}")
+            options[option] = normalized in {"true", "1"}
+        else:
+            options[option] = value
+    return options
 
 
 class RedisCache:
@@ -42,53 +103,29 @@ class RedisCache:
         try:
             self._loop = asyncio.get_running_loop()
 
-            # 构建 SSL 上下文（云 Redis 需要 TLS 连接）
-            ssl_context = None
-            if settings.REDIS_SSL:
-                import ssl
-                ssl_context = ssl.create_default_context()
-                cert_reqs_map = {
-                    "required": ssl.CERT_REQUIRED,
-                    "optional": ssl.CERT_OPTIONAL,
-                    "none": ssl.CERT_NONE,
-                }
-                ssl_context.check_hostname = (settings.REDIS_SSL_CERT_REQS != "none")
-                ssl_context.verify_mode = cert_reqs_map.get(
-                    settings.REDIS_SSL_CERT_REQS, ssl.CERT_REQUIRED
-                )
-
             if settings.REDIS_SENTINEL_ENABLED and settings.REDIS_SENTINEL_HOSTS:
-                # Sentinel 模式：解析 sentinel 地址列表
-                sentinel_hosts = []
-                for item in settings.REDIS_SENTINEL_HOSTS.split(","):
-                    item = item.strip()
-                    if ":" in item:
-                        h, p = item.rsplit(":", 1)
-                        sentinel_hosts.append((h.strip(), int(p.strip())))
-                    else:
-                        sentinel_hosts.append((item, 26379))
-
-                sentinel = redis.Sentinel(
-                    sentinel_hosts,
-                    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
-                    socket_keepalive=True,
-                    password=settings.REDIS_PASSWORD,
-                )
-                sentinel_kwargs: dict = {}
-                if ssl_context is not None:
-                    sentinel_kwargs["ssl"] = True
-                    sentinel_kwargs["ssl_context"] = ssl_context
-                self._client = sentinel.master_for(
-                    settings.REDIS_SENTINEL_MASTER,
+                self._client = create_async_sentinel_client(
+                    sentinels=_parse_sentinel_hosts(settings.REDIS_SENTINEL_HOSTS),
+                    master_name=settings.REDIS_SENTINEL_MASTER,
+                    sentinel_password=_optional_setting("REDIS_SENTINEL_PASSWORD"),
+                    sentinel_options=_sentinel_connection_options(),
                     db=settings.REDIS_DB_CACHE,
                     password=settings.REDIS_PASSWORD,
                     decode_responses=True,
-                    **sentinel_kwargs,
+                    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
+                    socket_keepalive=True,
+                    max_connections=settings.REDIS_MAX_CONNECTIONS,
+                    ssl_enabled=settings.REDIS_SSL,
+                    ssl_cert_reqs=settings.REDIS_SSL_CERT_REQS,
+                    ssl_ca_certs=_optional_setting("REDIS_SSL_CA_CERTS"),
+                    ssl_ca_data=_optional_setting("REDIS_SSL_CA_DATA"),
+                    ssl_check_hostname=None,
+                    ssl_certfile=_optional_setting("REDIS_SSL_CERTFILE"),
+                    ssl_keyfile=_optional_setting("REDIS_SSL_KEYFILE"),
                 )
                 logger.info(f"Redis Sentinel 模式初始化成功，master={settings.REDIS_SENTINEL_MASTER}")
             else:
-                # 单机模式：使用连接池
-                pool = redis.ConnectionPool(
+                self._client = create_async_redis_client(
                     host=settings.REDIS_HOST,
                     port=settings.REDIS_PORT,
                     db=settings.REDIS_DB_CACHE,
@@ -97,20 +134,34 @@ class RedisCache:
                     socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
                     socket_keepalive=True,
                     max_connections=settings.REDIS_MAX_CONNECTIONS,
+                    ssl_enabled=settings.REDIS_SSL,
+                    ssl_cert_reqs=settings.REDIS_SSL_CERT_REQS,
+                    ssl_ca_certs=_optional_setting("REDIS_SSL_CA_CERTS"),
+                    ssl_ca_data=_optional_setting("REDIS_SSL_CA_DATA"),
+                    ssl_check_hostname=None,
+                    ssl_certfile=_optional_setting("REDIS_SSL_CERTFILE"),
+                    ssl_keyfile=_optional_setting("REDIS_SSL_KEYFILE"),
                 )
-                redis_kwargs: dict = {}
-                if ssl_context is not None:
-                    redis_kwargs["ssl"] = True
-                    redis_kwargs["ssl_context"] = ssl_context
-                self._client = redis.Redis(connection_pool=pool, **redis_kwargs)
                 logger.info(f"Redis 单机模式初始化成功，max_connections={settings.REDIS_MAX_CONNECTIONS}")
 
             # 测试连接
-            await self._client.ping()
+            await asyncio.wait_for(
+                self._client.ping(), timeout=max(0.1, settings.REDIS_CONNECT_TIMEOUT)
+            )
             self._initialized = True
 
-        except Exception as e:
-            logger.error(f"Redis缓存客户端初始化失败: {e}")
+        except BaseException as e:
+            # A failed/cancelled candidate must not leave an owned pool behind.
+            failed_client, self._client = self._client, None
+            self._initialized = False
+            self._loop = None
+            if failed_client is not None:
+                try:
+                    await asyncio.wait_for(failed_client.aclose(), timeout=1.0)
+                except (Exception, asyncio.CancelledError):
+                    pass
+            if not isinstance(e, asyncio.CancelledError):
+                logger.error(f"Redis缓存客户端初始化失败: {e}")
             raise
     
     async def get_client(self) -> redis.Redis:
@@ -280,94 +331,16 @@ class RedisCache:
 cache: RedisCache = RedisCache()  # type: ignore[awaitable-is-bool]
 
 
-def cache_key_generator(
-    prefix: str, 
-    **kwargs
-) -> str:
-    """生成缓存键（优化版）"""
-    if not kwargs:
-        return prefix
-    
-    # 将布尔值转换为数字
-    processed_kwargs = {}
-    for key, value in kwargs.items():
-        if isinstance(value, bool):
-            processed_kwargs[key] = 1 if value else 0
-        elif value is None:
-            processed_kwargs[key] = 0  # 将None转换为0
-        else:
-            processed_kwargs[key] = value
-    
-    # 使用固定顺序的键，避免排序开销
-    # 注意：调用方需要按固定顺序传递参数
-    param_str = ":".join(str(processed_kwargs[key]) for key in sorted(kwargs.keys()))
-    return f"{prefix}:{param_str}"
-
-
-def compact_cache_key_generator(
-    prefix: str,
-    *args
-) -> str:
-    """紧凑版缓存键生成器（直接传递参数值）"""
-    if not args:
-        return prefix
-    
-    param_str = ":".join(str(arg) for arg in args)
-    return f"{prefix}:{param_str}"
-
-
-# 缓存装饰器
+# 缓存装饰器：保留旧入口以及可 monkeypatch 的模块依赖。
 def cache_decorator(
     prefix: str,
     expire_seconds: int = 300,  # 默认5分钟
-    ignore_args: Optional[List[str]] = None
+    ignore_args: Optional[List[str]] = None,
 ):
-    """
-    缓存装饰器
-    
-    Args:
-        prefix: 缓存键前缀
-        expire_seconds: 缓存过期时间（秒）
-        ignore_args: 忽略的参数列表（不参与缓存键生成）
-    """
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            # 生成缓存键
-            cache_kwargs = kwargs.copy()
-            
-            # 从args中提取参数（假设是FastAPI的依赖注入，第一个参数是self或request）
-            if args:
-                # 如果是类方法，跳过self
-                # 简单处理：只考虑关键字参数
-                pass
-            
-            # 移除忽略的参数
-            if ignore_args:
-                for arg in ignore_args:
-                    cache_kwargs.pop(arg, None)
-            
-            # 生成缓存键
-            key = cache_key_generator(prefix, **cache_kwargs)
-            
-            # 尝试从缓存获取
-            cached_value = await cache.get(key)
-            if cached_value is not None:
-                logger.debug(f"缓存命中: {key}")
-                return cached_value
-            
-            # 缓存未命中，执行函数
-            logger.debug(f"缓存未命中: {key}")
-            result = await func(*args, **kwargs)
-            
-            # 缓存结果
-            if result is not None:
-                await cache.set(key, result, expire_seconds)
-            
-            return result
-        
-        return wrapper
-    
-    return decorator
+    """缓存装饰器；ignore_args 不参与键生成，None 结果不写入缓存。"""
+    return query_cache_decorator(
+        prefix, expire_seconds, ignore_args, sys.modules[__name__]
+    )
 
 
 # 特定功能的缓存键生成器
@@ -399,10 +372,11 @@ class ArticleCacheKeys:
         published_only: bool = True,
         include_relations: bool = False,
         category_id: Optional[int] = None,
-        author_id: Optional[int] = None
+        author_id: Optional[int] = None,
+        search: Optional[str] = None,
     ) -> str:
         """管理文章列表缓存键（紧凑版）"""
-        # 使用固定顺序：page, size, published_only, include_relations, category_id, author_id
+        # 使用固定顺序，搜索词必须参与分区，避免不同结果互相污染。
         published_num = 1 if published_only else 0
         relation_num = 1 if include_relations else 0
         return compact_cache_key_generator(
@@ -412,7 +386,8 @@ class ArticleCacheKeys:
             published_num,
             relation_num,
             category_id or 0,
-            author_id or 0
+            author_id or 0,
+            (search or "").strip(),
         )
     
     @staticmethod
@@ -470,108 +445,28 @@ class ArticleCacheKeys:
         return patterns
 
 
-# 缓存清理工具
+# 缓存清理工具：保留原签名，helper 动态读取此模块的 cache/keys/logger。
 async def clear_article_cache(
     article_id: Optional[int] = None,
-    slug: Optional[str] = None
+    slug: Optional[str] = None,
 ) -> None:
-    """清除文章相关缓存"""
-    patterns = ArticleCacheKeys.clear_article(article_id, slug)
-    
-    deleted_total = 0
-    for pattern in patterns:
-        deleted = await cache.clear_pattern(pattern)
-        deleted_total += deleted
-    
-    if deleted_total > 0:
-        logger.info(f"清除了 {deleted_total} 个文章相关缓存")
+    """清除文章相关缓存（兼容新旧键格式）。"""
+    await _invalidation.clear_article_cache(sys.modules[__name__], article_id, slug)
 
 
 async def clear_all_article_cache() -> None:
-    """清除所有文章缓存"""
-    patterns = [
-        "articles:*"
-    ]
-    
-    deleted_total = 0
-    for pattern in patterns:
-        deleted = await cache.clear_pattern(pattern)
-        deleted_total += deleted
-    
-    if deleted_total > 0:
-        logger.info(f"清除了 {deleted_total} 个文章缓存")
-
-
-class AnalysisCacheKeys:
-    """分析相关缓存键生成器"""
-
-    @staticmethod
-    def hot_analysis_detail(analysis_id: int) -> str:
-        """热点问题分析详情缓存键"""
-        return f"analysis:hot:{analysis_id}"
-
-    @staticmethod
-    def chain_analysis_detail(analysis_id: int) -> str:
-        """学生问题链分析详情缓存键"""
-        return f"analysis:chain:{analysis_id}"
-
-    @staticmethod
-    def task_analysis_detail(analysis_id: int) -> str:
-        """任务分析详情缓存键"""
-        return f"analysis:task:{analysis_id}"
-
-    @staticmethod
-    def hot_analysis_list(skip: int = 0, limit: int = 50) -> str:
-        """热点问题分析列表缓存键"""
-        return f"analysis:hot:list:{skip}:{limit}"
-
-    @staticmethod
-    def chain_analysis_list(skip: int = 0, limit: int = 50) -> str:
-        """学生问题链分析列表缓存键"""
-        return f"analysis:chain:list:{skip}:{limit}"
-
-    @staticmethod
-    def task_analysis_list(skip: int = 0, limit: int = 20) -> str:
-        """任务分析列表缓存键"""
-        return f"analysis:task:list:{skip}:{limit}"
-
-    @staticmethod
-    def trends_summary(agent_id: int, analysis_type: str, limit: int = 10) -> str:
-        """趋势摘要缓存键"""
-        return f"analysis:trends:{agent_id}:{analysis_type}:{limit}"
+    """清除所有文章缓存。"""
+    await _invalidation.clear_all_article_cache(sys.modules[__name__])
 
 
 async def clear_analysis_cache(
     analysis_type: Optional[str] = None,
-    analysis_id: Optional[int] = None
+    analysis_id: Optional[int] = None,
 ) -> None:
-    """清除分析相关缓存
-
-    Args:
-        analysis_type: 分析类型 (hot/chain/task)，None 表示清除所有
-        analysis_id: 分析记录ID，None 表示清除该类型所有缓存
-    """
-    patterns = []
-
-    if analysis_type is None:
-        # 清除所有分析缓存
-        patterns.append("analysis:*")
-    else:
-        if analysis_id:
-            # 清除特定分析记录的缓存
-            patterns.append(f"analysis:{analysis_type}:{analysis_id}")
-
-        # 清除该类型的列表缓存和趋势缓存
-        patterns.append(f"analysis:{analysis_type}:list:*")
-        patterns.append(f"analysis:trends:*:{analysis_type}:*")
-
-    deleted_total = 0
-    for pattern in patterns:
-        deleted = await cache.clear_pattern(pattern)
-        deleted_total += deleted
-
-    if deleted_total > 0:
-        logger.info(f"清除了 {deleted_total} 个分析相关缓存")
+    """清除分析相关缓存；None 表示全部类型，记录 ID 为可选项。"""
+    await _invalidation.clear_analysis_cache(
+        sys.modules[__name__], analysis_type, analysis_id
+    )
 
 
 # FastAPI生命周期事件
