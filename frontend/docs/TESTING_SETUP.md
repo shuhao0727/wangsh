@@ -1,5 +1,13 @@
 # 前端测试指南
 
+## BookReader 内容运行时消费者回归
+
+`src/components/BookReader.runtime.test.tsx` 由既有 components 默认收集入口运行。
+测试使用真实 BookReader 与 ReactMarkdown，仅控制 Mermaid API 和 Promise：
+延迟 ready、事件去重、卸载、排队任务取消、迟到章节回包、同步/异步失败及
+StrictMode 重放。此类单元测试不是 CDN、完整 App、内容持久化或复合富文本验收；
+实际 Docker/CDN 浏览器结果及首败保留在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
 > 状态：active
 > Owner：frontend
 > 最近复核：2026-07-22

@@ -106,13 +106,28 @@ const MermaidPre: React.FC<{ code: string }> = ({ code }) => {
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
     const pre = ref.current;
-    if (!pre || !(window as any).mermaid) return;
-    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
-    (window as any).mermaid.render(id, code).then((r: any) => {
-      if (pre) pre.innerHTML = r.svg;
-    }).catch(() => {});
+    if (!pre) return;
+    let active = true;
+    let attempted = false;
+    const render = () => {
+      const mermaid = (window as any).mermaid;
+      if (!active || attempted || !mermaid) return;
+      attempted = true;
+      const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+      // Readiness may arrive after mount; results belong only to this effect.
+      Promise.resolve().then(() => active ? mermaid.render(id, code) : undefined).then((r: any) => {
+        if (active && r) pre.innerHTML = r.svg;
+      }).catch(() => {});
+    };
+    window.addEventListener('ws:mermaid-ready', render);
+    render();
+    return () => {
+      active = false;
+      window.removeEventListener('ws:mermaid-ready', render);
+    };
   }, [code]);
-  return <pre ref={ref} className="mermaid">{code}</pre>;
+  // This component owns rendering; exclude its output from global auto-scans.
+  return <pre ref={ref} className="mermaid" data-processed="true">{code}</pre>;
 };
 
 /* ─── Markdown Body (react-markdown) ─── */

@@ -1,5 +1,15 @@
 # 发布与运维记录
 
+## 未发布基础：可选内容运行时非阻塞启动
+
+- 可选 CDN 脚本从 HTML deferred 队列移到独立 async 依赖链，保留固定
+  SRI/CORS；可选 CSS 使用各自 preload/load 激活，不等待 CDN 才挂载应用。
+- BookReader Mermaid 兼容延迟就绪；清理监听、拒绝旧代次迟到结果并避免自动重复扫描。
+- 非阻塞 HTML 回归改用 DOM 解析，拒绝单引号、协议相对及属性乱序的阻塞标签。
+- Markmap ready 仅表示 view/lib 核心；toolbar 可选、失败恢复为页面重载，
+  不承诺自动重试/超时、全部消费者渲染或工具栏成功。实际范围见
+  [TEST_STATUS](testing/TEST_STATUS.md)。未发布、未生产部署。
+
 ## 未发布修复：前端独立静态入口
 
 - AI Partner 的裸路径及目录正确解析自身 index，缺失文件仍返回 404，
