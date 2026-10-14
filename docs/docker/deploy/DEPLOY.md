@@ -1019,3 +1019,31 @@ gateway/tests/test_caddy_config.sh
 ```
 
 发布前还必须在独立网关环境验证 `413`、`431`、上游响应超时、健康检查和现有 `/api/*`、前端反代不回归；这些隔离证据不能替代公网边缘防护验收。
+
+## DB 启动与视图迁移的提交合同
+
+在线 Alembic runner 在同一事务中先取得固定 advisory lock，再扩容版本表并迁移；
+提交或回滚释放锁。离线 SQL 生成不取得该锁。`migration_state.py` 只静态解析
+revision 图，拒绝缺失、空、多行、未知 revision、非法 parent 及非单 head 图。
+
+`v_conversations_with_deleted` 的最终 14 列定义由 forward revision
+`f1a2b3c4d5e6` 负责。历史 `20260211_0004` 仅在当前 schema 没有同名关系且
+全部投影依赖列齐全时创建；已有对象不重建，缺列暂不创建，交后续 migration
+收敛。已执行该历史 revision 的库不会重跑；本修改不能恢复早先已经丢失的
+owner、ACL 或 comment，须另行核备份和授权记录。
+
+Forward 在单事务内预读并恢复 owner、对象级有效显式授权及 grant option、注释和
+对象级 security label，不保留原 grantor 的审计来源。列级 label、列级 ACL/comment、view reloptions、自定义 trigger/rule、
+依赖对象、缺列或权限不足须失败并回滚，不使用 CASCADE，也不在 startup 用 DDL 兜底。
+Downgrade 删除视图而非恢复旧定义/授权，不能当作无损生产回退；视图缺失由
+readiness 拒绝服务，生产恢复须另验备份及权限来源。
+
+`--initial-only` bootstrap 只为真正空库建立 legacy baseline；已有业务表但
+缺失或空版本表须拒绝，不 stamp 冒充完成迁移。完整升级后普通 bootstrap
+再处理兼容字段并检查合同；已有 head 的 startup 不执行 schema DDL。
+`/health` 与 `/api/system/health` 共用 readiness 合同：healthy 返回 200，
+degraded/unhealthy 返回 503；`/ping` 仅为 liveness。Compose/网关切换属于
+后续独立批，不因提交此 API 自动改变现用运行栈。
+
+实际执行范围和首败/复测见 [TEST_STATUS](../testing/TEST_STATUS.md)；
+本地提交不构成生产迁移、镜像发布或完整备份恢复的授权。

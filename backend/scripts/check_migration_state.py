@@ -36,6 +36,39 @@ _REVIEWED_DEFINITION = (
     f"CREATE INDEX {_REVIEWED_INDEX} ON public.{_REVIEWED_TABLE} USING btree (group_name)"
 )
 
+# The 2026-10-01 conversation-index migration uses Alembic's
+# ``if_not_exists=True`` form for three indexes.  It is safe to exempt those
+# guards only when the complete migration AST still matches the reviewed
+# source; existing same-name indexes continue to require exact catalog
+# evidence below.
+_REVIEWED_GUARD_MIGRATIONS = {
+    "20260430_migrate_dev_schema": {
+        _REVIEWED_INDEX: _REVIEWED_DEFINITION,
+    },
+    "291268877685": {
+        "ix_conversations_session_created": (
+            "CREATE INDEX ix_conversations_session_created ON public.znt_conversations "
+            "USING btree (session_id, created_at DESC, id DESC)"
+        ),
+        "ix_group_messages_session_created": (
+            "CREATE INDEX ix_group_messages_session_created "
+            "ON public.znt_group_discussion_messages USING btree (session_id, created_at DESC)"
+        ),
+        "ix_conversations_user_agent_time": (
+            "CREATE INDEX ix_conversations_user_agent_time ON public.znt_conversations "
+            "USING btree (user_id, agent_id, created_at DESC)"
+        ),
+    },
+}
+
+_REVIEWED_GUARD_AST_BY_REVISION = {
+    "20260430_migrate_dev_schema": _REVIEWED_INDEX_GUARD_AST,
+    # Generated once from the checked-in migration and intentionally kept
+    # static.  A source change must receive a fresh review rather than silently
+    # widening the exemption.
+    "291268877685": "c553e9ce082640458d5ee2b9584599a4b11acd7ff8650ec77fd5ea575322b11f",
+}
+
 
 @dataclass(frozen=True)
 class IndexDefinition:
@@ -67,6 +100,24 @@ class MigrationCheckResult:
 
 def normalize_identifier(value: str) -> str:
     return value.strip().strip('"').strip("'").lower()
+
+
+def _qualified_identifier(schema: str, name: str) -> str:
+    """Quote a schema-qualified PostgreSQL identifier."""
+    def quote(value: str) -> str:
+        return '"' + value.replace('"', '""') + '"'
+
+    return f"{quote(schema)}.{quote(name)}"
+
+
+def _expected_index_table(definition: str) -> str | None:
+    """Extract the table from a reviewed PostgreSQL index definition."""
+    match = re.search(
+        r"\bON\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\s+USING\b",
+        definition,
+        re.IGNORECASE,
+    )
+    return match.group(1) if match else None
 
 
 def _load_revision_namespace(path: Path) -> dict[str, object]:
@@ -206,7 +257,21 @@ def _guard_ast_digest(tree: ast.AST) -> str:
             }]
         if isinstance(value, list):
             return [canonical(item) for item in value]
-        return value
+        if value is Ellipsis:
+            return {"__constant__": "Ellipsis"}
+        if isinstance(value, bytes):
+            return {"__constant__": "bytes", "hex": value.hex()}
+        if isinstance(value, complex):
+            return {
+                "__constant__": "complex",
+                "real": value.real,
+                "imag": value.imag,
+            }
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        raise TypeError(
+            f"unsupported AST scalar in migration digest: {type(value).__name__}"
+        )
 
     return hashlib.sha256(json.dumps(canonical(tree), sort_keys=True).encode()).hexdigest()
 
@@ -220,7 +285,19 @@ def parse_migration_ops(path: Path, revision: str) -> MigrationOps:
     }
 
     tree = ast.parse(content)
-    reviewed = _guard_ast_digest(tree) == _REVIEWED_INDEX_GUARD_AST
+    ast_digest = _guard_ast_digest(tree)
+    reviewed_guards = _REVIEWED_GUARD_MIGRATIONS.get(revision, {})
+    reviewed = ast_digest == _REVIEWED_GUARD_AST_BY_REVISION.get(revision)
+    if not reviewed:
+        # The digest, rather than a filename or caller-supplied revision label,
+        # is the source-of-truth for a reviewed guard. This keeps comments and
+        # harmless file renames from disabling an existing contract while a
+        # changed executable AST remains fail-closed.
+        for known_revision, known_digest in _REVIEWED_GUARD_AST_BY_REVISION.items():
+            if ast_digest == known_digest:
+                reviewed_guards = _REVIEWED_GUARD_MIGRATIONS[known_revision]
+                reviewed = True
+                break
     create_indexes: set[str] = set()
     guarded_indexes: dict[str, str] = {}
     review_errors: list[str] = []
@@ -262,8 +339,8 @@ def parse_migration_ops(path: Path, revision: str) -> MigrationOps:
                 if not isinstance(ancestor, ast.Expr):
                     conditional = True
                 ancestor = parents[ancestor]
-            if reviewed and name == _REVIEWED_INDEX:
-                guarded_indexes[name] = _REVIEWED_DEFINITION
+            if reviewed and name in reviewed_guards:
+                guarded_indexes[name] = reviewed_guards[name]
             elif conditional or any(kw.arg in {None, "if_not_exists"} for kw in node.keywords):
                 review_errors.append(f"{name}: unreviewed index guard/control flow; manual review required")
 
@@ -316,8 +393,9 @@ def build_drift_messages(
             if not effective_definitions and name not in existing_indexes:
                 continue  # The reviewed guard will create the absent index.
             schema_definition = expected.replace(" ON public.", f" ON {schema}.")
+            expected_table = _expected_index_table(expected)
             equivalent = len(effective_definitions) == 1 and effective_definitions[0] == IndexDefinition(
-                schema=schema, table=_REVIEWED_TABLE, definition=schema_definition,
+                schema=schema, table=expected_table or "", definition=schema_definition,
                 valid=True, ready=True, live=True, kind="i",
             )
             if not equivalent or name not in existing_indexes:
@@ -339,14 +417,7 @@ def build_drift_messages(
     return messages
 
 
-async def _load_database_state(conn) -> tuple[
-    str,
-    list[str],
-    set[str],
-    set[str],
-    set[tuple[str, str]],
-    dict[str, tuple[IndexDefinition, ...]],
-]:
+async def _load_database_state(conn, *, include_version_table: bool = False):
     schema_result = await conn.execute(text("SELECT current_schema()"))
     schema = schema_result.scalar_one_or_none()
     if not schema:
@@ -373,10 +444,13 @@ async def _load_database_state(conn) -> tuple[
     )
     has_version_table = bool(version_table.scalar_one_or_none())
 
-    current_revisions: list[str] = []
+    current_revisions: list[object] = []
     if has_version_table:
-        rows = await conn.execute(text("SELECT version_num FROM alembic_version"))
-        current_revisions = [str(row[0]) for row in rows if row[0]]
+        version_table = _qualified_identifier(schema, "alembic_version")
+        rows = await conn.execute(
+            text(f"SELECT version_num FROM {version_table} ORDER BY version_num")
+        )
+        current_revisions = [row[0] for row in rows]
 
     table_rows = await conn.execute(
         text(
@@ -430,7 +504,7 @@ async def _load_database_state(conn) -> tuple[
         for row in column_rows
     }
 
-    return (
+    state = (
         schema,
         current_revisions,
         existing_tables,
@@ -438,17 +512,21 @@ async def _load_database_state(conn) -> tuple[
         existing_columns,
         existing_index_definitions,
     )
+    if include_version_table:
+        return (schema, has_version_table, *state[1:])
+    return state
 
 
 def evaluate_migration_state(
     *,
-    current_revisions: list[str],
+    current_revisions: list[object],
     existing_tables: set[str],
     existing_indexes: set[str],
     existing_columns: set[tuple[str, str]],
     existing_index_definitions: dict[str, tuple[IndexDefinition, ...]] | None = None,
     versions_dir: Path = VERSIONS_DIR,
     schema: str = "public",
+    version_table_exists: bool | None = None,
 ) -> MigrationCheckResult:
     try:
         revisions, down_revisions, heads = load_revision_graph(versions_dir)
@@ -456,6 +534,14 @@ def evaluate_migration_state(
         return MigrationCheckResult(ok=False, messages=[str(exc)])
 
     if not current_revisions:
+        if version_table_exists:
+            return MigrationCheckResult(
+                ok=False,
+                messages=[
+                    "alembic_version exists but is empty; refusing to infer or stamp a revision",
+                    "Run an explicit Alembic migration or stamp only after confirming the database state manually.",
+                ],
+            )
         if existing_tables:
             return MigrationCheckResult(
                 ok=False,
@@ -476,6 +562,28 @@ def evaluate_migration_state(
             messages=[
                 "empty database without alembic_version; run bootstrap_db.py --initial-only "
                 "before alembic upgrade head"
+            ],
+        )
+
+    if len(current_revisions) != 1:
+        return MigrationCheckResult(
+            ok=False,
+            messages=[
+                "alembic_version must contain exactly one revision row; "
+                f"found {len(current_revisions)}: {current_revisions!r}"
+            ],
+        )
+
+    invalid_values = [
+        value for value in current_revisions
+        if not isinstance(value, str) or not value
+    ]
+    if invalid_values:
+        return MigrationCheckResult(
+            ok=False,
+            messages=[
+                "alembic_version contains invalid revision value(s): "
+                f"{invalid_values!r}"
             ],
         )
 
@@ -520,11 +628,14 @@ async def async_main() -> int:
         # A consistent, read-only catalog snapshot; no normal DB migration or stamp.
         async with conn.begin():
             await conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
-            (schema, current_revisions, existing_tables, existing_indexes,
-             existing_columns, existing_index_definitions) = await _load_database_state(conn)
+            (schema, version_table_exists, current_revisions, existing_tables, existing_indexes,
+             existing_columns, existing_index_definitions) = await _load_database_state(
+                 conn, include_version_table=True
+             )
 
     result = evaluate_migration_state(
         current_revisions=current_revisions,
+        version_table_exists=version_table_exists,
         existing_tables=existing_tables,
         existing_indexes=existing_indexes,
         existing_columns=existing_columns,

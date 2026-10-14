@@ -1,12 +1,22 @@
 import asyncio
+import ast
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
 from scripts.check_migration_state import (
+    _guard_ast_digest,
     _load_database_state,
     evaluate_migration_state,
     load_revision_graph,
+    parse_migration_ops,
     pending_revisions_from_current,
+)
+from app.db.migration_state import (
+    VIEW_CONTRACT_REVISION,
+    load_revision_graph as load_shared_revision_graph,
+    validate_revision_state,
 )
 
 
@@ -52,7 +62,7 @@ class _SchemaStateConnection:
             return _Rows(scalar="tenant_test")
         if "SELECT EXISTS" in sql and "alembic_version" in sql:
             return _Rows(scalar=True)
-        if "SELECT version_num FROM alembic_version" in sql:
+        if "SELECT version_num FROM" in sql and "alembic_version" in sql:
             return _Rows(rows=[("001_head",)])
         if "FROM pg_tables" in sql:
             return _Rows(rows=[("sample_table",)])
@@ -188,6 +198,63 @@ def test_empty_database_without_alembic_version_can_initialize(tmp_path):
     assert result.ok
 
 
+def test_existing_empty_version_table_is_blocked(tmp_path):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    _write_revision(versions / "001_base.py", "001_base", None)
+
+    result = evaluate_migration_state(
+        current_revisions=[],
+        existing_tables=set(),
+        existing_indexes=set(),
+        existing_columns=set(),
+        versions_dir=versions,
+        version_table_exists=True,
+    )
+
+    assert not result.ok
+    assert any("exists but is empty" in message for message in result.messages)
+
+
+def test_multiple_or_invalid_version_rows_are_blocked(tmp_path):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    _write_revision(versions / "001_base.py", "001_base", None)
+
+    duplicate = evaluate_migration_state(
+        current_revisions=["001_base", "001_base"],
+        existing_tables=set(),
+        existing_indexes=set(),
+        existing_columns=set(),
+        versions_dir=versions,
+    )
+    invalid = evaluate_migration_state(
+        current_revisions=[None],
+        existing_tables=set(),
+        existing_indexes=set(),
+        existing_columns=set(),
+        versions_dir=versions,
+    )
+
+    assert not duplicate.ok
+    assert "exactly one revision row" in duplicate.messages[0]
+    assert not invalid.ok
+    assert "invalid revision value" in invalid.messages[0]
+
+
+def test_migration_ast_digest_accepts_ellipsis_constants():
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / (
+        "f1a2b3c4d5e6_rebuild_conversations_with_deleted_view.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    digest = _guard_ast_digest(tree)
+    ops = parse_migration_ops(path, "f1a2b3c4d5e6")
+
+    assert len(digest) == 64
+    assert ops.revision == "f1a2b3c4d5e6"
+
+
 def test_empty_database_requires_exactly_one_alembic_head(tmp_path):
     versions = tmp_path / "versions"
     versions.mkdir()
@@ -308,3 +375,66 @@ def test_legacy_baseline_index_repair_migration_covers_conditional_indexes():
     assert "for statement in INDEX_STATEMENTS:" in content
     assert "op.execute(sa.text(statement))" in content
     assert "DROP INDEX" not in content
+
+
+def test_shared_migration_state_accepts_contract_revision_and_current_head():
+    graph = load_shared_revision_graph()
+    assert len(graph.heads) == 1
+    head = next(iter(graph.heads))
+    assert graph.is_ancestor(VIEW_CONTRACT_REVISION, head)
+
+    result = validate_revision_state([head], graph)
+
+    assert result.ok
+    assert result.reason == "ok"
+    assert result.revision == head
+
+
+def test_shared_migration_state_rejects_empty_multiple_old_and_unknown_rows(tmp_path):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    _write_revision(versions / "001_contract.py", "001_contract", None)
+    _write_revision(versions / "002_head.py", "002_head", "001_contract")
+    graph = load_shared_revision_graph(versions)
+
+    cases = (
+        ([], "empty_version_table"),
+        (["001_contract", "001_contract"], "multiple_version_rows"),
+        (["001_contract"], "revision_before_contract"),
+        (["unknown_future"], "unknown_revision"),
+    )
+    for revisions, reason in cases:
+        result = validate_revision_state(
+            revisions, graph, contract_revision="002_head"
+        )
+        assert not result.ok
+        assert result.reason == reason
+
+
+def test_shared_migration_state_accepts_known_future_descendant(tmp_path):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    _write_revision(versions / "001_contract.py", "001_contract", None)
+    _write_revision(versions / "002_head.py", "002_head", "001_contract")
+    _write_revision(versions / "003_future.py", "003_future", "002_head")
+    graph = load_shared_revision_graph(versions)
+
+    result = validate_revision_state(
+        ["003_future"], graph, contract_revision="001_contract"
+    )
+
+    assert result.ok
+    assert result.revision == "003_future"
+
+
+def test_shared_migration_state_rejects_ellipsis_parent(tmp_path):
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    (versions / "001_bad.py").write_text(
+        "revision = '001_bad'\n"
+        "down_revision = ...\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="down_revision must be None"):
+        load_shared_revision_graph(versions)

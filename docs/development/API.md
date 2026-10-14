@@ -933,3 +933,15 @@ Content-Type: application/json
 | DELETE | `/admin/ml/book/{module_key}/chapters/{slug}` | 删除章节 | 管理员 |
 | PATCH | `/admin/ml/book/{module_key}/chapters/reorder` | 批量重排章节 | 管理员 |
 | PATCH | `/admin/ml/book/{module_key}/chapters/{slug}/toggle` | 启用或停用章节 | 管理员 |
+
+## Readiness 与存活检查合同
+
+`GET /health` 与 `GET /api/system/health` 使用相同 readiness 结果：顶层
+`status=healthy` 返回 HTTP 200，`degraded` 或 `unhealthy` 返回 HTTP 503。
+检查项包括 DB、Redis、会话视图/迁移状态和智能体密钥可解密性；DB session
+不可用时保守返回 unhealthy，不把依赖失败当作成功。密钥检查仅返回失败
+agent id，不返回或记录密钥明文。`GET /ping` 仅证明 HTTP 进程可达，不能
+代替 readiness、worker 任务或真实 AI 调用成功。
+
+迁移与启动责任见 [DEPLOY](../docker/deploy/DEPLOY.md#db-启动与视图迁移的提交合同)，
+实际验证与未发布范围见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。

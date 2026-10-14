@@ -141,3 +141,18 @@ python3 backend/scripts/check_python_governance.py snapshot \
 - 临时例外写在对应 ceiling 条目的 `exception` 对象中，必须同时包含非空
   `owner`、`reason`、`expires_at`，日期格式为 `YYYY-MM-DD`，最长期限为从检查当天起 30 天；
   过期例外会阻断检查。
+
+## Bootstrap 与迁移前检查的提交合同
+
+`bootstrap_db.py --initial-only` 仅为真正空库生成 legacy baseline；非空库
+缺失/空版本表、未知 revision 或多行版本须拒绝，不自动 stamp。后续按
+Alembic 完整升级再运行普通 bootstrap，兼容字段写入与只读视图检查分开。
+现存 head 的 startup 不建表或重建视图。
+
+`check_migration_state.py` 与 `app/db/migration_state.py` 静态解析 revision
+图与 guard 摘要，拒绝非法 parent/断链/非单 head；不执行 migration 模块，
+也不自动重算审核指纹放行未知 guard。历史 `20260211_0004` 仅创建不存在且
+依赖齐全的视图，现存视图的保全/重建由 forward revision 负责。
+
+操作和回退边界见 [DEPLOY](../../docs/docker/deploy/DEPLOY.md#db-启动与视图迁移的提交合同)，
+测试结果见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。

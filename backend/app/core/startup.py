@@ -13,6 +13,13 @@ from loguru import logger
 
 from app.core.config import settings
 from app.db.database import engine, AsyncSessionLocal
+from app.db.migration_state import (
+    DEFAULT_VERSIONS_DIR,
+    VIEW_CONTRACT_REVISION,
+    load_revision_graph,
+    qualified_identifier as _qualified_identifier,
+    validate_revision_state,
+)
 from app.core.celery_app import celery_app
 from app.utils.security import hash_super_admin_password
 from app.core.http_client import HttpClientManager
@@ -28,10 +35,11 @@ from app.services.informatics.github_sync import get_or_create_sync_settings
 
 
 async def init_database():
-    """开发环境空库使用 Alembic 初始化；已有库只维护兼容视图。
+    """开发环境空库使用 Alembic 初始化；启动过程只读校验视图合同。
 
     已有数据库必须通过 Alembic 迁移演进，避免 DEBUG 模式下
-    应用启动自动修改或标记未经验证的 schema。
+    应用启动自动修改或标记未经验证的 schema。目标视图的业务 DDL
+    只允许由 Alembic forward migration 执行。
     """
     if not (settings.DEBUG or settings.AUTO_CREATE_TABLES):
         return
@@ -39,22 +47,35 @@ async def init_database():
     async with engine.begin() as conn:
         schema = await _current_schema(conn)
         existing_tables = await _get_existing_schema_tables(conn, schema)
-        has_alembic_revision = await _has_alembic_revision(conn)
-        if existing_tables:
-            if has_alembic_revision:
+        version_rows = await _alembic_version_rows(conn, schema)
+        if existing_tables or version_rows is not None:
+            if existing_tables and version_rows:
                 logger.info("检测到已有数据库和 Alembic 版本，跳过自动 create_all")
-            else:
+            elif existing_tables:
                 logger.warning(
                     "检测到非空数据库但 alembic_version 缺失或为空，已跳过自动 create_all；"
                     "请先运行 scripts/check_migration_state.py 并人工确认 schema 状态"
                 )
-            await _ensure_views(conn)
+            # A version table with rows must be validated even when the schema
+            # has no application tables; an empty version table must also fail
+            # closed instead of being mistaken for an uninitialized database.
+            contract = await check_conversations_view_contract(conn)
+            if contract["status"] != "healthy":
+                raise RuntimeError(
+                    "数据库未达到 v_conversations_with_deleted readiness contract: "
+                    f"{contract.get('reason', 'unknown error')}"
+                )
             return
 
     logger.info("检测到空数据库，执行 Alembic upgrade head")
     await _upgrade_database_to_head()
     async with engine.begin() as conn:
-        await _ensure_views(conn)
+        contract = await check_conversations_view_contract(conn)
+        if contract["status"] != "healthy":
+            raise RuntimeError(
+                "Alembic upgrade head 后视图 readiness contract 仍未满足: "
+                f"{contract.get('reason', 'unknown error')}"
+            )
 
 
 async def init_super_admin():
@@ -234,12 +255,62 @@ async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
     return {str(row[0]) for row in result}
 
 
+async def _alembic_version_rows(conn, schema: str) -> list[object] | None:
+    """Read every effective-schema version row, never only the first row."""
+    table_result = await conn.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_class AS c
+                JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema
+                  AND c.relname = 'alembic_version'
+                  AND c.relkind IN ('r', 'p')
+            )
+            """
+        ),
+        {"schema": schema},
+    )
+    if not bool(_result_scalar(table_result)):
+        return None
+
+    version_table = _qualified_identifier(schema, "alembic_version")
+    result = await conn.execute(
+        text(f"SELECT version_num FROM {version_table} ORDER BY version_num")
+    )
+    try:
+        rows = list(result)
+    except TypeError:
+        rows = []
+    if rows:
+        return [row[0] for row in rows]
+    # Small test doubles and scalar-only DB adapters may not expose iteration.
+    scalar = _result_scalar(result)
+    return [] if scalar is None else [scalar]
+
+
 async def _has_alembic_revision(conn) -> bool:
-    version_table = await conn.execute(text("SELECT to_regclass('alembic_version')"))
-    if version_table.scalar_one_or_none() is None:
-        return False
-    result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
-    return result.scalar_one_or_none() is not None
+    """Return whether the effective schema contains at least one version row.
+
+    This is only the empty-schema discriminator.  Any non-empty row set is
+    validated against the complete migration graph by
+    :func:`_validate_migration_state` before application traffic is allowed.
+    """
+    schema = await _current_schema(conn)
+    rows = await _alembic_version_rows(conn, schema)
+    return bool(rows)
+
+
+async def _validate_migration_state(conn, schema: str):
+    rows = await _alembic_version_rows(conn, schema)
+    if rows is None:
+        return None, "alembic_version_missing"
+    try:
+        graph = load_revision_graph(DEFAULT_VERSIONS_DIR)
+    except (RuntimeError, SyntaxError, ValueError) as exc:
+        return None, f"migration_graph_invalid: {exc}"
+    return validate_revision_state(rows, graph, contract_revision=VIEW_CONTRACT_MIGRATION), None
 
 
 async def _ensure_dev_schema(conn):
@@ -251,29 +322,112 @@ async def _ensure_dev_schema(conn):
     logger.debug("_ensure_dev_schema: 已由 Alembic migration 20260430_migrate_dev_schema 接管")
 
 
-async def _ensure_views(conn):
-    """确保视图存在"""
+VIEW_CONTRACT_MIGRATION = VIEW_CONTRACT_REVISION
+VIEW_CONTRACT_NAME = "v_conversations_with_deleted"
+VIEW_CONTRACT_COLUMNS = (
+    "id",
+    "user_id",
+    "display_user_name",
+    "agent_id",
+    "display_agent_name",
+    "session_id",
+    "message_type",
+    "content",
+    "response_time_ms",
+    "created_at",
+    "is_archived",
+    "archived_at",
+    "is_user_deleted",
+    "is_agent_deleted",
+)
+
+
+def _result_scalar(result):
+    scalar = getattr(result, "scalar", None)
+    if callable(scalar):
+        return scalar()
+    return result.scalar_one_or_none()
+
+
+async def check_conversations_view_contract(conn) -> dict[str, str]:
+    """Read-only readiness check for the migration-owned conversation view.
+
+    This helper intentionally performs no DDL.  It verifies that the current
+    effective schema has reached the view migration, that the view exposes the
+    exact positional contract, and that PostgreSQL can resolve its dependencies.
+    """
     try:
-        await conn.execute(
-            text("""
-                CREATE OR REPLACE VIEW v_conversations_with_deleted AS
-                SELECT
-                    c.id, c.user_id,
-                    COALESCE(c.user_name, u.full_name, '未知用户') AS display_user_name,
-                    c.agent_id,
-                    COALESCE(c.agent_name, a.name, '未知智能体') AS display_agent_name,
-                    c.session_id, c.message_type, c.content, c.response_time_ms, c.created_at,
-                    c.is_archived, c.archived_at,
-                    CASE WHEN u.id IS NULL OR u.is_deleted = true THEN true ELSE false END AS is_user_deleted,
-                    CASE WHEN a.id IS NULL OR a.is_deleted = true THEN true ELSE false END AS is_agent_deleted
-                FROM znt_conversations c
-                LEFT JOIN sys_users u ON c.user_id = u.id
-                LEFT JOIN znt_agents a ON c.agent_id = a.id
-            """)
+        schema_result = await conn.execute(text("SELECT current_schema()"))
+        schema = _result_scalar(schema_result)
+        if not schema:
+            return {"status": "unhealthy", "reason": "no_effective_schema"}
+        schema = str(schema)
+        revision_state, missing_reason = await _validate_migration_state(conn, schema)
+        if missing_reason is not None:
+            return {
+                "status": "unhealthy",
+                "reason": missing_reason,
+                "schema": schema,
+            }
+        if not revision_state.ok:
+            return {
+                "status": "unhealthy",
+                "reason": f"migration_state_invalid: {revision_state.reason}: {revision_state.message}",
+                "schema": schema,
+            }
+
+        expected_columns_sql = ", ".join(
+            f"'{column}'" for column in VIEW_CONTRACT_COLUMNS
         )
-        logger.info("视图 v_conversations_with_deleted 已创建/更新")
-    except Exception:
-        logger.warning("创建视图失败，跳过")
+        contract_result = await conn.execute(
+            text(
+                f"""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_class AS c
+                    JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = :schema
+                      AND c.relname = :view_name
+                      AND c.relkind = 'v'
+                )
+                AND COALESCE((
+                    SELECT array_agg(a.attname::text ORDER BY a.attnum)
+                           = ARRAY[{expected_columns_sql}]::text[]
+                    FROM pg_catalog.pg_attribute AS a
+                    JOIN pg_catalog.pg_class AS c ON c.oid = a.attrelid
+                    JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = :schema
+                      AND c.relname = :view_name
+                      AND c.relkind = 'v'
+                      AND a.attnum > 0
+                      AND NOT a.attisdropped
+                ), false)
+                """
+            ),
+            {"schema": schema, "view_name": VIEW_CONTRACT_NAME},
+        )
+        if not bool(_result_scalar(contract_result)):
+            return {
+                "status": "unhealthy",
+                "reason": "view_missing_or_columns_mismatch",
+                "schema": schema,
+            }
+
+        view_identifier = _qualified_identifier(schema, VIEW_CONTRACT_NAME)
+        await conn.execute(text(f"SELECT * FROM {view_identifier} LIMIT 0"))
+    except Exception as exc:
+        logger.exception("v_conversations_with_deleted readiness contract 检查失败")
+        return {
+            "status": "unhealthy",
+            "reason": f"dependency_check_failed: {exc}",
+        }
+
+    return {
+        "status": "healthy",
+        "reason": "ok",
+        "schema": schema,
+        "migration": VIEW_CONTRACT_MIGRATION,
+    }
 
 
 async def _upgrade_database_to_head() -> None:

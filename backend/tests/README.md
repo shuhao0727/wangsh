@@ -241,3 +241,21 @@ time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024-20
 - 迁移：`tests/test_migration_preflight_guard_contract.py` 与 `tests/system/test_migration_state_check.py`，不加载 app conftest；不执行实际 upgrade。完整命令、红绿记录、环境与未覆盖范围只维护于 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
 
 认证撤销反馈专项：`auth/test_auth_publication_failure_contract.py` 覆盖 `503`/Cookie 清理、严格会话读取、独立 refresh fallback 及登录提交后重锁重验。故障响应与凭据实际失效分别断言，不能把返回 `503` 当成双存储撤销保证。旧 fixture 必须模拟严格 GET 而非只模拟降级 cache.get；独立 PostgreSQL/Redis 故障与并发层的结果统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 旧 revision 视图与启动准入回归
+
+`system/test_legacy_conversations_view_migration_pg.py` 使用显式
+`LEGACY_CONVERSATIONS_VIEW_TEST_DATABASE_URL`；只允许 loopback、非 5432/5433
+的专用 test-named asyncpg 库。每例只在自有 schema/合成角色执行实际
+`20260211_0004` 及适用的 forward migration，读回视图元数据、定义、权限与
+数据，覆盖已有对象保全、缺投影依赖、完整创建和依赖阻断；forward 对
+未支持的列级属性、view 安全选项和自定义 trigger/rule 必须在 DROP 前拒绝。
+缺配置为 skip，
+不是 PASS。须遵守 collection 前禁 dotenv、正常 conftest 和自动插件的
+隔离入口，不直接访问开发/网站库。
+
+`test_conversations_view_contract.py`、`system/test_alembic_concurrency.py`
+分别覆盖 forward 元数据/依赖/权限与真实迁移事务锁；bootstrap、startup、
+health 的合同回归不能代替专用 PG 空库完整链或实际生产 Compose 启动。
+仅复用运行依赖镜像和挂载候选源码的测试容器不是新生产镜像。实际源码绑定、
+首败/复测和未覆盖项只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。

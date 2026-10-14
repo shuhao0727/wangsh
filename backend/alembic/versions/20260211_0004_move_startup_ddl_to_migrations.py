@@ -57,11 +57,47 @@ def upgrade() -> None:
                 ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS description TEXT;
             END IF;
 
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = current_schema() AND table_name = 'znt_conversations'
+            -- 旧库可能已有不同列序及独立 owner/ACL/comment 的视图。
+            -- 本历史 revision 不重建任何已有对象，否则后续 forward 迁移
+            -- 无法恢复这里已经丢失的元信息。最终定义与元信息保全由
+            -- f1a2b3c4d5e6 在单事务中负责，startup 不执行 DDL 兜底。
+            -- 空库的归档列由后续 revision 添加；全部投影依赖就绪才创建。
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_catalog.pg_class AS existing
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = existing.relnamespace
+                WHERE namespace.nspname = current_schema()
+                  AND existing.relname = 'v_conversations_with_deleted'
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM (VALUES
+                    ('znt_conversations', 'id'),
+                    ('znt_conversations', 'user_id'),
+                    ('znt_conversations', 'user_name'),
+                    ('znt_conversations', 'agent_id'),
+                    ('znt_conversations', 'agent_name'),
+                    ('znt_conversations', 'session_id'),
+                    ('znt_conversations', 'message_type'),
+                    ('znt_conversations', 'content'),
+                    ('znt_conversations', 'response_time_ms'),
+                    ('znt_conversations', 'created_at'),
+                    ('znt_conversations', 'is_archived'),
+                    ('znt_conversations', 'archived_at'),
+                    ('sys_users', 'id'),
+                    ('sys_users', 'full_name'),
+                    ('sys_users', 'is_deleted'),
+                    ('znt_agents', 'id'),
+                    ('znt_agents', 'name'),
+                    ('znt_agents', 'is_deleted')
+                ) AS required(table_name, column_name)
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns AS present
+                    WHERE present.table_schema = current_schema()
+                      AND present.table_name = required.table_name
+                      AND present.column_name = required.column_name
+                )
             ) THEN
-                CREATE OR REPLACE VIEW v_conversations_with_deleted AS
+                CREATE VIEW v_conversations_with_deleted AS
                 SELECT
                     c.id,
                     c.user_id,

@@ -831,3 +831,18 @@ IMAGE_TAG=1.5.9 docker compose up -d
 - 修复 `verify-release-set` 把完整应用版本 `2.1.0` 与镜像标签 `2.1` 强制做字符串相等比较的
   发布阻断；现在以 `frontend/package.json` 为版本权威源，分别校验完整应用版本与 major.minor
   镜像标签，并增加真实 `2.1.0 / 2.1` 接受及多类漂移拒绝合同测试。
+
+## 未发布：DB 启动、readiness 与旧视图兼容
+
+- 在线迁移使用事务级 advisory lock，启动和迁移前检查共用静态 revision
+  图合同；拒绝非空无版本库，不以 startup 建表/重建视图兜底。
+- 历史 `20260211_0004` 不重建现存同名关系，仅在全部依赖列齐全时创建
+  缺失视图；forward revision 保全 owner、对象级有效 ACL/grant option 与注释；未支持的列级属性、view
+  选项与自定义 trigger/rule 在 DROP 前拒绝，不静默移除权限或安全语义。
+  早先已经丢失的元数据不能由本改动恢复；downgrade 不是无损回退。
+- `/health` 与系统 health 路由统一 readiness，未就绪返回 HTTP 503；
+  `/ping` 保留 liveness 语义。
+
+本批只作本地提交准备，尚未发布或迁移现用网站库。验收范围见
+[TEST_STATUS](testing/TEST_STATUS.md)，操作合同见
+[DEPLOY](deploy/DEPLOY.md#db-启动与视图迁移的提交合同)。
