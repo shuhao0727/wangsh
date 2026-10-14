@@ -1,5 +1,17 @@
 # 后端测试说明
 
+## 共享数据库辅助工具离线回归
+
+`utils/test_db_helpers.py` 使用内存 SQLite 核对 `get_or_404` 的命中、缺失、
+自定义状态/文案，以及 `get_or_none` 的空结果。`utils/test_db_errors.py` 核对
+`handle_db_commit` 的约束冲突、业务错误文案与生产脱敏、回滚后同 session 重试、
+原业务异常传播和“不隐式提交”。辅助工具不自动 commit，事务仍由调用方控制。
+
+须在 collection 前禁用 dotenv/secrets、正常 conftest、自动插件及外连的外部
+隔离运行器中精确选这两份测试；只允许内存 SQLite。缺可选 Trio 时将其排除数
+单列，不计为通过。这不证明 PostgreSQL 并发、正式迁移、HTTP 或 Docker 行为。
+实际结果和运行器绑定统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
 `backend/tests/` 只放 pytest 用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
 
 > 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。

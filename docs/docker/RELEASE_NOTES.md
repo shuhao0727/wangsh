@@ -1,5 +1,14 @@
 # 发布与运维记录
 
+## 未发布基础：数据库查询与提交错误工具（2026-10-14）
+
+- 新增 `get_or_404` / `get_or_none`，复用既有 AsyncSession 查询与 HTTP 错误机制。
+- 新增 `handle_db_commit`：约束冲突及数据库错误先 rollback；生产错误沿用
+  `safe_error_detail` 脱敏，支持调用方 `error_detail`；其他业务异常回滚后继续传播。
+- 工具本身不隐式提交，不新增表、迁移或公开路由；调用方接入随各功能批次提交。
+- 直接回归与边界由测试 owner 维护，实际局测见 [TEST_STATUS](testing/TEST_STATUS.md)。
+  本地提交不表示已推送、镜像发布或部署。
+
 > 状态：active
 > Owner：release-ops
 > 最近复核：2026-09-28
