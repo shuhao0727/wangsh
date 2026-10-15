@@ -1,5 +1,10 @@
 # 后端测试说明
 
+## 学习进度与canonical章节回归
+
+`learning/test_progress.py`覆盖版本冲突、递归合并、显式清除与旧格式保护；`test_chapters_canonical_source.py`覆盖章节来源，`test_chapter_overlay_governance.py`的历史oracle用例仅在提供已核SHA的外部`LEARNING_OVERLAY_ORACLE`时执行，缺失明确记SKIP。继续使用collection前禁dotenv、自动插件、外连和正常conftest的合成配置运行器；真实HTTP/PG证据另记TEST_STATUS。
+
+
 ## 用户导入与 AUTH 兼容回归
 
 `users/test_users_import_parsing_isolated.py`、`users/test_users_import.py` 覆盖损坏输入、

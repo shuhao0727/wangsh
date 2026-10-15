@@ -7,8 +7,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.learning.chapter import LearningChapter
 from app.models.learning.content import LearningContentItem
 from app.schemas.learning.content import LearningContentItemIn
+from app.services.learning import chapter_overlay
 from app.utils.errors import safe_error_detail
 
 
@@ -21,7 +23,35 @@ def _safe_json_loads(value: str | None, fallback: Any) -> Any:
         return fallback
 
 
-def _content_payload(item: LearningContentItem) -> Dict[str, Any]:
+def _chapter_overlay(chapter: LearningChapter) -> Dict[str, Any]:
+    """Convert the chapter table row to the public LearningBook shape."""
+    return {
+        "slug": chapter.slug,
+        "title": chapter.title,
+        "summary": chapter.summary,
+        "estimatedMinutes": chapter.estimated_minutes,
+        "difficulty": chapter.difficulty,
+        "group": chapter.group_name,
+        "markdown": chapter.markdown or "",
+        "sort_order": chapter.sort_order,
+        "updated_at": chapter.updated_at.isoformat() if chapter.updated_at else None,
+    }
+
+
+def _merge_book_chapters(content: Any, chapters: List[LearningChapter]) -> Any:
+    """Overlay persisted chapters without discarding bundled book metadata."""
+    return chapter_overlay.merge_book_chapters(
+        content, chapters, lambda chapter: _chapter_overlay(chapter),
+    )
+
+
+def _content_payload(
+    item: LearningContentItem,
+    chapters: List[LearningChapter] | None = None,
+) -> Dict[str, Any]:
+    content = _safe_json_loads(item.content, {})
+    if item.section_key == "raw" and item.item_key == "book":
+        content = _merge_book_chapters(content, chapters or [])
     return {
         "id": item.id,
         "module_key": item.module_key,
@@ -29,7 +59,7 @@ def _content_payload(item: LearningContentItem) -> Dict[str, Any]:
         "item_key": item.item_key,
         "title": item.title,
         "summary": item.summary,
-        "content": _safe_json_loads(item.content, {}),
+        "content": content,
         "tags": _safe_json_loads(item.tags, []),
         "difficulty": item.difficulty,
         "sort_order": item.sort_order,
@@ -56,7 +86,14 @@ async def list_learning_content(db: AsyncSession, module_key: str) -> List[Dict[
         )
     )
     result = await db.execute(stmt)
-    return [_content_payload(item) for item in result.scalars().all()]
+    items = result.scalars().all()
+    chapter_result = await db.execute(
+        select(LearningChapter)
+        .where(LearningChapter.module_key == module_key)
+        .order_by(LearningChapter.sort_order, LearningChapter.id)
+    )
+    chapters = chapter_result.scalars().all()
+    return [_content_payload(item, chapters) for item in items]
 
 
 async def list_learning_content_admin(db: AsyncSession, module_key: str) -> List[Dict[str, Any]]:
@@ -71,7 +108,14 @@ async def list_learning_content_admin(db: AsyncSession, module_key: str) -> List
         )
     )
     result = await db.execute(stmt)
-    return [_content_payload(item) for item in result.scalars().all()]
+    items = result.scalars().all()
+    chapter_result = await db.execute(
+        select(LearningChapter)
+        .where(LearningChapter.module_key == module_key)
+        .order_by(LearningChapter.sort_order, LearningChapter.id)
+    )
+    chapters = chapter_result.scalars().all()
+    return [_content_payload(item, chapters) for item in items]
 
 
 async def upsert_learning_content(

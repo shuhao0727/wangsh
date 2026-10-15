@@ -39,6 +39,7 @@ export default defineConfig({
       "src/pages/Admin/Dashboard/index.permissions.test.tsx",
       "src/pages/Admin/Users/UserInteractions.test.tsx",
       "src/pages/Admin/Users/UserFocusRestore.test.tsx",
+      "src/pages/Admin/ITTechnology/progressSafety.contract.test.ts",
       "src/lib/**/*.test.{ts,tsx}",
       "src/services/**/*.test.{ts,tsx}",
     ],

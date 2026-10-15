@@ -205,3 +205,102 @@
     font-size: 0.9em;
   }
 }
+
+/* KaTeX 继承正文前景；仅 display 容器滚动，不改公式内部几何和用户显式颜色。 */
+.ws-markdown .katex {
+  color: inherit;
+  background: transparent;
+}
+
+.ws-markdown .katex-display {
+  margin: 1em 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+.ws-markdown .katex-error {
+  color: var(--ws-color-error-text) !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* highlight.js 仅在 Markdown 内容容器中接入永久浅色语法色。
+   与 Monaco 共用语法 token，不把关键字或字符串当作成功/警告/错误状态。 */
+.ws-markdown pre code.hljs {
+  color: var(--ws-color-text);
+  background: transparent;
+}
+
+.ws-markdown .hljs-comment,
+.ws-markdown .hljs-quote {
+  color: var(--ws-color-text-secondary);
+  font-style: italic;
+}
+
+.ws-markdown .hljs-keyword,
+.ws-markdown .hljs-selector-tag,
+.ws-markdown .hljs-literal {
+  color: var(--ws-color-editor-syntax-keyword);
+  font-weight: 600;
+}
+
+.ws-markdown .hljs-string,
+.ws-markdown .hljs-regexp {
+  color: var(--ws-color-editor-syntax-string);
+}
+
+.ws-markdown .hljs-number {
+  color: var(--ws-color-editor-syntax-number);
+}
+
+.ws-markdown .hljs-title,
+.ws-markdown .hljs-section,
+.ws-markdown .hljs-function {
+  color: var(--ws-color-editor-syntax-function);
+}
+
+.ws-markdown .hljs-type,
+.ws-markdown .hljs-built_in,
+.ws-markdown .hljs-title.class_ {
+  color: var(--ws-color-editor-syntax-type);
+}
+
+.ws-markdown .hljs-attr,
+.ws-markdown .hljs-attribute,
+.ws-markdown .hljs-meta,
+.ws-markdown .hljs-symbol {
+  color: var(--ws-color-editor-syntax-decorator);
+}
+
+.ws-markdown .hljs-operator,
+.ws-markdown .hljs-punctuation {
+  color: var(--ws-color-editor-syntax-operator);
+}
+
+.ws-markdown .hljs-variable,
+.ws-markdown .hljs-subst,
+.ws-markdown .hljs-name {
+  color: var(--ws-color-editor-syntax-variable);
+}
+
+.ws-markdown .hljs-addition {
+  color: var(--ws-color-editor-diff-added);
+  background: var(--ws-color-editor-diff-added-background);
+}
+
+.ws-markdown .hljs-deletion {
+  color: var(--ws-color-editor-diff-removed);
+  background: var(--ws-color-editor-diff-removed-background);
+}
+
+.ws-markdown .hljs-emphasis { font-style: italic; }
+.ws-markdown .hljs-strong { font-weight: 700; }
+
+/* 保留用户显式选择的 terminal 阅读面：不套用浅色语法前景，也不启用暗色主题。 */
+.ws-markdown pre.terminal code.hljs,
+.ws-markdown pre.terminal code.hljs [class*="hljs-"] {
+  color: var(--ws-color-code-text);
+  background: transparent;
+}

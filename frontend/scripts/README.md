@@ -1,5 +1,10 @@
 # 前端脚本说明
 
+## 学习进度安全直接回归
+
+默认测试收集明确纳入`src/pages/Admin/ITTechnology/progressSafety.contract.test.ts`。结合`learningProgressBaselineGuards.test.tsx`和`services/learningProgress.test.ts`验证读取基线、版本冲突及过时响应；组件/AST证据不替代真实保存和数据库读回。
+
+
 > 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 `frontend/scripts/` 只保留当前仍接入 npm 命令、CI 或生产烟测链路的脚本。

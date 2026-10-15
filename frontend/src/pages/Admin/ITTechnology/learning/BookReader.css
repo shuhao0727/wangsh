@@ -10,7 +10,6 @@
 
 /* ── 正文排版（对标 Typst 12pt 正文字号） ── */
 .br-article {
-  color: var(--ws-color-text);
   font-family: "Times New Roman", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", serif;
   font-size: 1.05rem;
   line-height: 1.95;
@@ -43,7 +42,6 @@
   font-family: "STKaiti", "KaiTi", "Kaiti SC", "Noto Serif CJK SC", serif;
   font-weight: 700;
   line-height: 1.4;
-  color: var(--ws-color-text);
   text-indent: 0;
 }
 
@@ -51,14 +49,13 @@
   font-size: 1.6em;
   margin: 1.6em 0 0.6em 0;
   padding-bottom: 0.4em;
-  border-bottom: 2px solid var(--ws-color-primary);
+  border-bottom-width: 2px;
 }
 
 .br-article h2 {
   font-size: 1.35em;
   margin: 1.4em 0 0.5em 0;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--ws-color-border);
 }
 
 .br-article h3 {
@@ -70,11 +67,9 @@
 .br-article blockquote {
   margin: 1.2em 0;
   padding: 0.8em 1.2em;
-  border-left: 4px solid var(--ws-color-primary);
-  background: linear-gradient(90deg, var(--ws-color-primary-soft), transparent);
+  border-left-width: 4px;
   border-radius: 0 8px 8px 0;
   font-style: italic;
-  color: var(--ws-color-text-secondary);
   text-indent: 0;
 }
 
@@ -91,27 +86,21 @@
   font-size: 0.88em;
   line-height: 1.6;
   text-indent: 0;
-  background: var(--ws-color-code-bg);
-  color: var(--ws-color-code-text);
-}
-.br-article pre code.hljs {
-  background: transparent;
-  padding: 0;
 }
 
-.br-article pre code {
-  background: none;
+.br-article.ws-markdown pre code {
   padding: 0;
   font-family: inherit;
   font-size: inherit;
-  color: inherit;
+}
+
+.br-article.ws-markdown pre code.hljs {
+  padding: 0;
 }
 
 .br-article code {
   font-family: "Courier New", "Menlo", "Monaco", "Consolas", monospace;
   font-size: 0.88em;
-  background: var(--ws-color-primary-soft);
-  color: var(--ws-color-primary-active);
   padding: 0.1em 0.3em;
   border-radius: 3px;
 }
@@ -126,21 +115,15 @@
 }
 
 .br-article th {
-  background: var(--ws-color-surface-2);
   font-weight: 700;
   text-align: left;
   padding: 0.6em 0.8em;
-  border-bottom: 2px solid var(--ws-color-border);
+  border-bottom-width: 2px;
   font-family: "STKaiti", "Kaiti SC", serif;
 }
 
 .br-article td {
   padding: 0.5em 0.8em;
-  border-bottom: 1px solid var(--ws-color-border-secondary);
-}
-
-.br-article tr:nth-child(even) td {
-  background: rgba(0, 0, 0, 0.015);
 }
 
 /* ── 列表 ── */
@@ -165,68 +148,68 @@
   box-shadow: var(--ws-shadow-sm);
 }
 
-/* ── 数学公式 ── */
+/* ── 数学公式：仅保留阅读布局，颜色继承公共 Markdown 层 ── */
 .br-article .math-inline {
-  padding: 0 0.15em;
+  padding: 0 0.1em;
 }
 
 .br-article .math-block {
   display: block;
-  margin: 1em 0;
+  margin: 0.6em 0;
+  padding: 0 0 0 0.6em;
   overflow-x: auto;
-  border-left: 3px solid var(--ws-color-primary);
-  padding-left: 1em;
   font-size: 1.05em;
   text-indent: 0;
 }
 
-/* ── KaTeX 样式 ── */
-.br-article .katex-display { margin: 0 !important; }
-.br-article .katex .katex-html { background: var(--ws-color-surface) !important; }
-.br-article .katex,
-.br-article .katex .mord,
-.br-article .katex .mbin,
-.br-article .katex .mrel,
-.br-article .katex .mopen,
-.br-article .katex .mclose,
-.br-article .katex .mpunct,
-.br-article .katex .minner,
-.br-article .katex .mathit,
-.br-article .katex .mathrm,
-.br-article .katex .mathcal,
-.br-article .katex .mathbf,
-.br-article .katex .boldsymbol { color: var(--ws-color-text) !important; }
-.br-article .math-inline { padding: 0 0.1em; }
-.br-article .math-block { margin: 0.6em 0; padding: 0; border-left: 3px solid var(--ws-color-primary); padding-left: 0.6em; }
-/* Math + Mermaid pre: remove dark hljs background */
-.br-article pre:has(.math-block),
-.br-article pre:has(code.language-math),
-.br-article pre:has(code.language-mermaid),
-.br-article .mermaid { background: transparent !important; padding: 0 !important; }
-.br-article .mermaid svg { max-width: 100%; max-height: 350px; }
+/* ── 图表和安全源码回退 ── */
+.br-mermaid {
+  margin: 1em 0;
+  min-width: 0;
+  text-indent: 0;
+}
+
+.br-mermaid-svg {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.br-mermaid-svg svg {
+  max-width: 100%;
+  max-height: 350px;
+}
+
+.br-mermaid-svg foreignObject,
+.br-mermaid-svg foreignObject div,
+.br-mermaid-svg foreignObject p,
+.br-mermaid-svg foreignObject span,
+.br-mermaid-svg foreignObject strong {
+  text-indent: 0;
+}
+
+.br-mermaid-svg foreignObject p {
+  margin: 0;
+}
+
+.br-article .br-render-status {
+  font-size: 0.9em;
+  line-height: 1.6;
+  text-align: left;
+  text-indent: 0;
+  color: var(--ws-color-text-secondary);
+}
+
+.br-article .br-render-status[role="alert"] {
+  color: var(--ws-color-error-text);
+}
 
 /* ── 思维导图 ── */
 .mindmap-container { overflow: hidden; }
 .mindmap-container svg { width: 100% !important; height: 100% !important; }
 
-/* ── 水平线 ── */
+/* ── 水平线：颜色沿用公共层 ── */
 .br-article hr {
-  border: none;
-  height: 1px;
-  background: var(--ws-color-border);
   margin: 2em 0;
-}
-
-/* ── 链接 ── */
-.br-article a {
-  color: var(--ws-color-primary);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s;
-}
-
-.br-article a:hover {
-  border-bottom-color: var(--ws-color-primary);
 }
 
 /* ── 移动端适配 ── */

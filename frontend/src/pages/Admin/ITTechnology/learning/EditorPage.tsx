@@ -9,6 +9,11 @@ import remarkGfm from "remark-gfm";
 import type { LearningModuleKey, LearningBook } from "./types";
 import { BookReader } from "./BookReader";
 import {
+  loadLearningBook,
+  mergeLearningBookChapters,
+  type PersistedLearningChapter,
+} from "./helpers";
+import {
   ArrowLeft, Eye, Edit3, Save, BookOpen,
   Bold, Italic, Code, Link, List, ListOrdered, Image,
 } from "lucide-react";
@@ -25,43 +30,65 @@ const LearningEditorPage: React.FC = () => {
   const [editValue, setEditValue] = useState("");
   const [view, setView] = useState<EditorView>("split");
   const [saving, setSaving] = useState(false);
+  const [canSave, setCanSave] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const bookRef = useRef<LearningBook | null>(null);
+  const activeSlugRef = useRef("");
+  const loadRequestRef = useRef(0);
+  const saveRequestRef = useRef(0);
+  const selectionGenerationRef = useRef(0);
+  const draftRevisionRef = useRef(0);
 
-  // Load book
+  bookRef.current = book;
+
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const requestId = ++loadRequestRef.current;
+    const selectionGeneration = ++selectionGenerationRef.current;
     const load = async () => {
       setLoading(true);
+      setCanSave(false);
+      setSaving(false);
       try {
-        let m: any;
-        switch (mk) {
-          case "ml": m = await import("../ml/book"); break;
-          case "ai": m = await import("../ai/book"); break;
-          case "agents": m = await import("../agents/book"); break;
-          default: m = await import("../ml/book"); break;
-        }
-        const b = m.ML_BOOK ?? m.AI_BOOK ?? m.AGENTS_BOOK ?? m.default;
-        if (!cancelled && b) {
-          setBook(b as LearningBook);
-          const slug = b.chapters[0]?.slug ?? "";
-          setActiveSlug(slug);
-          setEditValue(b.chapters[0]?.markdown ?? "");
-        }
+        const resolved = await loadLearningBook(mk, controller.signal);
+        if (requestId !== loadRequestRef.current) return;
+        const resolvedBook = resolved.book;
+        const nextSlug = resolvedBook.chapters.some((chapter) => chapter.slug === activeSlugRef.current)
+          ? activeSlugRef.current
+          : resolvedBook.chapters[0]?.slug ?? "";
+        const nextChapter = resolvedBook.chapters.find((chapter) => chapter.slug === nextSlug);
+        activeSlugRef.current = nextSlug;
+        bookRef.current = resolvedBook;
+        setBook(resolvedBook);
+        setCanSave(resolved.canSave);
+        setActiveSlug(nextSlug);
+        setEditValue(nextChapter?.markdown ?? "");
+        draftRevisionRef.current += 1;
       } catch {
-        if (!cancelled) showMessage.error("加载失败");
+        if (requestId === loadRequestRef.current) showMessage.error("加载失败");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (requestId === loadRequestRef.current && selectionGeneration === selectionGenerationRef.current) {
+          setLoading(false);
+        }
       }
     };
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      controller.abort();
+      loadRequestRef.current += 1;
+      selectionGenerationRef.current += 1;
+      saveRequestRef.current += 1;
+    };
   }, [mk]);
 
   const handleSelectChapter = useCallback((slug: string) => {
+    selectionGenerationRef.current += 1;
+    activeSlugRef.current = slug;
     setActiveSlug(slug);
-    const ch = book?.chapters.find((c) => c.slug === slug);
+    const ch = bookRef.current?.chapters.find((c) => c.slug === slug);
     setEditValue(ch?.markdown ?? "");
-  }, [book]);
+    draftRevisionRef.current += 1;
+  }, []);
 
   const activeChapter = book?.chapters.find((c) => c.slug === activeSlug);
 
@@ -72,6 +99,7 @@ const LearningEditorPage: React.FC = () => {
     const start = ta.selectionStart, end = ta.selectionEnd;
     const selected = editValue.substring(start, end);
     const newText = editValue.substring(0, start) + before + selected + after + editValue.substring(end);
+    draftRevisionRef.current += 1;
     setEditValue(newText);
     setTimeout(() => {
       ta.focus();
@@ -80,22 +108,47 @@ const LearningEditorPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!activeChapter) return;
+    if (!activeChapter || !canSave || saving) return;
+    const slug = activeChapter.slug;
+    const saveRequestId = ++saveRequestRef.current;
+    const selectionGeneration = selectionGenerationRef.current;
+    const draftRevision = draftRevisionRef.current;
     setSaving(true);
     try {
-      await api.put(`/learning/chapters/${mk}/${activeChapter.slug}`, {
+      await api.put(`/learning/chapters/${mk}/${slug}`, {
         title: activeChapter.title,
         summary: activeChapter.summary,
         estimated_minutes: activeChapter.estimatedMinutes,
         difficulty: activeChapter.difficulty,
         group_name: activeChapter.group,
         markdown: editValue,
+        sort_order: "sort_order" in activeChapter ? activeChapter.sort_order : book!.chapters.indexOf(activeChapter),
       });
-      showMessage.success("保存成功");
+      const readBack = await api.get(`/learning/chapters/${mk}/${slug}`);
+      if (saveRequestId !== saveRequestRef.current) return;
+      const saved = readBack.data as unknown as PersistedLearningChapter;
+      if (saved?.slug !== slug || typeof saved.markdown !== "string") {
+        throw new Error("Invalid chapter read-back");
+      }
+      const currentBook = bookRef.current;
+      if (currentBook) {
+        const updatedBook = mergeLearningBookChapters(currentBook, [saved]);
+        bookRef.current = updatedBook;
+        setBook(updatedBook);
+        if (
+          selectionGeneration === selectionGenerationRef.current &&
+          activeSlugRef.current === slug && draftRevision === draftRevisionRef.current
+        ) {
+          setEditValue(saved.markdown ?? "");
+        }
+      }
+      if (selectionGeneration === selectionGenerationRef.current && activeSlugRef.current === slug) {
+        showMessage.success("保存成功");
+      }
     } catch {
-      showMessage.error("保存失败");
+      if (saveRequestId === saveRequestRef.current) showMessage.error("保存失败");
     } finally {
-      setSaving(false);
+      if (saveRequestId === saveRequestRef.current) setSaving(false);
     }
   };
 
@@ -128,11 +181,12 @@ const LearningEditorPage: React.FC = () => {
           <Button size="sm" variant={view === "edit" ? "secondary" : "ghost"} onClick={() => setView("edit")} className="h-7 text-xs gap-2xs"><Edit3 className="h-3 w-3" />编辑</Button>
           <Button size="sm" variant={view === "preview" ? "secondary" : "ghost"} onClick={() => setView("preview")} className="h-7 text-xs gap-2xs"><Eye className="h-3 w-3" />预览</Button>
           <Button size="sm" variant={view === "split" ? "secondary" : "ghost"} onClick={() => setView("split")} className="h-7 text-xs gap-2xs">分屏</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-2xs"><Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving || !canSave} className="h-7 text-xs gap-2xs"><Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}</Button>
         </div>
       </div>
 
       {/* Main area */}
+      {!canSave && <p role="status" className="px-3 py-xs text-xs text-text-secondary">服务端内容读取失败，当前展示备用内容。请重新加载后再保存。</p>}
       <div className="flex flex-1 min-h-0">
         {/* Chapter list */}
         <aside className="hidden w-[200px] shrink-0 border-r border-border lg:flex lg:flex-col bg-surface-2">
@@ -171,7 +225,7 @@ const LearningEditorPage: React.FC = () => {
             <textarea
               ref={textareaRef}
               value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
+              onChange={(e) => { draftRevisionRef.current += 1; setEditValue(e.target.value); }}
               className="h-full w-full resize-none border-0 bg-surface p-5 font-mono text-sm leading-relaxed outline-none text-text-base"
               placeholder="在此编辑 Markdown 内容..."
               spellCheck={false}
@@ -183,7 +237,7 @@ const LearningEditorPage: React.FC = () => {
                 <textarea
                   ref={textareaRef}
                   value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
+                  onChange={(e) => { draftRevisionRef.current += 1; setEditValue(e.target.value); }}
                   className="h-full w-full resize-none border-0 bg-surface p-4 font-mono text-xs leading-relaxed outline-none text-text-base"
                   placeholder="在此编辑..."
                   spellCheck={false}

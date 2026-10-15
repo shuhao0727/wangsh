@@ -5,7 +5,7 @@ import { BookReader } from '@/pages/Admin/ITTechnology/learning/BookReader';
 import type { LearningBook, LearningBookChapter } from '@/pages/Admin/ITTechnology/learning/types';
 
 type MermaidResult = { svg: string };
-type RuntimeWindow = Window & { mermaid?: { render: ReturnType<typeof vi.fn> } };
+type RuntimeWindow = Window & { mermaid?: { initialize: ReturnType<typeof vi.fn>; render: ReturnType<typeof vi.fn> } };
 const runtime = window as RuntimeWindow;
 const codeA = 'graph TD; A-->B';
 const codeB = 'graph TD; C-->D';
@@ -45,17 +45,18 @@ afterEach(() => {
 });
 
 describe('BookReader Mermaid consumer lifecycle', () => {
-  it('marks component-owned nodes so automatic scans do not reinterpret SVG output', () => {
+  it('keeps component-owned source outside automatic Mermaid scans', () => {
     const view = render(<BookReader {...props} />);
-    expect(view.container.querySelector('pre.mermaid')).toHaveAttribute('data-processed', 'true');
-    expect(view.container.querySelector('pre.mermaid')).toHaveTextContent(codeA);
+    expect(view.container.querySelector('.br-mermaid')).toHaveAttribute('aria-busy', 'true');
+    expect(view.container.querySelector('.mermaid')).toBeNull();
+    expect(view.container.querySelector('.br-mermaid pre')).toHaveTextContent(codeA);
   });
 
   it('renders the real component when the library becomes ready after mount', async () => {
     const view = render(<BookReader {...props} />);
-    expect(view.container.querySelector('pre.mermaid')).toHaveTextContent(codeA);
+    expect(view.container.querySelector('.br-mermaid pre')).toHaveTextContent(codeA);
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('late') });
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     ready();
     await waitFor(() => expect(view.queryByTestId('late')).not.toBeNull());
     expect(renderDiagram).toHaveBeenCalledTimes(1);
@@ -64,26 +65,30 @@ describe('BookReader Mermaid consumer lifecycle', () => {
 
   it('renders immediately available libraries, without duplicate work on ready events', async () => {
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('immediate') });
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     const view = render(<BookReader {...props} />);
     await waitFor(() => expect(view.queryByTestId('immediate')).not.toBeNull());
     ready(); ready(); await flush();
     expect(renderDiagram).toHaveBeenCalledTimes(1);
     expect(view.getByTestId('immediate')).toBeInTheDocument();
+    expect(view.getByTestId('immediate').closest('.br-mermaid-svg')).toHaveAttribute('role', 'img');
+    expect(view.container.querySelector('.mermaid')).toBeNull();
+    expect(runtime.mermaid.initialize).toHaveBeenCalledTimes(1);
+    expect(runtime.mermaid.initialize).toHaveBeenCalledWith(expect.objectContaining({ securityLevel: 'strict', startOnLoad: false }));
   });
 
   it('removes its late-ready subscription on unmount', async () => {
     const view = render(<BookReader {...props} />);
     view.unmount();
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('orphan') });
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     ready(); await flush();
     expect(renderDiagram).not.toHaveBeenCalled();
   });
 
   it('does not start a queued render after cleanup', async () => {
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('queued') });
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     const view = render(<BookReader {...props} />);
     view.unmount(); await flush();
     expect(renderDiagram).not.toHaveBeenCalled();
@@ -91,9 +96,9 @@ describe('BookReader Mermaid consumer lifecycle', () => {
 
   it('never writes an in-flight result into a detached pre element', async () => {
     const request = deferred();
-    runtime.mermaid = { render: vi.fn().mockReturnValue(request.promise) };
+    runtime.mermaid = { initialize: vi.fn(), render: vi.fn().mockReturnValue(request.promise) };
     const view = render(<BookReader {...props} />);
-    const pre = view.container.querySelector('pre.mermaid')!;
+    const pre = view.container.querySelector('.br-mermaid pre')!;
     await flush();
     expect(runtime.mermaid.render).toHaveBeenCalledTimes(1);
     view.unmount();
@@ -105,9 +110,9 @@ describe('BookReader Mermaid consumer lifecycle', () => {
   it('discards old chapter results while the current chapter is rendering', async () => {
     const first = deferred(); const second = deferred();
     const renderDiagram = vi.fn((_id: string, code: string) => code.trim() === codeA ? first.promise : second.promise);
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     const view = render(<BookReader {...props} />);
-    const oldPre = view.container.querySelector('pre.mermaid')!;
+    const oldPre = view.container.querySelector('.br-mermaid pre')!;
     await flush();
     view.rerender(<BookReader {...props} activeSlug="second" />); await flush();
     await act(async () => { second.resolve({ svg: svg('current') }); await second.promise; });
@@ -121,34 +126,34 @@ describe('BookReader Mermaid consumer lifecycle', () => {
 
   it('keeps source text after an asynchronous render rejection', async () => {
     const request = deferred();
-    runtime.mermaid = { render: vi.fn().mockReturnValue(request.promise) };
+    runtime.mermaid = { initialize: vi.fn(), render: vi.fn().mockReturnValue(request.promise) };
     const view = render(<BookReader {...props} />); await flush();
     await act(async () => { request.reject(new Error('render unavailable')); await request.promise.catch(() => {}); });
     await flush();
-    expect(view.container.querySelector('pre.mermaid')).toHaveTextContent(codeA);
-    expect(view.container.querySelector('pre.mermaid svg')).toBeNull();
+    expect(view.container.querySelector('.br-mermaid pre')).toHaveTextContent(codeA);
+    expect(view.container.querySelector('.br-mermaid svg')).toBeNull();
   });
 
   it('keeps source text after a synchronous API throw without crashing the component', async () => {
-    runtime.mermaid = { render: vi.fn(() => { throw new Error('synchronous render failure'); }) };
+    runtime.mermaid = { initialize: vi.fn(), render: vi.fn(() => { throw new Error('synchronous render failure'); }) };
     const view = render(<BookReader {...props} />); await flush();
-    expect(view.container.querySelector('pre.mermaid')).toHaveTextContent(codeA);
-    expect(view.container.querySelector('pre.mermaid svg')).toBeNull();
+    expect(view.container.querySelector('.br-mermaid pre')).toHaveTextContent(codeA);
+    expect(view.container.querySelector('.br-mermaid svg')).toBeNull();
   });
 
   it('ignores ready signals without an instance, then renders exactly once when available', async () => {
     const view = render(<BookReader {...props} />);
     ready(); await flush();
-    expect(view.container.querySelector('pre.mermaid svg')).toBeNull();
+    expect(view.container.querySelector('.br-mermaid svg')).toBeNull();
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('valid') });
-    runtime.mermaid = { render: renderDiagram }; ready(); ready();
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram }; ready(); ready();
     await waitFor(() => expect(view.queryByTestId('valid')).not.toBeNull());
     expect(renderDiagram).toHaveBeenCalledTimes(1);
   });
 
   it('survives StrictMode cleanup/replay without rendering the abandoned effect', async () => {
     const renderDiagram = vi.fn().mockResolvedValue({ svg: svg('strict') });
-    runtime.mermaid = { render: renderDiagram };
+    runtime.mermaid = { initialize: vi.fn(), render: renderDiagram };
     const view = render(<StrictMode><BookReader {...props} /></StrictMode>);
     await waitFor(() => expect(view.queryByTestId('strict')).not.toBeNull());
     expect(renderDiagram).toHaveBeenCalledTimes(1);
