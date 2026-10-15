@@ -42,6 +42,7 @@ import path from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { compilerFixtureRanges } from "./ui-alpha-fixture-context.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "src");
@@ -168,20 +169,34 @@ export function walk(dir, out = []) {
   return out;
 }
 
-export function scanSource(colorMap, srcDir = SRC) {
+export function scanSourceDetails(colorMap, srcDir = SRC) {
   const violations = [];
+  const rawViolations = [];
+  const compilerFixtures = [];
   for (const file of walk(srcDir)) {
     const content = fs.readFileSync(file, "utf8");
     const relative = path.relative(ROOT, file).split(path.sep).join("/");
+    const ranges = compilerFixtureRanges(content, file);
     const lines = content.split("\n");
+    let offset = 0;
     for (let index = 0; index < lines.length; index += 1) {
       for (const match of lines[index].matchAll(ALPHA_RE)) {
         const verdict = judgeToken(match[0], colorMap);
-        if (verdict) violations.push({ ...verdict, file: relative, line: index + 1 });
+        if (!verdict) continue;
+        const row = { ...verdict, file: relative, line: index + 1 };
+        rawViolations.push(row);
+        const range = ranges.find((r) => offset + match.index >= r.start && offset + match.index + match[0].length <= r.end);
+        if (range) compilerFixtures.push({ ...row, rule: range.rule });
+        else violations.push(row);
       }
+      offset += lines[index].length + 1;
     }
   }
-  return violations;
+  return { violations, rawViolations, compilerFixtures };
+}
+
+export function scanSource(colorMap, srcDir = SRC) {
+  return scanSourceDetails(colorMap, srcDir).violations;
 }
 
 /**
@@ -304,7 +319,9 @@ export async function findDeadColorClasses(srcDir = SRC) {
   for (const file of walk(srcDir)) {
     if (!/\.(ts|tsx)$/.test(file)) continue;
     const content = fs.readFileSync(file, "utf8");
+    const ranges = compilerFixtureRanges(content, file);
     for (const match of content.matchAll(literalRe)) {
+      if (ranges.some((r) => match.index >= r.start && match.index + match[0].length <= r.end)) continue;
       const raw = match[1] ?? match[2] ?? match[3] ?? "";
       if (!looksLikeClassList(raw)) continue;
       const colors = extractCandidateTokens(raw);
@@ -372,7 +389,7 @@ function parseArgs(args) {
 
 export async function buildReport(options = {}) {
   const colorMap = loadColorMap();
-  const violations = scanSource(colorMap, options.src || SRC);
+  const { violations, rawViolations, compilerFixtures } = scanSourceDetails(colorMap, options.src || SRC);
   const report = {
     scanned_color_names: colorMap.size,
     alpha_capable: [...colorMap.entries()]
@@ -385,6 +402,10 @@ export async function buildReport(options = {}) {
       return acc;
     }, {}),
     violations,
+    raw_violation_count: rawViolations.length,
+    raw_violations: rawViolations,
+    compiler_fixture_count: compilerFixtures.length,
+    compiler_fixtures: compilerFixtures,
   };
   if (options.deadClasses) {
     report.dead_color_classes = await findDeadColorClasses(options.src || SRC);
@@ -413,6 +434,7 @@ async function main() {
       "): " +
       report.alpha_capable.join(", "),
   );
+  if (report.compiler_fixture_count) console.log("仅编译负例：" + report.compiler_fixture_count + " 处（原始命中保留；非测试文件豁免）。");
   if (report.violation_count === 0) {
     console.log(
       "透明度修饰符门禁通过：0 处 /N 用于不支持 alpha 的颜色（扫描 " +

@@ -110,3 +110,21 @@ Run、Debug、Pause、Continue、Step、tooltip、hover、pointer 或 focus 时�
 执行 `npm test -- src/components/sharedUtilitiesHooks.test.tsx`、`npm run type-check`
 和适用静态门禁。组件内存替身不等于真实浏览器关页或业务 API/数据库验收，
 动态证据与限制仍见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 颜色解析桥的源声明合同（未发布）
+
+在 `frontend/` 执行
+`npm test -- src/lib/cssTokens.test.ts src/lib/cssTokens.charts.test.ts src/lib/cssTokens.contract.test.ts`。
+contract 从该 cwd 读取候选自身 CSS/Tailwind，经 PostCSS 解析首个顶层 root，
+校对已登记 fallback、RGB 配对（缺源也失败）及颜色映射的变量定义；没有覆盖
+所有 root token 的 renderer 注册或 CSS 级联。另实编译 `text-2xs`/`text-3xs`
+与 alpha 正/负例，防止有定义但不产出 CSS。
+
+组件/库单测不替代实际 canvas/SVG、production 静态资源和四桌面浏览器。
+非颜色数据、invalid live/fallback 与样式读取失败必须保留反例；候选从实际 index
+独立导出、记录 cwd/source SHA，不借完整 dirty 工作区测试。颜色快照与批准来源
+是独立准入条件，不通过 `--adopt`、增阈值或放宽 fixture 解决。动态结果仅见
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+颜色门禁的编译输入分类回归：`node --test scripts/ui-alpha-fixture-context.test.mjs`。
+原始命中与实际运行类分开保留，不删除不生成 CSS 的负例；颜色快照承接仍需来源批准。
