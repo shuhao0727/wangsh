@@ -25,6 +25,10 @@ export default defineConfig({
     // PythonLab 是核心交互模块，纳入默认门禁防止流程图/调试/终端能力回归。
     // Query hooks 和 service 层覆盖键值稳定性与 API 形状。
     include: [
+      // B05 article closure: exact new regressions; no future feature glob.
+      "src/hooks/queries/articleBatchMutations.test.tsx",
+      "src/components/articleEditor.direct.test.tsx",
+      "src/components/Layout/PanelCard.bridge.test.tsx",
       "src/components/**/*.test.{ts,tsx}",
       "src/pages/AIAgents/**/*.test.{ts,tsx}",
       "src/pages/Xbk/**/*.test.{ts,tsx}",

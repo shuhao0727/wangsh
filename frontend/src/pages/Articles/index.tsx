@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RotateCcw, Search, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { articleApi, categoryApi } from "@services";
 import { logger } from "@services/logger";
 import { subscribeArticleUpdated } from "@utils/articleUpdatedEvent";
 import { useDebounce } from "@hooks/useDebounce";
-import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { calculatePagination } from "@utils/pagination";
 import type {
   ArticleWithRelations,
   CategoryWithUsage,
 } from "@services";
-import SplitPanePage from "@components/Layout/SplitPanePage";
 import PanelCard from "@components/Layout/PanelCard";
 import EmptyState from "@components/Common/EmptyState";
 import ArticleItem from "./components/ArticleItem";
@@ -92,25 +92,57 @@ const cleanAndValidateDataArray = <T,>(
 };
 
 const ArticlesPage: React.FC = () => {
-  const screens = useBreakpoint();
-  const isCompactViewport = !screens.sm;
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [articles, setArticles] = useState<ArticleWithRelations[]>([]);
   const [categories, setCategories] = useState<CategoryWithUsage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [searchKeyword, setSearchKeyword] = useState<string>("");
+  const pageParam = Number(searchParams.get("page"));
+  const currentPage = Number.isSafeInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+  const sizeParam = Number(searchParams.get("size"));
+  const pageSize = PAGE_SIZE_OPTIONS.includes(sizeParam) ? sizeParam : 12;
+  const categoryParam = Number(searchParams.get("category"));
+  const selectedCategory = Number.isSafeInteger(categoryParam) && categoryParam > 0
+    ? categoryParam : null;
+  const urlKeyword = searchParams.get("q") || "";
+  const [searchKeyword, setSearchKeyword] = useState(urlKeyword);
+  const [previousLocationKey, setPreviousLocationKey] = useState(location.key);
+  const pendingSearchRef = useRef(false);
+  const ownNavigationRef = useRef<string | null>(null);
+  // Keep keystrokes synchronous; URL navigation can commit after the next input event.
+  // Restore external navigation before effects can submit an obsolete input draft.
+  if (previousLocationKey !== location.key) {
+    setPreviousLocationKey(location.key);
+    if (ownNavigationRef.current !== searchParams.toString()) {
+      pendingSearchRef.current = false;
+      setSearchKeyword(urlKeyword);
+    }
+    ownNavigationRef.current = null;
+  }
   const debouncedKeyword = useDebounce(searchKeyword, 500);
+
+  useEffect(() => {
+    if (!pendingSearchRef.current || debouncedKeyword !== searchKeyword || searchKeyword === urlKeyword) return;
+    pendingSearchRef.current = false;
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (searchKeyword) next.set("q", searchKeyword);
+      else next.delete("q");
+      next.set("page", "1");
+      ownNavigationRef.current = next.toString();
+      return next;
+    });
+  }, [debouncedKeyword, searchKeyword, urlKeyword, setSearchParams]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refreshTimerRef = useRef<number | null>(null);
   const lastRefreshAtRef = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const requestRefresh = useCallback(() => {
     const now = Date.now();
@@ -128,16 +160,6 @@ const ArticlesPage: React.FC = () => {
       setRefreshKey((k) => k + 1);
     }, minInterval - since);
   }, []);
-
-  useEffect(() => {
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const category = searchParams.get("category");
-
-    setCurrentPage(page);
-    if (category) {
-      setSelectedCategory(parseInt(category, 10));
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -198,16 +220,18 @@ const ArticlesPage: React.FC = () => {
       try {
         if (isMounted) {
           setLoading(true);
+          setError(null);
         }
 
         abortController = new AbortController();
 
         let response;
-        if (debouncedKeyword.trim()) {
+        if (urlKeyword.trim()) {
           response = await articleApi.searchArticles(
-            debouncedKeyword.trim(),
+            urlKeyword.trim(),
             currentPage,
             pageSize,
+            selectedCategory || undefined,
           );
         } else {
           response = await articleApi.listPublicArticles({
@@ -262,8 +286,7 @@ const ArticlesPage: React.FC = () => {
         }
         logger.error("获取文章列表失败:", error);
         if (isMounted) {
-          setArticles([]);
-          setTotal(0);
+          setError(error?.response?.data?.detail || "文章列表加载失败，请稍后重试");
         }
       } finally {
         if (isMounted) {
@@ -280,7 +303,7 @@ const ArticlesPage: React.FC = () => {
         abortController.abort();
       }
     };
-  }, [currentPage, pageSize, selectedCategory, refreshKey, debouncedKeyword]);
+  }, [currentPage, pageSize, selectedCategory, refreshKey, urlKeyword]);
 
   useEffect(() => {
     const unsub = subscribeArticleUpdated(() => {
@@ -306,6 +329,8 @@ const ArticlesPage: React.FC = () => {
   const updateUrlParams = (updates: {
     page?: number;
     category?: number | null;
+    size?: number;
+    q?: string;
     sort?: string;
   }) => {
     const newParams = new URLSearchParams(searchParams);
@@ -322,19 +347,26 @@ const ArticlesPage: React.FC = () => {
       }
     }
 
+    if (updates.size !== undefined) {
+      newParams.set("size", updates.size.toString());
+    }
+    if (updates.q !== undefined) {
+      if (updates.q) newParams.set("q", updates.q);
+      else newParams.delete("q");
+      setSearchKeyword(updates.q);
+    }
+
     if (updates.sort !== undefined) {
       newParams.set("sort", updates.sort);
     }
 
+    pendingSearchRef.current = false;
+    ownNavigationRef.current = newParams.toString();
     setSearchParams(newParams);
   };
 
   const handlePageChange = (page: number, nextPageSize?: number) => {
-    setCurrentPage(page);
-    if (nextPageSize && nextPageSize !== pageSize) {
-      setPageSize(nextPageSize);
-    }
-    updateUrlParams({ page });
+    updateUrlParams({ page: searchKeyword === urlKeyword ? page : 1, size: nextPageSize ?? pageSize, q: searchKeyword });
   };
 
   const handlePageButtonClick = (
@@ -350,20 +382,19 @@ const ArticlesPage: React.FC = () => {
     handlePageChange(page);
   };
 
-  const handleCategorySelect = useCallback(
-    (categoryId: number | null) => {
-      setSelectedCategory(categoryId);
-      setCurrentPage(1);
-      const newParams = new URLSearchParams(searchParams);
-      if (categoryId === null) {
-        newParams.delete("category");
-      } else {
-        newParams.set("category", categoryId.toString());
-      }
-      newParams.set("page", "1");
-      setSearchParams(newParams);
+  const handleCategorySelect = (categoryId: number | null) => {
+    updateUrlParams({ category: categoryId, q: searchKeyword, page: 1 });
+  };
+
+  const handleCategoryFocus = useCallback(
+    (event: React.FocusEvent<HTMLButtonElement>) => {
+      if (!window.matchMedia("(max-width: 768px)").matches) return;
+      event.currentTarget.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
     },
-    [searchParams, setSearchParams],
+    [],
   );
 
   const navigateToArticle = useCallback(
@@ -373,20 +404,12 @@ const ArticlesPage: React.FC = () => {
     [navigate],
   );
 
-  const handleSearch = useCallback(() => {
-    setCurrentPage(1);
-  }, []);
+  const handleSearch = () => updateUrlParams({ q: searchKeyword, page: 1 });
 
-  useEffect(() => {
-    if (debouncedKeyword) setCurrentPage(1);
-  }, [debouncedKeyword]);
-
-  const handleSearchInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchKeyword(e.target.value);
-    },
-    [],
-  );
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    pendingSearchRef.current = true;
+    setSearchKeyword(e.target.value);
+  };
 
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -406,186 +429,203 @@ const ArticlesPage: React.FC = () => {
   }, [articles]);
 
   const displayedArticles = safeArticles;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const { totalPages } = calculatePagination({ page: currentPage, pageSize, total });
 
   return (
     <div className="articles-page">
-      <div className="articles-split-pane">
-        <SplitPanePage
-          leftWidth={isCompactViewport ? 280 : 320}
-          alignItems="stretch"
-          left={
-            <div className="articles-left-sticky">
-              <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
-                <div className="articles-left">
-                  <div className="articles-left-search">
-                    <div className="relative flex-1 min-w-0">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-                      <Input
-                        className="pl-[var(--ws-search-input-padding-start)]"
-                        placeholder="搜索文章..."
-                        value={searchKeyword}
-                        onChange={handleSearchInputChange}
-                        onKeyDown={handleSearchKeyDown}
-                        clearable
-                        onClear={() => setSearchKeyword("")}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSearchKeyword("");
-                        handleCategorySelect(null);
-                      }}
-                      disabled={!selectedCategory && !searchKeyword.trim()}
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <PanelCard bodyPadding="var(--ws-panel-padding-sm)" className="articles-panel-card">
+        <div className="articles-content-body">
+          <aside className="articles-toolbar" aria-label="文章筛选">
+            <div className="articles-search-row">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                <Input
+                  ref={searchInputRef}
+                  className="articles-search-input pl-[var(--ws-search-input-padding-start)]"
+                  aria-label="搜索文章"
+                  placeholder="搜索文章..."
+                  value={searchKeyword}
+                  onChange={handleSearchInputChange}
+                  onKeyDown={handleSearchKeyDown}
+                  clearable
+                  onClear={() => {
+                    updateUrlParams({ q: "", page: 1 });
+                  }}
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 disabled:bg-transparent"
+                aria-label="清除搜索和分类"
+                title="清除搜索和分类"
+                onClick={() => {
+                  updateUrlParams({ q: "", category: null, page: 1 });
+                  searchInputRef.current?.focus();
+                }}
+                disabled={!selectedCategory && !searchKeyword.trim()}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
 
-                  <div className="articles-left-menu rounded-lg border border-[var(--ws-color-border-secondary)] bg-surface p-[var(--ws-space-1)]">
+            <div className="articles-category-toolbar" aria-label="文章分类">
+              <div className="articles-category-label">
+                <ListFilter className="h-4 w-4" />
+                分类
+              </div>
+              <div className="articles-category-list" role="group" aria-label="选择文章分类">
+                <button
+                  type="button"
+                  className={`articles-category-item ${!selectedCategory ? "articles-category-item-active" : ""}`}
+                  aria-pressed={!selectedCategory}
+                  onFocus={handleCategoryFocus}
+                  onClick={() => handleCategorySelect(null)}
+                >
+                  全部文章
+                </button>
+                {categoriesLoading ? (
+                  <div className="articles-category-loading" aria-label="分类加载中">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-20 rounded-md" />
+                    ))}
+                  </div>
+                ) : categories.map((category) => {
+                  const active = selectedCategory === category.id;
+                  return (
                     <button
                       type="button"
-                      className={`appearance-none border-0 articles-category-item ${!selectedCategory ? "articles-category-item-active" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
-                      onClick={() => handleCategorySelect(null)}
+                      key={category.id}
+                      className={`articles-category-item ${active ? "articles-category-item-active" : ""}`}
+                      aria-pressed={active}
+                      onFocus={handleCategoryFocus}
+                      onClick={() => handleCategorySelect(category.id)}
                     >
-                      <span className="inline-flex items-center gap-1.5">
-                        <ListFilter className="h-4 w-4" />
-                        全部文章
-                      </span>
+                      <span className="truncate">{category.name}</span>
+                      <span className="text-xs text-text-secondary">({category.article_count || 0})</span>
                     </button>
-
-                    {categoriesLoading ? (
-                      <div className="space-y-[var(--ws-space-1)] p-[var(--ws-space-1)]">
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <Skeleton key={i} className="h-8 w-full rounded-md" />
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {!categoriesLoading
-                      ? categories.map((category) => {
-                          const active = selectedCategory === category.id;
-                          return (
-                            <button
-                              type="button"
-                              key={category.id}
-                              className={`appearance-none border-0 articles-category-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active ? "articles-category-item-active" : ""}`}
-                              onClick={() => handleCategorySelect(category.id)}
-                            >
-                              <span className="truncate">{category.name}</span>
-                              <span className="text-sm text-text-tertiary">({category.article_count || 0})</span>
-                            </button>
-                          );
-                        })
-                      : null}
-
-                    {!categoriesLoading && categories.length === 0 ? (
-                      <div className="px-3 py-6 text-center text-sm text-text-tertiary">暂无分类</div>
-                    ) : null}
-                  </div>
-                </div>
-              </PanelCard>
+                  );
+                })}
+                {!categoriesLoading && categories.length === 0 ? (
+                  <span className="articles-category-empty">暂无分类</span>
+                ) : null}
+              </div>
             </div>
-          }
-          right={
-            <div className="articles-right-shell">
-              <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
-                <div className="articles-right-body">
-                  <div className="articles-right-scroll">
-                    {loading ? (
-                      <div className="loading-container animate-in fade-in-0 duration-200 space-y-[var(--ws-space-2)] p-[var(--ws-space-3)]">
-                        <div className="space-y-[var(--ws-space-1)] rounded-lg border border-[var(--ws-color-border-secondary)] p-[var(--ws-space-2)]">
-                          <Skeleton className="h-5 w-1/2" />
-                          <Skeleton className="h-4 w-11/12" />
-                          <Skeleton className="h-4 w-2/3" />
-                        </div>
-                        <div className="space-y-[var(--ws-space-1)] rounded-lg border border-[var(--ws-color-border-secondary)] p-[var(--ws-space-2)]">
-                          <Skeleton className="h-5 w-2/5" />
-                          <Skeleton className="h-4 w-10/12" />
-                          <Skeleton className="h-4 w-1/2" />
-                        </div>
-                      </div>
-                    ) : displayedArticles.length === 0 ? (
-                      <div className="empty-container animate-in fade-in-0 duration-200">
-                        <EmptyState
-                          variant={debouncedKeyword.trim() ? "no-results" : "no-data"}
-                          description={
-                            debouncedKeyword.trim()
-                              ? "未找到匹配的文章"
-                              : selectedCategory
-                                ? "该分类下暂无文章"
-                                : "暂无文章"
-                          }
-                          action={
-                            (selectedCategory || debouncedKeyword.trim()) && (
-                              <Button
-                                onClick={() => {
-                                  setSearchKeyword("");
-                                  handleCategorySelect(null);
-                                }}
-                              >
-                                清除筛选
-                              </Button>
-                            )
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        {displayedArticles.map((article) => (
-                          <ArticleItem
-                            key={article.id}
-                            article={article}
-                            onClick={navigateToArticle}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+          </aside>
 
-                  {!searchKeyword.trim() && total > 0 ? (
-                    <div className="articles-pagination-bar">
-                      <div className="flex flex-wrap items-center justify-end gap-[var(--ws-space-1)] text-sm text-text-secondary">
-                        <span>共 {total} 条</span>
-                        <select
-                          value={pageSize}
-                          onChange={(e) => handlePageChange(1, Number(e.target.value))}
-                          aria-label="每页条数"
-                          className="h-8 rounded-md border border-[var(--ws-color-border)] bg-surface px-xs text-sm"
-                        >
-                          {PAGE_SIZE_OPTIONS.map((size) => (
-                            <option key={size} value={size}>{size} / 页</option>
-                          ))}
-                        </select>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(event) => handlePageButtonClick(event, Math.max(1, currentPage - 1))}
-                          disabled={currentPage <= 1}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-center text-sm text-text-base tabular-nums">
-                          {currentPage} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(event) => handlePageButtonClick(event, Math.min(totalPages, currentPage + 1))}
-                          disabled={currentPage >= totalPages}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
+          <section className="articles-results" aria-label="文章列表">
+            <div className="articles-list-region">
+              <div className="articles-right-scroll">
+                {loading ? (
+                  <div className="loading-container animate-in fade-in-0 duration-200 space-y-[var(--ws-space-2)] p-[var(--ws-space-3)]">
+                    <div className="space-y-[var(--ws-space-1)] border-b border-[var(--ws-color-border-subtle)] p-[var(--ws-space-2)]">
+                      <Skeleton className="h-5 w-1/2" />
+                      <Skeleton className="h-4 w-11/12" />
+                      <Skeleton className="h-4 w-2/3" />
                     </div>
-                  ) : null}
-                </div>
-              </PanelCard>
+                    <div className="space-y-[var(--ws-space-1)] p-[var(--ws-space-2)]">
+                      <Skeleton className="h-5 w-2/5" />
+                      <Skeleton className="h-4 w-10/12" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="p-[var(--ws-space-3)]">
+                    <Alert variant="destructive">
+                      <AlertTitle>文章列表加载失败</AlertTitle>
+                      <AlertDescription className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <span>{error}</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={requestRefresh}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          重试
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                ) : displayedArticles.length === 0 ? (
+                  <div className="empty-container animate-in fade-in-0 duration-200">
+                    <EmptyState
+                      variant={urlKeyword.trim() ? "no-results" : "no-data"}
+                      description={
+                        urlKeyword.trim()
+                          ? "未找到匹配的文章"
+                          : selectedCategory
+                            ? "该分类下暂无文章"
+                            : "暂无文章"
+                      }
+                      action={
+                        (selectedCategory || urlKeyword.trim()) && (
+                          <Button
+                            onClick={() => {
+                              updateUrlParams({ q: "", category: null, page: 1 });
+                            }}
+                          >
+                            清除筛选
+                          </Button>
+                        )
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    {displayedArticles.map((article) => (
+                      <ArticleItem
+                        key={article.id}
+                        article={article}
+                        onClick={navigateToArticle}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          }
-        />
-      </div>
+
+            {!searchKeyword.trim() && total > 0 ? (
+              <div className="articles-pagination-bar">
+                <div className="flex flex-wrap items-center justify-end gap-[var(--ws-space-1)] text-sm text-text-secondary">
+                  <span>共 {total} 条</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => handlePageChange(1, Number(e.target.value))}
+                    aria-label="每页条数"
+                    className="h-8 rounded-md border border-[var(--ws-color-border-subtle)] bg-surface px-xs text-sm"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>{size} / 页</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label="上一页"
+                    onClick={(event) => handlePageButtonClick(event, Math.max(1, currentPage - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-center text-sm text-text-base tabular-nums">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label="下一页"
+                    onClick={(event) => handlePageButtonClick(event, Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </PanelCard>
     </div>
   );
 };

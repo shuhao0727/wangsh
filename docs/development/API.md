@@ -288,7 +288,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/articles` | 获取文章列表 | 超级管理员 |
+| GET | `/articles` | 管理文章列表；支持 `search` 标题/正文搜索，筛选后分页且缓存按搜索词隔离 | 超级管理员 |
 | POST | `/articles` | 创建文章 | 超级管理员 |
 | GET | `/articles/{article_id}` | 获取文章详情 | 是 |
 | GET | `/articles/slug/{slug}` | 按 slug 获取文章 | 是 |
