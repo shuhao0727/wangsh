@@ -1,5 +1,13 @@
 # 后端测试说明
 
+## 用户导入与 AUTH 兼容回归
+
+`users/test_users_import_parsing_isolated.py`、`users/test_users_import.py` 覆盖损坏输入、
+资源关闭、保存点释放和取消回滚；`auth/test_auth_service_runtime_bindings.py` 覆盖
+密码及切换快照的动态绑定。使用 collection 前禁 dotenv/conftest/外连的合成配置
+运行器；SQLite/替身结果与专用 Docker PostgreSQL、真实 HTTP 验收分开记录。
+当前结果、首败与证据统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
 ## 用户管理唯一性与前端合同（未发布）
 
 `users/test_full12_auth_uniqueness_isolated.py` 用真实 SQLite ORM 多行结果验证
