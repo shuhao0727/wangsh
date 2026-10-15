@@ -1,5 +1,10 @@
 # API 接口清单
 
+## 公共信息学 PDF 可用性（未发布修复）
+
+`GET /public/informatics/typst-notes/{id}` 新增布尔字段 `pdf_available`，表示当前源码、样式和附件哈希匹配且实际缓存存在；它不是数据库字段。未生成或缓存过期时为 false，前端展示待编译状态。`GET /public/informatics/typst-notes/{id}/export.pdf` 仍只读缓存，不接受匿名编译；无有效缓存返回404，未发布或已删除笔记也返回404。元信息与导出保持既有禁止缓存响应头。
+
+
 ## 学习进度与章节来源（未发布修复）
 
 `GET /learning/progress/{module_key}` 返回 `data` 与 `version`；首次无记录返回200、`id=null`、`version=null`，不写库。`PATCH` 必须显式携带读取版本，无记录传null；缺少版本428，陈旧版本409且不覆盖原值。非空对象递归合并，数组、标量、空对象与显式null替换；`PUT`全量替换，`POST/PUT`保留旧调用兼容。业务数据与版本分离，合并后仍受50KB约束，损坏旧JSON拒绝覆盖。所有进度按当前用户与模块隔离。

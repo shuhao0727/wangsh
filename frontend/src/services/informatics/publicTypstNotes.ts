@@ -15,6 +15,7 @@ export type PublicTypstNote = {
   summary?: string;
   toc?: any[];
   updated_at: string;
+  pdf_available?: boolean;
 };
 
 export const publicTypstNotesApi = {
@@ -47,15 +48,17 @@ export const publicTypstNotesApi = {
       if (blob instanceof Blob) {
         try {
           const text = await blob.text();
-          const obj = JSON.parse(text);
-          throw new Error(obj?.detail || text);
-        } catch {
+          let detail = text;
           try {
-            const text = await blob.text();
-            throw new Error(text || "导出失败");
+            const obj = JSON.parse(text);
+            detail = obj?.detail || text;
           } catch {
-            throw e;
+            // 非 JSON 错误正文直接按文本展示。
           }
+          throw new Error(detail || "导出失败");
+        } catch (readError) {
+          if (readError instanceof Error && readError.message) throw readError;
+          throw e;
         }
       }
       throw e;
