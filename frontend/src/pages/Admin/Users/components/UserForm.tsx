@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 
 import { Spinner } from "@/components/ui/spinner";
+import useAuth from "@hooks/useAuth";
 const formSchema = z.object({
   student_id: z.string().trim().min(1, "请输入学号").regex(/^\S+$/, "学号不能包含空格"),
   username: z.string().optional().refine((v) => !v || /^\S+$/.test(v), "用户名不能包含空格"),
@@ -63,6 +64,10 @@ const UserForm: React.FC<UserFormProps> = ({
   onSubmit,
   onCancel,
 }) => {
+  const { user } = useAuth();
+  const assignableRoles = user?.role_code === "admin"
+    ? roleOptions.filter((role) => role.value === "student" || role.value === "teacher")
+    : roleOptions;
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: DEFAULT_VALUES,
@@ -162,7 +167,7 @@ const UserForm: React.FC<UserFormProps> = ({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(editingUser ? roleOptions.filter(r => r.value !== "super_admin") : roleOptions).map((role) => (
+                        {assignableRoles.map((role) => (
                           <SelectItem key={role.value} value={role.value}>
                             {role.label}
                           </SelectItem>

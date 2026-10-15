@@ -1,5 +1,19 @@
 # 后端测试说明
 
+## 用户管理唯一性与前端合同（未发布）
+
+`users/test_full12_auth_uniqueness_isolated.py` 用真实 SQLite ORM 多行结果验证
+创建端点及更新唯一性 helper：用户名与学号分撞不同账号时返回 `400`，拒绝后账号
+数据保持原值。治理锁为替身，不证明真实授权或 PostgreSQL 并发锁行为。
+须在 collection 前禁用 dotenv/secrets、正常 conftest、自动插件和外连，注入合成
+配置；`FULL12_AUTH_ISOLATED=1` 只是 opt-in，不能代替隔离运行器。
+
+前端 `frontend/src/hooks/queries/useUsersManagement.contract.test.tsx` 核对编辑
+payload 的 `username`、普通 admin 表单的学生/教师选项和 super_admin 的管理员选项。
+这些替身合同不证明真实 HTTP 保存或刷新回读；局测不代替 PostgreSQL 并发或新构建
+Docker 栈验收。实际命令、结果与未验项仅维护在
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
 ## 缓存叶子与连接工厂回归
 
 缓存门面保持 `cache`、key formatter、logger 及失效函数的动态 patch 点；

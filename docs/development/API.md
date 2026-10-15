@@ -266,6 +266,11 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | GET | `/users/import/template` | 获取导入模板（Excel） | 管理员 |
 | POST | `/users/import` | 导入用户；普通 admin 仅可新增/更新 student、teacher；高权限行在 `UserImportResult.errors` 中逐行失败 | 管理员 |
 
+未发布修复：`POST /users/` 与 `PUT /users/{user_id}` 的用户名、学号分别与
+不同账号冲突时，返回既有 `400`，不因匹配多行而返回 `500`；`detail` 沿用
+“用户名已存在”或“学号已存在”，不保证双重冲突时的提示优先级。
+编辑用户名通过更新 JSON 请求体中的 `username` 提交，既有字段可选性与角色授权合同不变。
+
 用户管理权限说明：
 - 普通 `admin` 只能管理和导入 `student`、`teacher`，不能创建、修改或删除 `admin`、`super_admin`。
 - 导入文件中的高权限角色行不会自动降级；该行单独失败并继续处理后续行，失败明细通过 `UserImportResult.errors` 返回。

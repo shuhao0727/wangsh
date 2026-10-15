@@ -1,5 +1,5 @@
 import React from "react";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +8,9 @@ import { userApi } from "@services/users";
 import { showMessage } from "@/lib/toast";
 
 // Real AdminUsers input/event handler, useUsers and TanStack mutation. Only the
-// HTTP boundary, live subscriptions and unrelated closed dialogs are replaced.
+// HTTP/auth context boundary, live subscriptions and unrelated closed dialogs are replaced.
+const fixtures = vi.hoisted(() => ({ actor: "super_admin" }));
+vi.mock("@hooks/useAuth", () => ({ default: () => ({ user: { role_code: fixtures.actor } }) }));
 vi.mock("@hooks/useAdminSSE", () => ({ useAdminSSE: () => undefined }));
 vi.mock("@/pages/Admin/Users/components/UserForm", () => ({ default: () => null }));
 vi.mock("@/pages/Admin/Users/components/UserDetailModal", () => ({ default: () => null }));
@@ -34,7 +36,7 @@ const mount = () => {
   return { ...view, input, client };
 };
 const file = new File(["username,full_name\nsynthetic,Synthetic"], "users.csv", { type: "text/csv" });
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(userApi.importUsers).mockReset().mockResolvedValue(success); });
+beforeEach(() => { fixtures.actor = "super_admin"; vi.clearAllMocks(); vi.mocked(userApi.importUsers).mockReset().mockResolvedValue(success); });
 afterEach(cleanup);
 
 describe("FE-05 real AdminUsers import input", () => {
@@ -85,5 +87,31 @@ describe("FE-05 real AdminUsers import input", () => {
     await act(async () => outcome === "success" ? pending.resolve(success) : pending.reject(new Error("detached failure")));
     await waitFor(() => expect(old.input.value).toBe("")); expect(next.input.files?.[0]).toBe(file);
     await act(async () => nextPending.resolve(success)); await waitFor(() => expect(next.input.value).toBe(""));
+  });
+});
+
+describe("B04 real AdminUsers role filter", () => {
+  it("offers only student and teacher roles to an administrator", async () => {
+    fixtures.actor = "admin";
+    const { getAllByRole, findByRole } = mount();
+    // The role filter is the first SelectTrigger in both the staged base and current UI.
+    await userEvent.setup().click(getAllByRole("combobox")[0]);
+    const options = within(await findByRole("listbox"));
+    expect(options.getByRole("option", { name: /^全部角色$/ })).toBeInTheDocument();
+    expect(options.getByRole("option", { name: /^学生$/ })).toBeInTheDocument();
+    expect(options.getByRole("option", { name: /^教师$/ })).toBeInTheDocument();
+    expect(options.queryByRole("option", { name: /^管理员$/ })).not.toBeInTheDocument();
+    expect(options.getAllByRole("option")).toHaveLength(3);
+  });
+
+  it("retains the administrator role for a super administrator", async () => {
+    const { getAllByRole, findByRole } = mount();
+    await userEvent.setup().click(getAllByRole("combobox")[0]);
+    const options = within(await findByRole("listbox"));
+    expect(options.getByRole("option", { name: /^全部角色$/ })).toBeInTheDocument();
+    expect(options.getByRole("option", { name: /^学生$/ })).toBeInTheDocument();
+    expect(options.getByRole("option", { name: /^教师$/ })).toBeInTheDocument();
+    expect(options.getByRole("option", { name: /^管理员$/ })).toBeInTheDocument();
+    expect(options.getAllByRole("option")).toHaveLength(4);
   });
 });

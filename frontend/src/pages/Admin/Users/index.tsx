@@ -49,8 +49,13 @@ import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { useBreakpoint } from "@hooks/useBreakpoint";
+import useAuth from "@hooks/useAuth";
 
 const AdminUsers: React.FC = () => {
+  const { user } = useAuth();
+  const filterRoles = user?.role_code === "admin"
+    ? roleOptions.filter((role) => role.value === "student" || role.value === "teacher")
+    : roleOptions;
   const { state, actions, closeForm, closeDetail } = useUsers();
   const { data: stats } = useUsersStats();
   const screens = useBreakpoint();
@@ -208,7 +213,7 @@ const AdminUsers: React.FC = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部角色</SelectItem>
-            {roleOptions.map((role) => (
+            {filterRoles.map((role) => (
               <SelectItem key={role.value} value={role.value}>
                 {role.label}
               </SelectItem>
