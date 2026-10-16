@@ -121,7 +121,9 @@ async def export_my_data(
         discussion_messages.append({
             "id": msg.id,
             "session_id": msg.session_id,
-            "message_type": msg.message_type,
+            # GroupDiscussionMessage 没有 message_type 列；此前直接读属性会在
+            # 用户存在讨论消息时抛 AttributeError 导致 GDPR 导出 500。
+            "message_type": getattr(msg, "message_type", None),
             "content": msg.content,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
         })
