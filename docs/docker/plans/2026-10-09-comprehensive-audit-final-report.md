@@ -3,7 +3,7 @@
 > 状态：reference
 > Owner：project-governance
 > 最近复核：2026-10-16
-> 归档条件：长期结论沉淀到 owner 文档（含 docs/docker/2026-10-15-project-audit.md）后移入 archive
+> 归档条件：长期结论沉淀到 owner 文档（含 ../archive/2026-10-15-project-audit.md）后移入 archive
 
 **审核时间**: 2026-10-09
 **审核范围**: 全部 47 个问题 + 代码冗余分析 + 简化方案设计

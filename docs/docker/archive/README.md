@@ -159,4 +159,6 @@
 - [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) - UI 改进计划（B 系列已随 UI 回退作废）。
 - [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) - 视图迁移与 PythonLab 类型说明（已实施）。
 - [2026-10-09-comprehensive-review.md](2026-10-09-comprehensive-review.md) - 综合复核记录（已完成）。
-- [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md) - 六轮审计问题清单（已被 2026-10-15 核查报告取代）。
+- [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md)
+- [2026-10-15-project-audit.md](2026-10-15-project-audit.md) - 全项目核查报告（结论已于 2026-10-16 全部落地，见文首「结论落地情况」）。
+ - 六轮审计问题清单（已被 2026-10-15 核查报告取代）。

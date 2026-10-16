@@ -22,7 +22,7 @@
   `codex/release-2.2.0-prep` 移植并按当前 `.env.example` 校准；
   `node --test scripts/env-consistency.test.mjs` **6 passed**。
 - **Markdown 合同：** `node scripts/check-markdown-contracts.mjs` **exit 0** —
-  `135 files / 507 links / 0 missing`。此前 14 条错误全部修复：
+  `135 files / 508 links / 0 missing`。此前 14 条错误全部修复：
   - 7 条断链改指真实文档或删除引用行：`DATA_ARCHIVING.md`×3
     （Celery→`analysis/ASYNC_ANALYSIS.md`、数据库→`DATABASE_PERFORMANCE_GUIDE.md`、
     监控→`operations/MONITORING.md`）、`IMPLEMENTATION_SUMMARY.md`×1
@@ -47,7 +47,7 @@
 
 - **更正说明：** 本节原始版本声称 `node scripts/check-markdown-contracts.mjs` exit 0、
   `165 files / 489 links / 0 missing`、「11 条错误已清零」「6 条断链已修复」。经 2026-10-15
-  全项目核查（[2026-10-15-project-audit.md](../2026-10-15-project-audit.md) §3.4/§八）实测：
+  全项目核查（[2026-10-15-project-audit.md](../archive/2026-10-15-project-audit.md) §3.4/§八）实测：
   这些修复**从未出现在任何提交中**；截至 2026-10-15，仓库内 Markdown 合同仍为 14 条错误
   （7 条断链 + 6 条生命周期元数据缺失 + 1 条过期摘要），当时「门禁已绿」的结论不成立。
   本节原始数字与结论仅作历史保留，不再作为当前状态依据。

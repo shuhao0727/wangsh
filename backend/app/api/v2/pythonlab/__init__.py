@@ -1,3 +1,10 @@
+"""
+PythonLab API v2 兼容别名层（facade），不是空壳。
+
+规范实现位于 app.api.pythonlab；本模块只把同一批 router 以 /api/v2/pythonlab
+前缀重挂（main.py 中 include_router(v2_pythonlab_router, prefix="/api/v2/pythonlab")）。
+新增/修改 PythonLab 端点请改 app.api.pythonlab，不要在本层复制逻辑。
+"""
 from fastapi import APIRouter
 
 from app.api.pythonlab.sessions import router as sessions_router
