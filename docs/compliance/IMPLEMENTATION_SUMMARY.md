@@ -180,4 +180,4 @@ WangSh 项目团队
 ## 相关文档
 - [GDPR 合规指南](./GDPR.md)
 - [API 开发文档](../development/API.md)
-- [数据库设计文档](../database/)
+- [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)

@@ -14,6 +14,8 @@
 - `health-check-detailed.sh` - 细粒度健康检查
 - `clean-local-artifacts.sh` - 本地临时产物与缓存清理（默认只预览，`--apply` 才删除）
 - `check-version-consistency.mjs` - CI 版本一致性检查（完整版本号与镜像标签统一使用 SemVer 校验，权威源为 `frontend/package.json`）
+- `check-env-consistency.mjs` - 两栈环境一致性只读比对（`.env` 与 `.env.dev` 共享密钥指纹，绝不打印明文；缺文件时降级跳过）
+- `env-consistency.test.mjs` - 环境一致性检查器的契约测试（CI 使用临时 fixture，不依赖本地 env）
 - `workflow-contracts.test.mjs` - GitHub Actions、发布和日志脱敏合同测试
 - `check-markdown-contracts.mjs` - Markdown 链接、生命周期、归档和派生数字检查
 - `markdown-contracts.test.mjs` - Markdown 合同与独立 workflow 回归测试

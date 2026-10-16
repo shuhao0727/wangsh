@@ -13,7 +13,7 @@ const assessmentPromptOwners = [
 function listMarkdownFiles() {
   const output = execFileSync(
     "git",
-    ["ls-files", "-co", "--exclude-standard", "--", "*.md"],
+    ["-c", "core.quotepath=false", "ls-files", "-co", "--exclude-standard", "--", "*.md"],
     { cwd: repoRoot, encoding: "utf8" },
   );
 

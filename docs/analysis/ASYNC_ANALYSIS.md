@@ -187,16 +187,16 @@ async function pollTaskStatus(taskId: string, onProgress?: (progress: number) =>
       try {
         const response = await fetch(`/api/agents/analyses/tasks/${taskId}`);
         const status = await response.json();
-        
+
         if (status.status === 'progress' && onProgress) {
           onProgress(status.progress);
         }
-        
+
         if (status.status === 'completed') {
           clearInterval(interval);
           resolve(status.result);
         }
-        
+
         if (status.status === 'failed') {
           clearInterval(interval);
           reject(new Error(status.error));
@@ -220,19 +220,19 @@ async function runAnalysis() {
       task_sheet: 'Python 基础语法课',
       title: '热点分析'
     });
-    
+
     console.log('任务已提交:', taskId);
-    
+
     // 轮询状态
     const result = await pollTaskStatus(taskId, (progress) => {
       console.log(`进度: ${progress}%`);
     });
-    
+
     console.log('分析完成:', result);
-    
+
     // 跳转到结果页面
     window.location.href = `/analysis/hot/${result.analysis_id}`;
-    
+
   } catch (error) {
     console.error('分析失败:', error);
   }
@@ -282,26 +282,26 @@ function AnalysisPage() {
   const [taskId, setTaskId] = useState<string | null>(null);
   const submitMutation = useSubmitHotAnalysis();
   const taskStatus = useTaskStatus(taskId, !!taskId);
-  
+
   const handleSubmit = async (params: HotAnalysisParams) => {
     const result = await submitMutation.mutateAsync(params);
     setTaskId(result.task_id);
   };
-  
+
   return (
     <div>
       {/* 提交表单 */}
       {!taskId && <AnalysisForm onSubmit={handleSubmit} />}
-      
+
       {/* 进度显示 */}
       {taskId && taskStatus.data && (
-        <ProgressBar 
+        <ProgressBar
           status={taskStatus.data.status}
           progress={taskStatus.data.progress}
           message={taskStatus.data.message}
         />
       )}
-      
+
       {/* 结果显示 */}
       {taskStatus.data?.status === 'completed' && (
         <AnalysisResult result={taskStatus.data.result} />

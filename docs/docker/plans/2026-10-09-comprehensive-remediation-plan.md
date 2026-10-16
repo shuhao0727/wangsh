@@ -1,9 +1,9 @@
 # WangSh 项目全面完善计划
 
-> 状态：active  
-> Owner：project-governance  
-> 生成时间：2026-10-09  
-> 依据：《2026-10-09-six-round-audit-issue-list.md》全面审核 + 实测验证  
+> 状态：active
+> Owner：project-governance
+> 生成时间：2026-10-09
+> 依据：《2026-10-09-six-round-audit-issue-list.md》全面审核 + 实测验证
 > 目标：**功能完整、代码精简、稳定可靠**
 
 ---
@@ -258,18 +258,18 @@ async def login_for_access_token(...):
     # 失败计数键
     fail_key = f"login_fail:{form_data.username}"
     fail_count = int(await cache.get(fail_key) or 0)
-    
+
     if fail_count >= 5:
         # 指数退避：5 次后锁 5 分钟
         raise HTTPException(429, "登录失败次数过多，请 5 分钟后重试")
-    
+
     user_info = await authenticate_user(...)
     if not user_info:
         # 失败计数 +1，TTL 15 分钟
         await cache.incr(fail_key)
         await cache.expire(fail_key, 900)
         raise HTTPException(401, "用户名或密码错误")
-    
+
     # 成功后清除计数
     await cache.delete(fail_key)
     ...
@@ -484,7 +484,7 @@ async def flush_metrics():
     batch = []
     while not _metrics_queue.empty() and len(batch) < 100:
         batch.append(await _metrics_queue.get())
-    
+
     if batch:
         # 批量写入
         pipeline = await cache.pipeline()
@@ -552,11 +552,11 @@ async def test_login_refresh_logout():
     resp = await client.post("/auth/login", data={"username": "admin", "password": "admin"})
     assert resp.status_code == 200
     token = resp.json()["access_token"]
-    
+
     # 刷新
     resp2 = await client.post("/auth/refresh", cookies={"refresh_token": resp.cookies["refresh_token"]})
     assert resp2.status_code == 200
-    
+
     # 登出
     resp3 = await client.post("/auth/logout", cookies=resp2.cookies)
     assert resp3.status_code == 200
@@ -616,13 +616,13 @@ rg "^\s*//" --type ts --type tsx | grep -v "^//"  # 排除顶层注释
 async def invoke_upstream(agent, message, history, stream=False):
     """统一上游调用，chat_blocking 和 chat_stream 共用"""
     api_endpoint, api_key = resolve_credentials(agent)
-    
+
     # stub 检查（统一位置）
     if not api_endpoint or not api_key:
         if settings.DEBUG:
             raise DebugStubException(f"debug_stub: {message[:800]}")
         raise ValueError(f"agent {agent.id} 配置缺失")
-    
+
     provider = get_provider(agent.agent_type, api_endpoint, api_key)
     if stream:
         return provider.chat_stream(...)

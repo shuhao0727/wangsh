@@ -164,8 +164,8 @@ def archive_old_conversations(self, days: int = 90) -> dict:  # 修改默认值
 2. **性能影响**：大量数据归档可能需要较长时间，建议在低峰时段执行
 3. **回滚方案**：如需恢复归档数据，执行以下 SQL：
    ```sql
-   UPDATE znt_conversations 
-   SET is_archived = FALSE, archived_at = NULL 
+   UPDATE znt_conversations
+   SET is_archived = FALSE, archived_at = NULL
    WHERE archived_at > '2026-01-01';
    ```
 4. **数据库索引**：确保 `created_at` 和 `is_archived` 字段有索引以提升性能
@@ -179,7 +179,7 @@ def archive_old_conversations(self, days: int = 90) -> dict:  # 修改默认值
    # Terminal 1: 启动 worker
    cd backend
    celery -A app.core.celery_app.celery_app worker --loglevel=info
-   
+
    # Terminal 2: 启动 beat（定时任务调度器）
    celery -A app.core.celery_app.celery_app beat --loglevel=info
    ```
@@ -199,15 +199,15 @@ def archive_old_conversations(self, days: int = 90) -> dict:  # 修改默认值
 SELECT COUNT(*) FROM znt_conversations WHERE is_archived = TRUE;
 
 -- 查看最近归档的记录
-SELECT id, created_at, archived_at 
-FROM znt_conversations 
-WHERE is_archived = TRUE 
-ORDER BY archived_at DESC 
+SELECT id, created_at, archived_at
+FROM znt_conversations
+WHERE is_archived = TRUE
+ORDER BY archived_at DESC
 LIMIT 10;
 ```
 
 ## 相关文档
 
-- [Celery 配置](../docker/CELERY.md)
-- [数据库维护](../development/DATABASE.md)
-- [系统监控](../docker/deploy/MONITORING.md)
+- [Celery 任务队列（异步分析指南）](../analysis/ASYNC_ANALYSIS.md)
+- [数据库性能指南](../DATABASE_PERFORMANCE_GUIDE.md)
+- [系统监控](../operations/MONITORING.md)

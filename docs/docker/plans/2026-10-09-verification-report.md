@@ -1,5 +1,9 @@
 # 六轮审计问题清单验证报告
 
+> 状态：reference
+> Owner：project-governance
+> 最近复核：2026-10-16
+
 > 验证时间：2026-10-09
 > 验证人：Claude Code (Fable 5)
 > 工作目录：/Users/wsh/wangsh
@@ -151,7 +155,7 @@ pipe = client.pipeline()                    # pipeline批量操作
 
 实际执行的 Redis 调用：
 - `get_client()` 多次调用
-- `incr("http:req:inflight")` 
+- `incr("http:req:inflight")`
 - `decr("http:req:inflight")`
 - `pipeline` 中的批量操作（incr total, 4xx/5xx, lpush）
 
@@ -527,4 +531,3 @@ cd frontend && npm run -s ui:spacing:ci
 - **状态确认**: 5/16 (31%)
 - **待补充验证**: 6/16 (38%)
 - **总体准确率**: 100% (可验证部分无证伪)
-

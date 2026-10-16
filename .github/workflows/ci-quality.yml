@@ -132,21 +132,21 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           WORKFLOW_CALL_BASE_REF: origin/main
         run: |
-          python backend/scripts/check_python_governance.py check
+          python scripts/check_python_governance.py check
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            python backend/scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"
+            python scripts/check_python_governance.py check --base-ref "$PR_BASE_SHA"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            python backend/scripts/check_python_governance.py check --base-ref "$PUSH_BEFORE_SHA"
+            python scripts/check_python_governance.py check --base-ref "$PUSH_BEFORE_SHA"
           elif [ "$EVENT_NAME" = "workflow_call" ]; then
             git fetch --no-tags origin main
-            python backend/scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
+            python scripts/check_python_governance.py check --base-ref "$WORKFLOW_CALL_BASE_REF"
           fi
       - name: migrate and bootstrap clean database
         run: |
-          python backend/scripts/check_migration_state.py
-          python backend/scripts/bootstrap_db.py --initial-only
+          python scripts/check_migration_state.py
+          python scripts/bootstrap_db.py --initial-only
           alembic upgrade head
-          python backend/scripts/bootstrap_db.py
+          python scripts/bootstrap_db.py
           python - <<'PY'
           import os
           import asyncio
@@ -237,7 +237,7 @@ jobs:
             git fetch --no-tags origin main
             BASE_REF="origin/main"
           fi
-          python backend/scripts/check_changed_lines_coverage.py \
+          python scripts/check_changed_lines_coverage.py \
             --coverage coverage.json --base-ref "$BASE_REF"
 
       # ── 核心业务 smoke 入 CI（评估落地，起步阶段）────────────────────

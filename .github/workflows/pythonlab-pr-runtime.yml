@@ -113,10 +113,10 @@ jobs:
       - name: migrate current PR database
         working-directory: backend
         run: |
-          python backend/scripts/check_migration_state.py
-          python backend/scripts/bootstrap_db.py --initial-only
+          python scripts/check_migration_state.py
+          python scripts/bootstrap_db.py --initial-only
           alembic upgrade head
-          python backend/scripts/bootstrap_db.py
+          python scripts/bootstrap_db.py
 
       # AUTH 持久权威迁移只插入 auth_authority(id=1, ready=false)，而登录在 ready
       # 未置位时 fail closed（503「认证持久状态尚未完成受控迁移」），会让后面的浏览器

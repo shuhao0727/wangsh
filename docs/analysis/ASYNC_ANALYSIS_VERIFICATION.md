@@ -1,7 +1,7 @@
 # 深度分析异步任务验证报告
 
-**验证日期**: 2026-10-01  
-**验证人**: Claude Code  
+**验证日期**: 2026-10-01
+**验证人**: Claude Code
 **状态**: ✅ 已完成
 
 ---
@@ -198,18 +198,18 @@ const { task_id } = await fetch('/api/agents/analyses/hot-questions/async', {
 const interval = setInterval(async () => {
   const status = await fetch(`/api/agents/analyses/tasks/${task_id}`)
     .then(res => res.json());
-  
+
   if (status.status === 'progress') {
     console.log(`进度: ${status.progress}%`);
   }
-  
+
   if (status.status === 'completed') {
     clearInterval(interval);
     console.log('分析完成:', status.result);
     // 跳转到结果页
     window.location.href = `/analysis/hot/${status.result.analysis_id}`;
   }
-  
+
   if (status.status === 'failed') {
     clearInterval(interval);
     console.error('分析失败:', status.error);

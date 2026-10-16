@@ -64,7 +64,7 @@
 #### 会话列表响应时间
 - **指标名**: `ai_agents_conversations_duration_ms`
 - **类型**: 百分位数（P50/P90/P95/Max）
-- **目标**: 
+- **目标**:
   - P50 < 50ms
   - P95 < 100ms
 - **说明**: 会话列表 API 响应时间，包含缓存查询和数据库查询
@@ -87,7 +87,7 @@
 - **说明**: 会话列表缓存命中率，低命中率表示缓存配置需要优化
 
 #### 缓存命中/未命中次数
-- **指标名**: 
+- **指标名**:
   - `ai_agents_conversations_cache_hit_total`
   - `ai_agents_conversations_cache_miss_total`
 - **类型**: 计数器
@@ -96,7 +96,7 @@
 ### 容量指标
 
 #### Dify 租约使用情况
-- **指标名**: 
+- **指标名**:
   - `ai_agents_dify_active_leases`: 当前活跃租约数
   - `ai_agents_dify_lease_limit`: 租约总限制
 - **类型**: 仪表（gauge）
@@ -135,9 +135,9 @@
    - 是否有大量冷启动请求
 4. 检查数据库索引：
    ```sql
-   EXPLAIN ANALYZE 
-   SELECT * FROM conversations 
-   WHERE user_id = ? AND agent_id = ? 
+   EXPLAIN ANALYZE
+   SELECT * FROM conversations
+   WHERE user_id = ? AND agent_id = ?
    ORDER BY updated_at DESC LIMIT 20;
    ```
 
