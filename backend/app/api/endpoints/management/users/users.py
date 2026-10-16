@@ -244,9 +244,7 @@ async def create_user(
         
         # 类型忽略：Pylance不理解这个条件检查
         if existing_checks:  # type: ignore
-            # The two unique fields can conflict with two different accounts.
-            # Any match is enough to reject the request before writing.
-            check_query = select(User).where(or_(*existing_checks)).limit(1)
+            check_query = select(User).where(or_(*existing_checks))
             check_result = await db.execute(check_query)
             existing_user = check_result.scalar_one_or_none()
             
@@ -319,7 +317,7 @@ async def _assert_update_unique_fields(
         return
 
     existing_user = (
-        await db.execute(select(User).where(or_(*checks), User.id != user_id).limit(1))
+        await db.execute(select(User).where(or_(*checks), User.id != user_id))
     ).scalar_one_or_none()
     if existing_user and existing_user.username == user_data.username:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")

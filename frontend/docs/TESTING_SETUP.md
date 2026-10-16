@@ -1,13 +1,5 @@
 # 前端测试指南
 
-## BookReader 内容运行时消费者回归
-
-`src/components/BookReader.runtime.test.tsx` 由既有 components 默认收集入口运行。
-测试使用真实 BookReader 与 ReactMarkdown，仅控制 Mermaid API 和 Promise：
-延迟 ready、事件去重、卸载、排队任务取消、迟到章节回包、同步/异步失败及
-StrictMode 重放。此类单元测试不是 CDN、完整 App、内容持久化或复合富文本验收；
-实际 Docker/CDN 浏览器结果及首败保留在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
-
 > 状态：active
 > Owner：frontend
 > 最近复核：2026-07-22
@@ -87,44 +79,3 @@ Run、Debug、Pause、Continue、Step、tooltip、hover、pointer 或 focus 时�
 - [前端脚本](../scripts/README.md)
 - [CI/CD](../../docs/docker/deploy/CICD.md)
 - [前端 UI 文档](../../docs/docker/frontend/README.md)
-
-## Three.js 依赖升级验证（未发布）
-
-`three` 与 `@types/three` 的依赖区间分别同步为 `^0.186.1` 与
-`^0.186.0`，类型包作为构建依赖与锁文件同批维护。依赖升级不代表应用版本发布；
-版本字段由最终封版批同步。AI Partner 改用受支持的 `PCFShadowMap`，
-避免新版运行时移除 `PCFSoftShadowMap` 后触发警告与隐式回退。验证从实际提交候选执行 `npm ci`、`type-check`、
-直接游戏回归及 `build:check`，不能借当前工作区其他未提交代码证明兼容。
-安装脚本必须在无业务凭据的隔离副本执行；局测与真实浏览器/WebGL验收分开，
-当前动态结果与未验范围见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
-
-## 共享工具与 hooks 直接回归
-
-默认组件门禁中的 `sharedUtilitiesHooks.test.tsx` 直接验证日期格式、未知错误
-对象的兜底、分页边界与分页读取、总量缩小后的上一页、独立预览返回及批量
-操作部分失败，含同步校验抛错时仍逐项结算。查询失效复用既有 `queryKeys`，不靠页面混合测试借后续实现。
-错误响应 `data` 为空或不为对象时返回未知错误，避免处理异常时再次抛错；分页
-状态与有效显示页同步，上一页/下一页从当前显示页导航。独立页关闭被拒时
-返回所属页面，成功关闭或卸载时不迟到导航。
-
-执行 `npm test -- src/components/sharedUtilitiesHooks.test.tsx`、`npm run type-check`
-和适用静态门禁。组件内存替身不等于真实浏览器关页或业务 API/数据库验收，
-动态证据与限制仍见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
-
-## 颜色解析桥的源声明合同（未发布）
-
-在 `frontend/` 执行
-`npm test -- src/lib/cssTokens.test.ts src/lib/cssTokens.charts.test.ts src/lib/cssTokens.contract.test.ts`。
-contract 从该 cwd 读取候选自身 CSS/Tailwind，经 PostCSS 解析首个顶层 root，
-校对已登记 fallback、RGB 配对（缺源也失败）及颜色映射的变量定义；没有覆盖
-所有 root token 的 renderer 注册或 CSS 级联。另实编译 `text-2xs`/`text-3xs`
-与 alpha 正/负例，防止有定义但不产出 CSS。
-
-组件/库单测不替代实际 canvas/SVG、production 静态资源和四桌面浏览器。
-非颜色数据、invalid live/fallback 与样式读取失败必须保留反例；候选从实际 index
-独立导出、记录 cwd/source SHA，不借完整 dirty 工作区测试。颜色快照与批准来源
-是独立准入条件，不通过 `--adopt`、增阈值或放宽 fixture 解决。动态结果仅见
-[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
-
-颜色门禁的编译输入分类回归：`node --test scripts/ui-alpha-fixture-context.test.mjs`。
-原始命中与实际运行类分开保留，不删除不生成 CSS 的负例；颜色快照承接仍需来源批准。

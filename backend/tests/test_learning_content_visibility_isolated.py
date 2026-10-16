@@ -21,7 +21,6 @@ from app.core import session_guard
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.models import AuthAuthority, AuthSessionState, User
-from app.models.learning.chapter import LearningChapter
 from app.models.learning.content import LearningContentItem
 from app.services.auth import create_access_token
 from app.services.learning import content_service
@@ -113,7 +112,7 @@ def isolated(monkeypatch):
         try:
             async with engine.begin() as connection:
                 await connection.run_sync(lambda c: Base.metadata.create_all(c, tables=[
-                    User.__table__, LearningContentItem.__table__, LearningChapter.__table__,
+                    User.__table__, LearningContentItem.__table__,
                     AuthAuthority.__table__, AuthSessionState.__table__,
                 ]))
             async with h.db_factory() as db:

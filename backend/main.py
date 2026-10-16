@@ -5,11 +5,13 @@ FastAPI 应用配置和启动
 
 import time
 import uuid
-from typing import Any
+from datetime import datetime
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -24,7 +26,6 @@ from app.core.exception_handlers import (
 )
 from app.db.database import AsyncSessionLocal
 from app.api import api_router
-from app.api.endpoints.system import health as health_api
 from app.api.v2.pythonlab import router as v2_pythonlab_router
 from app.core.celery_app import celery_app
 from app.core.log_sanitizer import install_log_sanitization
@@ -124,7 +125,7 @@ class HttpMetricsMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path in {"/health", f"{settings.API_V1_STR}/health", "/ping", "/docs", "/openapi.json"}:
+        if path in {"/health", "/ping", "/docs", "/openapi.json"}:
             return await call_next(request)
         if path.startswith("/docs") or path.startswith("/redoc"):
             return await call_next(request)
@@ -236,26 +237,42 @@ async def root():
 
 
 @app.get("/health")
-async def root_health(response: Response):
-    """Root readiness endpoint backed by the same contract as /api/v1/health."""
+async def health_check() -> Dict[str, Any]:
+    db_status = "healthy"
     try:
         async with AsyncSessionLocal() as db:
-            payload = await health_api.readiness_check(db)
+            r = await db.execute(text("SELECT 1"))
+            db_status = "healthy" if r.scalar() == 1 else "unhealthy"
     except Exception:
-        payload = health_api._readiness_payload(
-            db_status="unhealthy",
-            redis_status="unhealthy",
-            view_contract=health_api._unhealthy_view_contract(
-                "database_session_unavailable"
-            ),
-            agent_secrets={
-                "status": "unhealthy",
-                "reason": "database_session_unavailable",
-            },
-        )
+        db_status = "unhealthy"
 
-    response.status_code = health_api.readiness_http_status(payload["status"])
-    return payload
+    redis_status = "healthy"
+    try:
+        client = await cache.get_client()
+        pong = await client.ping()  # type: ignore[misc]
+        if pong is not True and pong != "PONG":
+            redis_status = "unhealthy"
+    except Exception:
+        redis_status = "unhealthy"
+
+    if db_status != "healthy":
+        overall_status = "unhealthy"
+    elif redis_status != "healthy":
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
+
+    return {
+        "status": overall_status,
+        "checks": {"database": db_status, "redis": redis_status},
+        "system": {
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "timestamp": datetime.now().isoformat(),
+            "environment": settings.REACT_APP_ENV,
+            "debug_mode": settings.DEBUG,
+        },
+    }
 
 
 @app.get("/ping")

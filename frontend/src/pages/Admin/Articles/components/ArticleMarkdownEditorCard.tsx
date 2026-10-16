@@ -96,7 +96,6 @@ export default function ArticleMarkdownEditorCard({ viewMode, canSplit, onViewMo
                   type="button"
                   variant="ghost"
                   size="sm"
-                  aria-label={tool.tooltip}
                   onClick={tool.action}
                   className="article-editor-toolbar-btn"
                 >

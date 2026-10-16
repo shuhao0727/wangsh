@@ -1,25 +1,5 @@
 # 根层脚本说明
 
-## 两栈共享密钥检查（独立只读入口）
-
-`check-env-consistency.mjs` 对 `.env` 与 `.env.dev` 的
-`AGENT_API_KEY_ENCRYPTION_KEY` / `SECRET_KEY` 做只读比较，也可通过
-`--stack-a` / `--stack-b` 指定文件。它不打印明文，只输出短 SHA-256 指纹；
-日志仍应作为私有证据保管，不提交到 Git。不要自动生成或替换历史加密密钥。
-
-```bash
-# 只对已明确授权的本地配置执行；不修改文件
-node scripts/check-env-consistency.mjs
-# 使用临时合成 fixture；不读取真实 env
-node --test scripts/env-consistency.test.mjs
-```
-
-两边均有值且不一致时 exit 1；缺文件、缺键或单侧配置只提示并 exit 0，
-因此 exit 0 不总表示已验证全部配置。JWT access 签名与 refresh 的数据库
-校验不同，不能把 SECRET_KEY 差异推断为全部 refresh 必然失效。启动集成
-随部署批次承接，本批不宣称 `start-dev.sh` 已调用该入口。实际测试见
-[TEST_STATUS](../docs/docker/testing/TEST_STATUS.md)。
-
 > 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 仓库根层 `scripts/` 只保留跨模块、运维级和统一入口级脚本。

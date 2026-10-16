@@ -341,7 +341,12 @@
    "ceiling": 735
   },
   "backend/app/api/endpoints/content/articles/articles.py": {
-   "ceiling": 767
+   "ceiling": 767,
+   "exception": {
+    "owner": "project-governance",
+    "reason": "2026-10-16 UI 回滚：恢复合并前 articles.py（766 行），相对已合并分支的 699 行为回滚性增长，非新增债务。到期前重新评估。",
+    "expires_at": "2026-11-15"
+   }
   },
   "backend/app/api/endpoints/xbk/import_export.py": {
    "ceiling": 894

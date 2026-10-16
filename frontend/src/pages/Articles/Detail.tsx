@@ -1,11 +1,12 @@
 /**
  * 文章详情页面 - 分栏布局版
- * 展示单篇文章的完整内容，桌面左侧目录、右侧正文
+ * 展示单篇文章的完整内容，左侧内容区，右侧目录
  */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import DOMPurify from "dompurify";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +59,17 @@ const nodeToText = (node: any): string => {
   return "";
 };
 
+const markdownHeadingToPlainText = (raw: string): string => {
+  const s = String(raw || "");
+  return s
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[*_~]/g, "")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+};
+
 const ArticleDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
@@ -73,8 +85,6 @@ const ArticleDetailPage: React.FC = () => {
   const refreshTimerRef = useRef<number | null>(null);
   const lastRefreshAtRef = useRef(0);
   const articleIdRef = useRef<number | null>(null);
-  const mobileTocRef = useRef<HTMLDetailsElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     articleIdRef.current = article?.id ?? null;
@@ -183,31 +193,46 @@ const ArticleDetailPage: React.FC = () => {
   }, [navigate, requestRefresh, slug]);
 
   useEffect(() => {
-    if (loading || error || !article) {
-      setTableOfContents([]);
-      return;
-    }
-    // Use the same parsed headings the reader sees; do not reparse Markdown with regex.
-    const counts = new Map<string, number>();
-    const usedIds = new Set([`article-title-${article.id}`]);
+    const content = article?.content || "";
     const tocItems: TableOfContentsItem[] = [];
-    contentRef.current?.querySelectorAll<HTMLHeadingElement>("h1, h2, h3, h4").forEach((heading) => {
-      const text = heading.textContent?.trim() || "";
-      if (!text) return;
-      const base = textToId(text) || "section";
-      let count = (counts.get(base) || 0) + 1;
-      let id = count === 1 ? base : `${base}-${count}`;
-      while (usedIds.has(id)) id = `${base}-${++count}`;
-      counts.set(base, count);
-      usedIds.add(id);
-      heading.id = id;
-      tocItems.push({ id, text, level: Number(heading.tagName.slice(1)) });
-    });
-    if (tocItems.length === 0 && article.title.trim()) {
-      tocItems.push({ id: `article-title-${article.id}`, text: article.title.trim(), level: 1 });
+    const counts = new Map<string, number>();
+    const makeId = (title: string) => {
+      const base = textToId(title);
+      const next = (counts.get(base) || 0) + 1;
+      counts.set(base, next);
+      return next === 1 ? base : `${base}-${next}`;
+    };
+
+    if (content) {
+      const lines = content.split("\n");
+      let inFence = false;
+      for (const line of lines) {
+        const trimmed = String(line || "").trim();
+        if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+          inFence = !inFence;
+          continue;
+        }
+        if (inFence) continue;
+
+        const m = String(line || "")
+          .replace(/^\s+/, "")
+          .match(/^(#{1,4})[ \t]*(.+?)\s*$/);
+        if (!m) continue;
+        const level = m[1].length;
+        const rawTitle = String(m[2] || "").replace(/\s+#+\s*$/, "");
+        const titleText = markdownHeadingToPlainText(rawTitle);
+        if (!titleText) continue;
+        tocItems.push({ id: makeId(titleText), text: titleText, level });
+      }
     }
+
+    if (tocItems.length === 0 && article?.title) {
+      const titleText = String(article.title || "").trim();
+      if (titleText) tocItems.push({ id: textToId(titleText), text: titleText, level: 1 });
+    }
+
     setTableOfContents(tocItems);
-  }, [article, loading, error]);
+  }, [article?.content, article?.title]);
 
   const handleBack = () => {
     void navigate("/articles");
@@ -216,40 +241,21 @@ const ArticleDetailPage: React.FC = () => {
   const scrollToTocItem = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
-      const mobileToc = mobileTocRef.current;
-      if (mobileToc?.open) {
-        mobileToc.open = false;
-        mobileToc.querySelector("summary")?.focus();
-      }
       element.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
-  const renderBackButton = () => (
-    <Button
-      variant="ghost"
-      onClick={handleBack}
-      className="article-back-btn !text-text-secondary hover:!text-primary-text"
-    >
-      <ArrowLeft className="h-4 w-4" />
-      返回文章列表
-    </Button>
-  );
-
   if (loading) {
     return (
-      <div className="article-page-wrapper bg-page">
-        <div className="article-header">{renderBackButton()}</div>
-        <div className="article-detail-state" role="status" aria-label="正在加载文章" aria-busy="true">
-          <div className="mb-6 space-y-3" aria-hidden="true">
-            <Skeleton className="h-8 w-3/5" />
-            <Skeleton className="h-4 w-2/5" />
-          </div>
-          <div className="space-y-xs" aria-hidden="true">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-4 w-full" />
-            ))}
-          </div>
+      <div className="max-w-[1560px] mx-auto px-[var(--ws-space-4)] py-[var(--ws-space-5)]">
+        <div className="mb-6 space-y-3">
+          <Skeleton className="h-8 w-3/5" />
+          <Skeleton className="h-4 w-2/5" />
+        </div>
+        <div className="space-y-xs">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
         </div>
       </div>
     );
@@ -257,34 +263,40 @@ const ArticleDetailPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="article-page-wrapper bg-page">
-        <div className="article-header">{renderBackButton()}</div>
-        <div className="article-detail-state">
-          <Alert variant="destructive" className="article-detail-error">
-            <TriangleAlert className="h-4 w-4" />
-            <AlertTitle>文章加载失败</AlertTitle>
-            <AlertDescription className="mt-2xs flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
-              <span className="min-w-0 break-words">{error}</span>
-              <Button onClick={() => setRefreshKey((key) => key + 1)}>重试</Button>
-            </AlertDescription>
-          </Alert>
-        </div>
+      <div className="max-w-[1560px] mx-auto px-[var(--ws-space-4)] py-[var(--ws-space-5)]">
+        <Alert variant="destructive" className="border border-destructive/20 bg-destructive/5">
+          <TriangleAlert className="h-4 w-4" />
+          <AlertTitle>文章加载失败</AlertTitle>
+          <AlertDescription className="mt-2xs flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
+            <span>{error}</span>
+            <Button onClick={handleBack}>返回文章列表</Button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   if (!article) {
     return (
-      <div className="article-page-wrapper bg-page">
-        <div className="article-header">{renderBackButton()}</div>
-        <div className="article-detail-state article-detail-empty">
-          <EmptyState variant="no-data" description="文章不存在或已被删除" />
-        </div>
+      <div className="article-detail-container article-detail-empty">
+        <EmptyState
+          variant="no-data"
+          description="文章不存在或已被删除"
+          action={<Button onClick={handleBack}>返回文章列表</Button>}
+        />
       </div>
     );
   }
 
   const renderContent = () => {
+    const counts = new Map<string, number>();
+    const makeId = (title: string) => {
+      const base = textToId(title);
+      const next = (counts.get(base) || 0) + 1;
+      counts.set(base, next);
+      return next === 1 ? base : `${base}-${next}`;
+    };
+    const headingText = (children: any) => nodeToText(children).trim();
     const scopeId = article?.id ? `article-${article.id}` : `article-${article.slug}`;
     const combinedCss = `${article?.style?.content || ""}\n${article?.custom_css || ""}`;
     const scopedCss = combinedCss.trim()
@@ -293,54 +305,94 @@ const ArticleDetailPage: React.FC = () => {
 
     return (
       <div className="article-content-wrapper">
-        <div className="article-detail-hero border-0 bg-transparent">
-          <h1 className="article-detail-title text-text-base" id={`article-title-${article.id}`}>
+        <div className="article-detail-hero">
+          <div className="article-detail-title" id={textToId(article.title)}>
             {article.title}
-          </h1>
+          </div>
           {article.summary && (
-            <p className="article-detail-summary text-text-secondary">{article.summary}</p>
+            <p className="article-detail-summary">{article.summary}</p>
           )}
         </div>
 
-        <div className="article-meta-row text-text-secondary">
-          <div className="article-meta-item">
+        <div className="article-meta-row">
+          <div className="flex w-full flex-wrap items-center gap-[var(--ws-layout-gap)]">
+            <div className="flex items-center gap-xs">
               <User className="h-4 w-4 text-text-tertiary" />
-              <span title={article.author?.full_name || article.author?.username || "匿名作者"}>
+              <span>
                 {article.author?.full_name ||
                   article.author?.username ||
                   "匿名作者"}
               </span>
-          </div>
-
-          <div className="article-meta-item">
-              <Calendar className="h-4 w-4 text-text-tertiary" />
-              <time dateTime={article.created_at}>{dayjs(article.created_at).format("YYYY年MM月DD日")}</time>
-          </div>
-
-          <div className="article-meta-item">
-              <Clock3 className="h-4 w-4 text-text-tertiary" />
-              <time dateTime={article.created_at}>发布于 {dayjs(article.created_at).fromNow()}</time>
-          </div>
-
-          {article.category && (
-            <div className="article-meta-item">
-                <FolderOpen className="h-4 w-4 text-text-tertiary" />
-              <Link className="article-meta-category" title={article.category.name} to={`/articles?category=${article.category.id}`}>
-                {article.category.name}
-              </Link>
             </div>
-          )}
+
+            <div className="flex items-center gap-xs">
+              <Calendar className="h-4 w-4 text-text-tertiary" />
+              <span>{dayjs(article.created_at).format("YYYY年MM月DD日")}</span>
+            </div>
+
+            <div className="flex items-center gap-xs">
+              <Clock3 className="h-4 w-4 text-text-tertiary" />
+              <span>发布于 {dayjs(article.created_at).fromNow()}</span>
+            </div>
+
+            {article.category && (
+              <div className="flex items-center gap-xs">
+                <FolderOpen className="h-4 w-4 text-text-tertiary" />
+                <Badge variant="warning">
+                  <Link to={`/articles?category=${article.category.id}`}>
+                    {article.category.name}
+                  </Link>
+                </Badge>
+              </div>
+            )}
+          </div>
         </div>
 
         <Separator className="my-6" />
 
         <div className="min-h-[400px]">
           {article.content ? (
-            <div ref={contentRef} className="article-content ws-markdown" data-markdown-entry="article-detail" data-article-scope={scopeId}>
+            <div className="article-content ws-markdown" data-article-scope={scopeId}>
               {scopedCss ? <style dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(scopedCss, { FORCE_BODY: true }) }} /> : null}
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  h1: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h1 id={id} {...props}>
+                        {props.children}
+                      </h1>
+                    );
+                  },
+                  h2: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h2 id={id} {...props}>
+                        {props.children}
+                      </h2>
+                    );
+                  },
+                  h3: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h3 id={id} {...props}>
+                        {props.children}
+                      </h3>
+                    );
+                  },
+                  h4: ({ node: _node, ...props }) => {
+                    const text = headingText(props.children);
+                    const id = text ? makeId(text) : undefined;
+                    return (
+                      <h4 id={id} {...props}>
+                        {props.children}
+                      </h4>
+                    );
+                  },
                   a: ({ node: _node, ...props }) => (
                     <a target="_blank" rel="noopener noreferrer" {...props}>
                       {props.children}
@@ -355,7 +407,7 @@ const ArticleDetailPage: React.FC = () => {
                       <div className="group relative">
                         <button
                           type="button"
-                          className="article-code-copy absolute right-2 top-2 z-10 inline-flex items-center gap-2xs rounded-md bg-[var(--ws-color-surface-2)] px-xs py-2xs text-xs text-text-secondary opacity-0 transition-opacity hover:bg-interaction-hover focus-visible:opacity-100 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interaction-focus focus-visible:ring-offset-2"
+                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-2xs rounded-md bg-[var(--ws-color-surface-2)] px-xs py-2xs text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(codeText);
@@ -392,48 +444,33 @@ const ArticleDetailPage: React.FC = () => {
 
         <div className="flex items-center justify-between pt-4">
           <span className="text-sm text-text-secondary">
-            最后更新：<time dateTime={article.updated_at}>{dayjs(article.updated_at).format("YYYY-MM-DD HH:mm")}</time>
+            最后更新：{dayjs(article.updated_at).format("YYYY-MM-DD HH:mm")}
           </span>
         </div>
       </div>
     );
   };
 
-  const renderToc = () => (
-    <nav aria-label="文章目录" className="article-toc-list border-none">
-      {tableOfContents.length > 0 ? tableOfContents.map((item) => (
-        <button
-          type="button"
-          key={item.id}
-          title={item.text}
-          onClick={() => scrollToTocItem(item.id)}
-          className="article-toc-item appearance-none border-0 border-l-[var(--ws-border-accent-width)] border-l-transparent bg-transparent text-left text-text-secondary hover:border-l-brand-accent hover:bg-interaction-hover hover:text-text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interaction-focus focus-visible:ring-inset"
-          style={{ paddingLeft: `calc(var(--ws-space-2) * ${Math.max(item.level - 1, 0)} + var(--ws-space-2))` }}
-        >
-          {item.text}
-        </button>
-      )) : <div className="p-4 text-center text-sm text-text-tertiary">暂无目录</div>}
-    </nav>
-  );
-
   return (
-    <div className="article-page-wrapper bg-page">
+    <div className="article-page-wrapper">
       <div className="article-header">
-        {renderBackButton()}
+        <Button
+          variant="ghost"
+          onClick={handleBack}
+          className="article-back-btn"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          返回文章列表
+        </Button>
       </div>
-
-      <details className="article-mobile-toc" ref={mobileTocRef}>
-        <summary>文章目录</summary>
-        {renderToc()}
-      </details>
 
       <div className="article-body">
         <SplitPanePage
           leftWidth={280}
           alignItems="stretch"
-          className="article-detail-layout h-full"
+          className="h-full"
           left={
-            <div className="article-left-pane [&>.informatics-card]:!border-0 [&>.informatics-card]:!bg-transparent [&>.informatics-card]:!shadow-none">
+            <div className="article-left-pane">
               <PanelCard
                 title={
                   <div className="flex items-center gap-xs">
@@ -443,12 +480,28 @@ const ArticleDetailPage: React.FC = () => {
                 }
                 bodyPadding={0}
               >
-                {renderToc()}
+                <div className="article-toc-list border-none">
+                  {tableOfContents.length > 0 ? (
+                    tableOfContents.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => scrollToTocItem(item.id)}
+                        className="appearance-none border-0 article-toc-item text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        style={{ paddingLeft: `calc(var(--ws-space-2) * ${Math.max(item.level - 1, 0)} + var(--ws-space-2))` }}
+                      >
+                        {item.text}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-sm text-text-tertiary">暂无目录</div>
+                  )}
+                </div>
               </PanelCard>
             </div>
           }
           right={
-            <div className="article-right-pane [&>.informatics-card]:!border-0 [&>.informatics-card]:!bg-transparent [&>.informatics-card]:!shadow-none">
+            <div className="article-right-pane">
               <PanelCard bodyPadding="var(--ws-space-4)">
                 {renderContent()}
               </PanelCard>

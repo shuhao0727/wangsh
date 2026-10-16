@@ -31,12 +31,6 @@ class LearningProgressUpdate(BaseModel):
     notes: Optional[str] = Field(
         None, max_length=5000, description="学习笔记，最大 5000 字符"
     )
-    version: Optional[str] = Field(
-        None,
-        min_length=8,
-        max_length=128,
-        description="读取时返回的版本 token；用于检测双标签或旧回包冲突",
-    )
 
     # 允许额外字段通过（前端发送的 completedItems, favoriteItems 等）
     model_config = ConfigDict(extra="allow")
@@ -67,9 +61,9 @@ class LearningProgressUpdate(BaseModel):
         return v
 
     def to_progress_dict(self) -> Dict[str, Any]:
-        """返回本次请求明确提供的字段，保留显式 null 的清除语义。"""
-        # exclude_unset 区分“未发送”与“明确发送 null”，version 不属于业务数据。
-        return self.model_dump(exclude_unset=True, exclude={"version"})
+        """将所有字段（含额外字段）转为可存储的 dict，排除 None 值"""
+        # model_dump 包含已知字段 + 额外字段
+        return {k: v for k, v in self.model_dump().items() if v is not None}
 
 
 class LearningProgressOut(BaseModel):

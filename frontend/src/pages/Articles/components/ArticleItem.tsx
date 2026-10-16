@@ -1,5 +1,5 @@
 import React from "react";
-import { badgeVariants } from "@/components/ui/badge-variants";
+import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import dayjs from "dayjs";
 import type { ArticleWithRelations } from "@services";
@@ -18,38 +18,34 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
   const authorName = article.author?.username || "";
 
   return (
-    <button
-      type="button"
-      disabled={!slug}
-      aria-label={title}
+    <div
       onClick={() => slug && onClick(slug)}
-      className="article-item-row w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-default"
+      className="group px-3 py-3 rounded-lg cursor-pointer article-item-hover border-b"
     >
-      <span className="article-card-title">
+      <div className="font-semibold text-sm leading-snug mb-2xs text-text-base">
         {title}
-      </span>
-      <span className="article-card-subline">
+      </div>
+      <div className="flex items-center gap-3">
         {summary && (
-          <span className="article-card-summary">
+          <div className="flex-1 min-w-0 text-xs truncate text-text-secondary">
             {summary}
-          </span>
+          </div>
         )}
-        <span className="article-card-meta">
+        <div className="flex items-center gap-xs flex-shrink-0 text-xs text-text-tertiary">
           {date && (
-            <span className="inline-flex shrink-0 items-center gap-2xs">
-              <Calendar className="h-3 w-3" aria-hidden="true" />
-              <time dateTime={date}>{date}</time>
+            <span className="flex items-center gap-2xs">
+              <Calendar className="h-3 w-3" />{date}
             </span>
           )}
           {categoryName && (
-            <span className={badgeVariants({ variant: "info", className: "article-card-category !m-0 text-xs" })} title={categoryName}>
-              <span className="truncate">{categoryName}</span>
-            </span>
+            <Badge variant="info" className="!m-0 text-xs">
+              {categoryName}
+            </Badge>
           )}
-          {authorName && <span className="article-card-author" title={authorName}>{authorName}</span>}
-        </span>
-      </span>
-    </button>
+          {authorName && <span>{authorName}</span>}
+        </div>
+      </div>
+    </div>
   );
 };
 

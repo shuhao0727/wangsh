@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, func, cast, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loguru import logger
@@ -29,7 +29,6 @@ from app.services.informatics.typst_note_state import (
 from app.services.informatics.typst_project_files import (
     write_project_files as _write_project_files,
 )
-from app.services.informatics.typst_note_queries import _title_natural_order, note_list_query
 from app.services.informatics.typst_styles import read_resource_style
 from app.models.informatics.typst_style import TypstStyle
 
@@ -39,7 +38,8 @@ _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPI
 TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
 
 
-class TypstNoteDeletedError(RuntimeError): pass  # noqa: E701 - 单行异常类，压缩文件行数以通过治理基线
+class TypstNoteDeletedError(RuntimeError):
+    pass
 
 
 async def _load_note_compile_inputs(
@@ -105,13 +105,38 @@ async def _lock_note_for_compile(
     return locked_note
 
 
+def _title_natural_order():
+    """按标题中的数字前缀自然排序，如 1.1, 1.2, ..., 1.10, 2.1"""
+    # 提取主序号（标题开头的第一个数字）
+    major = cast(
+        func.coalesce(
+            func.nullif(func.substring(TypstNote.title, r'^(\d+)'), ''),
+            '999999'
+        ),
+        Integer,
+    )
+    # 提取子序号（主序号后面 . 跟的数字）
+    minor = cast(
+        func.coalesce(
+            func.nullif(func.substring(TypstNote.title, r'^\d+\.(\d+)'), ''),
+            '0'
+        ),
+        Integer,
+    )
+    return [major, minor, TypstNote.title]
+
+
 async def list_notes(
     db: AsyncSession,
     skip: int = 0,
     limit: int = 50,
     search: Optional[str] = None,
 ) -> List[TypstNote]:
-    stmt = note_list_query(False, search, skip, limit, _title_natural_order)
+    stmt = select(TypstNote).where(TypstNote.is_deleted.is_(False))
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(TypstNote.title.ilike(like))
+    stmt = stmt.order_by(*_title_natural_order()).offset(skip).limit(limit)
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
@@ -122,7 +147,14 @@ async def list_published_notes(
     limit: int = 50,
     search: Optional[str] = None,
 ) -> List[TypstNote]:
-    stmt = note_list_query(True, search, skip, limit, _title_natural_order)
+    stmt = select(TypstNote).where(
+        TypstNote.is_deleted.is_(False),
+        TypstNote.published.is_(True),
+    )
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(TypstNote.title.ilike(like))
+    stmt = stmt.order_by(*_title_natural_order()).offset(skip).limit(limit)
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
@@ -410,36 +442,6 @@ async def compile_note_pdf(db: AsyncSession, note: TypstNote) -> Tuple[bytes, st
         return pdf_bytes, h
 
 
-async def has_cached_note_pdf(db: AsyncSession, note: TypstNote) -> bool:
-    """检查当前笔记是否有可公开读取的已编译 PDF，不读取完整 PDF 内容。
-
-    公开目录/详情页使用这个轻量检查来避免对没有缓存的笔记发起
-    必然返回 404 的 export.pdf 请求；它仍然复用编译输入 hash 校验，
-    不会把过期或失效的缓存误报为可用。
-    """
-    try:
-        current_hash = await compute_note_compile_hash(db, note)
-    except Exception:
-        logger.warning(
-            "typst.cache availability_check_failed note_id={}",
-            getattr(note, "id", None),
-        )
-        return False
-    if not note.compiled_hash or note.compiled_hash != current_hash:
-        return False
-
-    if note.compiled_pdf_path:
-        try:
-            p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, note.compiled_pdf_path)
-            with open(p, "rb") as cached_pdf:
-                if os.fstat(cached_pdf.fileno()).st_size > 0:
-                    return True
-        except Exception:
-            pass
-
-    return bool(note.compiled_pdf)
-
-
 async def get_cached_note_pdf(db: AsyncSession, note: TypstNote) -> Optional[bytes]:
     """仅读取已编译的 PDF 缓存（磁盘文件 > 数据库二进制），不触发任何编译。
 
@@ -462,9 +464,7 @@ async def get_cached_note_pdf(db: AsyncSession, note: TypstNote) -> Optional[byt
         try:
             p = abs_pdf_path(settings.TYPST_PDF_STORAGE_DIR, note.compiled_pdf_path)
             if os.path.exists(p):
-                pdf_bytes = await asyncio.to_thread(lambda: Path(p).read_bytes())
-                if pdf_bytes:
-                    return pdf_bytes
+                return await asyncio.to_thread(lambda: Path(p).read_bytes())
         except Exception:
             pass
 

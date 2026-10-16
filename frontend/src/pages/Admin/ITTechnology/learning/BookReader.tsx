@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,11 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { CheckCircle2, Circle, Clock, Star, BookOpen, ListTree, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import DOMPurify from "dompurify";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getWangShMermaidTheme, type WangShMermaidTheme } from "@/lib/mermaidTheme";
-import { readCssColor } from "@/lib/cssTokens";
-import { getErrorMessage } from "@/utils/errorHandling";
 import type { LearningBook, LearningBookChapter } from "./types";
 import "./BookReader.css";
 
@@ -56,40 +53,18 @@ const slugify = (text: string) => text.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9
 
 interface TocItem { id: string; level: 2 | 3; text: string }
 
-type FenceMarker = { char: "`" | "~"; length: number };
-
-const getFenceMarker = (line: string): FenceMarker | null => {
-  const match = line.match(/^\s*(`{3,}|~{3,})/);
-  return match ? { char: match[1][0] as FenceMarker["char"], length: match[1].length } : null;
-};
-
-const closesFence = (line: string, opening: FenceMarker): boolean => {
-  const marker = getFenceMarker(line);
-  if (!marker || marker.char !== opening.char || marker.length < opening.length) return false;
-  return new RegExp(`^\\s*${opening.char === "`" ? "`" : "~"}{${opening.length},}\\s*$`).test(line);
-};
-
 const useHeadings = (markdown: string): TocItem[] => {
   return useMemo(() => {
     const items: TocItem[] = [];
     const numbered = addChineseNumbering(preprocessMath(markdown));
     const lines = numbered.split("\n");
-    let fence: FenceMarker | null = null;
     for (const line of lines) {
-      if (fence) {
-        if (closesFence(line, fence)) fence = null;
-        continue;
-      }
-      const marker = getFenceMarker(line);
-      if (marker) {
-        fence = marker;
-        continue;
-      }
-      const heading = line.match(/^\s*(##|###)\s+(.*)$/);
-      if (heading) {
-        const text = heading[2].trim();
-        const level = heading[1] === "##" ? 2 : 3;
-        items.push({ id: slugify(text), level, text });
+      if (line.startsWith("## ")) {
+        const text = line.slice(3).trim();
+        items.push({ id: slugify(text), level: 2, text });
+      } else if (line.startsWith("### ")) {
+        const text = line.slice(4).trim();
+        items.push({ id: slugify(text), level: 3, text });
       }
     }
     return items;
@@ -99,39 +74,17 @@ const useHeadings = (markdown: string): TocItem[] => {
 /* ─── Math preprocessor ─── */
 
 const preprocessMath = (md: string): string => {
-  const transformOutsideCode = (chunk: string): string => {
-    let result = chunk.replace(/\\\(([\s\S]*?)\\\)/g, '`math-inline:$1`');
-    // Blank lines keep adjacent display formulas as separate Markdown blocks.
-    result = result.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g,
-      (_match, bracketMath: string | undefined, dollarMath: string | undefined) =>
-        `\n\n\`\`\`math\n${bracketMath ?? dollarMath}\n\`\`\`\n\n`);
-    result = result.replace(/\\begin\{align\}/g, '\n\n```math\n\\begin{align}');
-    result = result.replace(/\\end\{align\}/g, '\\end{align}\n```\n\n');
-    return result;
-  };
-
-  // Preserve literal math syntax inside fenced code samples.
-  const output: string[] = [];
-  let outside = '';
-  let fence: FenceMarker | null = null;
-  for (const line of md.split('\n')) {
-    const marker = getFenceMarker(line);
-    if (!fence && marker) {
-      output.push(transformOutsideCode(outside).replace(/\n$/, ''));
-      outside = '';
-      output.push(line);
-      fence = marker;
-      continue;
-    }
-    if (fence) {
-      output.push(line);
-      if (closesFence(line, fence)) fence = null;
-      continue;
-    }
-    outside += `${line}\n`;
-  }
-  output.push(transformOutsideCode(outside).replace(/\n$/, ''));
-  return output.join('\n');
+  // Inline \(...\) → code span
+  let result = md.replace(/\\\(([\s\S]*?)\\\)/g, '`math-inline:$1`');
+  // Display \[...\] → fenced math block
+  result = result.replace(/\\\[([\s\S]*?)\\\]/g, '```math\n$1\n```');
+  // Standalone \begin{align} → open fence, \end{align} → close fence
+  result = result.replace(/\\begin\{align\}/g, '```math\n\\begin{align}');
+  result = result.replace(/\\end\{align\}/g, '\\end{align}\n```');
+  // Cleanup: remove empty/duplicate math fences
+  result = result.replace(/```math\s*```/g, '');
+  result = result.replace(/```\s*```/g, '');
+  return result;
 };
 
 /* ─── Chinese numbering ─── */
@@ -141,256 +94,115 @@ const CN_H3 = CN_H2.map(n => '（' + n + '）');
 
 const addChineseNumbering = (md: string): string => {
   let h2Idx = 0, h3Idx = 0;
-  let fence: FenceMarker | null = null;
   return md.split('\n').map(line => {
-    const marker = getFenceMarker(line);
-    if (marker) {
-      if (!fence) fence = marker;
-      else if (closesFence(line, fence)) fence = null;
-      return line;
-    }
-    if (fence) return line;
     if (line.startsWith('## ')) { h2Idx++; h3Idx = 0; const n = CN_H2[h2Idx - 1] || ''; return `## ${n}、${line.slice(3)}`; }
     if (line.startsWith('### ')) { h3Idx++; const n = CN_H3[h3Idx - 1] || ''; return `### ${n} ${line.slice(4)}`; }
     return line;
   }).join('\n');
 };
 
-/* ─── CDN rendering contracts (no eager library import) ─── */
-type MermaidRuntime = {
-  initialize: (config: WangShMermaidTheme) => void;
-  render: (id: string, code: string) => Promise<{ svg: string }>;
-};
-type KatexRuntime = {
-  renderToString: (code: string, options: { throwOnError: boolean; displayMode: boolean; trust: boolean; errorColor: string }) => string;
-};
-type HighlightRuntime = {
-  highlight: (code: string, options: { language: string; ignoreIllegals: boolean }) => { value: string };
-};
-type ReaderWindow = Window & {
-  mermaid?: MermaidRuntime;
-  katex?: KatexRuntime;
-  hljs?: HighlightRuntime;
-  __mermaidLoadFailed?: boolean;
-};
-const contentLibraries = () => {
-  const source = typeof window === "undefined" ? undefined : window as ReaderWindow;
-  return {
-    katex: typeof source?.katex?.renderToString === "function" ? source.katex : undefined,
-    hljs: typeof source?.hljs?.highlight === "function" ? source.hljs : undefined,
-  };
-};
-const LIBRARY_TIMEOUT_MS = 10_000;
-let mermaidRenderId = 0;
-
-/* ─── Mermaid: late CDN readiness, bounded fallback and stale-result isolation ─── */
-type MermaidState = { code: string; status: "loading" | "ready" | "error" | "empty"; svg?: string; message?: string };
-const pendingMermaid = (code: string): MermaidState => ({ code, status: code.trim() ? "loading" : "empty" });
-
+/* ─── Mermaid pre component ─── */
 const MermaidPre: React.FC<{ code: string }> = ({ code }) => {
-  const [state, setState] = useState<MermaidState>(() => pendingMermaid(code));
+  const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
-    let cancelled = false;
-    let started = false;
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const scripts = Array.from(document.scripts).filter((script) => /mermaid/i.test(script.src));
-    const stopListening = () => {
-      window.removeEventListener("ws:mermaid-ready", render);
-      window.removeEventListener("ws:mermaid-error", loadFailed);
-      scripts.forEach((script) => {
-        script.removeEventListener("load", render);
-        script.removeEventListener("error", loadFailed);
-      });
-    };
-    const showLoadError = (message: string) => {
-      if (cancelled || started) return;
-      clearTimeout(timeout);
-      setState({ code, status: "error", message });
-      // No polling after fallback. Keep ready events until unmount so a late CDN can recover.
-    };
-    const loadFailed = () => showLoadError("图表运行库加载失败，已保留源代码。");
-    const finish = (next: MermaidState) => {
-      if (cancelled || settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      setState(next);
-    };
-    const render = () => {
-      if (cancelled || started) return;
-      const mermaid = (window as ReaderWindow).mermaid;
-      if (typeof mermaid?.initialize !== "function" || typeof mermaid.render !== "function") return;
-      started = true;
-      stopListening();
-      clearTimeout(timeout);
-      setState(pendingMermaid(code));
-      timeout = setTimeout(() => finish({ code, status: "error", message: "图表渲染超时，已保留源代码。请刷新后重试。" }), LIBRARY_TIMEOUT_MS);
-      void Promise.resolve().then(() => {
-        if (cancelled || settled) return;
-        mermaid.initialize(getWangShMermaidTheme());
-        return mermaid.render(`br-mermaid-${++mermaidRenderId}`, code);
-      }).then((result) => {
-        if (cancelled || settled) return;
-        if (!result || typeof result.svg !== "string" || !result.svg.trim()) throw new Error("图表返回为空");
-        // Keep SVG styles/user colors and a small safe HTML label vocabulary.
-        // Mermaid strict disables diagram callbacks; do not bind untrusted handlers.
-        const svg = DOMPurify.sanitize(result.svg, {
-          USE_PROFILES: { svg: true, svgFilters: true },
-          HTML_INTEGRATION_POINTS: { foreignobject: true },
-          ADD_TAGS: ["foreignObject", "div", "span", "p", "br", "b", "strong", "em", "i", "code", "sub", "sup", "ul", "ol", "li"],
-        });
-        if (!/<svg[\s>]/i.test(svg)) throw new Error("图表未返回有效 SVG");
-        finish({ code, status: "ready", svg });
-      }).catch((error: unknown) => {
-        finish({ code, status: "error", message: `图表渲染失败：${getErrorMessage(error) || "未知错误"}。已保留源代码。` });
-      });
-    };
-
-    setState(pendingMermaid(code));
-    if (!code.trim()) return () => { cancelled = true; };
-    timeout = setTimeout(() => showLoadError("图表运行库未就绪，已保留源代码。请刷新后重试。"), LIBRARY_TIMEOUT_MS);
-    window.addEventListener("ws:mermaid-ready", render);
-    window.addEventListener("ws:mermaid-error", loadFailed);
-    scripts.forEach((script) => {
-      script.addEventListener("load", render);
-      script.addEventListener("error", loadFailed);
-    });
-    render();
-    if ((window as ReaderWindow).__mermaidLoadFailed) loadFailed();
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-      stopListening();
-    };
+    const pre = ref.current;
+    if (!pre || !(window as any).mermaid) return;
+    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+    (window as any).mermaid.render(id, code).then((r: any) => {
+      if (pre) pre.innerHTML = r.svg;
+    }).catch(() => {});
   }, [code]);
-
-  // Hide the previous SVG immediately, before the next effect starts.
-  const current = state.code === code ? state : pendingMermaid(code);
-  return (
-    <section className="br-mermaid" aria-busy={current.status === "loading"}>
-      {current.status === "ready" ? (
-        <div className="br-mermaid-svg" role="img" aria-label="Mermaid 图表" dangerouslySetInnerHTML={{ __html: current.svg ?? "" }} />
-      ) : (
-        <>
-          <p className="br-render-status" role={current.status === "error" ? "alert" : "status"}>
-            {current.status === "empty" ? "暂无图表内容。" : current.status === "error" ? current.message : "图表加载中，源代码已保留。"}
-          </p>
-          {code.trim() && <pre><code className="language-mermaid">{code}</code></pre>}
-        </>
-      )}
-    </section>
-  );
-};
-
-type ReaderLibraries = ReturnType<typeof contentLibraries> & { katexWaiting: boolean };
-const ReaderLibrariesContext = createContext<ReaderLibraries>({ katex: undefined, hljs: undefined, katexWaiting: false });
-
-const MathMarkup: React.FC<{ code: string; display?: boolean }> = ({ code, display = false }) => {
-  const { katex, katexWaiting } = useContext(ReaderLibrariesContext);
-  let message = katexWaiting ? "公式加载中，已保留源码。" : "公式渲染不可用，已保留源码。";
-  if (katex) {
-    try {
-      const html = DOMPurify.sanitize(katex.renderToString(code, { throwOnError: false, displayMode: display, trust: true, errorColor: readCssColor("--ws-color-error-text") }));
-      return display
-        ? <div className="math-block" dangerouslySetInnerHTML={{ __html: html }} />
-        : <span className="math-inline" dangerouslySetInnerHTML={{ __html: html }} />;
-    } catch {
-      message = "公式渲染失败，已保留源码。";
-    }
-  }
-  return display
-    ? <div className="math-block"><p className="br-render-status" role="status">{message}</p><code>{code}</code></div>
-    : <span className="math-inline" title={message}>{code}</span>;
-};
-
-const codeString = (value: React.ReactNode): string => {
-  if (typeof value === "string") return value;
-  return Array.isArray(value) ? value.map(codeString).join("") : "";
-};
-
-const ReaderCode: React.FC<{ className?: string; children?: React.ReactNode }> = ({ className, children }) => {
-  const clean = codeString(children).replace(/\n$/, "");
-  if (clean.startsWith("math-inline:")) return <MathMarkup code={clean.slice(12)} />;
-  return <code className={className}>{children}</code>;
-};
-
-const ReaderPre: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { hljs } = useContext(ReaderLibrariesContext);
-  const codeProps = React.isValidElement<{ className?: string; children?: React.ReactNode }>(children) ? children.props : undefined;
-  const lang = codeProps?.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1] ?? "";
-  const codeText = codeString(codeProps ? codeProps.children : children);
-  if (lang === "mermaid") return <MermaidPre code={codeText} />;
-  if (lang === "math") return <MathMarkup code={codeText} display />;
-  if (hljs && lang) {
-    try {
-      const highlighted = hljs.highlight(codeText, { language: lang, ignoreIllegals: true }).value;
-      return <pre><code className={`hljs language-${lang}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlighted) }} /></pre>;
-    } catch {
-      // Unknown highlighter languages still retain the safe original code.
-    }
-  }
-  return <pre><code className={lang ? `language-${lang}` : undefined}>{codeText}</code></pre>;
-};
-
-// Stable component identities prevent readiness updates from remounting Mermaid blocks.
-const readerMarkdownComponents: Components = {
-  h2: ({ children }) => <h2 id={slugify(typeof children === "string" ? children : String(children))} className="scroll-mt-20">{children}</h2>,
-  h3: ({ children }) => <h3 id={slugify(typeof children === "string" ? children : String(children))} className="scroll-mt-20">{children}</h3>,
-  code: ReaderCode,
-  pre: ReaderPre,
+  return <pre ref={ref} className="mermaid">{code}</pre>;
 };
 
 /* ─── Markdown Body (react-markdown) ─── */
+
 const MarkdownBody: React.FC<{ markdown: string }> = ({ markdown }) => {
-  const processed = useMemo(() => preprocessMath(addChineseNumbering(markdown)), [markdown]);
-  const [libraries, setLibraries] = useState<ReaderLibraries>(() => {
-    const available = contentLibraries();
-    return { ...available, katexWaiting: !available.katex };
-  });
+  const articleRef = useRef<HTMLElement>(null);
+
+  const processed = useMemo(() => {
+    let md = markdown;
+    md = addChineseNumbering(md);
+    md = preprocessMath(md);
+    return md;
+  }, [markdown]);
+
+  // Track library readiness
+  const [libsReady, setLibsReady] = useState(false);
   useEffect(() => {
-    let active = true;
-    let timedOut = false;
-    let katexFailed = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const scripts = Array.from(document.scripts).filter((script) => /katex|highlight/i.test(script.src));
-    const stopListening = () => scripts.forEach((script) => {
-      script.removeEventListener("load", onLoad);
-      script.removeEventListener("error", onError);
-    });
-    const check = () => {
-      if (!active) return;
-      const available = contentLibraries();
-      setLibraries({ ...available, katexWaiting: !available.katex && !timedOut && !katexFailed });
-      if (available.katex && available.hljs) {
-        clearTimeout(timeout);
-        stopListening();
-      }
-    };
-    const onLoad: EventListener = () => check();
-    const onError: EventListener = (event) => {
-      const script = event.currentTarget as HTMLScriptElement;
-      if (/katex(?:\.min)?\.js(?:[?#]|$)/i.test(script.src)) katexFailed = true;
-      check();
-    };
-    timeout = setTimeout(() => { timedOut = true; check(); }, LIBRARY_TIMEOUT_MS);
-    scripts.forEach((script) => {
-      script.addEventListener("load", onLoad);
-      script.addEventListener("error", onError);
-    });
-    check();
-    return () => {
-      active = false;
-      clearTimeout(timeout);
-      stopListening();
-    };
+    const check = () => !!(window as any).katex && !!(window as any).hljs;
+    if (check()) { setLibsReady(true); return; }
+    const id = setInterval(() => { if (check()) { setLibsReady(true); clearInterval(id); } }, 100);
+    return () => clearInterval(id);
   }, []);
+  const katex = libsReady ? (window as any).katex : null;
+  const hljsLib = libsReady ? (window as any).hljs : null;
 
   return (
-    <article className="br-article ws-markdown">
-      {!processed.trim() && <p className="br-render-status" role="status">本章节暂无正文内容。</p>}
-      <ReaderLibrariesContext.Provider value={libraries}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={readerMarkdownComponents}>{processed}</ReactMarkdown>
-      </ReaderLibrariesContext.Provider>
+    <article className="br-article" ref={articleRef}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h2: ({ children }) => {
+            const text = typeof children === 'string' ? children : String(children);
+            return <h2 id={slugify(text)} className="scroll-mt-20">{children}</h2>;
+          },
+          h3: ({ children }) => {
+            const text = typeof children === 'string' ? children : String(children);
+            return <h3 id={slugify(text)} className="scroll-mt-20">{children}</h3>;
+          },
+          code: ({ className, children, ...props }) => {
+            const text = Array.isArray(children) ? children.join('') : String(children ?? '');
+            const clean = text.replace(/\n$/, '');
+            if (clean.startsWith('math-inline:')) {
+              const latex = clean.slice(12);
+              if (katex) {
+                try {
+                  const html = katex.renderToString(latex, { throwOnError: false, displayMode: false, trust: true });
+                  return <span className="math-inline" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
+                } catch (e) {}
+              }
+              return <span className="math-inline">{latex}</span>;
+            }
+            if (className === 'language-math') {
+              if (katex) {
+                try {
+                  const html = katex.renderToString(clean, { throwOnError: false, displayMode: true, trust: true });
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
+                } catch (e) {}
+              }
+              return <div className="math-block">{clean}</div>;
+            }
+            // Inline code: just return as-is (react-markdown handles the wrapping)
+            return <>{children}</>;
+          },
+          pre: ({ children }) => {
+            const codeEl = children as any;
+            const lang = codeEl?.props?.className?.replace('language-', '') || '';
+            const codeText = codeEl?.props?.children || String(children ?? '');
+            if (lang === 'mermaid') return <MermaidPre code={codeText} />;
+            if (lang === 'math') {
+              const tex = codeText.replace(/^```math\n?/, '').replace(/\n?```$/, '');
+              if (katex) {
+                try {
+                  const html = katex.renderToString(tex, { throwOnError: false, displayMode: true, trust: true });
+                  return <div className="math-block" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
+                } catch (e) {}
+              }
+              return <div className="math-block">{tex}</div>;
+            }
+            if (hljsLib && lang) {
+              try {
+                const highlighted = hljsLib.highlight(codeText, { language: lang, ignoreIllegals: true }).value;
+                return <pre><code className={`hljs language-${lang}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlighted) }} /></pre>;
+              } catch {}
+            }
+            return <pre><code className={lang ? `language-${lang}` : undefined}>{codeText}</code></pre>;
+          },
+        }}
+      >
+        {processed}
+      </ReactMarkdown>
     </article>
   );
 };

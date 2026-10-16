@@ -95,7 +95,6 @@ export interface ArticleFilterParams {
   category_id?: number;
   author_id?: number;
   include_relations?: boolean;
-  search?: string;
 }
 
 // 公开文章筛选参数
@@ -103,7 +102,6 @@ export interface PublicArticleFilterParams {
   page?: number;
   size?: number;
   category_id?: number;
-  q?: string;
 }
 
 /**
@@ -121,7 +119,6 @@ export const articleApi = {
       category_id,
       author_id,
       include_relations = false,
-      search,
     } = params;
 
     // 注意：后端直接返回数据，没有ApiResponse包装
@@ -134,7 +131,6 @@ export const articleApi = {
         category_id,
         author_id,
         include_relations,
-        search,
       },
     });
   },
@@ -214,7 +210,7 @@ export const articleApi = {
    * 获取公开文章列表（无需认证）
    */
   listPublicArticles: (params: PublicArticleFilterParams = {}) => {
-    const { page = 1, size = 20, category_id, q } = params;
+    const { page = 1, size = 20, category_id } = params;
 
     // 后端直接返回数据，没有ApiResponse包装
     // 使用client.get避免ApiResponse包装期望
@@ -223,7 +219,6 @@ export const articleApi = {
         page,
         size,
         category_id,
-        q,
       },
     });
   },
@@ -240,13 +235,12 @@ export const articleApi = {
   /**
    * 搜索文章（通过公开列表接口的 q 参数，无需认证）
    */
-  searchArticles: (query: string, page: number = 1, size: number = 20, category_id?: number) => {
+  searchArticles: (query: string, page: number = 1, size: number = 20) => {
     return api.client.get<ArticleListResponse>("/articles/public/list", {
       params: {
         q: query,
         page,
         size,
-        category_id,
       },
     });
   },

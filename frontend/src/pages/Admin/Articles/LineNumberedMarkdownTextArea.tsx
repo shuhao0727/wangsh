@@ -48,7 +48,6 @@ export default function LineNumberedMarkdownTextArea({ id, value, placeholder, o
         <Textarea
           ref={textareaRef}
           id={id}
-          aria-label="文章正文"
           value={value || ""}
           onChange={(e) => onChange?.(e.target.value)}
           onKeyDown={onKeyDown}

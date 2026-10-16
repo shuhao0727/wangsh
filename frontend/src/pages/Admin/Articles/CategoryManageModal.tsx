@@ -1,6 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AdminFilterBar } from "@components/Admin";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import {
   type ColumnDef,
@@ -15,7 +14,6 @@ import { FileText, Filter, FolderOpen, Pencil, Plus, RefreshCw, Search, Trash2, 
 import { categoryApi } from "@services";
 import { logger } from "@services/logger";
 import type { CategoryWithUsage, CategoryFilterParams } from "@services";
-import { useBatchDeleteCategories } from "@hooks/queries/useCategoriesQuery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -47,7 +45,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
-import { calculatePagination } from "@utils/pagination";
 
 import { Spinner } from "@/components/ui/spinner";
 type CategoryManageModalProps = {
@@ -87,8 +84,7 @@ const CategoryEditDialog: React.FC<{
   isCreateMode: boolean;
   onSave: () => void;
   onCancel: () => void;
-  onCloseAutoFocus: (event: Event) => void;
-}> = ({ open, category, isCreateMode, onSave, onCancel, onCloseAutoFocus }) => {
+}> = ({ open, category, isCreateMode, onSave, onCancel }) => {
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: emptyFormValues,
@@ -147,7 +143,7 @@ const CategoryEditDialog: React.FC<{
         if (!next) onCancel();
       }}
     >
-      <DialogContent className="sm:max-w-[640px]" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{isCreateMode ? "添加新分类" : "编辑分类"}</DialogTitle>
           <DialogDescription>
@@ -176,7 +172,7 @@ const CategoryEditDialog: React.FC<{
               name="slug"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex flex-wrap items-center justify-between gap-xs">
+                  <div className="flex items-center justify-between gap-xs">
                     <FormLabel>URL 标识 (slug)</FormLabel>
                     <Button
                       type="button"
@@ -247,8 +243,6 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
   onCategoryChange,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [hasUnfilteredCategories, setHasUnfilteredCategories] = useState(false);
   const [categories, setCategories] = useState<CategoryWithUsage[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -265,30 +259,16 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
   const [editingCategory, setEditingCategory] =
     useState<CategoryWithUsage | null>(null);
   const [isCreateMode, setIsCreateMode] = useState(false);
-  const editTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const addButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const handleEditCloseAutoFocus = useCallback((event: Event) => {
-    const trigger = editTriggerRef.current?.isConnected ? editTriggerRef.current : addButtonRef.current;
-    if (!trigger) return;
-    event.preventDefault();
-    trigger.focus();
-  }, []);
 
   const [filterVisible, setFilterVisible] = useState(false);
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [minArticles, setMinArticles] = useState<number | undefined>(undefined);
 
-  const batchDeleteMutation = useBatchDeleteCategories();
-  const requestSeqRef = useRef(0);
-
   const loadCategories = useCallback(
     async () => {
-      const requestSeq = ++requestSeqRef.current;
       try {
         setLoading(true);
         const response = await categoryApi.listCategories(searchParams);
-        if (requestSeq !== requestSeqRef.current) return;
         const listData = response.data;
 
         const normalized = (listData?.categories || []).map((category) => {
@@ -336,17 +316,13 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         }
 
         setCategories(next);
-        setHasUnfilteredCategories(normalized.length > 0);
-        setLoadFailed(false);
         setTotal(next.length);
         setRowSelection({});
       } catch (error) {
-        if (requestSeq !== requestSeqRef.current) return;
-        setLoadFailed(true);
         logger.error("加载分类列表失败:", error);
         showMessage.error("加载分类列表失败");
       } finally {
-        if (requestSeq === requestSeqRef.current) setLoading(false);
+        setLoading(false);
       }
     },
     [minArticles, searchParams, searchText, sortBy],
@@ -355,9 +331,6 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
   useEffect(() => {
     if (!visible) return;
     void loadCategories();
-    return () => {
-      requestSeqRef.current += 1;
-    };
   }, [loadCategories, visible]);
 
   const handleSearch = useCallback(() => {
@@ -399,8 +372,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     setSearchParams(nextParams);
   }, [pageSize, searchParams]);
 
-  const handleEdit = useCallback((record: CategoryWithUsage, trigger: HTMLButtonElement) => {
-    editTriggerRef.current = trigger;
+  const handleEdit = useCallback((record: CategoryWithUsage) => {
     setEditingCategory(record);
     setIsCreateMode(false);
     setEditModalVisible(true);
@@ -418,8 +390,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     }
   }, [loadCategories, onCategoryChange]);
 
-  const handleAddCategory = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    editTriggerRef.current = event.currentTarget;
+  const handleAddCategory = useCallback(() => {
     setEditingCategory(null);
     setIsCreateMode(true);
     setEditModalVisible(true);
@@ -438,21 +409,18 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     }
     setConfirmState({ message: `确定删除选中的 ${selectedRowKeys.length} 个分类吗？`, onOk: async () => {
       try {
-        const result = await batchDeleteMutation.mutateAsync(selectedRowKeys);
-
-        if (result.errorCount === 0) {
-          showMessage.success(`成功删除 ${result.successCount} 个分类`);
-        } else if (result.successCount > 0) {
-          showMessage.warning(`部分删除成功：成功 ${result.successCount} 个，失败 ${result.errorCount} 个`);
-        } else {
-          showMessage.error("全部删除失败");
+        setLoading(true);
+        for (const id of selectedRowKeys) {
+          await categoryApi.deleteCategory(id);
         }
-
+        showMessage.success(`成功删除 ${selectedRowKeys.length} 个分类`);
         await loadCategories();
         onCategoryChange?.();
       } catch (error) {
         logger.error("批量删除失败:", error);
         showMessage.error("批量删除失败");
+      } finally {
+        setLoading(false);
       }
     }});
   };
@@ -514,16 +482,18 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         enableSorting: false,
         enableHiding: false,
         size: 42,
+        meta: { className: "w-[42px]" },
       },
       {
         id: "name",
         header: "分类名称",
         accessorKey: "name",
         size: 240,
+        meta: { className: "w-[240px]" },
         cell: ({ row }) => (
-          <div className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-            <div className="font-semibold" title={row.original.name}>{row.original.name}</div>
-            <div className="text-xs text-text-secondary" title={row.original.slug}>{row.original.slug}</div>
+          <div>
+            <div className="font-semibold">{row.original.name}</div>
+            <div className="text-xs text-text-secondary">{row.original.slug}</div>
           </div>
         ),
       },
@@ -532,8 +502,9 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         header: "描述",
         accessorKey: "description",
         size: 300,
+        meta: { className: "w-[300px]" },
         cell: ({ row }) => (
-          <div className="whitespace-normal text-text-secondary [overflow-wrap:anywhere]">
+          <div className="text-text-secondary">
             {row.original.description || (
               <span className="text-text-tertiary">暂无描述</span>
             )}
@@ -545,6 +516,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         header: "文章数量",
         accessorFn: (row) => row.article_count || 0,
         size: 140,
+        meta: { className: "w-[140px]" },
         cell: ({ row }) => (
           <Badge variant={(row.original.article_count || 0) > 0 ? "info" : "neutral"}>
             <FileText className="mr-2xs h-3 w-3" />
@@ -557,6 +529,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         header: "创建时间",
         accessorKey: "created_at",
         size: 170,
+        meta: { className: "w-[170px]" },
         cell: ({ row }) => (
           <div>
             <div className="text-xs">
@@ -571,7 +544,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
       {
         id: "action",
         header: "操作",
-        size: 160,
+        size: 120,
         meta: { className: "" },
         cell: ({ row }) => (
           <div className="flex items-center gap-2xs">
@@ -579,7 +552,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
               size="sm"
               variant="outline"
               className="h-7 px-xs"
-              onClick={(event) => handleEdit(row.original, event.currentTarget)}
+              onClick={() => handleEdit(row.original)}
             >
               <Pencil className="h-3.5 w-3.5" />
               编辑
@@ -612,7 +585,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const { totalPages } = calculatePagination({ page: currentPage, pageSize, total });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <>
@@ -623,7 +596,7 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         }}
       >
         <DialogContent className="w-[95vw] p-0 sm:max-w-[1100px]">
-          <DialogHeader className="border-b border-border-subtle px-panel-padding py-panel-padding-sm">
+          <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="flex items-center gap-xs">
               <FolderOpen className="h-4 w-4" />
               分类管理
@@ -633,15 +606,14 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[calc(90vh-96px)] overflow-y-auto p-panel-padding">
-            <AdminFilterBar className="p-panel-padding-sm">
-              <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-button-gap">
-                <div className="relative w-full min-w-0 md:w-auto md:flex-1">
+          <div className="max-h-[calc(90vh-96px)] space-y-item-gap overflow-y-auto px-6 py-5">
+            <Card className="border border-border bg-surface p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="relative w-full max-w-[320px]">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                   <Input
                     value={searchText}
-                    aria-label="搜索分类名称或 slug"
-                    className="border-transparent bg-transparent pl-8 shadow-none hover:border-transparent hover:bg-interaction-hover focus-visible:border-transparent focus-visible:bg-surface focus-visible:ring-inset focus-visible:ring-offset-0"
+                    className="pl-8"
                     placeholder="搜索分类名称或 slug..."
                     onChange={(e) => setSearchText(e.target.value)}
                     onKeyDown={(e) => {
@@ -653,12 +625,10 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                   />
                 </div>
 
-                <div className="flex min-w-0 flex-wrap items-center gap-xs">
+                <div className="flex flex-wrap items-center gap-xs">
                   <Button
                     variant={filterVisible ? "default" : "outline"}
                     aria-label="筛选"
-                    aria-expanded={filterVisible}
-                    aria-controls="category-management-filters"
                     onClick={() => setFilterVisible((prev) => !prev)}
                   >
                     <Filter className="h-4 w-4" />
@@ -668,17 +638,17 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     {loading ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
                     刷新
                   </Button>
-                  <Button ref={addButtonRef} onClick={handleAddCategory}>
+                  <Button onClick={handleAddCategory}>
                     <Plus className="h-4 w-4" />
                     新增分类
                   </Button>
                 </div>
               </div>
-            </AdminFilterBar>
+            </Card>
 
             {filterVisible ? (
-              <section id="category-management-filters" aria-label="高级筛选" className="mb-item-gap rounded-lg bg-surface-2 p-panel-padding">
-                <div className="mb-content-gap flex items-center justify-between gap-xs">
+              <Card className="border border-border bg-surface p-4">
+                <div className="mb-3 flex items-center justify-between gap-xs">
                   <h4 className="text-sm font-semibold">高级筛选</h4>
                   <Button
                     variant="ghost"
@@ -689,16 +659,16 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     收起
                   </Button>
                 </div>
-                <div className="grid min-w-0 gap-form-field-gap md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-[180px_140px_auto]">
                   <div>
-                    <label htmlFor="category-management-sort" className="mb-xs block text-sm font-medium">排序方式</label>
+                    <label className="mb-1.5 block text-sm font-medium">排序方式</label>
                     <Select
                       value={sortBy || FILTER_ALL}
                       onValueChange={(value) =>
                         setSortBy(value === FILTER_ALL ? undefined : value)
                       }
                     >
-                      <SelectTrigger id="category-management-sort" className="border-transparent bg-transparent shadow-none hover:border-transparent hover:bg-interaction-hover focus-visible:bg-surface focus-visible:ring-inset focus-visible:ring-offset-0">
+                      <SelectTrigger>
                         <SelectValue placeholder="选择排序方式" />
                       </SelectTrigger>
                       <SelectContent>
@@ -713,10 +683,8 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     </Select>
                   </div>
                   <div>
-                    <label htmlFor="category-management-min-articles" className="mb-xs block text-sm font-medium">最少文章数</label>
+                    <label className="mb-1.5 block text-sm font-medium">最少文章数</label>
                     <Input
-                      id="category-management-min-articles"
-                      className="border-transparent bg-transparent shadow-none hover:border-transparent hover:bg-interaction-hover focus-visible:border-transparent focus-visible:bg-surface focus-visible:ring-inset focus-visible:ring-offset-0"
                       type="number"
                       min={0}
                       value={minArticles ?? ""}
@@ -734,11 +702,11 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
                     <Button onClick={handleFilterApply}>筛选</Button>
                   </div>
                 </div>
-              </section>
+              </Card>
             ) : null}
 
             {selectedRowKeys.length > 0 ? (
-              <Card className="mb-item-gap border-0 bg-surface-2 p-panel-padding-sm shadow-none">
+              <Card className="border border-primary/20 bg-primary-soft p-4">
                 <div className="flex flex-wrap items-center justify-between gap-xs">
                   <div className="text-sm">
                     已选择{" "}
@@ -759,39 +727,25 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
               </Card>
             ) : null}
 
-            <Card className="border-0 bg-surface p-0 shadow-none">
-              {loadFailed ? (
-                <div role="alert" className="flex flex-wrap items-center justify-between gap-xs rounded-lg bg-error-soft p-panel-padding-sm text-sm text-error-text">
-                  <span>{categories.length > 0 ? "加载分类列表失败，当前显示上次加载的数据。" : "加载分类列表失败，请重试。"}</span>
-                  <Button variant="outline" disabled={loading} onClick={() => void loadCategories()}>
-                    重试
-                  </Button>
-                </div>
-              ) : null}
+            <Card className="border border-border bg-surface p-0">
               {loading ? (
-                <div className="py-section-gap text-center text-sm text-text-tertiary">
+                <div className="py-14 text-center text-sm text-text-tertiary">
                   <span className="inline-flex items-center gap-xs">
                     <Spinner size="sm" />
                     正在加载分类...
                   </span>
                 </div>
               ) : categories.length === 0 ? (
-                loadFailed ? null : (
-                  <div role="status" className="py-section-gap text-center">
-                    <p className="text-sm text-text-tertiary">{hasUnfilteredCategories ? "暂无符合条件的分类" : "暂无分类数据"}</p>
-                    {hasUnfilteredCategories ? (
-                      <p className="mt-xs text-sm text-text-secondary">请调整搜索关键词或筛选条件</p>
-                    ) : (
-                      <Button className="mt-button-gap" onClick={handleAddCategory}>
-                        添加第一个分类
-                      </Button>
-                    )}
-                  </div>
-                )
+                <div className="py-14 text-center">
+                  <p className="text-sm text-text-tertiary">暂无分类数据</p>
+                  <Button className="mt-3" onClick={handleAddCategory}>
+                    添加第一个分类
+                  </Button>
+                </div>
               ) : (
                 <>
-                  <DataTable table={table} tableClassName="min-w-[980px] table-fixed" />
-                  <div className="mt-xs flex justify-end border-t border-border-secondary pt-panel-padding-sm">
+                  <DataTable table={table} tableClassName="min-w-[980px]" />
+                  <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
                     <DataTablePagination
                       currentPage={currentPage}
                       totalPages={totalPages}
@@ -814,7 +768,6 @@ const CategoryManageModal: React.FC<CategoryManageModalProps> = ({
         isCreateMode={isCreateMode}
         onSave={() => void handleEditFormSave()}
         onCancel={() => setEditModalVisible(false)}
-        onCloseAutoFocus={handleEditCloseAutoFocus}
       />
 
       <ConfirmDialog

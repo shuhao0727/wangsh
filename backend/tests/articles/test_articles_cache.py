@@ -84,57 +84,6 @@ def test_public_article_list_cache_is_partitioned_by_search_query(monkeypatch):
     assert len(cached_values) == 3
 
 
-def test_admin_article_list_passes_search_and_partitions_cache(monkeypatch):
-    cached_values = {}
-    service_calls = []
-
-    async def fake_cache_get(key):
-        return cached_values.get(key)
-
-    async def fake_cache_set(key, value, expire_seconds=None):
-        cached_values[key] = value
-
-    async def fake_list_articles(**kwargs):
-        service_calls.append(kwargs["search"])
-        return {"total": 1 if kwargs["search"] else 2, "articles": [], "total_pages": 1}
-
-    monkeypatch.setattr(articles_api.cache, "get", fake_cache_get)
-    monkeypatch.setattr(articles_api.cache, "set", fake_cache_set)
-    monkeypatch.setattr(articles_api.ArticleService, "list_articles", fake_list_articles)
-
-    async def run_requests():
-        return await asyncio.gather(
-            articles_api.list_articles(
-                page=1,
-                size=20,
-                published_only=False,
-                category_id=None,
-                author_id=None,
-                include_relations=True,
-                search="目标",
-                db=object(),
-                _={"role_code": "super_admin"},
-            ),
-            articles_api.list_articles(
-                page=1,
-                size=20,
-                published_only=False,
-                category_id=None,
-                author_id=None,
-                include_relations=True,
-                search=None,
-                db=object(),
-                _={"role_code": "super_admin"},
-            ),
-        )
-
-    filtered, unfiltered = asyncio.run(run_requests())
-    assert filtered["total"] == 1
-    assert unfiltered["total"] == 2
-    assert service_calls == ["目标", None]
-    assert len(cached_values) == 2
-
-
 def test_article_cache_patterns_cover_shared_and_targeted_keys():
     patterns = ArticleCacheKeys.clear_article(article_id=12, slug="hello-world")
 

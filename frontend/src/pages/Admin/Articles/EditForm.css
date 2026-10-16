@@ -280,7 +280,7 @@
 @media (max-width: 1200px) {
   .article-edit-editor-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: max-content minmax(520px, 1fr);
+    grid-template-rows: auto 1fr;
     overflow-y: auto;
   }
 
@@ -311,10 +311,6 @@
 }
 
 @media (max-width: 768px) {
-  .article-edit-editor-grid {
-    grid-template-rows: max-content minmax(420px, 1fr);
-  }
-
   .article-edit-editor-main {
     min-height: 420px;
   }

@@ -1,25 +1,7 @@
 # API 接口清单
 
-## 公共信息学 PDF 可用性（未发布修复）
-
-`GET /public/informatics/typst-notes/{id}` 新增布尔字段 `pdf_available`，表示当前源码、样式和附件哈希匹配且实际缓存存在；它不是数据库字段。未生成或缓存过期时为 false，前端展示待编译状态。`GET /public/informatics/typst-notes/{id}/export.pdf` 仍只读缓存，不接受匿名编译；无有效缓存返回404，未发布或已删除笔记也返回404。元信息与导出保持既有禁止缓存响应头。
-
-
-## 学习进度与章节来源（未发布修复）
-
-`GET /learning/progress/{module_key}` 返回 `data` 与 `version`；首次无记录返回200、`id=null`、`version=null`，不写库。`PATCH` 必须显式携带读取版本，无记录传null；缺少版本428，陈旧版本409且不覆盖原值。非空对象递归合并，数组、标量、空对象与显式null替换；`PUT`全量替换，`POST/PUT`保留旧调用兼容。业务数据与版本分离，合并后仍受50KB约束，损坏旧JSON拒绝覆盖。所有进度按当前用户与模块隔离。
-
-学习内容与章节通过现有认证客户端读取；持久章节按slug覆盖书籍正文等canonical字段，保留内置扩展元信息；不新增表或迁移。
-
-
 > 基础路径：`/api/v1`（认证接口需携带 `Authorization: Bearer <token>` 头）
 > 最后更新：2026-09-28（AI伙伴临时共享榜单，未发布）
-
-## 用户导入错误与事务边界（未发布）
-
-用户 CSV/TXT 的非法 UTF-8、已识别的损坏 XLSX/ZIP/XML 和声明却缺失的工作簿返回400。
-XLSX 后段解析失败回滚本次未提交写入；取消时回滚并继续传播取消。合法逐行校验
-失败仍使用保存点并计入 errors，其他成功行继续提交；意外程序/数据库错误仍走500。
 
 ## AI伙伴临时共享榜单（未发布）
 
@@ -284,11 +266,6 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 | GET | `/users/import/template` | 获取导入模板（Excel） | 管理员 |
 | POST | `/users/import` | 导入用户；普通 admin 仅可新增/更新 student、teacher；高权限行在 `UserImportResult.errors` 中逐行失败 | 管理员 |
 
-未发布修复：`POST /users/` 与 `PUT /users/{user_id}` 的用户名、学号分别与
-不同账号冲突时，返回既有 `400`，不因匹配多行而返回 `500`；`detail` 沿用
-“用户名已存在”或“学号已存在”，不保证双重冲突时的提示优先级。
-编辑用户名通过更新 JSON 请求体中的 `username` 提交，既有字段可选性与角色授权合同不变。
-
 用户管理权限说明：
 - 普通 `admin` 只能管理和导入 `student`、`teacher`，不能创建、修改或删除 `admin`、`super_admin`。
 - 导入文件中的高权限角色行不会自动降级；该行单独失败并继续处理后续行，失败明细通过 `UserImportResult.errors` 返回。
@@ -300,7 +277,7 @@ PythonLab WS 接入补充（2026-09-09）：terminal/DAP 在业务缓存、termi
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/articles` | 管理文章列表；支持 `search` 标题/正文搜索，筛选后分页且缓存按搜索词隔离 | 超级管理员 |
+| GET | `/articles` | 获取文章列表 | 超级管理员 |
 | POST | `/articles` | 创建文章 | 超级管理员 |
 | GET | `/articles/{article_id}` | 获取文章详情 | 是 |
 | GET | `/articles/slug/{slug}` | 按 slug 获取文章 | 是 |
@@ -956,15 +933,3 @@ Content-Type: application/json
 | DELETE | `/admin/ml/book/{module_key}/chapters/{slug}` | 删除章节 | 管理员 |
 | PATCH | `/admin/ml/book/{module_key}/chapters/reorder` | 批量重排章节 | 管理员 |
 | PATCH | `/admin/ml/book/{module_key}/chapters/{slug}/toggle` | 启用或停用章节 | 管理员 |
-
-## Readiness 与存活检查合同
-
-`GET /health` 与 `GET /api/system/health` 使用相同 readiness 结果：顶层
-`status=healthy` 返回 HTTP 200，`degraded` 或 `unhealthy` 返回 HTTP 503。
-检查项包括 DB、Redis、会话视图/迁移状态和智能体密钥可解密性；DB session
-不可用时保守返回 unhealthy，不把依赖失败当作成功。密钥检查仅返回失败
-agent id，不返回或记录密钥明文。`GET /ping` 仅证明 HTTP 进程可达，不能
-代替 readiness、worker 任务或真实 AI 调用成功。
-
-迁移与启动责任见 [DEPLOY](../docker/deploy/DEPLOY.md#db-启动与视图迁移的提交合同)，
-实际验证与未发布范围见 [TEST_STATUS](../docker/testing/TEST_STATUS.md)。

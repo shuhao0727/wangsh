@@ -34,16 +34,8 @@ def _make_db_mock(scalar_value=1):
     return mock_db
 
 
-def _patch_healthy_view_contract(monkeypatch):
-    async def fake_contract(_db):
-        return {"status": "healthy", "reason": "ok"}
-
-    monkeypatch.setattr(health_api, "check_conversations_view_contract", fake_contract)
-
-
 def test_health_all_healthy(monkeypatch):
     mock_db = _make_db_mock(scalar_value=1)
-    _patch_healthy_view_contract(monkeypatch)
 
     mock_client = AsyncMock()
     mock_client.ping.return_value = True
@@ -62,7 +54,6 @@ def test_health_all_healthy(monkeypatch):
 
 def test_health_redis_down(monkeypatch):
     mock_db = _make_db_mock(scalar_value=1)
-    _patch_healthy_view_contract(monkeypatch)
 
     async def fake_get_client():
         raise ConnectionError("Redis 不可用")
@@ -80,10 +71,11 @@ def test_health_db_down(monkeypatch):
     mock_db = AsyncMock()
     mock_db.execute.side_effect = Exception("DB 连接失败")
 
-    result = asyncio.run(health_api.health_check(db=mock_db))
-
-    assert result["status"] == "unhealthy"
-    assert result["checks"]["database"] == "unhealthy"
+    try:
+        asyncio.run(health_api.health_check(db=mock_db))
+        assert False, "应该抛出 HTTPException"
+    except HTTPException as e:
+        assert e.status_code == 503
 
 
 def test_config_blocked_in_production(monkeypatch):

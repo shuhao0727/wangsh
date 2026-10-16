@@ -5,11 +5,11 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.errors import safe_error_detail
+
 from app.core.deps import get_current_user, get_db, require_admin
 from app.models.learning.chapter import LearningChapter
 from app.schemas.user_info import UserInfo
-from app.utils.db_helpers import get_or_404
-from app.utils.db_errors import handle_db_commit
 
 router = APIRouter()
 
@@ -64,7 +64,10 @@ async def get_chapter(
         LearningChapter.module_key == module_key,
         LearningChapter.slug == slug,
     )
-    ch = await get_or_404(db, stmt, detail="章节不存在")
+    result = await db.execute(stmt)
+    ch = result.scalar_one_or_none()
+    if ch is None:
+        raise HTTPException(status_code=404, detail="章节不存在")
     return _chapter_payload(ch)
 
 
@@ -106,8 +109,11 @@ async def upsert_chapter(
     if "sort_order" in data:
         ch.sort_order = data["sort_order"]
 
-    async with handle_db_commit(db, error_detail="保存章节失败"):
+    try:
         await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("保存章节失败", e))
     await db.refresh(ch)
     return _chapter_payload(ch)
 
@@ -126,8 +132,14 @@ async def delete_chapter(
         LearningChapter.module_key == module_key,
         LearningChapter.slug == slug,
     )
-    ch = await get_or_404(db, stmt, detail="章节不存在")
+    result = await db.execute(stmt)
+    ch = result.scalar_one_or_none()
+    if ch is None:
+        raise HTTPException(status_code=404, detail="章节不存在")
     await db.delete(ch)
-    async with handle_db_commit(db, error_detail="删除章节失败"):
+    try:
         await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail("删除章节失败", e))
     return {"detail": "ok"}

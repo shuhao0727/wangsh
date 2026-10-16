@@ -1,18 +1,13 @@
 """用户 CSV/XLSX 模板、解析和批量导入实现。"""
 
-import asyncio
 import csv
 import io
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote
-from xml.etree.ElementTree import ParseError, fromstring
-from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
-from openpyxl.xml.constants import XLSX, XLSM, XLTX, XLTM
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +24,6 @@ from .schemas import ImportUserResponse, UserImportResult
 
 USER_IMPORT_HEADERS = ["学号", "姓名", "学年", "班级", "状态", "用户名", "角色"]
 USER_IMPORT_REQUIRED_FIELDS = ["学号", "姓名"]
-_XLSX_CONTENT_ERRORS = (BadZipFile, InvalidFileException, ParseError, EOFError)
 USER_IMPORT_TEMPLATE_ROWS = [
     ["20230001", "张三", "2025", "高一(1)班", "true", "zhangsan", "student"],
     ["20230002", "李四", "2025", "高一(2)班", "true", "lisi", "student"],
@@ -47,13 +41,7 @@ def normalize_cell_value(value: Any) -> str:
 
 
 def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    try:
-        content_text = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CSV/TXT 文件编码无效，请使用 UTF-8 编码后重试",
-        ) from None
+    content_text = content.decode("utf-8-sig")
     csv_file = io.StringIO(content_text)
     reader = csv.DictReader(csv_file)
     if not reader.fieldnames:
@@ -66,96 +54,37 @@ def parse_csv_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]
     return fieldnames, reader
 
 
-class _InvalidXlsxContent(HTTPException):
-    def __init__(self) -> None:
-        super().__init__(
+def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
+    workbook = load_workbook(filename=io.BytesIO(content), data_only=True, read_only=True)
+    worksheet = workbook.active
+    assert worksheet is not None  # XLSX 文件总是有 active sheet
+    row_iterator = worksheet.iter_rows(values_only=True)
+    header_row = next(row_iterator, None)
+    if not header_row:
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Excel 文件无效或已损坏，请另存为 XLSX 后重试",
+            detail="Excel文件为空或格式不正确",
         )
 
+    fieldnames = [normalize_cell_value(value) for value in header_row]
+    if not any(fieldnames):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Excel文件缺少表头",
+        )
 
-def _invalid_xlsx_error() -> HTTPException:
-    return _InvalidXlsxContent()
+    def row_generator() -> Iterator[Dict[str, str]]:
+        for row in row_iterator:
+            current_row = row or ()
+            parsed_row: Dict[str, str] = {}
+            for idx, header in enumerate(fieldnames):
+                if not header:
+                    continue
+                value = current_row[idx] if idx < len(current_row) else ""
+                parsed_row[header] = normalize_cell_value(value)
+            yield parsed_row
 
-
-class _XlsxRows(Iterator[Dict[str, str]]):
-    """Own the read-only workbook until row iteration ends or the caller closes."""
-
-    def __init__(self, workbook, source: io.BytesIO, row_iterator, fieldnames: List[str]) -> None:
-        self.workbook = workbook
-        self.source = source
-        self.row_iterator = row_iterator
-        self.fieldnames = fieldnames
-        self.closed = False
-
-    def __next__(self) -> Dict[str, str]:
-        try:
-            row = next(self.row_iterator)
-            return {
-                header: normalize_cell_value(row[idx] if idx < len(row) else "")
-                for idx, header in enumerate(self.fieldnames) if header
-            }
-        except _XLSX_CONTENT_ERRORS:
-            self.close()
-            raise _invalid_xlsx_error() from None
-        except BaseException:
-            self.close()
-            raise
-
-    def close(self) -> None:
-        if self.closed:
-            return
-        self.closed = True
-        try:
-            self.row_iterator.close()
-        finally:
-            try:
-                self.workbook.close()
-            finally:
-                self.source.close()
-
-
-def parse_xlsx_rows(content: bytes) -> Tuple[List[str], Iterator[Dict[str, str]]]:
-    workbook = None
-    row_iterator = None
-    source = io.BytesIO(content)
-    try:
-        # Detect the known missing-member input explicitly; a programming
-        # KeyError from openpyxl or our code must not become a client error.
-        with ZipFile(io.BytesIO(content)) as archive:
-            if "[Content_Types].xml" not in archive.namelist():
-                raise _invalid_xlsx_error()
-            manifest = fromstring(archive.read("[Content_Types].xml"))
-            for part in manifest:
-                if part.get("ContentType") in (XLSX, XLSM, XLTX, XLTM):
-                    if part.get("PartName", "").lstrip("/") not in archive.namelist():
-                        raise _invalid_xlsx_error()
-        workbook = load_workbook(filename=source, data_only=True, read_only=True)
-        worksheet = workbook.active
-        if worksheet is None:
-            raise _invalid_xlsx_error()
-        row_iterator = worksheet.iter_rows(values_only=True)
-        header_row = next(row_iterator, None)
-        if not header_row:
-            raise HTTPException(status_code=400, detail="Excel文件为空或格式不正确")
-        fieldnames = [normalize_cell_value(value) for value in header_row]
-        if not any(fieldnames):
-            raise HTTPException(status_code=400, detail="Excel文件缺少表头")
-        rows = _XlsxRows(workbook, source, row_iterator, fieldnames)
-        return [header for header in fieldnames if header], rows
-    except BaseException as exc:
-        try:
-            if workbook is not None:
-                try:
-                    if row_iterator is not None:
-                        row_iterator.close()
-                finally:
-                    workbook.close()
-        finally:
-            source.close()
-        if isinstance(exc, _XLSX_CONTENT_ERRORS):
-            raise _invalid_xlsx_error() from None
-        raise
+    return [header for header in fieldnames if header], row_generator()
 
 
 def parse_import_rows(
@@ -381,7 +310,6 @@ async def _process_import_rows(
                 current_user,
                 row_number,
             )
-            await savepoint.commit()
             results.append(result)
             imported_count += int(created)
             updated_count += int(not created)
@@ -405,7 +333,6 @@ async def import_users(
     current_user: Dict[str, Any],
     db: AsyncSession,
 ) -> UserImportResult:
-    reader = None
     try:
         if not file.filename:
             raise HTTPException(
@@ -431,14 +358,6 @@ async def import_users(
             error_count=error_count,
             errors=errors,
         )
-    except asyncio.CancelledError:
-        await db.rollback()
-        raise
-    except _InvalidXlsxContent:
-        # read_only XLSX parsing can fail after valid rows were processed.
-        # Preserve the prior rollback boundary and expose the input failure.
-        await db.rollback()
-        raise
     except HTTPException:
         raise
     except Exception as exc:
@@ -447,6 +366,3 @@ async def import_users(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail("导入用户失败", exc),
         )
-    finally:
-        if isinstance(reader, _XlsxRows):
-            reader.close()

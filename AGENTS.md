@@ -88,19 +88,11 @@ CSS 变量 (index.css) → Tailwind 映射 (tailwind.config.js) → shadcn/ui �
 ### 核心色彩
 | Token | 值 | 用途 |
 |-------|-----|------|
-| `--ws-color-primary` | `#0F766E` | 按钮、链接、主色（白字 5.22:1） |
-| `--ws-color-primary-hover` | `#0B5F59` | primary 元素 hover 态（加深，非变浅） |
-| `--ws-color-primary-active` | `#084C47` | primary 元素 active 态 |
-| `--ws-color-primary-muted` | `#E6F7F5` | 柔色背景、tag 底色 |
-| `--ws-color-secondary` | `#4F46E5` | 品牌装饰、卡片 hover 边框 |
-| `--ws-color-accent` | `#4F46E5` | 强调边框、课堂互动浮动入口（同 secondary，非 Teal） |
-| `--ws-color-focus-ring` | `#4F46E5` | 焦点环 `focus-visible:ring-*` |
-| `--ws-color-info` | `#0369A1` | 信息提示、帮助文本（非 Sky `#0EA5E9`，已废弃） |
-| `--ws-color-success` | `#15803D` | 完成、通过、正向指标 |
-| `--ws-color-warning` | `#B45309` | 警告、待处理 |
-| `--ws-color-error` | `#B42318` | 错误、删除、危险操作（`--ws-color-danger` 同值） |
-| `--ws-color-bg` | `#F8FBFC` (近白) | 页面背景 |
-
+| `--ws-color-primary` | `#0D9488` (Teal) | 按钮、链接、主色 |
+| `--ws-color-accent` | `#0D9488` (Teal) | 强调、焦点环、选中左条（与 primary 一致） |
+| `--ws-color-secondary` | `#7C3AED` (Violet) | 仅品牌装饰/插画，不参与主交互 |
+| `--ws-color-bg` | `#F0FDFA` (Mint) | 页面背景 |
+| `--ws-color-primary-muted` | `#CCFBF1` | 柔色背景 |
 
 ### 禁止事项
 - ❌ 硬编码色值（`#xxx`、`bg-sky-500`）

@@ -22,22 +22,17 @@ const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label
   </div>
 );
 
-type FocusAwareUserDetailModalProps = UserDetailModalProps & {
-  onCloseAutoFocus?: React.ComponentPropsWithoutRef<typeof DialogContent>["onCloseAutoFocus"];
-};
-
-const UserDetailModal: React.FC<FocusAwareUserDetailModalProps> = ({
+const UserDetailModal: React.FC<UserDetailModalProps> = ({
   visible,
   currentUser,
   onCancel,
   onEdit,
-  onCloseAutoFocus,
 }) => {
   if (!currentUser) return null;
 
   return (
     <Dialog open={visible} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[640px]" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>用户详情</DialogTitle>
         </DialogHeader>

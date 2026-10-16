@@ -17,9 +17,8 @@
  *        场景 A 白字叠该色块         —— contrast(#FFFFFF, color)
  *        场景 B 该色作文字在白底上    —— contrast(color, --ws-color-surface)
  *        场景 C 该色作文字在页面底色上 —— contrast(color, --ws-color-bg)
- *      按语义角色选择场景；文字、代码文字、反白文字不套强调色的三场景。
- *      整值 var() 别名先解析再检查；原始声明仍用于快照比较。
- *      半透明设计元素及非内容角色跳过并计数；解析错误使 CI 失败，不能静默跳过。
+ *      只对**实心**色断言；带 alpha 的 soft/border/overlay 是半透明设计元素、
+ *      本就不作正文色，跳过并计数（见 skipped 口径）。
  *
  * 用法：
  *   node scripts/ui-token-values.mjs                 # 人读报告
@@ -103,31 +102,21 @@ const NAMED = { white: "#FFFFFF", black: "#000000" };
  *
  * 判据来自 token 名语义 + index.css 注释，不靠猜测：
  *   accent      —— 可作正文、图标、按钮底色的强调色：三向全查
- *   text        —— 正文/辅助/占位文字：查"作文字"两向
+ *   text        —— 只作文字（text/text-secondary/text-tertiary）：查"作文字"两向
  *   code_text   —— 代码文本，真实背景是 code-bg：查 code-bg 上的对比度
- *   inverse_text —— 深色主填充上的反白文字：查 primary-fill 上的对比度
  *   surface     —— 页面/面板底色，不作文字也不作被叠色块：不适用三场景，跳过
  *   decor       —— 非常规语境（error-light 浅色提示底、scrollbar 非内容）：跳过
  */
-const TEXT_TOKENS = /^--ws-color-(text|text-secondary|text-tertiary|text-placeholder)$/;
+const TEXT_TOKENS = /^--ws-color-(text|text-secondary|text-tertiary)$/;
 const SURFACE_TOKENS =
-  /^--ws-color-(page|bg|surface|surface-2|primary-muted|overlay|tooltip|code-bg)$/;
-const DECOR_TOKENS = /^--ws-color-(error-light|error-soft-solid|scrollbar)$/;
-const MODULE_ALIASES = /^--ws-color-(chart|debug|diagram|editor|module-shell|terminal)(-|$)/;
+  /^--ws-color-(bg|surface|surface-2|primary-muted|overlay|tooltip|code-bg)$/;
+const DECOR_TOKENS = /^--ws-color-(error-light|scrollbar)$/;
 
-export function classifyToken(name, sourceToken = name, aliasChain = []) {
-  if (name === "--ws-color-text-inverse") return "inverse_text";
+export function classifyToken(name) {
   if (name === "--ws-color-code-text") return "code_text";
   if (TEXT_TOKENS.test(name)) return "text";
   if (SURFACE_TOKENS.test(name)) return "surface";
   if (DECOR_TOKENS.test(name)) return "decor";
-  // Keep the first canonical semantic role along a module alias chain. For example,
-  // module-shell-code-text -> code-text -> surface is still code_text, not surface.
-  // Public accent tokens keep their own role: primary -> surface must still fail contrast.
-  if (sourceToken !== name && MODULE_ALIASES.test(name)) {
-    const semanticSource = aliasChain.find((token) => !MODULE_ALIASES.test(token));
-    return classifyToken(semanticSource || sourceToken);
-  }
   return "accent";
 }
 
@@ -149,33 +138,13 @@ export function parseColor(input) {
   }
   m = s.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+%?))?\s*\)$/);
   if (m) {
-    // parseFloat alone truncates malformed values such as 17..5 and 0..5.
-    if (m.slice(1).some((part) => part != null && !/^(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(part))) {
-      return null;
-    }
     const num = (x) => (x.endsWith("%") ? (parseFloat(x) / 100) * 255 : parseFloat(x));
     const alpha = m[4] == null ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
     const r = num(m[1]), g = num(m[2]), b = num(m[3]);
-    if ([r, g, b, alpha].some((v) => !Number.isFinite(v)) ||
-        [r, g, b].some((v) => v < 0 || v > 255) || alpha < 0 || alpha > 1) return null;
+    if ([r, g, b, alpha].some((v) => Number.isNaN(v))) return null;
     return { r, g, b, a: alpha };
   }
   return null;
-}
-
-/** Resolve whole-token var() aliases without changing the raw baseline values. */
-export function resolveTokenValue(tokens, name) {
-  const seen = new Set();
-  let current = name;
-  while (true) {
-    if (!Object.hasOwn(tokens, current)) return { reason: "missing-token", target: current };
-    if (seen.has(current)) return { reason: "alias-cycle", target: current };
-    seen.add(current);
-    const value = tokens[current];
-    const alias = value.match(/^var\(\s*(--ws-color-[a-z0-9-]+)\s*\)$/);
-    if (!alias) return { value, source_token: current, alias_chain: [...seen] };
-    current = alias[1];
-  }
 }
 
 /** alpha 合成到不透明背景上（source-over） */
@@ -216,50 +185,25 @@ export function buildReport(opts = {}) {
   const tokens = parseColorTokens(extractRootBlock(css));
 
   const names = Object.keys(tokens).sort();
-  const resolved = { ...tokens };
-  const resolvedValues = {};
-  const colors = {};
-  const roles = {};
-  const resolutionErrors = [];
+  const resolved = {};
   const contrastChecks = [];
   const skipped = [];
 
-  for (const name of names) {
-    const result = resolveTokenValue(tokens, name);
-    resolvedValues[name] = result.value ?? null;
-    if (result.reason) {
-      resolutionErrors.push({ token: name, value: tokens[name], ...result });
-    } else if (!name.endsWith("-rgb")) {
-      const color = parseColor(result.value);
-      if (color) {
-        colors[name] = color;
-        roles[name] = classifyToken(name, result.source_token, result.alias_chain);
-      } else {
-        resolutionErrors.push({ token: name, value: tokens[name], reason: "invalid-color" });
-      }
-    }
-  }
-
-  // Missing optional backgrounds retain the fixture defaults; invalid defined ones never do.
-  const background = (name, fallback) =>
-    Object.hasOwn(tokens, name) ? colors[name] : parseColor(fallback);
-  const surface = background("--ws-color-surface", "#FFFFFF");
-  const pageBg = background("--ws-color-bg", "#FFFFFF");
-  const codeBg = background("--ws-color-code-bg", "#1e1e1e");
-  const primaryFill = Object.hasOwn(tokens, "--ws-color-primary-fill")
-    ? colors["--ws-color-primary-fill"]
-    : background("--ws-color-primary", "#0F766E");
+  const surface = parseColor(tokens["--ws-color-surface"] || "#FFFFFF");
+  const pageBg = parseColor(tokens["--ws-color-bg"] || "#FFFFFF");
   const white = { r: 255, g: 255, b: 255, a: 1 };
 
   for (const name of names) {
     const raw = tokens[name];
     // -rgb 三元组是数值投影，不是颜色，单独在一致性检查里处理
     if (name.endsWith("-rgb")) {
+      resolved[name] = raw;
       continue;
     }
-    const color = colors[name];
+    const color = parseColor(raw);
+    resolved[name] = raw;
     if (!color) {
-      skipped.push({ token: name, value: raw, reason: "resolution-error" });
+      skipped.push({ token: name, value: raw, reason: "indirect-or-unparsable" });
       continue;
     }
     if (color.a < 1) {
@@ -269,13 +213,13 @@ export function buildReport(opts = {}) {
       continue;
     }
 
-    const role = roles[name];
+    const role = classifyToken(name);
+    const codeBg = parseColor(tokens["--ws-color-code-bg"] || "#1e1e1e");
     // 各角色适用场景（见 classifyToken 注释）：
     const SCENARIOS = {
       accent: ["white_text_on_color", "color_text_on_surface", "color_text_on_page_bg"],
       text: ["color_text_on_surface", "color_text_on_page_bg"],
       code_text: ["color_text_on_code_bg"],
-      inverse_text: ["color_text_on_primary_fill"],
       surface: [],
       decor: [],
     };
@@ -289,12 +233,7 @@ export function buildReport(opts = {}) {
       color_text_on_surface: { bg: surface, fg: color },
       color_text_on_page_bg: { bg: pageBg, fg: color },
       color_text_on_code_bg: { bg: codeBg, fg: color },
-      color_text_on_primary_fill: { bg: primaryFill, fg: color },
     };
-    if (wanted.some((scenario) => !all[scenario].bg)) {
-      skipped.push({ token: name, value: raw, reason: "unresolved-background" });
-      continue;
-    }
     const ratios = {};
     let min = Infinity;
     for (const scenario of wanted) {
@@ -321,17 +260,12 @@ export function buildReport(opts = {}) {
   for (const name of names) {
     if (!name.endsWith("-rgb")) continue;
     const base = name.slice(0, -4);
-    const triplet = resolvedValues[name];
-    if (triplet == null) continue; // Already reported as an alias resolution error.
-    const parts = triplet.match(/^(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})$/);
-    if (!parts || parts.slice(1).some((part) => Number(part) > 255)) {
-      resolutionErrors.push({ token: name, value: tokens[name], reason: "invalid-rgb-triplet" });
-      continue;
-    }
-    if (!(base in tokens)) continue; // Orphan projections still require valid triplet syntax/range.
-    const baseColor = colors[base];
-    if (!baseColor) continue; // The base color's resolution error is already reported.
-    const [r, g, b] = parts.slice(1).map(Number);
+    if (!(base in tokens)) continue;
+    const baseColor = parseColor(tokens[base]);
+    if (!baseColor) continue;
+    const parts = tokens[name].match(/\d+\s+\d+\s+\d+/);
+    if (!parts) continue;
+    const [r, g, b] = parts[0].split(/\s+/).map(Number);
     if (r !== baseColor.r || g !== baseColor.g || b !== baseColor.b) {
       rgbMismatches.push({
         rgb_token: name,
@@ -355,15 +289,12 @@ export function buildReport(opts = {}) {
       contrast_skipped: skipped.length,
       contrast_failures: failures.length,
       rgb_mismatches: rgbMismatches.length,
-      resolution_errors: resolutionErrors.length,
     },
     values: resolved,
-    resolved_values: resolvedValues,
     contrast: contrastChecks,
     contrast_failures: failures,
     skipped,
     rgb_mismatches: rgbMismatches,
-    resolution_errors: resolutionErrors,
   };
 }
 
@@ -392,10 +323,6 @@ if (isMain) {
     const base = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
     const baseValues = base.values || {};
     const problems = [];
-
-    for (const error of report.resolution_errors) {
-      problems.push("token resolution failed: " + error.token + " (" + error.reason + ")");
-    }
 
     // ① 值变更即红（新增/删除/改值三类都要报）
     for (const [name, value] of Object.entries(values)) {
@@ -448,13 +375,6 @@ if (isMain) {
   }
 
   if (asAdopt) {
-    if (report.resolution_errors.length) {
-      console.error("[ui-token-values] cannot adopt unresolved or invalid tokens");
-      for (const error of report.resolution_errors) {
-        console.error("  " + error.token + ": " + error.reason);
-      }
-      process.exit(1);
-    }
     const next = {
       generated_at: report.generated_at,
       source: report.source,
@@ -486,12 +406,8 @@ if (isMain) {
     console.log("  -rgb 三元组    : " + report.counts.rgb_triplets);
     console.log("对比度已测       : " + report.counts.contrast_checked);
     console.log(
-      "对比度跳过       : " + report.counts.contrast_skipped + "（半透明/非内容角色/解析错误）",
+      "对比度跳过       : " + report.counts.contrast_skipped + "（半透明/间接引用，不作正文色）",
     );
-    console.log("解析错误         : " + report.counts.resolution_errors);
-    for (const error of report.resolution_errors) {
-      console.log("  " + error.token + ": " + error.reason);
-    }
     console.log("对比度不达标     : " + report.counts.contrast_failures);
     console.log("-rgb 不同步      : " + report.counts.rgb_mismatches);
     if (report.contrast_failures.length) {

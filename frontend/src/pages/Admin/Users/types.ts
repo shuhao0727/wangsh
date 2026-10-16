@@ -8,7 +8,7 @@ import type { User } from "@services";
 export interface UserFormProps {
   visible: boolean;
   editingUser: User | null;
-  onSubmit: (values: any) => void | Promise<void>;
+  onSubmit: (values: any) => void;
   onCancel: () => void;
 }
 

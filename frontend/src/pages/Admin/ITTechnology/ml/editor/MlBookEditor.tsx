@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { showMessage } from "@/lib/toast";
-import { readCssColor } from "@/lib/cssTokens";
 import { mlBookAdminApi, type MLBookChapter, type MLBookResponse, type ReorderItem } from "@/services/ml/books";
 import { BookOpen, Eye, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -55,12 +54,6 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
   const [chapters, setChapters] = useState<MLBookChapter[]>([]);
   const [activeSlug, setActiveSlug] = useState("");
   const [editMode, setEditMode] = useState<EditMode>("edit");
-  const saveRequestRef = useRef(0);
-  const selectionGenerationRef = useRef(0);
-  const activeSlugRef = useRef("");
-  const draftRevisionRef = useRef(0);
-  const loadRequestRef = useRef(0);
-  const preserveDraftRef = useRef<string | null>(null);
 
   // Active chapter form state (editable copy)
   const [editedChapter, setEditedChapter] = useState<Omit<MLBookChapter, "id" | "book_id" | "created_at" | "updated_at">>(DEFAULT_CHAPTER);
@@ -70,19 +63,16 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
 
   // Load book data
   const loadBook = useCallback(async () => {
-    const requestId = ++loadRequestRef.current;
     setLoading(true);
     try {
       const res = await mlBookAdminApi.getBook("ml");
-      if (requestId !== loadRequestRef.current) return;
       const data = (res.data as unknown as MLBookResponse)?.book;
       if (data) {
         setBookId(data.id ?? null);
         setBookTitle(data.title);
         const sorted = [...data.chapters].sort((a, b) => a.sort_order - b.sort_order);
         setChapters(sorted);
-        if (sorted.length > 0 && !sorted.find((ch) => ch.slug === activeSlugRef.current)) {
-          activeSlugRef.current = sorted[0].slug;
+        if (sorted.length > 0 && !sorted.find((ch) => ch.slug === activeSlug)) {
           setActiveSlug(sorted[0].slug);
         }
       } else {
@@ -104,27 +94,18 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
         await loadBook();
       }
     } catch {
-      if (requestId === loadRequestRef.current) showMessage.error("加载书籍失败");
+      showMessage.error("加载书籍失败");
     } finally {
-      if (requestId === loadRequestRef.current) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadBook();
-    return () => {
-      loadRequestRef.current += 1;
-      saveRequestRef.current += 1;
-    };
   }, []);
 
   // Sync edited chapter when activeSlug changes
   useEffect(() => {
-    if (preserveDraftRef.current === activeSlug) {
-      preserveDraftRef.current = null;
-      return;
-    }
-    draftRevisionRef.current += 1;
     if (isNewChapter) {
       setEditedChapter({ ...DEFAULT_CHAPTER, chapter_number: chapters.length + 1, slug: EMPTY_CHAPTER_SLUG });
       return;
@@ -151,18 +132,11 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
         enabled: ch.enabled ?? true,
       });
     }
-  }, [activeSlug, activeChapter, isNewChapter]);
-
-  const handleSelectChapter = useCallback((slug: string) => {
-    activeSlugRef.current = slug;
-    selectionGenerationRef.current += 1;
-    draftRevisionRef.current += 1;
-    setActiveSlug(slug);
-  }, []);
+  }, [activeSlug, chapters, isNewChapter]);
 
   // Save current chapter
   const saveChapter = async () => {
-    if (!bookId || saving || loading) return;
+    if (!bookId) return;
     if (!editedChapter.title.trim()) {
       showMessage.error("请输入章节标题");
       return;
@@ -170,40 +144,27 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
     const slug = isNewChapter
       ? editedChapter.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase() || `chapter-${editedChapter.chapter_number}`
       : editedChapter.slug;
-    const saveRequestId = ++saveRequestRef.current;
-    const selectionGeneration = selectionGenerationRef.current;
-    const selectionSlug = activeSlugRef.current;
-    const draftRevision = draftRevisionRef.current;
 
     setSaving(true);
     try {
-      await mlBookAdminApi.upsertChapter("ml", slug, {
+      const res = await mlBookAdminApi.upsertChapter("ml", slug, {
         ...editedChapter,
         slug,
       });
-      const readBack = await mlBookAdminApi.getChapter("ml", slug);
-      if (saveRequestId !== saveRequestRef.current) return;
-      const saved = (readBack.data as unknown as { chapter: MLBookChapter })?.chapter;
-      if (!saved || saved.slug !== slug) throw new Error("Invalid chapter read-back");
-      const sameSelection = selectionGeneration === selectionGenerationRef.current &&
-        activeSlugRef.current === selectionSlug;
-      const hasNewDraft = sameSelection && draftRevision !== draftRevisionRef.current;
-      if (hasNewDraft) preserveDraftRef.current = saved.slug;
+      const saved = (res.data as unknown as { chapter: MLBookChapter })?.chapter;
+      showMessage.success("章节已保存");
       setChapters((prev) => {
         const rest = prev.filter((ch) => ch.slug !== slug);
         const updated = saved ? [saved, ...rest] : rest;
         return updated.sort((a, b) => a.sort_order - b.sort_order);
       });
-      if (sameSelection) {
-        activeSlugRef.current = saved.slug;
+      if (isNewChapter && saved) {
         setActiveSlug(saved.slug);
-        if (hasNewDraft) setEditedChapter((prev) => ({ ...prev, slug: saved.slug }));
-        showMessage.success("章节已保存");
       }
     } catch {
-      if (saveRequestId === saveRequestRef.current) showMessage.error("保存失败");
+      showMessage.error("保存失败");
     } finally {
-      if (saveRequestId === saveRequestRef.current) setSaving(false);
+      setSaving(false);
     }
   };
 
@@ -250,9 +211,6 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
   // Create new empty chapter
   const handleNewChapter = () => {
     const newSlug = EMPTY_CHAPTER_SLUG;
-    activeSlugRef.current = newSlug;
-    selectionGenerationRef.current += 1;
-    draftRevisionRef.current += 1;
     setActiveSlug(newSlug);
     setEditMode("edit");
   };
@@ -267,7 +225,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [editedChapter, bookId, saving, loading, isNewChapter]);
+  }, [editedChapter, bookId]);
 
   const toolbarButtons = [
     { label: "B", action: "**粗体**", title: "加粗 (Ctrl+B)" },
@@ -313,7 +271,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
             <ChapterList
               chapters={chapters}
               activeSlug={activeSlug}
-              onSelectChapter={handleSelectChapter}
+              onSelectChapter={setActiveSlug}
               onDeleteChapter={deleteChapter}
               onToggleChapter={toggleChapter}
               onReorder={handleReorder}
@@ -341,7 +299,6 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                       const before = editedChapter.markdown?.slice(0, start) ?? "";
                       const after = editedChapter.markdown?.slice(end) ?? "";
                       const next = before + btn.action + after;
-                      draftRevisionRef.current += 1;
                       setEditedChapter((prev) => ({ ...prev, markdown: next }));
                       setTimeout(() => {
                         ta.focus();
@@ -377,7 +334,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                       <LineNumberedMarkdownTextArea
                         id="ml-book-editor-textarea"
                         value={editedChapter.markdown ?? ""}
-                        onChange={(text) => { draftRevisionRef.current += 1; setEditedChapter((prev) => ({ ...prev, markdown: text })); }}
+                        onChange={(text) => setEditedChapter((prev) => ({ ...prev, markdown: text }))}
                         placeholder="输入章节 Markdown 内容，支持 GFM、LaTeX 公式、代码块..."
                       />
                     </div>
@@ -393,10 +350,10 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                   <div className={editMode === "split" ? "flex min-h-0 flex-1 flex-col border-l border-border lg:w-1/2" : "flex min-h-0 flex-1 flex-col"}>
                     <div className="overflow-auto p-4">
                       {(editedChapter.markdown) ? (
-                        <div className="ws-markdown [&.ws-markdown]:text-sm [&.ws-markdown]:leading-7" data-markdown-entry="ml-book-preview">
+                        <div className="ws-markdown text-sm leading-7 text-text-base">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[[rehypeKatex, { errorColor: readCssColor("--ws-color-error-text") }]]}
+                            rehypePlugins={[rehypeKatex]}
                           >
                             {editedChapter.markdown}
                           </ReactMarkdown>
@@ -416,7 +373,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
             <MetadataPanel
               chapter={editedChapter}
               allChapters={chapters}
-              onChange={(chapter) => { draftRevisionRef.current += 1; setEditedChapter(chapter); }}
+              onChange={setEditedChapter}
             />
           </div>
         )}

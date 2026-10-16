@@ -141,46 +141,24 @@ def test_downgrade_locks_writers_before_dropping_only_the_new_index(monkeypatch)
     )
 
 
-def _ancestor_revision_ids(script: ScriptDirectory, head: str) -> set[str]:
-    """Return a head and every revision reachable through its parents."""
-    pending = [head]
-    seen: set[str] = set()
-    while pending:
-        revision_id = pending.pop()
-        if revision_id in seen:
-            continue
-        seen.add(revision_id)
-        revision = script.get_revision(revision_id)
-        assert revision is not None, f"迁移图引用了不存在的 revision: {revision_id}"
-        parents = revision.down_revision
-        if parents is None:
-            continue
-        if isinstance(parents, tuple):
-            pending.extend(parents)
-        else:
-            pending.append(parents)
-    return seen
-
-
 def test_revision_is_the_single_alembic_head_and_follows_auth_authority():
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    # 断言「迁移图只有一个 head」，而不是「head 恰好等于某个特定 revision」。
-    # 早期版本写死了当时的 head（20260914_0001_xbk_active_selection_unique），
-    # 之后每新增一条迁移都会让断言失效——它测的是快照而非不变量。
-    # 单 head 才是真正要守的性质：多 head 会让 alembic upgrade head 失败。
+    # 迁移图必须始终收敛到唯一 head（本仓库不支持多 head）。
+    # 不再断言 xbk revision「就是」head：后续新增迁移会合法地把它顶下去，
+    # 那种断言会把每次正常加迁移都变成红灯。
     heads = script.get_heads()
-    assert len(heads) == 1, (
-        f"alembic 存在多个 head（{heads}），upgrade head 将无法确定目标"
-    )
+    assert len(heads) == 1, f"expected exactly one alembic head, got {heads}"
 
-    # XBK 迁移本身仍在链上，且紧接 auth_authority（这才是本用例关心的契约）。
-    target_id = "20260914_0001_xbk_active_selection_unique"
-    revision = script.get_revision(target_id)
+    revision = script.get_revision("20260914_0001_xbk_active_selection_unique")
     assert revision is not None
     assert revision.down_revision == "20260910_0001_auth_authority"
-    assert target_id in _ancestor_revision_ids(script, heads[0]), (
-        f"XBK revision {target_id} 不在当前 head {heads[0]} 的祖先链上"
-    )
+
+    # xbk revision 必须仍在 head 的祖先链上（即没有被旁路或删除）。
+    ancestors = {
+        item.revision
+        for item in script.walk_revisions(base="base", head=heads[0])
+    }
+    assert "20260914_0001_xbk_active_selection_unique" in ancestors
