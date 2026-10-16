@@ -1,14 +1,6 @@
 // Shared types for AgentData pages and components
 
 export type WordCloudItem = { word: string; count: number };
-
-export type HotnessComponent = {
-  score?: number;
-  weight?: number;
-  contribution?: number;
-  evidence?: string;
-};
-
 export type TopicItem = {
   topic: string;
   questions?: string[];
@@ -16,75 +8,10 @@ export type TopicItem = {
   unique_students?: number;
   evidence_ids?: number[];
   representative_question?: string;
-  theme_id?: string;
-  intent_code?: string;
-  intent_label?: string;
-  keywords?: WordCloudItem[];
-  active_bucket_count?: number;
-  commonness_score?: number;
-  difficulty_signal_score?: number;
-  persistence_score?: number;
-  hotness_score?: number;
-  hotness_components?: Record<string, HotnessComponent>;
-  hotness_explanation?: string[];
-  score_basis?: string;
-  heat_profile?: string;
 };
 export type MainQuestionChainItem = { stage: string; question: string; reason?: string; evidence?: string[] };
 
 export type TeacherQuestionItem = { id?: string; time?: string; question: string; source?: string; user_name?: string };
-
-export type HotStudentQuestionEvent = {
-  message_id?: number;
-  created_at?: string;
-  content?: string;
-  question?: string;
-  user_name?: string;
-  student_id?: number;
-  class_name?: string;
-  session_id?: string;
-  quality_label?: string;
-  quality_reason?: string;
-  quality_flags?: string[];
-  included_in_analysis?: boolean;
-  theme?: string;
-  intent_label?: string;
-  teacher_anchor_id?: string | null;
-  teacher_anchor_question?: string | null;
-  teacher_anchor_score?: number | null;
-  teacher_anchor_confidence?: string | null;
-  teacher_anchor_match_type?: string | null;
-  teacher_anchor_reason?: string[];
-  trigger_delay_seconds?: number | null;
-};
-
-export type HotDataQuality = {
-  raw_count?: number;
-  raw_event_count?: number;
-  valid_question_count?: number;
-  prompt_echo_count?: number;
-  duplicate_count?: number;
-  off_track_count?: number;
-  too_short_count?: number;
-  noise_count?: number;
-  excluded_count?: number;
-  prompt_echo_rate?: number;
-  noise_rate?: number;
-};
-
-export type HotAnalysisAudit = {
-  audit_version?: string;
-  raw_event_count?: number;
-  raw_student_event_count?: number;
-  valid_question_count?: number;
-  excluded_event_count?: number;
-  teacher_anchor_denominator?: number;
-  teacher_anchor_match_count?: number;
-  teacher_anchor_coverage?: number;
-  teacher_anchor_confidence_total?: number;
-  teacher_anchor_statistics_consistent?: boolean;
-  warnings?: string[];
-};
 export type TeacherMark = { time: string; question: string };
 export type StudentQuestionChainSource = "saved" | "live" | "beam" | "evidence";
 
@@ -128,8 +55,6 @@ export type HotDeepThemeAnalysis = {
   covered_by_task_sheet?: boolean;
   student_behavior?: string;
   diagnosis?: string;
-  hotness_score?: number;
-  heat_profile?: string;
 };
 
 export type HotDeepAnalysis = {
@@ -251,7 +176,6 @@ export type BeamNode = {
 };
 
 export type TaskAnalysisResult = {
-  analysis_version?: string;
   word_cloud?: WordCloudItem[];
   wordCloud?: WordCloudItem[];
   keywords?: WordCloudItem[];
@@ -260,36 +184,13 @@ export type TaskAnalysisResult = {
   uncovered?: TopicItem[];
   main_question_chain?: MainQuestionChainItem[];
   themes?: Array<TopicItem & { theme_id?: string; unique_students?: number; evidence_ids?: number[]; representative_question?: string }>;
-  burst_points?: Array<{
-    bucket_start: string;
-    question_count: number;
-    top_questions?: Array<{ question: string; count: number }>;
-    burst_score?: number;
-    burst_reasons?: string[];
-  }>;
+  burst_points?: Array<{ bucket_start: string; question_count: number; top_questions?: Array<{ question: string; count: number }> }>;
   teacher_questions?: TeacherQuestionItem[];
   teacher_mainline?: TeacherQuestionItem[];
   teacher_marks?: TeacherQuestionItem[];
   course_hotspot_sequence?: Array<{ stage: string; start_at?: string; end_at?: string; teacher_question?: string; dominant_theme?: string; phase_type?: string; question_count?: number; unique_students?: number; representative_questions?: string[] }>;
   teaching_suggestions?: Array<{ theme?: string; priority?: string; reason?: string; suggestion?: string }>;
-  summary?: {
-    question_count?: number;
-    valid_question_count?: number;
-    raw_count?: number;
-    unique_students?: number;
-    burst_count?: number;
-    prompt_echo_count?: number;
-    duplicate_count?: number;
-    noise_count?: number;
-    teacher_anchor_count?: number;
-    teacher_anchor_match_count?: number;
-    teacher_anchor_coverage?: number;
-    teacher_anchor_confidence_distribution?: Record<string, number>;
-    top_hotness_score?: number;
-  };
-  data_quality?: HotDataQuality;
-  analysis_audit?: HotAnalysisAudit;
-  student_question_events?: HotStudentQuestionEvent[];
+  summary?: { question_count?: number; unique_students?: number; burst_count?: number };
   ai_main_question_chain?: Array<{ stage?: string; question?: string; next_ai_question?: string; reason?: string; evidence?: string[]; student_response_summary?: string }>;
   student_question_chains?: StudentQuestionChainItem[];
   student_chains?: StudentQuestionChainItem[];
@@ -305,22 +206,6 @@ export type TaskAnalysisResult = {
     top_questions?: Array<{ question?: string; count?: number }>;
     is_burst?: boolean;
     near_teacher_mark?: string | null;
-    growth_rate?: number;
-    volume_signal?: number;
-    growth_signal?: number;
-    student_diversity_signal?: number;
-    burst_score?: number;
-    burst_reasons?: string[];
-    teacher_question?: TeacherQuestionItem | null;
-    teacher_anchor_id?: string | null;
-    teacher_anchor_question?: string | null;
-    teacher_anchor_score?: number | null;
-    teacher_anchor_confidence?: string | null;
-    teacher_anchor_match_type?: string | null;
-    teacher_anchor_reason?: string[];
-    trigger_delay_seconds?: number | null;
-    theme_distribution?: Record<string, number>;
-    question_type_distribution?: Record<string, number>;
   }>;
   result?: TaskAnalysisResult;
   deep_analysis?: HotDeepAnalysis | ChainDeepAnalysis;

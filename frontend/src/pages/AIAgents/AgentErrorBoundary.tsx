@@ -25,7 +25,7 @@ class AgentErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center py-16 gap-item-gap">
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
           <AlertTriangle className="h-12 w-12 text-error" />
           <div className="text-xl font-bold text-text-base">页面出现异常</div>
           <div className="text-sm text-text-secondary">{this.state.error?.message || "未知错误"}</div>

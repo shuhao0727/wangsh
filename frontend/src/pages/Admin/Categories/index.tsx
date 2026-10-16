@@ -53,8 +53,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Ellipsis, Eye, FileText, Filter, Pencil, Plus, RotateCcw, Search, Trash2,  } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
+import {
+  Ellipsis,
+  Eye,
+  FileText,
+  Filter,
+  Loader2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+} from "lucide-react";
+
 type CategoryEditFormProps = {
   category: CategoryWithUsage | null;
   isCreateMode: boolean;
@@ -157,7 +168,7 @@ const CategoryEditForm: React.FC<CategoryEditFormProps> = ({
           <DialogTitle>{isCreateMode ? "添加新分类" : "编辑分类"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form className="space-y-form-field-gap" onSubmit={form.handleSubmit(handleFormSubmit)}>
+          <form className="space-y-4" onSubmit={form.handleSubmit(handleFormSubmit)}>
             <FormField
               control={form.control}
               name="name"
@@ -178,7 +189,7 @@ const CategoryEditForm: React.FC<CategoryEditFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>URL标识 (slug)</FormLabel>
-                  <div className="flex items-center gap-xs">
+                  <div className="flex items-center gap-2">
                     <FormControl>
                       <Input placeholder="例如：algorithm-basics" {...field} />
                     </FormControl>
@@ -218,7 +229,7 @@ const CategoryEditForm: React.FC<CategoryEditFormProps> = ({
                 取消
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? <Spinner size="sm" /> : null}
+                {form.formState.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isCreateMode ? "创建分类" : "保存修改"}
               </Button>
             </DialogFooter>
@@ -518,7 +529,7 @@ const AdminCategories: React.FC = () => {
           <Badge
             variant={(row.original.article_count || 0) > 0 ? "info" : "outline"}
           >
-            <FileText className="mr-2xs h-3.5 w-3.5" />
+            <FileText className="mr-1 h-3.5 w-3.5" />
             {row.original.article_count || 0} 篇
           </Badge>
         ),
@@ -543,10 +554,8 @@ const AdminCategories: React.FC = () => {
       {
         id: "actions",
         header: "操作",
-        size: 120,
-        meta: { className: "w-[120px]" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-2xs">
+          <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" onClick={() => handleEdit(row.original)}>
               <Pencil className="h-4 w-4" />
               编辑
@@ -567,16 +576,16 @@ const AdminCategories: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handleViewArticles(row.original.id, row.original.name)}>
-                  <Eye className="mr-xs h-4 w-4" />
+                  <Eye className="mr-2 h-4 w-4" />
                   查看文章
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleEdit(row.original)}>
-                  <Pencil className="mr-xs h-4 w-4" />
+                  <Pencil className="mr-2 h-4 w-4" />
                   编辑
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.original.id)}>
-                  <Trash2 className="mr-xs h-4 w-4" />
+                  <Trash2 className="mr-2 h-4 w-4" />
                   删除
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -584,6 +593,8 @@ const AdminCategories: React.FC = () => {
           </div>
         ),
         enableSorting: false,
+        size: 210,
+        meta: { className: "w-[210px]" },
       },
     ],
     [handleDelete, handleEdit, handleViewArticles],
@@ -637,7 +648,7 @@ const AdminCategories: React.FC = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem className="text-destructive" onClick={handleBatchDelete}>
-                <Trash2 className="mr-xs h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 批量删除
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -651,7 +662,7 @@ const AdminCategories: React.FC = () => {
           筛选
         </Button>
         <Button variant="outline" onClick={() => loadCategories()} disabled={loading}>
-          {loading ? <Spinner size="sm" /> : <RotateCcw className="h-4 w-4" />}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
           刷新
         </Button>
         <Button onClick={handleAddCategory}>
@@ -663,7 +674,7 @@ const AdminCategories: React.FC = () => {
       {filterVisible && (
         <div className="mb-4 rounded-xl bg-surface-2 p-4">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="w-[200px] space-y-2xs">
+            <div className="w-[200px] space-y-1">
               <div className="text-xs text-text-secondary">排序方式</div>
               <Select value={sortBy} onValueChange={(value) => setSorting(sortValueToState(value))}>
                 <SelectTrigger>
@@ -680,7 +691,7 @@ const AdminCategories: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-[140px] space-y-2xs">
+            <div className="w-[140px] space-y-1">
               <div className="text-xs text-text-secondary">最少文章数</div>
               <Input
                 type="number"
@@ -712,7 +723,7 @@ const AdminCategories: React.FC = () => {
               <div className="flex items-center">
                 <span>分类列表</span>
                 {selectedIds.length > 0 && (
-                  <Badge variant="info" className="ml-xs">
+                  <Badge variant="info" className="ml-2">
                     已选择 {selectedIds.length} 项
                   </Badge>
                 )}
@@ -733,7 +744,7 @@ const AdminCategories: React.FC = () => {
           </AdminTablePanel>
         </div>
         {filteredCategories.length > 0 ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}

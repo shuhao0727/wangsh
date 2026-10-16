@@ -78,8 +78,8 @@ const AdminSystem: React.FC = () => {
 
   return (
     <AdminPage>
-      <div className="mb-4 flex items-center justify-end gap-xs">
-        <div className="inline-flex rounded-lg bg-surface-2 p-2xs">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <div className="inline-flex rounded-lg bg-surface-2 p-1">
           <Button
             size="sm"
             variant={tab === "system" ? "default" : "ghost"}
@@ -107,7 +107,7 @@ const AdminSystem: React.FC = () => {
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div className="lg:col-span-2">
             <AdminCard title="前端导航可见性" className="rounded-lg border border-border bg-surface" size="small">
-              <div className="grid grid-cols-1 gap-xs md:grid-cols-3 xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {NAV_VISIBILITY_ITEMS.map((item) => (
                   <div
                     key={item.path}
@@ -152,16 +152,16 @@ const AdminSystem: React.FC = () => {
 
           <AdminCard title="安全设置" className="rounded-lg border border-border bg-surface" size="small">
             <div className="flex flex-col gap-2.5">
-              <div className="grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-xs">
+              <div className="grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-2">
                 <span className="text-sm text-text-secondary">JWT 过期时间</span>
                 <Input value={settings?.security?.jwt_expire_minutes ?? ""} readOnly className="h-9" />
                 <span className="text-sm text-text-tertiary">分钟</span>
               </div>
-              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-xs">
+              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
                 <span className="text-sm text-text-secondary">算法</span>
                 <Input value={settings?.security?.algorithm ?? ""} readOnly className="h-9" />
               </div>
-              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-xs">
+              <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2">
                 <span className="text-sm text-text-secondary">Auto Create Tables</span>
                 <Input value={String(settings?.features?.auto_create_tables ?? "")} readOnly className="h-9" />
               </div>
@@ -171,7 +171,7 @@ const AdminSystem: React.FC = () => {
           <div className="lg:col-span-2">
             <AdminCard title="观测指标" className="rounded-lg border border-border bg-surface" size="small">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-xs">
+                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
                   <span className="mb-1.5 block text-sm font-semibold">HTTP</span>
                   <MetricRow label="总请求" value={overview?.observability?.http?.total ?? "-"} />
                   <MetricRow label="4xx" value={overview?.observability?.http?.["4xx"] ?? "-"} />
@@ -179,7 +179,7 @@ const AdminSystem: React.FC = () => {
                   <MetricRow label="In-flight" value={overview?.observability?.http?.inflight ?? "-"} />
                   <MetricRow label="p95(ms)" value={overview?.observability?.http?.dur_ms?.p95 ?? "-"} />
                 </div>
-                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-xs">
+                <div className="rounded-md border border-border-secondary bg-surface-2 px-3 py-2">
                   <span className="mb-1.5 block text-sm font-semibold">DB Pool</span>
                   <MetricRow label="pool_size" value={overview?.observability?.db?.pool_size ?? "-"} />
                   <MetricRow label="checked_in" value={overview?.observability?.db?.checked_in ?? "-"} />

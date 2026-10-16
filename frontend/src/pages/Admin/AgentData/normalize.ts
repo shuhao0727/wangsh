@@ -42,28 +42,6 @@ export const normalizeTopics = (value: unknown): TopicItem[] => Array.isArray(va
     unique_students: Number(item.unique_students || 0) || undefined,
     evidence_ids: Array.isArray(item.evidence_ids) ? item.evidence_ids : undefined,
     representative_question: item.representative_question ? String(item.representative_question) : undefined,
-    theme_id: item.theme_id ? String(item.theme_id) : undefined,
-    intent_code: item.intent_code ? String(item.intent_code) : undefined,
-    intent_label: item.intent_label ? String(item.intent_label) : undefined,
-    keywords: Array.isArray(item.keywords)
-      ? item.keywords.map((keyword: any) => ({
-        word: String(keyword?.word || keyword?.name || "").trim(),
-        count: Number(keyword?.count ?? keyword?.value ?? 0),
-      })).filter((keyword: { word: string; count: number }) => keyword.word)
-      : undefined,
-    active_bucket_count: Number(item.active_bucket_count ?? 0) || undefined,
-    commonness_score: typeof item.commonness_score === "number" ? item.commonness_score : undefined,
-    difficulty_signal_score: typeof item.difficulty_signal_score === "number" ? item.difficulty_signal_score : undefined,
-    persistence_score: typeof item.persistence_score === "number" ? item.persistence_score : undefined,
-    hotness_score: typeof item.hotness_score === "number" ? item.hotness_score : undefined,
-    hotness_components: item.hotness_components && typeof item.hotness_components === "object"
-      ? item.hotness_components
-      : undefined,
-    hotness_explanation: Array.isArray(item.hotness_explanation)
-      ? item.hotness_explanation.map((text: unknown) => String(text)).filter(Boolean)
-      : undefined,
-    score_basis: item.score_basis ? String(item.score_basis) : undefined,
-    heat_profile: item.heat_profile ? String(item.heat_profile) : undefined,
   }))
   : [];
 
@@ -377,25 +355,6 @@ export const normalizeTimelineBuckets = (
           .filter((item) => item.question),
         is_burst: Boolean(bucket.is_burst),
         near_teacher_mark: bucket.near_teacher_mark || null,
-        growth_rate: typeof bucket.growth_rate === "number" ? bucket.growth_rate : undefined,
-        volume_signal: typeof bucket.volume_signal === "number" ? bucket.volume_signal : undefined,
-        growth_signal: typeof bucket.growth_signal === "number" ? bucket.growth_signal : undefined,
-        student_diversity_signal: typeof bucket.student_diversity_signal === "number" ? bucket.student_diversity_signal : undefined,
-        burst_score: typeof bucket.burst_score === "number" ? bucket.burst_score : undefined,
-        burst_reasons: Array.isArray(bucket.burst_reasons)
-          ? bucket.burst_reasons.map((reason: unknown) => String(reason)).filter(Boolean)
-          : [],
-        teacher_anchor_id: bucket.teacher_anchor_id || null,
-        teacher_anchor_question: bucket.teacher_anchor_question || bucket.near_teacher_mark || null,
-        teacher_anchor_score: typeof bucket.teacher_anchor_score === "number" ? bucket.teacher_anchor_score : undefined,
-        teacher_anchor_confidence: bucket.teacher_anchor_confidence || null,
-        teacher_anchor_match_type: bucket.teacher_anchor_match_type || null,
-        teacher_anchor_reason: Array.isArray(bucket.teacher_anchor_reason)
-          ? bucket.teacher_anchor_reason.map((reason: unknown) => String(reason)).filter(Boolean)
-          : [],
-        trigger_delay_seconds: typeof bucket.trigger_delay_seconds === "number" ? bucket.trigger_delay_seconds : undefined,
-        theme_distribution: bucket.theme_distribution || undefined,
-        question_type_distribution: bucket.question_type_distribution || undefined,
       };
     })
     .filter((bucket) => dayjs(bucket.bucket_start).isValid())

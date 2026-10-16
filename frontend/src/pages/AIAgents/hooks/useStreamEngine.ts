@@ -14,7 +14,7 @@ import {
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
   onEnd: (fullText: string) => void;
-  onError: (errText: string, partialText?: string, errorCode?: string) => void;
+  onError: (errText: string, partialText?: string) => void;
   onWorkflowStarted?: (groupId: string) => void;
   onNodeStarted?: (name: string) => void;
   onNodeFinished?: (name: string, detail?: string) => void;
@@ -135,13 +135,13 @@ export function useStreamEngine() {
       callbacks.onEnd(fullText);
     };
 
-    const finishError = (message: string, errorCode?: string) => {
+    const finishError = (message: string) => {
       if (finished) return;
       finalizeReasoningFilter();
       finished = true;
       clearIdleTimeout();
       clearDeltaTimer();
-      callbacks.onError(message, fullText || undefined, errorCode);
+      callbacks.onError(message, fullText || undefined);
     };
 
     const finishSilently = () => {
@@ -231,7 +231,7 @@ export function useStreamEngine() {
           finishSuccess();
           return;
         }
-        finishError("模型未返回内容", "empty_answer");
+        finishError("模型未返回内容");
       } else if (eventType === "workflow_started") {
         callbacks.onWorkflowStarted?.(
           payload?.workflow_run_id || `wf-${Date.now()}`,
@@ -253,19 +253,16 @@ export function useStreamEngine() {
           finishSuccess();
           return;
         }
-        finishError("模型未返回内容", "empty_answer");
+        finishError("模型未返回内容");
       } else if (eventType === "error") {
         sawTerminalEvent = true;
-        const errorCode =
-          typeof payload?.error === "string"
-            ? payload.error
-            : typeof payload?.code === "string"
-              ? payload.code
-              : undefined;
-        const baseMsg =
-          payload?.message || payload?.detail || "对话发生错误";
-        const errMsg = String(baseMsg).trim() || "对话发生错误";
-        finishError(errMsg.slice(0, 260), errorCode);
+        const baseMsg = payload?.message || payload?.error || "对话发生错误";
+        const detail =
+          typeof payload?.detail === "string" ? payload.detail.trim() : "";
+        const errMsg = detail
+          ? `${baseMsg}（${detail.slice(0, 220)}）`
+          : baseMsg;
+        finishError(String(errMsg));
       }
       // Unknown and reasoning-only events (for example agent_thought) are ignored.
     };
@@ -311,24 +308,17 @@ export function useStreamEngine() {
           if (!finished) {
             if (xhr.status < 200 || xhr.status >= 300) {
               let detail = "";
-              let errorCode: string | undefined;
               try {
                 const payload = JSON.parse(xhr.responseText);
                 detail = String(
-                  payload?.detail || payload?.message || "",
+                  payload?.detail || payload?.message || payload?.error || "",
                 ).trim();
-                errorCode =
-                  typeof payload?.error === "string"
-                    ? payload.error
-                    : typeof payload?.code === "string"
-                      ? payload.code
-                      : undefined;
               } catch {
                 const text = xhr.responseText.trim();
                 if (text && !text.startsWith("<")) detail = text.slice(0, 220);
               }
               const suffix = detail ? `：${detail.slice(0, 220)}` : "";
-              finishError(`请求失败（HTTP ${xhr.status}）${suffix}`, errorCode);
+              finishError(`请求失败（HTTP ${xhr.status}）${suffix}`);
             } else {
               const contentType = xhr.getResponseHeader("Content-Type") || "";
               if (
@@ -337,9 +327,9 @@ export function useStreamEngine() {
               ) {
                 finishError("服务返回了非流式响应");
               } else if (hasVisibleText(fullText) && !sawTerminalEvent) {
-                finishError("流式响应提前结束", "stream_incomplete");
+                finishError("流式响应提前结束");
               } else {
-                finishError("模型未返回内容", "empty_answer");
+                finishError("模型未返回内容");
               }
             }
           }

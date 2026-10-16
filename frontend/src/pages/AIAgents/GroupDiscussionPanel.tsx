@@ -1,7 +1,20 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
-import { LogOut, Pin, PinOff, Plus, RefreshCw, Search, Trash2, User as UserIcon, UserPlus, Users, X,  } from "lucide-react";
+import {
+  Loader2,
+  LogOut,
+  Pin,
+  PinOff,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  User as UserIcon,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { groupDiscussionApi } from "@services/agents";
 import { config as appConfig } from "@services";
 import { userApi } from "@services";
@@ -49,8 +62,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 const PushpinFilled = Pin;
 const PushpinOutlined = PinOff;
 const TeamOutlined = Users;
@@ -697,8 +708,8 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
   // --- 渲染组件 ---
 
   const renderIntro = () => (
-    <div className="flex h-full flex-col px-2xs">
-      <div className="mb-3 grid grid-cols-2 gap-[var(--ws-space-1)] rounded-md border border-[var(--ws-color-border)] bg-surface p-2xs">
+    <div className="flex h-full flex-col px-1">
+      <div className="mb-3 grid grid-cols-2 gap-[var(--ws-space-1)] rounded-md border border-[var(--ws-color-border)] bg-surface p-1">
         {[
           { key: "join", label: "加入小组", icon: <TeamOutlined className="h-4 w-4" /> },
           { key: "create", label: "新建小组", icon: <PlusOutlined className="h-4 w-4" /> },
@@ -708,10 +719,9 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             type="button"
             className={cn(
               "flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               introMode === item.key
-                ? "bg-surface text-text-base shadow-sm"
-                : "text-text-tertiary hover:text-text-base",
+                ? "bg-surface text-text shadow-sm"
+                : "text-text-tertiary hover:text-text",
             )}
             onClick={() => setIntroMode(item.key as "join" | "create")}
           >
@@ -733,7 +743,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       {introMode === "join" ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           {isAdmin ? (
-            <div className="mb-3 flex w-full flex-wrap gap-xs">
+            <div className="mb-3 flex w-full flex-wrap gap-2">
               <Input
                 type="date"
                 value={filterDate || ""}
@@ -782,10 +792,10 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           <div className="flex-1 overflow-y-auto">
             {groupsLoading ? (
               <div className="flex justify-center p-6">
-                <LoadingState label="正在加载讨论组…" size="md" />
+                <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
               </div>
             ) : groups.length ? (
-              <div className="flex flex-col gap-xs px-0.5">
+              <div className="flex flex-col gap-2 px-0.5">
                 {groups.map((item) => (
                   <div
                     key={`${item.session_date}-${item.class_name || ""}-${item.group_no}`}
@@ -793,14 +803,14 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                   >
                     <div className="flex justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-xs">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{item.group_no}组</span>
                           {item.group_name ? (
                             <Badge variant="outline">{item.group_name}</Badge>
                           ) : null}
                         </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-xs text-xs text-text-tertiary">
-                          <span className="inline-flex items-center gap-2xs">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                          <span className="inline-flex items-center gap-1">
                             <UserOutlined className="h-4 w-4" />
                             {item.member_count}人
                           </span>
@@ -885,7 +895,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           </Button>
 
           <div className="rounded-lg bg-surface-2 p-3 text-xs text-text-tertiary">
-            <div className="mb-2xs">注意事项：</div>
+            <div className="mb-1">注意事项：</div>
             <div>
               1. 创建/加入小组后，需等待 {Math.ceil(config.join_lock_seconds / 60)} 分钟才能切换其他小组。
             </div>
@@ -900,18 +910,18 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-[var(--ws-color-border-secondary)] bg-surface px-4 py-3">
         <div>
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <span className="text-base font-semibold">{currentGroup.no}组</span>
             {currentGroup.name ? (
               <Badge variant="info">{currentGroup.name}</Badge>
             ) : null}
           </div>
           <div className="mt-0.5 text-xs text-text-tertiary">
-            <TeamOutlined className="mr-2xs inline h-4 w-4" />
+            <TeamOutlined className="mr-1 inline h-4 w-4" />
             正在讨论中
           </div>
         </div>
-        <div className="flex items-center gap-xs">
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -941,7 +951,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
               {dayjs(msg.created_at).format("HH:mm")}
             </div>
             <div
-              className={`break-words whitespace-pre-wrap px-3 py-xs text-sm leading-relaxed ${
+              className={`break-words whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed ${
                 msg.is_mine
                   ? "rounded-xl rounded-bl-[4px] bg-primary text-primary-foreground"
                   : "rounded-xl rounded-br-[4px] bg-surface text-text-base"
@@ -954,7 +964,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
       </div>
 
       <div className="border-t border-[var(--ws-color-border-secondary)] bg-surface p-3">
-        <div className="flex w-full items-center gap-xs">
+        <div className="flex w-full items-center gap-2">
           <Input
             value={draft}
             placeholder="输入消息..."
@@ -972,11 +982,11 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             onClick={() => void handleSend()}
             disabled={sending || !draft.trim()}
           >
-            {sending ? <Spinner size="sm" /> : null}
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             发送
           </Button>
         </div>
-        <div className="mt-2xs text-center text-xs text-text-tertiary">
+        <div className="mt-1 text-center text-xs text-text-tertiary">
           每 {config.rate_limit_seconds} 秒可发送一条消息
         </div>
       </div>
@@ -1040,7 +1050,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
             <span className="font-semibold text-sm flex items-center gap-1.5">
               <TeamOutlined className="h-4 w-4" /> 小组讨论
             </span>
-            <div className="flex gap-2xs" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1070,7 +1080,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                 onClick={() => { void handleManualRefresh(); }}
               >
                 {(view === "intro" ? groupsLoading : chatRefreshing)
-                  ? <Spinner size="sm" />
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <ReloadOutlined className="h-4 w-4" />}
               </Button>
               <Button
@@ -1114,10 +1124,10 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
           <div className="h-[calc(100dvh-4rem)] overflow-y-auto p-4">
         {membersLoading ? (
           <div className="p-6 flex justify-center">
-            <Spinner size="md" className="text-text-tertiary" />
+            <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
           </div>
         ) : members.length ? (
-          <div className="flex flex-col gap-xs">
+          <div className="flex flex-col gap-2">
             {members.map((item) => (
               <div
                 key={String(item.user_id)}
@@ -1186,10 +1196,10 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
         <div className="max-h-[25rem] overflow-y-auto">
           {inviteLoading ? (
             <div className="p-6 flex justify-center">
-              <Spinner size="md" className="text-text-tertiary" />
+              <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
             </div>
           ) : inviteUsers.length ? (
-            <div className="flex flex-col gap-xs">
+            <div className="flex flex-col gap-2">
               {inviteUsers.map((user) => {
                 const isMember = members.some((m) => m.user_id === user.id);
                 return (
@@ -1215,7 +1225,7 @@ const GroupDiscussionPanel: React.FC<Props> = ({ isAuthenticated, isStudent, isA
                         disabled={isMember}
                         onClick={() => void handleInvite(user.id)}
                       >
-                        {invitingUserId === user.id ? <Spinner size="sm" /> : null}
+                        {invitingUserId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {isMember ? "已加入" : "邀请"}
                       </Button>
                     </div>

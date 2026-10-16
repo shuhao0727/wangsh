@@ -200,7 +200,7 @@ export const getAgentColumns = (
       const record = row.original;
       const isActive = record.status ?? record.is_active;
       return (
-        <div className="flex items-center gap-xs">
+        <div className="flex items-center gap-2">
           <Switch
             checked={isActive}
             onCheckedChange={(checked) => handleToggleActive(record.id, checked)}
@@ -228,15 +228,6 @@ export const getAgentColumns = (
   {
     id: "action",
     header: "操作",
-    // 宽度依据：本列 cell 是 flex + gap-1 + whitespace-nowrap，内有 4 个图标按钮
-    // （查看/编辑/测试连接/删除），必须按内容最小宽度定宽，否则按钮行会被压缩或溢出。
-    // 实测（浏览器内按下列 class 复刻，根字号取项目上限 15px = 1rem）：
-    //   单个按钮 h-[--ws-control-height-sm] px-3 + size-4 图标 ≈ 37.5px → 4 个 = 150px
-    //   按钮间 3 个 gap-1(0.25rem = 3.75px) = 11.25px
-    //   TableCell 左右内边距 px-3 = 22.5px
-    //   合计 ≈ 183.6px → 取整 184px
-    // 根字号为 clamp(14px, 0.12vw + 13px, 15px)，窄屏降到 14px 时内容约 171.5px，
-    // 故 184px 在整体区间内都不会挤压；小于此值 nowrap 内容会溢出压到相邻列。
     size: 184,
     meta: {
       headerClassName: "w-[184px] min-w-[184px]",
@@ -246,7 +237,7 @@ export const getAgentColumns = (
       const record = row.original;
       return (
         <TooltipProvider delayDuration={120}>
-          <div className="flex items-center gap-2xs whitespace-nowrap">
+          <div className="flex items-center gap-1 whitespace-nowrap">
             <HoverTip title="查看详情">
               <Button
                 variant="ghost"

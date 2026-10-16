@@ -112,27 +112,27 @@ const ExperimentCard: React.FC<{
         "rounded-md border bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)] hover:bg-[var(--ws-color-primary-soft)] cursor-pointer",
         completed ? "border-[var(--ws-color-success)]" : "border-[var(--ws-color-border-secondary)]",
       )} onClick={() => { setOpen(true); setTab("steps"); }}>
-        <div className="flex items-start justify-between gap-xs">
+        <div className="flex items-start justify-between gap-2">
           <h3 className="text-sm font-medium text-text-base">{experiment.name}</h3>
-          <div className="flex shrink-0 items-center gap-2xs">
+          <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-              className={cn("rounded p-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
+              className={cn("rounded p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
               <Star className={cn("h-3.5 w-3.5", favorite && "fill-[var(--ws-color-warning)]")} />
             </button>
             <Badge variant={diff.variant as any} className="text-xs">{diff.label}</Badge>
           </div>
         </div>
-        <div className="mt-xs space-y-2xs text-xs text-text-tertiary">
+        <div className="mt-2 space-y-1 text-xs text-text-tertiary">
           <p>📊 {experiment.data}</p>
           <p>⏱ {experiment.estimated_time} · 🎯 {experiment.goal}</p>
-          <div className="flex flex-wrap gap-2xs">
+          <div className="flex flex-wrap gap-1">
             {experiment.tools.slice(0, 4).map(t => <span key={t} className="rounded bg-[var(--ws-color-surface)] px-1.5 py-0.5">{t}</span>)}
             {experiment.tools.length > 4 && <span className="text-text-tertiary">+{experiment.tools.length - 4}</span>}
           </div>
         </div>
-        <div className="mt-xs flex items-center gap-xs">
+        <div className="mt-2 flex items-center gap-2">
           <button type="button" onClick={(e) => { e.stopPropagation(); onToggleCompleted(); }}
-            className={cn("inline-flex items-center gap-2xs rounded-md px-xs py-2xs text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
+            className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
             <CheckCircle2 className="h-3.5 w-3.5" />{completed ? "已完成" : "标记"}
           </button>
           <span className="text-xs text-[var(--ws-color-primary)]">点击查看详情 →</span>
@@ -149,16 +149,16 @@ const ExperimentCard: React.FC<{
             ref={(el) => { if (el) { const first = el.querySelector<HTMLElement>('button, [tabindex]'); first?.focus(); } }}>
             {/* Header */}
             <div className="shrink-0 border-b border-border px-6 pt-5 pb-3">
-              <div className="flex items-center justify-between mb-xs">
+              <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-bold">{experiment.name}</h2>
-                <button onClick={() => setOpen(false)} className="rounded p-2xs hover:bg-accent text-lg leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="关闭">✕</button>
+                <button onClick={() => setOpen(false)} className="rounded p-1 hover:bg-accent text-lg leading-none" aria-label="关闭">✕</button>
               </div>
-              <div className="flex items-center gap-xs text-xs text-text-tertiary">
-                <Badge variant={diff.variant as any} className="text-3xs">{diff.label}</Badge>
+              <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                <Badge variant={diff.variant as any} className="text-[10px]">{diff.label}</Badge>
                 <span>⏱ {experiment.estimated_time}</span>
                 <span>📊 {experiment.data}</span>
               </div>
-              <p className="mt-xs text-xs text-text-secondary">🎯 {experiment.goal}</p>
+              <p className="mt-2 text-xs text-text-secondary">🎯 {experiment.goal}</p>
             </div>
 
             {/* Tab bar */}
@@ -166,7 +166,7 @@ const ExperimentCard: React.FC<{
               {TAB_CONFIG.map((t) => (
                 <button key={t.key} type="button" onClick={() => setTab(t.key)}
                   className={cn(
-                    "relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px]",
                     tab === t.key
                       ? "border-[var(--ws-color-primary)] text-[var(--ws-color-primary)]"
                       : "border-transparent text-text-tertiary hover:text-text-secondary",
@@ -178,13 +178,13 @@ const ExperimentCard: React.FC<{
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 min-h-0 overflow-auto p-panel-padding animate-ws-fade-in-up">
+            <div className="flex-1 min-h-0 overflow-auto p-6 animate-ws-fade-in-up">
               {/* Steps */}
               {tab === "steps" && experiment.steps && (
                 <div className="space-y-3">
                   <ol className="space-y-3 ml-5 list-decimal text-sm text-text-secondary leading-relaxed">
                     {experiment.steps.map((s, i) => (
-                      <li key={i} className="pl-2xs">{s}</li>
+                      <li key={i} className="pl-1">{s}</li>
                     ))}
                   </ol>
                 </div>
@@ -195,7 +195,7 @@ const ExperimentCard: React.FC<{
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-text-tertiary">可复制到 Jupyter Notebook / Google Colab 运行</p>
-                    <button type="button" className="inline-flex items-center gap-2xs rounded-md px-2.5 py-2xs text-xs text-text-secondary hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    <button type="button" className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(experiment.code || "");
@@ -207,7 +207,7 @@ const ExperimentCard: React.FC<{
                       <Copy className="h-3.5 w-3.5" />复制代码
                     </button>
                   </div>
-                  <pre className="overflow-auto rounded-lg bg-[var(--ws-color-code-bg)] p-5 text-xs leading-relaxed text-[var(--ws-color-code-text)]">
+                  <pre className="overflow-auto rounded-lg bg-[var(--ws-color-code-bg)] p-5 text-[13px] leading-relaxed text-[var(--ws-color-code-text)]">
                     {experiment.code}
                   </pre>
                 </div>
@@ -221,7 +221,7 @@ const ExperimentCard: React.FC<{
                   </div>
                   {experiment.download_url ? (
                     <a href={experiment.download_url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-xs rounded-md bg-[var(--ws-color-primary)] px-4 py-xs text-sm font-medium text-white hover:opacity-90 transition-opacity no-underline mb-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      className="inline-flex items-center gap-2 rounded-md bg-[var(--ws-color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity no-underline mb-5">
                       <Download className="h-4 w-4" />下载数据文件
                       <span className="text-xs opacity-80">{experiment.download_url.endsWith('.csv') ? '(CSV)' : experiment.download_url.endsWith('.data') ? '(DATA)' : ''}</span>
                     </a>
@@ -245,7 +245,7 @@ const ExperimentCard: React.FC<{
               {tab === "reflection" && experiment.reflection && (
                 <div>
                   <p className="text-xs text-text-tertiary mb-4">动手完成后思考以下问题，加深理解</p>
-                  <ul className="space-y-item-gap">
+                  <ul className="space-y-4">
                     {experiment.reflection.map((r, i) => (
                       <li key={i} className="flex gap-3">
                         <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ws-color-surface-2)] text-xs font-bold text-text-tertiary">{i + 1}</span>
@@ -260,7 +260,7 @@ const ExperimentCard: React.FC<{
             {/* Footer */}
             <div className="shrink-0 flex items-center justify-between border-t border-border px-6 py-3 bg-[var(--ws-color-surface-2)]">
               <Button size="sm" variant={completed ? "secondary" : "outline"} onClick={onToggleCompleted}>
-                <CheckCircle2 className="h-4 w-4 mr-2xs" />{completed ? "已完成" : "标记完成"}
+                <CheckCircle2 className="h-4 w-4 mr-1" />{completed ? "已完成" : "标记完成"}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>关闭</Button>
             </div>
@@ -280,20 +280,20 @@ const ResourceCard: React.FC<{ item: ResourceItem; favorite: boolean; onToggleFa
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="block rounded-md border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="block rounded-md border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3 transition-colors hover:border-[var(--ws-color-primary)]"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-text-base">{item.title}</span>
             <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-3xs font-medium text-white"
+              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
               style={{ backgroundColor: config?.color || "var(--ws-color-primary)" }}
             >
               {config?.label || item.type}
             </span>
           </div>
-          <p className="mt-2xs text-xs text-text-tertiary">{item.description}</p>
+          <p className="mt-1 text-xs text-text-tertiary">{item.description}</p>
         </div>
         <button
           type="button"
@@ -301,12 +301,12 @@ const ResourceCard: React.FC<{ item: ResourceItem; favorite: boolean; onToggleFa
             event.preventDefault();
             onToggleFavorite();
           }}
-          className={cn("ml-xs rounded p-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
+          className={cn("ml-2 rounded p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
           aria-label={favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
         >
           <Star className={cn("h-3 w-3", favorite && "fill-[var(--ws-color-warning)]")} />
         </button>
-        <ExternalLink className="ml-2xs h-3 w-3 shrink-0 text-text-tertiary" />
+        <ExternalLink className="ml-1 h-3 w-3 shrink-0 text-text-tertiary" />
       </div>
       {item.rating && (
         <div className="mt-1.5 flex items-center gap-0.5">
@@ -532,7 +532,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
   }, [resourceKeyword, resourceType, resourcesData]);
 
   const content = (
-      <div className="flex min-h-0 flex-1 flex-col gap-item-gap">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         {/* 页面标题 */}
         <div className="flex flex-wrap items-center gap-3">
           <Sparkles className="h-6 w-6 text-[var(--ws-color-info)]" />
@@ -545,7 +545,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
               type="button"
               onClick={saveProgress}
               disabled={progressLoading}
-              className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               {progressLoading ? "保存中..." : "保存进度"}
             </button>
@@ -554,7 +554,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
         {/* Tab 导航 */}
         <Tabs value={activeTabKey} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="inline-flex h-auto min-h-10 w-full flex-wrap justify-start gap-2xs shrink-0">
+          <TabsList className="inline-flex h-auto min-h-10 w-full flex-wrap justify-start gap-1 shrink-0">
             <TabsTrigger value="book" className="gap-1.5">
               <BookMarked className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">学习书</span>
@@ -611,16 +611,14 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
           {/* Tab 3: 实验体系 */}
           <TabsContent value="experiments" className="flex-1 overflow-auto pt-3 outline-none">
-            <div className="space-y-form-field-gap">
+            <div className="space-y-6">
               <div className="rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
-                <div className="grid gap-xs sm:grid-cols-[1fr_160px]">
+                <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
                   <Input
                     value={experimentKeyword}
                     onChange={(event) => setExperimentKeyword(event.target.value)}
                     placeholder="搜索实验、数据集、工具或技能"
                     className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
-                    clearable
-                    onClear={() => setExperimentKeyword("")}
                   />
                   <Select value={experimentDifficulty} onValueChange={(value) => setExperimentDifficulty(value as typeof experimentDifficulty)}>
                     <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
@@ -633,22 +631,22 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="mt-xs text-xs text-text-tertiary">匹配 {filteredExperiments.length} 个实验，可直接标记完成或收藏。</p>
+                <p className="mt-2 text-xs text-text-tertiary">匹配 {filteredExperiments.length} 个实验，可直接标记完成或收藏。</p>
               </div>
 
               {filteredExperiments.length === 0 && (
-                <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-panel-padding text-center text-sm text-text-tertiary">
+                <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
                   未找到匹配的实验，请调整关键词或难度筛选。
                 </div>
               )}
 
               <div>
-                <h3 className="mb-3 flex items-center gap-xs text-sm font-semibold text-text-base">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-success)] text-xs text-white">1</span>
                   入门级实验
                   <Badge variant="success" className="text-xs">适合新手</Badge>
                 </h3>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {filteredExperiments.filter((exp) => exp.difficulty === "beginner").map((exp) => (
                     <ExperimentCard
                       key={exp.name}
@@ -664,12 +662,12 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
               {/* 中级 */}
               <div>
-                <h3 className="mb-3 flex items-center gap-xs text-sm font-semibold text-text-base">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-warning)] text-xs text-white">2</span>
                   中级实验
                   <Badge variant="warning" className="text-xs">需要基础</Badge>
                 </h3>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {filteredExperiments.filter((exp) => exp.difficulty === "intermediate").map((exp) => (
                     <ExperimentCard
                       key={exp.name}
@@ -685,12 +683,12 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
               {/* 高级 */}
               <div>
-                <h3 className="mb-3 flex items-center gap-xs text-sm font-semibold text-text-base">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--ws-color-error)] text-xs text-white">3</span>
                   高级实验
                   <Badge variant="danger" className="text-xs">需深度学习基础</Badge>
                 </h3>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {filteredExperiments.filter((exp) => exp.difficulty === "advanced").map((exp) => (
                     <ExperimentCard
                       key={exp.name}
@@ -707,12 +705,12 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
               {/* 专家 */}
               {filteredExperiments.some((exp) => exp.difficulty === "expert") && (
                 <div>
-                  <h3 className="mb-3 flex items-center gap-xs text-sm font-semibold text-text-base">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                     <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-purple text-xs text-white">4</span>
                     专家实验
                     <Badge variant="info" className="text-xs">需工程实践基础</Badge>
                   </h3>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {filteredExperiments.filter((exp) => exp.difficulty === "expert").map((exp) => (
                       <ExperimentCard key={exp.name} experiment={exp}
                         completed={Boolean(progress.completedItems[`experiment:${exp.name}`])}
@@ -728,16 +726,14 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
           {/* Tab 4: 工具箱 */}
           <TabsContent value="tools" className="flex-1 overflow-auto pt-3 outline-none">
-            <div className="space-y-item-gap">
+            <div className="space-y-4">
               <div className="rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
-                <div className="grid gap-xs sm:grid-cols-[1fr_180px]">
+                <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
                   <Input
                     value={toolKeyword}
                     onChange={(event) => setToolKeyword(event.target.value)}
                     placeholder="搜索工具名称、用途或类别"
                     className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
-                    clearable
-                    onClear={() => setToolKeyword("")}
                   />
                   <Select value={toolCategory} onValueChange={(value) => setToolCategory(value)}>
                     <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
@@ -749,26 +745,26 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="mt-xs text-xs text-text-tertiary">匹配 {filteredTools.length} 个工具，支持按工具链类别快速聚焦。</p>
+                <p className="mt-2 text-xs text-text-tertiary">匹配 {filteredTools.length} 个工具，支持按工具链类别快速聚焦。</p>
               </div>
 
               {filteredTools.length === 0 && (
-                <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-panel-padding text-center text-sm text-text-tertiary">
+                <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
                   未找到匹配的工具，请调整关键词或类别筛选。
                 </div>
               )}
 
               {Object.entries(toolsByCategory).map(([category, tools]) => (
                 <Card key={category}>
-                  <CardHeader className="pb-xs">
-                    <CardTitle className="flex items-center gap-xs text-sm font-semibold">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                       {CATEGORY_ICON_BY_KEY[category]}
                       {CATEGORY_LABELS[category] || category}
-                      <span className="ml-2xs text-xs font-normal text-text-tertiary">({tools.length} 个工具)</span>
+                      <span className="ml-1 text-xs font-normal text-text-tertiary">({tools.length} 个工具)</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {tools.map((tool) => (
                         <div
                           key={tool.name}
@@ -778,13 +774,13 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                             <span className="text-sm font-semibold text-text-base">{tool.name}</span>
                             <div className="flex items-center gap-1.5">
                               {tool.difficulty && (
-                                <Badge variant={DIFFICULTY_LABELS[tool.difficulty]?.variant as any} className="text-3xs px-1.5 py-0">
+                                <Badge variant={DIFFICULTY_LABELS[tool.difficulty]?.variant as any} className="text-[10px] px-1.5 py-0">
                                   {DIFFICULTY_LABELS[tool.difficulty]?.label}
                                 </Badge>
                               )}
                               {tool.url && (
                                 <a href={tool.url} target="_blank" rel="noopener noreferrer"
-                                  className="text-text-tertiary hover:text-[var(--ws-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={(e) => e.stopPropagation()}>
+                                  className="text-text-tertiary hover:text-[var(--ws-color-primary)]" onClick={(e) => e.stopPropagation()}>
                                   <ExternalLink className="h-3 w-3" />
                                 </a>
                               )}
@@ -792,15 +788,15 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                           </div>
                           <p className="mt-1.5 text-xs text-text-secondary leading-relaxed">{tool.description}</p>
                           {tool.pip_install && (
-                            <p className="mt-xs font-mono text-3xs text-text-tertiary bg-[var(--ws-color-surface)] rounded px-1.5 py-0.5 select-all">{tool.pip_install}</p>
+                            <p className="mt-2 font-mono text-[10px] text-text-tertiary bg-[var(--ws-color-surface)] rounded px-1.5 py-0.5 select-all">{tool.pip_install}</p>
                           )}
                           {tool.related_experiments && tool.related_experiments.length > 0 && (
-                            <div className="mt-xs flex flex-wrap gap-2xs">
+                            <div className="mt-2 flex flex-wrap gap-1">
                               {tool.related_experiments.slice(0, 3).map(exp => (
-                                <span key={exp} className="text-3xs text-[var(--ws-color-primary)] bg-[var(--ws-color-primary-soft)] rounded px-1.5 py-0.5">{exp}</span>
+                                <span key={exp} className="text-[10px] text-[var(--ws-color-primary)] bg-[var(--ws-color-primary-soft)] rounded px-1.5 py-0.5">{exp}</span>
                               ))}
                               {tool.related_experiments.length > 3 && (
-                                <span className="text-3xs text-text-tertiary">+{tool.related_experiments.length - 3}</span>
+                                <span className="text-[10px] text-text-tertiary">+{tool.related_experiments.length - 3}</span>
                               )}
                             </div>
                           )}
@@ -813,21 +809,19 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
 
               {/* ── 学习资源 ── */}
               <div className="mt-6 border-t border-[var(--ws-color-border-secondary)] pt-6">
-                <h3 className="mb-3 flex items-center gap-xs text-sm font-semibold text-text-base">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-base">
                   <BookOpen className="h-4 w-4 text-[var(--ws-color-primary)]" />
                   📚 学习资源
                   <span className="text-xs font-normal text-text-tertiary">({filteredResources.length} 个资源)</span>
                 </h3>
 
                 <div className="mb-4 rounded-lg border border-[var(--ws-color-border-secondary)] bg-[var(--ws-color-surface-2)] p-3">
-                  <div className="grid gap-xs sm:grid-cols-[1fr_160px]">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
                     <Input
                       value={resourceKeyword}
                       onChange={(event) => setResourceKeyword(event.target.value)}
                       placeholder="搜索资源名称、描述或类型"
                       className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
-                      clearable
-                      onClear={() => setResourceKeyword("")}
                     />
                     <Select value={resourceType} onValueChange={(value) => setResourceType(value as typeof resourceType)}>
                       <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
@@ -842,11 +836,11 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                 </div>
 
                 {filteredResources.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-panel-padding text-center text-sm text-text-tertiary">
+                  <div className="rounded-md border border-dashed border-[var(--ws-color-border-secondary)] p-6 text-center text-sm text-text-tertiary">
                     未找到匹配的资源，请调整关键词或类型筛选。
                   </div>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredResources.map((resource) => (
                       <ResourceCard
                         key={resource.title}
@@ -867,7 +861,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
   if (embedded) return content;
 
   return (
-    <AdminPage scrollable={false}>
+    <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
       {content}
     </AdminPage>
   );

@@ -949,7 +949,7 @@ const PythonLabStudioInner: React.FC<{
                 gap: "var(--ws-space-1)",
               }}
             >
-              <div className="flex items-center gap-xs">
+              <div className="flex items-center gap-2">
                 <span className="text-[var(--ws-text-md)] font-semibold">画布</span>
                 {experiment?.title ? (
                   <Badge variant="info">
@@ -1226,7 +1226,7 @@ const PythonLabStudioInner: React.FC<{
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <span className="text-sm text-text-tertiary">代码行</span>
-              <div className="flex items-center gap-xs">
+              <div className="flex items-center gap-2">
                 <Badge variant="outline" className="whitespace-nowrap">
                   {selectedNode.sourceLine ? `第${selectedNode.sourceLine}行` : "（无）"}
                 </Badge>

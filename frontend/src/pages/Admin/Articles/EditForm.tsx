@@ -8,7 +8,7 @@ import React, { useEffect, useState } from "react";
 import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -32,7 +32,6 @@ import "./EditForm.css";
 import "../../../styles/editor.css";
 import "../../../styles/markdown.css";
 
-import { Spinner } from "@/components/ui/spinner";
 const formSchema = z.object({
   title: z.string().trim().min(1, "请输入文章标题").max(200, "标题不能超过200个字符"),
   summary: z.string().max(500, "摘要不能超过500个字符"),
@@ -319,7 +318,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
   const renderActions = () => (
     <Card className="article-edit-actions-card">
       <div className="article-edit-actions-inner">
-        <div className="flex items-center justify-end gap-xs">
+        <div className="flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -329,7 +328,7 @@ const ArticleEditForm: React.FC<ArticleEditFormProps> = ({
             取消
           </Button>
           <Button type="submit" disabled={isSubmitting} className="min-w-[100px]">
-            {isSubmitting ? <Spinner size="sm" /> : null}
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {isCreateMode ? "创建文章" : "保存修改"}
           </Button>
         </div>

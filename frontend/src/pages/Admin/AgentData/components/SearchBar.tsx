@@ -111,7 +111,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ searchParams, onSearch, onReset, 
 
   return (
     <div className="flex-none">
-      <div className="flex flex-wrap items-center gap-xs">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="搜索问题或回答..."
           value={form.keyword}

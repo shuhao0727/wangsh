@@ -55,7 +55,7 @@ const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
         if (para.startsWith("```")) {
           const code = para.replace(/^```[^\n]*\n?/, "").replace(/```$/, "");
           return (
-            <pre key={i} className="my-xs overflow-auto rounded-md bg-surface-2 px-3 py-xs text-xs">
+            <pre key={i} className="my-2 overflow-auto rounded-md bg-surface-2 px-3 py-2 text-xs">
               {code}
             </pre>
           );
@@ -85,7 +85,7 @@ const CircleProgress: React.FC<{ percent: number; size?: number; color?: string;
   const offset = circumference * (1 - clamped / 100);
 
   return (
-    <div className="inline-flex flex-col items-center gap-xs">
+    <div className="inline-flex flex-col items-center gap-2">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle
           cx={size / 2}
@@ -112,7 +112,7 @@ const CircleProgress: React.FC<{ percent: number; size?: number; color?: string;
           y="50%"
           dominantBaseline="middle"
           textAnchor="middle"
-          className="fill-text-secondary text-sm font-semibold"
+          className="fill-text text-sm font-semibold"
         >
           {clamped}%
         </text>
@@ -150,11 +150,11 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-xs">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge variant={activity.activity_type === "vote" ? "info" : "success"}>
           {activity.activity_type === "vote" ? "投票" : "填空"}
         </Badge>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-xs py-0.5 text-xs text-text-secondary">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
           <span className={`inline-block h-2 w-2 rounded-full ${lifecycle.dot}`} />
           {lifecycle.text}
         </span>
@@ -163,14 +163,14 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
 
       {activity.activity_type === "vote" && Array.isArray(activity.options) && activity.options.length > 0 && (
         <div className="mb-3">
-          <div className="mb-2xs text-xs text-text-tertiary">选项</div>
+          <div className="mb-1 text-xs text-text-tertiary">选项</div>
           {activity.options.map((opt: OptionItem) => {
             const isCorrect = activity.correct_answer?.includes(opt.key);
             return (
               <div
                 key={opt.key}
                 className={cn(
-                  "mb-2xs rounded border px-2.5 py-2xs text-sm",
+                  "mb-1 rounded border px-2.5 py-1 text-sm",
                   isCorrect
                     ? "border-[var(--ws-color-success)]/30 bg-[var(--ws-color-success-soft)] text-[var(--ws-color-success)]"
                     : "border-border bg-surface-2 text-text-base",
@@ -192,7 +192,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
 
       {codeOpt && (
         <div className="mb-3">
-          <div className="mb-2xs text-xs text-text-tertiary">代码模板</div>
+          <div className="mb-1 text-xs text-text-tertiary">代码模板</div>
           <pre className="!m-0 overflow-x-auto rounded-md bg-code-bg px-3 py-2.5 text-xs text-code-text">{codeOpt.text}</pre>
         </div>
       )}
@@ -233,12 +233,12 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
               )}
               {Array.isArray(stats.blank_slot_stats) &&
                 stats.blank_slot_stats.map((slot) => (
-                  <div key={slot.slot_index} className="mb-xs rounded-lg border border-border p-xs">
-                    <div className="mb-2xs text-sm">
-                      <Badge variant="purple" className="mr-2xs">空位 {slot.slot_index}</Badge>
+                  <div key={slot.slot_index} className="mb-2 rounded-lg border border-border p-2">
+                    <div className="mb-1 text-sm">
+                      <Badge variant="purple" className="mr-1">空位 {slot.slot_index}</Badge>
                       标准答案：{slot.correct_answer}
                     </div>
-                    <div className="mb-2xs flex items-center gap-xs text-xs text-text-tertiary">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-text-tertiary">
                       <span>{slot.correct_rate ?? 0}% 正确</span>
                     </div>
                     <LineProgress
@@ -250,7 +250,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
                       }
                     />
                     {slot.top_wrong_answers?.length > 0 && (
-                      <div className="mt-2xs text-xs text-text-tertiary">
+                      <div className="mt-1 text-xs text-text-tertiary">
                         高频错答：{slot.top_wrong_answers.slice(0, 3).map((x) => `${x.answer}(${x.count})`).join("、")}
                       </div>
                     )}
@@ -264,7 +264,7 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
       {activity.analysis_status && activity.analysis_status !== "not_applicable" && (
         <div className="mt-4">
           <Separator className="my-3" />
-          <div className="mb-xs flex items-center gap-xs">
+          <div className="mb-2 flex items-center gap-2">
             <span className="text-sm font-semibold">AI 分析</span>
             <Badge variant={analysisStatus.variant}>{analysisStatus.text}</Badge>
           </div>
@@ -272,12 +272,12 @@ export const ActivityDetailContent: React.FC<{ activity: Activity; stats: Activi
             <div>
               <SimpleMarkdown text={activity.analysis_result} />
               {riskSlots.length > 0 && (
-                <div className="mt-xs text-xs text-[var(--ws-color-warning)]">
+                <div className="mt-2 text-xs text-[var(--ws-color-warning)]">
                   薄弱空位：{riskSlots.map((s: { slot_index?: number; correct_rate?: number }) => `空位${s.slot_index}(${s.correct_rate ?? 0}%)`).join("、")}
                 </div>
               )}
               {commonMistakes.length > 0 && (
-                <div className="mt-2xs text-xs text-text-secondary">
+                <div className="mt-1 text-xs text-text-secondary">
                   高频错答：{commonMistakes.slice(0, 5).map((x: { answer?: string; count?: number }) => `${x.answer}(${x.count})`).join("、")}
                 </div>
               )}

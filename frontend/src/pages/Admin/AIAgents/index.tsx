@@ -436,7 +436,7 @@ const AdminAIAgents: React.FC = () => {
           </AdminTablePanel>
         </div>
         {agents.length > 0 ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}

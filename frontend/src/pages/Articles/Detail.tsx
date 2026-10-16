@@ -252,7 +252,7 @@ const ArticleDetailPage: React.FC = () => {
           <Skeleton className="h-8 w-3/5" />
           <Skeleton className="h-4 w-2/5" />
         </div>
-        <div className="space-y-xs">
+        <div className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-4 w-full" />
           ))}
@@ -267,7 +267,7 @@ const ArticleDetailPage: React.FC = () => {
         <Alert variant="destructive" className="border border-destructive/20 bg-destructive/5">
           <TriangleAlert className="h-4 w-4" />
           <AlertTitle>文章加载失败</AlertTitle>
-          <AlertDescription className="mt-2xs flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
+          <AlertDescription className="mt-1 flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
             <span>{error}</span>
             <Button onClick={handleBack}>返回文章列表</Button>
           </AlertDescription>
@@ -316,7 +316,7 @@ const ArticleDetailPage: React.FC = () => {
 
         <div className="article-meta-row">
           <div className="flex w-full flex-wrap items-center gap-[var(--ws-layout-gap)]">
-            <div className="flex items-center gap-xs">
+            <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-text-tertiary" />
               <span>
                 {article.author?.full_name ||
@@ -325,18 +325,18 @@ const ArticleDetailPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-center gap-xs">
+            <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-text-tertiary" />
               <span>{dayjs(article.created_at).format("YYYY年MM月DD日")}</span>
             </div>
 
-            <div className="flex items-center gap-xs">
+            <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-text-tertiary" />
               <span>发布于 {dayjs(article.created_at).fromNow()}</span>
             </div>
 
             {article.category && (
-              <div className="flex items-center gap-xs">
+              <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-text-tertiary" />
                 <Badge variant="warning">
                   <Link to={`/articles?category=${article.category.id}`}>
@@ -407,7 +407,7 @@ const ArticleDetailPage: React.FC = () => {
                       <div className="group relative">
                         <button
                           type="button"
-                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-2xs rounded-md bg-[var(--ws-color-surface-2)] px-xs py-2xs text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-[var(--ws-color-surface-2)] px-2 py-1 text-xs text-text-secondary opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(codeText);
@@ -473,7 +473,7 @@ const ArticleDetailPage: React.FC = () => {
             <div className="article-left-pane">
               <PanelCard
                 title={
-                  <div className="flex items-center gap-xs">
+                  <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
                     <span>文章目录</span>
                   </div>
@@ -487,7 +487,7 @@ const ArticleDetailPage: React.FC = () => {
                         type="button"
                         key={item.id}
                         onClick={() => scrollToTocItem(item.id)}
-                        className="appearance-none border-0 article-toc-item text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="appearance-none border-0 article-toc-item text-left"
                         style={{ paddingLeft: `calc(var(--ws-space-2) * ${Math.max(item.level - 1, 0)} + var(--ws-space-2))` }}
                       >
                         {item.text}

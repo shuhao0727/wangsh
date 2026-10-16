@@ -18,7 +18,7 @@ export default function TypstTocDrawer({ open, toc, onClose, onJump }: Props) {
         </SheetHeader>
         <div className="px-6 py-4">
           {toc?.length ? (
-            <div className="flex flex-col gap-xs">
+            <div className="flex flex-col gap-2">
               {toc.map((it: any, idx: number) => {
                 const indentLevel = Math.max(0, (it.level || 1) - 1);
                 return (

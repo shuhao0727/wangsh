@@ -47,78 +47,10 @@ import { useStreamEngine } from "./hooks/useStreamEngine";
 
 const STREAM_IDLE_TIMEOUT_MS = 120_000;
 
-const getStreamErrorMessage = (errorCode: string | undefined, fallback: string): string => {
-  switch (errorCode) {
-    case "dify_empty_answer":
-    case "empty_answer":
-      return "Dify 未返回有效答案，请稍后重试";
-    case "dify_rate_limited":
-    case "provider_busy":
-    case "concurrency_unavailable":
-      return "当前 AI 服务繁忙，请稍后重试";
-    case "dify_upstream_error":
-      return "Dify 服务暂时不可用，请稍后重试";
-    case "dify_stream_incomplete":
-      return "Dify 流式响应未完成，请稍后重试";
-    case "dify_stream_interrupted":
-      return "Dify 流式连接中断，请稍后重试";
-    case "session_invalid":
-      return "登录状态已失效，请重新登录";
-    case "session_revalidation_unavailable":
-      return "暂时无法核验登录状态，请稍后重试";
-    default:
-      return fallback;
-  }
-};
-
 const generateSessionId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-// 侧边栏一次拉取并展示的会话条数。
-//
-// 这个值只决定「侧边栏显示多少条」，不决定「能恢复哪些会话」：
-// 恢复「上次会话」时若记录的会话已滑出这个窗口，会单独探测一次（见 loadSessionsAndMaybeRestore），
-// 因此保持精简不会造成用户的选择被静默丢弃。
-const SESSION_LIST_LIMIT = 5;
-
-/**
- * 用探测到的消息，为「滑出列表窗口的会话」补一份摘要。
- *
- * 侧边栏是照摘要列表渲染的，而列表只拉最近几条；不补这一条的话，
- * 主区能恢复它的内容、侧边栏却既看不到它、也点不中它
- * （handleSelectSession 会因「不在 sessions 里」直接 return）。
- *
- * 各字段刻意对齐后端 list_user_conversations 的口径，保证这条摘要在列表里不显突兀：
- *   preview = 最新一条回答（为空则退回最新一条提问），并同样截断到 80 字符；
- *   turns   = 提问条数；last_at = 最后一条消息的时间。
- */
-const toSummaryFromMessages = (
-  sessionId: string,
-  agentId: number,
-  messages: Array<{ content: string; message_type: string; created_at: string }>,
-): ConversationSummary => {
-  // 详情接口按 created_at 升序返回，故末尾即最新
-  const lastOf = (type: string) =>
-    [...messages].reverse().find((m) => m.message_type === type);
-  // 回答内容后端已做过 sanitize（agent_conversations._sanitize_conversation_row），此处直接使用
-  const rawPreview = (lastOf("answer")?.content || lastOf("question")?.content || "").trim();
-  const preview = rawPreview.length > 80 ? `${rawPreview.slice(0, 80)}…` : rawPreview;
-
-  return {
-    session_id: sessionId,
-    agent_id: agentId,
-    // 取最新一条消息的时间作为该会话的排序依据（与后端 max(created_at) 一致）
-    last_at: messages.reduce(
-      (latest, m) =>
-        new Date(m.created_at).getTime() > new Date(latest).getTime() ? m.created_at : latest,
-      messages[0].created_at,
-    ),
-    turns: messages.filter((m) => m.message_type === "question").length,
-    preview: preview || undefined,
-  };
-};
 
 const AIAgentsPage: React.FC = () => {
   const screens = useBreakpoint();
@@ -366,7 +298,7 @@ const AIAgentsPage: React.FC = () => {
     try {
       const listResp = await agentDataApi.listConversations({
         agent_id: agentIdNum,
-        limit: SESSION_LIST_LIMIT,
+        limit: 5,
       });
       if (request !== historyRequest.current) return;
       if (!listResp.success) throw new Error(listResp.message);
@@ -379,39 +311,10 @@ const AIAgentsPage: React.FC = () => {
         preferred = localStorage.getItem(getSessionStorageKey(agent.id));
       } catch {}
 
-      // 恢复用户上次打开的会话。
-      //
-      // 分两种情况，区别在于「摘要列表对这条会话有没有表态」：
-      //  1) 列表里有它 —— 以列表为准。只有 agent_id 归属本智能体才采纳，
-      //     否则说明这是孤儿会话或别的智能体的会话，绝不能接进当前对话。
-      //  2) 列表里没有它 —— 多半是被 limit 截掉了（侧边栏只拉最近几条，
-      //     而写入侧是无条件落盘的）。此时单独探测一次，并按返回消息的 agent_id
-      //     复核归属：该接口只按 user_id 过滤、不校验 agent，不核对就会把
-      //     「同一用户在别的智能体下的会话」错认成本智能体的历史。
-      const preferredSummary = preferred
-        ? listResp.data.find((s) => s.session_id === preferred)
-        : undefined;
-
-      let selected: string | null = null;
-      if (preferred) {
-        if (preferredSummary) {
-          if (preferredSummary.agent_id === agentIdNum) selected = preferred;
-        } else {
-          const probe = await agentDataApi.getConversationMessages(preferred);
-          if (request !== historyRequest.current) return;
-          if (probe.success && probe.data.length > 0 && probe.data.every((m) => m.agent_id === agentIdNum)) {
-            selected = preferred;
-            // 把这条会话补进列表，否则侧边栏既显示不出它、也点不中它。
-            // 放在列表末尾：它会落到「本月/更早」分组，不挤占「今天」的位置。
-            setSessions([
-              ...agentSessions,
-              toSummaryFromMessages(preferred, agentIdNum, probe.data),
-            ]);
-          }
-        }
-      }
-
-      if (!selected) selected = agentSessions[0]?.session_id || null;
+      const selected =
+        (preferred && agentSessions.find((s) => s.session_id === preferred)?.session_id) ||
+        agentSessions[0]?.session_id ||
+        null;
 
       if (!selected) {
         createNewConversation(agent);
@@ -627,7 +530,7 @@ const AIAgentsPage: React.FC = () => {
             if (request !== historyRequest.current) return;
             agentDataApi.listConversations({
               agent_id: parseInt(String(currentAgent.id), 10),
-              limit: SESSION_LIST_LIMIT,
+              limit: 5,
             }).then(listResp => {
               if (request !== historyRequest.current) return;
               if (listResp.success) {
@@ -690,12 +593,11 @@ const AIAgentsPage: React.FC = () => {
               setIsStreaming(false);
               void persistUsage(fullText);
             },
-            onError: (errText, partialText, errorCode) => {
+            onError: (errText, partialText) => {
               if (request !== historyRequest.current) return;
-              const displayError = getStreamErrorMessage(errorCode, errText);
               const errMsg: Message = {
                 id: `err-${Date.now()}`,
-                content: `⚠️ ${displayError}`,
+                content: `⚠️ ${errText}`,
                 sender: "agent",
                 timestamp: new Date().toISOString(),
                 agentId: currentAgent.id,
@@ -949,7 +851,7 @@ const AIAgentsPage: React.FC = () => {
         <div className="flex-1 min-w-0 flex flex-col h-full">
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {historyStatus !== "idle" && (
-              <div role="status" className="px-4 py-xs text-sm text-text-secondary">
+              <div role="status" className="px-4 py-2 text-sm text-text-secondary">
                 {historyStatusMessage}
               </div>
             )}
@@ -987,7 +889,7 @@ const AIAgentsPage: React.FC = () => {
         <DialogContent className="w-full sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>
-              <div className="flex items-center gap-xs">
+              <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm"
                   style={{ background: "var(--ws-gradient-primary)" }}>
                   W
@@ -998,7 +900,7 @@ const AIAgentsPage: React.FC = () => {
             <DialogDescription>登录后可继续与智能体对话。</DialogDescription>
           </DialogHeader>
           <div className="pt-[var(--ws-space-1)] space-y-[var(--ws-space-2)]">
-            <div className="space-y-xs">
+            <div className="space-y-2">
               <Label htmlFor="login-username">用户名/姓名</Label>
               <Input
                 id="login-username"
@@ -1008,7 +910,7 @@ const AIAgentsPage: React.FC = () => {
                 autoComplete="username"
               />
             </div>
-            <div className="space-y-xs">
+            <div className="space-y-2">
               <Label htmlFor="login-password">密码/学号</Label>
               <Input
                 id="login-password"

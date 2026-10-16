@@ -16,7 +16,7 @@ import dayjs from "dayjs";
 import type { UserDetailModalProps } from "../types";
 
 const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="space-y-2xs rounded-md border border-border bg-surface-2 p-3">
+  <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
     <div className="text-xs text-text-tertiary">{label}</div>
     <div className="text-sm text-text-base">{value}</div>
   </div>

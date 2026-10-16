@@ -128,6 +128,7 @@ describe("async agent analysis pages", () => {
 
   it("does not reload the old analysis type after deletion completes following a type switch", async () => {
     const deletion = deferred<{ success: boolean; message: string; data: null }>();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(agentDataApi.listHotAnalyses).mockResolvedValue({
       success: true,
       message: "ok",
@@ -153,13 +154,9 @@ describe("async agent analysis pages", () => {
     );
 
     await screen.findByText("Hot");
-    const switchTypeButton = screen.getByRole("button", { name: "switch analysis type" });
-    // 行内删除按钮现在只负责打开确认框，用 aria-label 精确定位而不是位置索引
-    fireEvent.click(screen.getByRole("button", { name: "删除" }));
-    // 确认对话框打开后，点「删除」才真正发起删除请求（此时 deferred 仍未 resolve，请求在途）
-    fireEvent.click(await screen.findByRole("button", { name: "删除" }));
-    // 竞态核心：删除在途时切换分析类型
-    fireEvent.click(switchTypeButton);
+    const actionButtons = screen.getByTestId("data-table").querySelectorAll("button");
+    fireEvent.click(actionButtons[actionButtons.length - 1]);
+    fireEvent.click(screen.getByRole("button", { name: "switch analysis type" }));
     deletion.resolve({ success: true, message: "ok", data: null });
 
     await waitFor(() => expect(showMessage.success).toHaveBeenCalledWith("已删除"));

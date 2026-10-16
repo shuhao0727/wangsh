@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdminPage } from "@components/Admin";
 import { StatCard } from "@components/Common/StatCard";
-import { Grid, GridCol } from "@/components/ui/grid";
 import { api, config } from "@services";
 import useAuth, { AuthRequestGate } from "@hooks/useAuth";
 import { canAccessRoles, SUPER_ADMIN_ROLES } from "@components/Auth/roleAccess";
@@ -21,7 +20,7 @@ const dot = (ok: boolean) => ok
 interface StatusRowProps { label: string; value: React.ReactNode; ok?: boolean; }
 const StatusRow: React.FC<StatusRowProps> = ({ label, value, ok }) => (
   <div className="flex items-center justify-between py-2.5 border-b border-border-secondary">
-    <div className="flex items-center gap-xs">
+    <div className="flex items-center gap-2">
       {ok !== undefined && dot(ok)}
       <span className="text-sm text-text-secondary">{label}</span>
     </div>
@@ -135,7 +134,7 @@ const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOvervi
           ))}
         </div>
       ) : (
-        <div className="space-y-section-gap">
+        <div className="space-y-6">
           {/* 整体状态 banner */}
           <div className={`rounded-xl px-4 py-3.5 flex items-center gap-3 ${isHealthy ? "bg-success-soft" : "bg-error-soft"}`}>
             {isHealthy
@@ -155,17 +154,11 @@ const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOvervi
 
           {/* 数据概览卡片 */}
           {canViewOverview && overview && (
-          <Grid cols={12} gap={4}>
-            <GridCol span={12} smSpan={6} mdSpan={4} lgSpan={4}>
-              <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} variant="horizontal" color="primary" />
-            </GridCol>
-            <GridCol span={12} smSpan={6} mdSpan={4} lgSpan={4}>
-              <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} variant="horizontal" color="purple" />
-            </GridCol>
-            <GridCol span={12} smSpan={6} mdSpan={4} lgSpan={4}>
-              <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} variant="horizontal" color="warning" />
-            </GridCol>
-          </Grid>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <StatCard label="用户总数" value={overview?.counts?.users} icon={<Users className="h-4 w-4" />} variant="horizontal" color="primary" />
+            <StatCard label="文章总数" value={overview?.counts?.articles} icon={<FileText className="h-4 w-4" />} variant="horizontal" color="purple" />
+            <StatCard label="智能体" value={overview?.counts?.agents} icon={<Bot className="h-4 w-4" />} variant="horizontal" color="warning" />
+          </div>
 
           )}
           {canViewOverview && loading && !overview && !overviewError && (

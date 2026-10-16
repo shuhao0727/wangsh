@@ -76,7 +76,7 @@ export const getAgentDataColumns = (
 
       return (
         <div className="space-y-0.5">
-          <div className="flex min-w-0 items-center gap-2xs">
+          <div className="flex min-w-0 items-center gap-1">
             <User className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
             <span
               className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
@@ -86,7 +86,7 @@ export const getAgentDataColumns = (
             </span>
             <Badge
               variant={user.is_active ? userStatusConfig.active.variant : userStatusConfig.inactive.variant}
-              className="shrink-0 whitespace-nowrap py-0 text-3xs leading-[16px]"
+              className="shrink-0 whitespace-nowrap py-0 text-[10px] leading-[16px]"
             >
               {user.is_active ? userStatusConfig.active.text : userStatusConfig.inactive.text}
             </Badge>
@@ -121,7 +121,7 @@ export const getAgentDataColumns = (
           >
             {agent.agent_name}
           </span>
-          <Badge variant={config.variant} className="shrink-0 whitespace-nowrap text-3xs">
+          <Badge variant={config.variant} className="shrink-0 whitespace-nowrap text-[10px]">
             {config.text}
           </Badge>
         </div>
@@ -141,7 +141,7 @@ export const getAgentDataColumns = (
     render: (question: string) => (
       <HoverTip title={question} contentClassName="max-w-[460px] break-words">
         <div className="truncate max-w-full">
-          <MessageCircle className="mr-2xs inline h-4 w-4 align-text-bottom text-[var(--ws-color-success)]" />
+          <MessageCircle className="mr-1 inline h-4 w-4 align-text-bottom text-[var(--ws-color-success)]" />
           {question}
         </div>
       </HoverTip>
@@ -167,7 +167,7 @@ export const getAgentDataColumns = (
     width: 100,
     render: (responseTime?: number) => (
       <div className="flex items-center whitespace-nowrap">
-        <Clock className="mr-2xs h-4 w-4 text-[var(--ws-color-warning)]" />
+        <Clock className="mr-1 h-4 w-4 text-[var(--ws-color-warning)]" />
         {formatResponseTime(responseTime)}
       </div>
     ),
@@ -181,7 +181,7 @@ export const getAgentDataColumns = (
     width: 120,
     render: (date: string) => (
       <div className="flex items-center whitespace-nowrap">
-        <Calendar className="mr-2xs h-4 w-4 text-primary" />
+        <Calendar className="mr-1 h-4 w-4 text-primary" />
         {dayjs(date).format("MM-DD HH:mm")}
       </div>
     ),

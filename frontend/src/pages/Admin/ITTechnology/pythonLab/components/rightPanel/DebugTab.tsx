@@ -170,7 +170,7 @@ export function DebugTab(props: {
           <div className="text-xs text-text-tertiary">{variablesNotice}</div>
         ) : null}
         <span className="font-semibold">表达式</span>
-        <div className="flex gap-xs">
+        <div className="flex gap-2">
           <Input
             id="pythonlab-watch-expression-input"
             name="pythonlab-watch-expression-input"
@@ -213,7 +213,7 @@ export function DebugTab(props: {
           emptyText="暂无表达式"
         />
         {!runner.watchResults.length && runner.watchExprs.length > 0 && (
-          <div className="py-xs text-center text-xs text-text-tertiary">等待下次暂停时计算...</div>
+          <div className="py-2 text-center text-xs text-text-tertiary">等待下次暂停时计算...</div>
         )}
       </div>
     </div>

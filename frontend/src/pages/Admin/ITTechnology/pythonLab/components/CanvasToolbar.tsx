@@ -37,7 +37,7 @@ const Divider = () => (
 
 // 按钮组：组内按钮紧凑，组间用 Divider
 const Group: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex items-center gap-xs">{children}</div>
+  <div className="flex items-center gap-2">{children}</div>
 );
 
 const Tip: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -85,7 +85,7 @@ export const CanvasToolbar = React.memo(function CanvasToolbar(props: {
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="flex items-center flex-wrap gap-xs max-w-full px-0.5">
+      <div className="flex items-center flex-wrap gap-2 max-w-full px-0.5">
         {/* 左侧面板切换 */}
         <Group>
           <Tip title={leftCollapsed ? "展开左侧模块" : "收起左侧模块"}>

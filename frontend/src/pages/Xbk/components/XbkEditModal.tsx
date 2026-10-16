@@ -6,7 +6,7 @@ import { z } from "zod";
 import { xbkDataApi } from "@services";
 import type { XbkMeta } from "@services";
 import { isValidAcademicYear } from "../academicYear";
-
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Spinner } from "@/components/ui/spinner";
 interface XbkEditModalProps {
   open: boolean;
   onCancel: () => void;
@@ -312,8 +311,8 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-form-field-gap [&_input]:h-8 [&_input]:text-xs">
-            <div className="grid grid-cols-1 gap-item-gap md:grid-cols-3">
+          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4 [&_input]:h-8 [&_input]:text-xs">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
                 name="year"
@@ -400,7 +399,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-1 gap-item-gap md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="student_no"
@@ -456,7 +455,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
               </>
             ) : kind === "courses" ? (
               <>
-                <div className="grid grid-cols-1 gap-item-gap md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="course_code"
@@ -535,7 +534,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
               </>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-item-gap md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="student_no"
@@ -583,7 +582,7 @@ export const XbkEditModal: React.FC<XbkEditModalProps> = ({
                 取消
               </Button>
               <Button type="submit" size="sm" disabled={saving}>
-                {saving ? <Spinner size="xs" /> : null}
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 保存
               </Button>
             </DialogFooter>

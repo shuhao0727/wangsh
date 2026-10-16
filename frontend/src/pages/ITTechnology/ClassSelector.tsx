@@ -30,7 +30,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
 
   if (loading) {
     return (
-      <div className="grid gap-item-gap" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="rounded-2xl p-6 bg-surface-2 h-40 flex flex-col justify-center">
             <div className="space-y-3">
@@ -49,7 +49,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
   }
 
   return (
-    <div className="grid gap-item-gap" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
       {classes.map((cls) => (
         <div
           key={`${cls.year}-${cls.class_name}`}
@@ -63,7 +63,7 @@ const ClassSelector: React.FC<Props> = ({ onSelect }) => {
             <div className="font-semibold text-base text-text-base">{cls.class_name}</div>
             <span className="text-sm text-text-secondary">{cls.year}级</span>
           </div>
-          <div className="rounded-full bg-[var(--ws-color-hover-bg)] px-3 py-2xs text-xs text-text-secondary">
+          <div className="rounded-full bg-[var(--ws-color-hover-bg)] px-3 py-1 text-xs text-text-secondary">
             共 {cls.count} 人
           </div>
         </div>

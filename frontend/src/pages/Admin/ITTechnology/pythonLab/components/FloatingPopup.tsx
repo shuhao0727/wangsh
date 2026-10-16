@@ -158,7 +158,7 @@ export function FloatingPopup(props: {
       <div
         data-testid="floating-popup-header"
         onPointerDown={onHeaderPointerDown}
-        className="flex items-center justify-between gap-xs px-3 py-xs select-none"
+        className="flex items-center justify-between gap-2 px-3 py-2 select-none"
         style={{
           borderBottom: "1px solid var(--ws-color-border-secondary)",
           background: "var(--ws-color-surface)",
@@ -177,7 +177,7 @@ export function FloatingPopup(props: {
           <X className="h-4 w-4" />
         </Button>
       </div>
-      <div className="flex flex-col gap-xs p-xs flex-1 min-h-0" style={{ overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
+      <div className="flex flex-col gap-2 p-2 flex-1 min-h-0" style={{ overflow: scrollable ? "auto" : "hidden" }}>{children}</div>
       {resizable ? (
         <div
           data-testid="floating-popup-resize-handle"

@@ -14,7 +14,6 @@ import TaskAnalysisListPanel from "./components/TaskAnalysisListPanel";
 import type { StatisticsData, SearchFilterParams } from "@services/znt/types";
 import { agentDataApi } from "@services/agents";
 import { AdminPage } from "@components/Admin";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { BarChart3, MessageSquareText, GitFork } from "lucide-react";
 
 type TabKey = "usage" | "hot" | "chains";
@@ -64,16 +63,8 @@ const AdminAgentData: React.FC = () => {
   };
 
   return (
-    <AdminPage scrollable={false}>
-      <Breadcrumb
-        items={[
-          { label: "管理后台", href: "/admin" },
-          { label: "智能体数据" },
-        ]}
-        className="mb-4"
-      />
-
-      <div className="flex min-h-0 flex-1 flex-col gap-item-gap">
+    <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         {/* 统计卡片 */}
         <StatisticsCards data={statistics} />
 
@@ -83,7 +74,7 @@ const AdminAgentData: React.FC = () => {
           onValueChange={handleTabChange}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <TabsList className="inline-flex h-10 w-fit gap-2xs">
+          <TabsList className="inline-flex h-10 w-fit gap-1">
             <TabsTrigger value="usage" className="gap-1.5">
               <BarChart3 className="h-3.5 w-3.5" />
               使用记录

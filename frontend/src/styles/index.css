@@ -9,10 +9,8 @@
 @tailwind utilities;
 
 /* shadcn/ui 基础层
- * 注意：这里不全局给 * 设置 border-border（Tailwind preflight 默认 border 已重置），
- * 避免通配选择器带来的样式覆盖与性能开销。shadcn 组件自带 border-border。
- * 历史备注：早期 antd + shadcn 过渡期曾为兼容 antd 边框而保留此例外，
- * 仓库现已零引用 antd（package.json 无依赖、源码无 import），该例外不再需要。
+ * 注意：过渡期（antd + shadcn 共存）不对 * 设置 border-border，
+ * 避免影响 antd 组件的边框样式。shadcn 组件自带 border-border。
  */
 @layer base {
   body {
@@ -45,7 +43,6 @@
   --accent: var(--ws-color-hover-bg);
   --accent-foreground: var(--ws-color-text);
   --destructive: var(--ws-color-error);
-  --destructive-rgb: 162 88 80;   /* = --ws-color-error；供 destructive 的 /N 修饰符使用 */
   --destructive-foreground: #FFFFFF;
   --ring: var(--ws-color-focus-ring);
   --radius: var(--ws-radius-lg);
@@ -61,11 +58,6 @@
   --ws-color-surface: #FFFFFF;
   --ws-color-surface-2: #E6F5F3;
   --ws-color-overlay: rgba(0, 0, 0, 0.4);
-  /* ★ RGB 三元组：供 Tailwind 透明度修饰符（bg-surface/90、bg-muted/50 等）使用。
-     Tailwind v3 无法对 var(--ws-color-*) 生成 /N 规则，故必须并列定义三元组。
-     ⚠️ 改上方任一 hex 时必须同步改下面同名的 -rgb（两处是同一真源的两个投影）。 */
-  --ws-color-surface-rgb: 255 255 255;      /* = --ws-color-surface */
-  --ws-color-surface-2-rgb: 230 245 243;    /* = --ws-color-surface-2 */
 
   /* 边框 */
   --ws-color-border: rgba(0, 0, 0, 0.08);
@@ -74,53 +66,41 @@
   /* 文字 */
   --ws-color-text: #1E293B;
   --ws-color-text-secondary: #475569;
-  --ws-color-text-tertiary: #626F82;   /* 原 #64748B 在次级面板 #E6F5F3 上仅 4.24:1，调深至三底色均达标 */
-  --ws-color-text-secondary-rgb: 71 85 105;   /* = --ws-color-text-secondary */
-  --ws-color-text-tertiary-rgb: 98 111 130;   /* = --ws-color-text-tertiary */
+  --ws-color-text-tertiary: #64748B;
 
-  /* 主色 — Tech Teal
-   * 无障碍基线：以下主色/语义色经 WCAG 2.1 实算，均同时满足
-   * (a) 白字落在色块上 ≥ 4.5:1  (b) 色块作文字在白底 ≥ 4.5:1
-   * (c) 作文字在页面底色 #F0FDFA / 次级面板 #E6F5F3 ≥ 4.5:1 */
-  --ws-color-primary: #36776F;         /* 白字 5.19:1｜中等彩度，避免大面积使用时刺眼 */
-  --ws-color-primary-rgb: 54 119 111;  /* = --ws-color-primary */
-  --ws-color-primary-hover: #2F7169;   /* hover 加深（原 #14B8A6 反而变浅且仅 2.49:1） */
-  --ws-color-primary-active: #266961;  /* 白字 6.45:1 */
+  /* 主色 — Tech Teal */
+  --ws-color-primary: #0D9488;
+  --ws-color-primary-hover: #14B8A6;
+  --ws-color-primary-active: #0F766E;
 
   /* 辅色 — Violet (装饰/强调) */
-  --ws-color-secondary: #7164A1;
-  /* 注意：Tailwind 的 secondary.DEFAULT 不是本变量，而是 shadcn 别名 --ws-color-surface-2（Mint）。
-     本三元组目前无 Tailwind class 消费者，仅为与 hex 配套保留。 */
-  --ws-color-secondary-rgb: 113 100 161;  /* = --ws-color-secondary */
-  --ws-color-secondary-active: #635592;
+  --ws-color-secondary: #7C3AED;
+  --ws-color-secondary-active: #6D28D9;
 
   /* 强调 — Violet */
-  --ws-color-accent: #7164A1;
+  --ws-color-accent: #7C3AED;
 
   /* 语义色 */
-  --ws-color-success: #39795D;         /* 白字 5.16:1｜语义色统一取中等彩度，与主色观感协调 */
-  --ws-color-warning: #976135;         /* 白字 5.16:1｜较原 #D97706 降彩度，去刺眼 */
-  --ws-color-error: #A25850;
-  --ws-color-success-rgb: 57 121 93;   /* = --ws-color-success */
-  --ws-color-warning-rgb: 151 97 53;   /* = --ws-color-warning */
-  --ws-color-error-rgb: 162 88 80;     /* = --ws-color-error */
+  --ws-color-success: #059669;
+  --ws-color-warning: #D97706;
+  --ws-color-error: #DC2626;
   --ws-color-error-dark: #B91C1C;
   --ws-color-error-light: #FCA5A5;
-  --ws-color-danger: #A25850;
-  --ws-color-info: #4B6EA1;
+  --ws-color-danger: #DC2626;
+  --ws-color-info: #0EA5E9;
 
   /* 交互 */
-  --ws-color-hover-bg: rgba(54, 119, 111, 0.08);   /* 跟随 --ws-color-primary 色相 */
-  --ws-color-focus-ring: #7164A1;
+  --ws-color-hover-bg: rgba(13, 148, 136, 0.08);
+  --ws-color-focus-ring: #7C3AED;
 
-  /* 柔和背景（半透明叠加，跟随新 primary / success / warning 基色） */
-  --ws-color-primary-soft: rgba(54, 119, 111, 0.08);
-  --ws-color-primary-light: rgba(54, 119, 111, 0.12);
+  /* 柔和背景 */
+  --ws-color-primary-soft: rgba(13, 148, 136, 0.08);
+  --ws-color-primary-light: rgba(13, 148, 136, 0.12);
   --ws-color-primary-muted: #CCFBF1;
-  --ws-color-success-soft: rgba(57, 121, 93, 0.08);
-  --ws-color-warning-soft: rgba(151, 97, 53, 0.08);
+  --ws-color-success-soft: rgba(5, 150, 105, 0.08);
+  --ws-color-warning-soft: rgba(217, 119, 6, 0.08);
   --ws-color-error-soft: rgba(220, 38, 38, 0.08);
-  --ws-color-info-soft: rgba(9, 105, 218, 0.08);
+  --ws-color-info-soft: rgba(14, 165, 233, 0.08);
 
   /* 课堂互动 / 评测 */
   --ws-color-purple: #C026D3;
@@ -135,20 +115,20 @@
   --ws-color-tooltip: rgba(15, 23, 42, 0.92);
 
   /* 渐变 */
-  --ws-gradient-primary: linear-gradient(135deg, #36776F, #7164A1);
+  --ws-gradient-primary: linear-gradient(135deg, #0D9488, #7C3AED);
 
-  /* 数据标签 Palette（跟随主色/语义色无障碍基线；chip 上叠加白字） */
+  /* 数据标签 Palette */
   --ws-tag-blue: #2563EB;
-  --ws-tag-teal: #36776F;
-  --ws-tag-green: #39795D;
-  --ws-tag-amber: #976135;
+  --ws-tag-teal: #0D9488;
+  --ws-tag-green: #059669;
+  --ws-tag-amber: #D97706;
   --ws-tag-orange: #F97316;
-  --ws-tag-red: #A25850;
+  --ws-tag-red: #DC2626;
   --ws-tag-pink: #DB2777;
-  --ws-tag-purple: #7164A1;
+  --ws-tag-purple: #C026D3;
   --ws-tag-indigo: #4F46E5;
   --ws-tag-sky: #0284C7;
-  --ws-tag-gray: #626F82;
+  --ws-tag-gray: #64748B;
 
   /* 毛玻璃 */
   --ws-glass-bg: rgba(255, 255, 255, 0.85);
@@ -202,12 +182,6 @@
   --ws-panel-padding-lg: var(--ws-space-4);
 
   /* 字号 */
-  /* 密集档（2xs/3xs）专用于元数据：徽标、角标、单位、时间戳、表格密集标签。
-     上限不得超过其替代的原始硬编码值（2xs ≤ 11px，3xs ≤ 10px），
-     ★ --ws-text-3xs 上界 10px 低于常见可读性建议；密集元数据专用，勿用于正文。
-     正文/说明文字一律使用 --ws-text-md(base) 及更大的档位。 */
-  --ws-text-2xs: clamp(10px, calc(0.07vw + 9.2px), 11px);
-  --ws-text-3xs: clamp(9px, calc(0.06vw + 8.3px), 10px);
   --ws-text-xs: clamp(12px, calc(0.08vw + 11.6px), 13px);
   --ws-text-sm: clamp(13px, calc(0.1vw + 12.4px), 15px);
   --ws-text-md: clamp(14px, calc(0.14vw + 12.8px), 16px);
@@ -340,8 +314,45 @@ tr:hover td {
 
 /* 布局类 */
 .full-height { height: 100%; }
+.full-width { width: 100%; }
+.ws-fluid-container {
+  width: min(var(--ws-page-max-width), 100%);
+  margin-inline: auto;
+  padding-inline: var(--ws-space-3);
+}
+
+.ws-fluid-container--wide {
+  width: min(var(--ws-page-max-width-wide), 100%);
+}
+
+.ws-shell {
+  width: min(var(--ws-shell-max-width), 100%);
+  margin-inline: auto;
+  padding-inline: var(--ws-space-3);
+}
+
+.ws-page-title {
+  font-size: var(--ws-text-title);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ws-color-text);
+}
+
+.ws-page-subtitle {
+  font-size: var(--ws-text-caption);
+  color: var(--ws-color-text-secondary);
+  line-height: 1.5;
+}
+
+.ws-fluid-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ws-space-3);
+}
 
 .flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-column { display: flex; flex-direction: column; }
 .flex-1 { flex: 1; }
 
 /* Border Utilities for the "Grid" look */
@@ -351,6 +362,64 @@ tr:hover td {
 .border-left { border-left: 1px solid var(--ws-color-border); }
 
 /* Home 页面模块卡片 hover 效果 */
+.home-welcome-strip {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, var(--ws-color-primary-muted) 0%, var(--ws-color-surface) 50%, var(--ws-color-surface-2) 100%);
+  border: 1px solid var(--ws-color-accent);
+}
+
+.home-welcome-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--ws-gradient-primary);
+  opacity: 0.85;
+}
+
+.module-card {
+  background: var(--ws-color-surface);
+  border: 1px solid var(--ws-color-border-secondary);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.module-card:hover {
+  border-color: var(--ws-color-accent) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.15);
+  transform: translateY(-2px);
+}
+
+.module-card:hover .module-arrow {
+  transform: translateX(3px);
+  opacity: 1;
+}
+
+.module-card:hover .module-icon { transform: scale(1.08); }
+.module-icon { transition: transform 0.15s; }
+.module-arrow {
+  opacity: 0.5;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+/* Home 页面外部链接 hover 效果 */
+.ext-card {
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.ext-card:hover {
+  border-color: var(--ws-color-accent) !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.15);
+  transform: translateY(-2px);
+}
+
+.ext-card:hover .ext-arrow { transform: translateX(3px); opacity: 1; }
+
+.ext-arrow {
+  opacity: 0.5;
+  transition: opacity 0.15s, transform 0.15s;
+}
 
 /* IT Technology 应用卡片 hover */
 .it-app-card { transition: var(--ws-transition-fast); }
@@ -360,9 +429,47 @@ tr:hover td {
 .it-app-card:hover .it-app-icon { transform: scale(1.06); }
 .it-app-card:hover .it-app-arrow { transform: translateX(2px); }
 
+/* Informatics 笔记卡片 hover */
+.informatics-note-card { background: var(--ws-color-surface-2); transition: background 0.15s, box-shadow 0.15s; }
+.informatics-note-card:hover { background: var(--ws-color-primary-soft); box-shadow: 0 0 0 1.5px var(--ws-color-focus-ring); }
+
+/* 管理后台按钮 hover */
+.admin-btn-hover {
+  background: color-mix(in srgb, var(--ws-color-primary) 12%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ws-color-primary) 18%, transparent);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.admin-btn-hover:hover {
+  background: color-mix(in srgb, var(--ws-color-primary) 18%, white);
+  transform: translateY(-1px);
+}
+
+.module-card:active,
+.ext-card:active,
+.admin-btn-hover:active {
+  transform: translateY(0);
+}
+
+.module-card:focus-visible .module-arrow,
+.ext-card:focus-visible .ext-arrow {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .module-arrow,
+  .ext-arrow {
+    opacity: 0.88;
+  }
+}
+
 /* 文章列表项 hover */
 .article-item-hover { transition: background 0.15s, border-color 0.15s; border-bottom-color: rgba(0,0,0,0.04); }
 .article-item-hover:hover { background: var(--ws-color-primary-soft); border-bottom-color: transparent; }
+
+/* AdminLayout 用户菜单 hover */
+.admin-user-menu { transition: background 0.15s; }
+.admin-user-menu:hover { background: rgba(0,0,0,0.03); }
 
 /* AIAgents 浮动入口样式统一 */
 .ws-floating-entry-btn {
@@ -452,6 +559,18 @@ tr:hover td {
 }
 
 /* 响应式断点 */
+@media (max-width: 768px) {
+  .hidden-mobile { display: none !important; }
+
+  .ws-shell {
+    padding-inline: var(--ws-space-2);
+  }
+}
+
+@media (min-width: 769px) {
+  .hidden-desktop { display: none !important; }
+}
+
 @media (min-width: 1366px) {
   :root {
     --ws-page-max-width: clamp(1100px, 88vw, 1700px);
@@ -519,6 +638,19 @@ tr:hover td {
   line-height: 1.2;
 }
 
+.stat-card-watermark {
+  position: absolute;
+  right: 6px;
+  bottom: -4px;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.stat-card-watermark svg {
+  width: 40px;
+  height: 40px;
+}
+
 .stat-card-icon {
   display: inline-flex;
   align-items: center;
@@ -556,6 +688,11 @@ tr:hover td {
     margin: 0 !important;
   }
 
+  /* 卡片移动端单列 */
+  .card-grid {
+    grid-template-columns: 1fr !important;
+  }
+
   /* 数据表移动端横向滚动 */
   .data-table {
     overflow-x: auto;
@@ -563,11 +700,83 @@ tr:hover td {
   }
 }
 
-/* ═══ Home Page Hero ═══
- * 深色渐变底上承载白字。改为引用 token，避免与主色脱钩；
- * 三个端点白字对比度：primary 5.19 / primary-hover 5.73 / accent 5.20 */
+/* ========================================================================
+ * 语义排版 class — 统一标题梯度，方便后续页面复用
+ * 使用方法：<h1 className="ws-heading-page">状态概览</h1>
+ * ======================================================================== */
+.ws-heading-page {
+  font-size: var(--ws-text-xl);
+  font-weight: 700;
+  line-height: var(--ws-line-height-heading);
+  color: var(--ws-color-text);
+  letter-spacing: var(--ws-letter-spacing-tight);
+  margin: 0;
+}
+
+.ws-heading-section {
+  font-size: var(--ws-text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ws-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.ws-heading-card {
+  font-size: var(--ws-text-md);
+  font-weight: 600;
+  line-height: var(--ws-line-height-heading);
+  color: var(--ws-color-text);
+  margin: 0;
+}
+
+.ws-text-body {
+  font-size: var(--ws-text-sm);
+  line-height: 1.7;
+  color: var(--ws-color-text);
+}
+
+.ws-text-meta {
+  font-size: var(--ws-text-xs);
+  line-height: 1.5;
+  color: var(--ws-color-text-tertiary);
+}
+
+/* 容器级栅格助手 — 统一卡片间距 */
+.ws-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ws-space-3);
+}
+
+.ws-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ws-space-2);
+}
+
+.ws-grid-cards {
+  display: grid;
+  gap: var(--ws-space-3);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .ws-grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ws-grid-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ═══ Home Page Hero ═══ */
 .home-hero {
-  background: linear-gradient(160deg, var(--ws-color-primary) 0%, var(--ws-color-primary-hover) 40%, var(--ws-color-accent) 100%);
+  background: linear-gradient(160deg, #0D9488 0%, #14B8A6 40%, #7C3AED 100%);
 }
 .home-hero::before {
   content: "";

@@ -1,6 +1,7 @@
 import { showMessage } from "@/lib/toast";
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { featureFlagsApi } from "@/services/system/featureFlags";
 import { pythonlabFlowApi } from "../pythonLab/services/pythonlabCodeApi";
 import {
@@ -25,8 +26,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 interface AgentConfigModalProps {
   visible: boolean;
   onClose: () => void;
@@ -214,10 +213,12 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
         </DialogHeader>
 
         {loading ? (
-          <LoadingState label="正在加载智能体配置…" size="xl" />
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+          </div>
         ) : (
           <Form {...form}>
-            <div className="space-y-form-field-gap">
+            <div className="space-y-4">
             <FormField
               control={form.control}
               name="api_url"
@@ -327,16 +328,16 @@ const AgentConfigModal: React.FC<AgentConfigModalProps> = ({ visible, onClose })
           </Form>
         )}
 
-        <DialogFooter className="gap-button-gap sm:justify-end">
+        <DialogFooter className="gap-2 sm:justify-end">
+          <Button type="button" variant="outline" onClick={handleTest} disabled={loading || saving || testing}>
+            {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            测试连接
+          </Button>
           <Button type="button" variant="outline" onClick={onClose} disabled={saving || testing}>
             取消
           </Button>
-          <Button type="button" variant="outline" onClick={handleTest} disabled={loading || saving || testing}>
-            {testing ? <Spinner size="sm" /> : null}
-            测试连接
-          </Button>
           <Button type="button" onClick={handleSave} disabled={loading || saving || testing}>
-            {saving ? <Spinner size="sm" /> : null}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             保存
           </Button>
         </DialogFooter>

@@ -58,14 +58,14 @@ export const GameCard: React.FC<Props> = ({ game, onSelect }) => {
 
       {/* 标题 + 分类 */}
       <h3 className="font-semibold text-text-base truncate">{game.title}</h3>
-      <p className="text-xs text-text-tertiary mt-2xs line-clamp-2 min-h-[2lh]">
+      <p className="text-xs text-text-tertiary mt-1 line-clamp-2 min-h-[2lh]">
         {game.description || "暂无简介"}
       </p>
 
       {/* 分类标签 */}
       <div className="mt-3 flex items-center gap-3 text-xs text-text-tertiary">
         <span
-          className="inline-flex items-center rounded-full px-xs py-0.5 text-xs font-medium"
+          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
           style={{
             backgroundColor: `color-mix(in srgb, ${color} 7%, transparent)`,
             color,
@@ -73,11 +73,11 @@ export const GameCard: React.FC<Props> = ({ game, onSelect }) => {
         >
           {game.category}
         </span>
-        <span className="inline-flex items-center gap-2xs">
+        <span className="inline-flex items-center gap-1">
           <HardDrive className="h-3 w-3" />
           {fmtSize(game.file_size)}
         </span>
-        <span className="inline-flex items-center gap-2xs">
+        <span className="inline-flex items-center gap-1">
           <Download className="h-3 w-3" />
           {game.download_count}
         </span>

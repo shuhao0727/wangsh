@@ -4,7 +4,7 @@ import AnimatedLoginCharacters from "@/components/Auth/AnimatedLoginCharacters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, User, Eye, EyeOff } from "lucide-react";
+import { Lock, User, Loader2, Eye, EyeOff } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "@hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -12,7 +12,6 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { resolveLoginDestination } from "@/utils/loginDestination";
 
-import { Spinner } from "@/components/ui/spinner";
 const LoginPage: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -83,11 +82,9 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen max-h-screen overflow-hidden grid lg:grid-cols-2">
-      {/* ── Left: Brand / Visual Panel ──
-          渐变走 token 而非硬编码：原先写死 #0D9488→#14B8A6→#7C3AED，
-          其中 #14B8A6 是亮青绿、白字对比度仅 2.49:1，且改主色时要手动同步这里。 */}
+      {/* ── Left: Brand / Visual Panel ── */}
       <div className="relative hidden lg:flex flex-col justify-between p-10 overflow-hidden"
-        style={{ background: "linear-gradient(160deg, var(--ws-color-primary) 0%, var(--ws-color-primary-hover) 35%, var(--ws-color-accent) 100%)" }}>
+        style={{ background: "linear-gradient(160deg, #0D9488 0%, #14B8A6 35%, #7C3AED 100%)" }}>
         {/* Logo */}
         <div className="relative z-20">
           <div className="flex items-center gap-3 text-lg font-semibold text-white">
@@ -109,11 +106,8 @@ const LoginPage: React.FC = () => {
 
         {/* Decorative blobs */}
         <div className="absolute top-1/4 right-1/4 size-64 bg-white/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/4 size-96 bg-white/[0.08] rounded-full blur-3xl" />
-        {/* 装饰光斑：Tailwind 的 "/20" 透明度修饰符对 var(--ws-*) 颜色不会生成规则
-            （JIT 无法对 CSS 变量做 alpha 合成），必须用 color-mix 保留 20% 语义。 */}
-        <div className="absolute top-1/2 left-1/2 size-48 rounded-full blur-2xl"
-          style={{ background: "color-mix(in srgb, var(--ws-color-accent) 20%, transparent)" }} />
+        <div className="absolute bottom-1/4 left-1/4 size-96 bg-white/8 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 size-48 bg-violet-400/20 rounded-full blur-2xl" />
       </div>
 
       {/* ── Right: Login Form ── */}
@@ -121,7 +115,7 @@ const LoginPage: React.FC = () => {
         style={{ background: "var(--ws-color-bg)" }}>
         <div className="w-full max-w-[400px]">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-xs mb-10">
+          <div className="lg:hidden flex items-center justify-center gap-2 mb-10">
             <div className="grid h-9 w-9 shrink-0 place-content-center rounded-xl text-sm font-bold text-white"
               style={{ background: "var(--ws-gradient-primary)" }}>
               W
@@ -137,8 +131,8 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit(onFinish)} className="space-y-form-field-gap" autoComplete="off">
-            <div className="space-y-xs">
+          <form onSubmit={handleSubmit(onFinish)} className="space-y-4" autoComplete="off">
+            <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium">
                 {requireAdmin ? "管理员账号" : "用户名"}
               </Label>
@@ -160,7 +154,7 @@ const LoginPage: React.FC = () => {
               ) : null}
             </div>
 
-            <div className="space-y-xs">
+            <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium">密码</Label>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
@@ -191,7 +185,7 @@ const LoginPage: React.FC = () => {
               className="h-11 w-full text-base font-semibold"
               disabled={auth.isLoading}
             >
-              {auth.isLoading && <Spinner size="sm" />}
+              {auth.isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {requireAdmin ? "管理员登录" : "登录"}
             </Button>
           </form>
@@ -202,7 +196,7 @@ const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { localStorage.setItem("ws_guest_mode", "1"); void navigate("/home"); }}
-                className="text-text-tertiary hover:text-text-secondary transition-colors underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="text-text-tertiary hover:text-text-secondary transition-colors underline underline-offset-4"
               >
                 访客模式进入
               </button>

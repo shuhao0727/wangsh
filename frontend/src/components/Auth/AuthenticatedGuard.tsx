@@ -1,9 +1,8 @@
 import React from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ShieldX } from "lucide-react";
+import { Loader2, ShieldX } from "lucide-react";
 import useAuth from "@hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { LoadingState } from "@/components/ui/loading-state";
 import { REGISTERED_USER_ROLES, canAccessRoles } from "./roleAccess";
 
 const AuthenticatedGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -14,7 +13,7 @@ const AuthenticatedGuard: React.FC<{ children: React.ReactNode }> = ({ children 
   if (auth.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <LoadingState label="正在校验登录状态…" size="2xl" />
+        <Loader2 className="h-9 w-9 animate-spin text-primary" />
       </div>
     );
   }
@@ -29,7 +28,7 @@ const AuthenticatedGuard: React.FC<{ children: React.ReactNode }> = ({ children 
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <ShieldX className="mx-auto mb-4 h-16 w-16 text-error" />
-          <div className="mb-xs text-2xl font-bold text-text-base">请登录正式账号</div>
+          <div className="mb-2 text-2xl font-bold text-text-base">请登录正式账号</div>
           <div className="mb-6 text-base text-text-secondary">
             访客模式不能使用智能体对话
           </div>

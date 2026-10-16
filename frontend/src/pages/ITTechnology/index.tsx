@@ -194,7 +194,7 @@ const ITTechnologyPage: React.FC = () => {
     ];
 
     return (
-      <div className="mb-3 flex items-center gap-2xs text-sm text-text-secondary">
+      <div className="mb-3 flex items-center gap-1 text-sm text-text-secondary">
         {crumbs.map((item, idx) => (
           <React.Fragment key={item.key}>
             {idx > 0 ? <ChevronRight className="h-4 w-4 text-text-tertiary" /> : null}
@@ -202,13 +202,13 @@ const ITTechnologyPage: React.FC = () => {
               <button
                 type="button"
                 onClick={item.onClick}
-                className="appearance-none border-0 inline-flex items-center gap-2xs rounded-md px-[var(--ws-space-1)] py-[calc(var(--ws-space-1)/2)] text-sm transition-colors hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="appearance-none border-0 inline-flex items-center gap-1 rounded-md px-[var(--ws-space-1)] py-[calc(var(--ws-space-1)/2)] text-sm transition-colors hover:bg-primary-soft hover:text-primary"
               >
                 {item.icon}
                 {item.label}
               </button>
             ) : (
-              <span className="inline-flex items-center gap-2xs text-text-base">{item.icon}{item.label}</span>
+              <span className="inline-flex items-center gap-1 text-text-base">{item.icon}{item.label}</span>
             )}
           </React.Fragment>
         ))}
@@ -243,7 +243,7 @@ const ITTechnologyPage: React.FC = () => {
         <Alert variant="destructive" className="border border-destructive/20 bg-destructive/5">
           <TriangleAlert className="h-4 w-4" />
           <AlertTitle>加载失败</AlertTitle>
-          <AlertDescription className="mt-2xs flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
+          <AlertDescription className="mt-1 flex flex-wrap items-center justify-between gap-[var(--ws-space-2)]">
             <span>{error}</span>
             <Button size="sm" variant="outline" onClick={loadFlags}>
               <RotateCcw className="h-4 w-4" />

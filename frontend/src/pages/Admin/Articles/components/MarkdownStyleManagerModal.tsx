@@ -163,7 +163,7 @@ export default function MarkdownStyleManagerModal({
               </SelectContent>
             </Select>
 
-            <div className="flex gap-xs">
+            <div className="flex gap-2">
               <Button
                 variant="destructive"
                 size="sm"

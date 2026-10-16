@@ -65,7 +65,7 @@ const rowActionButton = (
 const statusBadge = (status: Activity["status"]) => {
   const item = STATUS_MAP[status];
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-xs py-0.5 text-xs text-text-secondary">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-2 py-0.5 text-xs text-text-secondary">
       <span className={cn("inline-block h-2 w-2 rounded-full", item.dotClass)} />
       {item.label}
     </span>
@@ -179,15 +179,15 @@ export const getActivityColumns = (handlers: ActivityColumnHandlers): ColumnDef<
     {
       id: "actions",
       header: "操作",
-      size: 120,
-      meta: { className: "w-[120px]" },
+      size: 260,
+      meta: { className: "w-[260px]" },
       cell: ({ row }) => {
         const record = row.original;
         const isDraft = record.status === "draft";
         const isActive = record.status === "active";
         const isEnded = record.status === "ended";
         return (
-          <div className="flex items-center gap-2xs">
+          <div className="flex items-center gap-1">
             {!isActive
               ? rowActionButton("编辑", <Pencil className="h-4 w-4" />, () => handleEdit(record))
               : null}

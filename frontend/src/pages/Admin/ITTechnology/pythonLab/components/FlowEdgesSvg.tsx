@@ -96,9 +96,7 @@ export const FlowEdgesSvg = React.memo(function FlowEdgesSvg(props: {
         const selected = e.id === selectedEdgeId;
         const activeEdge = !!activeEdgeIds?.has(e.id);
         const noteEdge = canvasMetrics.get(e.from)?.shape === "note";
-        // 便签边一律用 warning token；选中态只靠下面的 strokeWidth（2.2 vs 1.6）区分，
-        // 不再混用旧 warning 深色档（那与 --ws-color-warning 属于两套色板）。
-        const stroke = noteEdge ? "var(--ws-color-warning)" : selected ? "var(--ws-color-primary)" : activeEdge ? "var(--ws-color-primary)" : "var(--ws-color-text-secondary)";
+        const stroke = noteEdge ? (selected ? "#B45309" : "var(--ws-color-warning)") : selected ? "var(--ws-color-primary)" : activeEdge ? "var(--ws-color-primary)" : "var(--ws-color-text-secondary)";
         const strokeWidth = selected ? 2.2 : activeEdge ? 2.5 : 1.6;
         const anchors = geom.anchors as { x: number; y: number }[];
         

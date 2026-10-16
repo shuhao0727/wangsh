@@ -1,5 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Bug, Code, Terminal, Maximize2, FastForward, LogIn, LogOut, PauseCircle, PlayCircle, RefreshCw, ChevronRight, Eye, Plus, Minus, Zap } from "lucide-react";
+import {
+  Bug,
+  Code,
+  Terminal,
+  Maximize2,
+  FastForward,
+  LogIn,
+  LogOut,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  ChevronRight,
+  Eye,
+  Plus,
+  Minus,
+  Zap,
+  Loader2
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,7 +44,6 @@ import { shouldConnectBackendTerminal, shouldUseBackendTerminal as resolveShould
 import { resolveDebugControlMatrix } from "@/pages/Admin/ITTechnology/pythonLab/adapters/debugCapabilityMap";
 import { logger } from "@services/logger";
 
-import { Spinner } from "@/components/ui/spinner";
 function PanelTooltip({
   title,
   children,
@@ -141,10 +157,10 @@ export const RightPanel = React.memo(function RightPanel() {
     return getTerminalModeHint({ sessionId: runner.sessionId, status: runner.status, lastLaunchMode });
   }, [lastLaunchMode, runner.sessionId, runner.status]);
   const softNoticeClass = {
-    success: "mt-xs rounded-lg border border-border-secondary bg-[var(--ws-color-success-soft)] px-3 py-xs",
-    warning: "mt-xs rounded-lg border border-border-secondary bg-[var(--ws-color-warning-soft)] px-3 py-xs",
-    info: "mt-xs rounded-lg border border-border-secondary bg-[var(--ws-color-info-soft)] px-3 py-xs",
-    error: "mt-xs rounded-lg border border-border-secondary bg-[var(--ws-color-error-soft)] px-3 py-xs",
+    success: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-success-soft)] px-3 py-2",
+    warning: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-warning-soft)] px-3 py-2",
+    info: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-info-soft)] px-3 py-2",
+    error: "mt-2 rounded-lg border border-border-secondary bg-[var(--ws-color-error-soft)] px-3 py-2",
   } as const;
   const handleDebugClick = async () => {
     setRebuildError(null);
@@ -322,18 +338,18 @@ export const RightPanel = React.memo(function RightPanel() {
           <div
             className="flex min-h-12 items-center justify-between border-b border-b-border-secondary px-3"
           >
-            <div className="flex min-w-0 items-center gap-xs overflow-hidden">
+            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
               <Code className="h-4 w-4 text-primary flex-shrink-0" />
               <span className="font-semibold flex-shrink-0">Python</span>
               <Badge
                 variant={isSyntaxOk ? "success" : "danger"}
-                className="m-0 h-[20px] flex-shrink-0 px-xs text-2xs font-semibold leading-4"
+                className="m-0 h-[20px] flex-shrink-0 px-2 text-[11px] font-semibold leading-4"
               >
                 {isSyntaxOk ? "语法正确" : "语法错误"}
               </Badge>
               {runner.sourceMismatch && (
                 <PanelTooltip title={runner.sourceMismatchMessage || "流程图与运行代码版本不一致"}>
-                  <Badge variant="warning" className="m-0 h-[20px] flex-shrink-0 px-xs text-2xs font-semibold leading-4">
+                  <Badge variant="warning" className="m-0 h-[20px] flex-shrink-0 px-2 text-[11px] font-semibold leading-4">
                     映射失配
                   </Badge>
                 </PanelTooltip>
@@ -341,7 +357,7 @@ export const RightPanel = React.memo(function RightPanel() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <div className="mr-xs flex items-center gap-2xs">
+              <div className="mr-2 flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -409,9 +425,9 @@ export const RightPanel = React.memo(function RightPanel() {
           </div>
         </div>
 
-        <div className="flex-shrink-0 border-b border-b-border-secondary border-l border-l-border px-3 py-xs">
+        <div className="flex-shrink-0 border-b border-b-border-secondary border-l border-l-border px-3 py-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2xs">
+            <div className="flex items-center gap-1">
               <PanelTooltip title="运行 (Run)">
                 <Button
                   variant="ghost"
@@ -426,7 +442,7 @@ export const RightPanel = React.memo(function RightPanel() {
                   }}
                 >
                   {(runner.status as string) === "starting"
-                    ? <Spinner size="sm" />
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
                     : <PlayCircle className="text-lg" style={{ color: !controlMatrix.run ? undefined : "var(--ws-color-success)" }} />}
                 </Button>
               </PanelTooltip>
@@ -481,7 +497,7 @@ export const RightPanel = React.memo(function RightPanel() {
                   <FastForward className="text-lg" />
                 </Button>
               </PanelTooltip>
-              <div className="mx-xs h-4 w-px bg-border" />
+              <div className="mx-2 h-4 w-px bg-border" />
               <PanelTooltip title="单步跳过 (Step Over)">
                 <Button variant="ghost" className="h-8 w-8 rounded-md p-0" onClick={onStepOver} disabled={!controlMatrix.stepOver}>
                   <ChevronRight className="h-4 w-4" />
@@ -497,7 +513,7 @@ export const RightPanel = React.memo(function RightPanel() {
                   <LogOut className="h-4 w-4" />
                 </Button>
               </PanelTooltip>
-              <div className="mx-xs h-4 w-px bg-border" />
+              <div className="mx-2 h-4 w-px bg-border" />
               <PanelTooltip title="重置/停止 (Reset)">
                 <Button variant="destructive" className="h-8 w-8 rounded-md p-0" onClick={onReset}>
                   <RefreshCw className="h-4 w-4" />
@@ -555,16 +571,16 @@ export const RightPanel = React.memo(function RightPanel() {
           onValueChange={(k) => setActiveTab(k as RightPanelTabKey)}
           className="h-full flex flex-col"
         >
-          <TabsList className="h-9 w-full justify-start rounded-none border-b border-[color:var(--ws-color-border-secondary)] bg-transparent p-2xs">
-            <TabsTrigger value="terminal" className="h-7 gap-1.5 rounded-md px-xs py-2xs text-xs data-[state=active]:shadow-none">
+          <TabsList className="h-9 w-full justify-start rounded-none border-b border-[color:var(--ws-color-border-secondary)] bg-transparent p-1">
+            <TabsTrigger value="terminal" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Terminal className="h-4 w-4" />
               终端交互
             </TabsTrigger>
-            <TabsTrigger value="debug" className="h-7 gap-1.5 rounded-md px-xs py-2xs text-xs data-[state=active]:shadow-none">
+            <TabsTrigger value="debug" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Bug className="h-4 w-4" />
               调试器
             </TabsTrigger>
-            <TabsTrigger value="pipeline" className="h-7 gap-1.5 rounded-md px-xs py-2xs text-xs data-[state=active]:shadow-none">
+            <TabsTrigger value="pipeline" className="h-7 gap-1.5 rounded-md px-2 py-1 text-xs data-[state=active]:shadow-none">
               <Eye className="h-4 w-4" />
               参考
             </TabsTrigger>
@@ -572,7 +588,7 @@ export const RightPanel = React.memo(function RightPanel() {
 
           <div className="relative flex flex-1 min-h-0 flex-col">
           <TerminalTabContent active={activeTab === "terminal"} keepConnected={shouldUseBackendTerminal}>
-            <div className="flex h-full flex-col bg-surface p-2xs">
+            <div className="flex h-full flex-col bg-surface p-1">
               <div className="flex-1 min-h-0">
                 {!shouldUseBackendTerminal && terminalBridge ? (
                   <PyodideTerminal ref={terminalUiRef as any} bridge={terminalBridge} fontSize={editorFontSize} showLineNumbers />

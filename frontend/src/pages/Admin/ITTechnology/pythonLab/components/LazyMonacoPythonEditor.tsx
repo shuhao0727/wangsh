@@ -10,8 +10,8 @@ const MonacoPythonEditor = React.lazy(() =>
 
 function MonacoEditorSkeleton() {
   return (
-    <div className="flex h-full flex-col gap-xs p-3" role="status" aria-label="正在加载代码编辑器">
-      <div className="flex items-center gap-xs">
+    <div className="flex h-full flex-col gap-2 p-3" role="status" aria-label="正在加载代码编辑器">
+      <div className="flex items-center gap-2">
         <Skeleton className="h-4 w-8" />
         <Skeleton className="h-4 w-24" />
       </div>
@@ -19,7 +19,7 @@ function MonacoEditorSkeleton() {
       <Skeleton className="h-3 w-1/2" />
       <Skeleton className="h-3 w-3/4" />
       <Skeleton className="h-3 w-1/4" />
-      <div className="mt-3 flex items-center gap-xs">
+      <div className="mt-3 flex items-center gap-2">
         <Skeleton className="h-3 w-16" />
         <Skeleton className="h-3 w-32" />
         <Skeleton className="h-3 w-12" />
@@ -27,7 +27,7 @@ function MonacoEditorSkeleton() {
       <Skeleton className="h-3 w-1/3" />
       <Skeleton className="h-3 w-2/3" />
       <Skeleton className="h-3 w-1/5" />
-      <div className="mt-xs flex items-center gap-xs">
+      <div className="mt-2 flex items-center gap-2">
         <Skeleton className="h-3 w-20" />
         <Skeleton className="h-3 w-28" />
       </div>

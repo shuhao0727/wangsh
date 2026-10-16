@@ -40,7 +40,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Bolt, CheckCircle2, CircleX, Cloud, Eye, PlayCircle, RefreshCw,  } from "lucide-react";
+import {
+  Bolt,
+  CheckCircle2,
+  CircleX,
+  Cloud,
+  Eye,
+  Loader2,
+  PlayCircle,
+  RefreshCw,
+} from "lucide-react";
+
 import { aiAgentsApi } from "@/services/znt/api";
 import type {
   AgentFormValues,
@@ -50,7 +60,6 @@ import type {
 } from "@/services/znt/types";
 import { logger } from "@services/logger";
 
-import { Spinner } from "@/components/ui/spinner";
 const AgentTypeOptions = [
   { value: "general", label: "通用智能体", icon: <Bolt className="h-4 w-4" /> },
   { value: "dify", label: "Dify智能体", icon: <Cloud className="h-4 w-4" /> },
@@ -346,10 +355,10 @@ const AgentForm: React.FC<AgentFormProps> = ({
           </DialogHeader>
           <Form {...form}>
             <form
-              className="space-y-form-field-gap"
+              className="space-y-4"
               onSubmit={form.handleSubmit(handleFormSubmit)}
             >
-              <div className="grid grid-cols-1 gap-content-gap md:grid-cols-[1fr_1fr_auto]">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto]">
                 <FormField
                   control={form.control}
                   name="name"
@@ -388,7 +397,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                         <SelectContent>
                           {AgentTypeOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
-                              <span className="flex items-center gap-xs">
+                              <span className="flex items-center gap-2">
                                 {option.icon}
                                 {option.label}
                               </span>
@@ -408,7 +417,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                     <FormItem>
                       <FormLabel>状态</FormLabel>
                       <FormControl>
-                        <div className="flex h-10 items-center gap-xs rounded-md border border-border px-3">
+                        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3">
                           <Switch
                             checked={formValues.is_active}
                             onCheckedChange={(checked) =>
@@ -426,13 +435,13 @@ const AgentForm: React.FC<AgentFormProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-content-gap md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="api_endpoint"
                   render={() => (
                     <FormItem>
-                      <div className="flex items-center gap-xs">
+                      <div className="flex items-center gap-2">
                         <FormLabel>API 地址</FormLabel>
                       </div>
                       <FormControl>
@@ -452,7 +461,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                   name="api_key"
                   render={() => (
                     <FormItem>
-                      <div className="flex items-center gap-xs">
+                      <div className="flex items-center gap-2">
                         <FormLabel>API 密钥</FormLabel>
                         {editingAgent?.id && editingAgent.has_api_key ? (
                           <Button
@@ -493,10 +502,10 @@ const AgentForm: React.FC<AgentFormProps> = ({
                 name="model_name"
                 render={() => (
                   <FormItem>
-                    <div className="flex items-center gap-xs">
+                    <div className="flex items-center gap-2">
                       <FormLabel>模型</FormLabel>
                       {discoveringModels ? (
-                        <Spinner size="xs" className="text-text-tertiary" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />
                       ) : (
                         <Button
                           type="button"
@@ -507,7 +516,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                           disabled={!watchedApiEndpoint?.trim()}
                           title="重新获取可用模型列表"
                         >
-                          <RefreshCw className="mr-2xs h-3 w-3" />
+                          <RefreshCw className="mr-1 h-3 w-3" />
                           刷新模型
                         </Button>
                       )}
@@ -551,7 +560,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                     {formValues.model_name &&
                       availableModels.length > 0 &&
                       !availableModels.some((m) => m.id === formValues.model_name) && (
-                        <p className="text-xs text-warning">
+                        <p className="text-xs text-amber-500">
                           当前模型不在发现列表中，请确认模型名称正确
                         </p>
                       )}
@@ -615,7 +624,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
 
               {testing ? (
                 <div className="flex items-center justify-center rounded-lg border border-border py-6 text-sm text-text-secondary">
-                  <Spinner size="sm" className="mr-xs" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   正在测试连接...
                 </div>
               ) : null}
@@ -628,7 +637,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                   )}
                   <AlertTitle>{testResult.message}</AlertTitle>
                   <AlertDescription>
-                    <div className="mt-2xs space-y-2xs text-xs">
+                    <div className="mt-1 space-y-1 text-xs">
                       {testResult.response_time ? (
                         <div>响应时间: {testResult.response_time}ms</div>
                       ) : null}
@@ -663,7 +672,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
                           disabled={!canTest || testing}
                         >
                           {testing ? (
-                            <Spinner size="sm" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <PlayCircle className="h-4 w-4" />
                           )}
@@ -698,7 +707,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
               请输入当前管理员密码以查看已保存的 API 密钥。
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-xs pt-2xs">
+          <div className="space-y-2 pt-1">
             <div className="ws-modal-label">管理员密码</div>
             <Input
               type="password"
@@ -721,7 +730,7 @@ const AgentForm: React.FC<AgentFormProps> = ({
               onClick={handleRevealApiKey}
               disabled={revealLoading}
             >
-              {revealLoading ? <Spinner size="sm" /> : null}
+              {revealLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               确认
             </Button>
           </DialogFooter>

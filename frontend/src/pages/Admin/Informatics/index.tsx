@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Plus, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Loader2, Pencil, Trash2 } from "lucide-react";
 import { AdminPage, AdminTablePanel } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { githubSyncApi, typstCategoriesApi, typstNotesApi } from "@services";
@@ -39,7 +39,6 @@ import { Switch } from "@/components/ui/switch";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import useAuth from "@hooks/useAuth";
 
-import { Spinner } from "@/components/ui/spinner";
 const FILTER_ALL = "__all__";
 
 type SyncFormState = {
@@ -308,7 +307,7 @@ const AdminInformatics: React.FC = () => {
           const checked = !!record.published;
           const publishing = publishingIds.has(record.id);
           return (
-            <div className="flex items-center gap-xs">
+            <div className="flex items-center gap-2">
               <Switch
                 checked={checked}
                 disabled={publishing}
@@ -362,7 +361,7 @@ const AdminInformatics: React.FC = () => {
                 }}
               />
               {publishing ? (
-                <Spinner size="xs" className="text-text-tertiary" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />
               ) : null}
             </div>
           );
@@ -398,10 +397,10 @@ const AdminInformatics: React.FC = () => {
       {
         id: "action",
         header: "操作",
-        size: 120,
-        meta: { className: "w-[120px]" },
+        size: 240,
+        meta: { className: "w-60" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -469,7 +468,7 @@ const AdminInformatics: React.FC = () => {
     <>
     <AdminPage scrollable={false}>
       <div className="mb-4 flex flex-wrap justify-between gap-3">
-        <div className="flex flex-wrap gap-xs">
+        <div className="flex flex-wrap gap-2">
           <Select
             value={categoryFilter || FILTER_ALL}
             onValueChange={(v) => {
@@ -500,7 +499,7 @@ const AdminInformatics: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-wrap gap-xs">
+        <div className="flex flex-wrap gap-2">
           {canManageGithubSync ? (
             <Button type="button" variant="outline" onClick={() => setSyncModalOpen(true)}>
               <RefreshCw className="h-4 w-4" />
@@ -508,7 +507,7 @@ const AdminInformatics: React.FC = () => {
             </Button>
           ) : null}
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             刷新
           </Button>
           <Button type="button" onClick={() => openEditor("/admin/informatics/editor/new")}>
@@ -529,7 +528,7 @@ const AdminInformatics: React.FC = () => {
           </AdminTablePanel>
         </div>
         {displayedItems.length > 0 ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={Math.max(1, page)}
               totalPages={Math.max(1, totalPages)}
@@ -645,14 +644,14 @@ const AdminInformatics: React.FC = () => {
               />
             </div>
 
-            <div className="flex flex-wrap gap-xs">
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
                 disabled={syncLoading}
                 onClick={() => void loadSync()}
               >
-                {syncLoading ? <Spinner size="sm" /> : null}
+                {syncLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 刷新状态
               </Button>
               <Button
@@ -680,7 +679,7 @@ const AdminInformatics: React.FC = () => {
                   }
                 }}
               >
-                {syncSaving ? <Spinner size="sm" /> : null}
+                {syncSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 保存配置
               </Button>
               <Button
@@ -772,7 +771,7 @@ const AdminInformatics: React.FC = () => {
                   }
                 }}
               >
-                {syncTriggering ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
+                {syncTriggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 立即同步
               </Button>
               <Button
@@ -841,7 +840,7 @@ const AdminInformatics: React.FC = () => {
                 }}
               >
                 {syncRecompileTriggering ? (
-                  <Spinner size="sm" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
@@ -851,7 +850,7 @@ const AdminInformatics: React.FC = () => {
 
             <div className="rounded-xl bg-surface-2 p-3">
               <div className="font-semibold">最近同步状态</div>
-              <div className="mt-xs">
+              <div className="mt-2">
                 <span className="text-text-tertiary">运行状态：</span>
                 <Badge
                   variant={
@@ -861,7 +860,7 @@ const AdminInformatics: React.FC = () => {
                         ? "danger"
                         : "info"
                   }
-                  className="ml-2xs border-0"
+                  className="ml-1 border-0"
                 >
                   {lastRun?.status || "暂无"}
                 </Badge>
@@ -899,12 +898,12 @@ const AdminInformatics: React.FC = () => {
                       : ""}
                   </div>
                   {syncTaskStatus.progress_current ? (
-                    <div className="mt-2xs text-sm text-text-tertiary">
+                    <div className="mt-1 text-sm text-text-tertiary">
                       当前文件：{syncTaskStatus.progress_current}
                     </div>
                   ) : null}
                   {syncTaskStatus.error ? (
-                    <div className="mt-2xs text-sm text-destructive">
+                    <div className="mt-1 text-sm text-destructive">
                       任务错误：{syncTaskStatus.error}
                     </div>
                   ) : null}

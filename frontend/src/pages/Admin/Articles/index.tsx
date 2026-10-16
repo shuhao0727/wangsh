@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTablePagination } from "@/components/ui/data-table";
-import { DataTableColumnToggle } from "@/components/ui/data-table-column-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +25,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Ellipsis, Eye, FolderOpen, Pencil, Plus, RotateCcw, Trash2,  } from "lucide-react";
+import {
+  Ellipsis,
+  Eye,
+  FolderOpen,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import dayjs from "dayjs";
 import { categoryApi } from "@services";
 import { logger } from "@services/logger";
@@ -47,7 +55,6 @@ import {
 } from "@hooks/queries/useArticlesQuery";
 import { queryKeys } from "@hooks/queries/queryKeys";
 
-import { Spinner } from "@/components/ui/spinner";
 const getArticleColumns = (
   handleEdit: (record: ArticleWithRelations) => void,
   handleDelete: (id: number) => void,
@@ -59,11 +66,10 @@ const getArticleColumns = (
     header: "标题",
     accessorKey: "title",
     size: 420,
-    enableHiding: true,
     meta: { className: "w-[420px] align-middle" },
     cell: ({ row }) => (
       <div className="py-0.5">
-        <div className="flex items-center gap-xs text-sm font-medium leading-5">
+        <div className="flex items-center gap-2 text-sm font-medium leading-5">
           <span className="line-clamp-1">{row.original.title}</span>
           <Badge
             variant={row.original.published ? "success" : "warning"}
@@ -80,7 +86,6 @@ const getArticleColumns = (
     header: "分类",
     accessorKey: "category",
     size: 180,
-    enableHiding: true,
     meta: { className: "w-[180px] align-middle" },
     cell: ({ row }) =>
       row.original.category ? (
@@ -96,7 +101,6 @@ const getArticleColumns = (
     header: "更新时间",
     accessorKey: "updated_at",
     size: 160,
-    enableHiding: true,
     meta: { className: "w-40 align-middle" },
     cell: ({ row }) => (
       <div className="text-xs font-medium text-text-secondary">
@@ -120,8 +124,8 @@ const getArticleColumns = (
   {
     id: "action",
     header: "操作",
-    size: 120,
-    meta: { className: "align-middle" },
+    size: 160,
+    meta: { className: "w-40 align-middle" },
     cell: ({ row }) => {
       const record = row.original;
       return (
@@ -138,11 +142,11 @@ const getArticleColumns = (
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleView(record.slug)}>
-                <Eye className="mr-xs h-4 w-4" />
+                <Eye className="mr-2 h-4 w-4" />
                 预览文章
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleEdit(record)}>
-                <Pencil className="mr-xs h-4 w-4" />
+                <Pencil className="mr-2 h-4 w-4" />
                 编辑
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -150,7 +154,7 @@ const getArticleColumns = (
                 className="text-destructive"
                 onClick={() => handleDelete(record.id)}
               >
-                <Trash2 className="mr-xs h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 删除
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -467,8 +471,6 @@ const AdminArticles: React.FC = () => {
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    columnResizeMode: 'onChange',
-    enableColumnResizing: true,
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -508,8 +510,6 @@ const AdminArticles: React.FC = () => {
           placeholder="搜索标题..."
           className="w-[220px]"
           onChange={(e) => setTitleKeyword(e.target.value)}
-          clearable
-          onClear={() => setTitleKeyword("")}
         />
         <div className="flex-1" />
         {selectedRowKeys.length > 0 ? (
@@ -535,14 +535,13 @@ const AdminArticles: React.FC = () => {
           </DropdownMenu>
         ) : null}
         <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
-          {(isLoading || mutating) ? <Spinner size="sm" /> : <RotateCcw className="h-4 w-4" />}
+          {(isLoading || mutating) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
           刷新
         </Button>
         <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
           <FolderOpen className="h-4 w-4" />
           分类管理
         </Button>
-        <DataTableColumnToggle table={table} />
         <Button onClick={handleAddArticle}>
           <Plus className="h-4 w-4" />
           新建文章
@@ -560,11 +559,10 @@ const AdminArticles: React.FC = () => {
               table={table}
               className="h-full"
               tableClassName="min-w-[1100px]"
-              stickyHeader
             />
           </AdminTablePanel>
         </div>
-        <div className="mt-xs flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
+        <div className="mt-2 flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
           <DataTablePagination
             currentPage={Math.max(1, currentPage)}
             totalPages={Math.max(1, totalPages)}
@@ -582,8 +580,6 @@ const AdminArticles: React.FC = () => {
         onCategoryChange={loadCategories}
       />
 
-      {/* 批量删除只保留工具栏（AdminFilterBar）中的「批量操作」下拉入口，
-          不再使用页面底部的浮动批量操作栏，避免同一操作出现两个入口 */}
       <ConfirmDialog
         open={batchDeleteOpen}
         onOpenChange={setBatchDeleteOpen}

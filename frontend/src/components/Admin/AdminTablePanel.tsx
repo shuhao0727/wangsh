@@ -28,7 +28,7 @@ type Props = {
 };
 
 const TableSkeleton: React.FC = () => (
-  <div className="space-y-button-gap px-item-gap py-item-gap" role="status" aria-label="加载中">
+  <div className="space-y-3 px-4 py-4" role="status" aria-label="加载中">
     <Skeleton className="h-8 w-full" />
     {Array.from({ length: 5 }).map((_, i) => (
       <Skeleton key={i} className="h-9 w-full" />
@@ -99,7 +99,7 @@ const AdminTablePanel: React.FC<Props> = ({
   return (
     <div className="flex flex-col min-h-0 overflow-hidden flex-1" role="region" aria-label={resolvedAriaLabel}>
       {(title || extra) && (
-        <div className="flex items-center justify-between px-item-gap py-button-gap">
+        <div className="flex items-center justify-between px-4 py-3">
           {title && <div className="text-base font-semibold text-text-base">{title}</div>}
           {extra && <div>{extra}</div>}
         </div>
@@ -110,7 +110,7 @@ const AdminTablePanel: React.FC<Props> = ({
       </div>
 
       {pagination && !loading && !error && !permissionDenied && (
-        <div className="flex justify-end border-t border-border-secondary px-item-gap py-button-gap">
+        <div className="flex justify-end border-t border-border-secondary px-4 py-3">
           {pagination}
         </div>
       )}

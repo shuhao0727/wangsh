@@ -11,7 +11,18 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowLeft, BarChart3, Download, FileSpreadsheet, Plus, RefreshCw, Search, Trash2, Upload,  } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { XbkTab } from "./types";
 import { useXbkFilters } from "./hooks/useXbkFilters";
@@ -52,7 +63,6 @@ import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 import { formatXbkClassName, sortXbkClassNames } from "./className";
 import { formatAcademicYear, getCurrentAcademicYear } from "./academicYear";
 
-import { Spinner } from "@/components/ui/spinner";
 const FILTER_ALL = "__all__";
 const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
 const CURRENT_ACADEMIC_START = Number(CURRENT_ACADEMIC_YEAR.slice(0, 4));
@@ -171,8 +181,8 @@ const LegacyConfigDataTable = <T extends Record<string, unknown>>({
       emptyState={
         loading ? (
           <div className="py-10 text-center text-sm text-text-tertiary">
-            <span className="inline-flex items-center gap-xs">
-              <Spinner size="sm" />
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
               正在加载...
             </span>
           </div>
@@ -611,7 +621,7 @@ const XbkPage: React.FC = () => {
         const isVirtualSelection =
           kind === "selections" && Number(record?.id || 0) <= 0;
         return (
-          <div className="flex items-center gap-2xs">
+          <div className="flex items-center gap-1">
             <Button
               size="sm"
               variant="outline"
@@ -901,8 +911,8 @@ const XbkPage: React.FC = () => {
             <span
               className={
                 quota !== null
-                  ? "inline-flex items-center rounded-full bg-[var(--ws-color-primary-soft)] px-xs py-0.5 text-xs font-medium text-[var(--ws-color-primary)]"
-                  : "inline-flex items-center rounded-full bg-[var(--ws-color-surface-2)] px-xs py-0.5 text-xs font-medium text-[var(--ws-color-text-tertiary)]"
+                  ? "inline-flex items-center rounded-full bg-[var(--ws-color-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ws-color-primary)]"
+                  : "inline-flex items-center rounded-full bg-[var(--ws-color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--ws-color-text-tertiary)]"
               }
             >
               {quota !== null ? quota : "不限"}
@@ -1261,7 +1271,7 @@ const XbkPage: React.FC = () => {
         <div className="flex w-full items-center justify-center">
           <Card className="w-full max-w-xl bg-surface-2 p-8 text-center">
             <h2 className="text-xl font-semibold">未开放</h2>
-            <p className="mt-xs text-sm text-text-secondary">
+            <p className="mt-2 text-sm text-text-secondary">
               XBK 处理系统当前未对前台开放，请联系管理员开启。
             </p>
             <div className="mt-6">
@@ -1423,7 +1433,7 @@ const XbkPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-xs border-t border-border">
+              <div className="pt-2 border-t border-border">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1453,7 +1463,7 @@ const XbkPage: React.FC = () => {
                     .filter(Boolean)
                     .join("；")}
                 </p>
-                <p className="mt-2xs text-text-secondary">
+                <p className="mt-1 text-text-secondary">
                   加载失败不代表没有数据，请重试。
                 </p>
               </div>
@@ -1504,7 +1514,7 @@ const XbkPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-xs">
+              <div className="flex flex-wrap items-center gap-2">
                 {canEdit ? (
                   <>
                     <Button
@@ -1541,7 +1551,7 @@ const XbkPage: React.FC = () => {
                   disabled={exportingCurrent}
                 >
                   {exportingCurrent ? (
-                    <Spinner size="sm" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Download className="h-4 w-4" />
                   )}
@@ -1585,7 +1595,7 @@ const XbkPage: React.FC = () => {
                   disabled={dataLoading || refreshing}
                 >
                   {dataLoading ? (
-                    <Spinner size="sm" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}

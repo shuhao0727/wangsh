@@ -329,13 +329,13 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
         </DialogHeader>
 
         <Form {...form}>
-          <div className="space-y-form-field-gap">
-          <div className="grid grid-cols-4 gap-xs">
+          <div className="space-y-4">
+          <div className="grid grid-cols-4 gap-2">
             {STEP_TITLES.map((title, index) => (
               <div
                 key={title}
                 className={cn(
-                  "rounded-md border px-xs py-2xs text-center text-xs",
+                  "rounded-md border px-2 py-1 text-center text-xs",
                   index < step
                     ? "border-[color:var(--ws-color-success)] bg-[var(--ws-color-success-soft)] text-[var(--ws-color-success)]"
                     : index === step
@@ -349,7 +349,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
           </div>
 
           {step === 0 ? (
-            <div className="space-y-form-field-gap">
+            <div className="space-y-3">
               <FormField
                 control={form.control}
                 name="activity_type"
@@ -366,10 +366,10 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                             key={item.value}
                             type="button"
                             className={cn(
-                              "rounded px-3 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                              "rounded px-3 py-1.5 text-xs transition-colors",
                               field.value === item.value
-                                ? "bg-surface text-text-base shadow-sm"
-                                : "text-text-tertiary hover:text-text-base",
+                                ? "bg-surface text-text shadow-sm"
+                                : "text-text-tertiary hover:text-text",
                             )}
                             onClick={() => {
                               field.onChange(item.value);
@@ -409,12 +409,12 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
           ) : null}
 
           {step === 1 ? (
-            <div className="space-y-form-field-gap">
+            <div className="space-y-3">
               {formValues.activity_type === "vote" ? (
                 <>
                   <div className="text-xs text-text-tertiary">至少 2 个选项，最多 6 个</div>
                   {(formValues.options || []).map((option, idx) => (
-                    <div key={idx} className="flex items-center gap-xs">
+                    <div key={idx} className="flex items-center gap-2">
                       <Input value={option.key} disabled className="w-[48px]" />
                       <FormField
                         control={form.control}
@@ -471,7 +471,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
                       <Code className="h-3.5 w-3.5" />
-                      代码片段模板（可选）— 用 <code className="rounded bg-purple-soft px-2xs py-0.5 text-purple">___</code> 标记空位
+                      代码片段模板（可选）— 用 <code className="rounded bg-violet-100 px-1 py-0.5 text-violet-700">___</code> 标记空位
                     </div>
                     <Textarea
                       value={codeTemplate}
@@ -488,7 +488,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                     {codeTemplate ? (
                       <div className="text-xs text-text-tertiary">
                         检测到{" "}
-                        <strong className="text-purple">{countBlanksInCode(codeTemplate)}</strong>{" "}
+                        <strong className="text-violet-600">{countBlanksInCode(codeTemplate)}</strong>{" "}
                         个空位
                       </div>
                     ) : null}
@@ -500,7 +500,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                       : "在标题中使用（1）（2）... 标记空位位置，这里填写每个空位的标准答案"}
                   </div>
                   {(formValues.blank_answers || []).map((answer, idx) => (
-                    <div key={idx} className="flex items-center gap-xs">
+                    <div key={idx} className="flex items-center gap-2">
                       <Badge variant="purple" className="shrink-0 whitespace-nowrap">
                         空位 {idx + 1}
                       </Badge>
@@ -543,7 +543,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-form-field-gap">
+            <div className="space-y-3">
               <FormField
                 control={form.control}
                 name="time_limit"
@@ -567,7 +567,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
               />
               <div>
                 <div className="mb-1.5 text-xs text-text-tertiary">快速设置</div>
-                <div className="flex flex-wrap gap-xs">
+                <div className="flex flex-wrap gap-2">
                   {[30, 60, 120, 300, 0].map((v) => (
                     <Button
                       key={v}
@@ -586,7 +586,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
                   control={form.control}
                   name="allow_multiple"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-md border border-border px-3 py-xs space-y-0">
+                    <FormItem className="flex flex-row items-center justify-between rounded-md border border-border px-3 py-2 space-y-0">
                       <FormLabel className="text-sm">允许多选</FormLabel>
                       <FormControl>
                         <Switch
@@ -603,7 +603,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
           ) : null}
 
           {step === 3 ? (
-            <div className="space-y-form-field-gap">
+            <div className="space-y-3">
               <div className="text-xs text-text-tertiary">
                 活动结束后自动触发 AI 分析（可选，跳过则不分析）
               </div>
@@ -674,7 +674,7 @@ const ActivityFormDialog: React.FC<ActivityFormDialogProps> = ({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between pt-xs">
+          <div className="flex items-center justify-between pt-2">
             <Button
               type="button"
               variant="outline"

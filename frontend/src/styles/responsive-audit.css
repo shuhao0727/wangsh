@@ -1,35 +1,3 @@
-/* ============================================
- * 响应式断点层
- * ============================================
- * 职责收敛为两块：
- *   1) Admin 页面壳的布局兜底（可收缩 / 换行），保持最小必要特异性；
- *   2) 按视口断点的适配（小屏内边距、顶栏、宽屏呼吸感）。
- *
- * 背景：本文件原是一层游离于设计 token 之外的「补丁层」，导入位置靠后
- * 且特异性偏高，会静默压过调用方写的 Tailwind 工具类，是多数疑难样式
- * 问题的共同来源。本轮做如下清理：
- *   - 删除零引用死类：.ws-page-card / .ws-table-frame / .ws-stat-card /
- *     .ws-section-alt / .ws-table-header / .ws-empty-state / .ws-accent-strip /
- *     .ws-clamp-1 / .ws-wrap-anywhere / .ws-no-horizontal-overflow /
- *     .ws-responsive-toolbar__group 系列；
- *   - 删除与 Tailwind 重复的 .ws-admin-page table { width: 100% }；
- *   - 小屏页面内边距由「三个文件三个值」收敛为本文件内一条随断点递减的规则；
- *   - 去除全部 !important，仅用单类选择器，避免再压过调用方工具类。
- *
- * 关键不变式（勿回退）：
- *   - 凡给「某类元素兜底 min-width: 0」的选择器，必须排除表单控件
- *     （input/textarea/select/button）。因为 Input 的基础类里含 flex
- *     （用于垂直居中），若被 .flex 命中，本条 (0,3,0) 会压掉调用方的
- *     Tailwind min-w-* (0,1,0)，导致输入框塌缩到 91px 左右。
- *   - 表格兜底须排除自行声明 min-w-* 的表格（DataTable 通过 tableClassName
- *     声明 min-w-[Npx]，用于在窄视口触发横向滚动），否则会被压成 0。
- *
- * 导入顺序依赖：本文件在 index.css 之后导入（src/index.tsx），
- * 与 Tailwind 工具类同权重时靠「后在者胜」覆盖，不使用 !important。
- * ============================================ */
-
-/* ── 第 1 节：Admin 页面壳的布局兜底 ── */
-
 .ws-admin-page {
   min-width: 0;
 }
@@ -38,13 +6,10 @@
   min-width: 0;
 }
 
-/* 让 flex/grid/滚动容器可收缩，避免内部内容撑破布局。排除表单控件，理由见文件头。 */
-.ws-admin-page :is(.grid, .flex, .overflow-x-auto, .overflow-auto):not(input):not(textarea):not(select):not(button) {
-  min-width: 0;
-}
-
-/* 仅对「未自行声明 min-w-*」的表格兜底，保留 DataTable 的横向滚动意图。 */
-.ws-admin-page table:not([class*="min-w-"]) {
+.ws-admin-page .grid,
+.ws-admin-page .flex,
+.ws-admin-page .overflow-x-auto,
+.ws-admin-page .overflow-auto {
   min-width: 0;
 }
 
@@ -54,14 +19,6 @@
 .ws-admin-page textarea {
   overflow-wrap: anywhere;
 }
-
-/* 表格单元格长词换行，避免 URL / 邮箱等连续字符撑破列宽。 */
-.ws-admin-page th,
-.ws-admin-page td {
-  word-break: break-word;
-}
-
-/* ── 第 2 节：响应式工具栏（SearchBar 使用） ── */
 
 .ws-responsive-toolbar {
   display: flex;
@@ -73,33 +30,91 @@
   min-width: 0;
 }
 
+.ws-responsive-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ws-responsive-toolbar__group--grow {
+  flex: 1;
+}
+
 .ws-responsive-toolbar input,
 .ws-responsive-toolbar button,
 .ws-responsive-toolbar [role="combobox"] {
   max-width: 100%;
 }
 
-/* ── 第 3 节：断点适配 ── */
+.ws-admin-page .ws-page-card,
+.ws-admin-page .ws-table-frame,
+.ws-admin-page .overflow-x-auto,
+.ws-admin-page table {
+  min-width: 0;
+}
 
-/* 小屏页面内边距 —— 全局唯一来源。
- * var(--ws-space-*) 本身已随视口递减（clamp，1024px 处约 13px），
- * 故此处只保留真正的档位切换：768px 进入紧凑档，430px 进入最小档。
- * 如需再调，只改这一处，不要在其它 CSS 新增同语义规则。 */
-@media (max-width: 768px) {
+.ws-admin-page table {
+  width: 100%;
+}
+
+.ws-admin-page th,
+.ws-admin-page td {
+  word-break: break-word;
+}
+
+.ws-clamp-1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ws-no-horizontal-overflow {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.home-page,
+.ai-agents-page,
+.informatics-page,
+.xbk-page,
+.articles-page,
+.article-page-wrapper,
+.it-technology-page {
+  font-size: var(--ws-text-sm);
+}
+
+@media (max-width: 1024px) {
   .ws-admin-page {
-    padding: var(--ws-panel-padding-sm);
+    padding: var(--ws-space-3) !important;
   }
+}
 
+@media (max-width: 768px) {
   .ws-responsive-toolbar {
     gap: 10px;
   }
 
-  /* 窄屏下每个筛选项独占一行，按钮文字居中。 */
-  .ws-responsive-toolbar > * {
+  .ws-responsive-toolbar__group {
     width: 100%;
   }
 
-  .ws-responsive-toolbar button {
+  .ws-responsive-toolbar__group input,
+  .ws-responsive-toolbar__group button,
+  .ws-responsive-toolbar__group [role="combobox"] {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  .ws-responsive-toolbar__group button,
+  .ws-responsive-toolbar__group [role="button"] {
     justify-content: center;
   }
 }
@@ -145,18 +160,4 @@
   .xbk-page {
     font-size: var(--ws-text-md);
   }
-}
-
-/* ── 第 4 节：页面排版基线 ──
- * 以下页面壳统一使用 --ws-text-sm（比 body 的 --ws-text-md 小 1px）。
- * 目前这些类没有各自的 CSS 模块排版入口，暂留于此维持既有观感；
- * 后续若在对应页面 CSS 模块中声明字号，应删除本节。 */
-.home-page,
-.ai-agents-page,
-.informatics-page,
-.xbk-page,
-.articles-page,
-.article-page-wrapper,
-.it-technology-page {
-  font-size: var(--ws-text-sm);
 }

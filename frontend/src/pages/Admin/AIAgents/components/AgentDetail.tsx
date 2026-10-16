@@ -35,7 +35,7 @@ const formatApiKey = (agent: AIAgent): string => {
 };
 
 const FieldItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="space-y-2xs rounded-md border border-border bg-surface-2 p-3">
+  <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
     <div className="text-xs text-text-tertiary">{label}</div>
     <div className="text-sm text-text-base">{value}</div>
   </div>
@@ -111,7 +111,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
               <FieldItem
                 label="API地址"
                 value={
-                  <div className="flex items-center gap-xs">
+                  <div className="flex items-center gap-2">
                     <Link className="h-4 w-4 text-primary" />
                     <code className="max-w-[420px] overflow-hidden text-ellipsis whitespace-nowrap text-xs">
                       {agent.api_endpoint}
@@ -141,7 +141,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
             <FieldItem
               label="API密钥"
               value={
-                <div className="flex items-center gap-xs">
+                <div className="flex items-center gap-2">
                   <KeyRound className="h-4 w-4 text-[var(--ws-color-warning)]" />
                   <Badge
                     variant={agent.has_api_key ? "warning" : "outline"}
@@ -191,7 +191,7 @@ const AgentDetail: React.FC<AgentDetailProps> = ({
               <FieldItem
                 label="已删除"
                 value={
-                  <div className="flex items-center gap-xs">
+                  <div className="flex items-center gap-2">
                     <Badge variant="danger">是</Badge>
                     {agent.deleted_at ? (
                       <span className="text-xs text-text-tertiary">

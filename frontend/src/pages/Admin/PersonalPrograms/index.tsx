@@ -47,7 +47,7 @@ const AdminPersonalPrograms: React.FC = () => {
   };
 
   return (
-    <AdminPage className="p-[var(--ws-space-4)]">
+    <AdminPage padding="var(--ws-space-4)">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <AdminAppCard
           title="校本课 (XBK)"

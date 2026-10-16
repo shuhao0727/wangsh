@@ -67,11 +67,11 @@ export const ChapterList: React.FC<ChapterListProps> = ({
     <div className="flex min-h-0 flex-col rounded-lg border border-border bg-surface">
       {/* Header */}
       <div className="border-b border-border-secondary p-3 shrink-0">
-        <div className="mb-2xs flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <span className="text-sm font-semibold text-text-base">章节列表</span>
           <span className="text-xs text-text-tertiary">{enabledCount}/{chapters.length} 启用</span>
         </div>
-        <div className="h-1.5 mt-xs overflow-hidden rounded-full bg-surface-2">
+        <div className="h-1.5 mt-2 overflow-hidden rounded-full bg-surface-2">
           <div
             className="h-full rounded-full bg-primary transition-all"
             style={{ width: chapters.length > 0 ? `${Math.round((enabledCount / chapters.length) * 100)}%` : "0%" }}
@@ -93,7 +93,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             onDragStart={(e) => handleDragStart(e, chapter.slug)}
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, chapter.slug)}
-            className={`mb-0.5 flex cursor-pointer items-center gap-1.5 rounded-md px-xs py-1.5 text-xs transition-colors group ${
+            className={`mb-0.5 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors group ${
               chapter.slug === activeSlug
                 ? "bg-primary/10 text-primary"
                 : "hover:bg-surface-2 text-text-secondary"
@@ -103,9 +103,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
             <GripVertical className="h-3 w-3 shrink-0 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
             <span className="w-5 shrink-0 text-center text-text-tertiary">{index + 1}</span>
             <span className="min-w-0 flex-1 truncate font-medium">{chapter.title}</span>
-            <div className="flex items-center gap-2xs shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {chapter.difficulty && (
-                <span className="hidden rounded px-2xs py-0.5 text-3xs bg-surface-2 text-text-tertiary group-hover:hidden md:inline">
+                <span className="hidden rounded px-1 py-0.5 text-[10px] bg-surface-2 text-text-tertiary group-hover:hidden md:inline">
                   {DIFFICULTY_LABELS[chapter.difficulty] ?? chapter.difficulty}
                 </span>
               )}
@@ -130,9 +130,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
       </nav>
 
       {/* Add Chapter Button */}
-      <div className="border-t border-border-secondary p-xs shrink-0">
+      <div className="border-t border-border-secondary p-2 shrink-0">
         <Button variant="outline" size="sm" className="w-full" onClick={onNewChapter}>
-          <Plus className="mr-xs h-3.5 w-3.5" />
+          <Plus className="mr-2 h-3.5 w-3.5" />
           新增章节
         </Button>
       </div>

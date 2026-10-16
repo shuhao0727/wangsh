@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { showMessage } from "@/lib/toast";
-import { LoadingState } from "@/components/ui/loading-state";
 import BasicLayout from "@layouts/BasicLayout";
 import AdminLayout from "@layouts/AdminLayout";
 import AdminEditorLayout from "@layouts/AdminEditorLayout";
@@ -86,11 +86,12 @@ const AdminClassroomPlanPage = lazy(() => import("./pages/Admin/ClassroomPlan/Pl
 const AdminMLBookEditorPage = lazy(() => import("./pages/Admin/ITTechnology/ml/editor/MlBookEditor"));
 const LoginPage = lazy(() => import("./pages/Auth/Login"));
 
-// 懒加载路由的兜底加载态（全站首屏可见）。
-// 迁移前是裸 <Loader2>：无 role/aria，屏幕阅读器读到一个空白页。
-// 用 LoadingState 后自带 role="status" + aria-live + 可访问名称「页面加载中…」。
-// 尺寸 3xl = h-10，与原 h-10 逐像素一致（项目 1rem≈14.73px，非 16px）。
-const LoadingIndicator = <LoadingState label="页面加载中…" size="3xl" />;
+// 加载中组件
+const LoadingIndicator = (
+  <div className="p-12 text-center">
+    <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+  </div>
+);
 
 const guarded = (roles: readonly AppRole[], element: React.ReactNode) => (
   <RoleGuard roles={roles}>{element}</RoleGuard>

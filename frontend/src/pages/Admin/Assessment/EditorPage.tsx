@@ -23,10 +23,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminPage } from "@components/Admin";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { assessmentConfigApi } from "@services/assessment";
 import { aiAgentsApi } from "@services/agents";
 import type { AIAgent } from "@services/znt/types";
@@ -35,8 +34,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 const GRADE_OPTIONS = [
   "高一", "高二", "高三",
   "初一", "初二", "初三",
@@ -126,8 +123,9 @@ const EditorPage: React.FC = () => {
   if (!isNew) {
     return (
       <AdminPage>
-        {/* 整页加载态：原为裸 <Loader2>（无 aria）。尺寸 1.5x = h-7，与原一致。 */}
-        <LoadingState label="正在加载测评编辑器…" size="1.5x" className="p-panel-padding-lg" />
+        <div className="flex justify-center p-24">
+          <Loader2 className="h-7 w-7 animate-spin text-text-tertiary" />
+        </div>
       </AdminPage>
     );
   }
@@ -135,19 +133,23 @@ const EditorPage: React.FC = () => {
   return (
     <AdminPage scrollable>
       <div className="mx-auto max-w-[680px] py-5">
-        <Breadcrumb
-          items={[
-            { label: "管理后台", href: "/admin" },
-            { label: "自适应测评", href: "/admin/assessment" },
-            { label: "新建测评" },
-          ]}
-        />
+        <div className="mb-6 flex items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void navigate("/admin/assessment")}
+            className="text-text-secondary"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回列表
+          </Button>
+        </div>
 
         <div className="rounded-md border border-border bg-surface px-5 py-5">
           <div className="mb-5 text-base font-semibold">新建测评</div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-form-field-gap">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="title"
@@ -167,7 +169,7 @@ const EditorPage: React.FC = () => {
                 )}
               />
 
-              <div className="grid grid-cols-1 gap-item-gap md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="grade"
@@ -267,7 +269,7 @@ const EditorPage: React.FC = () => {
                 )}
               />
 
-              <div className="pt-xs text-right">
+              <div className="pt-2 text-right">
                 <Button
                   type="button"
                   variant="outline"
@@ -278,7 +280,7 @@ const EditorPage: React.FC = () => {
                   取消
                 </Button>
                 <Button type="submit" disabled={saving}>
-                  {saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   创建测评
                 </Button>
               </div>

@@ -61,10 +61,10 @@ export const PythonLabStatusBar: React.FC<{
 
   return (
     <div
-      className="flex items-center gap-xs px-3 py-1.5 text-xs text-text-secondary border-b border-border-secondary"
+      className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary border-b border-border-secondary"
       role="status"
     >
-      <span className={`inline-flex items-center gap-2xs rounded-full px-xs py-0.5 text-2xs font-medium ${cfg.className}`}>
+      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>
         {cfg.icon}
         {cfg.label}
       </span>

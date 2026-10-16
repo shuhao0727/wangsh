@@ -81,9 +81,10 @@ jobs:
       SECRET_KEY: ci-secret-key-that-is-long-enough-for-tests
       SUPER_ADMIN_PASSWORD: ci-admin-password
       AGENT_API_KEY_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
-      # test_conversation_list_isolated.py 要求 loopback Redis，缺省会直接抛
-      # RuntimeError 而非 skip，导致 63 项测试整块失败。CI 必须显式提供。
-      CONVERSATION_TEST_REDIS_URL: redis://127.0.0.1:56379/15
+      # 缓存类测试（如 test_analysis_cache.py）走 app 配置直连 Redis；
+      # 必须显式指向下方 redis service 的映射端口，否则 CI 中不可达导致失败。
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "56379"
     services:
       postgres:
         image: postgres:16-alpine
@@ -311,38 +312,9 @@ jobs:
         run: npm run -s lint
       - name: ui-audit-gate
         run: npm run -s ui:audit:ci
-      # 死类门禁：Tailwind 不会为「看着存在但其实没有颜色」的类生成任何 CSS
-      #（如 border-border-secondary），静默失效。约 270ms，可每次运行。
-      - name: ui-alpha-dead-classes-gate
-        run: npm run -s ui:alpha:dead-classes:ci
-      # 布局/助手类死类门禁（2026-10-05 新增）。与上面那条**互补**：
-      # 上面走 findDeadColorClasses() 只看**颜色类**，看不见 index.css 里的
-      # 布局/排版/助手类。该盲区真实存在过——2026-08-06 诊断报告点名的 6 个死定义
-      # 两个月无人处理，就因为没门禁看着它们。已一次清理 30 个死类。
-      - name: ui-dead-layout-gate
-        run: npm run -s ui:dead-layout:ci
-      # 透明度修饰符门禁（G9）：Tailwind v3 对 var(--ws-color-*) 不生成 /N 规则，
-      # bg-primary/10 这类写法会**静默退化为默认值**。已靠并列 -rgb 三元组修复。
-      # 注意门禁名是 ui:alpha:**ci**（`ui:alpha` 无 --ci 是恒 0 的人读报告）。
-      - name: ui-alpha-modifiers-gate
-        run: npm run -s ui:alpha:ci
-      # 间距迁移 ratchet（B5 验收口径）。原以为它在 CI 里，实际一直没接——
-      # 本地 1382 基线的门禁若不在 CI 跑，B5 的迁移收益就无法被守住。
-      - name: ui-spacing-gate
-        run: npm run -s ui:spacing:ci
-      # 颜色 token **值**校验（G6，2026-10-05 新增）。token:check:ci 只证「名字有定义」，
-      # 完全不校验值——把 --ws-color-success 改成 #FF0000 它也 exit 0。本门禁补上值快照 +
-      # -rgb 三元组一致性 + WCAG 对比度回归。任何改色都会红，须显式 --adopt。
-      - name: ui-token-values-gate
-        run: npm run -s ui:token-values:ci
-      # 报告合法性门禁（B13）：防「没有浏览器却声称通过」（计划 §5.2 六条硬规则）。
-      - name: ui-verify-gate
-        run: npm run -s ui:verify:ci
-      # 迁移不变量门禁（G7 脚本改造）：message_calls 与 antd 引入数必须恒为 0。
-      # 前者证明 Toast 全量走项目约定的 showMessage（现 501 处映射、0 处绕过），
-      # 后者是哨兵——谁把 antd 引回来立刻红灯。
-      - name: ui-migration-gate
-        run: npm run -s ui:migration:ci
+      # 2026-10-16 UI 回退（恢复 v2.1.3 界面）后，以下 7 条 10-05 新增的 UI 门禁
+      # 与 2.1.3 的渲染方式（无 -rgb 三元组/无语义间距 token）不再兼容，已移除。
+      # 保留 2.1.3 时代即存在的 ui:audit:ci 门禁。
       - name: production build
         run: npm run build:check
       # 浏览器 smoke（auth-replaced-login-smoke / prod-smoke-ui）需完整

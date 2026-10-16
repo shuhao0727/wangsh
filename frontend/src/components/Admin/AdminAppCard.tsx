@@ -22,7 +22,7 @@ const AdminAppCard: React.FC<Props> = ({
   showToggle = true,
 }) => (
   <div className="rounded-lg flex flex-col items-center p-3 h-full transition-all duration-200 hover:shadow-sm bg-surface-2">
-    <div className="flex items-center justify-center w-8 h-8 rounded-lg mb-xs text-lg flex-shrink-0"
+    <div className="flex items-center justify-center w-8 h-8 rounded-lg mb-2 text-lg flex-shrink-0"
       style={{ color, background: `${color}18` }}>
       {icon}
     </div>
@@ -31,11 +31,11 @@ const AdminAppCard: React.FC<Props> = ({
       {title}
     </h5>
 
-    <span className="text-xs text-text-secondary text-center mb-xs line-clamp-2 min-h-[30px] leading-relaxed">
+    <span className="text-xs text-text-secondary text-center mb-2 line-clamp-2 min-h-[30px] leading-relaxed">
       {description}
     </span>
 
-    <div className="w-full mt-auto pt-xs flex items-center justify-between border-t border-border-secondary">
+    <div className="w-full mt-auto pt-2 flex items-center justify-between border-t border-border-secondary">
       {showToggle ? (
         <div className="flex items-center gap-1.5">
           <Switch checked={enabled} disabled={loading} onCheckedChange={onToggle} />

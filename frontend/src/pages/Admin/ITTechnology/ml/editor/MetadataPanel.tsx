@@ -39,25 +39,25 @@ const StringArrayField: React.FC<{
   };
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-2xs text-xs font-medium text-text-secondary">
+      <Label className="flex items-center gap-1 text-xs font-medium text-text-secondary">
         {icon}
         {label}
       </Label>
-      <div className="flex flex-wrap gap-2xs">
+      <div className="flex flex-wrap gap-1">
         {items.map((item, idx) => (
-          <Badge key={idx} variant="secondary" className="gap-2xs text-2xs">
+          <Badge key={idx} variant="secondary" className="gap-1 text-[11px]">
             {item}
             <button
               type="button"
               onClick={() => onChange(items.filter((_, i) => i !== idx))}
-              className="ml-0.5 rounded-full hover:bg-muted-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="ml-0.5 rounded-full hover:bg-muted-foreground/20"
             >
               <X className="h-2.5 w-2.5" />
             </button>
           </Badge>
         ))}
       </div>
-      <div className="flex gap-2xs">
+      <div className="flex gap-1">
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -78,10 +78,10 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
 
   return (
     <div className="flex min-h-0 flex-col gap-1.5 overflow-auto rounded-lg border border-border bg-surface p-3">
-      <h3 className="mb-2xs text-sm font-semibold text-text-base">章节设置</h3>
+      <h3 className="mb-1 text-sm font-semibold text-text-base">章节设置</h3>
 
       {/* Slug */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">Slug</Label>
         <Input
           value={chapter.slug}
@@ -93,7 +93,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Chapter Number */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">章节序号</Label>
         <Input
           type="number"
@@ -105,7 +105,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Title */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">标题</Label>
         <Input
           value={chapter.title}
@@ -116,7 +116,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Difficulty */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">难度</Label>
         <Select value={chapter.difficulty ?? "beginner"} onValueChange={(v) => patch({ difficulty: v })}>
           <SelectTrigger className="h-8 text-xs">
@@ -131,7 +131,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Estimated Minutes */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">预计时长 (分钟)</Label>
         <Input
           type="number"
@@ -143,7 +143,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Prerequisites */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">前置章节</Label>
         <Select
           value=""
@@ -163,9 +163,9 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
           </SelectContent>
         </Select>
         {chapter.prerequisites.length > 0 && (
-          <div className="flex flex-wrap gap-2xs">
+          <div className="flex flex-wrap gap-1">
             {chapter.prerequisites.map((slug) => (
-              <Badge key={slug} variant="outline" className="gap-2xs text-2xs cursor-pointer" onClick={() => patch({ prerequisites: chapter.prerequisites.filter((s) => s !== slug) })}>
+              <Badge key={slug} variant="outline" className="gap-1 text-[11px] cursor-pointer" onClick={() => patch({ prerequisites: chapter.prerequisites.filter((s) => s !== slug) })}>
                 {allChapters.find((ch) => ch.slug === slug)?.title ?? slug}
                 <X className="h-2.5 w-2.5" />
               </Badge>
@@ -175,7 +175,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       </div>
 
       {/* Summary */}
-      <div className="space-y-2xs">
+      <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">摘要</Label>
         <Textarea
           value={chapter.summary ?? ""}
@@ -213,7 +213,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       />
 
       {/* Enabled Toggle */}
-      <div className="flex items-center justify-between pt-xs border-t border-border-secondary">
+      <div className="flex items-center justify-between pt-2 border-t border-border-secondary">
         <Label className="text-xs text-text-secondary">启用</Label>
         <Switch checked={chapter.enabled} onCheckedChange={(checked) => patch({ enabled: checked })} />
       </div>

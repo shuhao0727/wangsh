@@ -307,81 +307,81 @@ const AdminClassroomInteractionPage: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      <AdminFilterBar>
-        <Input
-          placeholder="搜索标题"
-          className="w-[220px]"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <AdminFilterBar className="mb-0">
+          <Input
+            placeholder="搜索标题"
+            className="w-[220px]"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
 
-        <Select
-          value={statusFilter || FILTER_ALL}
-          onValueChange={(v) => {
-            setStatusFilter(v === FILTER_ALL ? "" : v);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
-            <SelectItem value="draft">草稿</SelectItem>
-            <SelectItem value="active">进行中</SelectItem>
-            <SelectItem value="ended">已结束</SelectItem>
-          </SelectContent>
-        </Select>
+          <Select
+            value={statusFilter || FILTER_ALL}
+            onValueChange={(v) => {
+              setStatusFilter(v === FILTER_ALL ? "" : v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FILTER_ALL}>全部状态</SelectItem>
+              <SelectItem value="draft">草稿</SelectItem>
+              <SelectItem value="active">进行中</SelectItem>
+              <SelectItem value="ended">已结束</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <Select
-          value={typeFilter || FILTER_ALL}
-          onValueChange={(v) => {
-            setTypeFilter(v === FILTER_ALL ? "" : v);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="类型" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={FILTER_ALL}>全部类型</SelectItem>
-            <SelectItem value="vote">投票</SelectItem>
-            <SelectItem value="fill_blank">填空</SelectItem>
-          </SelectContent>
-        </Select>
+          <Select
+            value={typeFilter || FILTER_ALL}
+            onValueChange={(v) => {
+              setTypeFilter(v === FILTER_ALL ? "" : v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="类型" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FILTER_ALL}>全部类型</SelectItem>
+              <SelectItem value="vote">投票</SelectItem>
+              <SelectItem value="fill_blank">填空</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void handleRefreshList()}
-          disabled={isLoading}
-        >
-          {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          刷新
-        </Button>
-
-        {selectedRowKeys.length > 0 ? (
           <Button
             type="button"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setBulkDeleteOpen(true)}
+            variant="outline"
+            onClick={() => void handleRefreshList()}
+            disabled={isLoading}
           >
-            <Trash2 className="h-4 w-4" />
-            批量删除 ({selectedRowKeys.length})
+            {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            刷新
           </Button>
-        ) : null}
 
-        <div className="flex-1" />
+          {selectedRowKeys.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              批量删除 ({selectedRowKeys.length})
+            </Button>
+          ) : null}
+        </AdminFilterBar>
 
         <Button type="button" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           创建活动
         </Button>
-      </AdminFilterBar>
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 flex flex-col">
@@ -394,7 +394,7 @@ const AdminClassroomInteractionPage: React.FC = () => {
           </AdminTablePanel>
         </div>
         {total > 0 ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={page}
               totalPages={totalPages}

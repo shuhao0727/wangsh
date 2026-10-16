@@ -238,7 +238,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
   ];
 
   return (
-    <AdminPage scrollable={false}>
+    <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
       <div className="flex h-full min-h-0 flex-col gap-3">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -250,13 +250,13 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
             <h1 className="text-base font-bold text-text-base sm:text-lg">ML 学习书编辑器</h1>
             <p className="text-xs text-text-tertiary">{bookTitle} · {chapters.length} 章</p>
           </div>
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-text-secondary">
-              <Eye className="mr-2xs h-3 w-3" />
+              <Eye className="mr-1 h-3 w-3" />
               {isNewChapter ? "新建章节" : `编辑: ${activeChapter?.title ?? ""}`}
             </Badge>
             <Button size="sm" onClick={saveChapter} disabled={saving || loading}>
-              <Save className="mr-xs h-4 w-4" />
+              <Save className="mr-2 h-4 w-4" />
               {saving ? "保存中..." : "保存 (⌘S)"}
             </Button>
           </div>
@@ -279,10 +279,10 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
             />
 
             {/* Center: Markdown Editor */}
-            <div className="flex min-h-0 min-w-0 flex-col gap-xs rounded-lg border border-border bg-surface">
+            <div className="flex min-h-0 min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface">
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-0.5 border-b border-border-secondary px-3 py-1.5 shrink-0">
-                <span className="mr-xs text-xs text-text-tertiary">快捷工具</span>
+                <span className="mr-2 text-xs text-text-tertiary">快捷工具</span>
                 {toolbarButtons.map((btn) => (
                   <Button
                     key={btn.title}
@@ -316,7 +316,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                       key={mode}
                       variant={editMode === mode ? "secondary" : "ghost"}
                       size="sm"
-                      className="h-7 px-xs text-xs"
+                      className="h-7 px-2 text-xs"
                       onClick={() => setEditMode(mode)}
                     >
                       {mode === "edit" ? "编辑" : mode === "split" ? "分屏" : "预览"}
@@ -359,7 +359,7 @@ const MlBookEditor: React.FC<Props> = ({ onBack }) => {
                           </ReactMarkdown>
                         </div>
                       ) : (
-                        <div className="rounded-md border border-dashed border-border-secondary p-panel-padding text-center text-sm text-text-tertiary">
+                        <div className="rounded-md border border-dashed border-border-secondary p-6 text-center text-sm text-text-tertiary">
                           在编辑器中输入内容后，此处将实时预览
                         </div>
                       )}

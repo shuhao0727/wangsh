@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { History, SendHorizonal, User, Clock, GitBranch, Settings, CircleCheck, CircleX } from "lucide-react";
+import { History, SendHorizonal, User, Clock, GitBranch, Settings, CircleCheck, CircleX, Loader2 } from "lucide-react";
 import dayjs from "dayjs";
 import type { ChatAreaProps, Message, WorkflowGroup, Agent } from "./types";
 import { logger } from "@services/logger";
@@ -24,7 +24,6 @@ import { normalizeMarkdown } from "@utils/normalizeMarkdown";
 import { sanitizeReasoningContent } from "./utils/reasoningContentFilter";
 import "./ChatArea.css";
 
-import { Spinner } from "@/components/ui/spinner";
 const workflowMessagePrefixes = [
   "工作流启动",
   "工作流节点：",
@@ -92,7 +91,7 @@ const markdownComponents: Components = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-primary rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="text-primary"
     >
       {children}
     </a>
@@ -176,7 +175,7 @@ const MessageBubble = React.memo<{
   const renderWorkflowGroups = () => {
     if (!workflowGroups || workflowGroups.length === 0) return null;
     return (
-      <div className="mt-xs mb-3 space-y-xs">
+      <div className="mt-2 mb-3 space-y-2">
         {workflowGroups.map((group) => {
           const nodes = group.nodes || [];
           const count = nodes.length;
@@ -199,13 +198,13 @@ const MessageBubble = React.memo<{
           }
           return (
             <details key={group.id} open className="overflow-hidden rounded-md border border-[var(--ws-color-border-secondary)] bg-surface">
-              <summary className="flex cursor-pointer items-center gap-xs px-3 py-xs text-sm text-text-tertiary">
+              <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-text-tertiary">
                 <GitBranch className="h-4 w-4" />
                 <span>{group.label}</span>
                 <span>节点 {count}</span>
                 <span>耗时 {durationText}</span>
               </summary>
-              <div className="px-3 pb-xs">
+              <div className="px-3 pb-2">
                 {nodes.length === 0 ? (
                   <p className="text-sm text-text-tertiary">暂无节点</p>
                 ) : (
@@ -213,7 +212,7 @@ const MessageBubble = React.memo<{
                     {nodes.map((n) => (
                       <div
                         key={n.id}
-                        className="flex items-center gap-3 py-2xs text-sm"
+                        className="flex items-center gap-3 py-1 text-sm"
                       >
                         <Badge
                           variant={
@@ -271,7 +270,7 @@ const MessageBubble = React.memo<{
           </AvatarFallback>
         </Avatar>
         <div className={`message-bubble ${isUser ? 'user' : 'agent'}`}>
-          <div className="mb-2xs">
+          <div className="mb-1">
             <span
               className="text-sm font-semibold"
               style={{
@@ -302,7 +301,7 @@ const MessageBubble = React.memo<{
                   </div>
                   {expanded && (
                     <div
-                      className="mt-xs px-3 py-xs rounded-lg text-sm whitespace-pre-wrap break-words"
+                      className="mt-2 px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words"
                       style={{
                         background: "var(--ws-color-surface-2)",
                         border: `1px solid ${wf.color}`,
@@ -324,7 +323,7 @@ const MessageBubble = React.memo<{
             <>
               {!isUser && renderWorkflowGroups()}
               {isThinking ? (
-                <div className="px-xs py-2xs" style={{ color: currentAgent?.color }}>
+                <div className="px-2 py-1" style={{ color: currentAgent?.color }}>
                   <ThinkingBubble />
                 </div>
               ) : (isUser || displayContent) ? (
@@ -390,7 +389,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         <div
           className="flex-1 flex items-center justify-center flex-col"
         >
-          <Spinner size="lg" className="text-text-tertiary" />
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
           <span className="mt-4 block text-sm text-text-secondary">正在加载智能体...</span>
         </div>
       </div>
@@ -437,7 +436,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       <div className="flex flex-col h-full overflow-hidden pr-[var(--ws-space-3)]">
         {/* 对话头部 */}
         <div className="flex items-center justify-between px-[var(--ws-space-4)] py-[var(--ws-space-2)] flex-shrink-0 bg-surface border-b border-[var(--ws-color-border-secondary)] min-h-14">
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             {!historyVisible && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -457,7 +456,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 {currentAgent?.icon}
               </AvatarFallback>
             </Avatar>
-            <div className="flex items-center gap-xs ml-[var(--ws-space-1)]">
+            <div className="flex items-center gap-2 ml-[var(--ws-space-1)]">
               <span className="text-base font-semibold" style={{ color: currentAgent?.color }}>
                 {currentAgent?.name}
               </span>
@@ -467,12 +466,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
             <Badge
               variant={currentAgent?.status === "online" ? "success" : "neutral"}
-              className="ml-2xs"
+              className="ml-1"
             >
               {currentAgent?.status === "online" ? "在线" : "离线"}
             </Badge>
           </div>
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             {isStreaming && (
               <>
                 <Badge variant="info">
@@ -485,21 +484,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
 
-        {/* 消息列表
-            无障碍（WCAG 4.1.2 / 4.1.3）：流式回复是异步插入的新内容，
-            读屏用户此前完全感知不到。role="log" + aria-live="polite" 让新增消息
-            被逐条播报，且不会打断用户正在读的内容（故不用 assertive）。
-            aria-atomic="false" 只播报新增部分，避免每次重播整段历史。
-            aria-relevant="additions" 只关心新消息，忽略文本流式更新造成的重复播报。 */}
-        <div
-          ref={messageListRef}
-          role="log"
-          aria-live="polite"
-          aria-atomic="false"
-          aria-relevant="additions"
-          aria-label="对话消息"
-          className="flex-1 overflow-y-auto min-h-0 px-[var(--ws-space-4)] py-[var(--ws-space-3)] bg-surface-2"
-        >
+        {/* 消息列表 */}
+        <div ref={messageListRef} className="flex-1 overflow-y-auto min-h-0 px-[var(--ws-space-4)] py-[var(--ws-space-3)] bg-surface-2">
           {visibleMessages.map((message) => {
             const messageWorkflows = workflowGroups?.filter((group) => group.messageId === message.id) || [];
             return (
@@ -528,7 +514,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             placeholder={`向${currentAgent?.name}发送消息...`}
             rows={2}
             onKeyDown={handleKeyPress}
-            className="mb-xs min-h-[calc(var(--ws-control-height)*1.8)] max-h-[calc(var(--ws-control-height)*4)] resize-y"
+            className="mb-2 min-h-[calc(var(--ws-control-height)*1.8)] max-h-[calc(var(--ws-control-height)*4)] resize-y"
           />
           <div className="flex items-center justify-between">
             <span className="text-sm text-text-tertiary">Enter 发送，Shift+Enter 换行</span>

@@ -24,11 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, FileSpreadsheet, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { xbkDataApi } from "@services";
 import type { XbkImportPreview, XbkImportResult, XbkScope } from "@services";
 
-import { Spinner } from "@/components/ui/spinner";
 interface XbkImportModalProps {
   open: boolean;
   onCancel: () => void;
@@ -287,8 +286,8 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-item-gap">
-          <div className="flex flex-wrap items-center gap-xs">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-text-tertiary">导入类型:</span>
             <Select
               disabled={importing}
@@ -385,7 +384,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
             </Button>
 
             {importFile ? (
-              <div className="inline-flex items-center gap-xs rounded-md border border-border bg-surface-2 px-3 py-1.5 text-sm">
+              <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-1.5 text-sm">
                 <FileSpreadsheet className="h-4 w-4 text-text-tertiary" />
                 <span className="max-w-[340px] truncate">
                   {importFile.name}
@@ -393,7 +392,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-7 px-xs text-xs"
+                  className="h-7 px-2 text-xs"
                   disabled={importing}
                   onClick={() => {
                     if (importLock.current) return;
@@ -406,7 +405,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
               </div>
             ) : null}
 
-            <div className="inline-flex items-center gap-xs">
+            <div className="inline-flex items-center gap-2">
               <Checkbox
                 id="skip-invalid"
                 disabled={importing}
@@ -433,7 +432,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
 
           {previewLoading ? (
             <Alert className="border border-primary/20 bg-primary-soft">
-              <Spinner size="sm" className="text-primary" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
               <AlertTitle>正在预检文件…</AlertTitle>
             </Alert>
           ) : null}
@@ -456,7 +455,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
                 {preview.total_rows === 0 ? (
                   <p>文件仅包含表头或空内容，请填写数据后再导入。</p>
                 ) : preview.invalid_rows > 0 ? (
-                  <div className="space-y-2xs">
+                  <div className="space-y-1">
                     {!skipInvalid ? (
                       <p>请修正错误行，或勾选“跳过错误行并继续导入”。</p>
                     ) : null}
@@ -528,7 +527,7 @@ export const XbkImportModal: React.FC<XbkImportModalProps> = ({
             onClick={handleImport}
             disabled={!canImport || importing}
           >
-            {importing ? <Spinner size="sm" /> : null}
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             导入
           </Button>
         </DialogFooter>

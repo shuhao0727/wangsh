@@ -5,7 +5,7 @@
 import React, { useEffect } from "react";
 import { roleOptions, statusOptions, studyYearOptions } from "../data";
 import type { UserFormProps } from "../types";
-
+import { Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Spinner } from "@/components/ui/spinner";
 const formSchema = z.object({
   student_id: z.string().trim().min(1, "请输入学号").regex(/^\S+$/, "学号不能包含空格"),
   username: z.string().optional().refine((v) => !v || /^\S+$/.test(v), "用户名不能包含空格"),
@@ -102,9 +101,9 @@ const UserForm: React.FC<UserFormProps> = ({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleFormSubmit)}
-            className="space-y-form-field-gap"
+            className="space-y-4"
           >
-            <div className="grid grid-cols-1 gap-content-gap md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="student_id"
@@ -134,7 +133,7 @@ const UserForm: React.FC<UserFormProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-content-gap md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="full_name"
@@ -175,7 +174,7 @@ const UserForm: React.FC<UserFormProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-content-gap md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="study_year"
@@ -261,7 +260,7 @@ const UserForm: React.FC<UserFormProps> = ({
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? (
-                  <Spinner size="sm" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
                 {editingUser ? "保存" : "添加"}
               </Button>

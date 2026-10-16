@@ -1,8 +1,8 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { logger } from "@services/logger";
 import { getPdfJs } from "@/utils/pdfInit";
 
-import { LoadingState } from "@/components/ui/loading-state";
 export type PdfCanvasVirtualViewerHandle = {
   scrollToPage: (pageNumber: number) => void;
 };
@@ -236,7 +236,11 @@ const PdfCanvasVirtualViewer = forwardRef<PdfCanvasVirtualViewerHandle, Props>(
 
     return (
       <div>
-        {loading ? <LoadingState label="正在加载 PDF 页面…" size="md" className="py-panel-padding" /> : null}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : null}
         {pageMetas.map((m, idx) => (
           <div
             key={m.pageNumber}

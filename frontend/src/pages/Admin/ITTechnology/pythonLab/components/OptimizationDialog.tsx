@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,8 +15,6 @@ import { normalizeAnnotationForTeaching } from "../flow/annotationTeaching";
 import { FlowAnnotationsSvg } from "./FlowAnnotationsSvg";
 import { LazyMonacoDiffEditor } from "./LazyMonacoDiffEditor";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 interface OptimizationDialogProps {
   visible: boolean;
   type: "code" | "flow";
@@ -89,8 +88,11 @@ const FlowPreview = ({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] })
   const offsetY = -bounds.minY * scale + 50;
 
   if (loading) {
-    // 原为裸 <Loader2>（无 aria）。尺寸 md = h-5，与原一致。
-    return <LoadingState label="正在加载优化方案…" size="md" className="h-[400px]" />;
+    return (
+      <div className="flex h-[400px] items-center justify-center text-text-secondary">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -175,7 +177,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
       draggable
       scrollable={false}
     >
-      <div className="flex flex-col gap-item-gap h-full">
+      <div className="flex flex-col gap-4 h-full">
         <>
           {type === "code" ? (
               <div className="relative min-h-[360px] flex-1 rounded border border-border">
@@ -198,9 +200,9 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                       background: "color-mix(in srgb, var(--ws-color-surface) 72%, transparent)",
                     }}
                   >
-                    <div className="inline-flex items-center gap-xs rounded-md bg-surface px-3 py-xs text-sm text-text-secondary shadow-sm">
-                      <Spinner size="sm" />
-                      <span aria-hidden="true">AI 正在思考优化方案...</span>
+                    <div className="inline-flex items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      AI 正在思考优化方案...
                     </div>
                   </div>
                 ) : null}
@@ -216,10 +218,10 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                   <TabsTrigger value="original">优化前</TabsTrigger>
                   <TabsTrigger value="optimized">优化后</TabsTrigger>
                 </TabsList>
-                <TabsContent value="original" className="mt-xs">
+                <TabsContent value="original" className="mt-2">
                   <FlowPreview nodes={originalContent?.nodes || []} edges={originalContent?.edges || []} />
                 </TabsContent>
-                <TabsContent value="optimized" className="mt-xs">
+                <TabsContent value="optimized" className="mt-2">
                   <FlowPreview nodes={optimizedContent?.nodes || []} edges={optimizedContent?.edges || []} />
                 </TabsContent>
               </Tabs>
@@ -230,9 +232,9 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
                     background: "color-mix(in srgb, var(--ws-color-surface) 72%, transparent)",
                   }}
                 >
-                  <div className="inline-flex items-center gap-xs rounded-md bg-surface px-3 py-xs text-sm text-text-secondary shadow-sm">
-                    <Spinner size="sm" />
-                    <span aria-hidden="true">AI 正在思考优化方案...</span>
+                  <div className="inline-flex items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary shadow-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    AI 正在思考优化方案...
                   </div>
                 </div>
               ) : null}
@@ -240,7 +242,7 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
           )}
 
           <div>
-            <div className="mb-2xs text-sm text-text-secondary">反馈与调整（可选）：</div>
+            <div className="mb-1 text-sm text-text-secondary">反馈与调整（可选）：</div>
             <Textarea
               rows={2}
               placeholder="例如：请保留原有的变量命名风格，或者减少循环嵌套..."
@@ -248,10 +250,10 @@ export const OptimizationDialog: React.FC<OptimizationDialogProps> = (props) => 
               onChange={(e) => setFeedback(e.target.value)}
               maxLength={280}
             />
-            <div className="mt-2xs text-right text-xs text-text-tertiary">{feedback.length}/280</div>
+            <div className="mt-1 text-right text-xs text-text-tertiary">{feedback.length}/280</div>
           </div>
 
-          <div className="flex justify-end gap-xs">
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onRegenerate}>重新生成</Button>
             <Button variant="outline" onClick={onDiscard}>放弃</Button>
             <Button onClick={onApply}>

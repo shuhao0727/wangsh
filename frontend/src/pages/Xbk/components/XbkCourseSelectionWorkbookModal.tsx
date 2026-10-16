@@ -4,10 +4,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { xbkDataApi } from "@services";
 
-import { Spinner } from "@/components/ui/spinner";
 type Filters = { year?: string; term?: string; [key: string]: unknown };
 type Row = { sheet:string; row:number; grade:string; class_name:string; student_no:string; name:string; baseline_course?:string|null; target_course?:string|null; action:string };
 type Preview = { plan_id:string; preview_token:string; total_rows:number; changed:number; unchanged:number; changed_rows:Row[]; notice?:string };
@@ -72,21 +71,21 @@ export function XbkCourseSelectionWorkbookModal({open,onCancel,onSuccess,filters
   const copy=result?resultText(result):null;
   return <Dialog open={open} onOpenChange={v=>!v&&close()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[920px]">
     <DialogHeader><DialogTitle>导入学生选课工作簿</DialogTitle><DialogDescription>上传当前学年、学期导出的 .xlsx 学生选课表；核对预览后再整批确认。</DialogDescription></DialogHeader>
-    <div className="space-y-item-gap">
+    <div className="space-y-4">
       <div className="grid gap-3 rounded-lg border border-border bg-surface-2 p-4 sm:grid-cols-[160px_160px_1fr]">
-        <div><div className="text-xs text-text-tertiary">学年</div><div className="mt-2xs text-sm font-medium">{year||"未选择"}</div></div>
-        <div><div className="text-xs text-text-tertiary">学期</div><div className="mt-2xs text-sm font-medium">{term||"未选择"}</div></div>
-        <div><label htmlFor="xbk-r3-file" className="text-xs text-text-tertiary">学生选课工作簿</label><Input ref={input} id="xbk-r3-file" className="mt-2xs" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={confirming} onChange={change}/></div>
+        <div><div className="text-xs text-text-tertiary">学年</div><div className="mt-1 text-sm font-medium">{year||"未选择"}</div></div>
+        <div><div className="text-xs text-text-tertiary">学期</div><div className="mt-1 text-sm font-medium">{term||"未选择"}</div></div>
+        <div><label htmlFor="xbk-r3-file" className="text-xs text-text-tertiary">学生选课工作簿</label><Input ref={input} id="xbk-r3-file" className="mt-1" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={confirming} onChange={change}/></div>
       </div>
       {!hasPeriod&&<Alert variant="warning"><AlertTitle>请选择具体的学年和学期</AlertTitle><AlertDescription>“全部学年”或“全部学期”不能用于工作簿预览和确认。</AlertDescription></Alert>}
-      {file&&<div className="flex items-center gap-xs text-sm text-text-secondary"><FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden="true"/><span>{file.name}</span>{previewing&&<span>正在预览…</span>}</div>}
-      {error&&<Alert variant="destructive"><AlertTitle>{error.message}</AlertTitle><AlertDescription>{error.code&&<div>错误代码：{error.code}</div>}{error.issues.length>0&&<ul className="mt-xs list-disc pl-5">{error.issues.map((x,i)=><li key={i}>{issueText(x,i)}</li>)}</ul>}</AlertDescription></Alert>}
-      {preview&&<section className="space-y-3" aria-labelledby="xbk-r3-preview"><div className="flex flex-wrap items-center justify-between gap-xs"><h3 id="xbk-r3-preview" className="text-sm font-semibold">变更预览</h3><div className="flex gap-xs text-sm"><span className="rounded-md bg-primary-soft px-xs py-2xs text-primary">变更 {preview.changed}</span><span className="rounded-md bg-surface-2 px-xs py-2xs">不变 {preview.unchanged}</span><span className="rounded-md bg-surface-2 px-xs py-2xs">总计 {preview.total_rows}</span></div></div>
-        {preview.changed_rows.length?<div className="max-h-[320px] overflow-auto rounded-lg border border-border"><table className="w-full min-w-[720px] text-left text-sm"><thead className="sticky top-0 bg-surface-2"><tr>{["班级","学生","原课程","目标课程","动作"].map(x=><th key={x} className="px-3 py-xs font-medium">{x}</th>)}</tr></thead><tbody>{preview.changed_rows.map(r=><tr key={`${r.sheet}-${r.row}-${r.student_no}`} className="border-t border-border"><td className="px-3 py-xs">{r.grade}{r.class_name}</td><td className="px-3 py-xs"><div>{r.name}</div><div className="text-xs text-text-tertiary">{r.student_no}</div></td><td className="px-3 py-xs">{r.baseline_course||"未选"}</td><td className="px-3 py-xs">{r.target_course||"未选"}</td><td className="px-3 py-xs">{actionText(r.action)}</td></tr>)}</tbody></table></div>:<div className="rounded-lg border border-border bg-surface-2 p-4 text-sm">没有选课变化，仍可由服务器确认当前状态。</div>}
+      {file&&<div className="flex items-center gap-2 text-sm text-text-secondary"><FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden="true"/><span>{file.name}</span>{previewing&&<span>正在预览…</span>}</div>}
+      {error&&<Alert variant="destructive"><AlertTitle>{error.message}</AlertTitle><AlertDescription>{error.code&&<div>错误代码：{error.code}</div>}{error.issues.length>0&&<ul className="mt-2 list-disc pl-5">{error.issues.map((x,i)=><li key={i}>{issueText(x,i)}</li>)}</ul>}</AlertDescription></Alert>}
+      {preview&&<section className="space-y-3" aria-labelledby="xbk-r3-preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 id="xbk-r3-preview" className="text-sm font-semibold">变更预览</h3><div className="flex gap-2 text-sm"><span className="rounded-md bg-primary-soft px-2 py-1 text-primary">变更 {preview.changed}</span><span className="rounded-md bg-surface-2 px-2 py-1">不变 {preview.unchanged}</span><span className="rounded-md bg-surface-2 px-2 py-1">总计 {preview.total_rows}</span></div></div>
+        {preview.changed_rows.length?<div className="max-h-[320px] overflow-auto rounded-lg border border-border"><table className="w-full min-w-[720px] text-left text-sm"><thead className="sticky top-0 bg-surface-2"><tr>{["班级","学生","原课程","目标课程","动作"].map(x=><th key={x} className="px-3 py-2 font-medium">{x}</th>)}</tr></thead><tbody>{preview.changed_rows.map(r=><tr key={`${r.sheet}-${r.row}-${r.student_no}`} className="border-t border-border"><td className="px-3 py-2">{r.grade}{r.class_name}</td><td className="px-3 py-2"><div>{r.name}</div><div className="text-xs text-text-tertiary">{r.student_no}</div></td><td className="px-3 py-2">{r.baseline_course||"未选"}</td><td className="px-3 py-2">{r.target_course||"未选"}</td><td className="px-3 py-2">{actionText(r.action)}</td></tr>)}</tbody></table></div>:<div className="rounded-lg border border-border bg-surface-2 p-4 text-sm">没有选课变化，仍可由服务器确认当前状态。</div>}
         {preview.notice&&<Alert><AlertTitle>服务器提示</AlertTitle><AlertDescription>{preview.notice}</AlertDescription></Alert>}
       </section>}
       {copy&&<Alert><AlertTitle>{copy.title}</AlertTitle><AlertDescription>{copy.body}</AlertDescription></Alert>}
     </div>
-    <DialogFooter><Button variant="outline" onClick={close}>{result?"完成":"取消"}</Button>{file&&!preview&&!previewing&&<Button variant="outline" disabled={!hasPeriod||confirming} onClick={()=>void runPreview(file)}>重新预览</Button>}<Button onClick={confirm} disabled={!current||previewing||confirming||Boolean(result)}>{confirming?<><Spinner size="sm" className="mr-xs" />正在确认…</>:"确认应用"}</Button></DialogFooter>
+    <DialogFooter><Button variant="outline" onClick={close}>{result?"完成":"取消"}</Button>{file&&!preview&&!previewing&&<Button variant="outline" disabled={!hasPeriod||confirming} onClick={()=>void runPreview(file)}>重新预览</Button>}<Button onClick={confirm} disabled={!current||previewing||confirming||Boolean(result)}>{confirming?<><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true"/>正在确认…</>:"确认应用"}</Button></DialogFooter>
   </DialogContent></Dialog>;
 }

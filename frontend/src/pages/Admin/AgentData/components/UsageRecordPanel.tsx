@@ -170,7 +170,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-xs">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <SearchBar
         searchParams={searchParams}
         onSearch={handleSearch}
@@ -180,7 +180,7 @@ const UsageRecordPanel: React.FC<{ onFilterChange?: (params: SearchFilterParams)
         exportLoading={exportLoading}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-secondary bg-surface-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border-secondary bg-surface-1">
         <AdminTablePanel
           loading={isLoading}
           isEmpty={!isLoading && data.length === 0}

@@ -122,8 +122,8 @@ const BasicLayout: React.FC = () => {
             {/* Logo */}
             <button
               type="button"
-              className="logo appearance-none border-0 bg-transparent p-0 text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => void navigate("/home")}
+              className="logo appearance-none border-0 bg-transparent p-0 text-left"
+              onClick={() => void navigate("/")}
               aria-label="返回首页"
             >
               <div className="logo-icon">W</div>
@@ -182,7 +182,7 @@ const BasicLayout: React.FC = () => {
           <SheetHeader className="px-4 py-3 border-b">
             <SheetTitle>导航菜单</SheetTitle>
           </SheetHeader>
-          <nav className="flex flex-col py-xs">
+          <nav className="flex flex-col py-2">
             {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = isNavItemActive(item.key);

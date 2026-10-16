@@ -5,17 +5,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Search, Check, ChevronRight, ChevronLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Search, Check, ChevronRight, ChevronLeft } from "lucide-react";
 import dayjs from "dayjs";
 import { agentDataApi } from "@services/znt/api";
 import aiAgentsApi from "@services/znt/api/ai-agents-api";
 import { showMessage } from "@/lib/toast";
 import type { AIAgent } from "@services/znt/types";
 
-import { LoadingState } from "@/components/ui/loading-state";
 type AnalysisType = "hot" | "chains";
 type PromptTemplate = {
   id: number;
@@ -68,9 +66,6 @@ const TaskAnalysisNewPage: React.FC = () => {
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [teacherMarks, setTeacherMarks] = useState<Array<{ time: string; question: string }>>([]);
   const [saving, setSaving] = useState(false);
-  // 删除提示词模板的确认框：受控 state，确认后才真正删除
-  const [deleteTemplateOpen, setDeleteTemplateOpen] = useState(false);
-  const [deletingTemplate, setDeletingTemplate] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressSteps, setProgressSteps] = useState<string[]>([]);
   const [partialResults, setPartialResults] = useState<string[]>([]);
@@ -170,34 +165,21 @@ const TaskAnalysisNewPage: React.FC = () => {
     if (next.success) setPromptTemplates((next.data as PromptTemplate[]) || []);
   };
 
-  // 点击「删除模板」：仅打开确认框，语义等价于原 window.confirm 的"取消则不删除"
-  const handleDeleteTemplate = () => {
+  const handleDeleteTemplate = async () => {
     if (!promptTemplateId) return;
     const t = promptTemplates.find((i) => String(i.id) === promptTemplateId);
-    if (!t) return;
-    setDeleteTemplateOpen(true);
-  };
-
-  // 确认后执行删除；id 在确认瞬间捕获，避免异步期间读到变化后的 state
-  const confirmDeleteTemplate = async (templateId: number) => {
-    setDeletingTemplate(true);
-    try {
-      const res = await agentDataApi.deleteAnalysisPromptTemplate(templateId);
-      if (!res.success) { showMessage.error(res.message || "删除模板失败"); return; }
-      showMessage.success("模板已删除");
-      const next = await agentDataApi.listAnalysisPromptTemplates(backendAnalysisType);
-      if (next.success) {
-        const items = (next.data as PromptTemplate[]) || [];
-        setPromptTemplates(items);
-        const fb = items.find((i) => i.is_default) || items[0];
-        setPromptTemplateId(fb ? String(fb.id) : ""); setCustomPrompt(fb?.content || "");
-      }
-    } finally {
-      setDeletingTemplate(false);
+    if (!t || !window.confirm(`确定删除提示词模板「${t.name}」？`)) return;
+    const res = await agentDataApi.deleteAnalysisPromptTemplate(Number(promptTemplateId));
+    if (!res.success) { showMessage.error(res.message || "删除模板失败"); return; }
+    showMessage.success("模板已删除");
+    const next = await agentDataApi.listAnalysisPromptTemplates(backendAnalysisType);
+    if (next.success) {
+      const items = (next.data as PromptTemplate[]) || [];
+      setPromptTemplates(items);
+      const fb = items.find((i) => i.is_default) || items[0];
+      setPromptTemplateId(fb ? String(fb.id) : ""); setCustomPrompt(fb?.content || "");
     }
   };
-
-  const deleteTemplateTarget = promptTemplates.find((i) => String(i.id) === promptTemplateId);
 
   const validateStep = (s: number): boolean => {
     if (s === 1 && !agentId) { showMessage.warning("请选择数据来源智能体"); return false; }
@@ -216,7 +198,7 @@ const TaskAnalysisNewPage: React.FC = () => {
     <div className="h-screen flex flex-col bg-[var(--ws-color-bg)]">
       {/* Header */}
       <header className="shrink-0 border-b border-border-secondary bg-surface/90 backdrop-blur-sm px-6 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-2xs" />关闭</Button>
+        <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="h-4 w-4 mr-1" />关闭</Button>
         <div className="h-5 w-px bg-border-secondary" />
         <span className="text-sm font-semibold">{isChain ? "新建学生问题链分析" : "新建热点问题分析"}</span>
       </header>
@@ -226,14 +208,8 @@ const TaskAnalysisNewPage: React.FC = () => {
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border-secondary bg-surface p-6 shadow-sm">
             <div className="text-center space-y-3">
-              {/* 下方可见文案不构成 role="status" 的可访问名称，需显式 label。
-                  3xl = h-10 与原一致。 */}
-              <LoadingState
-                label={isChain ? "正在分析学生问题链…" : "正在分析课程热点问题…"}
-                size="3xl"
-                variant="inline"
-              />
-              <div className="text-sm font-medium" aria-hidden="true">{isChain ? "正在分析学生问题链" : "正在分析课程热点问题"}</div>
+              <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+              <div className="text-sm font-medium">{isChain ? "正在分析学生问题链" : "正在分析课程热点问题"}</div>
               <div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} /></div>
               <div className="text-xs text-text-tertiary">{progress}%</div>
             </div>
@@ -243,7 +219,7 @@ const TaskAnalysisNewPage: React.FC = () => {
             {partialResults.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-xs font-medium text-text-tertiary">阶段结果</div>
-                {partialResults.map((r, i) => <div key={i} className="rounded-lg border border-border-secondary bg-surface px-3 py-xs text-sm text-text-secondary">{r}</div>)}
+                {partialResults.map((r, i) => <div key={i} className="rounded-lg border border-border-secondary bg-surface px-3 py-2 text-sm text-text-secondary">{r}</div>)}
               </div>
             )}
           </div>
@@ -252,7 +228,7 @@ const TaskAnalysisNewPage: React.FC = () => {
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl px-6 py-10">
             {/* Step indicator */}
-            <div className="flex items-center gap-xs mb-8">
+            <div className="flex items-center gap-2 mb-8">
               {STEP_LABELS.map((label, i) => {
                 const s = i + 1;
                 const done = s < step;
@@ -260,7 +236,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                 return (
                   <React.Fragment key={label}>
                     {i > 0 && <div className={`flex-1 h-px ${done ? "bg-primary" : "bg-border"}`} />}
-                    <button onClick={() => { if (done) setStep(s); }} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${active ? "bg-primary text-white shadow-sm" : done ? "bg-primary-soft text-primary cursor-pointer" : "bg-surface-2 text-text-tertiary"}`}>
+                    <button onClick={() => { if (done) setStep(s); }} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${active ? "bg-primary text-white shadow-sm" : done ? "bg-primary-soft text-primary cursor-pointer" : "bg-surface-2 text-text-tertiary"}`}>
                       {done ? <Check className="h-3 w-3" /> : <span>{s}</span>}
                       <span>{label}</span>
                     </button>
@@ -271,9 +247,9 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 1: 数据源 */}
             {step === 1 && (
-              <div className="space-y-5 rounded-2xl border border-border-secondary bg-surface p-6">
+              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
                 <h2 className="text-base font-semibold">选择数据源</h2>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs font-medium text-text-secondary">数据来源智能体</label>
                     <Select value={agentId || "__empty__"} onValueChange={(v) => setAgentId(v === "__empty__" ? "" : v)}>
@@ -284,9 +260,9 @@ const TaskAnalysisNewPage: React.FC = () => {
                       </SelectContent>
                     </Select>
                     {agentId && recentActivity?.firstAt && (
-                      <div className="mt-2xs text-2xs text-text-tertiary">
+                      <div className="mt-1 text-[11px] text-text-tertiary">
                         活动: {dayjs(recentActivity.firstAt).format("MM-DD")}~{dayjs(recentActivity.lastAt).format("MM-DD")}
-                        <button className="ml-2xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => { if (recentActivity.firstAt) setStartDate(dayjs(recentActivity.firstAt).format("YYYY-MM-DD")); if (recentActivity.lastAt) setEndDate(dayjs(recentActivity.lastAt).format("YYYY-MM-DD")); }}>填充</button>
+                        <button className="ml-1 text-primary hover:underline" onClick={() => { if (recentActivity.firstAt) setStartDate(dayjs(recentActivity.firstAt).format("YYYY-MM-DD")); if (recentActivity.lastAt) setEndDate(dayjs(recentActivity.lastAt).format("YYYY-MM-DD")); }}>填充</button>
                       </div>
                     )}
                   </div>
@@ -306,7 +282,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                 <div>
                   <label className="text-xs font-medium text-text-secondary">时间桶粒度</label>
                   <div className="mt-1.5 flex gap-1.5">
-                    {[60, 180, 300].map((v) => <button key={v} onClick={() => setBucketSeconds(v)} className={`px-3 py-1.5 rounded-lg text-xs border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${bucketSeconds === v ? "bg-primary text-white border-primary" : "bg-surface border-border text-text-tertiary hover:border-primary/30"}`}>{v / 60} 分钟</button>)}
+                    {[60, 180, 300].map((v) => <button key={v} onClick={() => setBucketSeconds(v)} className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${bucketSeconds === v ? "bg-primary text-white border-primary" : "bg-surface border-border text-text-tertiary hover:border-primary/30"}`}>{v / 60} 分钟</button>)}
                   </div>
                 </div>
               </div>
@@ -314,31 +290,31 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 2: 教学设计 */}
             {step === 2 && (
-              <div className="space-y-5 rounded-2xl border border-border-secondary bg-surface p-6">
+              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
                 <h2 className="text-base font-semibold">上传教学设计</h2>
                 <div>
-                  <label className="text-xs font-medium text-text-secondary">{isChain ? "课程任务单（可选）" : "任务单内容"}{!isChain && <span className="text-destructive ml-2xs">*</span>}</label>
+                  <label className="text-xs font-medium text-text-secondary">{isChain ? "课程任务单（可选）" : "任务单内容"}{!isChain && <span className="text-red-400 ml-1">*</span>}</label>
                   <textarea
-                    className="mt-1.5 w-full min-h-[200px] resize-none rounded-xl border border-border bg-surface-2/30 px-4 py-3 text-sm leading-relaxed placeholder:text-text-tertiary/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/5"
+                    className="mt-1.5 w-full min-h-[200px] resize-none rounded-xl border border-border/60 bg-surface-2/30 px-4 py-3 text-sm leading-relaxed placeholder:text-text-tertiary/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/5"
                     placeholder={isChain ? "粘贴任务单、教学目标或教师主问题..." : "粘贴任务单中的问题内容...\n\n例如：\n1. 编写一个 for 循环打印 1 到 10\n2. 用 if 判断奇偶数"}
                     value={taskSheet} onChange={(e) => setTaskSheet(e.target.value)}
                   />
-                  <div className="mt-2xs text-right text-2xs text-text-tertiary">{taskSheet.length} 字</div>
+                  <div className="mt-1 text-right text-[11px] text-text-tertiary">{taskSheet.length} 字</div>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-xs">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-text-secondary">教师提问标记</span>
-                    <Button variant="ghost" size="sm" onClick={addTeacherMark} className="text-xs h-6 px-xs">+ 添加</Button>
+                    <Button variant="ghost" size="sm" onClick={addTeacherMark} className="text-xs h-6 px-2">+ 添加</Button>
                   </div>
                   <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                     {teacherMarks.length === 0 ? (
                       <p className="text-xs text-text-tertiary/60 italic">暂未标记。系统将自动识别 teacher 的提问。</p>
                     ) : teacherMarks.map((mark, i) => (
-                      <div key={i} className="flex items-center gap-xs rounded-lg border border-border-secondary bg-surface-2/30 px-2.5 py-1.5">
-                        <span className="text-3xs font-semibold text-text-tertiary w-4">{i + 1}</span>
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-border/40 bg-surface-2/30 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold text-text-tertiary w-4">{i + 1}</span>
                         <Input type="time" value={mark.time} onChange={(e) => updateTeacherMark(i, "time", e.target.value)} className="h-7 text-xs w-24" />
                         <Input value={mark.question} onChange={(e) => updateTeacherMark(i, "question", e.target.value)} className="h-7 text-xs flex-1" placeholder="提问内容" />
-                        <button onClick={() => removeTeacherMark(i)} className="text-text-tertiary/40 hover:text-destructive text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">✕</button>
+                        <button onClick={() => removeTeacherMark(i)} className="text-text-tertiary/40 hover:text-red-500 text-xs">✕</button>
                       </div>
                     ))}
                   </div>
@@ -348,7 +324,7 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 3: LLM 配置 */}
             {step === 3 && (
-              <div className="space-y-5 rounded-2xl border border-border-secondary bg-surface p-6">
+              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
                 <h2 className="text-base font-semibold">配置 LLM 分析</h2>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">{analysisAgentLabel}</label>
@@ -359,25 +335,25 @@ const TaskAnalysisNewPage: React.FC = () => {
                       {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="mt-2xs text-2xs text-text-tertiary">{analysisAgentHelp}</p>
+                  <p className="mt-1 text-[11px] text-text-tertiary">{analysisAgentHelp}</p>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-text-secondary mb-xs">分析目标</div>
+                  <div className="text-xs font-medium text-text-secondary mb-2">分析目标</div>
                   {([{ key: "uncover_new", label: "发现未覆盖的新问题方向" }, { key: "track_deviation", label: "追踪偏离教师主线的趋势" }, { key: "suggest_task_sheet", label: "生成可加入任务单的教学建议" }, { key: "compare_previous", label: "与历史分析对比" }] as const).map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-xs py-2xs cursor-pointer">
-                      <input type="checkbox" checked={goalFlags[key] ?? false} onChange={(e) => setGoalFlags((p) => ({ ...p, [key]: e.target.checked }))} className="rounded border-border h-3.5 w-3.5 text-primary" />
+                    <label key={key} className="flex items-center gap-2 py-1 cursor-pointer">
+                      <input type="checkbox" checked={goalFlags[key] ?? false} onChange={(e) => setGoalFlags((p) => ({ ...p, [key]: e.target.checked }))} className="rounded border-gray-300 h-3.5 w-3.5 text-primary" />
                       <span className="text-xs text-text-secondary">{label}</span>
                     </label>
                   ))}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary">合并灵敏度</label>
-                  <p className="mt-0.5 text-2xs text-text-tertiary">越低越容易合并相似问题（宽松），越高越严格</p>
-                  <div className="mt-xs flex items-center gap-3">
-                    <span className="text-2xs text-text-tertiary">宽松</span>
+                  <p className="mt-0.5 text-[11px] text-text-tertiary">越低越容易合并相似问题（宽松），越高越严格</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-[11px] text-text-tertiary">宽松</span>
                     <input type="range" min={0.20} max={0.50} step={0.05} value={mergeThreshold} onChange={(e) => setMergeThreshold(Number(e.target.value))} className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-primary" />
-                    <span className="text-2xs text-text-tertiary">严格</span>
-                    <span className="min-w-[3rem] rounded-md border border-border bg-surface-2 px-xs py-0.5 text-center text-xs font-mono font-medium text-text-base">{mergeThreshold.toFixed(2)}</span>
+                    <span className="text-[11px] text-text-tertiary">严格</span>
+                    <span className="min-w-[3rem] rounded-md border border-border bg-surface-2 px-2 py-0.5 text-center text-xs font-mono font-medium text-text-base">{mergeThreshold.toFixed(2)}</span>
                   </div>
                 </div>
                 <div>
@@ -391,13 +367,13 @@ const TaskAnalysisNewPage: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <button onClick={() => setShowPromptEditor(!showPromptEditor)} className="text-xs text-text-tertiary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <button onClick={() => setShowPromptEditor(!showPromptEditor)} className="text-xs text-text-tertiary hover:text-primary">
                     {showPromptEditor ? "收起 ▲" : "展开 ▼"} 自定义提示词
                   </button>
                   {showPromptEditor && (
-                    <div className="mt-xs">
-                      <textarea className="w-full h-28 resize-none rounded-lg border border-border bg-surface-2/30 px-3 py-xs text-xs focus:outline-none focus:border-primary/40" placeholder="自定义 AI 分析提示词..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
-                      <div className="mt-xs flex gap-xs">
+                    <div className="mt-2">
+                      <textarea className="w-full h-28 resize-none rounded-lg border border-border bg-surface-2/30 px-3 py-2 text-xs focus:outline-none focus:border-primary/40" placeholder="自定义 AI 分析提示词..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
+                      <div className="mt-2 flex gap-2">
                         <Button variant="outline" size="sm" onClick={handleSaveTemplate}>保存为模板</Button>
                         {promptTemplateId && <Button variant="ghost" size="sm" onClick={handleDeleteTemplate}>删除模板</Button>}
                       </div>
@@ -409,7 +385,7 @@ const TaskAnalysisNewPage: React.FC = () => {
 
             {/* Step 4: 确认 */}
             {step === 4 && (
-              <div className="space-y-5 rounded-2xl border border-border-secondary bg-surface p-6">
+              <div className="space-y-5 rounded-2xl border border-border/40 bg-surface p-6">
                 <h2 className="text-base font-semibold">确认分析配置</h2>
                 <div className="grid gap-3 text-sm">
                   {[
@@ -423,7 +399,7 @@ const TaskAnalysisNewPage: React.FC = () => {
                     { label: "提示词", value: promptTemplateId ? (promptTemplates.find((t) => String(t.id) === promptTemplateId)?.name || "自定义") : "自定义" },
                     { label: "合并灵敏度", value: mergeThreshold.toFixed(2) },
                   ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between items-center py-1.5 border-b border-border-secondary last:border-0">
+                    <div key={label} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
                       <span className="text-text-tertiary">{label}</span>
                       <span className="font-medium text-text-base">{value}</span>
                     </div>
@@ -435,33 +411,19 @@ const TaskAnalysisNewPage: React.FC = () => {
             {/* Navigation */}
             <div className="mt-6 flex items-center justify-between">
               {step > 1 ? (
-                <Button variant="outline" onClick={goPrev}><ChevronLeft className="h-4 w-4 mr-2xs" />上一步</Button>
+                <Button variant="outline" onClick={goPrev}><ChevronLeft className="h-4 w-4 mr-1" />上一步</Button>
               ) : <div />}
               {step < 4 ? (
-                <Button onClick={goNext}>下一步<ChevronRight className="h-4 w-4 ml-2xs" /></Button>
+                <Button onClick={goNext}>下一步<ChevronRight className="h-4 w-4 ml-1" /></Button>
               ) : (
                 <Button size="lg" className="px-8 shadow-lg shadow-primary/20" onClick={handleSave}>
-                  <Search className="h-4 w-4 mr-xs" />{isChain ? "开始问题链分析" : "开始热点分析"}
+                  <Search className="h-4 w-4 mr-2" />{isChain ? "开始问题链分析" : "开始热点分析"}
                 </Button>
               )}
             </div>
           </div>
         </div>
       )}
-
-      <ConfirmDialog
-        open={deleteTemplateOpen}
-        onOpenChange={setDeleteTemplateOpen}
-        title="删除提示词模板"
-        description={`确定删除提示词模板「${deleteTemplateTarget?.name ?? ""}」？删除后不可恢复。`}
-        confirmText="删除"
-        variant="destructive"
-        loading={deletingTemplate}
-        onConfirm={() => {
-          if (!deleteTemplateTarget) return;
-          void confirmDeleteTemplate(deleteTemplateTarget.id);
-        }}
-      />
     </div>
   );
 };

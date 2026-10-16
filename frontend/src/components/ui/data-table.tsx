@@ -112,10 +112,7 @@ function DataTable<TData>({
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  className={cn(
-                    getHeaderClassName(header.column.columnDef.meta),
-                    "relative group"
-                  )}
+                  className={cn(getHeaderClassName(header.column.columnDef.meta))}
                   style={{
                     width: header.getSize() > 0 ? header.getSize() : undefined,
                   }}
@@ -123,21 +120,6 @@ function DataTable<TData>({
                   {header.isPlaceholder
                     ? null
                     : flexRender(header.column.columnDef.header, header.getContext())}
-                  {/* 列宽调整手柄 */}
-                  {header.column.getCanResize() && (
-                    <div
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onClick={(e) => e.stopPropagation()}
-                      className={cn(
-                        "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
-                        "opacity-0 group-hover:opacity-100 transition-opacity",
-                        "hover:bg-primary",
-                        header.column.getIsResizing() && "bg-primary opacity-100"
-                      )}
-                      aria-label="调整列宽"
-                    />
-                  )}
                 </TableHead>
               ))}
             </TableRow>
@@ -229,8 +211,8 @@ function DataTablePagination({
   )
 
   return (
-    <div className={cn("flex flex-wrap items-center justify-end gap-xs text-sm text-text-secondary", className)}>
-      <span className="mr-2xs whitespace-nowrap text-text-tertiary">共 {total} 条</span>
+    <div className={cn("flex flex-wrap items-center justify-end gap-2 text-sm text-text-secondary", className)}>
+      <span className="mr-1 whitespace-nowrap text-text-tertiary">共 {total} 条</span>
       <Select value={String(pageSize)} onValueChange={(value) => changePage(1, Number(value))}>
         <SelectTrigger className="w-[6.5rem] border-border-secondary text-text-base" aria-label="每页条数">
           <SelectValue />

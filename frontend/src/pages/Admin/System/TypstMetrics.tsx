@@ -1,14 +1,13 @@
 import { showMessage } from "@/lib/toast";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Loader2 } from "lucide-react";
 import { AdminCard } from "@components/Admin";
 import { systemMetricsApi } from "@services";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 
-import { Spinner } from "@/components/ui/spinner";
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 const TypstMetricsPanel: React.FC = () => {
@@ -51,9 +50,9 @@ const TypstMetricsPanel: React.FC = () => {
   }, [counts?.fail, q?.typst, q?.celery]);
 
   const StatItem: React.FC<{ title: string; value: string | number }> = ({ title, value }) => (
-    <div className="rounded-md border border-border bg-surface-2 px-3 py-xs">
+    <div className="rounded-md border border-border bg-surface-2 px-3 py-2">
       <div className="text-xs text-text-tertiary">{title}</div>
-      <div className="mt-2xs text-lg font-semibold text-text-base">{value}</div>
+      <div className="mt-1 text-lg font-semibold text-text-base">{value}</div>
     </div>
   );
 
@@ -61,11 +60,11 @@ const TypstMetricsPanel: React.FC = () => {
     <>
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <div className="inline-flex items-center gap-xs">
+        <div className="inline-flex items-center gap-2">
           <span className="font-semibold">Typst 编译观测</span>
           {statusTag}
         </div>
-        <div className="inline-flex items-center gap-xs">
+        <div className="inline-flex items-center gap-2">
           <Button
             variant="outline"
             onClick={async () => {
@@ -82,15 +81,15 @@ const TypstMetricsPanel: React.FC = () => {
             清理 PDF
           </Button>
           <Button variant="outline" disabled={loading} onClick={load}>
-            {loading ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />} 刷新
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} 刷新
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-section-gap lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
           <AdminCard title="计数与命中率">
-            <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <StatItem title="总编译次数" value={Number(counts?.total || 0)} />
               <StatItem title="近期命中率" value={pct(hitRate)} />
               <StatItem title="命中" value={Number(counts?.hit || 0)} />
@@ -99,7 +98,7 @@ const TypstMetricsPanel: React.FC = () => {
               <StatItem title="429 总次数" value={http429} />
             </div>
             <Separator className="my-4" />
-            <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <StatItem title="队列(typst)" value={Number(q?.typst || 0)} />
               <StatItem title="队列(celery)" value={Number(q?.celery || 0)} />
             </div>
@@ -108,7 +107,7 @@ const TypstMetricsPanel: React.FC = () => {
 
         <div>
           <AdminCard title="耗时分布">
-            <div className="grid grid-cols-1 gap-item-gap sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <StatItem title="样本数" value={Number(dur?.n || 0)} />
               <StatItem title="p50(ms)" value={Number(dur?.p50 || 0)} />
               <StatItem title="p90(ms)" value={Number(dur?.p90 || 0)} />

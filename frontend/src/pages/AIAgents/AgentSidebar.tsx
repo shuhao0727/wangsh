@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,6 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   onStartNewConversation, onSelectSession,
 }) => {
   // 折叠状态 - Hooks 必须在条件判断之前
-  // 除「今天」外默认折叠，避免历史很长时首屏被旧会话淹没。
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     today: false,
     yesterday: true,
@@ -60,27 +59,6 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
     return groups;
   }, [sessions]);
 
-  // 当前选中会话所在的分组。
-  // 恢复「上次会话」时，那条会话可能落在「本月」或「更早」里，而它们默认折叠，
-  // 不展开就会出现「主区正显示这段对话、侧边栏却看不到对应条目」的错位。
-  const activeGroupKey = useMemo(() => {
-    if (!currentSessionId) return null;
-    const found = (Object.keys(groupedSessions) as Array<keyof typeof groupedSessions>)
-      .find((key) => groupedSessions[key].some((s) => s.session_id === currentSessionId));
-    return found ?? null;
-  }, [groupedSessions, currentSessionId]);
-
-  // 选中会话切换时自动展开其所在分组。
-  // 用 effect 而非在渲染时强制展开：后者会让该分组的折叠按钮失效
-  // （点标题时箭头不变，看起来像坏了）。这里只在分组真正变化时展开一次，
-  // 之后用户仍可自由折叠。
-  useEffect(() => {
-    if (!activeGroupKey) return;
-    setCollapsed((prev) =>
-      prev[activeGroupKey] ? { ...prev, [activeGroupKey]: false } : prev,
-    );
-  }, [activeGroupKey]);
-
   const formatTimestamp = (timestamp: string) => dayjs(timestamp).format("MM-DD HH:mm");
 
   const toggleGroup = (key: string) => {
@@ -108,7 +86,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
 
         {/* 头部 */}
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <Settings className="text-text-secondary h-4 w-4" />
             <span className="text-base font-semibold">智能体</span>
           </div>
@@ -134,7 +112,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
             <SelectContent>
               {agents.map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
-                  <div className="flex items-center gap-xs">
+                  <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6 rounded-md">
                       <AvatarFallback className="rounded-md text-white text-xs" style={{ backgroundColor: agent.color }}>
                         {agent.icon}
@@ -150,8 +128,8 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
 
         {/* 当前智能体信息卡 */}
         <div className="rounded-lg p-[var(--ws-panel-padding-sm)] mb-4 bg-surface-2">
-          <div className="flex items-center justify-between mb-xs">
-            <div className="flex items-center gap-xs min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Avatar className="h-6 w-6 rounded-md">
                 <AvatarFallback className="rounded-md text-white text-xs" style={{ backgroundColor: currentAgent.color }}>
                   {currentAgent.icon}
@@ -159,7 +137,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
               </Avatar>
               <span className="truncate text-base font-semibold">{currentAgent.name}</span>
             </div>
-            <Badge variant="success" className="m-0 h-5 px-xs text-xs leading-4">
+            <Badge variant="success" className="m-0 h-5 px-2 text-xs leading-4">
               在线
             </Badge>
           </div>
@@ -188,7 +166,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
 
             <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-[var(--ws-space-1)]">
               {sessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-6 gap-2xs">
+                <div className="flex flex-col items-center justify-center py-6 gap-1">
                   <History className="text-2xl opacity-20 text-text-secondary h-6 w-6" />
                   <span className="text-sm text-text-tertiary">暂无历史记录</span>
                 </div>
@@ -200,22 +178,20 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                     { key: "thisWeek", label: "本周", data: groupedSessions.thisWeek },
                     { key: "thisMonth", label: "本月", data: groupedSessions.thisMonth },
                     { key: "older", label: "更早", data: groupedSessions.older },
-                  ].map(({ key, label, data }) => {
-                    // 选中会话所在分组强制展开，确保它一定可见
-                    const groupCollapsed = Boolean(collapsed[key]);
-                    return data.length > 0 && (
+                  ].map(({ key, label, data }) =>
+                    data.length > 0 && (
                       <div key={key}>
                         <div
                           onClick={() => toggleGroup(key)}
-                          className="flex items-center justify-between px-2xs py-2xs cursor-pointer hover:bg-surface-2 rounded transition-colors"
+                          className="flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-surface-2 rounded transition-colors"
                         >
                           <span className="text-sm font-medium text-text-tertiary">
                             {label} <span className="text-text-tertiary">({data.length})</span>
                           </span>
-                          {groupCollapsed ? <ChevronRight className="text-xs h-4 w-4" /> : <ChevronDown className="text-xs h-4 w-4" />}
+                          {collapsed[key] ? <ChevronRight className="text-xs h-4 w-4" /> : <ChevronDown className="text-xs h-4 w-4" />}
                         </div>
-                        {!groupCollapsed && (
-                          <div className="flex flex-col gap-2xs mt-2xs">
+                        {!collapsed[key] && (
+                          <div className="flex flex-col gap-1 mt-1">
                             {data.map((s) => (
                               <div
                                 key={s.session_id}
@@ -224,8 +200,8 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                                   s.session_id === currentSessionId ? "bg-primary-soft" : "hover:bg-surface-2"
                                 }`}
                               >
-                                <div className="flex items-center justify-between mb-2xs">
-                                  <Badge variant="info" className="m-0 h-5 px-xs text-xs leading-4">
+                                <div className="flex items-center justify-between mb-1">
+                                  <Badge variant="info" className="m-0 h-5 px-2 text-xs leading-4">
                                     {s.turns}轮
                                   </Badge>
                                   <span className="text-xs text-text-tertiary">
@@ -242,8 +218,8 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                           </div>
                         )}
                       </div>
-                    );
-                  })}
+                    )
+                  )}
                 </>
               )}
             </div>

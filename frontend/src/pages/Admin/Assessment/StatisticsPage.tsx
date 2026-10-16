@@ -20,6 +20,7 @@ import {
   Download,
   Eye,
   FlaskConical,
+  Loader2,
   Redo,
   Search,
   Trophy,
@@ -82,8 +83,6 @@ import {
   useBatchGenerateProfiles,
 } from "@/hooks/queries/useAssessmentStatisticsQuery";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 const FILTER_ALL = "__all__";
 
 type RadarPick =
@@ -109,21 +108,6 @@ const StatusTag: React.FC<{ status: string }> = ({ status }) => {
     variant: "neutral" as const,
   };
   return <Badge variant={item.variant}>{item.label}</Badge>;
-};
-
-/* 分数梯度端点取自 index.css 的 --ws-color-* token（语义：低分 danger → 中段 warning → 高分 success）。
- * ECharts 的 canvas 渲染器无法解析 "var(--ws-*)" 字符串（会回退成默认灰），
- * 与 AgentData/components/chartTheme.ts 一样在运行时读出 token 实际值。
- * 兜底值镜像 index.css 的 :root，仅用于 jsdom/SSR 或 token 缺失。 */
-const SCORE_BAND_TOKENS = {
-  low: ["--ws-color-danger", "#A25850"],
-  mid: ["--ws-color-warning", "#976135"],
-  high: ["--ws-color-success", "#39795D"],
-} as const;
-
-const resolveTokenColor = ([name, fallback]: readonly [string, string]) => {
-  if (typeof document === "undefined") return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 };
 
 const interpolateScoreColor = (c1: string, c2: string, t: number) => {
@@ -666,10 +650,10 @@ const StatisticsPage: React.FC = () => {
       {
         id: "actions",
         header: "操作",
-        size: 120,
-        meta: { className: "w-[120px]" },
+        size: 220,
+        meta: { className: "w-[220px]" },
         cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-2xs">
+          <div className="flex flex-wrap items-center gap-1">
             <Button
               size="sm"
               variant="link"
@@ -854,8 +838,8 @@ const StatisticsPage: React.FC = () => {
           data: dist.map((b, idx) => {
             const ratio = totalBuckets > 1 ? idx / (totalBuckets - 1) : 0;
             const color = ratio < 0.5
-              ? interpolateScoreColor(resolveTokenColor(SCORE_BAND_TOKENS.low), resolveTokenColor(SCORE_BAND_TOKENS.mid), ratio * 2)
-              : interpolateScoreColor(resolveTokenColor(SCORE_BAND_TOKENS.mid), resolveTokenColor(SCORE_BAND_TOKENS.high), (ratio - 0.5) * 2);
+              ? interpolateScoreColor("#EF4444", "#F59E0B", ratio * 2)
+              : interpolateScoreColor("#F59E0B", "#10B981", (ratio - 0.5) * 2);
             return { value: b.count, itemStyle: { color, borderRadius: [6, 6, 0, 0] } };
           }),
           label: {
@@ -890,8 +874,9 @@ const StatisticsPage: React.FC = () => {
       </div>
 
       {statsLoading ? (
-        /* 整区域加载态：原为裸 <Loader2>（无 aria）。lg = h-6 与原一致。 */
-        <LoadingState label="正在加载答题统计…" size="lg" />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+        </div>
       ) : stats ? (
         <>
           {/* ─── 统计卡片 ─── */}
@@ -904,14 +889,14 @@ const StatisticsPage: React.FC = () => {
                 icon={item.icon}
                 variant="horizontal"
                 color={item.color}
-                className="min-h-0 px-2.5 py-xs"
+                className="min-h-0 px-2.5 py-2"
               />
             ))}
           </div>
 
           {/* ─── 筛选卡片 ─── */}
           <Card className="mb-5 border border-border bg-surface p-3">
-            <div className="flex flex-wrap items-center gap-xs">
+            <div className="flex flex-wrap items-center gap-2">
               <Calendar className="h-4 w-4 text-text-tertiary shrink-0" />
               <Select value={timeField} onValueChange={setTimeField}>
                 <SelectTrigger className="h-8 w-[100px] text-xs"><SelectValue /></SelectTrigger>
@@ -938,7 +923,7 @@ const StatisticsPage: React.FC = () => {
                   key={preset.label}
                   size="sm"
                   variant={activePreset === preset.label ? "default" : "outline"}
-                  className="h-7 px-xs text-xs"
+                  className="h-7 px-2 text-xs"
                   onClick={() => applyPreset(preset)}
                 >
                   {preset.label}
@@ -1005,7 +990,7 @@ const StatisticsPage: React.FC = () => {
                     });
                   }}
                 >
-                  <Redo className="mr-2xs h-3.5 w-3.5" />全班重测
+                  <Redo className="mr-1 h-3.5 w-3.5" />全班重测
                 </Button>
               )}
               <Button
@@ -1020,9 +1005,9 @@ const StatisticsPage: React.FC = () => {
                 }}
               >
                 {batchGenerateMutation.isPending ? (
-                  <Spinner size="xs" className="mr-2xs" />
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <FlaskConical className="mr-2xs h-3.5 w-3.5" />
+                  <FlaskConical className="mr-1 h-3.5 w-3.5" />
                 )}
                 批量画像
               </Button>
@@ -1033,9 +1018,9 @@ const StatisticsPage: React.FC = () => {
                 onClick={() => { handleExport(); }}
               >
                 {exportMutation.isPending ? (
-                  <Spinner size="xs" className="mr-2xs" />
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Download className="mr-2xs h-3.5 w-3.5" />
+                  <Download className="mr-1 h-3.5 w-3.5" />
                 )}
                 导出
               </Button>
@@ -1044,11 +1029,11 @@ const StatisticsPage: React.FC = () => {
 
           {/* ─── 图表面板（趋势 + 分数分布） ─── */}
           {trendChartOption || scoreDistributionOption ? (
-            <div className="mb-5 grid gap-item-gap lg:grid-cols-2">
+            <div className="mb-5 grid gap-4 lg:grid-cols-2">
               {trendChartOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-xs">
-                    <div className="flex items-center gap-xs text-sm font-semibold">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
                       <TrendingUp className="h-4 w-4 text-primary" />
                       提交趋势
                     </div>
@@ -1065,8 +1050,8 @@ const StatisticsPage: React.FC = () => {
               )}
               {scoreDistributionOption && (
                 <Card className="chart-panel overflow-hidden border border-border bg-surface p-4">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-xs">
-                    <div className="flex items-center gap-xs text-sm font-semibold">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
                       <BarChart3 className="h-4 w-4 text-secondary" />
                       分数分布
                     </div>
@@ -1085,9 +1070,9 @@ const StatisticsPage: React.FC = () => {
           ) : null}
 
           {/* ─── 学生列表 + 雷达图 ─── */}
-          <div className="grid gap-item-gap lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <Card className="flex min-h-[420px] flex-col overflow-hidden border border-border bg-surface">
-              <div className="shrink-0 flex flex-wrap items-center gap-xs border-b border-border px-3 py-xs">
+              <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
                 <span className="text-sm font-semibold">学生答题列表{total > 0 ? ` (${total})` : ""}</span>
                 {selectedRowKeys.length > 0 && (
                   <>
@@ -1115,8 +1100,8 @@ const StatisticsPage: React.FC = () => {
                   emptyState={
                     sessionsQuery.isFetching && !sessionsQuery.data ? (
                       <div className="py-10 text-center text-sm text-text-tertiary">
-                        <span className="inline-flex items-center gap-xs">
-                          <Spinner size="sm" />正在加载...
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />正在加载...
                         </span>
                       </div>
                     ) : (
@@ -1126,15 +1111,15 @@ const StatisticsPage: React.FC = () => {
                 />
                 {sessionsQuery.isFetching && sessions.length > 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-surface/70 backdrop-blur-[1px]">
-                    <span className="inline-flex items-center gap-xs rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-secondary shadow-sm">
-                      <Spinner size="sm" />
+                    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-secondary shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       正在加载...
                     </span>
                   </div>
                 ) : null}
               </div>
 
-              <div className="shrink-0 flex justify-end border-t border-border-secondary px-3 py-xs">
+              <div className="shrink-0 flex justify-end border-t border-border-secondary px-3 py-2">
                 <DataTablePagination
                   currentPage={page}
                   totalPages={totalPages}
@@ -1161,9 +1146,9 @@ const StatisticsPage: React.FC = () => {
             </Card>
 
             <Card className="overflow-hidden border border-border bg-surface">
-              <div className="border-b border-border px-3 py-xs text-sm font-semibold">知识点掌握率</div>
-              <div className="space-y-xs p-3">
-                <div className="grid grid-cols-2 gap-xs">
+              <div className="border-b border-border px-3 py-2 text-sm font-semibold">知识点掌握率</div>
+              <div className="space-y-2 p-3">
+                <div className="grid grid-cols-2 gap-2">
                   <Select value={pickToValue(radarLeft) || FILTER_ALL} onValueChange={(value) => setRadarLeft(parsePickerValue(value))}>
                     <SelectTrigger className="h-8"><SelectValue placeholder="选择数据" /></SelectTrigger>
                     <SelectContent>
@@ -1191,7 +1176,7 @@ const StatisticsPage: React.FC = () => {
         statsQuery.isError ? (
           <div className="py-10 text-center text-sm text-text-tertiary">
             <p>加载统计数据失败</p>
-            <Button variant="outline" size="sm" className="mt-xs" onClick={() => statsQuery.refetch()}>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => statsQuery.refetch()}>
               重试
             </Button>
           </div>
@@ -1212,22 +1197,22 @@ const StatisticsPage: React.FC = () => {
           </DialogHeader>
 
           {detailQuery.isFetching && !detailQuery.data ? (
-            <LoadingState label="正在加载答题详情…" size="md" />
+            <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
           ) : detailQuery.data ? (
             <div className="space-y-3">
-              <div className="grid gap-xs rounded-lg bg-surface-2 p-3 text-sm md:grid-cols-2">
+              <div className="grid gap-2 rounded-lg bg-surface-2 p-3 text-sm md:grid-cols-2">
                 <div><span className="text-text-tertiary">状态：</span><StatusTag status={detailQuery.data.status} /></div>
                 <div><span className="text-text-tertiary">得分：</span><span>{detailQuery.data.earned_score ?? "-"} / {detailQuery.data.total_score}</span></div>
                 <div><span className="text-text-tertiary">开始时间：</span><span>{detailQuery.data.started_at ? new Date(detailQuery.data.started_at).toLocaleString("zh-CN") : "-"}</span></div>
                 <div><span className="text-text-tertiary">提交时间：</span><span>{detailQuery.data.submitted_at ? new Date(detailQuery.data.submitted_at).toLocaleString("zh-CN") : "-"}</span></div>
               </div>
 
-              <div className="max-h-[420px] space-y-xs overflow-auto pr-2xs">
+              <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
                 {detailQuery.data.answers.map((answer: AnswerDetailResponse, index: number) => (
-                  <details key={answer.id} className="rounded-lg border border-border bg-surface px-3 py-xs">
+                  <details key={answer.id} className="rounded-lg border border-border bg-surface px-3 py-2">
                     <summary className="cursor-pointer select-none text-sm font-medium">
                       <span>{`第${index + 1}题`}</span>
-                      <span className="ml-xs inline-flex items-center gap-2xs">
+                      <span className="ml-2 inline-flex items-center gap-1">
                         <Badge variant="secondary">{answer.question_type}</Badge>
                         {answer.is_correct === true ? <Badge variant="success">正确</Badge> : null}
                         {answer.is_correct === false ? <Badge variant="danger">错误</Badge> : null}
@@ -1235,7 +1220,7 @@ const StatisticsPage: React.FC = () => {
                       </span>
                     </summary>
 
-                    <div className="mt-xs space-y-1.5 text-sm leading-relaxed text-text-secondary">
+                    <div className="mt-2 space-y-1.5 text-sm leading-relaxed text-text-secondary">
                       <p><strong>题目：</strong>{answer.content}</p>
                       {answer.options ? <p><strong>选项：</strong>{answer.options}</p> : null}
                       <p><strong>学生答案：</strong>{answer.student_answer || "（未作答）"}</p>
@@ -1276,18 +1261,18 @@ const StatisticsPage: React.FC = () => {
             <DialogTitle>学生画像详情</DialogTitle>
           </DialogHeader>
           {profileQuery.isFetching && !profileQuery.data ? (
-            <LoadingState label="正在加载学生画像…" size="md" />
+            <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-text-tertiary" /></div>
           ) : (
             <div className="max-h-[86vh] overflow-auto p-3">
               <Tabs value={profileTab} onValueChange={(value) => setProfileTab(value as "basic" | "advanced")}>
-                <TabsList className="mb-xs">
+                <TabsList className="mb-2">
                   <TabsTrigger value="basic">初级画像</TabsTrigger>
                   <TabsTrigger value="advanced">三维画像</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-0">
                   {profileQuery.data?.basic ? (
-                    <div className="pb-xs"><BasicProfileView data={profileQuery.data.basic} /></div>
+                    <div className="pb-2"><BasicProfileView data={profileQuery.data.basic} /></div>
                   ) : (
                     <EmptyState description="暂无初级画像数据" />
                   )}
@@ -1295,7 +1280,7 @@ const StatisticsPage: React.FC = () => {
 
                 <TabsContent value="advanced" className="mt-0">
                   {profileQuery.data?.advanced ? (
-                    <div className="pb-2xs"><AdvancedProfileView profile={profileQuery.data.advanced} compact /></div>
+                    <div className="pb-1"><AdvancedProfileView profile={profileQuery.data.advanced} compact /></div>
                   ) : (
                     <AdvancedProfileEmpty
                       onGenerate={handleGenerateProfile}

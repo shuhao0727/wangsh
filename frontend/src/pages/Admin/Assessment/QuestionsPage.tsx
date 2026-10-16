@@ -16,6 +16,7 @@ import dayjs from "dayjs";
 import {
   ArrowLeft,
   Eye,
+  Loader2,
   Pencil,
   Plus,
   Save,
@@ -23,7 +24,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { AdminPage } from "@components/Admin";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
   assessmentQuestionApi,
   type AssessmentQuestion,
@@ -63,8 +63,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 const FILTER_ALL = "__all__";
 
 const TYPE_MAP: Record<
@@ -641,10 +639,10 @@ const QuestionsPage: React.FC = () => {
       {
         id: "actions",
         header: "操作",
-        size: 120,
-        meta: { className: "w-[120px]" },
+        size: 160,
+        meta: { className: "w-[160px]" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-2xs">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
@@ -689,8 +687,9 @@ const QuestionsPage: React.FC = () => {
   if (configLoading) {
     return (
       <AdminPage>
-        {/* 整页加载态：原为裸 <Loader2>（无 aria）。尺寸 lg = h-6，与原一致。 */}
-        <LoadingState label="正在加载题目配置…" size="lg" className="p-panel-padding-lg" />
+        <div className="flex justify-center p-24">
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+        </div>
       </AdminPage>
     );
   }
@@ -698,20 +697,18 @@ const QuestionsPage: React.FC = () => {
   return (
     <>
     <AdminPage scrollable>
-      <Breadcrumb
-        items={[
-          { label: "管理后台", href: "/admin" },
-          { label: "自适应测评", href: "/admin/assessment" },
-          { label: configData?.title || "管理测评" },
-        ]}
-        className="mb-4"
-      />
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/admin/assessment")}>
+          <ArrowLeft className="h-4 w-4" />
+          返回列表
+        </Button>
+      </div>
 
       <Card className="mb-5 border border-border bg-surface p-4 md:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-xs">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-text-base">基本设置</h3>
           <Button size="sm" disabled={saveConfigMutation.isPending} onClick={() => void handleSaveConfig()}>
-            {saveConfigMutation.isPending ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+            {saveConfigMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             保存设置
           </Button>
         </div>
@@ -837,13 +834,13 @@ const QuestionsPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-card-padding">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-xs">
-          <div className="flex items-center gap-xs">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-text-base">固定题</h3>
             <Badge variant="info">{items.length}</Badge>
           </div>
-          <div className="flex flex-wrap items-center gap-xs">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               value={filterType || FILTER_ALL}
               onValueChange={(value) => {
@@ -904,8 +901,8 @@ const QuestionsPage: React.FC = () => {
 
         {generating ? (
           <div className="mb-3 rounded-md bg-surface-2 px-3 py-2.5">
-            <div className="mb-2xs flex items-center justify-between text-sm text-text-secondary">
-              <span className="inline-flex items-center gap-2xs">
+            <div className="mb-1 flex items-center justify-between text-sm text-text-secondary">
+              <span className="inline-flex items-center gap-1">
                 <Sparkles className="h-3.5 w-3.5" />
                 AI 正在生成题目...
               </span>
@@ -927,8 +924,8 @@ const QuestionsPage: React.FC = () => {
           emptyState={
             questionsLoading ? (
               <div className="py-16 text-center text-sm text-text-tertiary">
-                <span className="inline-flex items-center gap-xs">
-                  <Spinner size="sm" />
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   正在加载...
                 </span>
               </div>
@@ -941,7 +938,7 @@ const QuestionsPage: React.FC = () => {
         />
 
         {total > pageSize ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
             <DataTablePagination
               currentPage={page}
               totalPages={totalPages}
@@ -959,10 +956,10 @@ const QuestionsPage: React.FC = () => {
         ) : null}
       </Card>
 
-      <Card className="mb-5 border border-border bg-surface p-4 md:p-card-padding">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-xs">
+      <Card className="mb-5 border border-border bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-xs">
+            <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-text-base">自适应知识点题</h3>
               <Badge variant="success">{adaptiveKPs.length}</Badge>
             </div>
@@ -970,13 +967,13 @@ const QuestionsPage: React.FC = () => {
               答题时 AI 实时出题，答错追加，连续答对即掌握
             </div>
           </div>
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleAddAdaptive}>
               <Plus className="h-4 w-4" />
               添加
             </Button>
             <Button size="sm" disabled={adaptiveLoading} onClick={() => void saveAllAdaptive()}>
-              {adaptiveLoading ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+              {adaptiveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               保存
             </Button>
           </div>
@@ -992,7 +989,7 @@ const QuestionsPage: React.FC = () => {
         ) : (
           <div className="min-h-[220px] space-y-3">
             <div
-              className="grid gap-xs px-xs text-xs font-medium text-text-tertiary"
+              className="grid gap-2 px-2 text-xs font-medium text-text-tertiary"
               style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
             >
               <span>#</span>
@@ -1007,7 +1004,7 @@ const QuestionsPage: React.FC = () => {
             {adaptiveKPs.map((kp, index) => (
               <div
                 key={kp.key}
-                className="grid items-center gap-xs rounded-md bg-surface-2 px-3 py-3"
+                className="grid items-center gap-2 rounded-md bg-surface-2 px-3 py-3"
                 style={{ gridTemplateColumns: "32px 1fr 2fr 110px 90px 90px 90px 40px" }}
               >
                 <span className="text-sm font-medium text-text-secondary">{index + 1}</span>
@@ -1103,7 +1100,7 @@ const QuestionsPage: React.FC = () => {
           <div className="space-y-3">
             <div>
               <label className="mb-1.5 block text-sm font-medium">题型</label>
-              <div className="flex flex-wrap gap-xs">
+              <div className="flex flex-wrap gap-2">
                 {(["choice", "fill", "short_answer"] as QuestionType[]).map((value) => (
                   <Button
                     key={value}
@@ -1245,12 +1242,12 @@ const QuestionsPage: React.FC = () => {
             </div>
           </div>
 
-          <DialogFooter className="gap-button-gap">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setQuestionDialogOpen(false)}>
               取消
             </Button>
             <Button disabled={qSaving} onClick={() => void handleSaveQuestion()}>
-              {qSaving ? <Spinner size="sm" /> : null}
+              {qSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {editingQ ? "保存修改" : "添加题目"}
             </Button>
           </DialogFooter>
@@ -1270,7 +1267,7 @@ const QuestionsPage: React.FC = () => {
 
           {previewQ ? (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-xs">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={TYPE_MAP[previewQ.question_type]?.variant || "neutral"}>
                   {TYPE_MAP[previewQ.question_type]?.label || previewQ.question_type}
                 </Badge>
@@ -1290,7 +1287,7 @@ const QuestionsPage: React.FC = () => {
                 if (!options) return null;
                 if (Array.isArray(options)) {
                   return (
-                    <div className="space-y-2xs text-sm">
+                    <div className="space-y-1 text-sm">
                       {options.map((item, index) => (
                         <div key={index}>{item}</div>
                       ))}
@@ -1298,7 +1295,7 @@ const QuestionsPage: React.FC = () => {
                   );
                 }
                 return (
-                  <div className="space-y-2xs text-sm">
+                  <div className="space-y-1 text-sm">
                     {Object.entries(options).map(([key, value]) => (
                       <div key={key}>
                         {key}. {String(value)}
@@ -1313,7 +1310,7 @@ const QuestionsPage: React.FC = () => {
                   正确答案：{previewQ.correct_answer}
                 </div>
                 {previewQ.explanation ? (
-                  <div className="mt-xs text-sm leading-relaxed text-text-secondary">
+                  <div className="mt-2 text-sm leading-relaxed text-text-secondary">
                     解析：{previewQ.explanation}
                   </div>
                 ) : null}
@@ -1413,12 +1410,12 @@ const QuestionsPage: React.FC = () => {
             </div>
           </div>
 
-          <DialogFooter className="gap-button-gap">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setGenDialogOpen(false)}>
               取消
             </Button>
             <Button disabled={generating} onClick={() => void handleGenerate()}>
-              {generating ? <Spinner size="sm" /> : null}
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               开始生成
             </Button>
           </DialogFooter>

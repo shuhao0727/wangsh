@@ -4,7 +4,14 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Download, ShieldAlert, HardDrive, Calendar, Tag,  } from "lucide-react";
+import {
+  Download,
+  ShieldAlert,
+  HardDrive,
+  Calendar,
+  Tag,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,13 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { showMessage } from "@/lib/toast";
 import useAuth from "@hooks/useAuth";
 import { useITGameDownload } from "@hooks/queries/useITGamesQuery";
 import { gamesApi } from "@services/it/games";
 import type { GameResource } from "@services/it/games";
 
-import { Spinner } from "@/components/ui/spinner";
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -83,8 +88,7 @@ export const GameDetailModal: React.FC<Props> = ({ open, onClose, game }) => {
         console.warn("刷新游戏详情失败：", err);
       }
     } catch {
-      // 原 alert 是阻塞式原生弹窗，改用项目统一 Toast（语义等价：仅提示失败原因）
-      showMessage.error("下载失败，请确认已登录并有下载权限");
+      alert("下载失败，请确认已登录并有下载权限");
     }
   };
 
@@ -98,18 +102,18 @@ export const GameDetailModal: React.FC<Props> = ({ open, onClose, game }) => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-xs">
+        <div className="space-y-3 py-2">
           {/* 分类标签 */}
-          <div className="flex flex-wrap items-center gap-xs">
-            <span className="inline-flex items-center gap-2xs rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary">
               <Tag className="h-3 w-3" />
               {localGame.category}
             </span>
-            <span className="inline-flex items-center gap-2xs text-xs text-text-tertiary">
+            <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
               <HardDrive className="h-3 w-3" />
               {fmtSize(localGame.file_size)}
             </span>
-            <span className="inline-flex items-center gap-2xs text-xs text-text-tertiary">
+            <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
               <Download className="h-3 w-3" />
               {localGame.download_count} 次下载
             </span>
@@ -117,17 +121,17 @@ export const GameDetailModal: React.FC<Props> = ({ open, onClose, game }) => {
 
           {/* 文件信息 */}
           <div className="rounded-lg border border-border bg-surface-2 p-3">
-            <Calendar className="mb-2xs h-3 w-3 text-text-tertiary" />
+            <Calendar className="mb-1 h-3 w-3 text-text-tertiary" />
             <p className="text-xs text-text-tertiary">
               文件名：{localGame.filename}
             </p>
             {localGame.file_sha256 && (
-              <p className="mt-2xs text-xs text-text-tertiary break-all">
+              <p className="mt-1 text-xs text-text-tertiary break-all">
                 SHA256：{localGame.file_sha256}
               </p>
             )}
             {localGame.created_at && (
-              <p className="mt-2xs text-xs text-text-tertiary">
+              <p className="mt-1 text-xs text-text-tertiary">
                 上传时间：{new Date(localGame.created_at).toLocaleDateString("zh-CN")}
               </p>
             )}
@@ -135,7 +139,7 @@ export const GameDetailModal: React.FC<Props> = ({ open, onClose, game }) => {
 
           {/* 未登录提示 */}
           {!isLoggedIn && (
-            <div className="flex items-start gap-xs rounded-lg border border-warning/30 bg-warning-soft p-3">
+            <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3">
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="text-xs text-text-base">
                 <p className="font-medium">下载需要登录</p>
@@ -156,9 +160,9 @@ export const GameDetailModal: React.FC<Props> = ({ open, onClose, game }) => {
             disabled={downloadGame.isPending}
           >
             {downloadGame.isPending ? (
-              <Spinner size="xs" className="mr-2xs" />
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Download className="mr-2xs h-3.5 w-3.5" />
+              <Download className="mr-1 h-3.5 w-3.5" />
             )}
             {isLoggedIn ? "下载" : "去登录"}
           </Button>

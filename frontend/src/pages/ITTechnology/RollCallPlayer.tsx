@@ -4,9 +4,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import type { DianmingClass, DianmingStudent } from '@/services/xxjs/dianming';
 import { dianmingApi } from '@/services/xxjs/dianming';
-import { PlayCircle, Square, ArrowLeft } from 'lucide-react';
+import { PlayCircle, Square, ArrowLeft, Loader2 } from 'lucide-react';
 
-import { LoadingState } from "@/components/ui/loading-state";
 interface Props {
   record: DianmingClass;
   onBack: () => void;
@@ -103,7 +102,7 @@ const RollCallPlayer: React.FC<Props> = ({ record, onBack }) => {
 
       <div className="it-player-main">
         {loading ? (
-          <LoadingState label="正在加载点名…" size="xl" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         ) : (
           <div style={{ textAlign: 'center' }}>
              <h1 

@@ -1,5 +1,5 @@
 import { showMessage } from "@/lib/toast";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -50,30 +50,6 @@ type AdminMenuItem = {
   children?: AdminMenuItem[];
 };
 
-// 侧边栏折叠偏好：只存放「用户手动选择过」的值
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "admin-sidebar-collapsed";
-
-// 读取用户保存的侧边栏偏好；从未手动设置过时返回 null
-const readSidebarPreference = (): boolean | null => {
-  if (typeof window === "undefined") return null;
-  try {
-    const saved = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
-    return saved === null ? null : saved === "true";
-  } catch {
-    // 隐私模式等场景禁止访问 localStorage，按「未设置过」处理
-    return null;
-  }
-};
-
-// 记录用户手动选择的折叠状态（写入失败不影响交互）
-const writeSidebarPreference = (next: boolean): void => {
-  try {
-    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-  } catch {
-    // 忽略写入失败
-  }
-};
-
 const agentPaths = [
   "/admin/ai-agents",
   "/admin/users",
@@ -118,30 +94,7 @@ const AdminLayout: React.FC = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
-  // 侧边栏折叠状态
-  // 初始态只取决于「用户是否手动选择过」：选择过就沿用，否则默认展开。
-  // 这里刻意不按 window.innerWidth 推导默认值——那条路径不可注入（测试与 SSR
-  // 拿不到真实视口），会与 useBreakpoint 给出的断点信号互相矛盾。
-  // 窄屏收起统一由下面的 isMobile 驱动，信号源只有一个。
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    const savedPreference = readSidebarPreference();
-    return savedPreference ?? false;
-  });
-
-  // 用户手动切换折叠状态：函数式更新避免闭包读到过期的 collapsed，并持久化选择
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      writeSidebarPreference(next);
-      return next;
-    });
-  }, []);
-
-  // 移动端强制收起（仅依赖 isMobile）；不写存储，避免覆盖用户桌面端的偏好
-  useEffect(() => {
-    if (isMobile) setCollapsed(true);
-  }, [isMobile]);
-
+  const [collapsed, setCollapsed] = useState(false);
   const { version, envLabel } = useAppMeta();
 
   const path = location.pathname;
@@ -152,6 +105,10 @@ const AdminLayout: React.FC = () => {
   useEffect(() => {
     if (inAgentGroup) setAgentsOpen(true);
   }, [inAgentGroup]);
+
+  useEffect(() => {
+    if (isMobile) setCollapsed(true);
+  }, [isMobile]);
 
   const menuWhitelist = useMemo(
     () => getAdminMenuWhitelist(auth.user?.role_code),
@@ -181,14 +138,14 @@ const AdminLayout: React.FC = () => {
       {showAdminProfile ? (
         <>
           <DropdownMenuItem onClick={() => void navigate("/admin/users")}>
-            <User className="mr-xs h-4 w-4" />
+            <User className="mr-2 h-4 w-4" />
             管理员资料
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>
       ) : null}
       <DropdownMenuItem onClick={() => window.location.href = "/login"}>
-        <Home className="mr-xs h-4 w-4" />
+        <Home className="mr-2 h-4 w-4" />
         返回首页
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -199,7 +156,7 @@ const AdminLayout: React.FC = () => {
           window.location.href = "/login";
         }}
       >
-        <LogOut className="mr-xs h-4 w-4" />
+        <LogOut className="mr-2 h-4 w-4" />
         退出登录
       </DropdownMenuItem>
     </>
@@ -220,7 +177,7 @@ const AdminLayout: React.FC = () => {
           void navigate(item.key);
           if (isMobile) setCollapsed(true);
         }}
-        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-xs rounded-lg px-3 py-xs text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+        className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
           active
             ? "bg-primary-soft text-primary shadow-[inset_3px_0_0_var(--ws-color-accent)]"
             : "text-text-secondary hover:bg-[var(--ws-color-primary-muted)]"
@@ -258,7 +215,7 @@ const AdminLayout: React.FC = () => {
       >
         <button
           type="button"
-          className="flex w-full appearance-none items-center gap-2.5 border-0 bg-transparent px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex w-full appearance-none items-center gap-2.5 border-0 bg-transparent px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           onClick={() => void navigate("/admin/dashboard")}
           aria-label="返回管理后台首页"
         >
@@ -276,14 +233,14 @@ const AdminLayout: React.FC = () => {
           ) : null}
         </button>
 
-        <div className="mx-4 mb-xs h-px bg-border-secondary" />
+        <div className="mx-4 mb-2 h-px bg-border-secondary" />
 
         <div className="h-[calc(100%-148px)] overflow-y-auto px-3 pb-3">
-          <div className="space-y-2xs">
+          <div className="space-y-1">
             {visibleMenuItems.map((item) => {
               if (!item.children) return renderMenuButton(item);
               return (
-                <div key={item.key} className="space-y-2xs">
+                <div key={item.key} className="space-y-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -294,7 +251,7 @@ const AdminLayout: React.FC = () => {
                       }
                       setAgentsOpen((v) => !v);
                     }}
-                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-xs rounded-lg px-3 py-xs text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    className={`appearance-none border-0 bg-transparent flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] ${
                       inAgentGroup
                         ? "bg-primary-soft text-primary"
                         : "text-text-secondary hover:bg-[var(--ws-color-hover-bg)]"
@@ -320,7 +277,7 @@ const AdminLayout: React.FC = () => {
                       !collapsed && agentsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                     )}>
                     <div className="overflow-hidden">
-                      <div className="space-y-2xs">
+                      <div className="space-y-1">
                         {item.children.map((child) => renderMenuButton(child))}
                       </div>
                     </div>
@@ -336,7 +293,7 @@ const AdminLayout: React.FC = () => {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="mb-xs flex w-full items-center gap-xs rounded-lg px-2xs py-1.5 text-left transition-colors hover:bg-[var(--ws-color-hover-bg)] appearance-none border-0 bg-transparent cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <button type="button" className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-[var(--ws-color-hover-bg)] appearance-none border-0 bg-transparent cursor-pointer">
                     <Avatar className="h-7 w-7 shrink-0 bg-primary/10">
                       <AvatarFallback className="bg-primary/10 text-primary">
                         <User className="h-4 w-4" />
@@ -355,17 +312,17 @@ const AdminLayout: React.FC = () => {
                   {renderUserDropdownItems()}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <div className="mb-xs flex items-center gap-xs">
+              <div className="mb-2 flex items-center gap-2">
                 {version ? (
                   <span className="text-xs text-text-tertiary">v{version}</span>
                 ) : null}
               </div>
             </>
           ) : (
-            <div className="mb-xs flex flex-col items-center gap-xs">
+            <div className="mb-2 flex flex-col items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="appearance-none border-0 bg-transparent cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <button type="button" className="appearance-none border-0 bg-transparent cursor-pointer">
                     <Avatar className="h-7 w-7 bg-primary/10">
                       <AvatarFallback className="bg-primary/10 text-primary">
                         <User className="h-4 w-4" />
@@ -382,7 +339,7 @@ const AdminLayout: React.FC = () => {
           <Button
             variant="ghost"
             className="w-full text-xs text-text-secondary"
-            onClick={toggleCollapsed}
+            onClick={() => setCollapsed((v) => !v)}
             aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
           >
             {collapsed ? <Menu className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -400,7 +357,7 @@ const AdminLayout: React.FC = () => {
             className="sticky top-0 z-[var(--ws-z-sticky)] flex items-center border-b border-border-secondary bg-surface px-4"
             style={{ height: "var(--ws-header-height)" }}
           >
-            <Button variant="ghost" size="icon" onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
+            <Button variant="ghost" size="icon" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}>
               <Menu className="h-4 w-4" />
             </Button>
           </header>
@@ -417,7 +374,7 @@ const AdminLayout: React.FC = () => {
               </PageTransitionShell>
             </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-item-gap">
+            <div className="flex h-full flex-col items-center justify-center gap-4">
               <Lock className="h-12 w-12 text-text-tertiary" />
               <h3 className="text-xl font-semibold">需要教职工权限</h3>
               <p className="text-sm text-text-tertiary">只有管理员可以访问此页面</p>

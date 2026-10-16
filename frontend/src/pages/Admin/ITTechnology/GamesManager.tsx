@@ -17,6 +17,7 @@ import {
   Download,
   Eye,
   FileText,
+  Loader2,
   Pencil,
   Plus,
   RefreshCw,
@@ -58,8 +59,6 @@ import {
   useITGameMutations,
 } from "@hooks/queries/useITGamesQuery";
 
-import { LoadingState } from "@/components/ui/loading-state";
-import { Spinner } from "@/components/ui/spinner";
 // 预设分类：与 GameUploadModal 保持一致
 const PRESET_CATEGORIES = ["益智", "动作", "冒险", "模拟", "策略", "竞速", "工具", "其它"];
 const FILTER_ALL = "__all__";
@@ -153,7 +152,7 @@ const GamesManagerPage: React.FC = () => {
         cell: ({ row }) => (
           <button
             type="button"
-            className="text-left font-medium text-text-base hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="text-left font-medium text-text-base hover:text-primary"
             onClick={() => {
               setDetailGame(row.original);
               setDetailOpen(true);
@@ -183,7 +182,7 @@ const GamesManagerPage: React.FC = () => {
         id: "download_count",
         header: "下载次数",
         cell: ({ row }) => (
-          <span className="inline-flex items-center gap-2xs text-text-secondary">
+          <span className="inline-flex items-center gap-1 text-text-secondary">
             <Download className="h-3 w-3" />
             {row.original.download_count}
           </span>
@@ -194,7 +193,7 @@ const GamesManagerPage: React.FC = () => {
         header: "状态",
         cell: ({ row }) =>
           row.original.is_active ? (
-            <Badge className="bg-success text-white hover:bg-success">
+            <Badge className="bg-success text-on-primary hover:bg-success">
               已上架
             </Badge>
           ) : (
@@ -217,14 +216,12 @@ const GamesManagerPage: React.FC = () => {
       {
         id: "actions",
         header: "操作",
-        size: 120,
-        meta: { className: "w-[120px]" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-2xs">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-xs"
+              className="h-7 px-2"
               title="编辑"
               onClick={() => {
                 setEditRecord(row.original);
@@ -236,7 +233,7 @@ const GamesManagerPage: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-xs"
+              className="h-7 px-2"
               title="下载日志"
               onClick={() => void openLogs(row.original)}
             >
@@ -245,7 +242,7 @@ const GamesManagerPage: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-xs text-destructive hover:text-destructive"
+              className="h-7 px-2 text-destructive hover:text-destructive"
               title="删除"
               onClick={() => setDeleteTarget(row.original)}
             >
@@ -266,7 +263,7 @@ const GamesManagerPage: React.FC = () => {
   });
 
   return (
-    <AdminPage scrollable={false}>
+    <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
       <AdminTablePanel
         title="游戏资源库管理"
         loading={loading}
@@ -281,7 +278,7 @@ const GamesManagerPage: React.FC = () => {
           void categoriesQuery.refetch();
         }}
         extra={
-          <div className="flex items-center gap-xs">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -289,9 +286,9 @@ const GamesManagerPage: React.FC = () => {
               onClick={() => void listQuery.refetch()}
             >
               {loading ? (
-                <Spinner size="xs" className="mr-2xs" />
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5 mr-2xs" />
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
               )}
               刷新
             </Button>
@@ -302,7 +299,7 @@ const GamesManagerPage: React.FC = () => {
                 setUploadOpen(true);
               }}
             >
-              <Plus className="h-3.5 w-3.5 mr-2xs" />
+              <Plus className="h-3.5 w-3.5 mr-1" />
               上传
             </Button>
           </div>
@@ -330,11 +327,6 @@ const GamesManagerPage: React.FC = () => {
               placeholder="搜索游戏名称或简介..."
               onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(1);
-              }}
-              clearable
-              onClear={() => {
-                setSearch("");
                 setPage(1);
               }}
             />
@@ -408,41 +400,43 @@ const GamesManagerPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>
               「{logsGame?.title}」下载日志
-              <span className="ml-xs text-xs font-normal text-text-tertiary">
+              <span className="ml-2 text-xs font-normal text-text-tertiary">
                 共 {logsTotal} 条
               </span>
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-auto">
             {logsLoading ? (
-              <LoadingState label="正在加载下载记录…" size="md" />
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+              </div>
             ) : logs.length === 0 ? (
               <div className="py-8 text-center text-sm text-text-tertiary">暂无下载记录</div>
             ) : (
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-surface-2 text-text-tertiary">
                   <tr>
-                    <th className="px-3 py-xs text-left font-medium">时间</th>
-                    <th className="px-3 py-xs text-left font-medium">用户ID</th>
-                    <th className="px-3 py-xs text-left font-medium">IP</th>
-                    <th className="px-3 py-xs text-left font-medium">UA</th>
+                    <th className="px-3 py-2 text-left font-medium">时间</th>
+                    <th className="px-3 py-2 text-left font-medium">用户ID</th>
+                    <th className="px-3 py-2 text-left font-medium">IP</th>
+                    <th className="px-3 py-2 text-left font-medium">UA</th>
                   </tr>
                 </thead>
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log.id} className="border-t border-border-secondary">
-                      <td className="px-3 py-xs text-text-secondary whitespace-nowrap">
+                      <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
                         {log.downloaded_at
                           ? dayjs(log.downloaded_at).format("YYYY-MM-DD HH:mm")
                           : "-"}
                       </td>
-                      <td className="px-3 py-xs text-text-secondary">
+                      <td className="px-3 py-2 text-text-secondary">
                         {log.user_id ?? "游客"}
                       </td>
-                      <td className="px-3 py-xs text-text-secondary whitespace-nowrap">
+                      <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
                         {log.ip_address}
                       </td>
-                      <td className="max-w-48 truncate px-3 py-xs text-text-tertiary">
+                      <td className="max-w-48 truncate px-3 py-2 text-text-tertiary">
                         {log.user_agent || "-"}
                       </td>
                     </tr>

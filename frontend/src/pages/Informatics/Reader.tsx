@@ -6,7 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { RotateCcw, Search, Menu, ArrowLeft, FileText, List, Folder, ChevronRight, TriangleAlert,  } from "lucide-react";
+import {
+  RotateCcw,
+  Search,
+  Menu,
+  ArrowLeft,
+  FileText,
+  List,
+  Folder,
+  ChevronRight,
+  Loader2,
+  TriangleAlert,
+} from "lucide-react";
 import EmptyState from "@components/Common/EmptyState";
 import { publicTypstNotesApi } from "@services";
 import type { PublicTypstNoteListItem } from "@services";
@@ -17,7 +28,6 @@ import { useDebounce } from "@hooks/useDebounce";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import "./Informatics.css";
 
-import { Spinner } from "@/components/ui/spinner";
 type PdfOutlineItem = {
   title: string;
   level: number;
@@ -64,7 +74,7 @@ const renderTreeNodes = (
       <div key={key}>
         <button
           type="button"
-          className={`appearance-none border-0 informatics-tree-row ${selected ? "informatics-tree-row-selected" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+          className={`appearance-none border-0 informatics-tree-row ${selected ? "informatics-tree-row-selected" : ""}`}
           style={{ paddingLeft: `calc(var(--ws-space-1) + ${depth} * var(--ws-space-2))` }}
           aria-label={nodeAriaLabel}
           aria-expanded={hasChildren ? expanded : undefined}
@@ -447,7 +457,7 @@ const InformaticsReaderPage: React.FC = () => {
         aria-label="刷新文档列表"
       >
         {(listLoading || pdfLoading)
-          ? <Spinner size="sm" />
+          ? <Loader2 className="h-4 w-4 animate-spin" />
           : <RotateCcw className="h-4 w-4" />}
       </Button>
     </div>

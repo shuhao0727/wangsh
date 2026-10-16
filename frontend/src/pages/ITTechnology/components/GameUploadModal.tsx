@@ -4,7 +4,11 @@
  */
 
 import React, { useRef, useState, useEffect } from "react";
-import { Upload, X,  } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +33,6 @@ import { showMessage } from "@/lib/toast";
 import type { GameResource } from "@services/it/games";
 import { useITGameMutations } from "@hooks/queries/useITGamesQuery";
 
-import { Spinner } from "@/components/ui/spinner";
 const PRESET_CATEGORIES = ["益智", "动作", "冒险", "模拟", "策略", "竞速", "工具", "其它"];
 
 interface Props {
@@ -125,13 +128,13 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-form-field-gap py-2xs">
+        <div className="space-y-4 py-1">
           {/* 游戏名称 */}
           <div>
             <Label htmlFor="g-title" className="ws-modal-label">游戏名称</Label>
             <Input
               id="g-title"
-              className="mt-2xs h-8 text-xs"
+              className="mt-1 h-8 text-xs"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="输入游戏名称"
@@ -142,7 +145,7 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
           <div>
             <Label className="ws-modal-label">分类</Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="mt-2xs h-8 text-xs">
+              <SelectTrigger className="mt-1 h-8 text-xs">
                 <SelectValue placeholder="选择分类" />
               </SelectTrigger>
               <SelectContent>
@@ -155,7 +158,7 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
 
           {/* 上架/下架开关（仅编辑模式显示，新建默认上架） */}
           {isEdit && (
-            <div className="flex items-center justify-between rounded-lg border bg-surface-2 px-3 py-xs">
+            <div className="flex items-center justify-between rounded-lg border bg-surface-2 px-3 py-2">
               <div className="flex flex-col">
                 <Label htmlFor="g-active" className="ws-modal-label">
                   {isActive ? "已上架" : "已下架"}
@@ -177,7 +180,7 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
             <Label htmlFor="g-desc" className="ws-modal-label">简介（选填）</Label>
             <Textarea
               id="g-desc"
-              className="mt-2xs h-8 min-h-16 text-xs"
+              className="mt-1 h-8 min-h-16 text-xs"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="简要描述游戏内容"
@@ -202,15 +205,15 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="mt-2xs w-full h-10 border-dashed"
+                  className="mt-1 w-full h-10 border-dashed"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="mr-2xs h-3.5 w-3.5" />
+                  <Upload className="mr-1 h-3.5 w-3.5" />
                   选择文件
                 </Button>
               ) : (
-                <div className="mt-2xs flex items-center justify-between rounded-lg border bg-surface-2 px-3 py-xs">
-                  <span className="text-xs text-text-base truncate mr-xs">{file.name}（{Math.round(file.size / 1024 / 1024 * 10) / 10} MB）</span>
+                <div className="mt-1 flex items-center justify-between rounded-lg border bg-surface-2 px-3 py-2">
+                  <span className="text-xs text-text truncate mr-2">{file.name}（{Math.round(file.size / 1024 / 1024 * 10) / 10} MB）</span>
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleFileRemove}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
@@ -225,7 +228,7 @@ export const GameUploadModal: React.FC<Props> = ({ open, onClose, onSuccess, edi
             取消
           </Button>
           <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
-            {saving && <Spinner size="xs" className="mr-2xs" />}
+            {saving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
             {isEdit ? "保存" : "上传"}
           </Button>
         </DialogFooter>

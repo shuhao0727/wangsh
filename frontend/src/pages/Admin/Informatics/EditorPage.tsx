@@ -1,11 +1,11 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import TypstNoteEditor from "./TypstNoteEditor";
 import { typstNotesApi } from "@services";
 import type { TypstNote } from "@services";
 
-import { LoadingState } from "@/components/ui/loading-state";
 const AdminTypstEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,10 +45,9 @@ const AdminTypstEditorPage: React.FC = () => {
   }, [id, isCreateMode, navigate]);
 
   if (loading) {
-    // 原为裸 <Loader2>：无 role/aria。尺寸 xl = h-8，与原 h-8 逐像素一致。
     return (
       <div className="flex items-center justify-center p-10">
-        <LoadingState label="正在加载笔记编辑器…" size="xl" />
+        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
       </div>
     );
   }

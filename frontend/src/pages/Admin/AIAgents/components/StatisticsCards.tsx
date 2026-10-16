@@ -34,7 +34,7 @@ const StatisticsCards: React.FC<StatisticsCardsProps> = ({ data }) => {
           icon={item.icon}
           variant="horizontal"
           color={colorMap[item.key]}
-          className="min-h-0 px-xs py-1.5 [&>div:first-child]:gap-1.5 [&>div:first-child>div:first-child]:h-6 [&>div:first-child>div:first-child]:w-6 [&>div:last-child]:text-lg [&>div:last-child]:leading-5"
+          className="min-h-0 px-2 py-1.5 [&>div:first-child]:gap-1.5 [&>div:first-child>div:first-child]:h-6 [&>div:first-child>div:first-child]:w-6 [&>div:last-child]:text-lg [&>div:last-child]:leading-5"
         />
       ))}
     </div>
