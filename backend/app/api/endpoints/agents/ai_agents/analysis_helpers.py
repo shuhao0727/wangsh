@@ -197,17 +197,10 @@ def _compact_teacher_questions(items: List[Dict[str, Any]]) -> List[Dict[str, An
     ]
 
 
-def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
-    summary = analysis_result.get("summary") or {}
-    filters = analysis_result.get("filters") or {}
-    themes = analysis_result.get("themes") if isinstance(analysis_result.get("themes"), list) else []
-    student_events = (
-        analysis_result.get("student_question_events")
-        if isinstance(analysis_result.get("student_question_events"), list)
-        else []
-    )
-    classes = sorted({str(item.get("class_name")) for item in student_events if item.get("class_name")})
-
+def _partition_student_questions(
+    student_events: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """把学生提问事件拆成有效问题与噪声问题，构造紧凑问题对象。"""
     student_questions = []
     noise_questions = []
     for item in student_events:
@@ -244,58 +237,88 @@ def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[st
             student_questions.append(compact)
         else:
             noise_questions.append(compact)
+    return student_questions, noise_questions
+
+
+def _compact_hot_theme(theme: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "theme_id": theme.get("theme_id"),
+        "topic": theme.get("topic"),
+        "count": int(theme.get("count") or 0),
+        "unique_students": int(theme.get("unique_students") or 0),
+        "intent_code": theme.get("intent_code") or "other",
+        "intent_label": theme.get("intent_label") or "其他问题",
+        "keywords": theme.get("keywords") or [],
+        "representative_question": theme.get("representative_question"),
+        "active_bucket_count": theme.get("active_bucket_count"),
+        "commonness_score": theme.get("commonness_score"),
+        "difficulty_signal_score": theme.get("difficulty_signal_score"),
+        "persistence_score": theme.get("persistence_score"),
+        "hotness_score": theme.get("hotness_score"),
+        "hotness_components": theme.get("hotness_components") or {},
+        "hotness_explanation": theme.get("hotness_explanation") or [],
+        "score_basis": theme.get("score_basis"),
+        "heat_profile": theme.get("heat_profile"),
+    }
+
+
+def _build_hot_meta(
+    analysis_result: Dict[str, Any],
+    summary: Dict[str, Any],
+    filters: Dict[str, Any],
+    classes: List[str],
+    themes: List[Dict[str, Any]],
+    student_questions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        "analysis_version": analysis_result.get("analysis_version"),
+        "analysis_type": analysis_result.get("analysis_type"),
+        "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
+        "total_questions": summary.get("valid_question_count", summary.get("question_count", len(student_questions))),
+        "raw_count": summary.get("raw_count"),
+        "valid_question_count": summary.get("valid_question_count", len(student_questions)),
+        "prompt_echo_count": summary.get("prompt_echo_count"),
+        "noise_count": summary.get("noise_count"),
+        "duplicate_count": summary.get("duplicate_count"),
+        "active_interval_count": summary.get("active_interval_count"),
+        "unique_students": summary.get("unique_students"),
+        "teacher_anchor_count": summary.get("teacher_anchor_count"),
+        "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
+        "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
+        "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
+        "theme_count": summary.get("theme_count", len(themes)),
+        "intent_distribution": summary.get("intent_distribution"),
+        "burst_count": summary.get("burst_count"),
+        "top_hotness_score": summary.get("top_hotness_score"),
+        "heat_profile_distribution": summary.get("heat_profile_distribution") or {},
+        "classes": classes,
+        "class_name": filters.get("class_name"),
+        "bucket_seconds": filters.get("bucket_seconds"),
+    }
+
+
+def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+    summary = analysis_result.get("summary") or {}
+    filters = analysis_result.get("filters") or {}
+    themes = analysis_result.get("themes") if isinstance(analysis_result.get("themes"), list) else []
+    student_events = (
+        analysis_result.get("student_question_events")
+        if isinstance(analysis_result.get("student_question_events"), list)
+        else []
+    )
+    classes = sorted({str(item.get("class_name")) for item in student_events if item.get("class_name")})
+
+    student_questions, noise_questions = _partition_student_questions(student_events)
 
     return {
-        "meta": {
-            "analysis_version": analysis_result.get("analysis_version"),
-            "analysis_type": analysis_result.get("analysis_type"),
-            "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
-            "total_questions": summary.get("valid_question_count", summary.get("question_count", len(student_questions))),
-            "raw_count": summary.get("raw_count"),
-            "valid_question_count": summary.get("valid_question_count", len(student_questions)),
-            "prompt_echo_count": summary.get("prompt_echo_count"),
-            "noise_count": summary.get("noise_count"),
-            "duplicate_count": summary.get("duplicate_count"),
-            "active_interval_count": summary.get("active_interval_count"),
-            "unique_students": summary.get("unique_students"),
-            "teacher_anchor_count": summary.get("teacher_anchor_count"),
-            "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
-            "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
-            "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
-            "theme_count": summary.get("theme_count", len(themes)),
-            "intent_distribution": summary.get("intent_distribution"),
-            "burst_count": summary.get("burst_count"),
-            "top_hotness_score": summary.get("top_hotness_score"),
-            "heat_profile_distribution": summary.get("heat_profile_distribution") or {},
-            "classes": classes,
-            "class_name": filters.get("class_name"),
-            "bucket_seconds": filters.get("bucket_seconds"),
-        },
+        "meta": _build_hot_meta(analysis_result, summary, filters, classes, themes, student_questions),
         "task_sheet": analysis_result.get("task_sheet") or "",
         "topic_distribution": {
             str(theme.get("topic") or f"主题{index + 1}"): int(theme.get("count") or 0)
             for index, theme in enumerate(themes)
         },
         "themes": [
-            {
-                "theme_id": theme.get("theme_id"),
-                "topic": theme.get("topic"),
-                "count": int(theme.get("count") or 0),
-                "unique_students": int(theme.get("unique_students") or 0),
-                "intent_code": theme.get("intent_code") or "other",
-                "intent_label": theme.get("intent_label") or "其他问题",
-                "keywords": theme.get("keywords") or [],
-                "representative_question": theme.get("representative_question"),
-                "active_bucket_count": theme.get("active_bucket_count"),
-                "commonness_score": theme.get("commonness_score"),
-                "difficulty_signal_score": theme.get("difficulty_signal_score"),
-                "persistence_score": theme.get("persistence_score"),
-                "hotness_score": theme.get("hotness_score"),
-                "hotness_components": theme.get("hotness_components") or {},
-                "hotness_explanation": theme.get("hotness_explanation") or [],
-                "score_basis": theme.get("score_basis"),
-                "heat_profile": theme.get("heat_profile"),
-            }
+            _compact_hot_theme(theme)
             for theme in themes[:30]
         ],
         "intent_distribution": summary.get("intent_distribution") or {},
@@ -304,6 +327,61 @@ def _prepare_hot_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[st
         "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_questions") or []),
         "timeline_buckets": (analysis_result.get("timeline_buckets") or [])[:40],
         "course_hotspot_sequence": (analysis_result.get("course_hotspot_sequence") or [])[:20],
+    }
+
+
+def _compact_student_chain(chain: Dict[str, Any]) -> Dict[str, Any]:
+    nodes = chain.get("nodes") if isinstance(chain.get("nodes"), list) else []
+    return {
+        "session_id": chain.get("session_id"),
+        "student_name": chain.get("student_name") or "未知学生",
+        "student_id": chain.get("student_id"),
+        "class_name": chain.get("class_name"),
+        "question_count": chain.get("question_count") or len(nodes),
+        "summary": chain.get("summary"),
+        "questions": [
+            {
+                "node_id": node.get("node_id"),
+                "time": node.get("time"),
+                "question": node.get("question"),
+                "question_type": node.get("question_type"),
+                "question_type_label": node.get("question_type_label"),
+                "bloom_level": node.get("bloom_level"),
+                "teacher_anchor_id": node.get("teacher_anchor_id"),
+                "teacher_anchor_question": node.get("teacher_anchor_question"),
+                "teacher_anchor_score": node.get("teacher_anchor_score"),
+                "teacher_anchor_confidence": node.get("teacher_anchor_confidence"),
+                "teacher_anchor_reason": node.get("teacher_anchor_reason") or [],
+                "evidence_ids": node.get("evidence_ids") or [],
+            }
+            for node in nodes
+            if node.get("question")
+        ],
+    }
+
+
+def _build_chain_meta(
+    analysis_result: Dict[str, Any],
+    summary: Dict[str, Any],
+    filters: Dict[str, Any],
+    classes: List[str],
+    student_chains: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        "analysis_version": analysis_result.get("analysis_version"),
+        "analysis_type": analysis_result.get("analysis_type"),
+        "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
+        "total_questions": summary.get("question_count"),
+        "unique_students": summary.get("unique_students"),
+        "teacher_anchor_count": summary.get("teacher_anchor_count"),
+        "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
+        "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
+        "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
+        "chain_count": summary.get("chain_count", len(student_chains)),
+        "ai_chain_node_count": summary.get("ai_chain_node_count"),
+        "dominant_question_type": summary.get("dominant_question_type"),
+        "classes": classes,
+        "class_name": filters.get("class_name"),
     }
 
 
@@ -317,55 +395,10 @@ def _prepare_chain_deep_analysis_input(analysis_result: Dict[str, Any]) -> Dict[
     )
     classes = sorted({str(chain.get("class_name")) for chain in raw_chains if chain.get("class_name")})
 
-    student_chains = []
-    for chain in raw_chains:
-        nodes = chain.get("nodes") if isinstance(chain.get("nodes"), list) else []
-        student_chains.append(
-            {
-                "session_id": chain.get("session_id"),
-                "student_name": chain.get("student_name") or "未知学生",
-                "student_id": chain.get("student_id"),
-                "class_name": chain.get("class_name"),
-                "question_count": chain.get("question_count") or len(nodes),
-                "summary": chain.get("summary"),
-                "questions": [
-                    {
-                        "node_id": node.get("node_id"),
-                        "time": node.get("time"),
-                        "question": node.get("question"),
-                        "question_type": node.get("question_type"),
-                        "question_type_label": node.get("question_type_label"),
-                        "bloom_level": node.get("bloom_level"),
-                        "teacher_anchor_id": node.get("teacher_anchor_id"),
-                        "teacher_anchor_question": node.get("teacher_anchor_question"),
-                        "teacher_anchor_score": node.get("teacher_anchor_score"),
-                        "teacher_anchor_confidence": node.get("teacher_anchor_confidence"),
-                        "teacher_anchor_reason": node.get("teacher_anchor_reason") or [],
-                        "evidence_ids": node.get("evidence_ids") or [],
-                    }
-                    for node in nodes
-                    if node.get("question")
-                ],
-            }
-        )
+    student_chains = [_compact_student_chain(chain) for chain in raw_chains]
 
     return {
-        "meta": {
-            "analysis_version": analysis_result.get("analysis_version"),
-            "analysis_type": analysis_result.get("analysis_type"),
-            "time_range": f"{filters.get('start_at') or ''} ~ {filters.get('end_at') or ''}",
-            "total_questions": summary.get("question_count"),
-            "unique_students": summary.get("unique_students"),
-            "teacher_anchor_count": summary.get("teacher_anchor_count"),
-            "teacher_anchor_match_count": summary.get("teacher_anchor_match_count"),
-            "teacher_anchor_coverage": summary.get("teacher_anchor_coverage"),
-            "teacher_anchor_confidence_distribution": summary.get("teacher_anchor_confidence_distribution") or {},
-            "chain_count": summary.get("chain_count", len(student_chains)),
-            "ai_chain_node_count": summary.get("ai_chain_node_count"),
-            "dominant_question_type": summary.get("dominant_question_type"),
-            "classes": classes,
-            "class_name": filters.get("class_name"),
-        },
+        "meta": _build_chain_meta(analysis_result, summary, filters, classes, student_chains),
         "task_sheet": analysis_result.get("task_sheet") or "",
         "teacher_questions": _compact_teacher_questions(analysis_result.get("teacher_mainline") or []),
         "student_chains": student_chains,

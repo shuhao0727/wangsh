@@ -158,6 +158,55 @@ def _build_analysis_audit(
     }
 
 
+def _intent_distribution(student_questions: List[Any]) -> Dict[str, int]:
+    intent_distribution: Dict[str, int] = {}
+    for event in student_questions:
+        intent_code = str(event.intent_code or "other")
+        intent_distribution[intent_code] = intent_distribution.get(intent_code, 0) + 1
+    return intent_distribution
+
+
+def _build_student_question_events(
+    all_student_events: List[Any],
+    themes: List[Dict[str, Any]],
+    teacher_questions: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    student_question_events = []
+    for event in all_student_events:
+        included = event.quality_label == "valid_question"
+        theme = _theme_for_event(event, themes) if included else None
+        teacher = _nearest_teacher(event, teacher_questions, max_minutes=20)
+        student_question_events.append(
+            {
+                **_event_to_dict(event),
+                "theme_id": theme.get("theme_id") if theme else None,
+                "theme": theme.get("topic") if theme else None,
+                "teacher_anchor_id": teacher.get("id") if teacher else None,
+                "teacher_anchor_question": teacher.get("question") if teacher else None,
+                "teacher_anchor_score": teacher.get("anchor_score") if teacher else None,
+                "teacher_anchor_confidence": teacher.get("anchor_confidence") if teacher else None,
+                "teacher_anchor_match_type": teacher.get("anchor_match_type") if teacher else None,
+                "teacher_anchor_reason": teacher.get("anchor_reason") if teacher else [],
+                "trigger_delay_seconds": teacher.get("delay_seconds") if teacher else None,
+            }
+        )
+    return student_question_events
+
+
+def _heat_profile_distribution(
+    themes: List[Dict[str, Any]],
+) -> tuple[Dict[str, int], float]:
+    heat_profile_distribution: Dict[str, int] = {}
+    for theme in themes:
+        profile = str(theme.get("heat_profile") or "局部热点")
+        heat_profile_distribution[profile] = heat_profile_distribution.get(profile, 0) + 1
+    top_hotness_score = max(
+        (float(theme.get("hotness_score") or 0) for theme in themes),
+        default=0.0,
+    )
+    return heat_profile_distribution, top_hotness_score
+
+
 async def analyze_hot_questions_v2(
     db: AsyncSession,
     *,
@@ -193,10 +242,7 @@ async def analyze_hot_questions_v2(
     )
     teacher_questions = build_teacher_questions(events, teacher_marks)
     themes = _cluster_questions(student_questions)
-    intent_distribution: Dict[str, int] = {}
-    for event in student_questions:
-        intent_code = str(event.intent_code or "other")
-        intent_distribution[intent_code] = intent_distribution.get(intent_code, 0) + 1
+    intent_distribution = _intent_distribution(student_questions)
     timeline_buckets, burst_points = _build_timeline(
         student_questions,
         themes,
@@ -214,25 +260,9 @@ async def analyze_hot_questions_v2(
     )
     word_cloud = _compute_word_cloud(themes, student_questions)
     course_sequence = _build_course_hotspot_sequence(timeline_buckets)
-    student_question_events = []
-    for event in all_student_events:
-        included = event.quality_label == "valid_question"
-        theme = _theme_for_event(event, themes) if included else None
-        teacher = _nearest_teacher(event, teacher_questions, max_minutes=20)
-        student_question_events.append(
-            {
-                **_event_to_dict(event),
-                "theme_id": theme.get("theme_id") if theme else None,
-                "theme": theme.get("topic") if theme else None,
-                "teacher_anchor_id": teacher.get("id") if teacher else None,
-                "teacher_anchor_question": teacher.get("question") if teacher else None,
-                "teacher_anchor_score": teacher.get("anchor_score") if teacher else None,
-                "teacher_anchor_confidence": teacher.get("anchor_confidence") if teacher else None,
-                "teacher_anchor_match_type": teacher.get("anchor_match_type") if teacher else None,
-                "teacher_anchor_reason": teacher.get("anchor_reason") if teacher else [],
-                "trigger_delay_seconds": teacher.get("delay_seconds") if teacher else None,
-            }
-        )
+    student_question_events = _build_student_question_events(
+        all_student_events, themes, teacher_questions
+    )
 
     quality_events_by_id = {event.message_id: event for event in all_student_events}
     evidence_events = [quality_events_by_id.get(event.message_id, event) for event in events]
@@ -263,14 +293,7 @@ async def analyze_hot_questions_v2(
         "prompt_echo_rate": round(quality_counts["prompt_echo_count"] / max(1, quality_counts["raw_count"]), 4),
         "noise_rate": round(quality_counts["noise_count"] / max(1, quality_counts["raw_count"]), 4),
     }
-    heat_profile_distribution: Dict[str, int] = {}
-    for theme in themes:
-        profile = str(theme.get("heat_profile") or "局部热点")
-        heat_profile_distribution[profile] = heat_profile_distribution.get(profile, 0) + 1
-    top_hotness_score = max(
-        (float(theme.get("hotness_score") or 0) for theme in themes),
-        default=0.0,
-    )
+    heat_profile_distribution, top_hotness_score = _heat_profile_distribution(themes)
 
     return {
         "analysis_version": "hot_v2",

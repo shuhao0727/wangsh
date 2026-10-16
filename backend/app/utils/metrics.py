@@ -212,6 +212,69 @@ def collect_db_pool_metrics() -> dict:
     }
 
 
+def _hit_rate(hit: int, miss: int) -> float:
+    """命中率计算：无样本时返回 0.0。"""
+    if hit + miss > 0:
+        return float(hit) / float(hit + miss)
+    return 0.0
+
+
+def _mget_int(vals: List, index: int, default: int = 0) -> int:
+    """从 mget 结果解析整数，缺省值兜底。"""
+    return int(vals[index] or default)
+
+
+async def _fetch_dur_samples(client, key: str, sample_size: int) -> List[int]:
+    raw = await client.lrange(key, 0, sample_size)  # type: ignore[misc]
+    return [int(x) for x in raw if str(x).isdigit()]
+
+
+async def _fetch_ai_agents_redis_values() -> dict:
+    """采集 AI 智能体原始指标，失败时保留默认值并记录节流警告。"""
+    conv_hit = conv_miss = analysis_total = 0
+    analysis_cache_hit = analysis_cache_miss = 0
+    dify_active = dify_limit = 20  # 默认限制
+    conv_dur_ms: List[int] = []
+    analysis_dur_ms: List[int] = []
+
+    try:
+        client = await cache.get_client()
+        vals = await client.mget(
+            "ai_agents:conversations:cache_hit",
+            "ai_agents:conversations:cache_miss",
+            "ai_agents:analysis:total",
+            "ai_agents:dify:active_leases",
+            "ai_agents:dify:lease_limit",
+            "analysis:cache:hit",
+            "analysis:cache:miss",
+        )
+        conv_hit = _mget_int(vals, 0, 0)
+        conv_miss = _mget_int(vals, 1, 0)
+        analysis_total = _mget_int(vals, 2, 0)
+        dify_active = _mget_int(vals, 3, 0)
+        dify_limit = _mget_int(vals, 4, 20)
+        analysis_cache_hit = _mget_int(vals, 5, 0)
+        analysis_cache_miss = _mget_int(vals, 6, 0)
+
+        sample_size = max(0, settings.HTTP_METRICS_SAMPLE_SIZE - 1)
+        conv_dur_ms = await _fetch_dur_samples(client, "ai_agents:conversations:dur_ms", sample_size)
+        analysis_dur_ms = await _fetch_dur_samples(client, "ai_agents:analysis:dur_ms", sample_size)
+    except Exception:
+        _warn_metrics_failure("ai_agents")
+
+    return {
+        "conv_hit": conv_hit,
+        "conv_miss": conv_miss,
+        "analysis_total": analysis_total,
+        "dify_active": dify_active,
+        "dify_limit": dify_limit,
+        "analysis_cache_hit": analysis_cache_hit,
+        "analysis_cache_miss": analysis_cache_miss,
+        "conv_dur_ms": conv_dur_ms,
+        "analysis_dur_ms": analysis_dur_ms,
+    }
+
+
 async def collect_ai_agents_metrics() -> dict:
     """采集 AI 智能体指标（从 Redis）
 
@@ -230,46 +293,19 @@ async def collect_ai_agents_metrics() -> dict:
             }
         }
     """
-    conv_hit = conv_miss = analysis_total = 0
-    analysis_cache_hit = analysis_cache_miss = 0
-    dify_active = dify_limit = 20  # 默认限制
-    conv_dur_ms: List[int] = []
-    analysis_dur_ms: List[int] = []
+    raw = await _fetch_ai_agents_redis_values()
+    conv_hit = raw["conv_hit"]
+    conv_miss = raw["conv_miss"]
+    analysis_total = raw["analysis_total"]
+    dify_active = raw["dify_active"]
+    dify_limit = raw["dify_limit"]
+    analysis_cache_hit = raw["analysis_cache_hit"]
+    analysis_cache_miss = raw["analysis_cache_miss"]
+    conv_dur_ms = raw["conv_dur_ms"]
+    analysis_dur_ms = raw["analysis_dur_ms"]
 
-    try:
-        client = await cache.get_client()
-        vals = await client.mget(
-            "ai_agents:conversations:cache_hit",
-            "ai_agents:conversations:cache_miss",
-            "ai_agents:analysis:total",
-            "ai_agents:dify:active_leases",
-            "ai_agents:dify:lease_limit",
-            "analysis:cache:hit",
-            "analysis:cache:miss",
-        )
-        conv_hit = int(vals[0] or 0)
-        conv_miss = int(vals[1] or 0)
-        analysis_total = int(vals[2] or 0)
-        dify_active = int(vals[3] or 0)
-        dify_limit = int(vals[4] or 20)
-        analysis_cache_hit = int(vals[5] or 0)
-        analysis_cache_miss = int(vals[6] or 0)
-
-        sample_size = max(0, settings.HTTP_METRICS_SAMPLE_SIZE - 1)
-        raw_conv_dur = await client.lrange("ai_agents:conversations:dur_ms", 0, sample_size)  # type: ignore[misc]
-        raw_analysis_dur = await client.lrange("ai_agents:analysis:dur_ms", 0, sample_size)  # type: ignore[misc]
-        conv_dur_ms = [int(x) for x in raw_conv_dur if str(x).isdigit()]
-        analysis_dur_ms = [int(x) for x in raw_analysis_dur if str(x).isdigit()]
-    except Exception:
-        _warn_metrics_failure("ai_agents")
-
-    cache_hit_rate = 0.0
-    if conv_hit + conv_miss > 0:
-        cache_hit_rate = float(conv_hit) / float(conv_hit + conv_miss)
-
-    analysis_cache_hit_rate = 0.0
-    if analysis_cache_hit + analysis_cache_miss > 0:
-        analysis_cache_hit_rate = float(analysis_cache_hit) / float(analysis_cache_hit + analysis_cache_miss)
+    cache_hit_rate = _hit_rate(conv_hit, conv_miss)
+    analysis_cache_hit_rate = _hit_rate(analysis_cache_hit, analysis_cache_miss)
 
     return {
         "conversations": {

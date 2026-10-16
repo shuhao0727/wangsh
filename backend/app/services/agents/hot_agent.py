@@ -103,24 +103,21 @@ async def deep_analyze_hot_questions(
     return result
 
 
-def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = None) -> str:
-    """构建发给 LLM 的完整分析 prompt。"""
-    import json
-
-    # 控制数据量：学生问题太多时做摘要
-    student_questions = data.get("student_questions") or []
-    meta = data.get("meta") or {}
-    topic_dist = data.get("topic_distribution") or {}
-    intent_dist = data.get("intent_distribution") or {}
-    themes = data.get("themes") or []
-    noise = data.get("noise_questions") or []
-    task_sheet = data.get("task_sheet") or ""
-    teacher_questions = data.get("teacher_questions") or []
-    timeline_buckets = data.get("timeline_buckets") or []
-    course_sequence = data.get("course_hotspot_sequence") or []
-
-    # 构建精简但信息完整的输入
-    input_data: Dict[str, Any] = {
+def _build_analysis_input_data(
+    *,
+    meta: Dict[str, Any],
+    task_sheet: str,
+    topic_dist: Dict[str, Any],
+    intent_dist: Dict[str, Any],
+    themes: List[Dict[str, Any]],
+    teacher_questions: List[Dict[str, Any]],
+    timeline_buckets: List[Dict[str, Any]],
+    course_sequence: List[Dict[str, Any]],
+    noise: List[Dict[str, Any]],
+    student_questions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """构建精简但信息完整的输入数据。"""
+    return {
         "meta": meta,
         "task_sheet": task_sheet[:2000],  # 截断过长的任务单
         "topic_distribution": topic_dist,
@@ -182,7 +179,9 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
         "student_questions": _compact_questions(student_questions),
     }
 
-    # 按主题分组示例
+
+def _group_question_examples(student_questions: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
+    """按主题分组示例，每个主题最多保留 5 条。"""
     examples_by_topic: Dict[str, List[Dict]] = {}
     for q in student_questions:
         terms = tuple(q.get("terms") or [])
@@ -199,7 +198,41 @@ def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = 
                 "intent": q.get("intent_label", ""),
                 "bloom_level": q.get("bloom_level", ""),
             })
-    input_data["question_examples_by_topic"] = examples_by_topic
+    return examples_by_topic
+
+
+def _build_analysis_prompt(data: Dict[str, Any], custom_prompt: Optional[str] = None) -> str:
+    """构建发给 LLM 的完整分析 prompt。"""
+    import json
+
+    # 控制数据量：学生问题太多时做摘要
+    student_questions = data.get("student_questions") or []
+    meta = data.get("meta") or {}
+    topic_dist = data.get("topic_distribution") or {}
+    intent_dist = data.get("intent_distribution") or {}
+    themes = data.get("themes") or []
+    noise = data.get("noise_questions") or []
+    task_sheet = data.get("task_sheet") or ""
+    teacher_questions = data.get("teacher_questions") or []
+    timeline_buckets = data.get("timeline_buckets") or []
+    course_sequence = data.get("course_hotspot_sequence") or []
+
+    # 构建精简但信息完整的输入
+    input_data: Dict[str, Any] = _build_analysis_input_data(
+        meta=meta,
+        task_sheet=task_sheet,
+        topic_dist=topic_dist,
+        intent_dist=intent_dist,
+        themes=themes,
+        teacher_questions=teacher_questions,
+        timeline_buckets=timeline_buckets,
+        course_sequence=course_sequence,
+        noise=noise,
+        student_questions=student_questions,
+    )
+
+    # 按主题分组示例
+    input_data["question_examples_by_topic"] = _group_question_examples(student_questions)
 
     prompt_parts = ["## 输入数据\n", json.dumps(input_data, ensure_ascii=False, indent=2)]
 

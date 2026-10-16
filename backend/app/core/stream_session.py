@@ -88,21 +88,29 @@ async def _emit_session_failure(request: Request, status: str):
         yield _session_error_frame("session_revalidation_unavailable", "暂时无法核验会话，请稍后重试")
 
 
+async def _recheck_session(request: Request | None) -> str:
+    if request is None:
+        live = await _session_is_live(request)
+        return "ok" if live else "session_invalid"
+    return await _session_status(request)
+
+
+async def _emit_failure_frames(request: Request | None, status: str):
+    if request is not None:
+        async for frame in _emit_session_failure(request, status):
+            yield frame
+
+
 async def session_checked_stream(source, request: Request | None):
     """Check before subscription and each frame; always close the source."""
     pending = None
     try:
         if await _request_is_disconnected(request):
             return
-        if request is None:
-            live = await _session_is_live(request)
-            status = "ok" if live else "session_invalid"
-        else:
-            status = await _session_status(request)
+        status = await _recheck_session(request)
         if status != "ok":
-            if request is not None:
-                async for frame in _emit_session_failure(request, status):
-                    yield frame
+            async for frame in _emit_failure_frames(request, status):
+                yield frame
             return
         while True:
             if await _request_is_disconnected(request):
@@ -112,15 +120,10 @@ async def session_checked_stream(source, request: Request | None):
             done, _ = await asyncio.wait({pending}, timeout=CHECK_INTERVAL_SECONDS)
             if await _request_is_disconnected(request):
                 return
-            if request is None:
-                live = await _session_is_live(request)
-                status = "ok" if live else "session_invalid"
-            else:
-                status = await _session_status(request)
+            status = await _recheck_session(request)
             if status != "ok":
-                if request is not None:
-                    async for frame in _emit_session_failure(request, status):
-                        yield frame
+                async for frame in _emit_failure_frames(request, status):
+                    yield frame
                 return
             if not done:
                 continue

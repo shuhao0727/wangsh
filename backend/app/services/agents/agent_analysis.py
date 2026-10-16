@@ -5,7 +5,6 @@
 
 import json
 import logging
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
@@ -14,16 +13,13 @@ from sqlalchemy import select, text
 
 from app.core.http_client import get_http_client
 from app.models.core import User
+from app.services.agents.agent_analysis_helpers import (
+    _dedupe_question_freq,
+    _group_chain_rows,
+    _segment_keywords,
+)
 
 logger = logging.getLogger(__name__)
-
-# 中文停用词表（精简版）
-_STOP_WORDS = set(
-    "的 了 是 吗 呢 吧 啊 呀 么 有 在 也 不 都 就 和 与 或 但 而 还 又 很 太 更 最 要 会 能 可以 应该 "
-    "必须 需要 让 把 被 对 从 到 向 以 用 为 因为 所以 虽然 如果 但是 然而 因此 这个 那个 这些 那些 "
-    "什么 怎么 怎样 为什么 哪 哪里 谁 多少 几 第一 第二 一个 一种 这个 那个 方面 "
-    "请 请问 帮我 一下 一下吗 能否 可以吗 如何 怎么样".split()
-)
 
 
 def _timestamp_value(value: Any) -> Optional[float]:
@@ -128,33 +124,6 @@ def _build_timeline_buckets(
         prev_count = question_count
 
     return timeline
-
-
-def _segment_keywords(text: str, top_n: int = 50) -> List[Dict[str, Any]]:
-    """提取关键词；优先使用 jieba，未安装时使用内置轻量分词兜底。"""
-    freq: Dict[str, int] = {}
-
-    try:
-        import jieba
-        words = jieba.lcut(text)
-    except ImportError:
-        latin_words = re.findall(r"[A-Za-z][A-Za-z0-9_+#-]{1,}", text)
-        chinese_text = re.sub(r"[A-Za-z0-9_+#-]+", " ", text)
-        chinese_words: List[str] = []
-        for chunk in re.findall(r"[一-鿿]{2,}", chinese_text):
-            for size in (4, 3, 2):
-                for i in range(0, max(len(chunk) - size + 1, 0)):
-                    chinese_words.append(chunk[i:i + size])
-        words = latin_words + chinese_words
-
-    for w in words:
-        w = w.strip().lower()
-        if len(w) < 2 or w in _STOP_WORDS:
-            continue
-        freq[w] = freq.get(w, 0) + 1
-
-    sorted_words = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-    return [{"word": w, "count": c} for w, c in sorted_words[:top_n]]
 
 
 async def _call_llm_analysis(
@@ -332,16 +301,7 @@ async def stream_task_sheet_analysis(
     yield {"event": "step_finished", "step_id": "word_cloud", "message": "词云生成完成", "progress": 55}
 
     yield {"event": "step_started", "step_id": "llm", "message": "AI 正在对比分析任务单", "progress": 62}
-    freq: Dict[str, int] = {}
-    for q in all_questions_raw:
-        q = q.strip()
-        if not q:
-            continue
-        normalized = q.lower().rstrip("？?。.")
-        freq[normalized] = freq.get(normalized, 0) + 1
-
-    sorted_qs = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:300]
-    questions_text = "\n".join(f"{q}（{c}次）" for q, c in sorted_qs)
+    questions_text = _dedupe_question_freq(all_questions_raw)
     comparison = await _call_llm_analysis(
         agent_type, api_endpoint, api_key, task_sheet, questions_text, agent_model, custom_prompt
     )
@@ -455,18 +415,7 @@ async def analyze_task_sheet(
     word_cloud = _segment_keywords(combined)
 
     # 2. Deduplicate + frequency sort for LLM input
-    freq: Dict[str, int] = {}
-    for q in all_questions_raw:
-        q = q.strip()
-        if not q:
-            continue
-        # Normalize: lowercase, trim
-        normalized = q.lower().rstrip("？?。.")
-        freq[normalized] = freq.get(normalized, 0) + 1
-
-    # Sort by frequency, format with count
-    sorted_qs = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:300]
-    questions_text = "\n".join(f"{q}（{c}次）" for q, c in sorted_qs)
+    questions_text = _dedupe_question_freq(all_questions_raw)
 
     # 3. LLM comparison
     comparison = await _call_llm_analysis(
@@ -678,32 +627,6 @@ async def analyze_student_chains(
         },
     )).mappings().all()
 
-    by_session: Dict[str, Dict[str, Any]] = {}
-    session_order: List[str] = []
-    for r in all_rows:
-        sid = r.get("session_id")
-        if not sid:
-            continue
-        if sid not in by_session:
-            session_order.append(sid)
-            by_session[sid] = {
-                "session_id": sid,
-                "last_at": r.get("last_at"),
-                "turns": int(r.get("turns") or 0),
-                "student_id": r.get("student_id"),
-                "user_name": r.get("user_name"),
-                "class_name": r.get("class_name"),
-                "messages": [],
-            }
-        msg_id = r.get("msg_id")
-        if msg_id is not None:
-            by_session[sid]["messages"].append(
-                {
-                    "id": int(msg_id),
-                    "message_type": r.get("msg_type"),
-                    "content": r.get("msg_content"),
-                    "created_at": r.get("msg_created_at"),
-                }
-            )
+    by_session, session_order = _group_chain_rows(all_rows)
 
     return [by_session[sid] for sid in session_order]

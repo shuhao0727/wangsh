@@ -177,8 +177,7 @@ async def create_agent_usage(
     }
 
 
-async def get_agent_usage_list(
-    db: AsyncSession,
+def _build_usage_filters(
     *,
     keyword: Optional[str] = None,
     student_id: Optional[str] = None,
@@ -186,17 +185,11 @@ async def get_agent_usage_list(
     class_name: Optional[str] = None,
     grade: Optional[str] = None,
     agent_name: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
-    skip: Optional[int] = None,
-    limit: Optional[int] = None,
+    start_dt: Optional[datetime] = None,
+    end_dt: Optional[datetime] = None,
     include_archived: bool = False,
-) -> Dict[str, Any]:
-    start_dt = _parse_usage_datetime(start_date)
-    end_dt = _parse_usage_datetime(end_date, is_end=True)
-
+) -> tuple[List[str], List[str], List[str], Dict[str, Any]]:
+    """把查询条件拆成 CTE 侧 WHERE/HAVING 与外层 WHERE 片段。"""
     cte_where: List[str] = ["session_id IS NOT NULL"]
     if not include_archived:
         cte_where.append("is_archived = FALSE")
@@ -234,6 +227,41 @@ async def get_agent_usage_list(
     if agent_name:
         params["agent_name"] = f"%{agent_name}%"
         outer_where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
+
+    return cte_where, cte_having, outer_where, params
+
+
+async def get_agent_usage_list(
+    db: AsyncSession,
+    *,
+    keyword: Optional[str] = None,
+    student_id: Optional[str] = None,
+    student_name: Optional[str] = None,
+    class_name: Optional[str] = None,
+    grade: Optional[str] = None,
+    agent_name: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    skip: Optional[int] = None,
+    limit: Optional[int] = None,
+    include_archived: bool = False,
+) -> Dict[str, Any]:
+    start_dt = _parse_usage_datetime(start_date)
+    end_dt = _parse_usage_datetime(end_date, is_end=True)
+
+    cte_where, cte_having, outer_where, params = _build_usage_filters(
+        keyword=keyword,
+        student_id=student_id,
+        student_name=student_name,
+        class_name=class_name,
+        grade=grade,
+        agent_name=agent_name,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        include_archived=include_archived,
+    )
 
     effective_limit = limit or page_size
     effective_skip = skip if skip is not None else max(page - 1, 0) * effective_limit
@@ -329,41 +357,17 @@ async def get_agent_usage_statistics(
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
-    cte_where: List[str] = ["session_id IS NOT NULL"]
-    if not include_archived:
-        cte_where.append("is_archived = FALSE")
-    cte_having: List[str] = []
-    outer_where: List[str] = ["1=1"]
-    params: Dict[str, Any] = {}
-
-    if keyword:
-        params["keyword"] = f"%{keyword}%"
-        cte_having.append(
-            "(MAX(CASE WHEN message_type='question' THEN content END) ILIKE :keyword "
-            "OR MAX(CASE WHEN message_type='answer' THEN content END) ILIKE :keyword)"
-        )
-    if start_dt:
-        params["start_dt"] = start_dt
-        cte_where.append("created_at >= :start_dt")
-    if end_dt:
-        params["end_dt"] = end_dt
-        cte_having.append("MAX(created_at) < :end_dt")
-
-    if student_id:
-        params["student_id"] = f"%{student_id}%"
-        outer_where.append("u.student_id ILIKE :student_id")
-    if student_name:
-        params["student_name"] = f"%{student_name}%"
-        outer_where.append("(u.full_name ILIKE :student_name OR s.display_user_name ILIKE :student_name)")
-    if class_name:
-        params["class_name"] = f"%{class_name}%"
-        outer_where.append("u.class_name ILIKE :class_name")
-    if grade:
-        params["grade"] = grade
-        outer_where.append("u.study_year = :grade")
-    if agent_name:
-        params["agent_name"] = f"%{agent_name}%"
-        outer_where.append("(a.name ILIKE :agent_name OR s.display_agent_name ILIKE :agent_name)")
+    cte_where, cte_having, outer_where, params = _build_usage_filters(
+        keyword=keyword,
+        student_id=student_id,
+        student_name=student_name,
+        class_name=class_name,
+        grade=grade,
+        agent_name=agent_name,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        include_archived=include_archived,
+    )
 
     cte_where_sql = " AND ".join(cte_where)
     cte_having_sql = " AND ".join(cte_having) if cte_having else "1=1"
