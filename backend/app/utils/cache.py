@@ -75,13 +75,13 @@ def _sentinel_connection_options() -> dict[str, Any]:
 
 class RedisCache:
     """Redis缓存客户端封装"""
-    
+
     _instance: Optional["RedisCache"] = None
     _client: Optional[redis.Redis] = None
     _initialized: bool = False
     _loop: Optional[asyncio.AbstractEventLoop] = None
     _initialize_locks: dict[int, asyncio.Lock] = {}
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -89,12 +89,12 @@ class RedisCache:
             cls._instance._initialized = False
             cls._instance._initialize_locks = {}
         return cls._instance
-    
+
     def __init__(self):
         """初始化方法（单例模式下只调用一次）"""
         # 单例模式下，__init__只会在首次创建实例时调用
         pass
-    
+
     async def initialize(self) -> None:
         """初始化Redis连接（支持连接池和 Sentinel 高可用模式）"""
         if self._initialized and self._client:
@@ -163,7 +163,7 @@ class RedisCache:
             if not isinstance(e, asyncio.CancelledError):
                 logger.error(f"Redis缓存客户端初始化失败: {e}")
             raise
-    
+
     async def get_client(self) -> redis.Redis:
         """获取 Redis 客户端实例，并在同一事件循环内串行初始化。"""
         loop = asyncio.get_running_loop()
@@ -187,7 +187,7 @@ class RedisCache:
             if self._client is None:
                 raise RuntimeError("Redis客户端初始化失败")
             return self._client
-    
+
     async def close(self) -> None:
         """关闭Redis连接"""
         if self._client:
@@ -200,7 +200,7 @@ class RedisCache:
                 self._initialized = False
                 self._loop = None
                 logger.info("Redis缓存客户端已关闭")
-    
+
     async def get(self, key: str) -> Optional[Any]:
         """获取缓存值"""
         try:
@@ -216,11 +216,11 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis获取缓存失败: {e}")
             return None
-    
+
     async def set(
-        self, 
-        key: str, 
-        value: Any, 
+        self,
+        key: str,
+        value: Any,
         expire_seconds: Optional[int] = None,
         nx: bool = False,
     ) -> bool:
@@ -232,7 +232,7 @@ class RedisCache:
                 serialized_value = json.dumps(value, ensure_ascii=False)
             else:
                 serialized_value = str(value)
-            
+
             if expire_seconds:
                 result = await client.set(key, serialized_value, ex=expire_seconds, nx=nx)
             else:
@@ -241,7 +241,7 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis设置缓存失败: {e}")
             return False
-    
+
     async def delete(self, key: str) -> bool:
         """删除缓存键"""
         try:
@@ -251,7 +251,7 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis删除缓存失败: {e}")
             return False
-    
+
     async def exists(self, key: str) -> bool:
         """检查键是否存在"""
         try:
@@ -261,7 +261,7 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis检查缓存存在失败: {e}")
             return False
-    
+
     async def clear_pattern(self, pattern: str) -> int:
         """清除匹配模式的缓存键"""
         try:
@@ -290,7 +290,7 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis清除模式缓存失败: {e}")
             return 0
-    
+
     async def increment(self, key: str, amount: int = 1) -> Optional[int]:
         """递增计数器"""
         try:
@@ -300,7 +300,7 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis递增失败: {e}")
             return None
-    
+
     async def ttl(self, key: str) -> Optional[int]:
         """获取键的剩余生存时间（秒）"""
         try:
@@ -346,7 +346,7 @@ def cache_decorator(
 # 特定功能的缓存键生成器
 class ArticleCacheKeys:
     """文章相关缓存键生成器（优化版）"""
-    
+
     @staticmethod
     def public_list(
         page: int = 1, size: int = 20, category_id: Optional[int] = None, q: Optional[str] = None
@@ -359,12 +359,12 @@ class ArticleCacheKeys:
             category_id or 0,
             q or "",
         )
-    
+
     @staticmethod
     def public_detail(slug: str) -> str:
         """公开文章详情缓存键"""
         return f"articles:p:detail:{slug}"
-    
+
     @staticmethod
     def admin_list(
         page: int = 1,
@@ -389,41 +389,41 @@ class ArticleCacheKeys:
             author_id or 0,
             (search or "").strip(),
         )
-    
+
     @staticmethod
     def article_detail(article_id: int) -> str:
         """文章详情缓存键"""
         return f"articles:detail:{article_id}"
-    
+
     @staticmethod
     def article_by_slug(slug: str) -> str:
         """文章slug缓存键"""
         return f"articles:slug:{slug}"
-    
+
     @staticmethod
     def admin_detail_by_id(article_id: int, include_relations: bool = True) -> str:
         """管理员文章详情缓存键（根据ID，紧凑版）"""
         relation_num = 1 if include_relations else 0
         return f"articles:a:detail:id:{article_id}:{relation_num}"
-    
+
     @staticmethod
     def admin_detail_by_slug(slug: str, include_relations: bool = True) -> str:
         """管理员文章详情缓存键（根据slug，紧凑版）"""
         relation_num = 1 if include_relations else 0
         return f"articles:a:detail:slug:{slug}:{relation_num}"
-    
+
     @staticmethod
     def user_detail_by_id(article_id: int, user_id: int, include_relations: bool = True) -> str:
         """用户文章详情缓存键（根据ID，包含用户权限，紧凑版）"""
         relation_num = 1 if include_relations else 0
         return f"articles:u:detail:id:{article_id}:{user_id}:{relation_num}"
-    
+
     @staticmethod
     def user_detail_by_slug(slug: str, user_id: int, include_relations: bool = True) -> str:
         """用户文章详情缓存键（根据slug，包含用户权限，紧凑版）"""
         relation_num = 1 if include_relations else 0
         return f"articles:u:detail:slug:{slug}:{user_id}:{relation_num}"
-    
+
     @staticmethod
     def clear_article(article_id: Optional[int] = None, slug: Optional[str] = None):
         """清除文章相关缓存（兼容新旧键格式）"""
@@ -433,7 +433,7 @@ class ArticleCacheKeys:
             "articles:detail:*",      # 匹配旧版详情键
             "articles:slug:*",        # 匹配旧版slug键
         ]
-        
+
         if article_id:
             patterns.append(f"articles:detail:{article_id}")
             patterns.append(f"articles:*:detail:id:{article_id}:*")
@@ -441,7 +441,7 @@ class ArticleCacheKeys:
             patterns.append(f"articles:slug:{slug}")
             patterns.append(f"articles:*:detail:slug:{slug}:*")
             patterns.append(f"articles:p:detail:{slug}")
-        
+
         return patterns
 
 

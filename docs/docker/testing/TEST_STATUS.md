@@ -22,7 +22,7 @@
   `codex/release-2.2.0-prep` 移植并按当前 `.env.example` 校准；
   `node --test scripts/env-consistency.test.mjs` **6 passed**。
 - **Markdown 合同：** `node scripts/check-markdown-contracts.mjs` **exit 0** —
-  `173 files / 497 links / 0 missing`。此前 14 条错误全部修复：
+  `173 files / 530 links / 0 missing`。此前 14 条错误全部修复：
   - 7 条断链改指真实文档或删除引用行：`DATA_ARCHIVING.md`×3
     （Celery→`analysis/ASYNC_ANALYSIS.md`、数据库→`DATABASE_PERFORMANCE_GUIDE.md`、
     监控→`operations/MONITORING.md`）、`IMPLEMENTATION_SUMMARY.md`×1

@@ -36,37 +36,18 @@ _REVIEWED_DEFINITION = (
     f"CREATE INDEX {_REVIEWED_INDEX} ON public.{_REVIEWED_TABLE} USING btree (group_name)"
 )
 
-# The 2026-10-01 conversation-index migration uses Alembic's
-# ``if_not_exists=True`` form for three indexes.  It is safe to exempt those
-# guards only when the complete migration AST still matches the reviewed
-# source; existing same-name indexes continue to require exact catalog
-# evidence below.
+# 291268877685 曾用 if_not_exists=True 创建三个索引并被登记为
+# reviewed guard。2026-10-16 的 P0 修复（审计 §3.5）已把该迁移改为无条件创建：
+# 守卫移除后由预检对真实 schema 漂移 fail-closed 拦截，不再存在可豁免的守卫，
+# 因此目录不再登记该 revision（登记会随迁移 AST 变化产生错误的豁免）。
 _REVIEWED_GUARD_MIGRATIONS = {
     "20260430_migrate_dev_schema": {
         _REVIEWED_INDEX: _REVIEWED_DEFINITION,
-    },
-    "291268877685": {
-        "ix_conversations_session_created": (
-            "CREATE INDEX ix_conversations_session_created ON public.znt_conversations "
-            "USING btree (session_id, created_at DESC, id DESC)"
-        ),
-        "ix_group_messages_session_created": (
-            "CREATE INDEX ix_group_messages_session_created "
-            "ON public.znt_group_discussion_messages USING btree (session_id, created_at DESC)"
-        ),
-        "ix_conversations_user_agent_time": (
-            "CREATE INDEX ix_conversations_user_agent_time ON public.znt_conversations "
-            "USING btree (user_id, agent_id, created_at DESC)"
-        ),
     },
 }
 
 _REVIEWED_GUARD_AST_BY_REVISION = {
     "20260430_migrate_dev_schema": _REVIEWED_INDEX_GUARD_AST,
-    # Generated once from the checked-in migration and intentionally kept
-    # static.  A source change must receive a fresh review rather than silently
-    # widening the exemption.
-    "291268877685": "c553e9ce082640458d5ee2b9584599a4b11acd7ff8650ec77fd5ea575322b11f",
 }
 
 

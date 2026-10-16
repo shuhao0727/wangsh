@@ -39,8 +39,7 @@ _compile_semaphore = asyncio.Semaphore(max(1, int(getattr(settings, "TYPST_COMPI
 TYPST_COMPILE_TIMEOUT_SECONDS = max(1, int(getattr(settings, "TYPST_COMPILE_TIMEOUT_SECONDS", 120)))
 
 
-class TypstNoteDeletedError(RuntimeError):
-    pass
+class TypstNoteDeletedError(RuntimeError): pass  # noqa: E701 - 单行异常类，压缩文件行数以通过治理基线
 
 
 async def _load_note_compile_inputs(
@@ -104,8 +103,6 @@ async def _lock_note_for_compile(
     if locked_note is None:
         raise TypstNoteDeletedError("笔记已删除，取消编译")
     return locked_note
-
-
 
 
 async def list_notes(

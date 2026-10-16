@@ -38,15 +38,35 @@ def test_actual_intermediate_revision_accepts_only_equivalent_guarded_index():
     assert evaluate(definitions={INDEX: (catalog(),)}).ok
 
 
-def test_known_if_not_exists_conversation_guards_are_revision_fingerprinted(tmp_path):
+_CONVERSATION_INDEX_CONTRACT = {
+    "ix_conversations_session_created": (
+        "CREATE INDEX ix_conversations_session_created ON public.znt_conversations "
+        "USING btree (session_id, created_at DESC, id DESC)",
+        "znt_conversations",
+    ),
+    "ix_group_messages_session_created": (
+        "CREATE INDEX ix_group_messages_session_created "
+        "ON public.znt_group_discussion_messages USING btree (session_id, created_at DESC)",
+        "znt_group_discussion_messages",
+    ),
+    "ix_conversations_user_agent_time": (
+        "CREATE INDEX ix_conversations_user_agent_time ON public.znt_conversations "
+        "USING btree (user_id, agent_id, created_at DESC)",
+        "znt_conversations",
+    ),
+}
+
+
+def test_conversation_index_migration_is_unguarded_after_p0_fix(tmp_path):
+    # 2026-10-16 P0（审计 §3.5）移除了该迁移的 if_not_exists 守卫。
+    # 守卫移除后的正确契约：无 review 错误、无 guarded 豁免、三个
+    # op.create_index 索引以无条件形态进入 create_indexes，漂移由
+    # build_drift_messages 按同名冲突 fail-closed 拦截。
     path = VERSIONS / "291268877685_add_core_indexes_for_conversations.py"
     ops = preflight.parse_migration_ops(path, "291268877685")
     assert ops.review_errors == ()
-    assert set(ops.guarded_indexes) == {
-        "ix_conversations_session_created",
-        "ix_group_messages_session_created",
-        "ix_conversations_user_agent_time",
-    }
+    assert ops.guarded_indexes == {}
+    assert set(_CONVERSATION_INDEX_CONTRACT) <= ops.create_indexes
 
     changed = path.read_text(encoding="utf-8").replace(
         "created_at DESC", "created_at ASC", 1
@@ -55,52 +75,40 @@ def test_known_if_not_exists_conversation_guards_are_revision_fingerprinted(tmp_
     changed_path.write_text(changed, encoding="utf-8")
     try:
         changed_ops = preflight.parse_migration_ops(changed_path, "291268877685")
-        assert not changed_ops.guarded_indexes
-        assert changed_ops.review_errors
+        # 无守卫迁移的任何文本改动都不会凭空获得豁免。
+        assert changed_ops.guarded_indexes == {}
+        assert changed_ops.review_errors == ()
     finally:
         changed_path.unlink()
 
 
-@pytest.mark.parametrize("name,expected", list(
-    preflight._REVIEWED_GUARD_MIGRATIONS["291268877685"].items()
-))
-def test_conversation_guard_checks_its_own_table_and_full_index_structure(name, expected):
-    table = expected.split(" ON public.", 1)[1].split(" USING ", 1)[0]
+@pytest.mark.parametrize("name,expected", sorted(_CONVERSATION_INDEX_CONTRACT.items()))
+def test_unguarded_conversation_index_fails_closed_on_name_conflict(name, expected):
+    expected_sql, table = expected
     ops = preflight.parse_migration_ops(
         VERSIONS / "291268877685_add_core_indexes_for_conversations.py", "291268877685"
     )
+    assert name in ops.create_indexes
+    assert name not in ops.guarded_indexes
     definition = preflight.IndexDefinition(
-        schema="public", table=table, definition=expected,
+        schema="public", table=table, definition=expected_sql,
         valid=True, ready=True, live=True, kind="i",
     )
-    all_definitions = {
-        other_name: (
-            preflight.IndexDefinition(
-                schema="public",
-                table=other_expected.split(" ON public.", 1)[1].split(" USING ", 1)[0],
-                definition=other_expected,
-                valid=True,
-                ready=True,
-                live=True,
-                kind="i",
-            ),
-        )
-        for other_name, other_expected in
-        preflight._REVIEWED_GUARD_MIGRATIONS["291268877685"].items()
-    }
-    for item, allowed in (
-        (definition, True),
-        (replace(definition, table="other_table"), False),
-        (replace(definition, definition=expected + " WHERE id > 0"), False),
-        (replace(definition, valid=False), False),
-    ):
-        definitions = dict(all_definitions)
-        definitions[name] = (item,)
-        messages = preflight.build_drift_messages(
-            [ops], existing_tables={table}, existing_indexes=set(definitions), existing_columns=set(),
-            existing_index_definitions=definitions,
-        )
-        assert (not messages) == allowed
+    # 同名索引已存在（即使定义完全一致）→ 漂移必须被报告，不允许静默跳过。
+    messages = preflight.build_drift_messages(
+        [ops], existing_tables={table}, existing_indexes={name}, existing_columns=set(),
+        existing_index_definitions={name: (definition,)},
+    )
+    assert any(
+        "pending migration would create existing index" in message
+        for message in messages
+    )
+    # 索引不存在 → 不产生任何消息。
+    messages = preflight.build_drift_messages(
+        [ops], existing_tables={table}, existing_indexes=set(), existing_columns=set(),
+        existing_index_definitions={},
+    )
+    assert messages == []
 
 
 def test_actual_guard_without_catalog_evidence_stays_blocked():
