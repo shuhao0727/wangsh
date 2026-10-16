@@ -67,6 +67,17 @@ class SandboxProvider(abc.ABC):
         """
         pass
 
+    async def reap_user_container(self, user_id: int) -> None:
+        """
+        Best-effort reclamation of a user-scoped container that has no sessions.
+
+        Conservative default: providers without a host-side ownership journal
+        do nothing; the caller treats any failure as "retain". Providers with
+        an ownership journal must terminate only when the current record
+        proves the container is live and owned by this user.
+        """
+        return None
+
 def get_sitecustomize_content() -> str:
     return """import socket
 import sys

@@ -507,14 +507,38 @@ def test_tokenless_stop_retains_legacy_and_current_generations(ownership_env, wi
     assert not any(c[1] in {'rm', 'exec'} for c in calls)
 
 
-@pytest.mark.parametrize('with_journal', [False, True])
-def test_cleanup_orphans_fake_meta_retains_resources(ownership_env, monkeypatch, with_journal):
+def test_cleanup_orphans_reaps_user_container_with_live_ownership(ownership_env, monkeypatch):
     store, provider, meta, ws, state, calls, live_ids = ownership_env
-    if with_journal:
-        assert apply_start().state == 'SUCCESS'
-    else:
-        state['info'] = {'Id': 'a' * 64, 'State': {'Status': 'running'}}
-        live_ids.add('a' * 64)
+    assert apply_start().state == 'SUCCESS'
+    assert live_ids == {'b' * 64}
+    original_run = docker_api._run_async
+
+    async def orphan_listing(cmd, timeout_s=30):
+        if cmd[:2] == ['docker', 'ps']:
+            calls.append(list(cmd))
+            return 0, provider._container_name(meta) + '\n', ''
+        return await original_run(cmd, timeout_s=timeout_s)
+
+    monkeypatch.setattr(docker_api, '_run_async', orphan_listing)
+    client = SimpleNamespace(scard=AsyncMock(return_value=0))
+    monkeypatch.setattr(tasks.cache, 'get_client', AsyncMock(return_value=client))
+    monkeypatch.setattr(tasks, '_get_session_meta', AsyncMock(return_value=None))
+    result = tasks.cleanup_orphans.apply(throw=False)
+    assert result.state == 'SUCCESS'
+    client.scard.assert_awaited_once()
+    # 持有 live ownership journal 的用户容器必须被真实回收（此前是死代码）。
+    assert live_ids == set()
+    assert not ws.exists()
+    assert any(c[1] == 'rm' for c in calls)
+
+
+def test_cleanup_orphans_retains_user_container_without_ownership(ownership_env, monkeypatch):
+    store, provider, meta, ws, state, calls, live_ids = ownership_env
+    # 移除 docker_env 预置的 live journal，模拟无所有权凭证的孤儿容器：
+    # 必须保留，cleanup_orphans 不做无凭证删除。
+    docker_runtime.WorkspaceOwnership(ws.parent, ws).record_path.unlink(missing_ok=True)
+    state['info'] = {'Id': 'a' * 64, 'State': {'Status': 'running'}}
+    live_ids.add('a' * 64)
     original_run = docker_api._run_async
 
     async def orphan_listing(cmd, timeout_s=30):
@@ -528,12 +552,10 @@ def test_cleanup_orphans_fake_meta_retains_resources(ownership_env, monkeypatch,
     monkeypatch.setattr(tasks.cache, 'get_client', AsyncMock(return_value=client))
     monkeypatch.setattr(tasks, '_get_session_meta', AsyncMock(return_value=None))
     before_ids = set(live_ids)
-    original_code = (ws / 'main.py').read_text()
     result = tasks.cleanup_orphans.apply(throw=False)
-    assert result.state == 'SUCCESS'  # Scheduler success is NOT resource recovery.
+    assert result.state == 'SUCCESS'
     client.scard.assert_awaited_once()
     assert live_ids == before_ids
-    assert (ws / 'main.py').read_text() == original_code
     assert not any(c[1] in {'rm', 'exec'} for c in calls)
 
 

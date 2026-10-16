@@ -16,6 +16,9 @@ from app.core import session_guard
 from app.core.config import settings
 from app.models import User
 from app.services import auth as auth_service
+# test_logout_revocation_isolated 由专用隔离运行器（no-dotenv/no-network）提供，
+# 普通 pytest/CI 下不存在该模块：整个文件 skip，而不是在收集期报 ImportError。
+pytest.importorskip("test_logout_revocation_isolated")
 from test_logout_revocation_isolated import isolated  # noqa: F401
 from test_pythonlab_v2_ws_behavior import FakeCache, FakeRedisClient, FakeCeleryApp
 

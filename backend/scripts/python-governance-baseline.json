@@ -358,7 +358,12 @@
    "ceiling": 653
   },
   "backend/app/core/sandbox/docker.py": {
-   "ceiling": 756
+   "ceiling": 756,
+   "exception": {
+    "owner": "project-governance",
+    "reason": "2026-10-16 cleanup_orphans 回收修复：新增 reap_user_container（约 44 行），修复用户级孤儿容器永不回收的死代码。到期前重新评估是否拆分模块。",
+    "expires_at": "2026-11-15"
+   }
   },
   "backend/app/services/agents/agent_analysis.py": {
    "ceiling": 697

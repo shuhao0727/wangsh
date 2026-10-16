@@ -17,6 +17,8 @@ from app.api.pythonlab.ws import handlers, connection_auth, session_auth
 from app.core import session_guard
 from app.services import auth as auth_service
 from app.utils.cache import RedisCache
+# 同 test_ws_session_auth_isolated：专用隔离运行器提供的模块，普通 pytest/CI skip。
+pytest.importorskip("test_logout_revocation_isolated")
 from test_logout_revocation_isolated import isolated  # noqa: F401
 from test_ws_session_auth_isolated import BusinessCache
 from test_pythonlab_v2_ws_behavior import FakeCeleryApp

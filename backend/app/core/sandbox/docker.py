@@ -402,6 +402,49 @@ class DockerProvider(DockerMountMixin, SandboxProvider):
         """Compare ownership and delete under the same non-expiring fence."""
         await self._stop_owned(session_id, meta, force=True)
 
+    async def reap_user_container(self, user_id: int) -> None:
+        """Terminate a user-scoped container only with proven live ownership.
+
+        cleanup_orphans uses this when a user has no sessions left. The
+        ownership journal is the sole deletion authority: without a live
+        record whose container name matches this user's container, nothing
+        is removed.
+
+        The fence is released before terminate_session re-acquires it for
+        the authoritative check; holding it here would self-deadlock on the
+        same non-reentrant lock.
+        """
+        meta = {"owner_user_id": user_id}
+        name = self._container_name(meta)
+        ws_path = self._ws_path_for_session(meta)
+        identity = None
+        async with WorkspaceOwnership(_workspace_root(), ws_path) as ownership:
+            record = ownership.read()
+            if (
+                record
+                and record.get('phase') == 'live'
+                and record.get('container_name') == name
+                and record.get('session_id')
+                and record.get('container_id')
+            ):
+                identity = (
+                    record['session_id'],
+                    record['token'],
+                    record['container_id'],
+                )
+        if identity is None:
+            logger.warning("Preserving user container without proven ownership: u{}", user_id)
+            return
+        session_id, token, container_id = identity
+        await self.terminate_session(
+            session_id,
+            {
+                "owner_user_id": user_id,
+                "sandbox_owner_token": token,
+                "docker_container_id": container_id,
+            },
+        )
+
     async def list_active_sessions(self) -> List[str]:
         try:
             prefix = f"{self.container_namespace}_"

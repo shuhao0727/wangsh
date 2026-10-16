@@ -465,22 +465,20 @@ def cleanup_orphans():
             if sid.startswith("u"):
                 try:
                     user_id = int(sid[1:])
-                    # Deliberately conservative: the scheduler may detect a user
-                    # container, but it is NOT deletion authority. Real recovery
-                    # happens through stop_session with the true session identity
-                    # (cleanup_stale_sessions). Keeping the owner-scoped probe
-                    # means a container without proven ownership is retained.
+                    # 用户级容器在该用户没有任何会话时才允许回收。回收必须持有
+                    # 来自宿主机所有权 journal 的 live 凭证（真实 session_id /
+                    # token / container_id）；无凭证的容器一律保留。
+                    # cleanup_stale_sessions 只遍历会话元数据，看不到无会话的
+                    # 容器，因此这里是这类孤儿容器的唯一回收点。
                     user_sessions_key = f"{CACHE_KEY_USER_SESSIONS_PREFIX}:{user_id}:sessions"
                     count = await client.scard(user_sessions_key)  # type: ignore[misc]
                     if count > 0:
                         continue # Keep container alive
                     
-                    # No sessions, terminate container
-                    # We need to construct a fake meta to terminate
-                    fake_meta = {"owner_user_id": user_id}
-                    await provider.terminate_session("orphan", fake_meta)
+                    # No sessions, attempt reclamation with proven ownership.
+                    await provider.reap_user_container(user_id)
                 except Exception:
-                    logger.exception("cleanup_orphans 终止用户级孤儿容器失败")
+                    logger.exception("cleanup_orphans 回收用户级孤儿容器失败")
                     pass
                 continue
 
