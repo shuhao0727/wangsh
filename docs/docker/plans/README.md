@@ -24,15 +24,15 @@
 
 | 文件 | 状态 | 描述 |
 |------|------|------|
-| [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) | `active` | 30/60/90 天工程治理计划（头部仍声明 active；此前索引曾声称已移除，文件实际仍在） |
-| [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) | `active` | 全项目首轮问题台账（XBK 优先；此前索引曾声称已移除，文件实际仍在） |
-| [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) | `active` | 全项目首轮审查执行计划（此前索引曾声称已移除，文件实际仍在） |
-| [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) | `active` | **UI 改造唯一执行计划**（实测基线、批次、门禁加固与旧文档处置） |
-| [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) | `active` | 后端视图静默失败修复与 PythonLab 原生按钮核查 |
+| [2026-07-11-project-governance-30-60-90-execution-plan.md](../archive/2026-07-11-project-governance-30-60-90-execution-plan.md) | `active` | 30/60/90 天工程治理计划（头部仍声明 active；此前索引曾声称已移除，文件实际仍在） |
+| [2026-09-08-project-audit-findings.md](../archive/2026-09-08-project-audit-findings.md) | `active` | 全项目首轮问题台账（XBK 优先；此前索引曾声称已移除，文件实际仍在） |
+| [2026-09-08-project-comprehensive-audit-plan.md](../archive/2026-09-08-project-comprehensive-audit-plan.md) | `active` | 全项目首轮审查执行计划（此前索引曾声称已移除，文件实际仍在） |
+| [2026-10-03-ui-improvement-plan.md](../archive/2026-10-03-ui-improvement-plan.md) | `active` | **UI 改造唯一执行计划**（实测基线、批次、门禁加固与旧文档处置） |
+| [2026-10-03-view-migration-and-pythonlab-type.md](../archive/2026-10-03-view-migration-and-pythonlab-type.md) | `active` | 后端视图静默失败修复与 PythonLab 原生按钮核查 |
 | [2026-10-09-comprehensive-audit-final-report.md](2026-10-09-comprehensive-audit-final-report.md) | `reference` | 2026-10-09 全面深度审核报告（含未填写的占位段） |
 | [2026-10-09-comprehensive-remediation-plan.md](2026-10-09-comprehensive-remediation-plan.md) | `active` | 审计问题的分阶段修复执行计划（Phase 1-4，含负责人、时长与验收标准） |
-| [2026-10-09-comprehensive-review.md](2026-10-09-comprehensive-review.md) | `active` | 2026-10-09 工作区综合审查报告 |
-| [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md) | `active` | **现存问题唯一汇总台账**（九轮深度探查、修复方案、含 UI 专项审计与完成度核查） |
+| [2026-10-09-comprehensive-review.md](../archive/2026-10-09-comprehensive-review.md) | `active` | 2026-10-09 工作区综合审查报告 |
+| [2026-10-09-six-round-audit-issue-list.md](../archive/2026-10-09-six-round-audit-issue-list.md) | `active` | **现存问题唯一汇总台账**（九轮深度探查、修复方案、含 UI 专项审计与完成度核查） |
 | [2026-10-09-verification-report.md](2026-10-09-verification-report.md) | `reference` | 2026-10-09 审计项的逐项独立复核结论（验证率与判定依据） |
 | [2026-10-10-file-organization-findings.md](2026-10-10-file-organization-findings.md) | `reference` | 2026-10-10 文件整理扫描报告（68 条发现，CI 路径问题已修复并验证） |
 | [ui-single-page-governance.md](ui-single-page-governance.md) | `reference` | UI 治理与回归基线（此前索引曾声称已移除，文件实际仍在） |

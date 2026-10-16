@@ -7,7 +7,7 @@
 > 替代文档：../RELEASE_NOTES.md、../testing/TEST_STATUS.md
 > 归档原因：本清单对应的历史发布差距已被后续 2.1.0 发布记录和测试状态替代。
 
-本清单是[审计台账](../plans/2026-09-08-project-audit-findings.md)的派生发布视图：以台账最新批次
+本清单是[审计台账](2026-09-08-project-audit-findings.md)的派生发布视图：以台账最新批次
 （2026-09-09 全面修复整合）为准，并对照 2026-09-09 实际工作区源码逐条复核。
 动态测试数字以 [TEST_STATUS](../testing/TEST_STATUS.md) 为准；源码状态以工作区当前文件为准。
 

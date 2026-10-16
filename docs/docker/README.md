@@ -49,7 +49,7 @@
 - [plans/README.md](plans/README.md) - 当前计划与稳定 reference 索引
 - [../features/PYTHONLAB.md](../features/PYTHONLAB.md#能力边界) - PythonLab 能力矩阵与删除/拆分边界
 - [plans/ui-single-page-governance.md](plans/ui-single-page-governance.md) - UI 治理与回归唯一参考
-- [plans/2026-07-11-project-governance-30-60-90-execution-plan.md](plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
+- [archive/2026-07-11-project-governance-30-60-90-execution-plan.md](archive/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细任务、验证和退出标准
 
 ### 已归档计划
 

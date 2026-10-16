@@ -213,7 +213,7 @@ DAP 断连清理采用元信息原值 CAS 与连接租约条件检查，不覆�
 
 `/auth/logout` 不要求必须提供凭据；有凭据时优先使用当前有效且 nonce 匹配的 access。access 缺失、过期、验签失败或无法证明当前会话时，使用配置的 refresh Cookie，缺少该值才读取兼容 `refresh_token`；不从请求 body 读取 refresh。refresh 必须有效且所属用户可登录，并在用户锁后重验。有效当前 access 与 Cookie 身份冲突时，只撤销 access 证明的账号。
 
-撤销在用户锁内执行：更新 refresh 撤销位、尝试 nonce 轮换、提交数据库。缓存轮换失败仍尝试提交 refresh 撤销；数据库提交失败仍告警并尽力回滚。始终尝试删除配置的 access/refresh Cookie。正常处理或无有效凭据的幂等清理返回 `200` 与 `{message: "登出成功", timestamp: ...}`；已识别的撤销异常返回 `503`、`revocation_status: "incomplete"` 及说明消息。logout 严格读取会话遇到故障且无有效 refresh fallback 时也返回 `503`，缺失 nonce 不授权撤销。读取兼容 Cookie 不等于清理全部兼容别名；`503` 不保证保留的凭据已失效，不提供双存储原子性。故障边界与身份/锁保护机制见 [认证 owner](../features/AUTH.md#服务端退出与撤销边界)，本地修复范围见 [审查台账 AUTH-01](../docker/plans/2026-09-08-project-audit-findings.md)。
+撤销在用户锁内执行：更新 refresh 撤销位、尝试 nonce 轮换、提交数据库。缓存轮换失败仍尝试提交 refresh 撤销；数据库提交失败仍告警并尽力回滚。始终尝试删除配置的 access/refresh Cookie。正常处理或无有效凭据的幂等清理返回 `200` 与 `{message: "登出成功", timestamp: ...}`；已识别的撤销异常返回 `503`、`revocation_status: "incomplete"` 及说明消息。logout 严格读取会话遇到故障且无有效 refresh fallback 时也返回 `503`，缺失 nonce 不授权撤销。读取兼容 Cookie 不等于清理全部兼容别名；`503` 不保证保留的凭据已失效，不提供双存储原子性。故障边界与身份/锁保护机制见 [认证 owner](../features/AUTH.md#服务端退出与撤销边界)，本地修复范围见 [审查台账 AUTH-01](../docker/archive/2026-09-08-project-audit-findings.md)。
 
 登录提交边界（2026-09-09）：先提交 refresh 替换，再重取用户锁并重验本次 refresh 后发布 Redis 会话。第一阶段提交失败不提前旋转 Redis；若重验发现已被新的登录/退出替换则返回 `409`，无成功登录 Cookie。Redis 发布失败不能撤回已提交的 refresh 替换，仍需按认证 owner 的故障边界处理。
 

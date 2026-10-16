@@ -1,12 +1,12 @@
 > 状态：superseded
 > Owner：frontend
 > 最近复核：2026-10-03
-> 归档条件：已由 [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md) 取代
+> 归档条件：已由 [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) 取代
 
 # WangSh UI 提升计划（统一版）
 
 > ⚠️ **本文已被取代，不再是执行依据。** 当前唯一执行计划见
-> [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md)。
+> [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md)。
 > 保留本文是因为它最早逐条核实并记录了一批报表失真（见其 §5），有溯源价值。
 
 本文曾是 UI 改造的**唯一执行依据**。它合并了三类来源，并已用代码逐条核实：

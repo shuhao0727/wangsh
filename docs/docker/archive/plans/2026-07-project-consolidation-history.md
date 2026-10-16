@@ -102,5 +102,5 @@
 - 当前测试事实：[TEST_STATUS.md](../../testing/TEST_STATUS.md)
 - 当前发布记录：[RELEASE_NOTES.md](../../RELEASE_NOTES.md)
 - 当前部署方式：[DEPLOY.md](../../deploy/DEPLOY.md)
-- 长期治理：[30/60/90 计划](../../plans/2026-07-11-project-governance-30-60-90-execution-plan.md)
+- 长期治理：[30/60/90 计划](../2026-07-11-project-governance-30-60-90-execution-plan.md)
 - 当前文件整理：[项目整理执行计划](../2026-07-14-project-file-consolidation-plan.md)

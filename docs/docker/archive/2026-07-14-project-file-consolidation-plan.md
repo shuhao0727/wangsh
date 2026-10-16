@@ -8,7 +8,7 @@
 
 本文是当前文件整理工作的唯一执行入口。动态测试结果统一写入
 [TEST_STATUS.md](../testing/TEST_STATUS.md)，长期改进统一写入
-[30/60/90 计划](../plans/2026-07-11-project-governance-30-60-90-execution-plan.md)。
+[30/60/90 计划](2026-07-11-project-governance-30-60-90-execution-plan.md)。
 
 ## 当前清理批次（2026-09-09）
 

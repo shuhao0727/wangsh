@@ -33,7 +33,7 @@
 ### 当前计划与治理 (`docker/plans/`)
 
 - [docker/plans/README.md](docker/plans/README.md) - 当前计划与稳定 reference 索引
-- [docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/plans/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
+- [docker/archive/2026-07-11-project-governance-30-60-90-execution-plan.md](docker/archive/2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 天详细执行计划与验收标准
 
 > 2026-09-15 文件整理、旧 2.0 标签清理和 2.1 发布闭环的历史执行计划已移入 [docker/archive/README.md](docker/archive/README.md)。
 > 已完成的阶段报告、批次摘要和发布历史已压缩为一份归档摘要，详见
@@ -85,8 +85,8 @@
 
 ## 当前审查
 
-- [全项目审查计划（XBK 优先）](docker/plans/2026-09-08-project-comprehensive-audit-plan.md) — 范围、分工、验证与数据保护边界。
-- [全项目首轮问题台账](docker/plans/2026-09-08-project-audit-findings.md) — 初审候选与准确性复核状态、反证、限制及修复决策；不等同已确认 bug 清单；动态验证结果见 [当前测试状态](docker/testing/TEST_STATUS.md)。
+- [全项目审查计划（XBK 优先）](docker/archive/2026-09-08-project-comprehensive-audit-plan.md) — 范围、分工、验证与数据保护边界。
+- [全项目首轮问题台账](docker/archive/2026-09-08-project-audit-findings.md) — 初审候选与准确性复核状态、反证、限制及修复决策；不等同已确认 bug 清单；动态验证结果见 [当前测试状态](docker/testing/TEST_STATUS.md)。
 
 ## 整理约定
 

@@ -124,7 +124,7 @@
   **注意**该报告 §二.1 的 `ix_conversations_is_archived` 是错值（已在该归档件头部标注）。
 - [ui-improvement-plan-2026-10-03-superseded.md](ui-improvement-plan-2026-10-03-superseded.md)
   2026-10 的 UI 提升计划（统一版），现由
-  [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md) 取代。
+  [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) 取代。
   保留它是因它最早逐条核实并记录了一批报表失真（间距统一度宣称 95%、实测 4.6% 等），
   有溯源价值。
 
@@ -148,3 +148,15 @@
     `~/wangsh-ui-docs-snapshot-20261003.tar.gz`（sha256 `e3a08786…28a4`，20 文档 + 1 脚本），
     经用户确认**不再保留备份**，该 tar 已删除。本索引与各 owner 文档中的抢救内容
     是这批文档**唯一留存的信息**。
+
+### 2026-10-16 项目瘦身归档
+
+以下计划/审查文档于 2026-10-16 项目瘦身时从 docs/docker/plans/ 移入本目录：均已 superseded（对应工作已完成或方案已废弃），仅作历史追溯。
+
+- [2026-07-11-project-governance-30-60-90-execution-plan.md](2026-07-11-project-governance-30-60-90-execution-plan.md) - 30/60/90 治理执行计划（已结束）。
+- [2026-09-08-project-audit-findings.md](2026-09-08-project-audit-findings.md) - 全项目首轮问题台账（已被后续审计取代）。
+- [2026-09-08-project-comprehensive-audit-plan.md](2026-09-08-project-comprehensive-audit-plan.md) - 全项目审查计划（已执行完毕）。
+- [2026-10-03-ui-improvement-plan.md](2026-10-03-ui-improvement-plan.md) - UI 改进计划（B 系列已随 UI 回退作废）。
+- [2026-10-03-view-migration-and-pythonlab-type.md](2026-10-03-view-migration-and-pythonlab-type.md) - 视图迁移与 PythonLab 类型说明（已实施）。
+- [2026-10-09-comprehensive-review.md](2026-10-09-comprehensive-review.md) - 综合复核记录（已完成）。
+- [2026-10-09-six-round-audit-issue-list.md](2026-10-09-six-round-audit-issue-list.md) - 六轮审计问题清单（已被 2026-10-15 核查报告取代）。

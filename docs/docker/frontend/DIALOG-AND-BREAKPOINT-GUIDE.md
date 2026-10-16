@@ -108,5 +108,5 @@
 
 - [UI-PAGES.md](UI-PAGES.md) — 页面与浮层清单
 - [ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md) — 无障碍约束
-- [2026-10-03-ui-improvement-plan.md](../plans/2026-10-03-ui-improvement-plan.md) — UI 执行计划（B11 大屏推广）
+- [2026-10-03-ui-improvement-plan.md](../archive/2026-10-03-ui-improvement-plan.md) — UI 执行计划（B11 大屏推广）
 - 间距与尺寸 token（原 `frontend/src/styles/SPACING.md` 已随 2026-10-16 UI 回退删除；间距语义参见 `frontend/src/styles/COLORS.md` 与 Tailwind 配置）
