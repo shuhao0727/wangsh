@@ -11,7 +11,8 @@
  *   2. L3/L4 必须内联 browser_engine/version/viewport/screenshot_sha256/assertion_count/ran_at
  *   3. 浏览器不可用 → 结论只能是 BLOCKED(no_browser)；不得存在「仅静态审查→通过」路径
  *   4. 正文不得手写评分；人工判断须在 manual_notes 且标 manual:true
- *   5. generated_at 须与文件 mtime 相当（防日期造假）
+ *   5. generated_at 须与参照时间相当：已提交且工作树未改动的文件取 git 提交时间，
+ *      未提交（modified/untracked）文件回退 mtime（防日期造假）
  *   6. counts.scanned_hits 与 counts.human_confirmed 必须分开
  *
  * 用法：
@@ -24,14 +25,70 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FE = path.resolve(HERE, "..");
-const REPORT_DIRS = [path.join(FE, "..", "docs", "docker", "testing")];
+const REPO_ROOT = path.resolve(FE, "..");
+const REPORT_DIRS = [path.join(REPO_ROOT, "docs", "docker", "testing")];
 
 const VALID_LEVELS = new Set(["L0", "L1", "L2", "L3", "L4"]);
 const BROWSER_FIELDS = ["browser_engine", "browser_version", "viewport", "screenshot_sha256", "assertion_count", "ran_at"];
-const MTIME_TOLERANCE_MS = 24 * 60 * 60 * 1000; // generated_at 与文件 mtime 相差不得超过 24h
+const REFERENCE_TOLERANCE_MS = 24 * 60 * 60 * 1000; // generated_at 与参照时间相差不得超过 24h
+
+/** 工作树中相对 REPO_ROOT 的未提交（modified/untracked）文件集合，惰性取一次 */
+let uncommittedFilesCache = null;
+function uncommittedFiles() {
+  if (uncommittedFilesCache === null) {
+    const set = new Set();
+    try {
+      const out = execFileSync(
+        "git", ["-c", "core.quotepath=false", "status", "--porcelain"],
+        { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      );
+      for (const line of out.split("\n")) {
+        if (!line) continue;
+        const entry = line.slice(3).trim();
+        const arrow = entry.indexOf(" -> ");
+        if (arrow >= 0) {
+          set.add(entry.slice(0, arrow).trim());
+          set.add(entry.slice(arrow + 4).trim());
+        } else {
+          set.add(entry);
+        }
+      }
+    } catch {
+      // git 不可用 → 集合为空，全部按已提交处理；
+      // 但 referenceTime 的 git log 也会失败并回退 mtime，行为等价于旧实现。
+    }
+    uncommittedFilesCache = set;
+  }
+  return uncommittedFilesCache;
+}
+
+/**
+ * 规则 5 参照时间。
+ * 为什么弃用 mtime 作默认：mtime 不是 git 属性，由 checkout 时刻决定。
+ * 全新 clone 后 mtime 与 generated_at 的差值随日历单调增长，规则 5 会必然红且不自愈。
+ * 因此：已提交且工作树未改动的文件取 `git log -1` 的提交时间；
+ * 未提交（modified/untracked）或仓库外的文件（刚生成的报告、临时报告）回退 mtime。
+ */
+function referenceTime(file) {
+  const rel = path.relative(REPO_ROOT, file);
+  const inRepo = rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+  if (inRepo && !uncommittedFiles().has(rel)) {
+    try {
+      const out = execFileSync(
+        "git", ["log", "-1", "--format=%ct", "--", rel],
+        { cwd: REPO_ROOT, encoding: "utf8" },
+      ).trim();
+      if (/^\d+$/.test(out)) return Number(out) * 1000;
+    } catch {
+      // 提交时间不可得（浅克隆缺失历史等）→ 回退 mtime
+    }
+  }
+  return fs.statSync(file).mtimeMs;
+}
 
 /** 从正文里取 `key: value` 或 `key = value` 形式的字段（大小写不敏感） */
 function field(text, key) {
@@ -49,6 +106,7 @@ function parseJsonBlock(text) {
 function verify(file) {
   const errors = [];
   const warnings = [];
+  file = path.resolve(file);
   let text;
   try { text = fs.readFileSync(file, "utf8"); } catch (e) { return { file, errors: ["无法读取: " + e.message], warnings: [] }; }
 
@@ -60,9 +118,9 @@ function verify(file) {
     const ts = Date.parse(ga);
     if (Number.isNaN(ts)) errors.push("规则5 generated_at 不可解析: " + ga);
     else {
-      const mtime = fs.statSync(file).mtimeMs;
-      if (Math.abs(mtime - ts) > MTIME_TOLERANCE_MS) {
-        errors.push("规则5 generated_at(" + ga + ") 与文件 mtime 相差超过 24h —— 疑似日期造假");
+      const ref = referenceTime(file);
+      if (Math.abs(ref - ts) > REFERENCE_TOLERANCE_MS) {
+        errors.push("规则5 generated_at(" + ga + ") 与参照时间（git 提交时间；未提交文件为 mtime）相差超过 24h —— 疑似日期造假");
       }
     }
   }

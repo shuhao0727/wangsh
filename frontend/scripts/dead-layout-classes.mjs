@@ -41,7 +41,7 @@ const SCAN_EXT = /\.(tsx?|jsx?|mjs|cjs|html?|css|scss)$/;
 const ci = process.argv.includes("--ci");
 
 function collect(dir, out) {
-  let entries; 
+  let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of entries) {
     if (EXCLUDED_DIRS.test(e.name)) continue;

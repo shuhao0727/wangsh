@@ -12,22 +12,22 @@ module.exports = {
       colors: {
         // 项目自定义色彩（保留兼容）
         primary: {
-          DEFAULT: "var(--ws-color-primary)",
+          DEFAULT: "rgb(var(--ws-color-primary-rgb) / <alpha-value>)",
           hover: "var(--ws-color-primary-hover)",
           active: "var(--ws-color-primary-active)",
           soft: "var(--ws-color-primary-soft)",
           foreground: "var(--primary-foreground)",
         },
         success: {
-          DEFAULT: "var(--ws-color-success)",
+          DEFAULT: "rgb(var(--ws-color-success-rgb) / <alpha-value>)",
           soft: "var(--ws-color-success-soft)",
         },
         warning: {
-          DEFAULT: "var(--ws-color-warning)",
+          DEFAULT: "rgb(var(--ws-color-warning-rgb) / <alpha-value>)",
           soft: "var(--ws-color-warning-soft)",
         },
         error: {
-          DEFAULT: "var(--ws-color-error)",
+          DEFAULT: "rgb(var(--ws-color-error-rgb) / <alpha-value>)",
           soft: "var(--ws-color-error-soft)",
         },
         purple: {
@@ -40,32 +40,35 @@ module.exports = {
         skeleton: "var(--ws-color-border)",
         scrollbar: "var(--ws-color-scrollbar)",
         "text-base": "var(--ws-color-text)",
-        "text-secondary": "var(--ws-color-text-secondary)",
-        "text-tertiary": "var(--ws-color-text-tertiary)",
+        "text-secondary": "rgb(var(--ws-color-text-secondary-rgb) / <alpha-value>)",
+        "text-tertiary": "rgb(var(--ws-color-text-tertiary-rgb) / <alpha-value>)",
         surface: {
-          DEFAULT: "var(--ws-color-surface)",
-          2: "var(--ws-color-surface-2)",
+          DEFAULT: "rgb(var(--ws-color-surface-rgb) / <alpha-value>)",
+          2: "rgb(var(--ws-color-surface-2-rgb) / <alpha-value>)",
         },
         "code-bg": "var(--ws-color-code-bg)",
         "code-text": "var(--ws-color-code-text)",
 
         // ========== shadcn/ui 语义色（直接映射到项目 CSS 变量，统一颜色系统）==========
-        border: "var(--ws-color-border)",
+        border: {
+          DEFAULT: "var(--ws-color-border)",
+          secondary: "var(--ws-color-border-secondary)",
+        },
         input: "var(--ws-color-border)",
         ring: "var(--ws-color-focus-ring)",
         background: "var(--ws-color-surface)",
         foreground: "var(--ws-color-text)",
         secondary: {
-          DEFAULT: "var(--ws-color-surface-2)",
+          DEFAULT: "rgb(var(--ws-color-surface-2-rgb) / <alpha-value>)",
           foreground: "var(--ws-color-text)",
         },
         destructive: {
-          DEFAULT: "var(--ws-color-error)",
+          DEFAULT: "rgb(var(--destructive-rgb) / <alpha-value>)",
           foreground: "var(--destructive-foreground)",
         },
         muted: {
-          DEFAULT: "var(--ws-color-surface-2)",
-          foreground: "var(--ws-color-text-secondary)",
+          DEFAULT: "rgb(var(--ws-color-surface-2-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--ws-color-text-secondary-rgb) / <alpha-value>)",
         },
         accent: {
           DEFAULT: "var(--ws-color-hover-bg)",
@@ -93,6 +96,8 @@ module.exports = {
         mono: "var(--ws-font-mono)",
       },
       fontSize: {
+        "2xs": "var(--ws-text-2xs)",
+        "3xs": "var(--ws-text-3xs)",
         xs: "var(--ws-text-xs)",
         sm: "var(--ws-text-sm)",
         base: "var(--ws-text-md)",
