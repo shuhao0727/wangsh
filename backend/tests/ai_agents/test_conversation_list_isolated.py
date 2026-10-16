@@ -46,7 +46,7 @@ async def conversation_client(user_id=11, extra_rows=()):
                 id INTEGER PRIMARY KEY, user_id INTEGER, agent_id INTEGER,
                 session_id TEXT, display_user_name TEXT, display_agent_name TEXT,
                 message_type TEXT, content TEXT, created_at TIMESTAMP,
-                response_time_ms INTEGER, is_archived BOOLEAN DEFAULT 0,
+                response_time_ms INTEGER, is_archived BOOLEAN DEFAULT FALSE,
                 archived_at TIMESTAMP)"""))
             await db.execute(text("CREATE VIEW v_conversations_with_deleted AS SELECT * FROM conversation_fixture"))
             rows = [
