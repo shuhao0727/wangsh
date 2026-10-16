@@ -47,6 +47,30 @@ import { useStreamEngine } from "./hooks/useStreamEngine";
 
 const STREAM_IDLE_TIMEOUT_MS = 120_000;
 
+const getStreamErrorMessage = (errorCode: string | undefined, fallback: string): string => {
+  switch (errorCode) {
+    case "dify_empty_answer":
+    case "empty_answer":
+      return "Dify 未返回有效答案，请稍后重试";
+    case "dify_rate_limited":
+    case "provider_busy":
+    case "concurrency_unavailable":
+      return "当前 AI 服务繁忙，请稍后重试";
+    case "dify_upstream_error":
+      return "Dify 服务暂时不可用，请稍后重试";
+    case "dify_stream_incomplete":
+      return "Dify 流式响应未完成，请稍后重试";
+    case "dify_stream_interrupted":
+      return "Dify 流式连接中断，请稍后重试";
+    case "session_invalid":
+      return "登录状态已失效，请重新登录";
+    case "session_revalidation_unavailable":
+      return "暂时无法核验登录状态，请稍后重试";
+    default:
+      return fallback;
+  }
+};
+
 const generateSessionId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -593,11 +617,12 @@ const AIAgentsPage: React.FC = () => {
               setIsStreaming(false);
               void persistUsage(fullText);
             },
-            onError: (errText, partialText) => {
+            onError: (errText, partialText, errorCode) => {
               if (request !== historyRequest.current) return;
+              const displayError = getStreamErrorMessage(errorCode, errText);
               const errMsg: Message = {
                 id: `err-${Date.now()}`,
-                content: `⚠️ ${errText}`,
+                content: `⚠️ ${displayError}`,
                 sender: "agent",
                 timestamp: new Date().toISOString(),
                 agentId: currentAgent.id,
