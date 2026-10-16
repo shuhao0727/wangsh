@@ -12,7 +12,7 @@ from app.services.agents import (
     get_conversation_messages,
     get_conversation_messages_admin,
 )
-from app.utils.cache import cache, compact_cache_key_generator
+from app.utils.cache import cache
 
 router = APIRouter()
 
@@ -27,47 +27,23 @@ async def list_conversations(
     start_time = time.time()
     user_id = int(current_user["id"])
 
-    # 构造缓存键（包含所有查询参数）
-    cache_key = compact_cache_key_generator(
-        "conversations:user",
-        user_id,
-        agent_id or 0,
-        limit
+    # 直接查库。此处的会话列表 Redis 缓存已于 2026-10-15 移除，原因：
+    # 1. 缓存键只有 (user_id, agent_id, limit)，不含任何数据身份维度，
+    #    同一用户在会话数据变化后会读到陈旧结果；
+    # 2. PostgreSQL 下 last_at 是 datetime，cache.set 的 json.dumps 必然抛
+    #    TypeError 并被静默吞掉，缓存写入 100% 失败——即生产上零收益；
+    # 3. 归档任务与 GDPR 硬删除两条写路径没有缓存失效，删除后 60s 内仍会
+    #    返回已删除数据，与隐私接口的承诺矛盾。
+    # 要重新引入缓存，必须先解决上述三点（键维度 + 序列化 + 全部写路径失效）。
+    result = await list_user_conversations(
+        db, user_id=user_id, agent_id=agent_id, limit=limit
     )
 
-    # 尝试从缓存读取
-    cache_hit = False
-    try:
-        cached = await cache.get(cache_key)
-        if cached is not None:
-            cache_hit = True
-            logger.debug(f"会话列表缓存命中: user_id={user_id}, agent_id={agent_id}, limit={limit}")
-            result = cached
-        else:
-            # 缓存未命中，查询数据库
-            result = await list_user_conversations(db, user_id=user_id, agent_id=agent_id, limit=limit)
-
-            # 写入缓存（TTL 60 秒）
-            try:
-                await cache.set(cache_key, result, expire_seconds=60)
-                logger.debug(f"会话列表已缓存: user_id={user_id}, agent_id={agent_id}, limit={limit}")
-            except Exception as e:
-                logger.warning(f"Redis 缓存写入失败: {e}")
-    except Exception as e:
-        logger.warning(f"Redis 缓存读取失败，降级到数据库查询: {e}")
-        result = await list_user_conversations(db, user_id=user_id, agent_id=agent_id, limit=limit)
-
-    # 记录监控指标
+    # 记录监控指标（响应时间），失败不影响主业务
     duration_ms = int((time.time() - start_time) * 1000)
     try:
         client = await cache.get_client()
-        # 记录缓存命中/未命中
-        if cache_hit:
-            await client.incr("ai_agents:conversations:cache_hit")
-        else:
-            await client.incr("ai_agents:conversations:cache_miss")
-
-        # 记录响应时间（保留最近 500 个样本）
+        # 保留最近 500 个样本
         await client.lpush("ai_agents:conversations:dur_ms", duration_ms)
         await client.ltrim("ai_agents:conversations:dur_ms", 0, 499)
     except Exception:

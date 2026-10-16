@@ -146,7 +146,19 @@ def test_revision_is_the_single_alembic_head_and_follows_auth_authority():
     config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == ["20260914_0001_xbk_active_selection_unique"]
+    # 迁移图必须始终收敛到唯一 head（本仓库不支持多 head）。
+    # 不再断言 xbk revision「就是」head：后续新增迁移会合法地把它顶下去，
+    # 那种断言会把每次正常加迁移都变成红灯。
+    heads = script.get_heads()
+    assert len(heads) == 1, f"expected exactly one alembic head, got {heads}"
+
     revision = script.get_revision("20260914_0001_xbk_active_selection_unique")
     assert revision is not None
     assert revision.down_revision == "20260910_0001_auth_authority"
+
+    # xbk revision 必须仍在 head 的祖先链上（即没有被旁路或删除）。
+    ancestors = {
+        item.revision
+        for item in script.walk_revisions(base="base", head=heads[0])
+    }
+    assert "20260914_0001_xbk_active_selection_unique" in ancestors

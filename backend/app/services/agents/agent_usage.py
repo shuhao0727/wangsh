@@ -12,7 +12,6 @@ from loguru import logger
 from app.models.agents import AIAgent, ZntConversation
 from app.models.core import User
 from app.services.agents.assistant_answer_sanitizer import sanitize_assistant_answer
-from app.utils.cache import cache
 
 
 def _parse_usage_datetime(value: Optional[str], is_end: bool = False) -> Optional[datetime]:
@@ -128,17 +127,6 @@ async def create_agent_usage(
         db.add(answer_row)
 
     await db.commit()
-
-    # 清除该用户的会话列表缓存
-    if user_id is not None:
-        try:
-            # 清除所有该用户的会话列表缓存（不同 agent_id 和 limit 组合）
-            pattern = f"conversations:user:{user_id}:*"
-            deleted = await cache.clear_pattern(pattern)
-            if deleted > 0:
-                logger.debug(f"清除了 {deleted} 个用户 {user_id} 的会话列表缓存")
-        except Exception as e:
-            logger.warning(f"清除会话列表缓存失败: {e}")
 
     if answer_row:
         await db.refresh(answer_row)
