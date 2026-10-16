@@ -34,7 +34,13 @@ LEGACY_BASELINE_TABLES = (
     "xbk_selections",
     "xxjs_dianming",
 )
-MIGRATION_ORIGIN_COLUMNS = (("znt_group_discussion_members", "muted_until"),)
+MIGRATION_ORIGIN_COLUMNS = (
+    ("znt_group_discussion_members", "muted_until"),
+    # 归档列由 4a85c94b5c4c 添加；bootstrap 从当前模型拷贝建表时必须退回
+    # 历史形状，否则空库上 alembic upgrade head 会在该迁移处 DuplicateColumn。
+    ("znt_conversations", "is_archived"),
+    ("znt_conversations", "archived_at"),
+)
 # Early migrations guarded these indexes with table_schema='public' and a later
 # historical migration drops them without transaction-safe existence checks.
 # A non-public legacy baseline must provide the disposable indexes so that the
