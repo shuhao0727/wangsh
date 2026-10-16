@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from app.schemas.agents.ai_agent import AgentChatRequest
 import app.services.agents.chat_blocking as chat_blocking
+import app.services.agents.chat_common as chat_common
 from app.services.agents.providers.common import build_messages
 
 
@@ -68,8 +69,10 @@ def test_blocking_chat_rejects_inactive_agent_before_resolving_credentials(monke
         credentials_resolved = True
         raise AssertionError("inactive agent must be rejected first")
 
-    monkeypatch.setattr(chat_blocking, "get_agent", fake_get_agent)
-    monkeypatch.setattr(chat_blocking, "resolve_credentials", fail_resolve_credentials)
+    # chat_blocking 重构后，get_agent / resolve_credentials 已下沉到
+    # chat_common.prepare_chat_context（chat_blocking 模块自身不再持有这两个名字）。
+    monkeypatch.setattr(chat_common, "get_agent", fake_get_agent)
+    monkeypatch.setattr(chat_common, "resolve_credentials", fail_resolve_credentials)
 
     with pytest.raises(ValueError, match="agent_inactive"):
         asyncio.run(
