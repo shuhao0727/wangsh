@@ -1,5 +1,57 @@
 # 后端测试说明
 
+## 学习进度与canonical章节回归
+
+`learning/test_progress.py`覆盖版本冲突、递归合并、显式清除与旧格式保护；`test_chapters_canonical_source.py`覆盖章节来源，`test_chapter_overlay_governance.py`的历史oracle用例仅在提供已核SHA的外部`LEARNING_OVERLAY_ORACLE`时执行，缺失明确记SKIP。继续使用collection前禁dotenv、自动插件、外连和正常conftest的合成配置运行器；真实HTTP/PG证据另记TEST_STATUS。
+
+
+## 用户导入与 AUTH 兼容回归
+
+`users/test_users_import_parsing_isolated.py`、`users/test_users_import.py` 覆盖损坏输入、
+资源关闭、保存点释放和取消回滚；`auth/test_auth_service_runtime_bindings.py` 覆盖
+密码及切换快照的动态绑定。使用 collection 前禁 dotenv/conftest/外连的合成配置
+运行器；SQLite/替身结果与专用 Docker PostgreSQL、真实 HTTP 验收分开记录。
+当前结果、首败与证据统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 用户管理唯一性与前端合同（未发布）
+
+`users/test_full12_auth_uniqueness_isolated.py` 用真实 SQLite ORM 多行结果验证
+创建端点及更新唯一性 helper：用户名与学号分撞不同账号时返回 `400`，拒绝后账号
+数据保持原值。治理锁为替身，不证明真实授权或 PostgreSQL 并发锁行为。
+须在 collection 前禁用 dotenv/secrets、正常 conftest、自动插件和外连，注入合成
+配置；`FULL12_AUTH_ISOLATED=1` 只是 opt-in，不能代替隔离运行器。
+
+前端 `frontend/src/hooks/queries/useUsersManagement.contract.test.tsx` 核对编辑
+payload 的 `username`、普通 admin 表单的学生/教师选项和 super_admin 的管理员选项。
+这些替身合同不证明真实 HTTP 保存或刷新回读；局测不代替 PostgreSQL 并发或新构建
+Docker 栈验收。实际命令、结果与未验项仅维护在
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 缓存叶子与连接工厂回归
+
+缓存门面保持 `cache`、key formatter、logger 及失效函数的动态 patch 点；
+提取实现位于 `cache_keys.py`、`cache_query.py`、`cache_invalidation.py`。
+`core/test_cache_facade_leaf_isolated.py` 直接核这些叶子：搜索分区、调用方
+patch 点、ignore args、None 不写缓存、失效模式、初始化 single-flight 与
+失败/取消回收；不导入跨领域混合合同。组合既有 `test_cache_set_nx.py` 和
+`test_redis_client_factory.py` 只提供叶子直接证据，不代替后续业务调用方。
+
+遵守 collection 前隔离要求。TLS/Sentinel 参数与池归属的局测不等于
+证书握手或真实 Sentinel failover；TCP 实测、否定反例与源码绑定单列于
+[TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。不扩大池刷绿。
+
+## 共享数据库辅助工具离线回归
+
+`utils/test_db_helpers.py` 使用内存 SQLite 核对 `get_or_404` 的命中、缺失、
+自定义状态/文案，以及 `get_or_none` 的空结果。`utils/test_db_errors.py` 核对
+`handle_db_commit` 的约束冲突、业务错误文案与生产脱敏、回滚后同 session 重试、
+原业务异常传播和“不隐式提交”。辅助工具不自动 commit，事务仍由调用方控制。
+
+须在 collection 前禁用 dotenv/secrets、正常 conftest、自动插件及外连的外部
+隔离运行器中精确选这两份测试；只允许内存 SQLite。缺可选 Trio 时将其排除数
+单列，不计为通过。这不证明 PostgreSQL 并发、正式迁移、HTTP 或 Docker 行为。
+实际结果和运行器绑定统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
 `backend/tests/` 只放 pytest 用例本体。专项 smoke/soak 脚本不放这里，统一收敛到 [`../scripts/README.md`](../scripts/README.md) 和 [`../../scripts/README.md`](../../scripts/README.md)。
 
 > 安全前置：本页测试选择和历史命令仅供已核验的隔离运行器使用。必须在导入 app 和 pytest collection 前禁用 dotenv、注入合成配置并限制网络；不得在普通 shell 直接运行全量或整个 auth 目录，使测试连接正常 `settings` 数据库。
@@ -216,3 +268,21 @@ time curl -X GET "http://localhost:8000/api/v1/xbk/analysis/summary?year=2024-20
 - 迁移：`tests/test_migration_preflight_guard_contract.py` 与 `tests/system/test_migration_state_check.py`，不加载 app conftest；不执行实际 upgrade。完整命令、红绿记录、环境与未覆盖范围只维护于 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
 
 认证撤销反馈专项：`auth/test_auth_publication_failure_contract.py` 覆盖 `503`/Cookie 清理、严格会话读取、独立 refresh fallback 及登录提交后重锁重验。故障响应与凭据实际失效分别断言，不能把返回 `503` 当成双存储撤销保证。旧 fixture 必须模拟严格 GET 而非只模拟降级 cache.get；独立 PostgreSQL/Redis 故障与并发层的结果统一见 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。
+
+## 旧 revision 视图与启动准入回归
+
+`system/test_legacy_conversations_view_migration_pg.py` 使用显式
+`LEGACY_CONVERSATIONS_VIEW_TEST_DATABASE_URL`；只允许 loopback、非 5432/5433
+的专用 test-named asyncpg 库。每例只在自有 schema/合成角色执行实际
+`20260211_0004` 及适用的 forward migration，读回视图元数据、定义、权限与
+数据，覆盖已有对象保全、缺投影依赖、完整创建和依赖阻断；forward 对
+未支持的列级属性、view 安全选项和自定义 trigger/rule 必须在 DROP 前拒绝。
+缺配置为 skip，
+不是 PASS。须遵守 collection 前禁 dotenv、正常 conftest 和自动插件的
+隔离入口，不直接访问开发/网站库。
+
+`test_conversations_view_contract.py`、`system/test_alembic_concurrency.py`
+分别覆盖 forward 元数据/依赖/权限与真实迁移事务锁；bootstrap、startup、
+health 的合同回归不能代替专用 PG 空库完整链或实际生产 Compose 启动。
+仅复用运行依赖镜像和挂载候选源码的测试容器不是新生产镜像。实际源码绑定、
+首败/复测和未覆盖项只维护在 [TEST_STATUS](../../docs/docker/testing/TEST_STATUS.md)。

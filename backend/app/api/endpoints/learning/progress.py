@@ -5,9 +5,11 @@
 """
 
 import json
+import hashlib
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,7 @@ from app.core.deps import get_db, get_current_user
 from app.schemas.user_info import UserInfo
 from app.schemas.learning.progress import LearningProgressUpdate
 from app.models.learning.progress import LearningProgress
+from app.utils.db_helpers import get_or_404
 
 router = APIRouter()
 
@@ -35,20 +38,109 @@ def _safe_json_loads(value: str | None) -> Any:
     return loaded
 
 
-def _progress_payload(progress: LearningProgress) -> Dict[str, Any]:
+def _stored_progress_dict(progress: LearningProgress) -> Dict[str, Any]:
+    """读取新旧两种存储格式，保证旧字段不会因部分写入而丢失。"""
     data = _safe_json_loads(progress.progress_data)
-    if data is None:
-        completed_stages = _safe_json_loads(progress.completed_stages)
-        data = {
+    if progress.progress_data is not None and not isinstance(data, dict):
+        raise HTTPException(status_code=409, detail={
+            "code": "LEARNING_PROGRESS_INVALID_STORED_DATA",
+            "message": "已保存的学习进度格式异常，请联系管理员；未覆盖原始记录",
+        })
+    if isinstance(data, dict):
+        result = dict(data)
+        legacy = {
             "current_stage": progress.current_stage,
-            "completed_stages": completed_stages,
+            "completed_stages": _safe_json_loads(progress.completed_stages),
             "notes": progress.notes,
         }
+        for key, value in legacy.items():
+            if key not in result and value is not None:
+                result[key] = value
+        return result
+
+    completed_stages = _safe_json_loads(progress.completed_stages)
+    return {
+        "current_stage": progress.current_stage,
+        "completed_stages": completed_stages,
+        "notes": progress.notes,
+    }
+
+
+def _progress_version(progress: LearningProgress) -> str:
+    """生成不依赖新数据库列的内容版本 token。"""
+    value = {
+        "id": progress.id,
+        "current_stage": progress.current_stage,
+        "completed_stages": progress.completed_stages,
+        "progress_data": progress.progress_data,
+        "notes": progress.notes,
+    }
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _merge_progress_values(existing: Any, incoming: Any) -> Any:
+    """递归合并非空对象；空对象、null、数组和标量显式替换。"""
+    if incoming == {}:
+        return {}
+    if isinstance(existing, dict) and isinstance(incoming, dict):
+        merged = dict(existing)
+        for key, value in incoming.items():
+            merged[key] = _merge_progress_values(merged[key], value) if key in merged else value
+        return merged
+    return incoming
+
+
+def _apply_progress_values(
+    progress: LearningProgress,
+    incoming: Dict[str, Any],
+    *,
+    replace: bool,
+) -> None:
+    existing = _stored_progress_dict(progress) if progress.progress_data or progress.id else {}
+    next_data = dict(incoming) if replace else dict(existing)
+    if not replace:
+        for key, value in incoming.items():
+            next_data[key] = _merge_progress_values(existing.get(key), value)
+    try:
+        LearningProgressUpdate.model_validate(next_data)
+    except ValidationError:
+        raise HTTPException(status_code=422, detail="合并后的学习进度无效或超过 50KB")
+    progress.progress_data = json.dumps(next_data, ensure_ascii=False)
+
+    # 旧列仍被旧读取方使用，必须与合并后的 canonical data 同步。
+    for key in ("current_stage", "completed_stages", "notes"):
+        if replace or key in next_data:
+            value = next_data.get(key)
+            if key == "completed_stages":
+                progress.completed_stages = (
+                    json.dumps(value, ensure_ascii=False) if value is not None else None
+                )
+            else:
+                setattr(progress, key, value)
+
+
+def _assert_expected_version(progress: LearningProgress, data: LearningProgressUpdate) -> None:
+    # 显式 version=null 表示 GET 确认不存在；省略仅供 legacy POST/PUT。
+    if "version" in data.model_fields_set and data.version != _progress_version(progress):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "LEARNING_PROGRESS_VERSION_CONFLICT",
+                "message": "学习进度已在其他标签页更新，请重新读取后再保存",
+                "version": _progress_version(progress),
+            },
+        )
+
+
+def _progress_payload(progress: LearningProgress) -> Dict[str, Any]:
+    data = _stored_progress_dict(progress)
     return {
         "id": progress.id,
         "user_id": progress.user_id,
         "module_key": progress.module_key,
         "data": data,
+        "version": _progress_version(progress),
         "created_at": progress.created_at,
         "updated_at": progress.updated_at,
     }
@@ -64,6 +156,7 @@ def _default_progress_payload(user_id: int, module_key: str) -> Dict[str, Any]:
             "completed_stages": None,
             "notes": None,
         },
+        "version": None,
         "created_at": None,
         "updated_at": None,
     }
@@ -111,7 +204,19 @@ async def upsert_learning_progress(
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ) -> Any:
-    """创建或更新学习进度（upsert）"""
+    """PUT：全量替换当前模块的 canonical progress data。"""
+    return await _write_learning_progress(module_key, data, db, current_user, replace=True)
+
+
+async def _write_learning_progress(
+    module_key: str,
+    data: LearningProgressUpdate,
+    db: AsyncSession,
+    current_user: UserInfo,
+    *,
+    replace: bool,
+) -> Any:
+    """在行锁内执行 PUT/PATCH，并对带版本请求启用乐观并发检查。"""
     _validate_module_key(module_key)
 
     user_id = int(current_user.get("id"))
@@ -120,31 +225,35 @@ async def upsert_learning_progress(
     stmt = select(LearningProgress).where(
         LearningProgress.user_id == user_id,
         LearningProgress.module_key == module_key,
-    ).with_for_update()
+    ).with_for_update().execution_options(populate_existing=True)
     result = await db.execute(stmt)
     progress = result.scalar_one_or_none()
 
     progress_dict = data.to_progress_dict()
 
     if progress:
-        # 更新
-        progress.progress_data = json.dumps(progress_dict, ensure_ascii=False)
-        if data.current_stage is not None:
-            progress.current_stage = data.current_stage
-        if data.completed_stages is not None:
-            progress.completed_stages = json.dumps(data.completed_stages, ensure_ascii=False)
-        if data.notes is not None:
-            progress.notes = data.notes
+        _assert_expected_version(progress, data)
+        _apply_progress_values(progress, progress_dict, replace=replace)
     else:
+        if data.version is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "LEARNING_PROGRESS_VERSION_CONFLICT",
+                    "message": "学习进度记录已不存在，请重新读取",
+                    "version": None,
+                },
+            )
         # 创建
         progress = LearningProgress(
             user_id=user_id,
             module_key=module_key,
-            current_stage=data.current_stage,
-            completed_stages=(json.dumps(data.completed_stages, ensure_ascii=False) if data.completed_stages is not None else None),
-            progress_data=json.dumps(progress_dict, ensure_ascii=False),
-            notes=data.notes,
+            current_stage=None,
+            completed_stages=None,
+            progress_data=None,
+            notes=None,
         )
+        _apply_progress_values(progress, progress_dict, replace=replace)
         try:
             db.add(progress)
             await db.flush()
@@ -154,21 +263,33 @@ async def upsert_learning_progress(
             stmt = select(LearningProgress).where(
                 LearningProgress.user_id == user_id,
                 LearningProgress.module_key == module_key,
-            ).with_for_update()
+            ).with_for_update().execution_options(populate_existing=True)
             result = await db.execute(stmt)
             progress = result.scalar_one()
-            # 应用更新
-            progress.progress_data = json.dumps(progress_dict, ensure_ascii=False)
-            if data.current_stage is not None:
-                progress.current_stage = data.current_stage
-            if data.completed_stages is not None:
-                progress.completed_stages = json.dumps(data.completed_stages, ensure_ascii=False)
-            if data.notes is not None:
-                progress.notes = data.notes
+            _assert_expected_version(progress, data)
+            _apply_progress_values(progress, progress_dict, replace=replace)
 
+    # 在行锁仍持有时取响应快照，避免 commit 后 refresh 读到其他 writer 的版本。
+    await db.flush()
+    # flush 后 server default/onupdate 时间戳可能过期；显式 async 加载，
+    # 避免序列化响应时隐式 IO 触发 MissingGreenlet。commit 前仍持有行锁。
+    await db.refresh(progress, attribute_names=["created_at", "updated_at"])
+    payload = _progress_payload(progress)
     await db.commit()
-    await db.refresh(progress)
-    return _progress_payload(progress)
+    return payload
+
+
+@router.patch("/learning/progress/{module_key}")
+async def patch_learning_progress(
+    module_key: str,
+    data: LearningProgressUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user),
+) -> Any:
+    """PATCH：递归合并本次提供的字段，未提供字段保持不变。"""
+    if "version" not in data.model_fields_set:
+        raise HTTPException(status_code=428, detail="PATCH 必须携带 GET 返回的 version；无记录时为 null")
+    return await _write_learning_progress(module_key, data, db, current_user, replace=False)
 
 
 @router.post("/learning/progress/{module_key}")
@@ -178,8 +299,8 @@ async def create_learning_progress(
     db: AsyncSession = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user),
 ) -> Any:
-    """兼容前端保存按钮的 POST 调用，行为与 PUT upsert 一致。"""
-    return await upsert_learning_progress(module_key, data, db, current_user)
+    """兼容旧客户端；POST 使用 PATCH 语义，避免部分 payload 覆盖整条记录。"""
+    return await _write_learning_progress(module_key, data, db, current_user, replace=False)
 
 
 @router.delete("/learning/progress/{module_key}")
@@ -196,10 +317,7 @@ async def delete_learning_progress(
         LearningProgress.user_id == user_id,
         LearningProgress.module_key == module_key,
     )
-    result = await db.execute(stmt)
-    progress = result.scalar_one_or_none()
-    if not progress:
-        raise HTTPException(status_code=404, detail="未找到该模块的学习进度")
+    progress = await get_or_404(db, stmt, detail="未找到该模块的学习进度")
 
     await db.delete(progress)
     await db.commit()

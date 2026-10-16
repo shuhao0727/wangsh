@@ -5,6 +5,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { calculatePagination } from "@utils/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -84,7 +85,7 @@ const getArticleColumns = (
     meta: { className: "w-[180px] align-middle" },
     cell: ({ row }) =>
       row.original.category ? (
-        <Badge variant="warning">
+        <Badge variant="secondary">
           {row.original.category.name}
         </Badge>
       ) : (
@@ -112,6 +113,7 @@ const getArticleColumns = (
     meta: { className: "w-28 align-middle text-left" },
     cell: ({ row }) => (
       <Switch
+        aria-label={`发布状态：${row.original.title}`}
         checked={row.original.published}
         onCheckedChange={(checked) => handleTogglePublish(row.original.id, checked)}
       />
@@ -171,12 +173,13 @@ const AdminArticles: React.FC = () => {
     include_relations: true,
   });
 
-  // TanStack Query hooks
-  const { data: articlesData, isLoading } = useArticlesList(searchParams);
-  const articles = useMemo(() => articlesData?.articles ?? [], [articlesData?.articles]);
-  const total = articlesData?.total || 0;
   const currentPage = searchParams.page || 1;
   const pageSize = searchParams.size || 20;
+
+  // TanStack Query hooks
+  const { data: articlesData, isLoading, isError, refetch } = useArticlesList(searchParams);
+  const articles = useMemo(() => articlesData?.articles ?? [], [articlesData?.articles]);
+  const total = articlesData?.total || 0;
 
   const deleteArticleMutation = useDeleteArticle();
   const togglePublishMutation = useTogglePublish();
@@ -185,8 +188,6 @@ const AdminArticles: React.FC = () => {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
-  const [categoryFilter, setCategoryFilter] = useState<number | undefined>(undefined);
-  const [titleKeyword, setTitleKeyword] = useState("");
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
 
@@ -284,16 +285,7 @@ const AdminArticles: React.FC = () => {
     };
   }, [requestRefreshFromSignal]);
 
-  // Client-side keyword filter
-  const displayedArticles = useMemo(() => {
-    const kw = titleKeyword.trim().toLowerCase();
-    if (!kw) return articles;
-    return (articles || []).filter((a) => {
-      const title = String(a.title || "").toLowerCase();
-      const slug = String(a.slug || "").toLowerCase();
-      return title.includes(kw) || slug.includes(kw);
-    });
-  }, [articles, titleKeyword]);
+  const displayedArticles = articles;
 
   // Keep rowSelection valid only for visible rows
   useEffect(() => {
@@ -323,13 +315,9 @@ const AdminArticles: React.FC = () => {
   );
 
   const handlePageChange = useCallback((nextPage: number, size?: number) => {
-    const resolvedSize = size ?? pageSize;
-    const boundedPage = Math.max(1, Math.min(Math.max(1, Math.ceil(total / resolvedSize)), nextPage));
-    setSearchParams((prev) => ({
-      ...prev,
-      page: boundedPage,
-      size: resolvedSize,
-    }));
+    const { totalPages } = calculatePagination({ page: nextPage, pageSize: size || pageSize, total });
+    const boundedPage = Math.max(1, Math.min(totalPages, nextPage));
+    setSearchParams((prev) => ({ ...prev, page: boundedPage, size: size || prev.size }));
   }, [pageSize, total]);
 
   const handleEdit = useCallback((record: ArticleWithRelations) => {
@@ -357,7 +345,7 @@ const AdminArticles: React.FC = () => {
   }, [togglePublishMutation]);
 
   const handleView = useCallback((slug: string) => {
-    window.open(`/articles/${slug}`, "_blank");
+    window.open(`/admin/articles/preview/${slug}`, "_blank", "noopener,noreferrer");
   }, []);
 
   const handleAddArticle = useCallback(() => {
@@ -409,10 +397,8 @@ const AdminArticles: React.FC = () => {
     }
 
     try {
-      const result = await batchPublishMutation.mutateAsync({
-        ids: selectedRowKeys,
-        published,
-      });
+      const items = selectedRowKeys.map(id => ({ id, published }));
+      const result = await batchPublishMutation.mutateAsync(items);
 
       const actionText = published ? "发布" : "转为草稿";
       if (result.errorCount === 0) {
@@ -471,7 +457,7 @@ const AdminArticles: React.FC = () => {
     enableColumnResizing: true,
   });
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const { totalPages } = calculatePagination({ page: currentPage, pageSize, total });
 
   // Whether a mutation is in-flight (for button disabled state)
   const mutating =
@@ -483,77 +469,86 @@ const AdminArticles: React.FC = () => {
   return (
     <AdminPage scrollable={false}>
       <AdminFilterBar>
-        <Select
-          value={categoryFilter != null ? String(categoryFilter) : "__all__"}
-          onValueChange={(value) => {
-            const next = value === "__all__" ? undefined : Number(value);
-            setCategoryFilter(next);
-            setSearchParams((prev) => ({ ...prev, page: 1, category_id: next }));
-          }}
-        >
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="按分类筛选" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">按分类筛选</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={String(category.id)}>
-                {category.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={titleKeyword}
-          placeholder="搜索标题..."
-          className="w-[220px]"
-          onChange={(e) => setTitleKeyword(e.target.value)}
-          clearable
-          onClear={() => setTitleKeyword("")}
-        />
-        <div className="flex-1" />
-        {selectedRowKeys.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Ellipsis className="h-4 w-4" />
-                批量操作 ({selectedRowKeys.length})
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleBatchPublish(true)}>
-                批量发布
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleBatchPublish(false)}>
-                批量转为草稿
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={handleBatchDelete}>
-                批量删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-        <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
-          {(isLoading || mutating) ? <Spinner size="sm" /> : <RotateCcw className="h-4 w-4" />}
-          刷新
-        </Button>
-        <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
-          <FolderOpen className="h-4 w-4" />
-          分类管理
-        </Button>
-        <DataTableColumnToggle table={table} />
-        <Button onClick={handleAddArticle}>
-          <Plus className="h-4 w-4" />
-          新建文章
-        </Button>
+        <div className="flex min-w-0 flex-wrap items-center gap-xs">
+          <Select
+            value={searchParams.category_id != null ? String(searchParams.category_id) : "__all__"}
+            onValueChange={(value) => {
+              const next = value === "__all__" ? undefined : Number(value);
+              setSearchParams((prev) => ({ ...prev, page: 1, category_id: next }));
+            }}
+          >
+            <SelectTrigger aria-label="按分类筛选" className="w-[220px] border-border-subtle bg-surface">
+              <SelectValue placeholder="按分类筛选" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">按分类筛选</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={String(category.id)}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            aria-label="搜索文章标题"
+            value={searchParams.search || ""}
+            placeholder="搜索标题..."
+            className="w-[220px] max-w-full border-border-subtle bg-surface"
+            onChange={(e) => setSearchParams((prev) => ({ ...prev, page: 1, search: e.target.value || undefined }))}
+            clearable
+            onClear={() => setSearchParams((prev) => ({ ...prev, page: 1, search: undefined }))}
+          />
+        </div>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-xs">
+          {selectedRowKeys.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Ellipsis className="h-4 w-4" />
+                  批量操作 ({selectedRowKeys.length})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleBatchPublish(true)}>
+                  批量发布
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBatchPublish(false)}>
+                  批量转为草稿
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onClick={handleBatchDelete}>
+                  批量删除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <Button variant="outline" onClick={invalidateArticles} disabled={isLoading || mutating}>
+            {(isLoading || mutating) ? <Spinner size="sm" /> : <RotateCcw className="h-4 w-4" />}
+            刷新
+          </Button>
+          <Button variant="outline" onClick={() => setCategoryModalVisible(true)}>
+            <FolderOpen className="h-4 w-4" />
+            分类管理
+          </Button>
+          <DataTableColumnToggle table={table} />
+          <Button onClick={handleAddArticle}>
+            <Plus className="h-4 w-4" />
+            新建文章
+          </Button>
+        </div>
       </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 flex flex-col">
           <AdminTablePanel
+            ariaLabel="文章列表"
             loading={isLoading}
-            isEmpty={displayedArticles.length === 0}
+            error={isError}
+            errorDescription="文章加载失败"
+            onRetry={() => void refetch()}
+            isEmpty={!isError && displayedArticles.length === 0 && !searchParams.search && searchParams.category_id == null}
+            noResults={!isError && displayedArticles.length === 0 && Boolean(searchParams.search || searchParams.category_id != null)}
+            noResultsDescription="没有匹配筛选条件的文章"
             emptyDescription="暂无文章数据"
           >
             <DataTable
@@ -564,7 +559,7 @@ const AdminArticles: React.FC = () => {
             />
           </AdminTablePanel>
         </div>
-        <div className="mt-xs flex flex-shrink-0 justify-end border-t border-border-secondary bg-surface pt-3">
+        <div className="mt-xs flex min-w-0 shrink-0 justify-end border-t border-border-subtle pt-3">
           <DataTablePagination
             currentPage={Math.max(1, currentPage)}
             totalPages={Math.max(1, totalPages)}

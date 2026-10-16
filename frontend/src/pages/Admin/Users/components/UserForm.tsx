@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 
 import { Spinner } from "@/components/ui/spinner";
+import useAuth from "@hooks/useAuth";
 const formSchema = z.object({
   student_id: z.string().trim().min(1, "请输入学号").regex(/^\S+$/, "学号不能包含空格"),
   username: z.string().optional().refine((v) => !v || /^\S+$/.test(v), "用户名不能包含空格"),
@@ -47,6 +48,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type FocusAwareUserFormProps = UserFormProps & {
+  onCloseAutoFocus?: React.ComponentPropsWithoutRef<typeof DialogContent>["onCloseAutoFocus"];
+};
+
 const DEFAULT_VALUES: FormValues = {
   student_id: "",
   username: "",
@@ -57,12 +62,17 @@ const DEFAULT_VALUES: FormValues = {
   is_active: true,
 };
 
-const UserForm: React.FC<UserFormProps> = ({
+const UserForm: React.FC<FocusAwareUserFormProps> = ({
   visible,
   editingUser,
   onSubmit,
   onCancel,
+  onCloseAutoFocus,
 }) => {
+  const { user } = useAuth();
+  const assignableRoles = user?.role_code === "admin"
+    ? roleOptions.filter((role) => role.value === "student" || role.value === "teacher")
+    : roleOptions;
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: DEFAULT_VALUES,
@@ -86,7 +96,7 @@ const UserForm: React.FC<UserFormProps> = ({
   }, [visible, editingUser, form]);
 
   const handleFormSubmit = (values: FormValues) => {
-    onSubmit({
+    return onSubmit({
       ...values,
       username: values.username?.trim() || undefined,
     });
@@ -94,7 +104,7 @@ const UserForm: React.FC<UserFormProps> = ({
 
   return (
     <Dialog open={visible} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="sm:max-w-[640px]">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[640px]" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{editingUser ? "编辑用户" : "添加用户"}</DialogTitle>
         </DialogHeader>
@@ -162,7 +172,7 @@ const UserForm: React.FC<UserFormProps> = ({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(editingUser ? roleOptions.filter(r => r.value !== "super_admin") : roleOptions).map((role) => (
+                        {assignableRoles.map((role) => (
                           <SelectItem key={role.value} value={role.value}>
                             {role.label}
                           </SelectItem>

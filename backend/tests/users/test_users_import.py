@@ -26,6 +26,10 @@ class _ScalarResult:
 class _Savepoint:
     def __init__(self):
         self.rollback_count = 0
+        self.commit_count = 0
+
+    async def commit(self):
+        self.commit_count += 1
 
     async def rollback(self):
         self.rollback_count += 1
@@ -166,3 +170,4 @@ def test_import_savepoint_creation_failure_is_reported_per_row_and_next_row_cont
     assert result.errors[0].message == "savepoint unavailable"
     assert len(db.added) == 1
     assert db.commit_count == 1
+    assert db.savepoints[0].commit_count == 1

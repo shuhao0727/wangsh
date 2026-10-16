@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge-variants";
 import { Calendar } from "lucide-react";
 import dayjs from "dayjs";
 import type { ArticleWithRelations } from "@services";
@@ -18,34 +18,38 @@ const ArticleItem: React.FC<ArticleItemProps> = ({ article, onClick }) => {
   const authorName = article.author?.username || "";
 
   return (
-    <div
+    <button
+      type="button"
+      disabled={!slug}
+      aria-label={title}
       onClick={() => slug && onClick(slug)}
-      className="group px-3 py-3 rounded-lg cursor-pointer article-item-hover border-b"
+      className="article-item-row w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-default"
     >
-      <div className="font-semibold text-sm leading-snug mb-2xs text-text-base">
+      <span className="article-card-title">
         {title}
-      </div>
-      <div className="flex items-center gap-3">
+      </span>
+      <span className="article-card-subline">
         {summary && (
-          <div className="flex-1 min-w-0 text-xs truncate text-text-secondary">
+          <span className="article-card-summary">
             {summary}
-          </div>
+          </span>
         )}
-        <div className="flex items-center gap-xs flex-shrink-0 text-xs text-text-tertiary">
+        <span className="article-card-meta">
           {date && (
-            <span className="flex items-center gap-2xs">
-              <Calendar className="h-3 w-3" />{date}
+            <span className="inline-flex shrink-0 items-center gap-2xs">
+              <Calendar className="h-3 w-3" aria-hidden="true" />
+              <time dateTime={date}>{date}</time>
             </span>
           )}
           {categoryName && (
-            <Badge variant="info" className="!m-0 text-xs">
-              {categoryName}
-            </Badge>
+            <span className={badgeVariants({ variant: "info", className: "article-card-category !m-0 text-xs" })} title={categoryName}>
+              <span className="truncate">{categoryName}</span>
+            </span>
           )}
-          {authorName && <span>{authorName}</span>}
-        </div>
-      </div>
-    </div>
+          {authorName && <span className="article-card-author" title={authorName}>{authorName}</span>}
+        </span>
+      </span>
+    </button>
   );
 };
 

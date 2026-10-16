@@ -57,9 +57,11 @@ def upgrade() -> None:
                 ALTER TABLE znt_agents ADD COLUMN IF NOT EXISTS description TEXT;
             END IF;
 
-            -- 空库的归档列由后续 revision（4a85c94b5c4c）添加；本历史 revision
-            -- 只在全部投影依赖就绪、且视图尚不存在时才创建视图，避免在
-            -- 新鲜空库上引用尚不存在的列。已有库的视图与元信息一概不动。
+            -- 旧库可能已有不同列序及独立 owner/ACL/comment 的视图。
+            -- 本历史 revision 不重建任何已有对象，否则后续 forward 迁移
+            -- 无法恢复这里已经丢失的元信息。最终定义与元信息保全由
+            -- f1a2b3c4d5e6 在单事务中负责，startup 不执行 DDL 兜底。
+            -- 空库的归档列由后续 revision 添加；全部投影依赖就绪才创建。
             IF NOT EXISTS (
                 SELECT 1 FROM pg_catalog.pg_class AS existing
                 JOIN pg_catalog.pg_namespace AS namespace

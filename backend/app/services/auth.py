@@ -3,29 +3,35 @@
 简化的认证功能
 """
 
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+
 import jwt
 from jwt.exceptions import PyJWTError
+from sqlalchemy import select, or_, and_, update, text
 from sqlalchemy.exc import MultipleResultsFound
 
 from app.core.config import settings
+from app.core import session_guard
 from app.core.session_family import (
     new_family_refresh, refresh_family, lock_auth_mutation, session_state,
+    valid_family_nonce,
 )
+from app.core.session_guard import _key_user, _key_ip
+from app.models import User, RefreshToken, AuthSessionState, AuthAuthority
+from app.utils import security
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
-    # 使用utils.security中的verify_password函数，确保一致性
-    from app.utils.security import verify_password as utils_verify_password
-    return utils_verify_password(plain_password, hashed_password)
+    # 保留运行期依赖替换，不冻结安全工具函数引用。
+    return security.verify_password(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
     """生成密码哈希"""
-    from app.utils.security import get_password_hash as utils_get_password_hash
-    return utils_get_password_hash(password)
+    return security.get_password_hash(password)
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
@@ -58,12 +64,8 @@ async def authenticate_user(
 
     identifier 用于定位用户（full_name / student_id / username，均为公开标识符）
     credential 优先匹配 student_id；有 hashed_password 的账号也可使用密码，
-    保持项目统一的“姓名 + 学号”登录契约并兼容历史密码账号。
+    保持项目统一的"姓名 + 学号"登录契约并兼容历史密码账号。
     """
-    from sqlalchemy import select, or_
-    from app.models import User
-    from app.utils.security import verify_password
-
     query = select(User).where(
         or_(User.full_name == identifier, User.student_id == identifier, User.username == identifier),
         User.is_deleted.is_(False),
@@ -109,9 +111,6 @@ async def resolve_legacy_subject(db, subject):
     This does not bind mutable subjects to their original token owner. ID/token
     migration is a separate contract; never choose a first or preferred match.
     """
-    from sqlalchemy import select, or_
-    from app.models import User
-
     if not isinstance(subject, str) or not subject:
         return None
     result = await db.execute(select(User).where(
@@ -178,23 +177,20 @@ async def get_current_user(token: str, db=None) -> Optional[Dict[str, Any]]:
 async def create_refresh_token(db, user_id: int) -> str:
     """
     创建刷新令牌并保存到数据库
-    
+
     Args:
         db: 数据库会话
         user_id: 用户ID
-    
+
     Returns:
         刷新令牌字符串
     """
-    from app.models import RefreshToken
-    import secrets
-    
     # 生成安全的随机令牌
     token = secrets.token_urlsafe(64)
-    
+
     # 计算过期时间（默认30天）
     expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    
+
     # 创建刷新令牌记录
     refresh_token = RefreshToken(
         user_id=user_id,
@@ -202,18 +198,15 @@ async def create_refresh_token(db, user_id: int) -> str:
         expires_at=expires_at,
         is_revoked=False
     )
-    
+
     db.add(refresh_token)
     await db.commit()
-    
+
     return token
 
 
 async def lock_user_for_login(db, user_id: int) -> bool:
     """串行化同一账号的登录流程，保证 nonce 与 refresh token 顺序一致。"""
-    from sqlalchemy import select
-    from app.models import User
-
     await lock_auth_mutation(db)
     result = await db.execute(
         select(User.id)
@@ -235,9 +228,6 @@ async def issue_login_refresh_token(
     commit: bool = True,
 ) -> str:
     """在用户行锁保护下撤销旧 refresh token，并原子签发唯一新 token。"""
-    from sqlalchemy import update
-    from app.models import RefreshToken
-
     try:
         if not user_locked and not await lock_user_for_login(db, user_id):
             raise ValueError("用户不存在或不可登录")
@@ -269,17 +259,14 @@ async def issue_login_refresh_token(
 async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
     """
     验证刷新令牌有效性
-    
+
     Args:
         db: 数据库会话
         token: 刷新令牌
-    
+
     Returns:
         用户ID字典或None
     """
-    from sqlalchemy import select, and_
-    from app.models import RefreshToken, User
-    
     # 查询有效的刷新令牌
     query = select(RefreshToken).where(
         and_(
@@ -288,13 +275,13 @@ async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
             RefreshToken.is_revoked == False
         )
     )
-    
+
     result = await db.execute(query)
     refresh_token_record = result.scalar_one_or_none()
-    
+
     if not refresh_token_record:
         return None
-    
+
     # 获取关联的用户信息
     user_query = select(User).where(
         User.id == refresh_token_record.user_id,
@@ -303,10 +290,10 @@ async def verify_refresh_token(db, token: str) -> Optional[Dict[str, Any]]:
     )
     user_result = await db.execute(user_query)
     user = user_result.scalar_one_or_none()
-    
+
     if not user or not user.is_active or user.is_deleted:
         return None
-    
+
     return {
         "user_id": user.id,
         "role_code": user.role_code,
@@ -325,14 +312,10 @@ async def rotate_refresh_token(
     commit: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """原子消费旧刷新令牌并签发新令牌，防止并发重放。"""
-    from sqlalchemy import and_, select
-    from app.models import RefreshToken, User
-    import secrets
-
     try:
         await lock_auth_mutation(db)
         family = refresh_family(token)
-        # 先只读取 user_id，再按与登录一致的顺序获取“用户行 -> token 行”锁。
+        # 先只读取 user_id，再按与登录一致的顺序获取"用户行 -> token 行"锁。
         # 锁后必须重新校验 token，避免登录在等待期间已经将其撤销。
         owner_query = select(RefreshToken.user_id).where(
             and_(
@@ -419,9 +402,6 @@ async def rotate_refresh_token(
 
 async def lock_refresh_token_owner_for_logout(db, token: str) -> Optional[int]:
     """仅以仍有效的 refresh 授权退出；返回时持有用户行和 token 行锁。"""
-    from sqlalchemy import select
-    from app.models import RefreshToken
-
     def valid_token_query():
         return select(RefreshToken.user_id).where(
             RefreshToken.token == token,
@@ -456,26 +436,23 @@ async def revoke_all_user_refresh_tokens(
 ) -> bool:
     """
     撤销用户的所有刷新令牌
-    
+
     Args:
         db: 数据库会话
         user_id: 用户ID
-    
+
     Returns:
         是否成功撤销
     """
-    from sqlalchemy import update
-    from app.models import RefreshToken
-    
     # 更新所有该用户的令牌为已撤销
     stmt = update(RefreshToken).where(
         RefreshToken.user_id == user_id
     ).values(is_revoked=True)
-    
+
     await db.execute(stmt)
     if commit:
         await db.commit()
-    
+
     return True
 
 
@@ -489,13 +466,10 @@ class AuthCutoverEvidenceError(ValueError):
 
 async def _collect_cutover_sessions(db, users, live_uids, reauthenticate_user_ids):
     """Baseline per-user cache evidence; live users without proof become uncertain."""
-    from app.core.session_guard import get_auth_snapshot_strict, _key_user
-    from app.core.session_family import valid_family_nonce
-
     sessions: dict[int, dict] = {}
     deadlines: dict[int, object] = {}
     uncertain: set[int] = set()
-    snapshot = await get_auth_snapshot_strict([_key_user(user.id) for user in users]) if users else {}
+    snapshot = await session_guard.get_auth_snapshot_strict([_key_user(user.id) for user in users]) if users else {}
     for user in users:
         if not user.is_active or user.is_deleted or user.id in reauthenticate_user_ids:
             continue
@@ -512,15 +486,12 @@ async def _collect_cutover_sessions(db, users, live_uids, reauthenticate_user_id
 
 async def _prune_ip_contested_sessions(db, sessions, deadlines, uncertain) -> None:
     """With per-IP uniqueness, only the binding-proven owner keeps its session."""
-    from app.core.session_guard import get_auth_snapshot_strict, _key_ip
-    from app.core.session_family import valid_family_nonce
-
     groups: dict[str, list[int]] = {}
     for uid, cached in sessions.items():
         groups.setdefault(cached["ip"], []).append(uid)
     if not groups:
         return
-    bindings = await get_auth_snapshot_strict([_key_ip(ip) for ip in groups])
+    bindings = await session_guard.get_auth_snapshot_strict([_key_ip(ip) for ip in groups])
     for ip, uids in groups.items():
         binding, deadline = bindings[_key_ip(ip)]
         if binding is None and len(uids) == 1:
@@ -550,9 +521,6 @@ def _binding_proven_winner(binding, uids, sessions, deadline, valid_nonce) -> Op
 
 def _materialize_cutover_state(db, users, live, sessions, deadlines, gate) -> None:
     """Write durable session rows, revoke unproven refresh tokens, open the gate."""
-    import secrets
-    from app.models import AuthSessionState
-
     for user in users:
         cached = sessions.get(user.id)
         db.add(AuthSessionState(
@@ -585,9 +553,6 @@ async def bootstrap_durable_auth_authority(
     reauthentication approval; no implicit bulk logout. The whole baseline and
     ready gate commit together. Caller must not mix unrelated pending DB writes.
     """
-    from sqlalchemy import select
-    from app.models import RefreshToken, User
-
     if not legacy_writers_stopped:
         raise ValueError("Stop and drain all legacy authentication writers before cutover")
     if any(type(uid) is not int or uid <= 0 for uid in reauthenticate_user_ids):
@@ -631,9 +596,6 @@ async def bootstrap_durable_auth_authority(
 
 async def _cutover_gate_and_fence(db, User, RefreshToken):
     """Lock the closed authority row and fence legacy writers on PostgreSQL."""
-    from sqlalchemy import select, text
-    from app.models import AuthAuthority, AuthSessionState
-
     await lock_auth_mutation(db, require_ready=False)
     gate = await db.scalar(select(AuthAuthority).where(AuthAuthority.id == 1).with_for_update())
     if gate is None or gate.ready:

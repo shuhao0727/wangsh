@@ -132,6 +132,7 @@ export const useUsers = (initialParams: SearchParams = {}) => {
         if (editingUser) {
           const updateData: UserUpdateRequest = {
             student_id: values.student_id,
+            username: values.username,
             full_name: values.full_name,
             class_name: values.class_name,
             study_year: values.study_year,

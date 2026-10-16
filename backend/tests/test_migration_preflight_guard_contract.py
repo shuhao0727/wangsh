@@ -38,6 +38,71 @@ def test_actual_intermediate_revision_accepts_only_equivalent_guarded_index():
     assert evaluate(definitions={INDEX: (catalog(),)}).ok
 
 
+def test_known_if_not_exists_conversation_guards_are_revision_fingerprinted(tmp_path):
+    path = VERSIONS / "291268877685_add_core_indexes_for_conversations.py"
+    ops = preflight.parse_migration_ops(path, "291268877685")
+    assert ops.review_errors == ()
+    assert set(ops.guarded_indexes) == {
+        "ix_conversations_session_created",
+        "ix_group_messages_session_created",
+        "ix_conversations_user_agent_time",
+    }
+
+    changed = path.read_text(encoding="utf-8").replace(
+        "created_at DESC", "created_at ASC", 1
+    )
+    changed_path = tmp_path / "291268877685_changed.py"
+    changed_path.write_text(changed, encoding="utf-8")
+    try:
+        changed_ops = preflight.parse_migration_ops(changed_path, "291268877685")
+        assert not changed_ops.guarded_indexes
+        assert changed_ops.review_errors
+    finally:
+        changed_path.unlink()
+
+
+@pytest.mark.parametrize("name,expected", list(
+    preflight._REVIEWED_GUARD_MIGRATIONS["291268877685"].items()
+))
+def test_conversation_guard_checks_its_own_table_and_full_index_structure(name, expected):
+    table = expected.split(" ON public.", 1)[1].split(" USING ", 1)[0]
+    ops = preflight.parse_migration_ops(
+        VERSIONS / "291268877685_add_core_indexes_for_conversations.py", "291268877685"
+    )
+    definition = preflight.IndexDefinition(
+        schema="public", table=table, definition=expected,
+        valid=True, ready=True, live=True, kind="i",
+    )
+    all_definitions = {
+        other_name: (
+            preflight.IndexDefinition(
+                schema="public",
+                table=other_expected.split(" ON public.", 1)[1].split(" USING ", 1)[0],
+                definition=other_expected,
+                valid=True,
+                ready=True,
+                live=True,
+                kind="i",
+            ),
+        )
+        for other_name, other_expected in
+        preflight._REVIEWED_GUARD_MIGRATIONS["291268877685"].items()
+    }
+    for item, allowed in (
+        (definition, True),
+        (replace(definition, table="other_table"), False),
+        (replace(definition, definition=expected + " WHERE id > 0"), False),
+        (replace(definition, valid=False), False),
+    ):
+        definitions = dict(all_definitions)
+        definitions[name] = (item,)
+        messages = preflight.build_drift_messages(
+            [ops], existing_tables={table}, existing_indexes=set(definitions), existing_columns=set(),
+            existing_index_definitions=definitions,
+        )
+        assert (not messages) == allowed
+
+
 def test_actual_guard_without_catalog_evidence_stays_blocked():
     result = evaluate()
     assert not result.ok

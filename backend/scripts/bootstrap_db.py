@@ -10,6 +10,13 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sqlalchemy import Integer, MetaData, text
 
 from app.db.database import engine
+from app.db.migration_state import (
+    DEFAULT_VERSIONS_DIR,
+    VIEW_CONTRACT_REVISION,
+    load_revision_graph,
+    qualified_identifier,
+    validate_revision_state,
+)
 from app.models import Base
 
 
@@ -34,10 +41,12 @@ LEGACY_BASELINE_TABLES = (
     "xbk_selections",
     "xxjs_dianming",
 )
+# These columns are added by later migrations with unguarded ``ADD COLUMN``
+# statements.  They must be absent from the legacy baseline itself; dropping
+# them after ``create_all`` is too late because the next migration would still
+# see the columns during the bootstrap transaction.
 MIGRATION_ORIGIN_COLUMNS = (
     ("znt_group_discussion_members", "muted_until"),
-    # 归档列由 4a85c94b5c4c 添加；bootstrap 从当前模型拷贝建表时必须退回
-    # 历史形状，否则空库上 alembic upgrade head 会在该迁移处 DuplicateColumn。
     ("znt_conversations", "is_archived"),
     ("znt_conversations", "archived_at"),
 )
@@ -69,7 +78,12 @@ async def _current_schema(conn) -> str:
     return str(schema)
 
 
-async def _has_alembic_version(conn, schema: str) -> bool:
+def _qualified_identifier(schema: str, name: str) -> str:
+    return qualified_identifier(schema, name)
+
+
+async def _alembic_version_rows(conn, schema: str) -> list[object] | None:
+    """Return every effective-schema version row, or ``None`` if absent."""
     table_result = await conn.execute(
         text(
             """
@@ -86,9 +100,27 @@ async def _has_alembic_version(conn, schema: str) -> bool:
         {"schema": schema},
     )
     if not table_result.scalar_one():
-        return False
-    result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
-    return result.scalar_one_or_none() is not None
+        return None
+    version_table = _qualified_identifier(schema, "alembic_version")
+    result = await conn.execute(
+        text(f"SELECT version_num FROM {version_table} ORDER BY version_num")
+    )
+    try:
+        rows = list(result)
+    except TypeError:
+        rows = []
+    if rows:
+        return [row[0] for row in rows]
+    scalar_one_or_none = getattr(result, "scalar_one_or_none", None)
+    if callable(scalar_one_or_none):
+        scalar = scalar_one_or_none()
+        return [] if scalar is None else [scalar]
+    return []
+
+
+async def _has_alembic_version(conn, schema: str) -> bool:
+    """Backward-compatible non-empty check for callers outside ``main``."""
+    return bool(await _alembic_version_rows(conn, schema))
 
 
 async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
@@ -106,6 +138,43 @@ async def _get_existing_schema_tables(conn, schema: str) -> set[str]:
     return {str(row[0]) for row in result}
 
 
+def _exclude_migration_origin_columns(baseline: MetaData) -> None:
+    """Remove later-migration columns from a private metadata copy.
+
+    ``Base.metadata`` is the current application shape, while this function
+    emits the historical pre-migration baseline.  Work only on the private
+    copy so imports and subsequent application startup retain the full ORM
+    model.  Any copied index/constraint that refers to an excluded column is
+    removed before the column collection is changed as well.
+    """
+    for table_name, column_name in MIGRATION_ORIGIN_COLUMNS:
+        table = baseline.tables.get(table_name)
+        if table is None:
+            continue
+        column = table.c.get(column_name)
+        if column is None:
+            continue
+
+        for index in tuple(table.indexes):
+            if any(
+                getattr(expression, "name", None) == column_name
+                for expression in index.expressions
+            ):
+                table.indexes.remove(index)
+
+        for constraint in tuple(table.constraints):
+            if any(
+                getattr(constraint_column, "name", None) == column_name
+                for constraint_column in getattr(constraint, "columns", ())
+            ):
+                table.constraints.remove(constraint)
+
+        # SQLAlchemy has no public ``Table.remove_column`` API.  This is a
+        # private metadata copy, so removing from its column collection is the
+        # narrowest way to prevent the column from appearing in CREATE TABLE.
+        table._columns.remove(column)
+
+
 async def _create_legacy_baseline(conn, *, schema: str) -> None:
     """Create only tables that predate the maintained Alembic migration chain."""
     # Current models include indexes introduced later by Alembic (some require
@@ -113,7 +182,9 @@ async def _create_legacy_baseline(conn, *, schema: str) -> None:
     # ORM metadata or create-and-drop indexes before their dependencies exist.
     baseline = MetaData()
     for table in Base.metadata.tables.values():
-        table.to_metadata(baseline)
+        copied = table.to_metadata(baseline)
+        copied.schema = schema
+    _exclude_migration_origin_columns(baseline)
     # These legacy tables predate the academic-year migration. Copying today's
     # String(9)/check constraints would make its integer-to-range conversion
     # fail even on an empty database. Keep the historical type only here.
@@ -137,21 +208,17 @@ async def _create_legacy_baseline(conn, *, schema: str) -> None:
             checkfirst=True,
         )
     )
-    for table_name, column_name in MIGRATION_ORIGIN_COLUMNS:
-        await conn.execute(
-            text(f'ALTER TABLE "{table_name}" DROP COLUMN IF EXISTS "{column_name}"')
-        )
     if schema != "public":
         for index_name, table_name, columns in NON_PUBLIC_LEGACY_DROP_INDEXES:
             await conn.execute(
                 text(
                     f'CREATE INDEX IF NOT EXISTS "{index_name}" '
-                    f'ON "{table_name}" ({columns})'
+                    f'ON {_qualified_identifier(schema, table_name)} ({columns})'
                 )
             )
     await conn.execute(
         text(
-            "CREATE TABLE IF NOT EXISTS alembic_version "
+            f"CREATE TABLE IF NOT EXISTS {_qualified_identifier(schema, 'alembic_version')} "
             "(version_num VARCHAR(64) NOT NULL)"
         )
     )
@@ -233,57 +300,75 @@ def _migration_managed_indexes() -> set[str]:
     return indexes
 
 
-async def _ensure_compat_columns(conn) -> None:
+async def _ensure_compat_columns(conn, schema: str) -> None:
     # 兼容历史库：早期 xxjs_dianming 缺少 updated_at，导致 ORM 查询报 UndefinedColumnError
+    table = _qualified_identifier(schema, "xxjs_dianming")
     await conn.execute(
         text(
-            "ALTER TABLE xxjs_dianming "
+            f"ALTER TABLE {table} "
             "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"
         )
     )
     await conn.execute(
         text(
-            "UPDATE xxjs_dianming "
+            f"UPDATE {table} "
             "SET updated_at = created_at "
             "WHERE updated_at IS NULL"
         )
     )
     await conn.execute(
         text(
-            "ALTER TABLE xxjs_dianming "
+            f"ALTER TABLE {table} "
             "ALTER COLUMN updated_at SET NOT NULL"
         )
     )
 
 
-async def _ensure_views(conn) -> None:
-    # 创建功能必需的视图（不受 AUTO_CREATE_TABLES 控制）
-    await conn.execute(
-        text(
-            """
-            CREATE OR REPLACE VIEW v_conversations_with_deleted AS
-            SELECT
-                c.id, c.user_id,
-                COALESCE(c.user_name, u.full_name, '未知用户') AS display_user_name,
-                c.agent_id,
-                COALESCE(c.agent_name, a.name, '未知智能体') AS display_agent_name,
-                c.session_id, c.message_type, c.content, c.response_time_ms, c.created_at,
-                c.is_archived, c.archived_at,
-                CASE WHEN u.id IS NULL OR u.is_deleted = true THEN true ELSE false END AS is_user_deleted,
-                CASE WHEN a.id IS NULL OR a.is_deleted = true THEN true ELSE false END AS is_agent_deleted
-            FROM znt_conversations c
-            LEFT JOIN sys_users u ON c.user_id = u.id
-            LEFT JOIN znt_agents a ON c.agent_id = a.id
-            """
-        )
+async def _check_view_contract(conn) -> dict[str, str]:
+    """Check the migration-owned view without performing any DDL.
+
+    Import lazily because startup imports this script only while upgrading an
+    empty database.  Keeping the shared helper import lazy avoids an import-time
+    startup/bootstrap cycle while preserving one implementation of the contract.
+    """
+    from app.core.startup import check_conversations_view_contract
+
+    return await check_conversations_view_contract(conn)
+
+
+def _validate_upgrade_source(version_rows: list[object]):
+    """Validate that the recorded revision can enter a formal Alembic upgrade.
+
+    ``--initial-only`` runs before Alembic. It must accept a known ancestor of
+    the current head, including revisions before the view-contract migration;
+    the post-upgrade bootstrap and application readiness check enforce that
+    later contract separately.
+    """
+    try:
+        graph = load_revision_graph(DEFAULT_VERSIONS_DIR)
+    except (RuntimeError, SyntaxError, ValueError) as exc:
+        return None, f"migration_graph_invalid: {exc}"
+
+    contract_revision = (
+        version_rows[0]
+        if len(version_rows) == 1 and isinstance(version_rows[0], str)
+        else VIEW_CONTRACT_REVISION
+    )
+    return (
+        validate_revision_state(
+            version_rows,
+            graph,
+            contract_revision=contract_revision,
+        ),
+        None,
     )
 
 
 async def main(*, initial_only: bool = False) -> None:
     async with engine.begin() as conn:
         schema = await _current_schema(conn)
-        has_alembic_version = await _has_alembic_version(conn, schema)
-        if not has_alembic_version:
+        version_rows = await _alembic_version_rows(conn, schema)
+        if version_rows is None:
             existing_tables = await _get_existing_schema_tables(conn, schema)
             if existing_tables:
                 raise RuntimeError(
@@ -301,12 +386,36 @@ async def main(*, initial_only: bool = False) -> None:
                 "applying compatibility patches and views."
             )
         elif initial_only:
+            state, state_error = _validate_upgrade_source(version_rows)
+            if state_error is not None:
+                raise RuntimeError(
+                    "Existing database has an invalid Alembic upgrade source: "
+                    f"{state_error}"
+                )
+            if not state.ok:
+                raise RuntimeError(
+                    "Existing database has an invalid Alembic upgrade source: "
+                    f"{state.reason}: {state.message}"
+                )
             print("Alembic version already exists; initial bootstrap skipped")
             return
 
-        await _ensure_compat_columns(conn)
-        await _ensure_views(conn)
-        print("Database compatibility patches and views are ready")
+        # Validate the exact revision state before any compatibility write.
+        state = await _check_view_contract(conn)
+        if state["status"] != "healthy":
+            raise RuntimeError(
+                "Database has an invalid Alembic migration state: "
+                f"{state.get('reason', 'unknown error')}"
+            )
+        await _ensure_compat_columns(conn, schema)
+        contract = await _check_view_contract(conn)
+        if contract["status"] != "healthy":
+            raise RuntimeError(
+                "Database is not ready for application traffic: "
+                f"v_conversations_with_deleted contract failed: "
+                f"{contract.get('reason', 'unknown error')}"
+            )
+        print("Database compatibility patches are ready; view contract is healthy")
 
 
 if __name__ == "__main__":

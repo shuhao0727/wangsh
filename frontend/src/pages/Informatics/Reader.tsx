@@ -64,7 +64,7 @@ const renderTreeNodes = (
       <div key={key}>
         <button
           type="button"
-          className={`appearance-none border-0 informatics-tree-row ${selected ? "informatics-tree-row-selected" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+          className={`appearance-none border-0 informatics-tree-row ${selected ? "informatics-tree-row-selected" : ""} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interaction-focus focus-visible:ring-offset-2`}
           style={{ paddingLeft: `calc(var(--ws-space-1) + ${depth} * var(--ws-space-2))` }}
           aria-label={nodeAriaLabel}
           aria-expanded={hasChildren ? expanded : undefined}
@@ -118,28 +118,38 @@ const InformaticsReaderPage: React.FC = () => {
   const outlineTokenRef = useRef(0);
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
   const [docExpandedKeys, setDocExpandedKeys] = useState<string[]>([]);
   const [outlineExpandedKeys, setOutlineExpandedKeys] = useState<string[]>([]);
+  const listTokenRef = useRef(0);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
   const loadList = useCallback(async () => {
+    const token = ++listTokenRef.current;
     setListLoading(true);
     try {
       const res = await publicTypstNotesApi.list({ limit: 100, search: debouncedSearch.trim() || undefined });
+      if (listTokenRef.current !== token) return false;
       setItems(res || []);
       if (res?.length && !isMobile) {
         setSelectedId((prev) => prev ?? res[0].id);
       }
+      return true;
     } catch (e: any) {
+      if (listTokenRef.current !== token) return false;
       const detail = e?.response?.data?.detail;
       const msg = typeof detail === "string" ? detail : (e?.message || "加载目录失败");
       showMessage.error(msg);
+      return false;
     } finally {
-      setListLoading(false);
+      if (listTokenRef.current === token) setListLoading(false);
     }
   }, [debouncedSearch, isMobile]);
 
   useEffect(() => {
     void loadList();
+    return () => { listTokenRef.current += 1; };
   }, [loadList]);
 
   const loadNote = useCallback(async (id: number, cacheKey?: string | number) => {
@@ -148,12 +158,18 @@ const InformaticsReaderPage: React.FC = () => {
     setPdfError("");
     setOutline([]);
     setPdfData(null);
-    outlineTokenRef.current = token;
+    outlineTokenRef.current += 1;
     try {
       const note = await publicTypstNotesApi.get(id);
       if (renderTokenRef.current !== token) return;
 
+      if (note?.pdf_available === false) {
+        setPdfError("PDF 暂未生成，请联系管理员编译");
+        return;
+      }
+
       const blob = await publicTypstNotesApi.exportPdf(id, note?.updated_at || cacheKey || Date.now());
+      if (renderTokenRef.current !== token) return;
       const data = new Uint8Array(await blob.arrayBuffer());
       if (renderTokenRef.current !== token) return;
       setPdfData(data);
@@ -168,22 +184,27 @@ const InformaticsReaderPage: React.FC = () => {
   }, []);
 
   const handleManualRefresh = useCallback(async () => {
-    await loadList();
-    if (selectedId) {
+    const token = renderTokenRef.current;
+    const refreshed = await loadList();
+    if (refreshed && selectedId && selectedIdRef.current === selectedId && renderTokenRef.current === token) {
       await loadNote(selectedId, selectedItem?.updated_at || Date.now());
     }
   }, [loadList, selectedId, selectedItem?.updated_at, loadNote]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    void loadNote(selectedId, selectedItem?.updated_at || Date.now());
-  }, [selectedId, selectedItem?.updated_at, loadNote]);
-
-  useEffect(() => {
+    if (selectedId) {
+      void loadNote(selectedId, selectedItem?.updated_at || Date.now());
+    } else {
+      setPdfData(null);
+      setOutline([]);
+      setPdfError("");
+      setPdfLoading(false);
+    }
     return () => {
       renderTokenRef.current += 1;
+      outlineTokenRef.current += 1;
     };
-  }, []);
+  }, [selectedId, selectedItem?.updated_at, loadNote]);
 
   useEffect(() => {
     const el = rightScrollRef.current;
@@ -362,29 +383,36 @@ const InformaticsReaderPage: React.FC = () => {
   };
 
   const handlePdfLoaded = useCallback((pdf: any) => {
-    const token = outlineTokenRef.current;
+    const token = ++outlineTokenRef.current;
+    const renderToken = renderTokenRef.current;
+    const isCurrent = () => outlineTokenRef.current === token && renderTokenRef.current === renderToken;
     void (async () => {
       try {
         const rawOutline = await pdf.getOutline();
+        if (!isCurrent()) return;
         const flat: PdfOutlineItem[] = [];
         const walk = async (list: any[], level: number) => {
           for (const it of list || []) {
+            if (!isCurrent()) return;
             let pageNumber = 1;
             try {
               let dest = it?.dest;
               if (typeof dest === "string") {
                 dest = await pdf.getDestination(dest);
+                if (!isCurrent()) return;
               }
               if (Array.isArray(dest) && dest.length > 0) {
                 const ref = dest[0];
                 if (typeof ref === "object" && ref !== null) {
                   const pageIndex = await pdf.getPageIndex(ref);
+                  if (!isCurrent()) return;
                   pageNumber = Number(pageIndex) + 1;
                 } else if (typeof ref === "number") {
                   pageNumber = ref + 1;
                 }
               }
             } catch {
+              if (!isCurrent()) return;
               pageNumber = 1;
             }
             flat.push({ title: it?.title || "未命名", level, pageNumber });
@@ -394,9 +422,9 @@ const InformaticsReaderPage: React.FC = () => {
         if (rawOutline) {
           await walk(rawOutline, 1);
         }
-        if (outlineTokenRef.current === token) setOutline(flat);
+        if (isCurrent()) setOutline(flat);
       } catch {
-        if (outlineTokenRef.current === token) setOutline([]);
+        if (isCurrent()) setOutline([]);
       }
     })();
   }, []);
@@ -555,14 +583,16 @@ const InformaticsReaderPage: React.FC = () => {
         <div className="p-3">
           <Alert variant="destructive">
             <TriangleAlert className="h-4 w-4" />
-            <AlertTitle>文档编译失败</AlertTitle>
+            <AlertTitle>{pdfError === "PDF 暂未生成，请联系管理员编译" ? "PDF 尚未生成" : "文档编译失败"}</AlertTitle>
             <AlertDescription>
               <pre className="mb-0 whitespace-pre-wrap">{pdfError}</pre>
             </AlertDescription>
           </Alert>
           <div className="h-2.5" />
-          <div className="text-sm text-text-secondary">
-            提示：通常是缺少图片资源（例如 images/a.png）或导入路径不正确，请在管理端上传资源或修正文档引用。
+          <div className="text-sm text-module-shell-muted">
+            {pdfError === "PDF 暂未生成，请联系管理员编译"
+              ? "这篇内容已经发布，但管理员还没有生成可供公开阅读的 PDF。"
+              : "提示：通常是缺少图片资源（例如 images/a.png）或导入路径不正确，请在管理端上传资源或修正文档引用。"}
           </div>
         </div>
       ) : null}
@@ -577,22 +607,30 @@ const InformaticsReaderPage: React.FC = () => {
       <div className="mx-auto flex min-h-0 w-full flex-1 flex-col p-3" style={{ maxWidth: "var(--ws-shell-max-width)" }}>
         {selectedId ? (
           <div className="flex h-full flex-col">
-            <div className="sticky top-0 z-sticky flex flex-shrink-0 items-center gap-[var(--ws-space-1)] bg-surface border-b border-[var(--ws-color-border-secondary)] px-[var(--ws-space-2)] py-[var(--ws-space-1)]">
-              <Button variant="ghost" onClick={() => setSelectedId(null)}>
+            <div className="sticky top-0 z-sticky flex flex-shrink-0 items-center gap-[var(--ws-space-1)] bg-module-shell-surface border-b border-module-shell-border px-[var(--ws-space-2)] py-[var(--ws-space-1)]">
+              <Button variant="ghost" aria-label="返回文档列表" onClick={() => setSelectedId(null)}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <span className="flex-1 truncate text-base font-semibold text-text-base" title={items.find((x) => x.id === selectedId)?.title || "内容"}>
                 {items.find((x) => x.id === selectedId)?.title || "内容"}
               </span>
-              <Button variant="ghost" onClick={() => setMobileDrawerOpen(true)}>
+              <Button ref={mobileNavButtonRef} variant="ghost" aria-label="打开文档导航" aria-expanded={mobileDrawerOpen} onClick={() => setMobileDrawerOpen(true)}>
                 <Menu className="h-4 w-4" />
               </Button>
             </div>
             <div className="informatics-mobile-content">{renderReader()}</div>
 
             <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-              <SheetContent side="left" className="w-[min(85%,22rem)] p-0 sm:max-w-none">
-                <SheetHeader className="border-b border-border px-4 py-3">
+              <SheetContent
+                side="left"
+                aria-describedby={undefined}
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                  mobileNavButtonRef.current?.focus();
+                }}
+                className="w-[min(85%,22rem)] bg-module-shell-surface text-module-shell-text p-0 sm:max-w-none"
+              >
+                <SheetHeader className="border-b border-module-shell-border px-4 py-3">
                   <SheetTitle className="text-left text-lg">导航</SheetTitle>
                 </SheetHeader>
                 <div className="h-full min-h-0 p-[var(--ws-space-2)]">{renderLeftContent()}</div>
@@ -612,7 +650,7 @@ const InformaticsReaderPage: React.FC = () => {
         leftWidth={320}
         alignItems="stretch"
         left={
-          <PanelCard bodyPadding="var(--ws-panel-padding-sm)">
+          <PanelCard className="shadow-none" bodyPadding="var(--ws-panel-padding-sm)">
             {renderLeftContent()}
           </PanelCard>
         }

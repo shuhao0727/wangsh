@@ -23,6 +23,7 @@ from app.utils.cache import cache, ArticleCacheKeys, clear_article_cache
 from app.core.pubsub import publish
 from app.utils.errors import safe_error_detail
 from .markdown_styles import router as markdown_styles_router
+from ._list_serialization import serialize_admin_article_list
 
 router = APIRouter()
 router.include_router(markdown_styles_router)
@@ -35,6 +36,7 @@ async def list_articles(
     published_only: bool = Query(True, description="是否只显示已发布的文章"),
     category_id: Optional[int] = Query(None, description="按分类ID筛选"),
     author_id: Optional[int] = Query(None, description="按作者ID筛选"),
+    search: Optional[str] = Query(None, description="按标题或正文搜索"),
     include_relations: bool = Query(False, description="是否包含关联信息"),
     db: AsyncSession = Depends(get_db),
     _: Dict[str, Any] = Depends(require_super_admin)
@@ -52,7 +54,8 @@ async def list_articles(
         published_only=published_only,
         include_relations=include_relations,
         category_id=category_id,
-        author_id=author_id
+        author_id=author_id,
+        search=search,
     )
     
     # 尝试从缓存获取
@@ -68,82 +71,12 @@ async def list_articles(
         published_only=published_only,
         category_id=category_id,
         author_id=author_id,
-        include_relations=include_relations
+        include_relations=include_relations,
+        search=search,
     )
     
-    # 将SQLAlchemy对象转换为字典（匹配Pydantic模型）
-    articles_list = []
-    for article in result["articles"]:
-        # 构建文章字典
-        article_dict = {
-            "id": article.id,
-            "title": article.title or "",
-            "slug": article.slug,
-            "content": article.content or "",
-            "summary": article.summary or "",
-            "custom_css": getattr(article, "custom_css", None),
-            "style_key": getattr(article, "style_key", None),
-            "published": article.published,
-            "author_id": article.author_id,  # Article模型有author_id字段
-            "category_id": article.category_id,
-            "created_at": article.created_at.isoformat(),
-            "updated_at": article.updated_at.isoformat(),
-        }
-        
-        # 如果包含关联信息，添加作者和分类
-        if include_relations:
-            # 添加作者信息
-            if article.author:
-                article_dict["author"] = {
-                    "id": article.author.id,
-                    "username": article.author.username,
-                    "email": getattr(article.author, "email", None),
-                    "full_name": article.author.full_name if hasattr(article.author, 'full_name') else None
-                }
-            else:
-                article_dict["author"] = None
-            
-            # 添加分类信息
-            if article.category:
-                # 分类slug处理
-                category_slug = None
-                if hasattr(article.category, 'slug') and article.category.slug:
-                    category_slug = article.category.slug
-                else:
-                    category_slug = f"category-{article.category.id}"
-                
-                article_dict["category"] = {
-                    "id": article.category.id,
-                    "name": article.category.name,
-                    "slug": category_slug,
-                    "description": article.category.description if hasattr(article.category, 'description') else None
-                }
-            else:
-                article_dict["category"] = None
+    articles_list = serialize_admin_article_list(result["articles"], include_relations)
 
-            if getattr(article, "style", None):
-                article_dict["style"] = {
-                    "key": article.style.key,
-                    "title": article.style.title or "",
-                    "sort_order": article.style.sort_order or 0,
-                    "content": article.style.content or "",
-                    "created_at": article.style.created_at.isoformat(),
-                    "updated_at": article.style.updated_at.isoformat(),
-                }
-            else:
-                article_dict["style"] = None
-            
-            # 标签功能已移除，不再返回标签信息
-            article_dict["tags"] = []
-        else:
-            # 如果不包含关联信息，设置为None
-            article_dict["author"] = None
-            article_dict["category"] = None
-            article_dict["style"] = None
-            article_dict["tags"] = []
-        
-        articles_list.append(article_dict)
-    
     response_data = {
         "total": result["total"],
         "articles": articles_list,

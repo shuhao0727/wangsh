@@ -1,5 +1,19 @@
 # 部署指南
 
+## Redis 连接工厂基础（未发布）
+
+缓存客户端通过 redis-py 原生证书参数构造 TLS，不传 `ssl_context`。
+`REDIS_SSL_CERT_REQS` 默认 `required`，可选 CA/客户端证书通过
+`REDIS_SSL_CA_CERTS`、`REDIS_SSL_CA_DATA`、`REDIS_SSL_CERTFILE`、
+`REDIS_SSL_KEYFILE` 传入；不以关闭证书校验验收。Sentinel discovery
+与 master 数据连接分开：发现密码取 `REDIS_SENTINEL_PASSWORD`，
+`REDIS_SENTINEL_SSL` / `REDIS_SENTINEL_SSL_*` 可覆盖发现通道；master
+保留原密码/TLS 配置。客户端关闭要同时释放自有数据和 discovery 池。
+
+本批只提交工厂及缓存门面，不表示其他模块已接入、镜像已发布或运行栈
+已切换。参数合同、真实 TCP 与 TLS/Sentinel 验收不得混计，实际证据见
+[TEST_STATUS](../testing/TEST_STATUS.md)。
+
 > 最后更新：2026-09-27
 
 ---
@@ -1005,3 +1019,43 @@ gateway/tests/test_caddy_config.sh
 ```
 
 发布前还必须在独立网关环境验证 `413`、`431`、上游响应超时、健康检查和现有 `/api/*`、前端反代不回归；这些隔离证据不能替代公网边缘防护验收。
+
+## DB 启动与视图迁移的提交合同
+
+在线 Alembic runner 在同一事务中先取得固定 advisory lock，再扩容版本表并迁移；
+提交或回滚释放锁。离线 SQL 生成不取得该锁。`migration_state.py` 只静态解析
+revision 图，拒绝缺失、空、多行、未知 revision、非法 parent 及非单 head 图。
+
+`v_conversations_with_deleted` 的最终 14 列定义由 forward revision
+`f1a2b3c4d5e6` 负责。历史 `20260211_0004` 仅在当前 schema 没有同名关系且
+全部投影依赖列齐全时创建；已有对象不重建，缺列暂不创建，交后续 migration
+收敛。已执行该历史 revision 的库不会重跑；本修改不能恢复早先已经丢失的
+owner、ACL 或 comment，须另行核备份和授权记录。
+
+Forward 在单事务内预读并恢复 owner、对象级有效显式授权及 grant option、注释和
+对象级 security label，不保留原 grantor 的审计来源。列级 label、列级 ACL/comment、view reloptions、自定义 trigger/rule、
+依赖对象、缺列或权限不足须失败并回滚，不使用 CASCADE，也不在 startup 用 DDL 兜底。
+Downgrade 删除视图而非恢复旧定义/授权，不能当作无损生产回退；视图缺失由
+readiness 拒绝服务，生产恢复须另验备份及权限来源。
+
+`--initial-only` bootstrap 只为真正空库建立 legacy baseline；已有业务表但
+缺失或空版本表须拒绝，不 stamp 冒充完成迁移。完整升级后普通 bootstrap
+再处理兼容字段并检查合同；已有 head 的 startup 不执行 schema DDL。
+`/health` 与 `/api/system/health` 共用 readiness 合同：healthy 返回 200，
+degraded/unhealthy 返回 503；`/ping` 仅为 liveness。Compose/网关切换属于
+后续独立批，不因提交此 API 自动改变现用运行栈。
+
+实际执行范围和首败/复测见 [TEST_STATUS](../testing/TEST_STATUS.md)；
+本地提交不构成生产迁移、镜像发布或完整备份恢复的授权。
+
+## 前端独立 HTML 目录入口与字体源
+
+生产前端 Caddy 明确处理 `/games/ai-partner` 与 `/games/ai-partner/*`；
+`try_files {path} {path}/index.html =404` 仅允许该路径自己的目录 index。
+独立入口和 JS/静态资源缺失必须为 404，不得用主站 `/index.html` 刷出 200。
+独立 HTML 保持 `no-cache`，生产字体源允许已固定 KaTeX CSS 所用的
+`https://cdn.jsdelivr.net`；不扩大 object、base、form 边界，也不关闭 TLS 校验。
+
+验收须用同一候选配置及构建产物检查裸路径、目录、显式 HTML 与不存在资源；
+检查 MIME、CSP、cache header 和双引擎原生交互。只挂载静态产物的 Caddy
+运输验证不是全 production Dockerfile 构建、后台功能或真实字体渲染验收。

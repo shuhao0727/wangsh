@@ -48,14 +48,19 @@ import type { User } from "./types";
 import { AdminPage, AdminTablePanel, AdminFilterBar } from "@components/Admin";
 import { ConfirmDialog } from "@components/Common/ConfirmDialog";
 import { PAGE_SIZE_OPTIONS } from "@/constants/tableDefaults";
-import { useBreakpoint } from "@hooks/useBreakpoint";
+import { calculatePagination } from "@utils/pagination";
+import useAuth from "@hooks/useAuth";
 
 const AdminUsers: React.FC = () => {
+  const { user } = useAuth();
+  const filterRoles = user?.role_code === "admin"
+    ? roleOptions.filter((role) => role.value === "student" || role.value === "teacher")
+    : roleOptions;
   const { state, actions, closeForm, closeDetail } = useUsers();
   const { data: stats } = useUsersStats();
-  const screens = useBreakpoint();
-  const compact = !screens.lg;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const formTriggerRef = useRef<HTMLElement | null>(null);
+  const addUserButtonRef = useRef<HTMLButtonElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const {
     handleEdit,
@@ -64,6 +69,29 @@ const AdminUsers: React.FC = () => {
   } = actions;
 
   const handleDeleteRequest = useCallback((id: number) => setDeleteTarget(id), []);
+
+  // Capture the actual button even when pointer activation does not focus it.
+  // Row View -> detail Edit keeps the row View target after the detail unmounts.
+  const captureFormTrigger = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    const trigger = event.target instanceof Element ? event.target.closest<HTMLElement>("button") : null;
+    if (trigger && event.currentTarget.contains(trigger)) formTriggerRef.current = trigger;
+  }, []);
+
+  const handleFormCloseAutoFocus = useCallback((event: Event) => {
+    const trigger = formTriggerRef.current?.isConnected ? formTriggerRef.current : addUserButtonRef.current;
+    if (!trigger) return;
+    event.preventDefault();
+    trigger.focus();
+  }, []);
+
+  const handleDetailCloseAutoFocus = useCallback((event: Event) => {
+    // The form owns focus when closing details as part of View -> Edit.
+    if (state.formVisible) {
+      event.preventDefault();
+      return;
+    }
+    handleFormCloseAutoFocus(event);
+  }, [state.formVisible, handleFormCloseAutoFocus]);
 
   const baseColumns = useMemo(
     () =>
@@ -147,179 +175,187 @@ const AdminUsers: React.FC = () => {
     enableColumnResizing: true,
   });
 
-  const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
+  const { totalPages } = calculatePagination({
+    page: state.currentPage,
+    pageSize: state.pageSize,
+    total: state.total
+  });
 
   return (
     <AdminPage scrollable={false}>
-      <AdminFilterBar>
-        {stats && (
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2.5 h-9">
-              <span className="text-text-tertiary">用户</span>
-              <span className="font-semibold text-primary tabular-nums">{stats.total}</span>
+      {/* 统计独立换行，避免与筛选和操作争抢宽度；窄屏同样保留角色统计。 */}
+      {stats && (
+        <div className="mb-xs flex shrink-0 flex-wrap items-center gap-xs text-xs" role="group" aria-label="用户统计">
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary-soft px-2.5 h-9">
+            <span className="text-text-tertiary">用户</span>
+            <span className="font-semibold text-primary tabular-nums">{stats.total}</span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-[var(--ws-color-success-soft)] px-2.5 h-9">
+            <span className="text-text-tertiary">激活</span>
+            <span className="font-semibold tabular-nums" style={{ color: "var(--ws-color-success)" }}>{stats.active}</span>
+          </span>
+          {stats.inactive > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
+              <span className="text-text-tertiary">禁用</span>
+              <span className="font-semibold text-text-base tabular-nums">{stats.inactive}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-success-soft)] px-2.5 h-9">
-              <span className="text-text-tertiary">激活</span>
-              <span className="font-semibold tabular-nums" style={{ color: "var(--ws-color-success)" }}>{stats.active}</span>
-            </span>
-            {stats.inactive > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
-                <span className="text-text-tertiary">禁用</span>
-                <span className="font-semibold text-text-base tabular-nums">{stats.inactive}</span>
+          )}
+          {stats.by_role && Object.entries(stats.by_role).map(([role, count]) => {
+            const label = role === "student" ? "学生" : role === "teacher" ? "教师" : role === "admin" ? "管理" : role === "super_admin" ? "超管" : role;
+            return (
+              <span key={role} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
+                <span className="text-text-tertiary">{label}</span>
+                <span className="font-semibold text-text-base tabular-nums">{count}</span>
               </span>
-            )}
-            {!compact && stats.by_role && Object.entries(stats.by_role).map(([role, count]) => {
-              const label = role === "student" ? "学生" : role === "teacher" ? "教师" : role === "admin" ? "管理" : role === "super_admin" ? "超管" : role;
-              return (
-                <span key={role} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--ws-color-surface-2)] px-2.5 h-9">
-                  <span className="text-text-tertiary">{label}</span>
-                  <span className="font-semibold text-text-base tabular-nums">{count}</span>
-                </span>
-              );
-            })}
+            );
+          })}
+        </div>
+      )}
+      <AdminFilterBar className="min-w-0 shrink-0 flex-wrap overflow-x-visible">
+        <div className="flex min-w-0 flex-wrap items-center gap-xs">
+          <div className="relative w-[220px] max-w-full">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+            <Input
+              aria-label="搜索用户"
+              placeholder="搜索用户..."
+              value={state.searchKeyword}
+              className="border-transparent bg-transparent pl-9 shadow-none hover:border-transparent hover:bg-interaction-hover focus-visible:bg-surface focus-visible:ring-inset focus-visible:ring-offset-0"
+              onChange={(e) => actions.handleSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  actions.handleSearch((e.target as HTMLInputElement).value);
+                }
+              }}
+              clearable
+              onClear={() => actions.handleSearch("")}
+            />
           </div>
-        )}
-        {stats && <div className="mx-2xs h-6 w-px bg-border-secondary" />}
-        <div className="relative w-[220px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-          <Input
-            placeholder="搜索用户..."
-            value={state.searchKeyword}
-            className="pl-9"
-            onChange={(e) => actions.handleSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                actions.handleSearch((e.target as HTMLInputElement).value);
+
+          <Select
+            value={state.roleFilter ?? "__all__"}
+            onValueChange={(value) =>
+              actions.handleRoleFilter(value === "__all__" ? undefined : value)
+            }
+          >
+            <SelectTrigger aria-label="按角色筛选" className="w-[120px] border-transparent bg-transparent shadow-none hover:bg-interaction-hover focus:ring-inset focus:ring-offset-0">
+              <SelectValue placeholder="角色" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部角色</SelectItem>
+              {filterRoles.map((role) => (
+                <SelectItem key={role.value} value={role.value}>
+                  {role.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={state.statusFilter === undefined ? "__all__" : String(state.statusFilter)}
+            onValueChange={(value) => {
+              if (value === "__all__") {
+                actions.handleStatusFilter(undefined);
+                return;
+              }
+              actions.handleStatusFilter(value === "true");
+            }}
+          >
+            <SelectTrigger aria-label="按状态筛选" className="w-[120px] border-transparent bg-transparent shadow-none hover:bg-interaction-hover focus:ring-inset focus:ring-offset-0">
+              <SelectValue placeholder="状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部状态</SelectItem>
+              {statusOptions.map((status) => (
+                <SelectItem key={String(status.value)} value={String(status.value)}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+        </div>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-xs">
+          <Button variant="ghost" size="icon" onClick={actions.handleReset} aria-label="重置">
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost">
+                <Download className="h-4 w-4" />
+                模板
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => actions.handleDownloadTemplate("xlsx")}>
+                下载 XLSX 模板
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => actions.handleDownloadTemplate("csv")}>
+                下载 CSV 模板
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".xlsx,.csv,.txt"
+            onChange={async (e) => {
+              const input = e.currentTarget;
+              const file = input.files?.[0];
+              if (!file) return;
+              try {
+                await actions.handleFileUpload(file);
+              } finally {
+                input.value = "";
               }
             }}
-            clearable
-            onClear={() => actions.handleSearch("")}
           />
-        </div>
-
-        <Select
-          value={state.roleFilter ?? "__all__"}
-          onValueChange={(value) =>
-            actions.handleRoleFilter(value === "__all__" ? undefined : value)
-          }
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="角色" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部角色</SelectItem>
-            {roleOptions.map((role) => (
-              <SelectItem key={role.value} value={role.value}>
-                {role.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={state.statusFilter === undefined ? "__all__" : String(state.statusFilter)}
-          onValueChange={(value) => {
-            if (value === "__all__") {
-              actions.handleStatusFilter(undefined);
-              return;
-            }
-            actions.handleStatusFilter(value === "true");
-          }}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            {statusOptions.map((status) => (
-              <SelectItem key={String(status.value)} value={String(status.value)}>
-                {status.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex-1" />
-
-        <Button variant="ghost" size="icon" onClick={actions.handleReset} aria-label="重置">
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost">
-              <Download className="h-4 w-4" />
-              模板
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => actions.handleDownloadTemplate("xlsx")}>
-              下载 XLSX 模板
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => actions.handleDownloadTemplate("csv")}>
-              下载 CSV 模板
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          accept=".xlsx,.csv,.txt"
-          onChange={async (e) => {
-            const input = e.currentTarget;
-            const file = input.files?.[0];
-            if (!file) return;
-            try {
-              await actions.handleFileUpload(file);
-            } finally {
-              input.value = "";
-            }
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="导入用户"
-          title="导入用户"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Upload className="h-4 w-4" />
-        </Button>
-
-        {state.selectedRowKeys.length > 0 ? (
           <Button
             variant="ghost"
-            onClick={actions.handleBatchDelete}
-            className="text-destructive"
+            size="icon"
+            aria-label="导入用户"
+            title="导入用户"
+            onClick={() => fileInputRef.current?.click()}
           >
-            <Trash2 className="h-4 w-4" />
-            删除 ({state.selectedRowKeys.length})
+            <Upload className="h-4 w-4" />
           </Button>
-        ) : null}
 
-        <DataTableColumnToggle table={table} />
+          {state.selectedRowKeys.length > 0 ? (
+            <Button
+              variant="ghost"
+              onClick={actions.handleBatchDelete}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              删除 ({state.selectedRowKeys.length})
+            </Button>
+          ) : null}
 
-        <Button onClick={actions.handleAddUser}>
-          <Plus className="h-4 w-4" />
-          添加用户
-        </Button>
+          <DataTableColumnToggle table={table} />
+
+          <Button ref={addUserButtonRef} onClickCapture={captureFormTrigger} onClick={actions.handleAddUser}>
+            <Plus className="h-4 w-4" />
+            添加用户
+          </Button>
+        </div>
       </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 flex flex-col">
+        <div className="min-h-0 flex-1 flex flex-col" onClickCapture={captureFormTrigger}>
           <AdminTablePanel
+            ariaLabel="用户列表"
             loading={state.loading}
             isEmpty={state.users.length === 0}
             emptyDescription={state.searchKeyword ? "未找到匹配的用户" : "暂无用户数据"}
-            emptyAction={<Button onClick={actions.handleAddUser}>添加第一个用户</Button>}
+            emptyAction={<Button onClickCapture={captureFormTrigger} onClick={actions.handleAddUser}>添加第一个用户</Button>}
           >
             <DataTable table={table} tableClassName="min-w-[980px]" stickyHeader />
           </AdminTablePanel>
         </div>
         {state.users.length > 0 ? (
-          <div className="mt-xs flex justify-end border-t border-border-secondary pt-3">
+          <div className="mt-xs flex min-w-0 shrink-0 justify-end border-t border-border-subtle pt-3">
             <DataTablePagination
               currentPage={state.currentPage}
               totalPages={totalPages}
@@ -337,6 +373,7 @@ const AdminUsers: React.FC = () => {
         editingUser={state.editingUser}
         onSubmit={actions.handleFormSubmit}
         onCancel={closeForm}
+        onCloseAutoFocus={handleFormCloseAutoFocus}
       />
 
       <UserDetailModal
@@ -344,6 +381,7 @@ const AdminUsers: React.FC = () => {
         currentUser={state.currentUser}
         onCancel={closeDetail}
         onEdit={actions.handleEdit}
+        onCloseAutoFocus={handleDetailCloseAutoFocus}
       />
 
       {/* 批量删除只保留工具栏（AdminFilterBar）中的「删除 (N)」入口，

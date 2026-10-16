@@ -7,11 +7,12 @@ type Props = {
   title?: React.ReactNode;
   extra?: React.ReactNode;
   bodyPadding?: number | string;
+  className?: string;
 };
 
-const PanelCard: React.FC<Props> = ({ children, title, extra, bodyPadding = 12 }) => {
+const PanelCard: React.FC<Props> = ({ children, title, extra, bodyPadding = 12, className }) => {
   return (
-    <Card className="informatics-card overflow-hidden">
+    <Card className={cn("informatics-card overflow-hidden", className)}>
       {title || extra ? (
         <div className="panel-card-header flex items-center justify-between gap-[var(--ws-space-2)] border-b border-[var(--ws-color-border-secondary)] px-[var(--ws-space-2)] py-[var(--ws-space-2)]">
           <div className="min-w-0 flex-1">{title}</div>

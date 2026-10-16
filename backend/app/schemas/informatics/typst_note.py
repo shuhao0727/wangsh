@@ -72,3 +72,4 @@ class TypstNotePublicResponse(BaseModel):
     summary: str = ""
     toc: list = []
     updated_at: datetime
+    pdf_available: bool = False

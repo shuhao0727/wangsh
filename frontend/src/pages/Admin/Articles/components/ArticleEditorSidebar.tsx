@@ -56,7 +56,7 @@ export default function ArticleEditorSidebar({
 
           <div className="grid grid-cols-1 gap-2.5">
             <div className="article-form-field">
-              <label className="article-form-label">发布状态</label>
+              <label htmlFor="article-published" className="article-form-label">发布状态</label>
               <Controller
                 control={control}
                 name="published"
@@ -66,6 +66,7 @@ export default function ArticleEditorSidebar({
                       {field.value ? "发布" : "草稿"}
                     </span>
                     <Switch
+                      id="article-published"
                       checked={Boolean(field.value)}
                       onCheckedChange={field.onChange}
                     />
@@ -75,7 +76,7 @@ export default function ArticleEditorSidebar({
             </div>
 
             <div className="article-form-field">
-              <label className="article-form-label">分类</label>
+              <label htmlFor="article-category" className="article-form-label">分类</label>
               <Controller
                 control={control}
                 name="category_id"
@@ -85,7 +86,7 @@ export default function ArticleEditorSidebar({
                     onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
                     disabled={loading}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="article-category">
                       <SelectValue placeholder="选择分类" />
                     </SelectTrigger>
                     <SelectContent>
@@ -126,7 +127,7 @@ export default function ArticleEditorSidebar({
       </Card>
 
       <Card className="article-edit-card article-edit-side-card">
-        <div className="article-edit-card-header">样式</div>
+        <div id="article-style-label" className="article-edit-card-header">样式</div>
         <div className="article-edit-card-body">
           <Controller
             control={control}
@@ -140,7 +141,7 @@ export default function ArticleEditorSidebar({
                   onStyleKeyChange(next);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-labelledby="article-style-label">
                   <SelectValue placeholder="选择 CSS 样式方案" />
                 </SelectTrigger>
                 <SelectContent>

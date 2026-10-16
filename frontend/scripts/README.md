@@ -1,5 +1,10 @@
 # 前端脚本说明
 
+## 学习进度安全直接回归
+
+默认测试收集明确纳入`src/pages/Admin/ITTechnology/progressSafety.contract.test.ts`。结合`learningProgressBaselineGuards.test.tsx`和`services/learningProgress.test.ts`验证读取基线、版本冲突及过时响应；组件/AST证据不替代真实保存和数据库读回。
+
+
 > 历史脚本清理记录：`docs/scripts/ARCHIVE_INDEX.md`
 
 `frontend/scripts/` 只保留当前仍接入 npm 命令、CI 或生产烟测链路的脚本。
@@ -20,10 +25,20 @@
 - `ui-spacing-baseline.json` - 间距迁移基线（只降不升）
 - `ui-token-values.mjs` - **颜色 token 值校验**（G6）：与 `token-check.mjs` 互补——后者只证明
   `var(--ws-*)` **引用有定义**，本脚本证明 `index.css` `:root` 里**定义的值没被偷改**。
-  三件事：① 值快照 ratchet（**值变更即红**，须 `--adopt` 显式接受）；② `xxx` 与 `xxx-rgb`
-  三元组一致性（同一真源的两个投影，极易漂移）；③ WCAG 对比度断言（内容色三场景 ≥4.5:1）。
+  三件事：① 值快照 ratchet（**值变更即红**，须明确审查接受）；② `xxx` 与 `xxx-rgb`
+  三元组一致性（先解析颜色及 RGB 的整值 `var(--ws-color-*)` 别名链）；③ WCAG 对比度
+  断言（强调色三场景 ≥4.5:1；正文按浅色表面/页底，代码文字按 `code-bg`，反白文字按
+  `primary-fill`；专业模块沿别名链保留首个既有非模块语义角色，公共强调色不能因指向背景而免检）。
+  `values` 保留原声明用于 ratchet，`resolved_values` 仅用于校验；缺失引用、循环别名和
+  非法值计入 `resolution_errors`，使 `--ci` 失败并拒绝 `--adopt`；RGB/alpha 不容许
+  畸形数值截断或越界，RGB 投影即使缺配对颜色也先核语法和范围。背景/装饰/半透明跳过项
+  分别记录原因，不代表实际渲染对比度已验收，也不是完整 CSS 引擎。
   只检测只报告，**不改颜色**——改色需 Lead 决策。
-- `token-value-baseline.json` - 颜色 token 值基线（`--adopt` 是显式接受的唯一路径）
+- `ui-token-values.test.mjs` / `ui-token-values.aliases.test.mjs` - 颜色值、角色、别名链及
+  CLI 正负例；负例先断言注入命中，CSS 和测试基线使用外部临时夹具，不改真实 baseline。
+- `token-value-baseline.json` - 颜色 token 值基线；CLI 用 `--adopt` 生成全表，分批治理只按
+  审查后的 token/旧值/新值名单精确补丁更新，保持阈值和失败集合。快照接受不等于消费者
+  视觉合格；当前检查不覆盖每个实际底色组合（如小字叠 `surface-2`），这类问题另按页面处理。
 - `ui-alpha-modifiers.mjs` - **透明度修饰符门禁**（G9）：Tailwind v3 只为静态色生成 `/N` 规则，
   颜色映射到 `var(--ws-color-*)` 时 `bg-primary/10`、`border-border/40` **不生成任何 CSS**（静默失效）。
   两条检查：① `--ci` 报错不支持 alpha 的色名 + `/N`（支持 `hover:`/`sm:hover:`/`data-[state=open]:` 等变体前缀）；
@@ -285,3 +300,19 @@ Tailwind v3 只为静态色生成 `/N` 规则。项目把颜色映射到 `var(--
 - 未接入 `package.json`、CI 或 `prod-smoke` 的一次性脚本不再保留。
 - 截图采集、手工调试、临时验证脚本统一清理，不回流到本目录。
 - PythonLab 调试控制区一旦涉及 `tooltip / hover / pointer / focus` 相关改动，必须补跑真实 Chrome channel 与 WebKit。
+
+## 前端静态独立入口合同
+
+`caddy-directory-entry.test.mjs` 由 `npm run test:scripts` 默认收集，检查独立
+AI Partner 的无尾斜线、目录和显式 HTML 入口匹配；目录只回到其自身 index，
+不存在的文件仍为 404，不能误回主站 SPA。它也约束 KaTeX CDN 字体源和未放宽
+的 object/base/form 边界。静态源码合同不替代实际 Caddy HTTP、浏览器或字体渲染。
+
+## 颜色编译负例与原始扫描
+
+G9 仍扫描测试文件中的运行类。仅直接 Vitest it/test 回调内的真实
+Tailwind/PostCSS inline raw HTML 编译输入分类为 compiler fixture；普通字符串、
+JSX、变量逃逸、shadow/mock 均不豁免。`ui-alpha-fixture-context.mjs` 使用
+TypeScript 绑定识别，报告同时保留 raw_violations 与 compiler_fixtures。
+`node --test scripts/ui-alpha-fixture-context.test.mjs` 覆盖反例；不得将测试
+文件名或注释当作全文件豁免。动态结果只见 TEST_STATUS。

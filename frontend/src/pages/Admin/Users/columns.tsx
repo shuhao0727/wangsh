@@ -130,7 +130,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
             <div className="flex items-center gap-2xs">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={() => handleView(record)}>
+                  <Button variant="ghost" size="sm" aria-label="查看详情" onClick={() => handleView(record)}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -139,7 +139,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={() => handleEdit(record)}>
+                  <Button variant="ghost" size="sm" aria-label="编辑" onClick={() => handleEdit(record)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -151,6 +151,7 @@ export const getUserColumns = (props: ColumnConfigProps): ColumnDef<User>[] => {
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label="删除"
                     className="text-text-tertiary hover:text-destructive"
                     onClick={() => handleDelete(record.id)}
                   >

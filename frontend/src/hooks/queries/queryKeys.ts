@@ -97,6 +97,11 @@ export const queryKeys = {
       [...queryKeys.articles.all, params] as const,
   },
 
+  // ── Article Categories ──
+  categories: {
+    all: ["categories"] as const,
+  },
+
   // ── Classroom Plans ──
   classroomPlans: {
     all: ["classroom-plans"] as const,

@@ -72,6 +72,7 @@ const AdminPersonalProgramsPage = lazy(
 );
 const AdminArticlesPage = lazy(() => import("./pages/Admin/Articles"));
 const AdminArticleEditorPage = lazy(() => import("./pages/Admin/Articles/EditorPage"));
+const AdminArticlePreviewPage = lazy(() => import("./pages/Admin/Articles/PreviewPage"));
 const AdminTypstEditorPage = lazy(() => import("./pages/Admin/Informatics/EditorPage"));
 const AdminSystemPage = lazy(() => import("./pages/Admin/System"));
 const AdminAssessmentPage = lazy(() => import("./pages/Admin/Assessment"));
@@ -207,6 +208,7 @@ function App() {
             >
               <Route path="/admin/articles/editor/new" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>)} />
               <Route path="/admin/articles/editor/:id" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="article-editor"><AdminArticleEditorPage /></PageErrorBoundary>)} />
+              <Route path="/admin/articles/preview/:slug" element={guarded(SUPER_ADMIN_ROLES, <PageErrorBoundary pageName="article-preview"><AdminArticlePreviewPage /></PageErrorBoundary>)} />
               <Route path="/admin/articles/new" element={<Navigate to="/admin/articles/editor/new" replace />} />
               <Route path="/admin/articles/edit/:id" element={<ArticleEditRedirect />} />
               <Route path="/admin/it-technology/learning/:moduleKey" element={guarded(IT_TECHNOLOGY_MANAGEMENT_ROLES, <PageErrorBoundary pageName="learning-editor"><AdminLearningEditorPage /></PageErrorBoundary>)} />
