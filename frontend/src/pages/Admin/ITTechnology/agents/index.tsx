@@ -411,7 +411,7 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
             type="button"
             onClick={saveProgress}
             disabled={progressLoading}
-            className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="ml-auto rounded-sm bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {progressLoading ? "保存中..." : "保存进度"}
           </button>
@@ -420,22 +420,26 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
 
       {/* Tab 导航 */}
       <Tabs value={activeTabKey} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="inline-flex h-auto min-h-10 w-full flex-wrap justify-start gap-1 shrink-0">
-          <TabsTrigger value="book" className="gap-1.5">
+        <TabsList className="grid h-auto min-h-10 w-full shrink-0 grid-cols-4 gap-1 sm:inline-flex sm:w-fit sm:grid-cols-none">
+          <TabsTrigger value="book" aria-label="学习书" className="gap-1 px-1 text-xs sm:gap-1.5 sm:px-3 sm:text-sm">
             <BookMarked className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">学习书</span>
+            <span className="sm:hidden">书</span>
           </TabsTrigger>
-          <TabsTrigger value="knowledge" className="gap-1.5">
+          <TabsTrigger value="knowledge" aria-label="学习地图" className="gap-1 px-1 text-xs sm:gap-1.5 sm:px-3 sm:text-sm">
             <Map className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">学习地图</span>
+            <span className="sm:hidden">地图</span>
           </TabsTrigger>
-          <TabsTrigger value="experiments" className="gap-1.5">
+          <TabsTrigger value="experiments" aria-label="动手实验" className="gap-1 px-1 text-xs sm:gap-1.5 sm:px-3 sm:text-sm">
             <FlaskConical className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">动手实验</span>
+            <span className="sm:hidden">实验</span>
           </TabsTrigger>
-          <TabsTrigger value="tools" className="gap-1.5">
+          <TabsTrigger value="tools" aria-label="工具箱" className="gap-1 px-1 text-xs sm:gap-1.5 sm:px-3 sm:text-sm">
             <Wrench className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">工具箱</span>
+            <span className="sm:hidden">工具</span>
           </TabsTrigger>
         </TabsList>
 
@@ -483,7 +487,7 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                   value={experimentKeyword}
                   onChange={(event) => setExperimentKeyword(event.target.value)}
                   placeholder="搜索实验、工具或技能"
-                  className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                  className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                 />
                 <Select
                   value={experimentDifficulty}
@@ -491,7 +495,7 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                     setExperimentDifficulty(value as typeof experimentDifficulty)
                   }
                 >
-                  <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                  <SelectTrigger className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -619,13 +623,13 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                   value={toolKeyword}
                   onChange={(event) => setToolKeyword(event.target.value)}
                   placeholder="搜索工具名称、用途或类别"
-                  className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                  className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                 />
                 <Select
                   value={toolCategory}
                   onValueChange={(value) => setToolCategory(value)}
                 >
-                  <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                  <SelectTrigger className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -726,13 +730,13 @@ const AgentExploration: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                     value={resourceKeyword}
                     onChange={(event) => setResourceKeyword(event.target.value)}
                     placeholder="搜索资源名称、描述或类型"
-                    className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                    className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                   />
                   <Select
                     value={resourceType}
                     onValueChange={(value) => setResourceType(value as typeof resourceType)}
                   >
-                    <SelectTrigger className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
+                    <SelectTrigger className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base focus:border-[var(--ws-color-primary)] focus:outline-none">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -825,7 +829,7 @@ const ExperimentCard: React.FC<{
                 onToggleFavorite();
               }}
               className={cn(
-                "rounded p-1 transition-colors",
+                "rounded-sm p-1 transition-colors",
                 favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]",
               )}
             >
@@ -852,7 +856,7 @@ const ExperimentCard: React.FC<{
               onToggleCompleted();
             }}
             className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+              "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium",
               completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary",
             )}
           >
@@ -892,7 +896,7 @@ const ExperimentCard: React.FC<{
                 <h2 className="text-lg font-bold">{experiment.name}</h2>
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded p-1 hover:bg-accent text-lg leading-none"
+                  className="rounded-sm p-1 hover:bg-accent text-lg leading-none"
                   aria-label="关闭"
                 >
                   ✕
@@ -946,7 +950,7 @@ const ExperimentCard: React.FC<{
                     <p className="text-xs text-text-tertiary">可复制到 Jupyter Notebook / Google Colab 运行</p>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
+                      className="inline-flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(experiment.code || "");
@@ -1067,7 +1071,7 @@ const ResourceCard: React.FC<{
             onToggleFavorite();
           }}
           className={cn(
-            "ml-2 rounded p-1",
+            "ml-2 rounded-sm p-1",
             favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]",
           )}
           aria-label={favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}

@@ -68,7 +68,7 @@ export const getAgentDataColumns = (
   {
     title: "学生信息",
     key: "student_info",
-    width: 170,
+    width: 150,
     fixed: "left" as const,
     render: (_: unknown, record: AgentUsageData) => {
       const user = record.user;
@@ -103,7 +103,7 @@ export const getAgentDataColumns = (
   {
     title: "智能体信息",
     key: "agent_info",
-    width: 200,
+    width: 180,
     render: (_: unknown, record: AgentUsageData) => {
       const agent = record.moxing;
       if (!agent) return "-";
@@ -137,7 +137,7 @@ export const getAgentDataColumns = (
     title: "问题内容",
     dataIndex: "question",
     key: "question",
-    width: 220,
+    width: 190,
     render: (question: string) => (
       <HoverTip title={question} contentClassName="max-w-[460px] break-words">
         <div className="truncate max-w-full">
@@ -151,7 +151,7 @@ export const getAgentDataColumns = (
     title: "回答摘要",
     dataIndex: "answer",
     key: "answer_summary",
-    width: 240,
+    width: 200,
     render: (answer: string) => (
       <HoverTip title={answer} contentClassName="max-w-[460px] break-words">
         <div className="truncate max-w-full text-text-secondary">
@@ -164,7 +164,7 @@ export const getAgentDataColumns = (
     title: "响应时间",
     dataIndex: "response_time_ms",
     key: "response_time",
-    width: 100,
+    width: 90,
     render: (responseTime?: number) => (
       <div className="flex items-center whitespace-nowrap">
         <Clock className="mr-1 h-4 w-4 text-[var(--ws-color-warning)]" />
@@ -178,7 +178,7 @@ export const getAgentDataColumns = (
     title: "使用时间",
     dataIndex: "used_at",
     key: "used_at",
-    width: 120,
+    width: 110,
     render: (date: string) => (
       <div className="flex items-center whitespace-nowrap">
         <Calendar className="mr-1 h-4 w-4 text-primary" />

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 import MindmapPreview from "@/pages/MindmapPreview";
 
@@ -32,7 +33,11 @@ describe("MindmapPreview", () => {
       }),
     );
 
-    render(<MindmapPreview />);
+    render(
+      <MemoryRouter>
+        <MindmapPreview />
+      </MemoryRouter>,
+    );
     fireEvent.click(await screen.findByRole("button", { name: /编辑/ }));
 
     expect(JSON.parse(localStorage.getItem("_wangsh_mindmap_data") || "{}").root).toEqual({
@@ -46,5 +51,17 @@ describe("MindmapPreview", () => {
       "/mindmap-demo/index.html?id=7",
       "_blank",
     );
+  });
+
+  it("shows a return action when preview data is missing", () => {
+    render(
+      <MemoryRouter>
+        <MindmapPreview />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "没有可预览的思维导图" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回导图广场" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /编辑/ })).not.toBeInTheDocument();
   });
 });

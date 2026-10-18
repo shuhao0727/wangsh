@@ -50,7 +50,7 @@ const StringArrayField: React.FC<{
             <button
               type="button"
               onClick={() => onChange(items.filter((_, i) => i !== idx))}
-              className="ml-0.5 rounded-full hover:bg-muted-foreground/20"
+              className="ml-0.5 rounded-sm hover:bg-muted-foreground/20"
             >
               <X className="h-2.5 w-2.5" />
             </button>
@@ -63,7 +63,7 @@ const StringArrayField: React.FC<{
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
           placeholder={placeholder}
-          className="h-7 text-xs"
+          className="h-8 text-sm"
         />
         <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5" onClick={add}>
           <Plus className="h-3 w-3" />
@@ -77,7 +77,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
   const patch = (partial: Partial<typeof chapter>) => onChange({ ...chapter, ...partial });
 
   return (
-    <div className="flex min-h-0 flex-col gap-1.5 overflow-auto rounded-lg border border-border bg-surface p-3">
+    <div className="ws-book-metadata flex h-full min-h-0 flex-col gap-2.5 overflow-auto bg-surface p-3">
       <h3 className="mb-1 text-sm font-semibold text-text-base">章节设置</h3>
 
       {/* Slug */}
@@ -87,7 +87,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
           value={chapter.slug}
           onChange={(e) => patch({ slug: e.target.value })}
           disabled={!!chapter.slug && chapter.slug !== "__new__"}
-          className="h-8 text-xs font-mono"
+          className="h-9 text-sm font-mono"
           placeholder="overview"
         />
       </div>
@@ -100,7 +100,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
           min={1}
           value={chapter.chapter_number}
           onChange={(e) => patch({ chapter_number: Math.max(1, parseInt(e.target.value) || 1) })}
-          className="h-8 text-xs"
+          className="h-9 text-sm"
         />
       </div>
 
@@ -110,7 +110,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
         <Input
           value={chapter.title}
           onChange={(e) => patch({ title: e.target.value })}
-          className="h-8 text-xs"
+          className="h-9 text-sm"
           placeholder="章节标题"
         />
       </div>
@@ -119,7 +119,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
       <div className="space-y-1">
         <Label className="text-xs text-text-tertiary">难度</Label>
         <Select value={chapter.difficulty ?? "beginner"} onValueChange={(v) => patch({ difficulty: v })}>
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +138,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
           min={1}
           value={chapter.estimated_minutes ?? 30}
           onChange={(e) => patch({ estimated_minutes: Math.max(1, parseInt(e.target.value) || 1) })}
-          className="h-8 text-xs"
+          className="h-9 text-sm"
         />
       </div>
 
@@ -153,7 +153,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ chapter, allChapte
             }
           }}
         >
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className="h-9 text-sm">
             <SelectValue placeholder="选择前置章节" />
           </SelectTrigger>
           <SelectContent>

@@ -431,6 +431,8 @@ const ArticlesPage: React.FC = () => {
                     </div>
                     <Button
                       variant="outline"
+                      aria-label="清除文章筛选"
+                      title="清除筛选"
                       onClick={() => {
                         setSearchKeyword("");
                         handleCategorySelect(null);
@@ -550,7 +552,7 @@ const ArticlesPage: React.FC = () => {
                           value={pageSize}
                           onChange={(e) => handlePageChange(1, Number(e.target.value))}
                           aria-label="每页条数"
-                          className="h-8 rounded-md border border-[var(--ws-color-border)] bg-surface px-2 text-sm"
+                          className="h-8 rounded-sm border border-[var(--ws-control-border)] bg-[var(--ws-control-bg)] px-2 text-sm shadow-none transition-colors hover:border-text-tertiary focus-visible:outline-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                         >
                           {PAGE_SIZE_OPTIONS.map((size) => (
                             <option key={size} value={size}>{size} / 页</option>
@@ -559,6 +561,8 @@ const ArticlesPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
+                          aria-label="上一页"
+                          title="上一页"
                           onClick={(event) => handlePageButtonClick(event, Math.max(1, currentPage - 1))}
                           disabled={currentPage <= 1}
                         >
@@ -570,6 +574,8 @@ const ArticlesPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
+                          aria-label="下一页"
+                          title="下一页"
                           onClick={(event) => handlePageButtonClick(event, Math.min(totalPages, currentPage + 1))}
                           disabled={currentPage >= totalPages}
                         >

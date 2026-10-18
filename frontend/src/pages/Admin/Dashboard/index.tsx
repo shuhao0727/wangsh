@@ -93,7 +93,7 @@ const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOvervi
   return (
     <AdminPage>
       {/* 页头 */}
-      <div className="flex items-center justify-between mb-5" aria-live="polite">
+    <div className="ws-dashboard-toolbar flex items-center justify-between" aria-live="polite">
         <div>
           <div className="text-lg font-semibold text-text-base">系统状态</div>
           <div className="text-base mt-0.5 text-text-secondary">实时监控系统运行状态与核心指标</div>
@@ -134,9 +134,9 @@ const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOvervi
           ))}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="ws-dashboard-shell flex flex-col">
           {/* 整体状态 banner */}
-          <div className={`rounded-xl px-4 py-3.5 flex items-center gap-3 ${isHealthy ? "bg-success-soft" : "bg-error-soft"}`}>
+          <div className={`ws-dashboard-status flex items-center gap-3 px-4 py-3.5 ${isHealthy ? "bg-success-soft" : "bg-error-soft"}`}>
             {isHealthy
               ? <CheckCircle className="h-5 w-5 text-success" />
               : <XCircle className="h-5 w-5 text-error" />}
@@ -166,7 +166,7 @@ const DashboardStatus: React.FC<{ canViewOverview: boolean }> = ({ canViewOvervi
           )}
 
           {/* 健康检查详情 */}
-          <div className="rounded-xl p-4 bg-surface-2">
+          <div className="ws-dashboard-group p-4">
             <div className="text-sm font-semibold uppercase tracking-wide mb-3 text-text-tertiary">
               服务检查
             </div>

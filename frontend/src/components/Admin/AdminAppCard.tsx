@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
 type Props = {
+  className?: string;
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -17,33 +18,28 @@ type Props = {
 };
 
 const AdminAppCard: React.FC<Props> = ({
+  className,
   title, description, icon, enabled, onToggle, loading,
   actionLabel, actionIcon, onAction, color = "var(--ws-color-primary)",
   showToggle = true,
 }) => (
-  <div className="rounded-lg flex flex-col items-center p-3 h-full transition-all duration-200 hover:shadow-sm bg-surface-2">
-    <div className="flex items-center justify-center w-8 h-8 rounded-lg mb-2 text-lg flex-shrink-0"
-      style={{ color, background: `${color}18` }}>
+  <div className={`ws-admin-app-row grid min-w-0 items-center gap-x-3 gap-y-2 p-3 transition-colors duration-150 hover:bg-primary-soft ${className ?? ""}`}>
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center text-lg" style={{ color }}>
       {icon}
     </div>
-
-    <h5 className="mb-0.5 text-sm font-semibold text-center text-text-base">
-      {title}
-    </h5>
-
-    <span className="text-xs text-text-secondary text-center mb-2 line-clamp-2 min-h-[30px] leading-relaxed">
-      {description}
-    </span>
-
-    <div className="w-full mt-auto pt-2 flex items-center justify-between border-t border-border-secondary">
+    <div className="min-w-0">
+      <h5 className="text-sm font-semibold text-text-base">{title}</h5>
+      <p className="mt-1 text-xs leading-relaxed text-text-secondary">{description}</p>
+    </div>
+    <div className="ws-admin-app-actions flex shrink-0 items-center justify-end gap-3">
       {showToggle ? (
         <div className="flex items-center gap-1.5">
-          <Switch checked={enabled} disabled={loading} onCheckedChange={onToggle} />
+          <Switch aria-label={`${title}启用状态`} checked={enabled} disabled={loading} onCheckedChange={onToggle} />
           <span className="text-xs text-text-tertiary">{enabled ? "已启用" : "已禁用"}</span>
         </div>
       ) : <span />}
       {onAction && actionLabel && (
-        <Button variant="link" size="sm" onClick={onAction} className="!p-0 !h-auto !text-xs">
+        <Button variant="ghost" size="sm" onClick={onAction} className="h-8 px-2 text-sm text-primary">
           {actionIcon}
           {actionLabel}
         </Button>

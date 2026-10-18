@@ -299,10 +299,6 @@ export default function TypstSidebar({
                 <span className="text-sm text-text-tertiary">快捷</span>
                 <span className="text-sm">Ctrl/⌘ + Enter 保存</span>
               </div>
-              <div className="flex justify-between gap-2.5">
-                <span className="text-sm text-text-tertiary">建议</span>
-                <span className="text-sm">分屏更利于排版</span>
-              </div>
               <div className="flex items-center justify-between rounded-md border border-border-secondary bg-surface-2 px-2.5 py-1.5">
                 <span className="text-sm text-text-tertiary">自动预览</span>
                 <div className="flex items-center gap-2">

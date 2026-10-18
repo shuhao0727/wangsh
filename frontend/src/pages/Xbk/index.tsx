@@ -1292,10 +1292,6 @@ const XbkPage: React.FC = () => {
         <div className="xbk-sidebar">
           <Card className="xbk-sidebar-card">
             <div className="xbk-filter-body">
-              <h3 className="mb-[var(--ws-space-3)] text-sm font-semibold">
-                筛选条件
-              </h3>
-
               <div className="xbk-filter-field">
                 <label htmlFor="xbk-filter-year">学年</label>
                 <Select
@@ -1309,7 +1305,7 @@ const XbkPage: React.FC = () => {
                 >
                   <SelectTrigger
                     id="xbk-filter-year"
-                    className="h-8 text-xs"
+                    className="h-[var(--ws-control-height)] text-sm"
                     aria-label="学年"
                   >
                     <SelectValue placeholder="选择学年" />
@@ -1338,7 +1334,7 @@ const XbkPage: React.FC = () => {
                 >
                   <SelectTrigger
                     id="xbk-filter-term"
-                    className="h-8 text-xs"
+                    className="h-[var(--ws-control-height)] text-sm"
                     aria-label="学期"
                   >
                     <SelectValue placeholder="选择学期" />
@@ -1371,7 +1367,7 @@ const XbkPage: React.FC = () => {
                 >
                   <SelectTrigger
                     id="xbk-filter-grade"
-                    className="h-8 text-xs"
+                    className="h-[var(--ws-control-height)] text-sm"
                     aria-label="年级"
                   >
                     <SelectValue placeholder="选择年级" />
@@ -1397,7 +1393,7 @@ const XbkPage: React.FC = () => {
                 >
                   <SelectTrigger
                     id="xbk-filter-class"
-                    className="h-8 text-xs"
+                    className="h-[var(--ws-control-height)] text-sm"
                     aria-label="班级"
                   >
                     <SelectValue placeholder="选择班级" />
@@ -1420,7 +1416,7 @@ const XbkPage: React.FC = () => {
                   <Input
                     id="xbk-filter-search"
                     aria-label="搜索"
-                    className="h-8 text-xs pl-[var(--ws-search-input-padding-start)]"
+                    className="h-[var(--ws-control-height)] text-sm pl-[var(--ws-search-input-padding-start)]"
                     value={filters.search_text || ""}
                     placeholder="关键字搜索..."
                     onChange={(e) =>
@@ -1437,7 +1433,7 @@ const XbkPage: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full h-8 text-xs"
+                  className="w-full h-[var(--ws-control-height)] text-sm"
                   onClick={resetFilters}
                 >
                   重置筛选
@@ -1477,8 +1473,8 @@ const XbkPage: React.FC = () => {
               </Button>
             </div>
           )}
-          <div className="xbk-header-bar">
-            <div className="xbk-header-row">
+          <div className="xbk-table-card">
+            <div className="xbk-header-bar">
               <div className="xbk-kpis">
                 <div className="xbk-kpi-item">
                   <span className="label">学生</span>
@@ -1513,99 +1509,41 @@ const XbkPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {canEdit ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWorkbookImportVisible(true)}
-                    >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      导入学生选课表
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setImportVisible(true)}
-                    >
-                      <Upload className="h-4 w-4" />
-                      导入
-                    </Button>
-                  </>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExportVisible(true)}
-                >
-                  <Download className="h-4 w-4" />
-                  导出
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  title="导出当前表格中符合筛选条件的全部结果（不限当前分页）"
-                  onClick={() => void handleExportCurrentTable()}
-                  disabled={exportingCurrent}
-                >
-                  {exportingCurrent ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  导出筛选结果
-                </Button>
-                {canEdit &&
-                (activeTab === "students" ||
+              {canEdit ? (
+                <div className="xbk-toolbar-group xbk-toolbar-imports">
+                  <Button
+                    variant={
+                      activeTab === "course_results" ? "default" : "outline"
+                    }
+                    size="sm"
+                    onClick={() => setWorkbookImportVisible(true)}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    导入学生选课表
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setImportVisible(true)}
+                  >
+                    <Upload className="h-4 w-4" />
+                    导入
+                  </Button>
+                  {activeTab === "students" ||
                   activeTab === "courses" ||
-                  activeTab === "selections") ? (
-                  <Button
-                    size="sm"
-                    onClick={() => openCreateModal(activeTab)}
-                    disabled={dataLoading}
-                  >
-                    <Plus className="h-4 w-4" />
-                    新增
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAnalysisVisible(true)}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  分析
-                </Button>
-                {canEdit ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteVisible(true)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    删除
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleRefresh()}
-                  disabled={dataLoading || refreshing}
-                >
-                  {dataLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  刷新
-                </Button>
-              </div>
+                  activeTab === "selections" ? (
+                    <Button
+                      size="sm"
+                      onClick={() => openCreateModal(activeTab)}
+                      disabled={dataLoading}
+                    >
+                      <Plus className="h-4 w-4" />
+                      新增
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-          </div>
-
-          <div className="xbk-table-card">
             <Tabs
               value={activeTab}
               onValueChange={(tab) => {
@@ -1615,17 +1553,84 @@ const XbkPage: React.FC = () => {
               }}
               className="xbk-tabs-root"
             >
-              <TabsList className="xbk-tabs-list">
-                {(Object.keys(tabLabels) as DataTabKey[]).map((tab) => (
-                  <TabsTrigger
-                    key={tab}
-                    value={tab}
-                    className="xbk-tab-trigger"
-                  >
-                    {tabLabels[tab]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div className="xbk-workspace-row">
+                <TabsList className="xbk-tabs-list">
+                  {(Object.keys(tabLabels) as DataTabKey[]).map((tab) => (
+                    <TabsTrigger
+                      key={tab}
+                      value={tab}
+                      className="xbk-tab-trigger"
+                    >
+                      {tabLabels[tab]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                <div
+                  className="xbk-toolbar"
+                  role="toolbar"
+                  aria-label="选课数据操作"
+                >
+                  <div className="xbk-toolbar-group">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExportVisible(true)}
+                    >
+                      <Download className="h-4 w-4" />
+                      导出
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="导出当前表格中符合筛选条件的全部结果（不限当前分页）"
+                      onClick={() => void handleExportCurrentTable()}
+                      disabled={exportingCurrent}
+                    >
+                      {exportingCurrent ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                      导出筛选结果
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAnalysisVisible(true)}
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      分析
+                    </Button>
+                  </div>
+                  <div className="xbk-toolbar-group xbk-toolbar-maintenance">
+                    {canEdit ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeleteVisible(true)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        删除
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRefresh()}
+                      disabled={dataLoading || refreshing}
+                    >
+                      {dataLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      刷新
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
               {(Object.keys(tabLabels) as DataTabKey[]).map((tab) => (
                 <TabsContent key={tab} value={tab} className="xbk-tab-panel">

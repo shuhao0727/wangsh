@@ -397,28 +397,32 @@ const AdminAIAgents: React.FC = () => {
 
   return (
     <AdminPage scrollable={false}>
-      {/* 统计卡片 */}
-      <StatisticsCards
-        data={statisticsData || statisticsDefaults}
-      />
+      <section
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border-secondary bg-surface"
+        aria-label="智能体管理工作区"
+      >
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 border-b border-border-secondary px-4">
+          <StatisticsCards
+            data={statisticsData || statisticsDefaults}
+            className="shrink-0 px-0"
+          />
+          <SearchBar
+            searchKeyword={searchKeyword}
+            selectedType={selectedType}
+            selectedRowKeys={selectedRowKeys}
+            onSearchChange={setSearchKeyword}
+            onSearch={handleSearch}
+            onTypeChange={setSelectedType}
+            onReset={handleReset}
+            onBatchDelete={handleBatchDelete}
+            onAddAgent={handleAddAgent}
+            className="min-w-0 flex-1 border-0 px-0"
+          />
+        </div>
 
-      {/* 搜索和操作栏 */}
-      <SearchBar
-        searchKeyword={searchKeyword}
-        selectedType={selectedType}
-        selectedRowKeys={selectedRowKeys}
-        onSearchChange={setSearchKeyword}
-        onSearch={handleSearch}
-        onTypeChange={setSelectedType}
-        onReset={handleReset}
-        onBatchDelete={handleBatchDelete}
-        onAddAgent={handleAddAgent}
-      />
-
-      {/* 智能体表格 */}
-      <div className="mt-3 flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <AdminTablePanel
+            ariaLabel="智能体列表"
             loading={isLoading}
             isEmpty={agents.length === 0}
             emptyDescription={
@@ -436,7 +440,7 @@ const AdminAIAgents: React.FC = () => {
           </AdminTablePanel>
         </div>
         {agents.length > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="flex justify-end border-t border-border-secondary px-4 py-2">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -447,7 +451,7 @@ const AdminAIAgents: React.FC = () => {
             />
           </div>
         ) : null}
-      </div>
+      </section>
 
       {/* 智能体表单弹窗 */}
       <AgentForm

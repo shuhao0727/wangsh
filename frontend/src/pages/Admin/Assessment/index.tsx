@@ -254,13 +254,18 @@ const AdminAssessment: React.FC = () => {
         id: "title",
         header: "标题",
         accessorKey: "title",
-        size: 260,
-        meta: { className: "w-[260px] align-top" },
+        size: 240,
+        meta: { className: "w-[240px] align-middle" },
         cell: ({ row }) => (
           <div className="flex items-center gap-1.5">
-            <div className="max-w-[220px] truncate font-medium">{row.original.title}</div>
+            <div className="max-w-[202px] truncate font-medium">
+              {row.original.title}
+            </div>
             {row.original.id < 0 ? (
-              <Badge variant="outline" className="border-border bg-transparent text-[11px] text-text-tertiary">
+              <Badge
+                variant="outline"
+                className="border-border bg-transparent text-[11px] text-text-tertiary"
+              >
                 模拟
               </Badge>
             ) : null}
@@ -271,30 +276,31 @@ const AdminAssessment: React.FC = () => {
         id: "grade",
         header: "年级",
         accessorKey: "grade",
-        size: 90,
-        meta: { className: "w-[90px] align-top" },
+        size: 76,
+        meta: { className: "w-[76px] align-middle" },
         cell: ({ row }) => row.original.grade || "-",
       },
       {
         id: "knowledge_points",
         header: "章节/知识点",
         accessorKey: "knowledge_points",
-        size: 220,
-        meta: { className: "w-[220px] align-top" },
+        size: 205,
+        meta: { className: "w-[205px] align-middle" },
         cell: ({ row }) => {
-          const points = parseKnowledgePoints(row.original.knowledge_points).slice(0, 4);
-          if (points.length === 0) return <span className="text-text-tertiary">-</span>;
+          const allPoints = parseKnowledgePoints(row.original.knowledge_points);
+          const points = allPoints.slice(0, 2);
+          if (allPoints.length === 0)
+            return <span className="text-text-tertiary">-</span>;
           return (
-            <div className="flex max-w-[210px] flex-wrap gap-1">
-              {points.map((point) => (
-                <Badge key={point} variant="secondary" className="max-w-[96px] truncate px-1.5 py-0 text-[11px]">
-                  {point}
-                </Badge>
-              ))}
-              {parseKnowledgePoints(row.original.knowledge_points).length > points.length ? (
-                <Badge variant="outline" className="border-border bg-transparent px-1.5 py-0 text-[11px] text-text-tertiary">
-                  +{parseKnowledgePoints(row.original.knowledge_points).length - points.length}
-                </Badge>
+            <div
+              className="flex max-w-[195px] items-center gap-1 text-sm"
+              title={allPoints.join("、")}
+            >
+              <span className="truncate">{points.join("、")}</span>
+              {allPoints.length > points.length ? (
+                <span className="shrink-0 text-xs text-text-tertiary">
+                  +{allPoints.length - points.length}
+                </span>
               ) : null}
             </div>
           );
@@ -304,38 +310,32 @@ const AdminAssessment: React.FC = () => {
         id: "question_count",
         header: "题目数",
         accessorKey: "question_count",
-        size: 90,
-        meta: { className: "w-[90px] align-top" },
+        size: 78,
+        meta: { className: "w-[78px] align-middle" },
         cell: ({ row }) => (
-          <Badge
-            variant="outline"
-            className="border-border bg-transparent text-text-secondary"
-          >
+          <span className="tabular-nums text-text-secondary">
             {row.original.question_count}
-          </Badge>
+          </span>
         ),
       },
       {
         id: "session_count",
         header: "答题人数",
         accessorKey: "session_count",
-        size: 100,
-        meta: { className: "w-[100px] align-top" },
+        size: 86,
+        meta: { className: "w-[86px] align-middle" },
         cell: ({ row }) => (
-          <Badge
-            variant={row.original.session_count > 0 ? "info" : "outline"}
-            className={row.original.session_count > 0 ? undefined : "border-border bg-transparent text-text-secondary"}
-          >
+          <span className="tabular-nums text-text-secondary">
             {row.original.session_count}
-          </Badge>
+          </span>
         ),
       },
       {
         id: "enabled",
         header: "状态",
         accessorKey: "enabled",
-        size: 90,
-        meta: { className: "w-[90px] align-top" },
+        size: 76,
+        meta: { className: "w-[76px] align-middle" },
         cell: ({ row }) => (
           <Switch
             checked={row.original.enabled}
@@ -351,43 +351,50 @@ const AdminAssessment: React.FC = () => {
         id: "created_at",
         header: "创建时间",
         accessorKey: "created_at",
-        size: 170,
-        meta: { className: "w-[170px] align-top" },
-        cell: ({ row }) => new Date(row.original.created_at).toLocaleString("zh-CN"),
+        size: 155,
+        meta: { className: "w-[155px] align-middle" },
+        cell: ({ row }) =>
+          new Date(row.original.created_at).toLocaleString("zh-CN"),
       },
       {
         id: "action",
         header: "操作",
-        size: 240,
-        meta: { className: "w-[240px] align-top" },
+        size: 212,
+        meta: { className: "w-[212px] align-middle" },
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="sm"
+              className="h-8 gap-1 px-2 text-xs"
               disabled={row.original.id < 0}
-              onClick={() => void navigate(`/admin/assessment/${row.original.id}/questions`)}
+              onClick={() =>
+                void navigate(`/admin/assessment/${row.original.id}/questions`)
+              }
             >
-              <Database className="h-4 w-4" />
+              <Database className="h-3.5 w-3.5" />
               管理
             </Button>
             <Button
               variant="ghost"
               size="sm"
+              className="h-8 gap-1 px-2 text-xs"
               disabled={row.original.id < 0}
-              onClick={() => void navigate(`/admin/assessment/${row.original.id}/statistics`)}
+              onClick={() =>
+                void navigate(`/admin/assessment/${row.original.id}/statistics`)
+              }
             >
-              <BarChart3 className="h-4 w-4" />
+              <BarChart3 className="h-3.5 w-3.5" />
               统计
             </Button>
             <Button
               variant="ghost"
               size="sm"
+              className="h-8 gap-1 px-2 text-xs text-destructive hover:text-destructive"
               disabled={row.original.id < 0}
-              className="text-destructive hover:text-destructive"
               onClick={() => handleDelete(row.original.id)}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
               删除
             </Button>
           </div>
@@ -404,83 +411,114 @@ const AdminAssessment: React.FC = () => {
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasActiveFilters =
+    Boolean(search) || gradeFilter !== "__all__" || enabledFilter !== "__all__";
 
   return (
     <AdminPage scrollable={false}>
-      <AdminFilterBar>
-        <Input
-          placeholder="搜索标题/章节/知识点"
-          className="w-[220px]"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              handleSearchSubmit();
-            }
-          }}
-        />
-        <Select
-          value={gradeFilter}
-          onValueChange={(value) => {
-            setGradeFilter(value);
-            setCurrentPage(1);
-          }}
+      <AdminFilterBar className="mb-0 flex-none justify-between gap-3 py-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:flex-1">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+            <Input
+              aria-label="搜索测评标题、章节或知识点"
+              placeholder="搜索标题/章节/知识点"
+              className="h-9 min-w-0 flex-1 sm:w-[250px] sm:flex-none"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearchSubmit();
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              className="h-9 shrink-0 px-3"
+              onClick={handleSearchSubmit}
+            >
+              <Search className="h-4 w-4" />
+              搜索
+            </Button>
+          </div>
+          <Select
+            value={gradeFilter}
+            onValueChange={(value) => {
+              setGradeFilter(value);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger
+              className="h-9 w-[calc(50%-4px)] sm:w-[112px]"
+              aria-label="按年级筛选"
+            >
+              <SelectValue placeholder="年级" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部年级</SelectItem>
+              {GRADE_OPTIONS.map((grade) => (
+                <SelectItem key={grade} value={grade}>
+                  {grade}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={enabledFilter}
+            onValueChange={(value) => {
+              setEnabledFilter(value);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger
+              className="h-9 w-[calc(50%-4px)] sm:w-[112px]"
+              aria-label="按状态筛选"
+            >
+              <SelectValue placeholder="状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部状态</SelectItem>
+              <SelectItem value="enabled">已启用</SelectItem>
+              <SelectItem value="disabled">已停用</SelectItem>
+            </SelectContent>
+          </Select>
+          {search ||
+          searchInput ||
+          gradeFilter !== "__all__" ||
+          enabledFilter !== "__all__" ? (
+            <Button
+              variant="ghost"
+              className="h-9 px-2 text-text-secondary"
+              onClick={handleClearSearch}
+            >
+              清空筛选
+            </Button>
+          ) : null}
+        </div>
+        <Button
+          className="h-9 w-full shrink-0 sm:ml-auto sm:w-auto lg:ml-0"
+          onClick={openCreateModal}
         >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="年级" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部年级</SelectItem>
-            {GRADE_OPTIONS.map((grade) => (
-              <SelectItem key={grade} value={grade}>{grade}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={enabledFilter}
-          onValueChange={(value) => {
-            setEnabledFilter(value);
-            setCurrentPage(1);
-          }}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            <SelectItem value="enabled">已启用</SelectItem>
-            <SelectItem value="disabled">已停用</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" onClick={handleSearchSubmit}>
-          <Search className="h-4 w-4" />
-          搜索
-        </Button>
-        {search || searchInput || gradeFilter !== "__all__" || enabledFilter !== "__all__" ? (
-          <Button variant="ghost" onClick={handleClearSearch}>
-            清空
-          </Button>
-        ) : null}
-        <div className="flex-1" />
-        <Button onClick={openCreateModal}>
           <Plus className="h-4 w-4" />
           新建测评
         </Button>
       </AdminFilterBar>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 flex flex-col">
-          <AdminTablePanel
-            loading={isLoading}
-            isEmpty={items.length === 0}
-            emptyDescription={search ? "未找到匹配的测评" : "暂无测评配置"}
-            emptyAction={<Button onClick={openCreateModal}>创建第一个测评</Button>}
-          >
-            <DataTable table={table} tableClassName="min-w-[1160px]" />
-          </AdminTablePanel>
-        </div>
+        <AdminTablePanel
+          loading={isLoading}
+          isEmpty={items.length === 0}
+          emptyDescription={
+            hasActiveFilters ? "未找到匹配的测评" : "暂无测评配置"
+          }
+        >
+          <DataTable
+            table={table}
+            className="h-full"
+            tableClassName="!min-w-[1128px]"
+          />
+        </AdminTablePanel>
         {items.length > 0 ? (
-          <div className="mt-2 flex justify-end border-t border-border-secondary pt-3">
+          <div className="flex shrink-0 justify-end border-t border-border-secondary bg-surface py-2">
             <DataTablePagination
               currentPage={currentPage}
               totalPages={totalPages}

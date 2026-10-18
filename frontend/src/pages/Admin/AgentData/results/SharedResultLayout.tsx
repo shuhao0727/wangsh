@@ -31,8 +31,8 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
   }, []);
 
   return (
-  <div className="flex h-screen flex-col bg-[radial-gradient(circle_at_top_left,var(--ws-color-primary-muted)_0,transparent_34%),linear-gradient(180deg,var(--ws-color-bg),var(--ws-color-surface))]">
-    <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border-secondary bg-surface/85 px-6 py-3 backdrop-blur-md">
+  <div className="ws-task-result-shell flex h-screen flex-col">
+    <header className="ws-task-result-header sticky top-0 z-10 flex shrink-0 items-center justify-between px-6">
       <div className="flex min-w-0 items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => window.close()}><ArrowLeft className="mr-1 h-4 w-4" />关闭</Button>
         <div className="min-w-0">
@@ -47,7 +47,7 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
               <Download className="mr-1 h-4 w-4" />导出 <ChevronDown className="ml-0.5 h-3 w-3" />
             </Button>
             {showDropdown && (
-              <div className="absolute right-0 top-full z-50 mt-1 min-w-[140px] rounded-lg border border-border bg-surface shadow-xl py-1 animate-in fade-in zoom-in-95 duration-150">
+              <div className="ws-task-result-export-menu absolute right-0 top-full z-50 mt-1 min-w-[140px] border border-border bg-surface py-1 animate-in fade-in zoom-in-95 duration-150">
                 {exportOptions.map((opt) => (
                   <button
                     key={opt.label}
@@ -68,14 +68,14 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
     </header>
 
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[1480px] px-6 py-8 lg:px-10">
+      <div className="ws-task-result-content">
         {detail.task_sheet ? <TaskSheetCollapsible taskSheet={detail.task_sheet} /> : (
-          <div className="mb-4 rounded-lg border border-dashed border-border-secondary bg-surface-2/60 px-4 py-3 text-xs text-text-tertiary text-center">
+          <div className="ws-task-result-task-sheet mb-4 border border-dashed bg-surface-2/60 px-4 py-3 text-xs text-text-tertiary text-center">
             未提供任务单内容
           </div>
         )}
         {summaryCards && (
-          <div className="mb-6">
+          <div className="ws-task-result-summary mb-5">
             {summaryCards}
           </div>
         )}
@@ -87,7 +87,7 @@ const SharedResultLayout: React.FC<SharedResultLayoutProps> = ({ detail, onDownl
 };
 
 const TaskSheetCollapsible: React.FC<{ taskSheet: string }> = ({ taskSheet }) => (
-  <details className="mb-5 rounded-lg border border-border-secondary bg-surface-2 px-4 py-2.5">
+  <details className="ws-task-result-task-sheet mb-5 border bg-surface-2 px-4 py-2.5">
     <summary className="cursor-pointer select-none text-xs font-medium text-text-tertiary hover:text-text-secondary">
       任务单<span className="ml-2 font-normal text-text-tertiary/60">{taskSheet.slice(0, 60)}{taskSheet.length > 60 ? "..." : ""}</span>
     </summary>

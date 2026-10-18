@@ -27,6 +27,8 @@
 - [docker/README.md#测试](docker/README.md#测试) - 测试与验证入口
 - [docker/README.md#前端](docker/README.md#前端) - 前端专项文档入口
 - [docker/frontend/ACCESSIBILITY_GUIDE.md](docker/frontend/ACCESSIBILITY_GUIDE.md) - 无障碍改进指南
+- [docker/frontend/EMBEDDED_UI_STYLE_GUIDE.md](docker/frontend/EMBEDDED_UI_STYLE_GUIDE.md) - 基于 XBK 的嵌入式页面整理规范
+- [docker/frontend/UI_REDESIGN_ROADMAP.md](docker/frontend/UI_REDESIGN_ROADMAP.md) - 49 个页面族的整理路线图
 - [docker/README.md#计划文档](docker/README.md#计划文档) - 当前计划与治理入口
 - [docker/archive/README.md](docker/archive/README.md) - 历史文档归档索引
 

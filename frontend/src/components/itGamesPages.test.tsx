@@ -133,6 +133,24 @@ describe("IT game pages", () => {
 
     expect(screen.getByText("游戏资源加载失败")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "搜索游戏名称或简介" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "游戏分类" })).toBeInTheDocument();
+  });
+
+  it("keeps admin search and categories usable with an empty game library", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useAdminITGamesQuery).mockReturnValue({
+      ...categoriesQuery,
+      data: { items: [], total: 0 },
+    } as never);
+    renderWithClient(<GamesManagerPage />);
+
+    expect(screen.getByText("暂无游戏资源")).toBeInTheDocument();
+    const search = screen.getByRole("textbox", { name: "搜索游戏名称或简介" });
+    await user.type(search, "puzzle");
+    expect(search).toHaveValue("puzzle");
+    expect(screen.getByRole("combobox", { name: "游戏分类" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传" })).toBeEnabled();
   });
 
   it("downloads the original blob and refreshes IT game caches and detail", async () => {

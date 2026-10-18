@@ -203,7 +203,11 @@ const TypstNoteEditorInner: React.FC<{
     if (typeof window !== "undefined" && window.matchMedia) {
       const mql = window.matchMedia("(min-width: 992px)");
       setCanSplit(mql.matches);
-      const handler = (e: MediaQueryListEvent) => setCanSplit(e.matches);
+      if (!mql.matches) setViewMode((mode) => mode === "split" ? "edit" : mode);
+      const handler = (e: MediaQueryListEvent) => {
+        setCanSplit(e.matches);
+        if (!e.matches) setViewMode((mode) => mode === "split" ? "edit" : mode);
+      };
       if (mql.addEventListener) {
         mql.addEventListener("change", handler);
         return () => mql.removeEventListener("change", handler);
@@ -687,9 +691,9 @@ const TypstNoteEditorInner: React.FC<{
                           <button
                             type="button"
                             className={cn(
-                              "rounded px-2.5 py-1 text-xs transition-colors",
+                              "h-8 rounded-sm px-2.5 text-sm transition-colors",
                               viewMode === "split"
-                                ? "bg-surface text-text shadow-sm"
+                                ? "bg-primary-soft text-primary shadow-none"
                                 : "text-text-tertiary hover:text-text",
                             )}
                             onClick={() => switchViewMode("split")}
@@ -700,9 +704,9 @@ const TypstNoteEditorInner: React.FC<{
                         <button
                           type="button"
                           className={cn(
-                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            "h-8 rounded-sm px-2.5 text-sm transition-colors",
                             viewMode === "edit"
-                              ? "bg-surface text-text shadow-sm"
+                              ? "bg-primary-soft text-primary shadow-none"
                               : "text-text-tertiary hover:text-text",
                           )}
                           onClick={() => switchViewMode("edit")}
@@ -712,9 +716,9 @@ const TypstNoteEditorInner: React.FC<{
                         <button
                           type="button"
                           className={cn(
-                            "rounded px-2.5 py-1 text-xs transition-colors",
+                            "h-8 rounded-sm px-2.5 text-sm transition-colors",
                             viewMode === "preview"
-                              ? "bg-surface text-text shadow-sm"
+                              ? "bg-primary-soft text-primary shadow-none"
                               : "text-text-tertiary hover:text-text",
                           )}
                           onClick={() => switchViewMode("preview")}

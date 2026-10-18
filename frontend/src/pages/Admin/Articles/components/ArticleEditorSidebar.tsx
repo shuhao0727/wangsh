@@ -117,7 +117,7 @@ export default function ArticleEditorSidebar({
               {errors.summary?.message ? (
                 <p className="article-form-error">{String(errors.summary.message)}</p>
               ) : (
-                <span className="text-xs text-text-tertiary">建议简洁概括核心内容</span>
+                <span />
               )}
               <span className="text-xs text-text-tertiary">{summary.length}/500</span>
             </div>
@@ -165,9 +165,6 @@ export default function ArticleEditorSidebar({
             管理样式
           </Button>
 
-          <p className="text-xs text-text-tertiary">
-            仅作用于当前文章内容区域
-          </p>
         </div>
       </Card>
     </>

@@ -13,7 +13,8 @@ const AdminEditorLayout: React.FC = () => {
   const isArticleEditor = location.pathname.startsWith("/admin/articles/editor");
   const isTypstEditor = location.pathname.startsWith("/admin/informatics/editor");
   const isAssessmentEditor = location.pathname.startsWith("/admin/assessment/editor");
-  const isFullscreenEditor = isTypstEditor || isArticleEditor;
+  const isLearningEditor = /^\/admin\/it-technology\/(learning|mindmap)\//.test(location.pathname);
+  const isFullscreenEditor = isTypstEditor || isArticleEditor || isLearningEditor;
 
   const backToList = () => {
     if (isTypstEditor) void navigate("/admin/informatics");
@@ -29,8 +30,8 @@ const AdminEditorLayout: React.FC = () => {
   })();
 
   return (
-    <div className="h-screen bg-surface">
-      <header className="sticky top-0 z-[var(--ws-z-floating-panel)] flex h-[var(--ws-header-height)] items-center justify-between border-b border-border bg-surface px-4">
+    <div className="ws-embedded-controls h-screen bg-surface">
+      {!isLearningEditor && <header className="sticky top-0 z-[var(--ws-z-floating-panel)] flex h-[var(--ws-header-height)] items-center justify-between border-b border-border bg-surface px-4">
         <div className="flex items-center gap-2.5">
           <Button variant="outline" onClick={backToList}>
             <ArrowLeft className="h-4 w-4" />
@@ -40,13 +41,13 @@ const AdminEditorLayout: React.FC = () => {
             {title}
           </span>
         </div>
-      </header>
+      </header>}
       <main
         className={cn(
           "flex flex-1 flex-col overflow-hidden",
           isFullscreenEditor ? "p-0" : "p-4"
         )}
-        style={{ height: "calc(100dvh - 56px)" }}
+        style={{ height: isLearningEditor ? "100dvh" : "calc(100dvh - 56px)" }}
       >
         <div
           className={cn(

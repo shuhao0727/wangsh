@@ -41,46 +41,36 @@ export const GameCard: React.FC<Props> = ({ game, onSelect }) => {
     <button
       type="button"
       onClick={() => onSelect(game)}
-      className="w-full text-left rounded-xl border border-border bg-surface p-5
-        hover:border-[var(--ws-color-primary)]/30 hover:shadow-sm transition-all
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="group flex min-h-[calc(var(--ws-space-unit)*26)] w-full items-start gap-3 border-0 border-b border-[var(--ws-color-border-secondary)] px-2 py-3 text-left transition-colors hover:bg-[var(--ws-color-workspace-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      {/* 图标区 */}
       <div
-        className="w-14 h-14 rounded-xl flex items-center justify-center mb-3"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
         style={{
           backgroundColor: `color-mix(in srgb, ${color} 9%, transparent)`,
           color,
         }}
       >
-        <MonitorPlay className="h-7 w-7" />
+        <MonitorPlay className="h-5 w-5" />
       </div>
 
-      {/* 标题 + 分类 */}
-      <h3 className="font-semibold text-text-base truncate">{game.title}</h3>
-      <p className="text-xs text-text-tertiary mt-1 line-clamp-2 min-h-[2lh]">
-        {game.description || "暂无简介"}
-      </p>
-
-      {/* 分类标签 */}
-      <div className="mt-3 flex items-center gap-3 text-xs text-text-tertiary">
-        <span
-          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${color} 7%, transparent)`,
-            color,
-          }}
-        >
-          {game.category}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <HardDrive className="h-3 w-3" />
-          {fmtSize(game.file_size)}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Download className="h-3 w-3" />
-          {game.download_count}
-        </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-text-base">{game.title}</h3>
+          <span className="shrink-0 text-xs font-medium" style={{ color }}>{game.category}</span>
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-text-secondary">
+          {game.description || "暂无简介"}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-tertiary">
+          <span className="inline-flex items-center gap-1">
+            <HardDrive className="h-3 w-3" />
+            {fmtSize(game.file_size)}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Download className="h-3 w-3" />
+            {game.download_count}
+          </span>
+        </div>
       </div>
     </button>
   );

@@ -2,7 +2,7 @@
  * 思维导图编辑器 — 支持模块模式和个人模式
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showMessage } from "@/lib/toast";
@@ -18,6 +18,7 @@ interface Props {
 }
 
 const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdown, onBack, onSaved }) => {
+  const navigate = useNavigate();
   const { moduleKey } = useParams<{ moduleKey: string }>();
   const isPersonal = mindmapId != null;
 
@@ -151,12 +152,12 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="ws-fullscreen-editor-root ws-mindmap-editor flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-1.5">
+      <div className="ws-editor-toolbar flex shrink-0 items-center gap-2">
         <Button variant="ghost" size="sm"
-          onClick={() => (onBack ? onBack() : window.close())}
-          className="h-7 text-xs gap-1">
+          onClick={() => (onBack ? onBack() : navigate(isPersonal ? "/mindmaps" : "/admin/it-technology"))}
+          className="h-8 text-sm gap-1">
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
 
@@ -164,20 +165,21 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="h-7 w-48 text-xs font-medium border-0 bg-transparent focus-visible:ring-0 px-1"
+            className="h-8 min-w-0 flex-1 text-sm font-medium"
+            aria-label="导图标题"
             placeholder="导图标题"
           />
         )}
-        <span className="text-xs font-medium text-text-secondary">
+        <span className="ws-editor-context text-sm font-medium text-text-secondary">
           {isPersonal ? "" : `${moduleKey === "ml" ? "机器学习" : moduleKey === "ai" ? "人工智能" : "智能体"} · 思维导图`}
         </span>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ws-editor-actions ml-auto flex items-center gap-1">
           <Button size="sm" variant={viewMode === "edit" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("edit")} className="h-7 text-xs gap-1"><Edit3 className="h-3 w-3" />编辑</Button>
+            onClick={() => setViewMode("edit")} className="h-8 text-sm gap-1"><Edit3 className="h-3 w-3" />编辑</Button>
           <Button size="sm" variant={viewMode === "preview" ? "secondary" : "ghost"}
-            onClick={() => setViewMode("preview")} className="h-7 text-xs gap-1"><Eye className="h-3 w-3" />预览</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs gap-1">
+            onClick={() => setViewMode("preview")} className="h-8 text-sm gap-1"><Eye className="h-3 w-3" />预览</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="h-8 text-sm gap-1">
             <Save className="h-3 w-3" />{saving ? "保存中..." : "保存"}
           </Button>
         </div>
@@ -188,7 +190,8 @@ const MindMapEditor: React.FC<Props> = ({ mindmapId, initialTitle, initialMarkdo
         <textarea
           value={markdown}
           onChange={(e) => setMarkdown(e.target.value)}
-          className="flex-1 w-full resize-none border-0 bg-surface p-5 font-mono text-sm leading-relaxed outline-none"
+          aria-label="思维导图 Markdown"
+          className="ws-editor-textarea min-h-0 flex-1 w-full resize-none border-0 bg-surface p-5 font-mono text-sm leading-relaxed outline-none"
           placeholder={`# 标题\n## 子主题\n### 细节\n...`}
           spellCheck={false}
         />

@@ -116,7 +116,7 @@ const ExperimentCard: React.FC<{
           <h3 className="text-sm font-medium text-text-base">{experiment.name}</h3>
           <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-              className={cn("rounded p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
+              className={cn("rounded-sm p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
               <Star className={cn("h-3.5 w-3.5", favorite && "fill-[var(--ws-color-warning)]")} />
             </button>
             <Badge variant={diff.variant as any} className="text-xs">{diff.label}</Badge>
@@ -132,7 +132,7 @@ const ExperimentCard: React.FC<{
         </div>
         <div className="mt-2 flex items-center gap-2">
           <button type="button" onClick={(e) => { e.stopPropagation(); onToggleCompleted(); }}
-            className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
+            className={cn("inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
             <CheckCircle2 className="h-3.5 w-3.5" />{completed ? "已完成" : "标记"}
           </button>
           <span className="text-xs text-[var(--ws-color-primary)]">点击查看详情 →</span>
@@ -151,7 +151,7 @@ const ExperimentCard: React.FC<{
             <div className="shrink-0 border-b border-border px-6 pt-5 pb-3">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-bold">{experiment.name}</h2>
-                <button onClick={() => setOpen(false)} className="rounded p-1 hover:bg-accent text-lg leading-none" aria-label="关闭">✕</button>
+                <button onClick={() => setOpen(false)} className="rounded-sm p-1 hover:bg-accent text-lg leading-none" aria-label="关闭">✕</button>
               </div>
               <div className="flex items-center gap-2 text-xs text-text-tertiary">
                 <Badge variant={diff.variant as any} className="text-[10px]">{diff.label}</Badge>
@@ -195,7 +195,7 @@ const ExperimentCard: React.FC<{
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-text-tertiary">可复制到 Jupyter Notebook / Google Colab 运行</p>
-                    <button type="button" className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
+                    <button type="button" className="inline-flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(experiment.code || "");
@@ -301,7 +301,7 @@ const ResourceCard: React.FC<{ item: ResourceItem; favorite: boolean; onToggleFa
             event.preventDefault();
             onToggleFavorite();
           }}
-          className={cn("ml-2 rounded p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
+          className={cn("ml-2 rounded-sm p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
           aria-label={favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
         >
           <Star className={cn("h-3 w-3", favorite && "fill-[var(--ws-color-warning)]")} />
@@ -545,7 +545,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
               type="button"
               onClick={saveProgress}
               disabled={progressLoading}
-              className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="ml-auto rounded-sm bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               {progressLoading ? "保存中..." : "保存进度"}
             </button>
@@ -618,7 +618,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                     value={experimentKeyword}
                     onChange={(event) => setExperimentKeyword(event.target.value)}
                     placeholder="搜索实验、数据集、工具或技能"
-                    className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                    className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                   />
                   <Select value={experimentDifficulty} onValueChange={(value) => setExperimentDifficulty(value as typeof experimentDifficulty)}>
                     <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
@@ -733,7 +733,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                     value={toolKeyword}
                     onChange={(event) => setToolKeyword(event.target.value)}
                     placeholder="搜索工具名称、用途或类别"
-                    className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                    className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                   />
                   <Select value={toolCategory} onValueChange={(value) => setToolCategory(value)}>
                     <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
@@ -821,7 +821,7 @@ const AdminAILearning: React.FC<AdminAILearningProps> = ({ embedded = false }) =
                       value={resourceKeyword}
                       onChange={(event) => setResourceKeyword(event.target.value)}
                       placeholder="搜索资源名称、描述或类型"
-                      className="h-9 rounded-md border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
+                      className="h-9 rounded-sm border border-[var(--ws-color-border)] bg-surface px-3 text-sm text-text-base placeholder:text-text-tertiary focus:border-[var(--ws-color-primary)] focus:outline-none"
                     />
                     <Select value={resourceType} onValueChange={(value) => setResourceType(value as typeof resourceType)}>
                       <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>

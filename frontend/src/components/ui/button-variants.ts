@@ -1,24 +1,24 @@
 import { cva, type VariantProps } from "class-variance-authority"
 
 export const buttonVariants = cva(
-  "inline-flex appearance-none items-center justify-center gap-2 whitespace-nowrap rounded-lg border-0 bg-transparent text-sm font-medium ring-offset-background transition-[color,background-color,border-color,transform,box-shadow] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ws-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex appearance-none items-center justify-center gap-2 whitespace-nowrap rounded-sm border-0 bg-transparent text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-none hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground shadow-none hover:bg-primary-active",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-none hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-none hover:bg-[var(--ws-color-error-dark)]",
         outline:
-          "border border-[var(--ws-color-secondary)] bg-transparent text-foreground shadow-none hover:bg-[var(--ws-color-primary-muted)]",
+          "border border-[var(--ws-control-action-border)] bg-[var(--ws-control-action-bg)] text-text-secondary shadow-none hover:bg-surface-2 hover:text-text-base",
         secondary:
-          "bg-[var(--ws-color-primary-muted)] text-primary shadow-none hover:bg-[var(--ws-color-primary-muted)]/70",
-        ghost: "shadow-none hover:bg-[var(--ws-color-primary-muted)]",
+          "bg-primary-soft text-primary shadow-none hover:bg-[var(--ws-color-primary-light)]",
+        ghost: "shadow-none hover:bg-primary-soft",
         link: "text-primary underline-offset-4 hover:underline shadow-none",
       },
       size: {
         default: "h-[var(--ws-control-height)] px-[18px] py-1",
-        sm: "h-[var(--ws-control-height-sm)] rounded-lg px-3 text-xs",
-        lg: "h-[var(--ws-control-height-lg)] rounded-lg px-8",
+        sm: "h-[var(--ws-control-height-sm)] px-3 text-xs",
+        lg: "h-[var(--ws-control-height-lg)] px-8",
         icon: "h-[var(--ws-control-height)] w-[var(--ws-control-height)]",
       },
     },

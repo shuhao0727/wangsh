@@ -64,7 +64,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   };
 
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-surface">
+    <div className="ws-book-chapters flex h-full min-h-0 flex-col bg-surface">
       {/* Header */}
       <div className="border-b border-border-secondary p-3 shrink-0">
         <div className="mb-1 flex items-center justify-between">
@@ -80,7 +80,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
       </div>
 
       {/* Chapter Items */}
-      <nav className="flex-1 overflow-auto p-1.5">
+      <nav aria-label="书籍章节" className="min-h-0 flex-1 overflow-auto p-1.5">
         {chapters.length === 0 && (
           <div className="p-4 text-center text-xs text-text-tertiary">
             暂无章节，点击下方按钮创建
@@ -98,6 +98,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 ? "bg-primary/10 text-primary"
                 : "hover:bg-surface-2 text-text-secondary"
             } ${!chapter.enabled ? "opacity-50" : ""}`}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectChapter(chapter.slug); } }}
             onClick={() => onSelectChapter(chapter.slug)}
           >
             <GripVertical className="h-3 w-3 shrink-0 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
@@ -110,6 +113,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
                 </span>
               )}
               <Switch
+                aria-label={`${chapter.title}启用状态`}
                 checked={chapter.enabled}
                 onClick={(e) => e.stopPropagation()}
                 onCheckedChange={(checked) => onToggleChapter(chapter.slug, checked)}
@@ -118,7 +122,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-7 w-7 p-0 opacity-60 hover:opacity-100 focus-visible:opacity-100"
                 onClick={(e) => { e.stopPropagation(); onDeleteChapter(chapter.slug); }}
                 title="删除章节"
               >

@@ -112,7 +112,7 @@ const BasicLayout: React.FC = () => {
 
 
   return (
-    <div className={cn("basic-layout", isHomePage && "home-page")}>
+    <div className={cn("basic-layout", !location.pathname.startsWith("/it-technology/python-lab") && "ws-embedded-controls", isHomePage && "home-page")}>
       {/* Home page nav hover trigger */}
       {isHomePage && <div className="nav-trigger" />}
       {/* 顶部导航栏 */}

@@ -60,7 +60,7 @@ const APPS = [
   {
     key: 'it_machine_learning_enabled',
     title: '机器学习',
-    description: '17 章学习书 · 5 阶段路线 · 9 大知识域 · 14 个实验',
+    description: '17 章 · 5 阶段 · 9 知识域 · 14 项实验',
     icon: <Cpu className="h-5 w-5" />,
     color: 'var(--ws-color-purple)', bg: 'color-mix(in srgb, var(--ws-color-purple) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-purple) 22%, transparent)',
     action: 'ml',
@@ -69,7 +69,7 @@ const APPS = [
   {
     key: 'it_ai_exploration_enabled',
     title: '人工智能探索',
-    description: '14 章学习书 · 6 阶段路线 · 8 大 AI 领域 · 14 项提示技术',
+    description: '14 章 · 6 阶段 · 8 领域 · 14 项提示技术',
     icon: <Sparkles className="h-5 w-5" />,
     color: 'var(--ws-color-primary)', bg: 'color-mix(in srgb, var(--ws-color-primary) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-primary) 22%, transparent)',
     action: 'ai',
@@ -78,7 +78,7 @@ const APPS = [
   {
     key: 'it_agent_exploration_enabled',
     title: '智能体探索',
-    description: '13 章学习书 · 5 阶段路线 · 13 种框架 · 16 个动手实验',
+    description: '13 章 · 5 阶段 · 13 种框架 · 16 项实验',
     icon: <Network className="h-5 w-5" />,
     color: 'var(--ws-color-accent)', bg: 'color-mix(in srgb, var(--ws-color-accent) 8%, transparent)', ring: 'color-mix(in srgb, var(--ws-color-accent) 22%, transparent)',
     action: 'agents',
@@ -202,7 +202,7 @@ const ITTechnologyPage: React.FC = () => {
               <button
                 type="button"
                 onClick={item.onClick}
-                className="appearance-none border-0 inline-flex items-center gap-1 rounded-md px-[var(--ws-space-1)] py-[calc(var(--ws-space-1)/2)] text-sm transition-colors hover:bg-primary-soft hover:text-primary"
+                className="appearance-none border-0 inline-flex items-center gap-1 rounded-sm px-[var(--ws-space-1)] py-[calc(var(--ws-space-1)/2)] text-sm transition-colors hover:bg-primary-soft hover:text-primary"
               >
                 {item.icon}
                 {item.label}
@@ -265,6 +265,7 @@ const ITTechnologyPage: React.FC = () => {
     return (
       <AppLauncherCard
         key={app.key}
+        layout="row"
         title={app.title}
         description={app.description}
         icon={app.icon}
@@ -298,9 +299,9 @@ const ITTechnologyPage: React.FC = () => {
               <EmptyState description="暂无可用应用，请联系管理员在后台开启。" />
             </div>
           ) : (
-            <div className="space-y-[var(--ws-layout-gap)]">
+            <div className="space-y-[var(--ws-space-3)]">
               {utilityApps.length > 0 && (
-                <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                <div className="grid grid-cols-1 gap-x-[var(--ws-space-3)] sm:grid-cols-2 lg:grid-cols-3">
                   {utilityApps.map(renderCard)}
                 </div>
               )}
@@ -311,7 +312,7 @@ const ITTechnologyPage: React.FC = () => {
                     <span className="text-xs font-medium uppercase tracking-wider text-text-tertiary whitespace-nowrap">AI 学习系列</span>
                     <div className="h-px flex-1 bg-border" />
                   </div>
-                  <div className="grid gap-[var(--ws-layout-gap)]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                  <div className="grid grid-cols-1 gap-x-[var(--ws-space-3)] sm:grid-cols-2 lg:grid-cols-3">
                     {learningApps.map(renderCard)}
                   </div>
                 </>
@@ -322,7 +323,7 @@ const ITTechnologyPage: React.FC = () => {
       ) : (
         <div className="flex flex-col flex-1">
           {renderBreadcrumb()}
-          <div className="flex-1 rounded-xl bg-surface p-[var(--ws-panel-padding)]">
+          <div className="flex-1 border-t border-[var(--ws-color-border-secondary)] py-[var(--ws-space-3)]">
             <ClassSelector onSelect={handleSelectClass} />
           </div>
         </div>

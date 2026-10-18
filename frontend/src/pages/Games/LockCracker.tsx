@@ -3,7 +3,7 @@
  * 三层难度固定：纯数字 / 字母数字 / 字母数字+特殊字符
  */
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, RefreshCw, Lock, Unlock, Hash, Type, Asterisk, Search, BarChart3 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, Hash, Type, Asterisk, Search, BarChart3, Check, X, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -41,7 +41,7 @@ const LockCrackerPage: React.FC = () => {
   const [method, setMethod] = useState("穷举法");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [unlocked, setUnlocked] = useState(false);
-  const [result, setResult] = useState<{ msg: string; color: string } | null>(null);
+  const [result, setResult] = useState<{ msg: string; kind: "warning" | "error" | "success" } | null>(null);
   const [startTime] = useState(Date.now());
   const [elapsed, setElapsed] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +63,12 @@ const LockCrackerPage: React.FC = () => {
 
   const handleGuess = () => {
     const g = guess.trim();
-    if (!g) { setResult({msg:"请输入密码!",color:"#F59E0B"}); return; }
+    if (!g) { setResult({msg:"请输入密码",kind:"warning"}); return; }
     const correct = g === password;
     const entry: Attempt = { id: attempts.length+1, guess: g, method, correct };
     setAttempts(prev => [...prev, entry]);
-    if (correct) { setUnlocked(true); setResult({msg:"🎉 密码正确！锁已打开！",color:"#22C55E"}); }
-    else { setResult({msg:"❌ 密码错误，继续尝试",color:"#EF4444"}); setGuess(""); }
+    if (correct) { setUnlocked(true); setResult({msg:"密码正确，锁已打开",kind:"success"}); }
+    else { setResult({msg:"密码错误，请继续尝试",kind:"error"}); setGuess(""); }
   };
 
   const total = attempts.length;
@@ -78,121 +78,125 @@ const LockCrackerPage: React.FC = () => {
   const config = LOCK_LABELS[lockType];
 
   return (
-    <div className="min-h-screen bg-[var(--ws-color-bg)] text-text-base flex flex-col">
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-bg text-text-base">
       {/* Header */}
-      <header className="shrink-0 border-b border-border-secondary bg-surface/95 px-6 py-3 flex items-center justify-between shadow-sm backdrop-blur">
+      <header className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b border-border-secondary bg-surface px-3 py-2 sm:flex sm:justify-between sm:px-6">
         <Button variant="ghost" size="sm" className="text-text-secondary hover:bg-primary-soft hover:text-primary" onClick={() => window.close()}>
-          <ArrowLeft className="h-4 w-4 mr-1"/>返回
+          <ArrowLeft className="mr-1 h-4 w-4"/>返回
         </Button>
-        <div className="text-center">
-          <h1 className="text-base font-bold text-text-base">🔐 密码锁破解</h1>
-          <p className="text-xs text-text-tertiary">理解枚举法 · 系统性地尝试所有可能</p>
+        <div className="min-w-0 text-center sm:mx-auto">
+          <h1 className="flex items-center justify-center gap-2 truncate text-sm font-semibold text-text-base sm:text-base">
+            <Lock className="h-4 w-4 shrink-0 text-primary" />
+            密码锁破解
+          </h1>
+          <p className="hidden text-xs text-text-tertiary sm:block">理解枚举法 · 系统性地尝试所有可能</p>
         </div>
-        <div className="flex items-center gap-3 text-xs font-medium text-text-secondary">
-          <span>⏱ {fmtTime(elapsed)}</span>
+        <div className="col-span-2 flex items-center justify-end gap-4 text-xs font-medium text-text-secondary sm:col-span-1">
+          <span className="flex items-center gap-1"><Timer className="h-3.5 w-3.5" />{fmtTime(elapsed)}</span>
           <span>{total} 次尝试</span>
         </div>
       </header>
 
       {/* Main: 3-column */}
-      <div className="flex-1 flex min-h-0">
+      <main className="mx-auto grid min-h-0 w-full max-w-[1800px] flex-1 grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)_280px]">
         {/* Left: Lock type selector */}
-        <aside className="w-[220px] shrink-0 border-r border-border-secondary p-4 flex flex-col gap-3 bg-surface">
-          <div className="text-xs font-semibold text-text-tertiary mb-1">🔑 密码锁类型</div>
+        <aside className="flex w-full shrink-0 flex-col gap-2 border-b border-border-secondary bg-surface p-3 xl:min-h-0 xl:w-[220px] xl:border-b-0 xl:border-r xl:p-4">
+          <div className="mb-1 hidden text-xs font-semibold text-text-tertiary xl:block">密码锁类型</div>
+          <div className="grid grid-cols-3 gap-2 xl:flex xl:flex-col xl:gap-3">
           {(Object.entries(LOCK_LABELS) as [LockType,typeof LOCK_LABELS['numeric']][]).map(([key,cfg]) => (
-            <button key={key} onClick={() => setLockType(key)}
-              className={`text-left rounded-lg p-3 border transition-all cursor-pointer ${
-                lockType===key ? "bg-primary-soft border-primary shadow-sm" : "bg-surface-2 border-border-secondary hover:border-primary/40 hover:bg-primary-soft/40"
+            <button key={key} onClick={() => setLockType(key)} aria-pressed={lockType===key}
+              className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-sm border p-2 text-center transition-colors cursor-pointer xl:items-start xl:p-3 xl:text-left ${
+                lockType===key ? "bg-primary-soft border-primary" : "bg-surface-2 border-border-secondary hover:border-primary/40 hover:bg-primary-soft/40"
               }`}
             >
-              <div className="flex items-center gap-2" style={{color:cfg.color}}>{cfg.icon}<span className="font-semibold text-sm text-text-base">{cfg.name}</span></div>
-              <div className="text-[11px] text-text-tertiary mt-1">{cfg.desc} · {cfg.charset}</div>
+              <div className="flex min-w-0 items-center gap-1.5 xl:gap-2" style={{color:cfg.color}}>{cfg.icon}<span className="font-semibold text-xs text-text-base xl:text-sm">{cfg.name}</span></div>
+              <div className="hidden text-[11px] text-text-tertiary xl:block">{cfg.desc} · {cfg.charset}</div>
             </button>
           ))}
-          <div className="flex-1"/>
-          <Button variant="ghost" size="sm" className="text-text-secondary hover:bg-primary-soft hover:text-primary w-full" onClick={() => pickPassword(lockType)}>
-            <RefreshCw className="h-4 w-4 mr-1"/>换一把锁
+          </div>
+          <div className="hidden flex-1 xl:block"/>
+          <Button variant="ghost" size="sm" className="hidden w-full text-text-secondary hover:bg-primary-soft hover:text-primary xl:flex" onClick={() => pickPassword(lockType)}>
+            <RefreshCw className="mr-1 h-4 w-4"/>换一把锁
           </Button>
         </aside>
 
         {/* Center: Game area */}
-        <main className="flex-1 flex flex-col items-center justify-center p-8 gap-6 bg-gradient-to-br from-[var(--ws-color-bg)] via-surface to-primary-soft/50">
+        <section className="flex min-h-[420px] min-w-0 flex-col items-center justify-center gap-5 overflow-hidden bg-surface px-4 py-6 sm:px-8 xl:min-h-0 xl:py-8">
           <div className="text-center">
-            <div className="text-7xl mb-3">{unlocked ? <Unlock className="inline h-20 w-20 text-[var(--ws-color-success)]"/>:<Lock className="inline h-20 w-20 text-primary drop-shadow-sm"/>}</div>
-            <div className="text-lg font-semibold text-text-base">{unlocked?"🔓 已破解!":config.name+" · 已锁定"}</div>
+            <div className="mb-3">{unlocked ? <Unlock className="mx-auto h-14 w-14 text-[var(--ws-color-success)]"/>:<Lock className="mx-auto h-14 w-14 text-primary"/>}</div>
+            <div className="text-base font-semibold text-text-base">{unlocked?"已破解":config.name+" · 已锁定"}</div>
             <div className="text-xs text-text-tertiary mt-1">密码长度: {password.length} 位</div>
           </div>
 
-          {/* Search space visualization */}
-          <div className="w-full max-w-[420px] rounded-xl bg-surface border border-border-secondary p-4 shadow-sm">
+          <div className="w-full max-w-[520px] border-y border-border-secondary py-3">
             <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-text-tertiary">搜索空间</span><span className="font-medium text-text-secondary">{total} / — 种</span>
+              <span className="text-text-tertiary">本轮挑战</span><span className="font-medium text-text-secondary">{config.name} · {password.length} 位</span>
             </div>
-            <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-              <div className="h-full rounded-full bg-primary transition-all" style={{width:`${Math.min(total*0.5,100)}%`}}/>
-            </div>
-            <div className="flex items-center gap-3 mt-2 text-[11px] text-text-tertiary">
-              <span><span className="inline-block w-2 h-2 rounded-full bg-border-secondary mr-1"/>未尝试</span>
-              <span><span className="inline-block w-2 h-2 rounded-full bg-primary mr-1"/>已尝试</span>
-              {unlocked && <span><span className="inline-block w-2 h-2 rounded-full bg-[var(--ws-color-success)] mr-1"/>正确答案</span>}
-            </div>
+            <p className="text-xs leading-5 text-text-secondary">已尝试 {total} 次 · 选择方法后输入猜测</p>
           </div>
 
           {/* Input area */}
           {!unlocked && (
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex w-full max-w-[520px] flex-col items-stretch gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                 <Input ref={inputRef} value={guess} onChange={e=>setGuess(e.target.value)}
                   maxLength={password.length}
                   onKeyDown={e=>{if(e.key==="Enter")handleGuess();}}
-                  className="h-14 w-[260px] rounded-xl border-2 border-primary/50 bg-surface text-center font-mono text-3xl font-bold tracking-[8px] text-text-base shadow-sm placeholder:text-text-tertiary focus:border-primary focus:ring-4 focus:ring-primary-soft"
+                  aria-label="输入尝试密码"
+                  inputMode={lockType==="numeric"?"numeric":"text"}
+                  autoComplete="off"
+                  className="h-12 min-w-0 rounded-sm border border-border bg-surface text-center font-mono text-2xl font-semibold tracking-[0.3em] text-text-base shadow-none placeholder:text-text-tertiary focus:border-primary focus:ring-2 focus:ring-primary-soft"
                   placeholder={password.replace(/./g,"•")} />
-                <Button onClick={handleGuess} className="h-14 px-6 bg-primary text-white hover:bg-primary/90">
-                  <Search className="h-5 w-5 mr-1"/>尝试解锁
+                <Button onClick={handleGuess} className="h-12 px-3 sm:px-5">
+                  <Search className="mr-1.5 h-4 w-4"/>尝试解锁
                 </Button>
               </div>
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-text-tertiary">破译方法:</span>
-                <select value={method} onChange={e=>setMethod(e.target.value)}
-                  className="bg-surface border border-border-secondary rounded px-2 py-1 text-text-base text-xs cursor-pointer focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-soft">
+                <label htmlFor="crack-method" className="shrink-0 text-text-tertiary">破译方法</label>
+                <select id="crack-method" value={method} onChange={e=>setMethod(e.target.value)}
+                  className="h-9 min-w-0 rounded-sm border border-border bg-surface px-2 text-text-base text-xs cursor-pointer transition-colors hover:border-text-tertiary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0">
                   {METHODS.map(m=><option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              {result && <div className="text-sm font-semibold" style={{color:result.color}}>{result.msg}</div>}
+              {result && <div role="status" aria-live="polite" className={`flex items-center gap-2 text-sm font-medium ${
+                result.kind==="success" ? "text-[var(--ws-color-success)]" : result.kind==="warning" ? "text-[var(--ws-color-warning)]" : "text-destructive"
+              }`}>{result.kind==="success" ? <Check className="h-4 w-4"/> : result.kind==="warning" ? <span aria-hidden="true">!</span> : <X className="h-4 w-4"/>}{result.msg}</div>}
             </div>
           )}
           {unlocked && (
             <Button onClick={()=>pickPassword(lockType)} className="bg-primary text-white hover:bg-primary/90">
-              <RefreshCw className="h-4 w-4 mr-1"/>换一把锁，再来一次
+              <RefreshCw className="mr-1 h-4 w-4"/>换一把锁，再来一次
             </Button>
           )}
-        </main>
+        </section>
 
         {/* Right: History + Stats */}
-        <aside className="w-[280px] shrink-0 border-l border-border-secondary p-4 bg-surface flex flex-col min-h-0">
+        <aside className="flex min-h-0 w-full shrink-0 flex-col border-t border-border-secondary bg-surface p-4 xl:w-[280px] xl:border-l xl:border-t-0">
           <div className="flex items-center gap-2 text-sm font-semibold mb-2">
             <BarChart3 className="h-4 w-4 text-primary"/>尝试记录
           </div>
-          <div className="flex-1 overflow-y-auto space-y-1 text-xs font-mono mb-3">
+          <div className="max-h-48 flex-1 overflow-y-auto space-y-1 text-xs font-mono mb-3 xl:max-h-none">
             {attempts.length===0 && <div className="text-text-tertiary text-center py-8">还没有尝试记录</div>}
             {attempts.slice().reverse().map(a=>(
               <div key={a.id} className="flex items-center gap-2 py-1.5 border-b border-border-secondary">
                 <span className="text-text-tertiary">#{a.id}</span>
                 <span className="font-semibold text-text-base">{a.guess}</span>
-                <span className="text-text-tertiary">{a.method}</span>
-                <span>{a.correct?"✅":"❌"}</span>
+                <span className="min-w-0 flex-1 truncate text-text-tertiary">{a.method}</span>
+                {a.correct ? <Check aria-label="正确" className="h-4 w-4 text-[var(--ws-color-success)]"/> : <X aria-label="错误" className="h-4 w-4 text-destructive"/>}
               </div>
             ))}
           </div>
-          <div className="shrink-0 rounded-xl bg-surface-2 border border-border-secondary p-3 text-xs space-y-1">
-            <div className="text-text-tertiary font-semibold mb-1">📊 统计</div>
-            <div>总尝试: <span className="text-text-base font-semibold">{total}</span></div>
-            <div>成功: <span className="text-[var(--ws-color-success)] font-semibold">{successes}</span></div>
-            <div>成功率: <span className="text-[var(--ws-color-warning)] font-semibold">{rate}%</span></div>
-            <div>耗时: <span className="text-text-base">{fmtTime(elapsed)}</span></div>
+          <div className="shrink-0 border-t border-border-secondary pt-3 text-xs">
+            <div className="mb-2 font-medium text-text-secondary">本局统计</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div>总尝试 <span className="font-semibold text-text-base">{total}</span></div>
+              <div>成功 <span className="font-semibold text-[var(--ws-color-success)]">{successes}</span></div>
+              <div>成功率 <span className="font-semibold text-[var(--ws-color-warning)]">{rate}%</span></div>
+              <div>耗时 <span className="text-text-base">{fmtTime(elapsed)}</span></div>
+            </div>
           </div>
         </aside>
-      </div>
+      </main>
     </div>
   );
 };

@@ -140,7 +140,7 @@ const TreeNode: React.FC<{ node: KnowledgeNode; depth?: number; keyword?: string
         type="button"
         onClick={() => hasChildren && setExpanded(!expanded)}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--ws-color-surface-2)]",
+          "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--ws-color-surface-2)]",
           depth === 0 && "font-semibold text-text-base",
           depth === 1 && "font-medium text-text-secondary",
           depth >= 2 && "text-text-tertiary",
@@ -436,7 +436,7 @@ const AdminMLLearning: React.FC<AdminMLLearningProps> = ({ embedded = false }) =
               type="button"
               onClick={saveProgress}
               disabled={progressLoading}
-              className="ml-auto rounded-md bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="ml-auto rounded-sm bg-[var(--ws-color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               {progressLoading ? "保存中..." : "保存进度"}
             </button>
@@ -810,7 +810,7 @@ const ExperimentCard: React.FC<{
           <h3 className="text-sm font-medium text-text-base">{experiment.name}</h3>
           <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-              className={cn("rounded p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
+              className={cn("rounded-sm p-1 transition-colors", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}>
               <Star className={cn("h-3.5 w-3.5", favorite && "fill-[var(--ws-color-warning)]")} />
             </button>
             <Badge variant={diff.variant as any} className="text-xs">{diff.label}</Badge>
@@ -826,7 +826,7 @@ const ExperimentCard: React.FC<{
         </div>
         <div className="mt-2 flex items-center gap-2">
           <button type="button" onClick={(e) => { e.stopPropagation(); onToggleCompleted(); }}
-            className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
+            className={cn("inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium", completed ? "bg-[var(--ws-color-success)] text-white" : "bg-[var(--ws-color-surface)] text-text-secondary")}>
             <CheckCircle2 className="h-3.5 w-3.5" />{completed ? "已完成" : "标记"}
           </button>
           <span className="text-xs text-[var(--ws-color-primary)]">点击查看详情 →</span>
@@ -846,7 +846,7 @@ const ExperimentCard: React.FC<{
             <div className="shrink-0 border-b border-border px-6 pt-5 pb-3">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-bold">{experiment.name}</h2>
-                <button onClick={() => setOpen(false)} className="rounded p-1 hover:bg-accent text-lg leading-none" aria-label="关闭">✕</button>
+                <button onClick={() => setOpen(false)} className="rounded-sm p-1 hover:bg-accent text-lg leading-none" aria-label="关闭">✕</button>
               </div>
               <div className="flex items-center gap-2 text-xs text-text-tertiary">
                 <Badge variant={diff.variant as any} className="text-[10px]">{diff.label}</Badge>
@@ -890,7 +890,7 @@ const ExperimentCard: React.FC<{
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-text-tertiary">可复制到 Jupyter Notebook / Google Colab 运行</p>
-                    <button type="button" className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
+                    <button type="button" className="inline-flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs text-text-secondary hover:bg-accent transition-colors"
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(experiment.code || "");
@@ -996,7 +996,7 @@ const ResourceCard: React.FC<{ item: ResourceItem; favorite: boolean; onToggleFa
             event.preventDefault();
             onToggleFavorite();
           }}
-          className={cn("ml-2 rounded p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
+          className={cn("ml-2 rounded-sm p-1", favorite ? "text-[var(--ws-color-warning)]" : "text-text-tertiary hover:text-[var(--ws-color-warning)]")}
           aria-label={favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
         >
           <Star className={cn("h-3 w-3", favorite && "fill-[var(--ws-color-warning)]")} />

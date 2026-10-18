@@ -1,6 +1,5 @@
 import { showMessage } from "@/lib/toast";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams } from "react-router-dom";
@@ -114,31 +113,25 @@ const InformaticsDetailPage: React.FC = () => {
           </div>
         ) : (
           <PanelCard>
-            {note?.summary ? (
-              <div className="mb-3">
-                <span className="text-text-secondary">{note.summary}</span>
+            {(note?.summary || note?.updated_at) && (
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--ws-color-border-secondary)] pb-3">
+                {note?.summary && <p className="m-0 min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">{note.summary}</p>}
+                <span className="shrink-0 text-xs text-text-tertiary">
+                  更新于 {note?.updated_at ? new Date(note.updated_at).toLocaleDateString("zh-CN") : "-"}
+                </span>
               </div>
-            ) : null}
-            <div className="mb-3">
-              <span className="text-xs text-text-secondary">
-                更新：{note?.updated_at ? new Date(note.updated_at).toLocaleString("zh-CN") : "-"}
-              </span>
-            </div>
+            )}
             {note?.toc?.length ? (
-              <Card className="mb-3 rounded-xl border-border bg-surface-2">
-                <CardHeader className="pb-2 pt-3">
-                  <CardTitle className="text-sm font-semibold">目录</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex flex-col gap-1.5">
-                    {note.toc.map((it: any, idx: number) => (
-                      <div key={idx} style={{ paddingLeft: Math.max(0, (it.level || 1) - 1) * 12 }}>
-                        <span>{extractHeadingText(it.text || it)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <section className="mb-3 grid gap-x-3 gap-y-1 border-b border-[var(--ws-color-border-secondary)] pb-3 sm:grid-cols-[36px_minmax(0,1fr)]" aria-label="文档目录">
+                <h2 className="m-0 text-xs font-medium text-text-tertiary">目录</h2>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
+                  {note.toc.map((it: any, idx: number) => (
+                    <span key={idx} style={{ marginLeft: `${Math.max(0, (it.level || 1) - 1) * 8}px` }}>
+                      {extractHeadingText(it.text || it)}
+                    </span>
+                  ))}
+                </div>
+              </section>
             ) : null}
             <div
               className="informatics-typst-viewer no-copy"

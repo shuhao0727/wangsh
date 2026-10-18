@@ -30,7 +30,7 @@ export const AdminFilterBar: React.FC<AdminFilterBarProps> = ({
 
   return (
     <div
-      className={cn("mb-4 flex flex-wrap items-center gap-2", className)}
+      className={cn("ws-admin-filter-bar mb-4 flex flex-wrap items-center gap-2", className)}
       {...(hasSlots ? { role: "toolbar", "aria-label": "操作工具栏" } : {})}
     >
       {hasSlots ? (

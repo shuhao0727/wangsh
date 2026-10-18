@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CheckCircle2, Circle, Clock, Star, BookOpen, ListTree, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
@@ -12,6 +12,7 @@ import type { LearningBook, LearningBookChapter } from "./types";
 import "./BookReader.css";
 
 interface BookReaderProps {
+  embedded?: boolean;
   book: LearningBook;
   activeSlug: string;
   completedChapters: Record<string, boolean>;
@@ -261,14 +262,14 @@ const ChapterSidebar: React.FC<{
               return (
                 <div key={group.name}>
                   <button type="button" onClick={() => toggleGroup(group.name)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary hover:bg-accent transition-colors">
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary hover:bg-accent transition-colors">
                     {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
                     <span className="flex-1">{group.name}</span>
                     <span className="text-[10px] tabular-nums font-normal normal-case text-text-tertiary">{done}/{group.chapters.length}</span>
                   </button>
                   {isOpen && group.chapters.map((ch) => (
                     <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
-                      className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-xs transition-colors ${
+                      className={`flex w-full items-center gap-2 rounded-sm py-1.5 pl-8 pr-3 text-left text-xs transition-colors ${
                         ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
                       }`}>
                       {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -280,7 +281,7 @@ const ChapterSidebar: React.FC<{
             })}
             {standalone.map((ch) => (
               <button key={ch.slug} type="button" onClick={() => onSelectChapter(ch.slug)}
-                className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-3 text-left text-xs transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-sm py-1.5 pl-3 pr-3 text-left text-xs transition-colors ${
                   ch.slug === activeSlug ? "bg-primary/10 text-primary font-medium border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-accent text-text-secondary"
                 }`}>
                 {completedChapters[ch.slug] ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -295,7 +296,7 @@ const ChapterSidebar: React.FC<{
             ) : (
               tocItems.map((item) => (
                 <button key={item.id} type="button" onClick={() => onTocClick(item.id)}
-                  className={`block w-full rounded-md py-1.5 text-left text-xs transition-colors hover:bg-accent ${
+                  className={`block w-full rounded-sm py-1.5 text-left text-xs transition-colors hover:bg-accent ${
                     item.level === 2 ? "pl-2" : "pl-5"
                   } ${item.id === activeHeading ? "text-primary font-medium" : "text-text-secondary"}`}>
                   {item.text}
@@ -314,6 +315,7 @@ const ChapterSidebar: React.FC<{
    ══════════════════════════════════════════════ */
 
 export const BookReader: React.FC<BookReaderProps> = ({
+  embedded = false,
   book, activeSlug, completedChapters, favoriteChapters,
   onSelectChapter, onToggleComplete, onToggleFavorite,
 }) => {
@@ -397,7 +399,7 @@ export const BookReader: React.FC<BookReaderProps> = ({
   return (
     <div className="flex min-h-0 flex-col lg:flex lg:flex-row h-full">
       {/* Desktop sidebar */}
-      <aside
+      {!embedded && <aside
         className="hidden lg:flex lg:flex-col lg:min-h-0 lg:shrink-0"
         style={{ width: sidebarW }}
       >
@@ -408,39 +410,46 @@ export const BookReader: React.FC<BookReaderProps> = ({
           tocItems={tocItems} activeHeading={activeHeading}
           onSelectChapter={handleSelectChapter} onTocClick={scrollToHeading}
         />
-      </aside>
+      </aside>}
 
       {/* Resize handle */}
-      <div
+      {!embedded && <div
         className="hidden lg:block w-2 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
         onMouseDown={onMouseDown}
-      />
+      />}
 
       {/* Main content */}
       <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
-        <div className="mx-auto px-6 py-8 lg:px-12 lg:py-12" style={{ maxWidth: 1200 }}>
+        <div className={embedded ? "mx-auto px-5 py-4 lg:px-7 lg:py-5" : "mx-auto px-6 py-8 lg:px-12 lg:py-12"} style={{ maxWidth: 1200 }}>
           <MarkdownBody markdown={activeChapter.markdown} />
           <div className="h-16" />
         </div>
 
         {/* Back to top */}
         <button type="button" onClick={scrollToTop}
-          className={`fixed bottom-8 right-8 z-10 rounded-full p-3 shadow-lg bg-primary text-primary-foreground transition-all duration-300 ${
+          className={`fixed bottom-8 right-8 z-10 hidden rounded-sm p-3 shadow-none bg-primary text-primary-foreground transition-colors duration-300 lg:block ${
             showScrollTop ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"}`}
           aria-label="回到顶部">
           <ArrowUp className="h-5 w-5" />
         </button>
       </main>
 
-      {/* Mobile: floating nav */}
-      <div className="fixed bottom-5 right-5 z-10 lg:hidden">
+      {/* Mobile reader actions stay outside the article flow. */}
+      {!embedded && <div className="flex shrink-0 items-center justify-end gap-1 border-t border-border-secondary px-3 py-1.5 lg:hidden">
+        {showScrollTop && (
+          <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-sm" onClick={scrollToTop} aria-label="回到顶部">
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+        )}
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
-            <Button size="sm" variant="secondary" className="rounded-full shadow-lg gap-1.5">
+            <Button size="sm" variant="ghost" className="h-8 rounded-sm gap-1.5">
               <ListTree className="h-4 w-4" />目录
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+            <SheetTitle className="sr-only">学习目录</SheetTitle>
+            <SheetDescription className="sr-only">按章节或内容大纲选择阅读位置。</SheetDescription>
             <ChapterSidebar
               book={book} groups={groups} standalone={standalone}
               activeSlug={activeSlug} completedChapters={completedChapters}
@@ -450,7 +459,7 @@ export const BookReader: React.FC<BookReaderProps> = ({
             />
           </SheetContent>
         </Sheet>
-      </div>
+      </div>}
     </div>
   );
 };

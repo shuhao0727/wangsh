@@ -798,9 +798,9 @@ const HotCoreChart: React.FC<{
                 <button
                   key={m}
                   onClick={() => setBucketMin(m)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
                     bucketMin === m
-                      ? "bg-primary text-white shadow-sm"
+                      ? "bg-primary text-white shadow-none"
                       : "text-text-secondary hover:text-text-base"
                   }`}
                 >

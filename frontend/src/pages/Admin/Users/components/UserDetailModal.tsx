@@ -16,9 +16,9 @@ import dayjs from "dayjs";
 import type { UserDetailModalProps } from "../types";
 
 const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="space-y-1 rounded-md border border-border bg-surface-2 p-3">
-    <div className="text-xs text-text-tertiary">{label}</div>
-    <div className="text-sm text-text-base">{value}</div>
+  <div className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-3 border-b border-border-secondary py-2.5">
+    <dt className="text-xs text-text-secondary">{label}</dt>
+    <dd className="m-0 min-w-0 text-sm text-text-base">{value}</dd>
   </div>
 );
 
@@ -37,7 +37,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
           <DialogTitle>用户详情</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
           <DetailItem label="ID" value={currentUser.id} />
           <DetailItem label="用户名" value={currentUser.username || "无"} />
           <DetailItem label="学号" value={currentUser.student_id || "无"} />
@@ -92,7 +92,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             label="更新时间"
             value={currentUser.updated_at ? dayjs(currentUser.updated_at).format("YYYY-MM-DD HH:mm") : "无"}
           />
-        </div>
+        </dl>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>

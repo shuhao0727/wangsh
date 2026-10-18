@@ -265,12 +265,13 @@ const GamesManagerPage: React.FC = () => {
   return (
     <AdminPage padding="var(--ws-panel-padding)" scrollable={false}>
       <AdminTablePanel
+        className="ws-game-manager-panel"
         title="游戏资源库管理"
         loading={loading}
         error={listQuery.isError || categoriesQuery.isError}
         errorDescription="游戏资源加载失败"
         isEmpty={!loading && games.length === 0 && !search && category === FILTER_ALL}
-        emptyDescription="暂无游戏资源，点击右上角「上传」添加"
+        emptyDescription="暂无游戏资源"
         noResults={!loading && games.length === 0 && (!!search || category !== FILTER_ALL)}
         noResultsDescription="没有匹配筛选条件的游戏"
         onRetry={() => {
@@ -282,47 +283,38 @@ const GamesManagerPage: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
+              className="h-8 px-3"
+              aria-label="刷新游戏资源"
               disabled={loading}
               onClick={() => void listQuery.refetch()}
             >
               {loading ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               )}
               刷新
             </Button>
             <Button
               size="sm"
+              className="h-8 px-3"
               onClick={() => {
                 setEditRecord(null);
                 setUploadOpen(true);
               }}
             >
-              <Plus className="h-3.5 w-3.5 mr-1" />
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               上传
             </Button>
           </div>
         }
-        pagination={
-          <DataTablePagination
-            currentPage={page}
-            totalPages={totalPages}
-            total={total}
-            pageSize={pageSize}
-            pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
-            onPageChange={(p, size) => {
-              setPage(p);
-              if (typeof size === "number") setPageSize(size);
-            }}
-          />
-        }
-      >
-        <AdminFilterBar>
-          <div className="relative flex-1 min-w-44 max-w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+        filters={
+        <AdminFilterBar className="w-full px-4">
+          <div className="relative min-w-44 max-w-[360px] flex-[1_1_260px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" aria-hidden="true" />
             <Input
-              className="h-8 text-xs pl-9"
+              className="pl-9"
+              aria-label="搜索游戏名称或简介"
               value={search}
               placeholder="搜索游戏名称或简介..."
               onChange={(e) => {
@@ -338,7 +330,7 @@ const GamesManagerPage: React.FC = () => {
               setPage(1);
             }}
           >
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="w-36" aria-label="游戏分类">
               <SelectValue placeholder="全部分类" />
             </SelectTrigger>
             <SelectContent>
@@ -351,10 +343,28 @@ const GamesManagerPage: React.FC = () => {
             </SelectContent>
           </Select>
         </AdminFilterBar>
+        }
+        pagination={
+          total > 0 ? (
+            <DataTablePagination
+              currentPage={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              onPageChange={(p, size) => {
+                setPage(p);
+                if (typeof size === "number") setPageSize(size);
+              }}
+            />
+          ) : null
+        }
+      >
+
 
         <DataTable
           table={table}
-          className="min-w-max"
+          className="min-w-[880px]"
           tableScrollContainer={false}
           stickyHeader
         />
