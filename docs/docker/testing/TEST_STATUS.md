@@ -13,6 +13,7 @@
 - **UI 门禁：** 初始固定尺寸审计为 991，超过原阈值 912；新增共享 4px 网格与 1px 边界基元后为 901，未修改审计器或 baseline。token 检查为 `0 undefined tokens across 2066 references`。当前页面卡片仍高约 185px、按钮 32px，未出现横向溢出；截图 `/tmp/wangsh-release-ui-2.1.4.png`。
 - **后端失败定位：** 当前远端主分支 CI `38914761454` 的 3 个 SSE idle logout 用例因 30ms 加速核验期限失败；在禁 dotenv、禁网络、合成配置的外部运行器中注入 50ms 正常核验延迟，复现 3 个失败。仅让 `cache_timeout` 注入场景保留 30ms，正常核验使用原 2s 预算后，同一延迟场景 3 项通过，完整 SSE 隔离文件 24 项通过；失效/故障/超时断言未放宽，应用代码未改变。该验证不是完整后端或真实 TCP 流式验收。
 - **构建与版本合同：** 统一 manifest、lockfile、Compose、环境示例、沙箱、发布工作流与模拟默认版本为 2.1.4；六个 Docker Hub 目标标签查询均为 404，不覆盖旧版。后端 context 补排除私有环境文件，发布夹具读取权威 manifest 版本。根脚本合同 76 项通过，Compose 开发/生产配置和 Bash 语法通过。
+- **干净 CI 追加定位：** 候选 PR #4 的首次前端安装因锁文件缺少 `@emnapi/core`、`@emnapi/runtime`、`@emnapi/wasi-threads` 而失败，已使用标准 npm 锁文件生成流程补齐；PythonLab 两个运行检查被 ECR 基础镜像 429 限流阻断，已通过既有 build args 将 GitHub 构建显式指向 Docker Hub 官方基础镜像，保留完整测试门禁。补齐锁文件未改变任何已锁定依赖版本；独立空依赖卷的标准 `npm ci`、30 项脚本、723 项测试与类型检查通过，更新后的 workflow 合同 60 项通过。新提交的完整 CI 仍待验证。
 - **文档与发布状态：** Markdown 派生摘要 `137 files / 529 links / 0 missing`；源码候选、完整 CI 与六镜像发布尚待下一步，未部署服务器、迁移业务库、停服务或清理其他容器/卷。
 
 ## 2026-10-18 信息技术应用管理卡片返工（待用户视觉确认）

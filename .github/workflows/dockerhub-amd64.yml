@@ -82,6 +82,8 @@ jobs:
           target: backend_runtime
           platforms: linux/amd64
           push: true
+          build-args: |
+            PYTHON_IMAGE=docker.io/library/python:3.11-slim
           tags: |
             docker.io/shuhao07/wangsh-backend:${{ env.STAGING_TAG }}
 
@@ -93,6 +95,8 @@ jobs:
           target: worker_runtime
           platforms: linux/amd64
           push: true
+          build-args: |
+            PYTHON_IMAGE=docker.io/library/python:3.11-slim
           tags: |
             docker.io/shuhao07/wangsh-typst-worker:${{ env.STAGING_TAG }}
 
@@ -104,6 +108,8 @@ jobs:
           target: pythonlab_worker_runtime
           platforms: linux/amd64
           push: true
+          build-args: |
+            PYTHON_IMAGE=docker.io/library/python:3.11-slim
           tags: |
             docker.io/shuhao07/wangsh-pythonlab-worker:${{ env.STAGING_TAG }}
 
@@ -113,6 +119,8 @@ jobs:
           context: ./backend/docker/pythonlab-sandbox
           platforms: linux/amd64
           push: true
+          build-args: |
+            PYTHON_IMAGE=docker.io/library/python:3.11-slim
           tags: |
             docker.io/shuhao07/pythonlab-sandbox:${{ env.STAGING_TAG }}
 
@@ -125,6 +133,8 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
+            NODE_IMAGE=docker.io/library/node:20-alpine
+            CADDY_IMAGE=docker.io/library/caddy:2-alpine
             REACT_APP_VERSION=${{ env.SOURCE_VERSION }}
           tags: |
             docker.io/shuhao07/wangsh-frontend:${{ env.STAGING_TAG }}
@@ -136,6 +146,8 @@ jobs:
           file: ./gateway/Dockerfile
           platforms: linux/amd64
           push: true
+          build-args: |
+            CADDY_IMAGE=docker.io/library/caddy:2.8.4
           tags: |
             docker.io/shuhao07/wangsh-gateway:${{ env.STAGING_TAG }}
 

@@ -108,7 +108,7 @@ jobs:
 
       - name: build PythonLab sandbox
         run: |
-          docker build -t pythonlab-sandbox:ci backend/docker/pythonlab-sandbox
+          docker build --build-arg PYTHON_IMAGE=docker.io/library/python:3.11-slim -t pythonlab-sandbox:ci backend/docker/pythonlab-sandbox
 
       - name: migrate current PR database
         working-directory: backend
