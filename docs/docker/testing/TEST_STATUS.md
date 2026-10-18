@@ -2,27 +2,37 @@
 
 > 状态：active
 > Owner：testing
-> 当前版本：2.1.4 发布候选（尚未部署服务器）
+> 当前版本：2.1.4 镜像已发布（服务器尚未部署）
 > 最近更新：2026-10-18
 > 说明：本文件是当前测试事实的唯一汇总入口；阶段报告只引用本页，不复制新基线。
 
-## 2026-10-18 v2.1.4 发布前检查（本地通过，完整 CI 与镜像待执行）
+## 2026-10-18 v2.1.4 检查与镜像推送（完成，服务器未部署）
 
-- **来源与边界：** UI 工作树已保留并快进整合 `origin/main` 的 PG 测试修复，发布分支 `codex/release-2.1.4`；主工作树另外 6 个未提交文件已保存 SHA-256 并核对保持。用户已认可信息技术卡片版并授权提交 GitHub、推送 Docker Hub，服务器部署不在本轮执行。
-- **前端：** 全量 Vitest 100 个文件 / 723 项通过；AI伙伴 4 个文件 / 55 项通过；类型检查、lint、生产构建与 bundle budget 通过，lint 保留既有 warning。脚本测试初次在只挂前端目录的开发容器中缺少仓库/Git、宿主执行又缺少 npm 依赖，均是执行环境不完整；改用只读挂载完整仓库及依赖的独立 Node 容器后，30 项全部通过。
-- **UI 门禁：** 初始固定尺寸审计为 991，超过原阈值 912；新增共享 4px 网格与 1px 边界基元后为 901，未修改审计器或 baseline。token 检查为 `0 undefined tokens across 2066 references`。当前页面卡片仍高约 185px、按钮 32px，未出现横向溢出；截图 `/tmp/wangsh-release-ui-2.1.4.png`。
-- **后端失败定位：** 当前远端主分支 CI `38914761454` 的 3 个 SSE idle logout 用例因 30ms 加速核验期限失败；在禁 dotenv、禁网络、合成配置的外部运行器中注入 50ms 正常核验延迟，复现 3 个失败。仅让 `cache_timeout` 注入场景保留 30ms，正常核验使用原 2s 预算后，同一延迟场景 3 项通过，完整 SSE 隔离文件 24 项通过；失效/故障/超时断言未放宽，应用代码未改变。该验证不是完整后端或真实 TCP 流式验收。
-- **构建与版本合同：** 统一 manifest、lockfile、Compose、环境示例、沙箱、发布工作流与模拟默认版本为 2.1.4；六个 Docker Hub 目标标签查询均为 404，不覆盖旧版。后端 context 补排除私有环境文件，发布夹具读取权威 manifest 版本。根脚本合同 76 项通过，Compose 开发/生产配置和 Bash 语法通过。
-- **干净 CI 追加定位：** 候选 PR #4 的首次前端安装因锁文件缺少 `@emnapi/core`、`@emnapi/runtime`、`@emnapi/wasi-threads` 而失败，已使用标准 npm 锁文件生成流程补齐；PythonLab 两个运行检查被 ECR 基础镜像 429 限流阻断，已通过既有 build args 将 GitHub 构建显式指向 Docker Hub 官方基础镜像，保留完整测试门禁。补齐锁文件未改变任何已锁定依赖版本；独立空依赖卷的标准 `npm ci`、30 项脚本、723 项测试与类型检查通过，更新后的 workflow 合同 60 项通过。新提交的完整 CI 仍待验证。
-- **文档与发布状态：** Markdown 派生摘要 `137 files / 529 links / 0 missing`；源码候选、完整 CI 与六镜像发布尚待下一步，未部署服务器、迁移业务库、停服务或清理其他容器/卷。
+- **源码：** [PR #4](https://github.com/shuhao0727/wangsh/pull/4) 的全部六项检查通过后正常合并到 `main`。镜像源码 commit 为 `4656faec87b989e15c20028d01011c64e4222c0f`；当前记录属于随后的文档提交，不改变镜像中的业务代码。
+- **发布流程：** [dockerhub-amd64 39128634727](https://github.com/shuhao0727/wangsh/actions/runs/39128634727) 成功，source-guard、完整 quality-gate、六镜像构建/推送、staging 与正式 digest 核对、release-set 产出全部通过；`push_latest=false`，旧版本与 `latest` 未覆盖。
+- **完整 CI：** 镜像流程使用临时 PostgreSQL/Redis，执行 legacy baseline/bootstrap、Alembic 与后端覆盖率测试，结果 `3442 passed / 241 skipped / 14 warnings`；241 项条件测试跳过，不算验收通过。前端全量 Vitest 100 文件 / 723 项、类型检查、lint、生产构建、包体预算与脚本 30 项通过。PR 的 PythonLab owner-concurrency 与 Phase C 运行门禁均通过，包括真实浏览器点击。AI伙伴另有本地 4 文件 / 55 项通过。
+- **发布阻断修复：** 固定尺寸改为共享 4px 网格与 1px 边界，UI 审计由 991 降到 901，原阈值 912 和审计器保持；token 检查 `0 undefined tokens across 2066 references`。SSE 测试只对注入超时保留 30ms，正常核验恢复原 2s 预算，严格错误码断言不变；外部禁 dotenv、禁网络、合成配置运行器验证 24 项及 50ms 延迟场景 3 项通过，延迟场景修复前复现 3 个失败，应用认证代码未改。锁文件补齐 3 个 `@emnapi` 间接依赖，已锁定版本未升级；独立空依赖卷标准 `npm ci`、30 脚本、723 测试与类型检查通过。GitHub 构建通过已有 build args 使用 Docker Hub 官方基础镜像，解决 ECR 429 阻断。前后端 context 排除私有环境文件。
+- **正式镜像验证：** 本机再次执行 `ENV_FILE=.env.example bash scripts/deploy.sh verify-release-set`，六个 registry digest 全匹配；另读取正式 manifest 验证六镜像包含 `linux/amd64`。实际 staging 后端镜像在 `--network none`、不导入业务 app 的容器中检查 `python-multipart=0.0.32`、`fastapi=0.128.0`、`redis=7.1.0`，其 digest 与正式后端镜像一致。
+- **清单与证据：** GitHub artifact 为 `release-set-39128634727`。本地持久副本在 `/Users/wsh/wangsh/.codex/releases/2.1.4/`，包含 `release-set.txt`、`source.json`、`workflow-status.json`、`platforms.json`、`registry-verification.log`、`backend-quality.log` 和 `backend-package-check.log`；release-set SHA-256 为 `3c08f582ce5df1071814bc35daaa81c3a5b7bae7249ae80df51be083b892c71b`。卡片尺寸仍约 185px、按钮 32px，无横向溢出，复核图为 `/tmp/wangsh-release-ui-2.1.4.png`。
+- **保护与边界：** 主工作树 6 个原有未提交文件按 SHA-256 保持原样，当前开发与 remediation 栈均未重建或停用；只清理本次新建的临时 npm 依赖卷。未部署服务器、迁移正常业务库、修改真实业务数据或调用真实模型。CI 与镜像通过不代替生产数据迁移、认证受控切换、模型配置和生产环境运行验收。
+- **其他门禁：** 根合同 76 项、更新后的 workflow 合同 60 项、Compose 开发/生产配置和 Bash 语法通过；文档派生摘要 `137 files / 531 links / 0 missing`，`git diff --check` 通过。
 
-## 2026-10-18 信息技术应用管理卡片返工（待用户视觉确认）
+| 镜像 | 正式标签 digest |
+|---|---|
+| `shuhao07/wangsh-backend:2.1.4` | `sha256:357a19b674f8bd66232c7cc4651d19d2dea22e4a328b163b54c3cc84c371c2c7` |
+| `shuhao07/wangsh-typst-worker:2.1.4` | `sha256:20d1278515bec5cd9ec34104a462686295857e5d2420e1257ca4f89d4f1724c2` |
+| `shuhao07/wangsh-pythonlab-worker:2.1.4` | `sha256:965cb33a38feaeb93547db198c5650145ef9d0d5d4e5577f4563efabc202dda7` |
+| `shuhao07/pythonlab-sandbox:2.1.4` | `sha256:79090cf4c11d07ad0813089ee66e4aa37c879820663bd3633bae0a3deefa673b` |
+| `shuhao07/wangsh-frontend:2.1.4` | `sha256:fc39ff26054dbebae9697271c93be5a37d19679a013a46c724505e2c6012a172` |
+| `shuhao07/wangsh-gateway:2.1.4` | `sha256:486b22c35e2432320ca29cd764daac31680d950ba4c2f08b7a5c8c2df7ea9332` |
+
+## 2026-10-18 信息技术应用管理卡片返工（用户已认可）
 
 - **范围：** 用户否定连续列表，明确偏好卡片；本轮仅重做 `/admin/it-technology` 主管理页面。9 项应用采用三列卡片，分类为轻量标记，图标、名称和短说明同层组织，开关与管理动作融入浅色底栏；未修改共享卡片或其他页面。
 - **尺寸与视觉复核：** 当前已登录内置浏览器实测 `1280×800`、`1440×900`、`1680×1050`、`1920×1080`、`390×844`。四档桌面均为三列三行，卡片高约 185px，列表底部位于约 655–658px；按钮高 32px。页面无横向溢出，名称、摘要、底栏和按钮无横向裁切。按容器宽度自动减为两列或一列，窄屏纵向滚动。
 - **真实交互：** 人工智能探索内容管理进入与返回、Python 智能体配置弹层打开与取消通过；Tab 从随机点名开关进入同卡片管理按钮，焦点可见。未切换真实功能开关，未保存、上传、发布、删除或调用模型；机器学习缺书自动初始化入口仍未点击。
 - **工程检查：** 前端类型检查通过；相关 2 个测试文件共 5 项通过，覆盖公共状态部分失败、超级管理员加载失败时禁止开关写入，以及已知状态的模拟保存。当前页面与回归测试 ESLint 无 error / warning；token 检查为 `0 undefined tokens across 1943 references`；Markdown 合同 `137 files / 526 links / 0 missing`、合同测试 10 项与 `git diff --check` 均通过。
-- **证据与验收：** `/tmp/wangsh-it-admin-cards/` 保存 5 档截图、`metrics.json` 与 `interactions.json`。用户确认的是卡片方向，新卡片视觉仍待确认；此前列表截图仅保留为历史证据。
+- **证据与验收：** `/tmp/wangsh-it-admin-cards/` 保存 5 档截图、`metrics.json` 与 `interactions.json`。用户已认可卡片版并授权进入发布准备；此前列表截图仅保留为历史证据。
 
 ## 2026-10-18 信息技术应用管理列表返工（已被卡片方案替代）
 
